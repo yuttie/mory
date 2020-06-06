@@ -648,6 +648,7 @@ dependencies = [
  "futures",
  "git2",
  "log 0.4.8",
+ "mime_guess 2.0.3",
  "pretty_env_logger",
  "tokio",
  "warp",

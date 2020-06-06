@@ -25,7 +25,6 @@ mod filters {
     use std::sync::Arc;
 
     use warp::Filter;
-    use log::debug;
     use git2::Repository;
     use tokio::sync::{Mutex};
 
@@ -59,14 +58,14 @@ mod handlers {
     use std::convert::Infallible;
     use std::vec::Vec;
     use std::string::String;
-    use std::path::PathBuf;
 
     use git2::Repository;
     use tokio::sync::{Mutex};
     use tokio;
     use log::debug;
-    use futures::prelude::*;
-    use tokio::prelude::*;
+    use warp::reply::Reply;
+    use mime_guess;
+    use warp::http::header::CONTENT_TYPE;
 
     pub async fn list_notes(repo: Arc<Mutex<Repository>>) -> Result<impl warp::Reply, Infallible> {
         debug!("list");
@@ -84,23 +83,24 @@ mod handlers {
         let found = {
             let repo = repo.lock().await;
             let index = repo.index().unwrap();
-            index.iter().any(|entry| std::str::from_utf8(&entry.path).unwrap() == path.as_str())
+            index.iter().find(|entry| std::str::from_utf8(&entry.path).unwrap() == path.as_str())
         };
-        if found {
-            let mut fp = PathBuf::from("notes");
-            fp.push(path.as_str());
-            if let Ok(mut file) = tokio::fs::File::open(fp).await {
-                let mut contents = vec![];
-                match file.read_to_end(&mut contents).await {
-                    Ok(_) => match String::from_utf8(contents) {
-                        Ok(s) => Ok(s),
-                        _ => Err(warp::reject::not_found()),
-                    },
-                    _ => Err(warp::reject::not_found()),
-                }
-            }
-            else {
-                Err(warp::reject::not_found())
+        if let Some(entry) = found {
+            let found = {
+                let repo = repo.lock().await;
+                repo.find_blob(entry.id).map(|blob| Vec::from(blob.content()))
+            };
+            match found {
+                Ok(content) => {
+                    let mut res = content.into_response();
+                    // Guess the mime type
+                    let guess = mime_guess::from_path(std::str::from_utf8(&entry.path).unwrap());
+                    if let Some(mime) = guess.first() {
+                        res.headers_mut().insert(CONTENT_TYPE, mime.as_ref().parse().unwrap()).unwrap();
+                    }
+                    Ok(res)
+                },
+                Err(_) => Err(warp::reject::not_found()),
             }
         }
         else {
