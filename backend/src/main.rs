@@ -17,7 +17,9 @@ async fn main() {
     let api = filters::notes(repo);
 
     let cors = warp::cors()
-        .allow_any_origin();
+        .allow_any_origin()
+        .allow_methods(vec!["GET", "POST"])
+        .allow_headers(vec!["Content-Type"]);
 
     let routes = api.with(cors);
     warp::serve(routes).run(([127, 0, 0, 1], 3030)).await;
