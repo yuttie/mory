@@ -101,7 +101,13 @@ mod handlers {
         debug!("load");
         let found = {
             let repo = repo.lock().await;
-            let index = repo.index().unwrap();
+
+            let head = repo.head().unwrap();
+            let head_tree = head.peel_to_tree().unwrap();
+
+            let mut index = Index::new().unwrap();
+            index.read_tree(&head_tree).unwrap();
+
             index.iter().find(|entry| std::str::from_utf8(&entry.path).unwrap() == path.as_str())
         };
         if let Some(entry) = found {
