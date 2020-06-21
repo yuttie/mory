@@ -96,11 +96,30 @@ mod handlers {
         let mut index = Index::new().unwrap();
         index.read_tree(&head_tree).unwrap();
 
-        let mut files = Vec::new();
-        for x in index.iter() {
-            files.push(String::from_utf8(x.path).unwrap());
+        let mut entries = Vec::new();
+        for entry in index.iter() {
+            let path = String::from_utf8(entry.path).unwrap();
+            let blob = repo.find_blob(entry.id).unwrap();
+            if blob.content().starts_with(b"---\n") {
+                if let Some(j) = blob.content().windows(5).position(|window| window == b"\n---\n") {
+                    if let Ok(yaml) = std::str::from_utf8(&blob.content()[4..j]) {
+                        let doc: serde_yaml::Value = serde_yaml::from_str(yaml).unwrap();
+                        debug!("{:?}", &doc);
+                        entries.push((path.clone(), Some(doc)));
+                    }
+                    else {
+                        entries.push((path.clone(), None));
+                    }
+                }
+                else {
+                    entries.push((path.clone(), None));
+                }
+            }
+            else {
+                entries.push((path.clone(), None));
+            }
         }
-        Ok(warp::reply::json(&files))
+        Ok(warp::reply::json(&entries))
     }
 
     pub async fn load_note(path: warp::path::Tail, repo: Arc<Mutex<Repository>>) -> Result<impl warp::Reply, warp::reject::Rejection> {

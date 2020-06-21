@@ -13,6 +13,7 @@ log = "0.4"
 mime_guess = "2.0.3"
 pretty_env_logger = "0.4"
 serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.8.13"
 tokio = { version = "0.2", features = ["io-util", "macros"] }
 urlencoding = "1.1.1"
 warp = "0.2"
