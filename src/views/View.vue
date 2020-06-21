@@ -2,7 +2,12 @@
   <div class="view">
     <button type="button" v-on:click="toggleEditor">{{ editorIsVisible ? 'Hide editor' : 'Edit' }}</button>
     <div>
-      <textarea v-model="text" class="editor" v-bind:class="{ shifted: editorIsVisible }"></textarea>
+      <textarea
+        v-model="text"
+        v-on:keydown="handleKeydown"
+        v-bind:class="{ shifted: editorIsVisible }"
+        class="editor"
+      ></textarea>
       <div v-html="rendered" class="rendered" v-bind:class="{ shifted: editorIsVisible }"></div>
     </div>
   </div>
@@ -33,6 +38,24 @@ export default class Home extends Vue {
 
   toggleEditor() {
     this.editorIsVisible = !this.editorIsVisible;
+  }
+
+  handleKeydown(e) {
+    if (e.ctrlKey && e.key == 's') {
+      this.save();
+      e.preventDefault();
+    }
+  }
+
+  save() {
+    const path = this.$route.params.path;
+    axios.post('http://localhost:3030/save', {
+      path: path,
+      content: this.text,
+      message: `Update ${path}`,
+    }).then(res => {
+      console.log(res.data);
+    });
   }
 }
 </script>
