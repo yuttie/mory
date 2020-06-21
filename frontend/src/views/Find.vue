@@ -3,7 +3,7 @@
     <ul>
       <li
         v-for="entry of entries"
-        v-bind:key="entry"><a v-bind:href="`/view/${entry}`">{{ entry }}</a></li>
+        v-bind:key="entry[0]"><a v-bind:href="`/view/${entry[0]}`">{{ entry[0] }}</a></li>
     </ul>
   </div>
 </template>
