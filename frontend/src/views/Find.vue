@@ -1,5 +1,12 @@
 <template>
   <div class="find">
+    <div>
+      <span
+        v-for="tag of tags"
+        v-bind:key="tag"
+        style="border: 1px solid #ccc; border-radius: 4px; margin: 0 4px;"
+      >{{ tag }}</span>
+    </div>
     <ul>
       <li
         v-for="entry of entries"
@@ -16,11 +23,23 @@ import axios from 'axios';
 @Component
 export default class Home extends Vue {
   entries: string[] = [];
+  tags: string[] = [];
 
   mounted() {
     axios.get('http://localhost:3030/list')
       .then(res => {
+        const tags = new Set();
         this.entries = res.data;
+        for (const entry of this.entries) {
+          if (entry[1] !== null) {
+            if (Object.prototype.hasOwnProperty.call(entry[1], 'tags')) {
+              for (const tag of entry[1].tags) {
+                tags.add(tag);
+              }
+            }
+          }
+        }
+        this.tags = Array.from(tags);
       });
   }
 }
