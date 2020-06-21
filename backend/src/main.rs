@@ -137,8 +137,8 @@ mod handlers {
 
         let mut index = Index::new().unwrap();
         index.read_tree(&head_tree).unwrap();
-        repo.set_index(&mut index).unwrap();
 
+        let blob_oid = repo.blob(note_save.content.as_bytes()).unwrap();
         let entry = IndexEntry {
             ctime: IndexTime::new(0, 0),
             mtime: IndexTime::new(0, 0),
@@ -148,14 +148,14 @@ mod handlers {
             uid: 0,
             gid: 0,
             file_size: 0,
-            id: Oid::zero(),
+            id: blob_oid,
             flags: 0,
             flags_extended: 0,
             path: note_save.path.into_bytes(),
         };
-        index.add_frombuffer(&entry, note_save.content.as_bytes()).unwrap();
+        index.add(&entry).unwrap();
 
-        let tree_oid = index.write_tree().unwrap();
+        let tree_oid = index.write_tree_to(&repo).unwrap();
         let tree = repo.find_tree(tree_oid).unwrap();
 
         let signature = Signature::now("John Doe", "jd@example.com").unwrap();
