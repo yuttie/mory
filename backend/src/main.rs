@@ -99,6 +99,7 @@ mod handlers {
 
     pub async fn load_note(path: warp::path::Tail, repo: Arc<Mutex<Repository>>) -> Result<impl warp::Reply, warp::reject::Rejection> {
         debug!("load");
+        let path = urlencoding::decode(path.as_str()).unwrap();
         let found = {
             let repo = repo.lock().await;
 
