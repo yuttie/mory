@@ -70,7 +70,13 @@ mod handlers {
     pub async fn list_notes(repo: Arc<Mutex<Repository>>) -> Result<impl warp::Reply, Infallible> {
         debug!("list");
         let repo = repo.lock().await;
-        let index = repo.index().unwrap();
+
+        let head = repo.head().unwrap();
+        let head_tree = head.peel_to_tree().unwrap();
+
+        let mut index = Index::new().unwrap();
+        index.read_tree(&head_tree).unwrap();
+
         let mut files = Vec::new();
         for x in index.iter() {
             files.push(String::from_utf8(x.path).unwrap());
