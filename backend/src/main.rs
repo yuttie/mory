@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use tokio::sync::{Mutex};
 use git2::Repository;
+use warp::Filter;
 
 #[tokio::main]
 async fn main() {
@@ -15,7 +16,10 @@ async fn main() {
 
     let api = filters::notes(repo);
 
-    let routes = api;
+    let cors = warp::cors()
+        .allow_any_origin();
+
+    let routes = api.with(cors);
     warp::serve(routes).run(([127, 0, 0, 1], 3030)).await;
 }
 
