@@ -158,7 +158,7 @@ mod handlers {
         let tree_oid = index.write_tree_to(&repo).unwrap();
         let tree = repo.find_tree(tree_oid).unwrap();
 
-        let signature = Signature::now("John Doe", "jd@example.com").unwrap();
+        let signature = repo.signature().unwrap();
         repo.commit(
             Some("HEAD"),
             &signature,
