@@ -12,9 +12,9 @@ async fn main() {
         Ok(repo) => repo,
         Err(e) => panic!("failed to open: {}", e),
     };
-    let repo = Arc::new(Mutex::new(repo));
+    let state = models::State::new(repo);
 
-    let api = filters::notes(repo);
+    let api = filters::notes(state);
 
     let cors = warp::cors()
         .allow_any_origin()
@@ -27,6 +27,7 @@ async fn main() {
 
 mod filters {
     use super::handlers;
+    use super::models;
 
     use std::sync::Arc;
 
@@ -35,43 +36,43 @@ mod filters {
     use tokio::sync::{Mutex};
 
     pub fn notes(
-        repo: Arc<Mutex<Repository>>,
+        state: models::State,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        notes_list(repo.clone())
-            .or(notes_load(repo.clone()))
-            .or(notes_save(repo))
+        notes_list(state.clone())
+            .or(notes_load(state.clone()))
+            .or(notes_save(state))
     }
 
     pub fn notes_list(
-        repo: Arc<Mutex<Repository>>,
+        state: models::State,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::path("list")
-            .and(warp::any().map(move || repo.clone()))
+            .and(warp::any().map(move || state.clone()))
             .and_then(handlers::list_notes)
     }
 
     pub fn notes_load(
-        repo: Arc<Mutex<Repository>>,
+        state: models::State,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::path("load")
             .and(warp::path::tail())
-            .and(warp::any().map(move || repo.clone()))
+            .and(warp::any().map(move || state.clone()))
             .and_then(handlers::load_note)
     }
 
     pub fn notes_save(
-        repo: Arc<Mutex<Repository>>,
+        state: models::State,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::path("save")
             .and(warp::post())
             .and(warp::body::json())
-            .and(warp::any().map(move || repo.clone()))
+            .and(warp::any().map(move || state.clone()))
             .and_then(handlers::save_note)
     }
 }
 
 mod handlers {
-    use super::models::{NoteSave};
+    use super::models::{State, NoteSave};
 
     use std::sync::Arc;
     use std::convert::Infallible;
@@ -86,9 +87,9 @@ mod handlers {
     use mime_guess;
     use warp::http::header::CONTENT_TYPE;
 
-    pub async fn list_notes(repo: Arc<Mutex<Repository>>) -> Result<impl warp::Reply, Infallible> {
+    pub async fn list_notes(state: State) -> Result<impl warp::Reply, Infallible> {
         debug!("list");
-        let repo = repo.lock().await;
+        let repo = state.repo.lock().await;
 
         let head = repo.head().unwrap();
         let head_tree = head.peel_to_tree().unwrap();
@@ -122,11 +123,11 @@ mod handlers {
         Ok(warp::reply::json(&entries))
     }
 
-    pub async fn load_note(path: warp::path::Tail, repo: Arc<Mutex<Repository>>) -> Result<impl warp::Reply, warp::reject::Rejection> {
+    pub async fn load_note(path: warp::path::Tail, state: State) -> Result<impl warp::Reply, warp::reject::Rejection> {
         debug!("load");
         let path = urlencoding::decode(path.as_str()).unwrap();
         let found = {
-            let repo = repo.lock().await;
+            let repo = state.repo.lock().await;
 
             let head = repo.head().unwrap();
             let head_tree = head.peel_to_tree().unwrap();
@@ -138,7 +139,7 @@ mod handlers {
         };
         if let Some(entry) = found {
             let found = {
-                let repo = repo.lock().await;
+                let repo = state.repo.lock().await;
                 repo.find_blob(entry.id).map(|blob| Vec::from(blob.content()))
             };
             match found {
@@ -159,9 +160,9 @@ mod handlers {
         }
     }
 
-    pub async fn save_note(note_save: NoteSave, repo: Arc<Mutex<Repository>>) -> Result<impl warp::Reply, Infallible> {
+    pub async fn save_note(note_save: NoteSave, state: State) -> Result<impl warp::Reply, Infallible> {
         debug!("save");
-        let repo = repo.lock().await;
+        let repo = state.repo.lock().await;
 
         let head = repo.head().unwrap();
         let head_tree = head.peel_to_tree().unwrap();
@@ -204,7 +205,24 @@ mod handlers {
 }
 
 mod models {
+    use std::sync::Arc;
+
+    use git2::Repository;
     use serde::{Deserialize, Serialize};
+    use tokio::sync::Mutex;
+
+    #[derive(Clone)]
+    pub struct State {
+        pub repo: Arc<Mutex<Repository>>,
+    }
+
+    impl State {
+        pub fn new(repo: Repository) -> State {
+            State {
+                repo: Arc::new(Mutex::new(repo)),
+            }
+        }
+    }
 
     #[derive(Debug, Deserialize, Serialize, Clone)]
     pub struct NoteSave {
