@@ -28,6 +28,7 @@ export default class Home extends Vue {
     console.log(this.$route.params.path);
     if (this.$route.query.mode === 'create') {
       this.text = '';
+      this.editorIsVisible = true;
     }
     else {
       axios.get(`http://localhost:3030/load/${this.$route.params.path}`)
