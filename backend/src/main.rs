@@ -72,7 +72,7 @@ mod filters {
 }
 
 mod handlers {
-    use super::models::{State, ListEntry, NoteSave};
+    use super::models::{State, Cached, ListEntry, NoteSave};
 
     use std::sync::Arc;
     use std::convert::Infallible;
@@ -89,14 +89,14 @@ mod handlers {
 
     pub async fn list_notes(state: State) -> Result<impl warp::Reply, Infallible> {
         debug!("list");
+        let repo = state.repo.lock().await;
         let mut cached_entries = state.cached_entries.lock().await;
-        if let Some(ref entries) = *cached_entries {
+        if let Some(entries) = cached_entries.get(&repo) {
             Ok(warp::reply::json(&entries))
         }
         else {
-            let repo = state.repo.lock().await;
-
             let head = repo.head().unwrap();
+            let head_commit = head.peel_to_commit().unwrap();
             let head_tree = head.peel_to_tree().unwrap();
 
             let mut index = Index::new().unwrap();
@@ -126,7 +126,10 @@ mod handlers {
                 }
             }
             let reply = warp::reply::json(&entries);
-            *cached_entries = Some(entries);
+            *cached_entries = Cached::Computed {
+                commit_id: head_commit.id(),
+                data: entries,
+            };
             Ok(reply)
         }
     }
@@ -216,24 +219,54 @@ mod models {
     use std::sync::Arc;
     use std::option::Option;
 
-    use git2::Repository;
+    use git2::{Repository, Oid};
     use serde::{Deserialize, Serialize};
     use tokio::sync::Mutex;
 
     pub type Metadata = serde_yaml::Value;
     pub type ListEntry = (String, Option<Metadata>);
 
+    pub enum Cached<T> {
+        Computed {
+            commit_id: Oid,
+            data: T,
+        },
+        None,
+    }
+
+    impl<T> Cached<T> {
+        pub fn get(&self, repo: &Repository) -> Option<&T> {
+            match self {
+                Cached::None => None,
+                Cached::Computed { commit_id, data } => {
+                    let head = repo.head().unwrap();
+                    match head.peel_to_commit() {
+                        Err(_) => None,
+                        Ok(commit) => {
+                            if *commit_id == commit.id() {
+                                Some(data)
+                            }
+                            else {
+                                None
+                            }
+                        },
+                    }
+                },
+            }
+        }
+    }
+
     #[derive(Clone)]
     pub struct State {
         pub repo: Arc<Mutex<Repository>>,
-        pub cached_entries: Arc<Mutex<Option<Vec<ListEntry>>>>,
+        pub cached_entries: Arc<Mutex<Cached<Vec<ListEntry>>>>,
     }
 
     impl State {
         pub fn new(repo: Repository) -> State {
             State {
                 repo: Arc::new(Mutex::new(repo)),
-                cached_entries: Arc::new(Mutex::new(None)),
+                cached_entries: Arc::new(Mutex::new(Cached::None)),
             }
         }
     }
