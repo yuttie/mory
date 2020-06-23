@@ -6,7 +6,7 @@
       <router-link to="/find">Find</router-link> |
       <router-link to="/about">About</router-link>
     </div>
-    <router-view class="router-view"/>
+    <router-view v-bind:key="$route.path" class="router-view"/>
   </div>
 </template>
 
