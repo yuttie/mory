@@ -1,6 +1,9 @@
 <template>
   <div class="view">
-    <button type="button" v-on:click="toggleEditor">{{ editorIsVisible ? 'Hide editor' : 'Edit' }}</button>
+    <div>
+      <button type="button" v-on:click="toggleEditor">{{ editorIsVisible ? 'Hide editor' : 'Edit' }}</button>
+      <span v-show="text !== initialText">Modified</span>
+    </div>
     <div>
       <textarea
         v-model="text"
@@ -22,18 +25,21 @@ import marked from 'marked';
 @Component
 export default class Home extends Vue {
   text = '';
+  initialText = '';
   editorIsVisible = false;
 
   mounted() {
     console.log(this.$route.params.path);
     if (this.$route.query.mode === 'create') {
       this.text = '';
+      this.initialText = this.text;
       this.editorIsVisible = true;
     }
     else {
       axios.get(`http://localhost:3030/notes/${this.$route.params.path}`)
         .then(res => {
           this.text = res.data;
+          this.initialText = this.text;
         });
     }
   }
