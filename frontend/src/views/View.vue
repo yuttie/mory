@@ -23,7 +23,7 @@ import axios from 'axios';
 import marked from 'marked';
 
 @Component
-export default class Home extends Vue {
+export default class View extends Vue {
   text = '';
   initialText = '';
   editorIsVisible = false;

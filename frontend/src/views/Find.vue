@@ -21,7 +21,7 @@ import { Component, Prop, Vue } from 'vue-property-decorator';
 import axios from 'axios';
 
 @Component
-export default class Home extends Vue {
+export default class Find extends Vue {
   entries: [string, any][] = [];
   tags: string[] = [];
 
