@@ -26,10 +26,15 @@ export default class Home extends Vue {
 
   mounted() {
     console.log(this.$route.params.path);
-    axios.get(`http://localhost:3030/load/${this.$route.params.path}`)
-      .then(res => {
-        this.text = res.data;
-      });
+    if (this.$route.query.mode === 'create') {
+      this.text = '';
+    }
+    else {
+      axios.get(`http://localhost:3030/load/${this.$route.params.path}`)
+        .then(res => {
+          this.text = res.data;
+        });
+    }
   }
 
   get rendered() {
