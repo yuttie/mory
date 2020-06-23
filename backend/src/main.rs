@@ -18,7 +18,7 @@ async fn main() {
 
     let cors = warp::cors()
         .allow_any_origin()
-        .allow_methods(vec!["GET", "POST"])
+        .allow_methods(vec!["GET", "PUT", "DELETE"])
         .allow_headers(vec!["Content-Type"]);
 
     let routes = api.with(cors);
@@ -41,14 +41,15 @@ mod filters {
         notes_list(state.clone())
             .or(notes_load(state.clone()))
             .or(notes_save(state.clone()))
-            .or(notes_delete(state.clone()))
-            .or(notes_rename(state))
+            .or(notes_delete(state))
     }
 
     pub fn notes_list(
         state: models::State,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        warp::path("list")
+        warp::path("notes")
+            .and(warp::path::end())
+            .and(warp::get())
             .and(warp::any().map(move || state.clone()))
             .and_then(handlers::list_notes)
     }
@@ -56,8 +57,9 @@ mod filters {
     pub fn notes_load(
         state: models::State,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        warp::path("load")
+        warp::path("notes")
             .and(warp::path::tail())
+            .and(warp::get())
             .and(warp::any().map(move || state.clone()))
             .and_then(handlers::load_note)
     }
@@ -65,8 +67,9 @@ mod filters {
     pub fn notes_save(
         state: models::State,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        warp::path("save")
-            .and(warp::post())
+        warp::path("notes")
+            .and(warp::path::tail())
+            .and(warp::put())
             .and(warp::body::json())
             .and(warp::any().map(move || state.clone()))
             .and_then(handlers::save_note)
@@ -75,27 +78,16 @@ mod filters {
     pub fn notes_delete(
         state: models::State,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        warp::path("delete")
-            .and(warp::delete())
+        warp::path("notes")
             .and(warp::path::tail())
+            .and(warp::delete())
             .and(warp::any().map(move || state.clone()))
             .and_then(handlers::delete_note)
-    }
-
-    pub fn notes_rename(
-        state: models::State,
-    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        warp::path("rename")
-            .and(warp::put())
-            .and(warp::path::tail())
-            .and(warp::body::json())
-            .and(warp::any().map(move || state.clone()))
-            .and_then(handlers::rename_note)
     }
 }
 
 mod handlers {
-    use super::models::{State, Cached, ListEntry, NoteSave, NoteRename};
+    use super::models::{State, Cached, ListEntry, NoteSave};
 
     use std::sync::Arc;
     use std::convert::Infallible;
@@ -194,47 +186,100 @@ mod handlers {
         }
     }
 
-    pub async fn save_note(note_save: NoteSave, state: State) -> Result<impl warp::Reply, Infallible> {
+    pub async fn save_note(path: warp::path::Tail, note_save: NoteSave, state: State) -> Result<impl warp::Reply, warp::reject::Rejection> {
         debug!("save");
-        let repo = state.repo.lock().await;
+        debug!("{:?}", note_save);
+        let path = urlencoding::decode(path.as_str()).unwrap();
+        match note_save {
+            NoteSave::Save { content, message } => {
+                let repo = state.repo.lock().await;
 
-        let head = repo.head().unwrap();
-        let head_tree = head.peel_to_tree().unwrap();
-        let head_commit = head.peel_to_commit().unwrap();
+                let head = repo.head().unwrap();
+                let head_tree = head.peel_to_tree().unwrap();
+                let head_commit = head.peel_to_commit().unwrap();
 
-        let mut index = Index::new().unwrap();
-        index.read_tree(&head_tree).unwrap();
+                let mut index = Index::new().unwrap();
+                index.read_tree(&head_tree).unwrap();
 
-        let blob_oid = repo.blob(note_save.content.as_bytes()).unwrap();
-        let entry = IndexEntry {
-            ctime: IndexTime::new(0, 0),
-            mtime: IndexTime::new(0, 0),
-            dev: 0,
-            ino: 0,
-            mode: 0o100644,
-            uid: 0,
-            gid: 0,
-            file_size: 0,
-            id: blob_oid,
-            flags: 0,
-            flags_extended: 0,
-            path: note_save.path.into_bytes(),
-        };
-        index.add(&entry).unwrap();
+                let blob_oid = repo.blob(content.as_bytes()).unwrap();
+                let entry = IndexEntry {
+                    ctime: IndexTime::new(0, 0),
+                    mtime: IndexTime::new(0, 0),
+                    dev: 0,
+                    ino: 0,
+                    mode: 0o100644,
+                    uid: 0,
+                    gid: 0,
+                    file_size: 0,
+                    id: blob_oid,
+                    flags: 0,
+                    flags_extended: 0,
+                    path: path.into_bytes(),
+                };
+                index.add(&entry).unwrap();
 
-        let tree_oid = index.write_tree_to(&repo).unwrap();
-        let tree = repo.find_tree(tree_oid).unwrap();
+                let tree_oid = index.write_tree_to(&repo).unwrap();
+                let tree = repo.find_tree(tree_oid).unwrap();
 
-        let signature = repo.signature().unwrap();
-        repo.commit(
-            Some("HEAD"),
-            &signature,
-            &signature,
-            &note_save.message,
-            &tree,
-            &[&head_commit],
-        ).unwrap();
-        Ok(warp::reply::json(&true))
+                let signature = repo.signature().unwrap();
+                repo.commit(
+                    Some("HEAD"),
+                    &signature,
+                    &signature,
+                    &message,
+                    &tree,
+                    &[&head_commit],
+                ).unwrap();
+                Ok(warp::reply::json(&true))
+            },
+            NoteSave::Rename { from } => {
+                let found = {
+                    let repo = state.repo.lock().await;
+
+                    let head = repo.head().unwrap();
+                    let head_tree = head.peel_to_tree().unwrap();
+
+                    let mut index = Index::new().unwrap();
+                    index.read_tree(&head_tree).unwrap();
+
+                    index.iter().find(|entry| std::str::from_utf8(&entry.path).unwrap() == from)
+                };
+                if let Some(mut entry) = found {
+                    let repo = state.repo.lock().await;
+
+                    let head = repo.head().unwrap();
+                    let head_tree = head.peel_to_tree().unwrap();
+                    let head_commit = head.peel_to_commit().unwrap();
+
+                    let mut index = Index::new().unwrap();
+                    index.read_tree(&head_tree).unwrap();
+
+                    let from = std::str::from_utf8(&entry.path).unwrap();
+                    index.remove(from.as_ref(), 0).unwrap();
+
+                    let message = format!("Rename {} to {}", &from, &path);
+                    entry.path = path.into_bytes();
+                    index.add(&entry).unwrap();
+
+                    let tree_oid = index.write_tree_to(&repo).unwrap();
+                    let tree = repo.find_tree(tree_oid).unwrap();
+
+                    let signature = repo.signature().unwrap();
+                    repo.commit(
+                        Some("HEAD"),
+                        &signature,
+                        &signature,
+                        &message,
+                        &tree,
+                        &[&head_commit],
+                    ).unwrap();
+                    Ok(warp::reply::json(&true))
+                }
+                else {
+                    Err(warp::reject::not_found())
+                }
+            },
+        }
     }
 
     pub async fn delete_note(path: warp::path::Tail, state: State) -> Result<impl warp::Reply, warp::reject::Rejection> {
@@ -273,55 +318,6 @@ mod handlers {
                 &signature,
                 &signature,
                 &format!("Delete {}", &path),
-                &tree,
-                &[&head_commit],
-            ).unwrap();
-            Ok(warp::reply::json(&true))
-        }
-        else {
-            Err(warp::reject::not_found())
-        }
-    }
-
-    pub async fn rename_note(to_path: warp::path::Tail, note_rename: NoteRename, state: State) -> Result<impl warp::Reply, warp::reject::Rejection> {
-        debug!("rename");
-        let to_path = urlencoding::decode(to_path.as_str()).unwrap();
-        let found = {
-            let repo = state.repo.lock().await;
-
-            let head = repo.head().unwrap();
-            let head_tree = head.peel_to_tree().unwrap();
-
-            let mut index = Index::new().unwrap();
-            index.read_tree(&head_tree).unwrap();
-
-            index.iter().find(|entry| std::str::from_utf8(&entry.path).unwrap() == note_rename.from)
-        };
-        if let Some(mut entry) = found {
-            let repo = state.repo.lock().await;
-
-            let head = repo.head().unwrap();
-            let head_tree = head.peel_to_tree().unwrap();
-            let head_commit = head.peel_to_commit().unwrap();
-
-            let mut index = Index::new().unwrap();
-            index.read_tree(&head_tree).unwrap();
-
-            let path = std::str::from_utf8(&entry.path).unwrap();
-            index.remove(path.as_ref(), 0).unwrap();
-
-            entry.path = to_path.clone().into_bytes();
-            index.add(&entry).unwrap();
-
-            let tree_oid = index.write_tree_to(&repo).unwrap();
-            let tree = repo.find_tree(tree_oid).unwrap();
-
-            let signature = repo.signature().unwrap();
-            repo.commit(
-                Some("HEAD"),
-                &signature,
-                &signature,
-                &format!("Rename {} to {}", &note_rename.from, &to_path),
                 &tree,
                 &[&head_commit],
             ).unwrap();
@@ -390,14 +386,13 @@ mod models {
     }
 
     #[derive(Debug, Deserialize, Serialize, Clone)]
-    pub struct NoteSave {
-        pub path: String,
-        pub content: String,
-        pub message: String,
-    }
-
-    #[derive(Debug, Deserialize, Serialize, Clone)]
-    pub struct NoteRename {
-        pub from: String,
+    pub enum NoteSave {
+        Save {
+            content: String,
+            message: String,
+        },
+        Rename {
+            from: String,
+        },
     }
 }
