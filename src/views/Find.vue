@@ -22,7 +22,7 @@ import axios from 'axios';
 
 @Component
 export default class Home extends Vue {
-  entries: string[] = [];
+  entries: [string, any][] = [];
   tags: string[] = [];
 
   mounted() {
@@ -39,7 +39,7 @@ export default class Home extends Vue {
             }
           }
         }
-        this.tags = Array.from(tags);
+        this.tags = Array.from(tags) as string[];
       });
   }
 }

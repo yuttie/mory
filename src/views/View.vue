@@ -40,7 +40,7 @@ export default class Home extends Vue {
     this.editorIsVisible = !this.editorIsVisible;
   }
 
-  handleKeydown(e) {
+  handleKeydown(e: KeyboardEvent) {
     if (e.ctrlKey && e.key == 's') {
       this.save();
       e.preventDefault();
