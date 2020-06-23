@@ -26,7 +26,7 @@ export default class Home extends Vue {
   tags: string[] = [];
 
   mounted() {
-    axios.get('http://localhost:3030/list')
+    axios.get('http://localhost:3030/notes')
       .then(res => {
         const tags = new Set();
         this.entries = res.data;

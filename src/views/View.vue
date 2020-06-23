@@ -31,7 +31,7 @@ export default class Home extends Vue {
       this.editorIsVisible = true;
     }
     else {
-      axios.get(`http://localhost:3030/load/${this.$route.params.path}`)
+      axios.get(`http://localhost:3030/notes/${this.$route.params.path}`)
         .then(res => {
           this.text = res.data;
         });
@@ -55,10 +55,11 @@ export default class Home extends Vue {
 
   save() {
     const path = this.$route.params.path;
-    axios.post('http://localhost:3030/save', {
-      path: path,
-      content: this.text,
-      message: `Update ${path}`,
+    axios.put(`http://localhost:3030/notes/${path}`, {
+      Save: {
+        content: this.text,
+        message: `Update ${path}`,
+      },
     }).then(res => {
       console.log(res.data);
     });
