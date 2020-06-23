@@ -40,7 +40,8 @@ mod filters {
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         notes_list(state.clone())
             .or(notes_load(state.clone()))
-            .or(notes_save(state))
+            .or(notes_save(state.clone()))
+            .or(notes_delete(state))
     }
 
     pub fn notes_list(
@@ -68,6 +69,16 @@ mod filters {
             .and(warp::body::json())
             .and(warp::any().map(move || state.clone()))
             .and_then(handlers::save_note)
+    }
+
+    pub fn notes_delete(
+        state: models::State,
+    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+        warp::path("delete")
+            .and(warp::delete())
+            .and(warp::path::tail())
+            .and(warp::any().map(move || state.clone()))
+            .and_then(handlers::delete_note)
     }
 }
 
@@ -212,6 +223,52 @@ mod handlers {
             &[&head_commit],
         ).unwrap();
         Ok(warp::reply::json(&true))
+    }
+
+    pub async fn delete_note(path: warp::path::Tail, state: State) -> Result<impl warp::Reply, warp::reject::Rejection> {
+        debug!("delete");
+        let path = urlencoding::decode(path.as_str()).unwrap();
+        let found = {
+            let repo = state.repo.lock().await;
+
+            let head = repo.head().unwrap();
+            let head_tree = head.peel_to_tree().unwrap();
+
+            let mut index = Index::new().unwrap();
+            index.read_tree(&head_tree).unwrap();
+
+            index.iter().find(|entry| std::str::from_utf8(&entry.path).unwrap() == path.as_str())
+        };
+        if let Some(entry) = found {
+            let repo = state.repo.lock().await;
+
+            let head = repo.head().unwrap();
+            let head_tree = head.peel_to_tree().unwrap();
+            let head_commit = head.peel_to_commit().unwrap();
+
+            let mut index = Index::new().unwrap();
+            index.read_tree(&head_tree).unwrap();
+
+            let path = std::str::from_utf8(&entry.path).unwrap();
+            index.remove(path.as_ref(), 0).unwrap();
+
+            let tree_oid = index.write_tree_to(&repo).unwrap();
+            let tree = repo.find_tree(tree_oid).unwrap();
+
+            let signature = repo.signature().unwrap();
+            repo.commit(
+                Some("HEAD"),
+                &signature,
+                &signature,
+                &format!("Delete {}", &path),
+                &tree,
+                &[&head_commit],
+            ).unwrap();
+            Ok(warp::reply::json(&true))
+        }
+        else {
+            Err(warp::reject::not_found())
+        }
     }
 }
 
