@@ -4,6 +4,8 @@ import Home from '../views/Home.vue'
 import Find from '../views/Find.vue'
 import View from '../views/View.vue'
 
+import { v4 as uuidv4 } from 'uuid';
+
 Vue.use(VueRouter)
 
 const routes: Array<RouteConfig> = [
@@ -11,6 +13,16 @@ const routes: Array<RouteConfig> = [
     path: '/',
     name: 'Home',
     component: Home
+  },
+  {
+    path: '/create',
+    name: 'Create',
+    redirect: to => {
+      return {
+        name: 'View',
+        params: { path: uuidv4() },
+      };
+    },
   },
   {
     path: '/find',
