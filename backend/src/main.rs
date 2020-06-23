@@ -12,9 +12,9 @@ async fn main() {
         Ok(repo) => repo,
         Err(e) => panic!("failed to open: {}", e),
     };
-    let repo = Arc::new(Mutex::new(repo));
+    let state = models::State::new(repo);
 
-    let api = filters::notes(repo);
+    let api = filters::notes(state);
 
     let cors = warp::cors()
         .allow_any_origin()
@@ -27,6 +27,7 @@ async fn main() {
 
 mod filters {
     use super::handlers;
+    use super::models;
 
     use std::sync::Arc;
 
@@ -35,43 +36,43 @@ mod filters {
     use tokio::sync::{Mutex};
 
     pub fn notes(
-        repo: Arc<Mutex<Repository>>,
+        state: models::State,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        notes_list(repo.clone())
-            .or(notes_load(repo.clone()))
-            .or(notes_save(repo))
+        notes_list(state.clone())
+            .or(notes_load(state.clone()))
+            .or(notes_save(state))
     }
 
     pub fn notes_list(
-        repo: Arc<Mutex<Repository>>,
+        state: models::State,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::path("list")
-            .and(warp::any().map(move || repo.clone()))
+            .and(warp::any().map(move || state.clone()))
             .and_then(handlers::list_notes)
     }
 
     pub fn notes_load(
-        repo: Arc<Mutex<Repository>>,
+        state: models::State,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::path("load")
             .and(warp::path::tail())
-            .and(warp::any().map(move || repo.clone()))
+            .and(warp::any().map(move || state.clone()))
             .and_then(handlers::load_note)
     }
 
     pub fn notes_save(
-        repo: Arc<Mutex<Repository>>,
+        state: models::State,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         warp::path("save")
             .and(warp::post())
             .and(warp::body::json())
-            .and(warp::any().map(move || repo.clone()))
+            .and(warp::any().map(move || state.clone()))
             .and_then(handlers::save_note)
     }
 }
 
 mod handlers {
-    use super::models::{NoteSave};
+    use super::models::{State, Cached, ListEntry, NoteSave};
 
     use std::sync::Arc;
     use std::convert::Infallible;
@@ -86,26 +87,35 @@ mod handlers {
     use mime_guess;
     use warp::http::header::CONTENT_TYPE;
 
-    pub async fn list_notes(repo: Arc<Mutex<Repository>>) -> Result<impl warp::Reply, Infallible> {
+    pub async fn list_notes(state: State) -> Result<impl warp::Reply, Infallible> {
         debug!("list");
-        let repo = repo.lock().await;
+        let repo = state.repo.lock().await;
+        let mut cached_entries = state.cached_entries.lock().await;
+        if let Some(entries) = cached_entries.get(&repo) {
+            Ok(warp::reply::json(&entries))
+        }
+        else {
+            let head = repo.head().unwrap();
+            let head_commit = head.peel_to_commit().unwrap();
+            let head_tree = head.peel_to_tree().unwrap();
 
-        let head = repo.head().unwrap();
-        let head_tree = head.peel_to_tree().unwrap();
+            let mut index = Index::new().unwrap();
+            index.read_tree(&head_tree).unwrap();
 
-        let mut index = Index::new().unwrap();
-        index.read_tree(&head_tree).unwrap();
-
-        let mut entries = Vec::new();
-        for entry in index.iter() {
-            let path = String::from_utf8(entry.path).unwrap();
-            let blob = repo.find_blob(entry.id).unwrap();
-            if blob.content().starts_with(b"---\n") {
-                if let Some(j) = blob.content().windows(5).position(|window| window == b"\n---\n") {
-                    if let Ok(yaml) = std::str::from_utf8(&blob.content()[4..j]) {
-                        let doc: serde_yaml::Value = serde_yaml::from_str(yaml).unwrap();
-                        debug!("{:?}", &doc);
-                        entries.push((path.clone(), Some(doc)));
+            let mut entries = Vec::new();
+            for entry in index.iter() {
+                let path = String::from_utf8(entry.path).unwrap();
+                let blob = repo.find_blob(entry.id).unwrap();
+                if blob.content().starts_with(b"---\n") {
+                    if let Some(j) = blob.content().windows(5).position(|window| window == b"\n---\n") {
+                        if let Ok(yaml) = std::str::from_utf8(&blob.content()[4..j]) {
+                            let doc: serde_yaml::Value = serde_yaml::from_str(yaml).unwrap();
+                            debug!("{:?}", &doc);
+                            entries.push((path.clone(), Some(doc)));
+                        }
+                        else {
+                            entries.push((path.clone(), None));
+                        }
                     }
                     else {
                         entries.push((path.clone(), None));
@@ -115,18 +125,20 @@ mod handlers {
                     entries.push((path.clone(), None));
                 }
             }
-            else {
-                entries.push((path.clone(), None));
-            }
+            let reply = warp::reply::json(&entries);
+            *cached_entries = Cached::Computed {
+                commit_id: head_commit.id(),
+                data: entries,
+            };
+            Ok(reply)
         }
-        Ok(warp::reply::json(&entries))
     }
 
-    pub async fn load_note(path: warp::path::Tail, repo: Arc<Mutex<Repository>>) -> Result<impl warp::Reply, warp::reject::Rejection> {
+    pub async fn load_note(path: warp::path::Tail, state: State) -> Result<impl warp::Reply, warp::reject::Rejection> {
         debug!("load");
         let path = urlencoding::decode(path.as_str()).unwrap();
         let found = {
-            let repo = repo.lock().await;
+            let repo = state.repo.lock().await;
 
             let head = repo.head().unwrap();
             let head_tree = head.peel_to_tree().unwrap();
@@ -138,7 +150,7 @@ mod handlers {
         };
         if let Some(entry) = found {
             let found = {
-                let repo = repo.lock().await;
+                let repo = state.repo.lock().await;
                 repo.find_blob(entry.id).map(|blob| Vec::from(blob.content()))
             };
             match found {
@@ -159,9 +171,9 @@ mod handlers {
         }
     }
 
-    pub async fn save_note(note_save: NoteSave, repo: Arc<Mutex<Repository>>) -> Result<impl warp::Reply, Infallible> {
+    pub async fn save_note(note_save: NoteSave, state: State) -> Result<impl warp::Reply, Infallible> {
         debug!("save");
-        let repo = repo.lock().await;
+        let repo = state.repo.lock().await;
 
         let head = repo.head().unwrap();
         let head_tree = head.peel_to_tree().unwrap();
@@ -204,7 +216,60 @@ mod handlers {
 }
 
 mod models {
+    use std::sync::Arc;
+    use std::option::Option;
+
+    use git2::{Repository, Oid};
     use serde::{Deserialize, Serialize};
+    use tokio::sync::Mutex;
+
+    pub type Metadata = serde_yaml::Value;
+    pub type ListEntry = (String, Option<Metadata>);
+
+    pub enum Cached<T> {
+        Computed {
+            commit_id: Oid,
+            data: T,
+        },
+        None,
+    }
+
+    impl<T> Cached<T> {
+        pub fn get(&self, repo: &Repository) -> Option<&T> {
+            match self {
+                Cached::None => None,
+                Cached::Computed { commit_id, data } => {
+                    let head = repo.head().unwrap();
+                    match head.peel_to_commit() {
+                        Err(_) => None,
+                        Ok(commit) => {
+                            if *commit_id == commit.id() {
+                                Some(data)
+                            }
+                            else {
+                                None
+                            }
+                        },
+                    }
+                },
+            }
+        }
+    }
+
+    #[derive(Clone)]
+    pub struct State {
+        pub repo: Arc<Mutex<Repository>>,
+        pub cached_entries: Arc<Mutex<Cached<Vec<ListEntry>>>>,
+    }
+
+    impl State {
+        pub fn new(repo: Repository) -> State {
+            State {
+                repo: Arc::new(Mutex::new(repo)),
+                cached_entries: Arc::new(Mutex::new(Cached::None)),
+            }
+        }
+    }
 
     #[derive(Debug, Deserialize, Serialize, Clone)]
     pub struct NoteSave {
