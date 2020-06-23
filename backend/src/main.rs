@@ -72,7 +72,7 @@ mod filters {
 }
 
 mod handlers {
-    use super::models::{State, NoteSave};
+    use super::models::{State, ListEntry, NoteSave};
 
     use std::sync::Arc;
     use std::convert::Infallible;
@@ -89,24 +89,33 @@ mod handlers {
 
     pub async fn list_notes(state: State) -> Result<impl warp::Reply, Infallible> {
         debug!("list");
-        let repo = state.repo.lock().await;
+        let mut cached_entries = state.cached_entries.lock().await;
+        if let Some(ref entries) = *cached_entries {
+            Ok(warp::reply::json(&entries))
+        }
+        else {
+            let repo = state.repo.lock().await;
 
-        let head = repo.head().unwrap();
-        let head_tree = head.peel_to_tree().unwrap();
+            let head = repo.head().unwrap();
+            let head_tree = head.peel_to_tree().unwrap();
 
-        let mut index = Index::new().unwrap();
-        index.read_tree(&head_tree).unwrap();
+            let mut index = Index::new().unwrap();
+            index.read_tree(&head_tree).unwrap();
 
-        let mut entries = Vec::new();
-        for entry in index.iter() {
-            let path = String::from_utf8(entry.path).unwrap();
-            let blob = repo.find_blob(entry.id).unwrap();
-            if blob.content().starts_with(b"---\n") {
-                if let Some(j) = blob.content().windows(5).position(|window| window == b"\n---\n") {
-                    if let Ok(yaml) = std::str::from_utf8(&blob.content()[4..j]) {
-                        let doc: serde_yaml::Value = serde_yaml::from_str(yaml).unwrap();
-                        debug!("{:?}", &doc);
-                        entries.push((path.clone(), Some(doc)));
+            let mut entries = Vec::new();
+            for entry in index.iter() {
+                let path = String::from_utf8(entry.path).unwrap();
+                let blob = repo.find_blob(entry.id).unwrap();
+                if blob.content().starts_with(b"---\n") {
+                    if let Some(j) = blob.content().windows(5).position(|window| window == b"\n---\n") {
+                        if let Ok(yaml) = std::str::from_utf8(&blob.content()[4..j]) {
+                            let doc: serde_yaml::Value = serde_yaml::from_str(yaml).unwrap();
+                            debug!("{:?}", &doc);
+                            entries.push((path.clone(), Some(doc)));
+                        }
+                        else {
+                            entries.push((path.clone(), None));
+                        }
                     }
                     else {
                         entries.push((path.clone(), None));
@@ -116,11 +125,10 @@ mod handlers {
                     entries.push((path.clone(), None));
                 }
             }
-            else {
-                entries.push((path.clone(), None));
-            }
+            let reply = warp::reply::json(&entries);
+            *cached_entries = Some(entries);
+            Ok(reply)
         }
-        Ok(warp::reply::json(&entries))
     }
 
     pub async fn load_note(path: warp::path::Tail, state: State) -> Result<impl warp::Reply, warp::reject::Rejection> {
@@ -206,20 +214,26 @@ mod handlers {
 
 mod models {
     use std::sync::Arc;
+    use std::option::Option;
 
     use git2::Repository;
     use serde::{Deserialize, Serialize};
     use tokio::sync::Mutex;
 
+    pub type Metadata = serde_yaml::Value;
+    pub type ListEntry = (String, Option<Metadata>);
+
     #[derive(Clone)]
     pub struct State {
         pub repo: Arc<Mutex<Repository>>,
+        pub cached_entries: Arc<Mutex<Option<Vec<ListEntry>>>>,
     }
 
     impl State {
         pub fn new(repo: Repository) -> State {
             State {
                 repo: Arc::new(Mutex::new(repo)),
+                cached_entries: Arc::new(Mutex::new(None)),
             }
         }
     }
