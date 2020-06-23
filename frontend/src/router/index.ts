@@ -21,6 +21,7 @@ const routes: Array<RouteConfig> = [
       return {
         name: 'View',
         params: { path: uuidv4() },
+        query: { mode: 'create' },
       };
     },
   },
