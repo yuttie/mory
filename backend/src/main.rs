@@ -41,7 +41,8 @@ mod filters {
         notes_list(state.clone())
             .or(notes_load(state.clone()))
             .or(notes_save(state.clone()))
-            .or(notes_delete(state))
+            .or(notes_delete(state.clone()))
+            .or(notes_rename(state))
     }
 
     pub fn notes_list(
@@ -80,10 +81,21 @@ mod filters {
             .and(warp::any().map(move || state.clone()))
             .and_then(handlers::delete_note)
     }
+
+    pub fn notes_rename(
+        state: models::State,
+    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+        warp::path("rename")
+            .and(warp::put())
+            .and(warp::path::tail())
+            .and(warp::body::json())
+            .and(warp::any().map(move || state.clone()))
+            .and_then(handlers::rename_note)
+    }
 }
 
 mod handlers {
-    use super::models::{State, Cached, ListEntry, NoteSave};
+    use super::models::{State, Cached, ListEntry, NoteSave, NoteRename};
 
     use std::sync::Arc;
     use std::convert::Infallible;
@@ -270,6 +282,55 @@ mod handlers {
             Err(warp::reject::not_found())
         }
     }
+
+    pub async fn rename_note(to_path: warp::path::Tail, note_rename: NoteRename, state: State) -> Result<impl warp::Reply, warp::reject::Rejection> {
+        debug!("rename");
+        let to_path = urlencoding::decode(to_path.as_str()).unwrap();
+        let found = {
+            let repo = state.repo.lock().await;
+
+            let head = repo.head().unwrap();
+            let head_tree = head.peel_to_tree().unwrap();
+
+            let mut index = Index::new().unwrap();
+            index.read_tree(&head_tree).unwrap();
+
+            index.iter().find(|entry| std::str::from_utf8(&entry.path).unwrap() == note_rename.from)
+        };
+        if let Some(mut entry) = found {
+            let repo = state.repo.lock().await;
+
+            let head = repo.head().unwrap();
+            let head_tree = head.peel_to_tree().unwrap();
+            let head_commit = head.peel_to_commit().unwrap();
+
+            let mut index = Index::new().unwrap();
+            index.read_tree(&head_tree).unwrap();
+
+            let path = std::str::from_utf8(&entry.path).unwrap();
+            index.remove(path.as_ref(), 0).unwrap();
+
+            entry.path = to_path.clone().into_bytes();
+            index.add(&entry).unwrap();
+
+            let tree_oid = index.write_tree_to(&repo).unwrap();
+            let tree = repo.find_tree(tree_oid).unwrap();
+
+            let signature = repo.signature().unwrap();
+            repo.commit(
+                Some("HEAD"),
+                &signature,
+                &signature,
+                &format!("Rename {} to {}", &note_rename.from, &to_path),
+                &tree,
+                &[&head_commit],
+            ).unwrap();
+            Ok(warp::reply::json(&true))
+        }
+        else {
+            Err(warp::reject::not_found())
+        }
+    }
 }
 
 mod models {
@@ -333,5 +394,10 @@ mod models {
         pub path: String,
         pub content: String,
         pub message: String,
+    }
+
+    #[derive(Debug, Deserialize, Serialize, Clone)]
+    pub struct NoteRename {
+        pub from: String,
     }
 }
