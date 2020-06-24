@@ -38,7 +38,6 @@ export default class Editor extends Vue {
     this.editor!.on('change', () => {
       this.$emit('change', this.editor!.getValue());
     });
-    this.editor.resize();
   }
 }
 </script>
