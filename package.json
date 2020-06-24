@@ -1,6 +1,7 @@
 {
   "name": "mory",
   "version": "0.1.0",
+  "author": "Yuta Taniguchi <yuta.taniguchi.y.t@gmail.com>",
   "private": true,
   "scripts": {
     "serve": "vue-cli-service serve",
