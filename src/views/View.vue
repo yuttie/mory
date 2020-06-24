@@ -72,6 +72,7 @@ export default class View extends Vue {
       },
     }).then(res => {
       console.log(res.data);
+      this.initialText = this.text;
     });
   }
 }
