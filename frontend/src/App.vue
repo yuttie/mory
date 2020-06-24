@@ -47,7 +47,7 @@ html, body {
 
 .router-view {
   flex: 1 1 0;
-  overflow: auto;
+  overflow: hidden;
   position: relative;
 }
 </style>
