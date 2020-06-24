@@ -146,6 +146,7 @@ export default class Find extends Vue {
 .find {
   display: flex;
   flex-direction: column;
+  padding: 1em;
 }
 
 .query {
@@ -162,11 +163,20 @@ export default class Find extends Vue {
   padding: 1em;
 }
 
+.tags {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 1em;
+}
+
 .tag {
+  display: inline-block;
   border: 1px solid #ccc;
   border-radius: 4px;
   padding: 0.2em 0.4em;
-  margin: 0 4px;
+  margin: 0.1em 0.2em;
   cursor: pointer;
 
   &.not-in-query {
