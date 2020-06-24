@@ -6,7 +6,8 @@
         <span
           v-for="tag of tags"
           v-bind:key="tag"
-          v-bind:class="{ 'not-in-query': query.tags.size > 0 && !query.tags.has(tag) }"
+          v-bind:class="{ 'not-in-query': !query.tags.has(tag) }"
+          v-on:click="toggleTag(tag)"
           class="tag"
         >{{ tag }}</span>
       </div>
@@ -121,6 +122,21 @@ export default class Find extends Vue {
     }
   }
 
+  toggleTag(tag: string) {
+    let hashtag = '#' + tag;
+    if (/\s/.test(hashtag)) {
+      hashtag = `"${hashtag}"`;
+    }
+
+    let queryElems = [...this.queryText.matchAll(/("[^"]+")|([^\s]+)/g)].map(x => x[1] || x[2]);
+    if (this.query.tags.has(tag)) {
+      queryElems = queryElems.filter(x => x !== hashtag);
+    }
+    else {
+      queryElems.push(hashtag);
+    }
+    this.queryText = queryElems.join(' ');
+  }
 }
 </script>
 
@@ -147,10 +163,16 @@ export default class Find extends Vue {
 .tag {
   border: 1px solid #ccc;
   border-radius: 4px;
+  padding: 0.2em 0.4em;
   margin: 0 4px;
+  cursor: pointer;
 
   &.not-in-query {
     opacity: 0.5;
+  }
+
+  &.not-in-query:hover {
+    opacity: 0.7;
   }
 }
 </style>
