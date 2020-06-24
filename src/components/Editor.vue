@@ -7,6 +7,7 @@
 import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 
 import ace from 'ace-builds';
+import 'ace-builds/src-noconflict/keybinding-vim';
 import 'ace-builds/src-noconflict/mode-markdown';
 import 'ace-builds/src-noconflict/theme-nord_dark';
 
@@ -28,6 +29,10 @@ export default class Editor extends Vue {
     this.editor = ace.edit(this.$refs.editor as Element, {
       mode: 'ace/mode/markdown',
       theme: 'ace/theme/nord_dark',
+      keyboardHandler: 'ace/keyboard/vim',
+      fontSize: 14,
+      fontFamily: 'monospace',
+      navigateWithinSoftTabs: true,
     });
     this.editor!.on('change', () => {
       this.$emit('change', this.editor!.getValue());
