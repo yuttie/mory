@@ -1,9 +1,17 @@
 <template>
   <div class="home">
-    <button type="button" v-on:click="toggleEditor">{{ editorIsVisible ? 'Hide editor' : 'Edit' }}</button>
-    <div>
-      <textarea v-model="text" class="editor" v-bind:class="{ shifted: editorIsVisible }"></textarea>
-      <div v-html="rendered" class="rendered" v-bind:class="{ shifted: editorIsVisible }"></div>
+    <div
+      v-for="category of categorizedEntries.entries()"
+      v-bind:key="category"
+      class="category"
+    >
+      <h1>{{ category[0] }}</h1>
+      <ul>
+        <li
+          v-for="entry of category[1]"
+          v-bind:key="entry[0]"
+        ><router-link v-bind:to="{ name: 'View', params: { path: entry[0] } }">{{ entry[0] }}</router-link></li>
+      </ul>
     </div>
   </div>
 </template>
@@ -11,66 +19,46 @@
 <script lang="ts">
 import { Component, Prop, Vue } from 'vue-property-decorator';
 
-import marked from 'marked';
+import axios from 'axios';
 
 @Component
 export default class Home extends Vue {
-  text = `abc
-===
+  entries: [string, any][] = [];
 
-## def
-
-This *is* an **Apple**.
-
-
-![google](https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_272x92dp.png)
-
-* [ ] abc
-* [x] def ~xyz~
-    * 1
-    * 2
-
-| foo | bar |
-| --- | --- |
-| baz | bim |
-
-`;
-  editorIsVisible = false;
-
-  get rendered() {
-    return marked(this.text);
+  get categorizedEntries() {
+    const categorized: Map<string, [string, any][]> = new Map();
+    for (const entry of this.entries) {
+      if (entry[1] !== null) {
+        if (Object.prototype.hasOwnProperty.call(entry[1], 'tags')) {
+          for (const tag of entry[1].tags) {
+            const match = tag.match(/^home:(.+)$/);
+            if (match) {
+              const category = match[1];
+              if (!categorized.has(category)) {
+                categorized.set(category, []);
+              }
+              categorized.get(category)!.push(entry);
+            }
+          }
+        }
+      }
+    }
+    return categorized;
   }
 
-  toggleEditor() {
-    this.editorIsVisible = !this.editorIsVisible;
+  mounted() {
+    axios.get('http://localhost:3030/notes')
+      .then(res => {
+        this.entries = res.data;
+      });
   }
+
 }
 </script>
 
 <style scoped lang="scss">
-.editor {
-  position: absolute;
-  width: 50%;
-  height: 100%;
-  margin-left: -50%;
-  transition: margin-left 500ms;
-  resize: none;
-}
-
-.rendered {
-  margin-left: 0;
-  width: 100%;
-  height: 100%;
-  transition: margin-left 500ms,
-              width 500ms;
-}
-
-.editor.shifted {
-  margin-left: 0;
-}
-
-.rendered.shifted {
-  margin-left: 50%;
-  width: 50%;
+.category {
+  border: 1px solid #ccc;
+  border-radius: 0.5em;
 }
 </style>
