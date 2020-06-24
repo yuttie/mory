@@ -4,14 +4,9 @@
       <button type="button" v-on:click="toggleEditor">{{ editorIsVisible ? 'Hide editor' : 'Edit' }}</button>
       <span v-show="text !== initialText">Modified</span>
     </div>
-    <div>
-      <textarea
-        v-model="text"
-        v-on:keydown="handleKeydown"
-        v-bind:class="{ shifted: editorIsVisible }"
-        class="editor"
-      ></textarea>
-      <div v-html="rendered" class="rendered" v-bind:class="{ shifted: editorIsVisible }"></div>
+    <div class="panes" v-bind:class="{ shifted: editorIsVisible }">
+      <Editor v-bind:value="text" v-on:change="text = $event"></Editor>
+      <div v-html="rendered" class="rendered"></div>
     </div>
   </div>
 </template>
@@ -19,10 +14,16 @@
 <script lang="ts">
 import { Component, Prop, Vue } from 'vue-property-decorator';
 
+import Editor from '@/components/Editor.vue';
+
 import axios from 'axios';
 import marked from 'marked';
 
-@Component
+@Component({
+  components: {
+    Editor,
+  },
+})
 export default class View extends Vue {
   text = '';
   initialText = '';
@@ -74,28 +75,42 @@ export default class View extends Vue {
 </script>
 
 <style scoped lang="scss">
+.view {
+  display: flex;
+  flex-direction: column;
+}
+
+.panes {
+  flex: 1 1 0;
+  position: relative;
+  overflow: hidden;
+
+  & > * {
+    width: 50%;
+    height: 100%;
+  }
+}
+
 .editor {
   position: absolute;
-  width: 50%;
-  height: 100%;
   margin-left: -50%;
   transition: margin-left 500ms;
-  resize: none;
 }
 
 .rendered {
   margin-left: 0;
   width: 100%;
   height: 100%;
+  overflow: auto;
   transition: margin-left 500ms,
               width 500ms;
 }
 
-.editor.shifted {
+.panes.shifted .editor {
   margin-left: 0;
 }
 
-.rendered.shifted {
+.panes.shifted .rendered {
   margin-left: 50%;
   width: 50%;
 }
