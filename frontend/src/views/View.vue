@@ -2,7 +2,7 @@
   <div class="view">
     <div>
       <button type="button" v-on:click="toggleEditor">{{ editorIsVisible ? 'Hide editor' : 'Edit' }}</button>
-      <span v-show="text !== initialText">Modified</span>
+      <span v-show="isModified">Modified</span>
     </div>
     <div class="panes" v-bind:class="{ shifted: editorIsVisible }">
       <Editor v-bind:value="text" v-on:change="text = $event" ref="editor"></Editor>
@@ -47,6 +47,10 @@ export default class View extends Vue {
 
   get rendered() {
     return marked(this.text);
+  }
+
+  get isModified(): boolean {
+    return this.text !== this.initialText;
   }
 
   toggleEditor() {
