@@ -43,6 +43,10 @@ export default class Editor extends Vue {
   focus() {
     this.editor!.focus();
   }
+
+  blur() {
+    this.editor!.blur();
+  }
 }
 </script>
 
