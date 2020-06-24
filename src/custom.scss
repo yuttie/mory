@@ -1,0 +1,46 @@
+.rendered {
+  padding: 1rem;
+  font-family: 'M+ 1c', 'Source Han Sans', sans-serif;
+  line-height: 1.2;
+  color: #4c566a;
+
+  h1 {
+    font-weight: 800;
+  }
+
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-weight: 500;
+  }
+
+  h1 { font-size: 1.875rem; }
+  h2 { font-size: 1.500rem; }
+  h3 { font-size: 1.250rem; }
+  h4 { font-size: 1.125rem; }
+  h5 { font-size: 1.000rem; }
+  h6 { font-size: 1.000rem; }
+
+  h2 {
+    padding-top: 4rem;
+    margin-top: 4rem;
+    border-top: 2px solid rgb(237,242,247);
+  }
+
+  pre, pre[class*="language-"],
+  code, code[class*="language-"] {
+    font-family: monospace;
+    border: none;
+  }
+
+  pre {
+    border-radius: 0.5rem;
+    padding: 0.5em 1.5em;
+    overflow: auto;
+
+    color: #f8f8f2;
+    background-color: #2e3440;
+  }
+}
