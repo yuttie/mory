@@ -1,12 +1,12 @@
 <template>
   <div class="find">
     <div>
-      <input v-on:input="onQueryInput($event)" type="text" class="query" autofocus ref="query">
+      <input v-model="queryText" type="text" class="query" autofocus ref="query" placeholder="Search">
       <div class="tags">
         <span
           v-for="tag of tags"
           v-bind:key="tag"
-          v-bind:class="{ 'not-in-query': queryTags.size > 0 && !queryTags.has(tag) }"
+          v-bind:class="{ 'not-in-query': query.tags.size > 0 && !query.tags.has(tag) }"
           class="tag"
         >{{ tag }}</span>
       </div>
@@ -24,18 +24,55 @@ import { Component, Prop, Vue } from 'vue-property-decorator';
 
 import axios from 'axios';
 
+interface Query {
+  keywords: Set<any>;
+  tags: Set<any>;
+}
+
 @Component
 export default class Find extends Vue {
   entries: [string, any][] = [];
-  tags: string[] = [];
-  queryKeywords: Set<any> = new Set();
-  queryTags: Set<any> = new Set();
+  queryText = '';
+
+  get tags() {
+    const tags = new Set();
+    for (const entry of this.entries) {
+      if (entry[1] !== null) {
+        if (Object.prototype.hasOwnProperty.call(entry[1], 'tags')) {
+          for (const tag of entry[1].tags) {
+            tags.add(tag);
+          }
+        }
+      }
+    }
+    return Array.from(tags) as string[];
+  }
+
+  get query() {
+    const queryKeywords = new Set();
+    const queryTags = new Set();
+    for (const match of this.queryText.matchAll(/"([^"]+)"|([^\s]+)/g)) {
+      const text = match[1] || match[2];
+      if (text.startsWith('#')) {
+        queryTags.add(text.slice(1));
+      }
+      else {
+        queryKeywords.add(text);
+      }
+    }
+
+    return {
+      keywords: queryKeywords,
+      tags: queryTags,
+    };
+  }
 
   get matchedEntries() {
     const matched = [];
 
-    const queryKeywords = [...this.queryKeywords];
-    const queryTags = [...this.queryTags];
+    const query: Query = this.query;
+    const queryKeywords: string[] = [...query.keywords];
+    const queryTags: string[] = [...query.tags];
 
     for (const entry of this.entries) {
       if (queryKeywords.length > 0) {
@@ -69,18 +106,7 @@ export default class Find extends Vue {
 
     axios.get('http://localhost:3030/notes')
       .then(res => {
-        const tags = new Set();
         this.entries = res.data;
-        for (const entry of this.entries) {
-          if (entry[1] !== null) {
-            if (Object.prototype.hasOwnProperty.call(entry[1], 'tags')) {
-              for (const tag of entry[1].tags) {
-                tags.add(tag);
-              }
-            }
-          }
-        }
-        this.tags = Array.from(tags) as string[];
       });
   }
 
@@ -95,22 +121,6 @@ export default class Find extends Vue {
     }
   }
 
-  onQueryInput(e: InputEvent) {
-    const query = (e.target as HTMLInputElement).value;
-    const queryKeywords = new Set();
-    const queryTags = new Set();
-    for (const match of query.matchAll(/"([^"]+)"|([^\s]+)/g)) {
-      const text = match[1] || match[2];
-      if (text.startsWith('#')) {
-        queryTags.add(text.slice(1));
-      }
-      else {
-        queryKeywords.add(text);
-      }
-    }
-    this.queryKeywords = queryKeywords;
-    this.queryTags = queryTags;
-  }
 }
 </script>
 
