@@ -1,5 +1,6 @@
 <template>
-  <div ref="editor" class="editor">
+  <div class="editor">
+    <div ref="editor"></div>
   </div>
 </template>
 
@@ -44,7 +45,11 @@ export default class Editor extends Vue {
 
 <style scoped lang="scss">
 .editor {
-  width: 100%;
-  height: 100%;
+  position: relative;
+  display: flex;
+
+  & > * {
+    flex: 1 1 0;
+  }
 }
 </style>
