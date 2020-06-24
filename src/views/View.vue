@@ -44,8 +44,6 @@ export default class View extends Vue {
   editorIsVisible = false;
 
   mounted() {
-    console.log(this.$route.params.path);
-
     window.addEventListener('keydown', this.handleKeydown);
 
     if (this.$route.query.mode === 'create') {
@@ -85,7 +83,6 @@ export default class View extends Vue {
   }
 
   handleKeydown(e: KeyboardEvent) {
-    console.log(e);
     if (!this.editorIsVisible && e.key === 'e') {
       this.toggleEditor();
     }
@@ -108,7 +105,6 @@ export default class View extends Vue {
         message: `Update ${path}`,
       },
     }).then(res => {
-      console.log(res.data);
       this.initialText = this.text;
     });
   }
