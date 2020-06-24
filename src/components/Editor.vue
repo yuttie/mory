@@ -39,6 +39,10 @@ export default class Editor extends Vue {
       this.$emit('change', this.editor!.getValue());
     });
   }
+
+  focus() {
+    this.editor!.focus();
+  }
 }
 </script>
 

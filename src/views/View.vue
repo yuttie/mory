@@ -5,7 +5,7 @@
       <span v-show="text !== initialText">Modified</span>
     </div>
     <div class="panes" v-bind:class="{ shifted: editorIsVisible }">
-      <Editor v-bind:value="text" v-on:change="text = $event"></Editor>
+      <Editor v-bind:value="text" v-on:change="text = $event" ref="editor"></Editor>
       <div v-html="rendered" class="rendered"></div>
     </div>
   </div>
@@ -51,6 +51,7 @@ export default class View extends Vue {
 
   toggleEditor() {
     this.editorIsVisible = !this.editorIsVisible;
+    (this.$refs.editor as Editor).focus();
   }
 
   handleKeydown(e: KeyboardEvent) {
