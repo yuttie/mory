@@ -15,7 +15,7 @@
     <ul class="list">
       <li
         v-for="entry of matchedEntries"
-        v-bind:key="entry[0]"><a v-bind:href="`/view/${entry[0]}`">{{ entry[0] }}</a></li>
+        v-bind:key="entry[0]"><router-link v-bind:to="{ path: `/view/${entry[0]}` }">{{ entry[0] }}</router-link></li>
     </ul>
   </div>
 </template>
