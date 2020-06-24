@@ -4,7 +4,7 @@
       <input v-model="queryText" type="text" class="query" autofocus ref="query" placeholder="Search">
       <div class="tags">
         <span
-          v-for="tag of tags"
+          v-for="tag of [...tags].sort()"
           v-bind:key="tag"
           v-bind:class="{ 'not-in-query': !query.tags.has(tag) }"
           v-on:click="toggleTag(tag)"
