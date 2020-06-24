@@ -4,6 +4,7 @@ process.env.VUE_APP_AUTHOR = require('./package.json').author.replace(/<[^>]+>/,
 process.env.VUE_APP_BUILD_YEAR = new Date().getFullYear();
 
 module.exports = {
+  publicPath: process.env.VUE_APP_APPLICATION_ROOT,
   css: {
     loaderOptions: {
       sass: {
