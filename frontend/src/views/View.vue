@@ -51,7 +51,9 @@ export default class View extends Vue {
 
   toggleEditor() {
     this.editorIsVisible = !this.editorIsVisible;
-    (this.$refs.editor as Editor).focus();
+    if (this.editorIsVisible) {
+      (this.$refs.editor as Editor).focus();
+    }
   }
 
   handleKeydown(e: KeyboardEvent) {
