@@ -31,6 +31,9 @@ export default class View extends Vue {
 
   mounted() {
     console.log(this.$route.params.path);
+
+    window.addEventListener('keydown', this.handleKeydown);
+
     if (this.$route.query.mode === 'create') {
       this.text = '';
       this.initialText = this.text;
@@ -43,6 +46,10 @@ export default class View extends Vue {
           this.initialText = this.text;
         });
     }
+  }
+
+  destroyed() {
+    window.removeEventListener('keydown', this.handleKeydown);
   }
 
   get rendered() {
@@ -58,11 +65,23 @@ export default class View extends Vue {
     if (this.editorIsVisible) {
       (this.$refs.editor as Editor).focus();
     }
+    else {
+      (this.$refs.editor as Editor).blur();
+    }
   }
 
   handleKeydown(e: KeyboardEvent) {
-    if (e.ctrlKey && e.key == 's') {
-      this.save();
+    console.log(e);
+    if (!this.editorIsVisible && e.key === 'e') {
+      this.toggleEditor();
+    }
+    else if (e.ctrlKey && e.key === 'Enter') {
+      this.toggleEditor();
+    }
+    else if (e.ctrlKey && e.key === 's') {
+      if (this.isModified) {
+        this.save();
+      }
       e.preventDefault();
     }
   }
