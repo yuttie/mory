@@ -18,6 +18,20 @@ import Editor from '@/components/Editor.vue';
 
 import axios from 'axios';
 import marked from 'marked';
+import Prism from 'prismjs';
+import 'prism-themes/themes/prism-nord.css';
+
+marked.setOptions({
+  gfm: true,
+  highlight: function(code, lang) {
+    if (Prism.languages[lang]) {
+      return Prism.highlight(code, Prism.languages[lang], lang);
+    }
+    else {
+      return code;
+    }
+  },
+});
 
 @Component({
   components: {
