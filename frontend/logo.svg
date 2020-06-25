@@ -14,7 +14,10 @@
    version="1.1"
    viewBox="0 0 135.46666 135.46667"
    height="512"
-   width="512">
+   width="512"
+   inkscape:export-filename="/home/yuta/Project/mory/src/assets/logo.png"
+   inkscape:export-xdpi="48"
+   inkscape:export-ydpi="48">
   <defs
      id="defs2">
     <linearGradient
@@ -39,7 +42,7 @@
      inkscape:snap-global="true"
      inkscape:window-maximized="0"
      inkscape:window-y="242"
-     inkscape:window-x="460"
+     inkscape:window-x="456"
      inkscape:window-height="1695"
      inkscape:window-width="2812"
      units="px"
@@ -47,9 +50,9 @@
      inkscape:document-rotation="0"
      inkscape:current-layer="layer1"
      inkscape:document-units="px"
-     inkscape:cy="437.49305"
-     inkscape:cx="-60.8561"
-     inkscape:zoom="1.0212997"
+     inkscape:cy="136.72614"
+     inkscape:cx="270.52623"
+     inkscape:zoom="0.18054199"
      inkscape:pageshadow="2"
      inkscape:pageopacity="0.0"
      borderopacity="1.0"
@@ -64,7 +67,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
+        <dc:title />
       </cc:Work>
     </rdf:RDF>
   </metadata>
@@ -75,12 +78,12 @@
     <g
        inkscape:export-ydpi="48"
        inkscape:export-xdpi="48"
-       transform="translate(-0.28506055,-0.4378237)"
+       transform="rotate(180,68.405033,67.423078)"
        id="g911">
       <path
          sodipodi:nodetypes="ccccccc"
-         style="fill:#4b6e95;fill-opacity:1;fill-rule:nonzero;stroke:#5e83ae;stroke-width:0.402283;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-         d="M 16.615945,8.7230324 V 119.57361 H 127.46651 V 64.148319 H 72.041237 V 8.7230324 Z"
+         style="fill:#456487;fill-opacity:1;fill-rule:nonzero;stroke:#5e83ae;stroke-width:0.402283;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         d="M 18.732613,6.6063656 V 117.45693 H 129.58319 V 62.031651 H 74.157905 V 6.6063656 Z"
          id="path851" />
       <path
          id="path880"
