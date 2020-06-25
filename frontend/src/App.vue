@@ -1,10 +1,14 @@
 <template>
   <div id="app">
     <div id="nav">
-      <router-link to="/">Home</router-link> |
-      <router-link to="/create">Create</router-link> |
-      <router-link to="/find">Find</router-link> |
-      <router-link to="/about">About</router-link>
+      <div class="left logo">mory</div>
+      <div class="middle">
+        <router-link to="/">Home</router-link> |
+        <router-link to="/create">Create</router-link> |
+        <router-link to="/find">Find</router-link> |
+        <router-link to="/about">About</router-link>
+      </div>
+      <div class="right"></div>
     </div>
     <router-view v-bind:key="$route.path" class="router-view"/>
   </div>
@@ -24,7 +28,9 @@ html, body {
   width: 100%;
   height: 100%;
 }
+</style>
 
+<style scoped lang="scss">
 #app {
   width: 100%;
   height: 100%;
@@ -33,14 +39,24 @@ html, body {
 }
 
 #nav {
-  padding: 30px;
+  display: flex;
+  align-items: center;
+  padding: 0.5em 1em;
+
+  & > * {
+    flex: 1 1 0;
+  }
+
+  .middle {
+    text-align: center;
+  }
 
   a {
     font-weight: bold;
-    color: #2c3e50;
+    color: #456487;
 
     &.router-link-exact-active {
-      color: #42b983;
+      color: #5e83ae;
     }
   }
 }
@@ -49,5 +65,32 @@ html, body {
   flex: 1 1 0;
   overflow: hidden;
   position: relative;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  vertical-align: bottom;
+  color: #333;
+  font-family: 'Source Code Pro', monospace;
+  font-size: 1.3em;
+  font-weight: normal;
+  letter-spacing: 0.4em;
+  transition: transform 200ms ease;
+  user-select: none;
+
+  &::before {
+    display: inline-block;
+    content: '';
+    width: 2.0em;
+    height: 1.5em;
+    background-size: contain;
+    background-position: left center;
+    background-repeat: no-repeat;
+    background-image: url("assets/logo.png");
+    border-right: 1px solid #cccccc;
+    vertical-align: bottom;
+    margin-right: 0.5em;
+  }
 }
 </style>
