@@ -16,7 +16,7 @@ import { Component, Prop, Vue } from 'vue-property-decorator';
 
 import Editor from '@/components/Editor.vue';
 
-import axios from 'axios';
+import axios from '@/axios';
 import marked from 'marked';
 import Prism from 'prismjs';
 import 'prism-themes/themes/prism-nord.css';
@@ -52,7 +52,7 @@ export default class View extends Vue {
       this.editorIsVisible = true;
     }
     else {
-      axios.get(`http://localhost:3030/notes/${this.$route.params.path}`)
+      axios.get(`/notes/${this.$route.params.path}`)
         .then(res => {
           this.text = res.data;
           this.initialText = this.text;
@@ -99,7 +99,7 @@ export default class View extends Vue {
 
   save() {
     const path = this.$route.params.path;
-    axios.put(`http://localhost:3030/notes/${path}`, {
+    axios.put(`/notes/${path}`, {
       Save: {
         content: this.text,
         message: `Update ${path}`,
