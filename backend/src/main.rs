@@ -1,5 +1,8 @@
+use std::env;
+use std::net::ToSocketAddrs;
 use std::sync::Arc;
 
+use dotenv::dotenv;
 use tokio::sync::{Mutex};
 use git2::Repository;
 use warp::Filter;
@@ -8,13 +11,29 @@ use warp::Filter;
 async fn main() {
     pretty_env_logger::init();
 
-    let repo = match Repository::open("notes") {
-        Ok(repo) => repo,
-        Err(e) => panic!("failed to open: {}", e),
+    dotenv().ok();
+
+    let repo = {
+        let git_dir = env::var("MORIED_GIT_DIR").unwrap();
+        match Repository::open(git_dir) {
+            Ok(repo) => repo,
+            Err(e) => panic!("failed to open: {}", e),
+        }
     };
     let state = models::State::new(repo);
 
-    let api = filters::notes(state);
+    let api = {
+        let root_path = env::var("MORIED_ROOT_PATH").unwrap();
+        assert!(root_path.starts_with('/'), "MORIED_ROOT_PATH must start with '/'");
+        assert!(root_path.ends_with('/'), "MORIED_ROOT_PATH must end with '/'");
+
+        if root_path == "/" {
+            filters::notes(None, state)
+        }
+        else {
+            filters::notes(Some(root_path[1..root_path.len() - 1].to_owned()), state)
+        }
+    };
 
     let cors = warp::cors()
         .allow_any_origin()
@@ -22,7 +41,11 @@ async fn main() {
         .allow_headers(vec!["Content-Type"]);
 
     let routes = api.with(cors);
-    warp::serve(routes).run(([127, 0, 0, 1], 3030)).await;
+    let addr = {
+        let mut addrs_iter = env::var("MORIED_LISTEN").unwrap().to_socket_addrs().unwrap();
+        addrs_iter.next().unwrap()
+    };
+    warp::serve(routes).run(addr).await;
 }
 
 mod filters {
@@ -36,12 +59,24 @@ mod filters {
     use tokio::sync::{Mutex};
 
     pub fn notes(
+        root_path: Option<String>,
         state: models::State,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        notes_list(state.clone())
-            .or(notes_load(state.clone()))
-            .or(notes_save(state.clone()))
-            .or(notes_delete(state))
+        if let Some(root_path) = root_path {
+            warp::path(root_path)
+                .and(notes_list(state.clone())
+                    .or(notes_load(state.clone()))
+                    .or(notes_save(state.clone()))
+                    .or(notes_delete(state)))
+                .boxed()
+        }
+        else {
+            notes_list(state.clone())
+                .or(notes_load(state.clone()))
+                .or(notes_save(state.clone()))
+                .or(notes_delete(state))
+                .boxed()
+        }
     }
 
     pub fn notes_list(
