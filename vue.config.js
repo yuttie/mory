@@ -12,4 +12,23 @@ module.exports = {
       },
     },
   },
+  pwa: {
+    themeColor: '#5e83ae',
+    iconPaths: {
+      favicon32: null,
+      favicon16: null,
+      appleTouchIcon: null,
+      maskIcon: null,
+      msTileImage: null,
+    },
+    manifestOptions: {
+      icons: [
+        {
+          'src': './img/icons/android-chrome-512x512.png',
+          'sizes': '512x512',
+          'type': 'image/png'
+        },
+      ],
+    },
+  },
 };
