@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+
+cd ..
+docker build -t moried .
+docker stop moried || true
+docker rm moried || true
+docker run --name moried -d --restart=unless-stopped -v /srv/notes.git:/notes -u $(id -u $USER):$(id -g $USER) -p 3030:3030 moried
