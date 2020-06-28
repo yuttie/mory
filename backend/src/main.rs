@@ -22,7 +22,18 @@ async fn main() {
     };
     let state = models::State::new(repo);
 
-    let api = filters::notes(state);
+    let api = {
+        let root_path = env::var("MORIED_ROOT_PATH").unwrap();
+        assert!(root_path.starts_with('/'), "MORIED_ROOT_PATH must start with '/'");
+        assert!(root_path.ends_with('/'), "MORIED_ROOT_PATH must end with '/'");
+
+        if root_path == "/" {
+            filters::notes(None, state)
+        }
+        else {
+            filters::notes(Some(root_path[1..root_path.len() - 1].to_owned()), state)
+        }
+    };
 
     let cors = warp::cors()
         .allow_any_origin()
@@ -48,12 +59,24 @@ mod filters {
     use tokio::sync::{Mutex};
 
     pub fn notes(
+        root_path: Option<String>,
         state: models::State,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        notes_list(state.clone())
-            .or(notes_load(state.clone()))
-            .or(notes_save(state.clone()))
-            .or(notes_delete(state))
+        if let Some(root_path) = root_path {
+            warp::path(root_path)
+                .and(notes_list(state.clone())
+                    .or(notes_load(state.clone()))
+                    .or(notes_save(state.clone()))
+                    .or(notes_delete(state)))
+                .boxed()
+        }
+        else {
+            notes_list(state.clone())
+                .or(notes_load(state.clone()))
+                .or(notes_save(state.clone()))
+                .or(notes_delete(state))
+                .boxed()
+        }
     }
 
     pub fn notes_list(
