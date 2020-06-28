@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+
+cd ..
+docker build -t mory .
+docker stop mory || true
+docker rm mory || true
+docker run --name mory -d --restart=unless-stopped -p 8080:80 mory
