@@ -1,5 +1,8 @@
+use std::env;
+use std::net::ToSocketAddrs;
 use std::sync::Arc;
 
+use dotenv::dotenv;
 use tokio::sync::{Mutex};
 use git2::Repository;
 use warp::Filter;
@@ -8,9 +11,14 @@ use warp::Filter;
 async fn main() {
     pretty_env_logger::init();
 
-    let repo = match Repository::open("notes") {
-        Ok(repo) => repo,
-        Err(e) => panic!("failed to open: {}", e),
+    dotenv().ok();
+
+    let repo = {
+        let git_dir = env::var("MORIED_GIT_DIR").unwrap();
+        match Repository::open(git_dir) {
+            Ok(repo) => repo,
+            Err(e) => panic!("failed to open: {}", e),
+        }
     };
     let state = models::State::new(repo);
 
@@ -22,7 +30,11 @@ async fn main() {
         .allow_headers(vec!["Content-Type"]);
 
     let routes = api.with(cors);
-    warp::serve(routes).run(([127, 0, 0, 1], 3030)).await;
+    let addr = {
+        let mut addrs_iter = env::var("MORIED_LISTEN").unwrap().to_socket_addrs().unwrap();
+        addrs_iter.next().unwrap()
+    };
+    warp::serve(routes).run(addr).await;
 }
 
 mod filters {
