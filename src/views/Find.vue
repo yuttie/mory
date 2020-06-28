@@ -125,7 +125,7 @@ export default class Find extends Vue {
       });
 
     if (this.$route.query.q) {
-      this.queryText = this.$route.query.q;
+      this.queryText = this.$route.query.q as string;
     }
   }
 
