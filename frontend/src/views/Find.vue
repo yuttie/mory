@@ -21,7 +21,7 @@
 </template>
 
 <script lang="ts">
-import { Component, Prop, Vue } from 'vue-property-decorator';
+import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 
 import axios from '@/axios';
 
@@ -104,6 +104,18 @@ export default class Find extends Vue {
     return matched;
   }
 
+  @Watch('queryText')
+  onQueryTextChanged(q: string) {
+    if (q !== this.$route.query.q) {
+      this.$router.replace({
+        query: {
+          ...this.$route.query,
+          q: q,
+        },
+      });
+    }
+  }
+
   mounted() {
     window.addEventListener('keydown', this.handleKeydown);
 
@@ -111,6 +123,10 @@ export default class Find extends Vue {
       .then(res => {
         this.entries = res.data;
       });
+
+    if (this.$route.query.q) {
+      this.queryText = this.$route.query.q;
+    }
   }
 
   destroyed() {
