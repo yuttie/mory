@@ -40,7 +40,7 @@ export default class About extends Vue {
 
   & > img {
     width: 192px;
-    width: 192px;
+    height: 192px;
   }
 }
 
