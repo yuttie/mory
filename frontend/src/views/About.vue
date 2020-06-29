@@ -37,6 +37,11 @@ export default class About extends Vue {
 .logo {
   padding-bottom: 1em;
   border-bottom: 1px solid #ccc;
+
+  & > img {
+    width: 192px;
+    width: 192px;
+  }
 }
 
 .name {
