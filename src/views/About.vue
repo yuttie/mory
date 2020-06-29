@@ -17,6 +17,10 @@ export default class About extends Vue {
   author: string = process.env.VUE_APP_AUTHOR;
   fromYear = 2020;
   buildYear: number = process.env.VUE_APP_BUILD_YEAR;
+
+  mounted() {
+    document.title = `About | ${process.env.VUE_APP_NAME}`;
+  }
 }
 </script>
 
