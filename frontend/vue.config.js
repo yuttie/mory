@@ -15,8 +15,8 @@ module.exports = {
   pwa: {
     themeColor: '#5e83ae',
     iconPaths: {
-      favicon32: null,
-      favicon16: null,
+      favicon32: 'img/icons/favicon-32x32.png',
+      favicon16: 'img/icons/favicon-16x16.png',
       appleTouchIcon: null,
       maskIcon: null,
       msTileImage: null,
