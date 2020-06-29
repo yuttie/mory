@@ -131,7 +131,7 @@ export default class View extends Vue {
 .editor {
   position: absolute;
   margin-left: -50%;
-  transition: margin-left 500ms;
+  transition: margin-left 300ms;
 }
 
 .rendered {
@@ -139,8 +139,8 @@ export default class View extends Vue {
   width: 100%;
   height: 100%;
   overflow: auto;
-  transition: margin-left 500ms,
-              width 500ms;
+  transition: margin-left 300ms,
+              width 300ms;
 }
 
 .panes.shifted .editor {
