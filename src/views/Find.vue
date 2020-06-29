@@ -222,6 +222,12 @@ export default class Find extends Vue {
   margin: 1em;
 }
 
+.note-tags {
+  .tag {
+    font-size: 0.8em;
+  }
+}
+
 .tag {
   display: inline-block;
   border: 1px solid #ccc;
