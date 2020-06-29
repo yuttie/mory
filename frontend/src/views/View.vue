@@ -50,6 +50,7 @@ export default class View extends Vue {
       this.text = '';
       this.initialText = this.text;
       this.editorIsVisible = true;
+      (this.$refs.editor as Editor).focus();
     }
     else {
       axios.get(`/notes/${this.$route.params.path}`)
