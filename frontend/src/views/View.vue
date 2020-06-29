@@ -44,6 +44,8 @@ export default class View extends Vue {
   editorIsVisible = false;
 
   mounted() {
+    document.title = `${this.$route.params.path} | ${process.env.VUE_APP_NAME}`;
+
     window.addEventListener('keydown', this.handleKeydown);
 
     if (this.$route.query.mode === 'create') {
