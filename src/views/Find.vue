@@ -15,7 +15,19 @@
     <ul class="list">
       <li
         v-for="entry of matchedEntries"
-        v-bind:key="entry[0]"><router-link v-bind:to="{ path: `/view/${entry[0]}` }">{{ entry[0] }}</router-link></li>
+        v-bind:key="entry[0]"
+      >
+        <router-link v-bind:to="{ path: `/view/${entry[0]}` }">{{ entry[0] }}</router-link>
+        <span class="note-tags">
+          <span
+            v-for="tag of [...(entry[1] || {}).tags || []].sort()"
+            v-bind:key="tag"
+            v-bind:class="{ 'not-in-query': !query.tags.has(tag) }"
+            v-on:click="handleTagClick(tag, $event)"
+            class="tag"
+            >{{ tag }}</span>
+        </span>
+      </li>
     </ul>
   </div>
 </template>
