@@ -21,7 +21,6 @@ import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 export default class App extends Vue {
   @Watch('$route')
   on$routeChanged(to: any) {
-    console.log(to);
     if (to.name === "Home") {
       document.title = `Home - ${process.env.VUE_APP_NAME}`;
     }
