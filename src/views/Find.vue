@@ -230,18 +230,23 @@ export default class Find extends Vue {
 
 .tag {
   display: inline-block;
-  border: 1px solid #ccc;
+  color: #ffffff;
+  background-color: #cb4b63;
   border-radius: 4px;
   padding: 0.2em 0.4em;
   margin: 0.1em 0.2em;
   cursor: pointer;
+  transition: color 100ms,
+              background-color 100ms;
 
   &.not-in-query {
-    opacity: 0.5;
+    color: #ccc;
+    background-color: #f4f4f4;
   }
 
   &.not-in-query:hover {
-    opacity: 0.7;
+    color: #ccc;
+    background-color: #f6e5e8;
   }
 }
 </style>
