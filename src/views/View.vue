@@ -18,6 +18,7 @@ import Editor from '@/components/Editor.vue';
 
 import axios from '@/axios';
 import marked from 'marked';
+import 'material-design-icons/iconfont/material-icons.css';
 import Prism from 'prismjs';
 import 'prism-themes/themes/prism-nord.css';
 
@@ -32,6 +33,16 @@ marked.setOptions({
     }
   },
 });
+
+const renderer = {
+  heading(text: string, level: number) {
+    const escapedText = text.toLowerCase().replace(/[^\p{Letter}\p{Number}]+/gu, '');
+
+    return `<h${level}><a name="${escapedText}" href="#${escapedText}" class="header-link material-icons"></a>${text}</h${level}>`;
+  },
+};
+
+(marked as any).use({ renderer });
 
 @Component({
   components: {
