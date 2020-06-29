@@ -241,12 +241,12 @@ export default class Find extends Vue {
 
   &.not-in-query {
     color: #ccc;
-    background-color: #f4f4f4;
+    background-color: #fafafa;
   }
 
   &.not-in-query:hover {
     color: #ccc;
-    background-color: #f6e5e8;
+    background-color: #fef3f5;
   }
 }
 </style>
