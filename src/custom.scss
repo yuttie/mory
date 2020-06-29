@@ -43,4 +43,19 @@
     color: #f8f8f2;
     background-color: #2e3440;
   }
+
+  table {
+    border: none;
+    border-collapse: collapse;
+    box-shadow: 0 4px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  th, td {
+    padding: 0.4em 0.8em;
+    border: 1px solid #e0e0e0;
+  }
+
+  thead {
+    border-bottom: 3px solid #e0e0e0;
+  }
 }
