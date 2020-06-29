@@ -14,6 +14,30 @@
   </div>
 </template>
 
+<script lang="ts">
+import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
+
+@Component
+export default class App extends Vue {
+  @Watch('$route')
+  on$routeChanged(to: any) {
+    console.log(to);
+    if (to.name === "Home") {
+      document.title = `Home - ${process.env.VUE_APP_NAME}`;
+    }
+    else if (to.name === "Find") {
+      document.title = `Find - ${process.env.VUE_APP_NAME}`;
+    }
+    else if (to.name === "View") {
+      document.title = `${to.params.path} - ${process.env.VUE_APP_NAME}`;
+    }
+    else if (to.name === "About") {
+      document.title = `About - ${process.env.VUE_APP_NAME}`;
+    }
+  }
+}
+</script>
+
 <style lang="scss">
 * {
   box-sizing: border-box;
