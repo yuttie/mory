@@ -236,6 +236,7 @@ export default class Find extends Vue {
   padding: 0.2em 0.4em;
   margin: 0.1em 0.2em;
   cursor: pointer;
+  user-select: none;
   transition: color 100ms,
               background-color 100ms;
 
