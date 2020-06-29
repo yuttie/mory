@@ -7,7 +7,7 @@
           v-for="tag of [...tags].sort()"
           v-bind:key="tag"
           v-bind:class="{ 'not-in-query': !query.tags.has(tag) }"
-          v-on:click="toggleTag(tag)"
+          v-on:click="handleTagClick(tag, $event)"
           class="tag"
         >{{ tag }}</span>
       </div>
@@ -138,6 +138,29 @@ export default class Find extends Vue {
       (this.$refs.query as HTMLInputElement).focus();
       e.preventDefault();
     }
+  }
+
+  handleTagClick(tag: string, e: MouseEvent) {
+    if (e.ctrlKey) {
+      this.toggleTag(tag);
+    }
+    else {
+      this.selectTag(tag);
+    }
+  }
+
+  selectTag(tag: string) {
+    let hashtag = '#' + tag;
+    if (/\s/.test(hashtag)) {
+      hashtag = `"${hashtag}"`;
+    }
+
+    let queryElems = [...this.queryText.matchAll(/("[^"]+")|([^\s]+)/g)].map(x => x[1] || x[2]);
+    queryElems = queryElems.filter(x => x === hashtag || !(x.startsWith('#') || x.startsWith('"#')));
+    if (!this.query.tags.has(tag)) {
+      queryElems.push(hashtag);
+    }
+    this.queryText = queryElems.join(' ');
   }
 
   toggleTag(tag: string) {
