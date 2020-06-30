@@ -51,7 +51,7 @@ const router = new VueRouter({
   routes,
   scrollBehavior(to, from, savedPosition) {
     if (to.hash) {
-      return { selector: to.hash };
+      return { selector: decodeURIComponent(to.hash) };
     }
     else if (savedPosition) {
       return savedPosition;
