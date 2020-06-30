@@ -32,7 +32,7 @@ export default class Editor extends Vue {
       theme: 'ace/theme/nord_dark',
       keyboardHandler: 'ace/keyboard/vim',
       fontSize: 14,
-      fontFamily: 'monospace',
+      fontFamily: 'Menlo, monospace',
       navigateWithinSoftTabs: true,
     });
     this.editor!.on('change', () => {
