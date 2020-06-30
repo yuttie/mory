@@ -49,9 +49,13 @@ marked.setOptions({
   },
 });
 
+function makeFragmentId(text: string) {
+  return text.toLowerCase().replace(/ /g, '-').replace(/[^-\p{Letter}\p{Number}]+/gu, '');
+}
+
 const renderer = {
   heading(text: string, level: number) {
-    const fragmentId = text.toLowerCase().replace(/ /g, '-').replace(/[^-\p{Letter}\p{Number}]+/gu, '');
+    const fragmentId = makeFragmentId(text);
 
     return `<h${level}><a id="${fragmentId}" href="#${fragmentId}" class="header-link material-icons"></a>${text}</h${level}>`;
   },
