@@ -73,6 +73,17 @@ export default class View extends Vue {
   mounted() {
     document.title = `${this.$route.params.path} | ${process.env.VUE_APP_NAME}`;
 
+    window.addEventListener('beforeunload', e => {
+      if (this.isModified) {
+        // Cancel the event
+        e.preventDefault();
+        e.returnValue = '';  // Chrome requires returnValue to be set
+      }
+      else {
+        delete e['returnValue'];  // This guarantees the browser unload happens
+      }
+    });
+
     window.addEventListener('keydown', this.handleKeydown);
 
     if (this.$route.query.mode === 'create') {
