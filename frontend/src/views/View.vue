@@ -7,11 +7,11 @@
     <div class="toc" v-on:click="toggleToc">
       <div class="header">TOC</div>
       <ol class="tree" v-bind:class="{ collapsed: !tocIsVisible }">
-        <li v-for="h1 of toc" v-bind:key="h1.title">{{ h1.title }}
+        <li v-for="h1 of toc" v-bind:key="h1.title"><a v-bind:href="'#' + makeFragmentId(h1.title)">{{ h1.title }}</a>
           <ol>
-            <li v-for="h2 of h1.children" v-bind:key="h2.title">{{ h2.title }}
+            <li v-for="h2 of h1.children" v-bind:key="h2.title"><a v-bind:href="'#' + makeFragmentId(h2.title)">{{ h2.title }}</a>
               <ol>
-                <li v-for="h3 of h2.children" v-bind:key="h3.title">{{ h3.title }}
+                <li v-for="h3 of h2.children" v-bind:key="h3.title"><a v-bind:href="'#' + makeFragmentId(h3.title)">{{ h3.title }}</a>
                 </li>
               </ol>
             </li>
@@ -139,6 +139,10 @@ export default class View extends Vue {
 
   get isModified(): boolean {
     return this.text !== this.initialText;
+  }
+
+  makeFragmentId(text: string) {
+    return makeFragmentId(text);
   }
 
   toggleToc() {
