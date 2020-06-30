@@ -51,9 +51,9 @@ marked.setOptions({
 
 const renderer = {
   heading(text: string, level: number) {
-    const escapedText = text.toLowerCase().replace(/[^\p{Letter}\p{Number}]+/gu, '');
+    const fragmentId = text.toLowerCase().replace(/ /g, '-').replace(/[^-\p{Letter}\p{Number}]+/gu, '');
 
-    return `<h${level}><a name="${escapedText}" href="#${escapedText}" class="header-link material-icons"></a>${text}</h${level}>`;
+    return `<h${level}><a id="${fragmentId}" href="#${fragmentId}" class="header-link material-icons"></a>${text}</h${level}>`;
   },
 };
 
