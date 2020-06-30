@@ -4,6 +4,21 @@
       <button type="button" v-on:click="toggleEditor">{{ editorIsVisible ? 'Hide editor' : 'Edit' }}</button>
       <span v-show="isModified">Modified</span>
     </div>
+    <div class="toc" v-on:click="toggleToc">
+      <div class="header">TOC</div>
+      <ol class="tree" v-bind:class="{ collapsed: !tocIsVisible }">
+        <li v-for="h1 of toc" v-bind:key="h1.title">{{ h1.title }}
+          <ol>
+            <li v-for="h2 of h1.children" v-bind:key="h2.title">{{ h2.title }}
+              <ol>
+                <li v-for="h3 of h2.children" v-bind:key="h3.title">{{ h3.title }}
+                </li>
+              </ol>
+            </li>
+          </ol>
+        </li>
+      </ol>
+    </div>
     <div class="panes" v-bind:class="{ shifted: editorIsVisible }">
       <Editor v-bind:value="text" v-on:change="text = $event" ref="editor"></Editor>
       <div v-html="rendered" class="rendered"></div>
@@ -53,6 +68,7 @@ export default class View extends Vue {
   text = '';
   initialText = '';
   editorIsVisible = false;
+  tocIsVisible = false;
 
   mounted() {
     document.title = `${this.$route.params.path} | ${process.env.VUE_APP_NAME}`;
@@ -82,8 +98,36 @@ export default class View extends Vue {
     return marked(this.text);
   }
 
+  get toc() {
+    const rendered = this.rendered;
+    const root = document.createElement('div');
+    root.innerHTML = rendered;
+
+    const toc: any = [];
+    const stack = [{ level: 0, title: '/', children: toc }];
+    for (const hx of [...root.children].filter(el => /^H\d+$/.test(el.tagName))) {
+      const level = parseInt(hx.tagName.slice(1));
+
+      // Find the parent of the header
+      while (level <= stack[stack.length - 1].level) {
+        stack.pop();
+      }
+
+      const parent = stack[stack.length - 1];
+      const child = { level: level, title: (hx as HTMLElement).innerText, children: [] };
+      parent.children.push(child);
+      stack.push(child);
+    }
+
+    return toc;
+  }
+
   get isModified(): boolean {
     return this.text !== this.initialText;
+  }
+
+  toggleToc() {
+    this.tocIsVisible = !this.tocIsVisible;
   }
 
   toggleEditor() {
@@ -164,5 +208,28 @@ export default class View extends Vue {
 .panes.shifted .rendered {
   margin-left: 50%;
   width: 50%;
+}
+
+.toc {
+  position: absolute;
+  right: 20px;
+  z-index: 1;
+  overflow: hidden;
+  background: white;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
+
+  .header {
+    font-weight: bold;
+    text-align: center;
+  }
+
+  .tree {
+    margin: 0;
+
+    &.collapsed {
+      width: 0;
+      height: 0;
+    }
+  }
 }
 </style>
