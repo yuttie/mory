@@ -4,6 +4,10 @@
       <button type="button" v-on:click="toggleEditor">{{ editorIsVisible ? 'Hide editor' : 'Edit' }}</button>
       <span v-show="isModified">Modified</span>
     </div>
+    <div class="panes" v-bind:class="{ shifted: editorIsVisible }">
+      <Editor v-bind:value="text" v-on:change="text = $event" ref="editor"></Editor>
+      <div v-html="rendered" class="rendered"></div>
+    </div>
     <div class="toc" v-on:click="toggleToc">
       <div class="header">TOC</div>
       <ol class="tree" v-bind:class="{ collapsed: !tocIsVisible }">
@@ -18,10 +22,6 @@
           </ol>
         </li>
       </ol>
-    </div>
-    <div class="panes" v-bind:class="{ shifted: editorIsVisible }">
-      <Editor v-bind:value="text" v-on:change="text = $event" ref="editor"></Editor>
-      <div v-html="rendered" class="rendered"></div>
     </div>
   </div>
 </template>
@@ -232,7 +232,6 @@ export default class View extends Vue {
 .toc {
   position: absolute;
   right: 20px;
-  z-index: 1;
   overflow: hidden;
   background: white;
   box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
