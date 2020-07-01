@@ -44,6 +44,21 @@
     background-color: #2e3440;
   }
 
+  blockquote {
+    font-family: serif;
+    font-style: italic;
+    background-color: #eff2f6;
+    padding: 0.8em 1.2em;
+
+    & > p:first-of-type {
+      margin-top: 0;
+    }
+
+    & > p:last-of-type {
+      margin-bottom: 0;
+    }
+  }
+
   table {
     border: none;
     border-collapse: collapse;
