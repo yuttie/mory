@@ -262,7 +262,6 @@ export default class Find extends Vue {
 
 .list {
   flex: 1 1 0;
-  overflow: auto;
   margin: 0;
   padding: 1em;
 }
