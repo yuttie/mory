@@ -1,12 +1,14 @@
 <template>
   <div class="view">
-    <div>
-      <button type="button" v-on:click="toggleEditor">{{ editorIsVisible ? 'Hide editor' : 'Edit' }}</button>
-      <span v-show="isModified">Modified</span>
-    </div>
     <div class="panes" v-bind:class="{ shifted: editorIsVisible }">
       <Editor v-bind:value="text" v-on:change="text = $event" ref="editor"></Editor>
-      <div v-html="rendered" class="rendered"></div>
+      <div class="rendered">
+        <div>
+          <button type="button" v-on:click="toggleEditor">{{ editorIsVisible ? 'Hide editor' : 'Edit' }}</button>
+          <span v-show="isModified">Modified</span>
+        </div>
+        <div v-html="rendered"></div>
+      </div>
     </div>
     <div class="toc" v-on:click="toggleToc">
       <div class="header">TOC</div>
@@ -240,6 +242,8 @@ export default class View extends Vue {
 </script>
 
 <style scoped lang="scss">
+$nav-height: 50px;
+
 .view {
   display: flex;
   flex-direction: column;
@@ -248,7 +252,6 @@ export default class View extends Vue {
 .panes {
   flex: 1 1 0;
   position: relative;
-  overflow: hidden;
 
   & > * {
     width: 50%;
@@ -265,8 +268,6 @@ export default class View extends Vue {
 .rendered {
   margin-left: 0;
   width: 100%;
-  height: 100%;
-  overflow: auto;
   transition: margin-left 300ms,
               width 300ms;
 }
@@ -280,8 +281,13 @@ export default class View extends Vue {
   width: 50%;
 }
 
+.editor {
+  position: fixed;
+  height: calc(100vh - #{$nav-height});
+}
+
 .toc {
-  position: absolute;
+  position: fixed;
   right: 20px;
   overflow: hidden;
   background: white;
