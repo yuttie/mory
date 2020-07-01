@@ -101,6 +101,17 @@ export default class View extends Vue {
         .then(res => {
           this.text = res.data;
           this.initialText = this.text;
+
+          // Jump to a header if specified
+          if (this.$route.hash) {
+            const anchorSelector = decodeURIComponent(this.$route.hash);
+            this.$nextTick(() => {
+              const anchor = document.querySelector(anchorSelector);
+              if (anchor) {
+                anchor.scrollIntoView();
+              }
+            });
+          }
         });
     }
   }
