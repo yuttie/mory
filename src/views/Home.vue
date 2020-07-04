@@ -17,12 +17,14 @@
 </template>
 
 <script lang="ts">
-import { Component, Prop, Vue } from 'vue-property-decorator';
+import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 
 import axios from '@/axios';
 
 @Component
 export default class Home extends Vue {
+  @Prop(String) readonly token!: null | string;
+
   entries: [string, any][] = [];
 
   get categorizedEntries() {
@@ -46,12 +48,37 @@ export default class Home extends Vue {
     return categorized;
   }
 
+  @Watch('token')
+  onTokenChanged(token: null | string) {
+    if (token) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    }
+    else {
+      delete axios.defaults.headers.common['Authorization'];
+    }
+  }
+
   mounted() {
     document.title = `Home | ${process.env.VUE_APP_NAME}`;
+
+    this.onTokenChanged(this.token);
 
     axios.get('/notes')
       .then(res => {
         this.entries = res.data;
+      }).catch(error => {
+        if (error.response) {
+          if (error.response.status === 401) {
+            // Unauthorized
+            this.$emit('tokenExpired');
+          }
+          else {
+            console.log('Unhandled error: {}', error.response);
+          }
+        }
+        else {
+          console.log('Unhandled error: {}', error);
+        }
       });
   }
 
