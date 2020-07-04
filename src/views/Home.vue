@@ -61,6 +61,8 @@ export default class Home extends Vue {
   mounted() {
     document.title = `Home | ${process.env.VUE_APP_NAME}`;
 
+    this.onTokenChanged(this.token);
+
     axios.get('/notes')
       .then(res => {
         this.entries = res.data;
