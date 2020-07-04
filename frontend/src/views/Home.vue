@@ -23,6 +23,8 @@ import axios from '@/axios';
 
 @Component
 export default class Home extends Vue {
+  @Prop(String) readonly token!: null | string;
+
   entries: [string, any][] = [];
 
   get categorizedEntries() {
