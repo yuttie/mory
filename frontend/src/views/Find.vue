@@ -143,6 +143,8 @@ export default class Find extends Vue {
   mounted() {
     document.title = `Find | ${process.env.VUE_APP_NAME}`;
 
+    this.onTokenChanged(this.token);
+
     window.addEventListener('keydown', this.handleKeydown);
 
     axios.get('/notes')

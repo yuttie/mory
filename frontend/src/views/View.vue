@@ -79,6 +79,8 @@ export default class View extends Vue {
   mounted() {
     document.title = `${this.$route.params.path} | ${process.env.VUE_APP_NAME}`;
 
+    this.onTokenChanged(this.token);
+
     window.addEventListener('beforeunload', e => {
       if (this.isModified) {
         // Cancel the event
