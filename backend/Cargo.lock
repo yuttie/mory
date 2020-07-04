@@ -737,6 +737,7 @@ dependencies = [
 name = "moried"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "dotenv",
  "futures",
  "git2",

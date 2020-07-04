@@ -149,6 +149,7 @@ mod handlers {
     use std::string::String;
 
     use argon2;
+    use chrono::{DateTime, Duration, Utc};
     use git2::{Repository, Index, IndexEntry, IndexTime, Oid, Signature};
     use jsonwebtoken as jwt;
     use tokio::sync::{Mutex};
@@ -168,9 +169,10 @@ mod handlers {
 
         if matches {
             let secret = env::var("MORIED_SECRET").unwrap();
+            let now: DateTime<Utc> = Utc::now();
             let my_claims = Claims {
-                sub: 0,
-                name: login.user.to_owned(),
+                sub: login.user.to_owned(),
+                exp: (now + Duration::hours(6)).timestamp() as usize,
                 email: "aaa@example.com".to_owned(),
             };
             let token = jwt::encode(
@@ -415,14 +417,8 @@ mod handlers {
         let token = header_value.split_whitespace().nth(1).unwrap();
         debug!("received token: {}", token);
 
-        let validation = jwt::Validation {
-            validate_exp: false,
-            ..jwt::Validation::default()
-        };
-        debug!("validation: {:?}", &validation);
-
         let secret = env::var("MORIED_SECRET").unwrap();
-        match jwt::decode::<Claims>(&token, &jwt::DecodingKey::from_secret(secret.as_ref()), &validation) {
+        match jwt::decode::<Claims>(&token, &jwt::DecodingKey::from_secret(secret.as_ref()), &jwt::Validation::default()) {
             Ok(_) => {
                 debug!("authorized");
                 Ok(())
@@ -453,8 +449,8 @@ mod models {
 
     #[derive(Debug, Serialize, Deserialize)]
     pub struct Claims {
-        pub sub: u64,
-        pub name: String,
+        pub sub: String,
+        pub exp: usize,
         pub email: String,
     }
 
