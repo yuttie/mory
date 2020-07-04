@@ -64,19 +64,31 @@ mod filters {
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         if let Some(root_path) = root_path {
             warp::path(root_path)
+                .and(auth()
+                    .and(notes_list(state.clone())
+                        .or(notes_load(state.clone()))
+                        .or(notes_save(state.clone()))
+                        .or(notes_delete(state)))
+                    .or(notes_login()))
+                .boxed()
+        }
+        else {
+            auth()
                 .and(notes_list(state.clone())
                     .or(notes_load(state.clone()))
                     .or(notes_save(state.clone()))
                     .or(notes_delete(state)))
+                .or(notes_login())
                 .boxed()
         }
-        else {
-            notes_list(state.clone())
-                .or(notes_load(state.clone()))
-                .or(notes_save(state.clone()))
-                .or(notes_delete(state))
-                .boxed()
-        }
+    }
+
+    pub fn notes_login() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+        warp::path("login")
+            .and(warp::path::end())
+            .and(warp::post())
+            .and(warp::body::json())
+            .and_then(handlers::login)
     }
 
     pub fn notes_list(
@@ -119,23 +131,59 @@ mod filters {
             .and(warp::any().map(move || state.clone()))
             .and_then(handlers::delete_note)
     }
+
+    pub fn auth() -> impl Filter<Extract = (), Error = warp::Rejection> + Copy {
+        warp::header::<String>("Authorization")
+            .and_then(handlers::auth)
+            .untuple_one()
+    }
 }
 
 mod handlers {
-    use super::models::{State, Cached, ListEntry, NoteSave};
+    use super::models::{Unauthorized, Claims, State, Cached, ListEntry, Login, NoteSave};
 
+    use std::env;
     use std::sync::Arc;
     use std::convert::Infallible;
     use std::vec::Vec;
     use std::string::String;
 
+    use argon2;
     use git2::{Repository, Index, IndexEntry, IndexTime, Oid, Signature};
+    use jsonwebtoken as jwt;
     use tokio::sync::{Mutex};
     use tokio;
     use log::debug;
     use warp::reply::Reply;
     use mime_guess;
     use warp::http::header::CONTENT_TYPE;
+
+    pub async fn login(login: Login) -> Result<Box<dyn warp::Reply>, Infallible> {
+        debug!("login");
+        debug!("{:?}", login);
+        let user_name = env::var("MORIED_USER_NAME").unwrap();
+        let user_email = env::var("MORIED_USER_EMAIL").unwrap();
+        let user_hash = env::var("MORIED_USER_HASH").unwrap();
+        let matches = user_name == login.user && argon2::verify_encoded(&user_hash, login.password.as_ref()).unwrap();
+
+        if matches {
+            let secret = env::var("MORIED_SECRET").unwrap();
+            let my_claims = Claims {
+                sub: 0,
+                name: login.user.to_owned(),
+                email: "aaa@example.com".to_owned(),
+            };
+            let token = jwt::encode(
+                &jwt::Header::default(),
+                &my_claims,
+                &jwt::EncodingKey::from_secret(secret.as_ref())
+            ).unwrap();
+            Ok(Box::new(token))
+        }
+        else {
+            Ok(Box::new(warp::http::StatusCode::UNAUTHORIZED))
+        }
+    }
 
     pub async fn list_notes(state: State) -> Result<impl warp::Reply, Infallible> {
         debug!("list");
@@ -362,6 +410,29 @@ mod handlers {
             Err(warp::reject::not_found())
         }
     }
+
+    pub async fn auth(header_value: String) -> Result<(), warp::reject::Rejection> {
+        let token = header_value.split_whitespace().nth(1).unwrap();
+        debug!("received token: {}", token);
+
+        let validation = jwt::Validation {
+            validate_exp: false,
+            ..jwt::Validation::default()
+        };
+        debug!("validation: {:?}", &validation);
+
+        let secret = env::var("MORIED_SECRET").unwrap();
+        match jwt::decode::<Claims>(&token, &jwt::DecodingKey::from_secret(secret.as_ref()), &validation) {
+            Ok(_) => {
+                debug!("authorized");
+                Ok(())
+            },
+            Err(e) => {
+                debug!("failed to decode token: {:?}", e);
+                Err(warp::reject::custom(Unauthorized))
+            },
+        }
+    }
 }
 
 mod models {
@@ -374,6 +445,18 @@ mod models {
 
     pub type Metadata = serde_yaml::Value;
     pub type ListEntry = (String, Option<Metadata>);
+
+    #[derive(Debug)]
+    pub struct Unauthorized;
+
+    impl warp::reject::Reject for Unauthorized {}
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct Claims {
+        pub sub: u64,
+        pub name: String,
+        pub email: String,
+    }
 
     pub enum Cached<T> {
         Computed {
@@ -418,6 +501,12 @@ mod models {
                 cached_entries: Arc::new(Mutex::new(Cached::None)),
             }
         }
+    }
+
+    #[derive(Debug, Deserialize, Serialize, Clone)]
+    pub struct Login {
+        pub user: String,
+        pub password: String,
     }
 
     #[derive(Debug, Deserialize, Serialize, Clone)]
