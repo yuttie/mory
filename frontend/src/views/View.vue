@@ -27,7 +27,7 @@
 </template>
 
 <script lang="ts">
-import { Component, Prop, Vue } from 'vue-property-decorator';
+import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 
 import Editor from '@/components/Editor.vue';
 
@@ -69,6 +69,8 @@ const renderer = {
   },
 })
 export default class View extends Vue {
+  @Prop(String) readonly token!: null | string;
+
   text = '';
   initialText = '';
   editorIsVisible = false;
@@ -112,6 +114,19 @@ export default class View extends Vue {
               }
             });
           }
+        }).catch(error => {
+          if (error.response) {
+            if (error.response.status === 401) {
+              // Unauthorized
+              this.$emit('tokenExpired');
+            }
+            else {
+              console.log('Unhandled error: {}', error.response);
+            }
+          }
+          else {
+            console.log('Unhandled error: {}', error);
+          }
         });
     }
   }
@@ -150,6 +165,16 @@ export default class View extends Vue {
 
   get isModified(): boolean {
     return this.text !== this.initialText;
+  }
+
+  @Watch('token')
+  onTokenChanged(token: null | string) {
+    if (token) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    }
+    else {
+      delete axios.defaults.headers.common['Authorization'];
+    }
   }
 
   makeFragmentId(text: string) {
@@ -194,6 +219,19 @@ export default class View extends Vue {
       },
     }).then(res => {
       this.initialText = this.text;
+    }).catch(error => {
+      if (error.response) {
+        if (error.response.status === 401) {
+          // Unauthorized
+          this.$emit('tokenExpired');
+        }
+        else {
+          console.log('Unhandled error: {}', error.response);
+        }
+      }
+      else {
+        console.log('Unhandled error: {}', error);
+      }
     });
   }
 }
