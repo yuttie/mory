@@ -10,9 +10,49 @@
       </div>
       <div class="right"></div>
     </div>
-    <router-view v-bind:key="$route.path" class="router-view"/>
+    <router-view v-if="token" v-bind:key="$route.path" v-bind:token="token" v-on:tokenExpired="tokenExpired" class="router-view"/>
+    <div v-show="!token" class="login-overlay">
+      <div class="form">
+        <h1>Login</h1>
+        <div class="field">
+          <label for="username">Username</label>
+          <input v-on:keypress.enter="login" id="username" type="text" ref="username" autofocus>
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input v-on:keypress.enter="login" id="password" type="password" ref="password">
+        </div>
+        <button v-on:click="login">Login</button>
+      </div>
+    </div>
   </div>
 </template>
+
+<script lang="ts">
+import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
+
+import axios from '@/axios';
+
+@Component
+export default class App extends Vue {
+  token = localStorage.getItem('token') as null | string;
+
+  login() {
+    axios.post(`/login`, {
+      user: (this.$refs.username as HTMLInputElement).value,
+      password: (this.$refs.password as HTMLInputElement).value,
+    }).then(res => {
+      this.token = res.data;
+      localStorage.setItem('token', res.data);
+    });
+  }
+
+  tokenExpired() {
+    this.token = null;
+    localStorage.removeItem('token');
+  }
+}
+</script>
 
 <style lang="scss">
 * {
@@ -91,6 +131,61 @@ html, body {
     border-right: 1px solid #cccccc;
     vertical-align: bottom;
     margin-right: 0.5em;
+  }
+}
+
+.login-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 100;
+
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
+
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+
+  &:before,
+  &:after {
+    content: '';
+    flex: 1 1 0;
+  }
+
+  .form {
+    max-width: 60em;
+    margin: 0 auto;
+
+    display: flex;
+    flex-direction: column;
+
+    & > * {
+      margin-top: 1em;
+    }
+
+    h1,
+    .field label {
+      color: #000;
+      text-shadow: 0 0 2px rgba(255, 255, 255, 0.5);
+    }
+
+    .field {
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      width: 20em;
+
+      label {
+        font-weight: bold;
+      }
+    }
+
+    button {
+      padding: 0.5em 1em;
+    }
   }
 }
 </style>
