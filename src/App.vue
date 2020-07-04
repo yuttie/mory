@@ -35,7 +35,7 @@ import axios from '@/axios';
 
 @Component
 export default class App extends Vue {
-  token = null as null | string;
+  token = localStorage.getItem('token') as null | string;
 
   login() {
     axios.post(`/login`, {
@@ -43,11 +43,13 @@ export default class App extends Vue {
       password: (this.$refs.password as HTMLInputElement).value,
     }).then(res => {
       this.token = res.data;
+      localStorage.setItem('token', res.data);
     });
   }
 
   tokenExpired() {
     this.token = null;
+    localStorage.removeItem('token');
   }
 }
 </script>
