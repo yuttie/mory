@@ -70,6 +70,7 @@ mod filters {
                         .or(notes_save(state.clone()))
                         .or(notes_delete(state)))
                     .or(notes_login()))
+                .recover(handlers::rejection)
                 .boxed()
         }
         else {
@@ -79,6 +80,7 @@ mod filters {
                     .or(notes_save(state.clone()))
                     .or(notes_delete(state)))
                 .or(notes_login())
+                .recover(handlers::rejection)
                 .boxed()
         }
     }
@@ -154,12 +156,12 @@ mod handlers {
     use jsonwebtoken as jwt;
     use tokio::sync::{Mutex};
     use tokio;
-    use log::debug;
+    use log::{debug, error};
     use warp::reply::Reply;
     use mime_guess;
     use warp::http::header::CONTENT_TYPE;
 
-    pub async fn login(login: Login) -> Result<Box<dyn warp::Reply>, Infallible> {
+    pub async fn login(login: Login) -> Result<Box<dyn warp::Reply>, warp::reject::Rejection> {
         debug!("login");
         debug!("{:?}", login);
         let user_name = env::var("MORIED_USER_NAME").unwrap();
@@ -183,7 +185,7 @@ mod handlers {
             Ok(Box::new(token))
         }
         else {
-            Ok(Box::new(warp::http::StatusCode::UNAUTHORIZED))
+            Err(warp::reject::custom(Unauthorized))
         }
     }
 
@@ -428,6 +430,28 @@ mod handlers {
                 Err(warp::reject::custom(Unauthorized))
             },
         }
+    }
+
+    pub async fn rejection(err: warp::reject::Rejection) -> Result<impl Reply, Infallible> {
+        let code =
+            if err.is_not_found() {
+                warp::http::StatusCode::NOT_FOUND
+            } else if let Some(missing_header) = err.find::<warp::reject::MissingHeader>() {
+                if missing_header.name() == "Authorization" {
+                    warp::http::StatusCode::UNAUTHORIZED
+                }
+                else {
+                    error!("unhandled rejection: {:?}", err);
+                    warp::http::StatusCode::INTERNAL_SERVER_ERROR
+                }
+            } else if let Some(_) = err.find::<Unauthorized>() {
+                warp::http::StatusCode::UNAUTHORIZED
+            } else {
+                error!("unhandled rejection: {:?}", err);
+                warp::http::StatusCode::INTERNAL_SERVER_ERROR
+            };
+
+        Ok(code)
     }
 }
 
