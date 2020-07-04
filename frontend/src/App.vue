@@ -37,16 +37,6 @@ import axios from '@/axios';
 export default class App extends Vue {
   token = null as null | string;
 
-  @Watch('token')
-  onTokenChanged(token: null | string) {
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    }
-    else {
-      delete axios.defaults.headers.common['Authorization'];
-    }
-  }
-
   login() {
     axios.post(`/login`, {
       user: (this.$refs.username as HTMLInputElement).value,
