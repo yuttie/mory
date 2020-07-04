@@ -37,8 +37,8 @@ async fn main() {
 
     let cors = warp::cors()
         .allow_any_origin()
-        .allow_methods(vec!["GET", "PUT", "DELETE"])
-        .allow_headers(vec!["Content-Type"]);
+        .allow_methods(vec!["GET", "POST", "PUT", "DELETE"])
+        .allow_headers(vec!["Authorization", "Content-Type"]);
 
     let routes = api.with(cors);
     let addr = {
@@ -64,19 +64,33 @@ mod filters {
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
         if let Some(root_path) = root_path {
             warp::path(root_path)
+                .and(auth()
+                    .and(notes_list(state.clone())
+                        .or(notes_load(state.clone()))
+                        .or(notes_save(state.clone()))
+                        .or(notes_delete(state)))
+                    .or(notes_login()))
+                .recover(handlers::rejection)
+                .boxed()
+        }
+        else {
+            auth()
                 .and(notes_list(state.clone())
                     .or(notes_load(state.clone()))
                     .or(notes_save(state.clone()))
                     .or(notes_delete(state)))
+                .or(notes_login())
+                .recover(handlers::rejection)
                 .boxed()
         }
-        else {
-            notes_list(state.clone())
-                .or(notes_load(state.clone()))
-                .or(notes_save(state.clone()))
-                .or(notes_delete(state))
-                .boxed()
-        }
+    }
+
+    pub fn notes_login() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+        warp::path("login")
+            .and(warp::path::end())
+            .and(warp::post())
+            .and(warp::body::json())
+            .and_then(handlers::login)
     }
 
     pub fn notes_list(
@@ -119,23 +133,61 @@ mod filters {
             .and(warp::any().map(move || state.clone()))
             .and_then(handlers::delete_note)
     }
+
+    pub fn auth() -> impl Filter<Extract = (), Error = warp::Rejection> + Copy {
+        warp::header::<String>("Authorization")
+            .and_then(handlers::auth)
+            .untuple_one()
+    }
 }
 
 mod handlers {
-    use super::models::{State, Cached, ListEntry, NoteSave};
+    use super::models::{Unauthorized, Claims, State, Cached, ListEntry, Login, NoteSave};
 
+    use std::env;
     use std::sync::Arc;
     use std::convert::Infallible;
     use std::vec::Vec;
     use std::string::String;
 
+    use argon2;
+    use chrono::{DateTime, Duration, Utc};
     use git2::{Repository, Index, IndexEntry, IndexTime, Oid, Signature};
+    use jsonwebtoken as jwt;
     use tokio::sync::{Mutex};
     use tokio;
-    use log::debug;
+    use log::{debug, error};
     use warp::reply::Reply;
     use mime_guess;
     use warp::http::header::CONTENT_TYPE;
+
+    pub async fn login(login: Login) -> Result<Box<dyn warp::Reply>, warp::reject::Rejection> {
+        debug!("login");
+        debug!("{:?}", login);
+        let user_name = env::var("MORIED_USER_NAME").unwrap();
+        let user_email = env::var("MORIED_USER_EMAIL").unwrap();
+        let user_hash = env::var("MORIED_USER_HASH").unwrap();
+        let matches = user_name == login.user && argon2::verify_encoded(&user_hash, login.password.as_ref()).unwrap();
+
+        if matches {
+            let secret = env::var("MORIED_SECRET").unwrap();
+            let now: DateTime<Utc> = Utc::now();
+            let my_claims = Claims {
+                sub: login.user.to_owned(),
+                exp: (now + Duration::hours(6)).timestamp() as usize,
+                email: "aaa@example.com".to_owned(),
+            };
+            let token = jwt::encode(
+                &jwt::Header::default(),
+                &my_claims,
+                &jwt::EncodingKey::from_secret(secret.as_ref())
+            ).unwrap();
+            Ok(Box::new(token))
+        }
+        else {
+            Err(warp::reject::custom(Unauthorized))
+        }
+    }
 
     pub async fn list_notes(state: State) -> Result<impl warp::Reply, Infallible> {
         debug!("list");
@@ -362,6 +414,45 @@ mod handlers {
             Err(warp::reject::not_found())
         }
     }
+
+    pub async fn auth(header_value: String) -> Result<(), warp::reject::Rejection> {
+        let token = header_value.split_whitespace().nth(1).unwrap();
+        debug!("received token: {}", token);
+
+        let secret = env::var("MORIED_SECRET").unwrap();
+        match jwt::decode::<Claims>(&token, &jwt::DecodingKey::from_secret(secret.as_ref()), &jwt::Validation::default()) {
+            Ok(_) => {
+                debug!("authorized");
+                Ok(())
+            },
+            Err(e) => {
+                debug!("failed to decode token: {:?}", e);
+                Err(warp::reject::custom(Unauthorized))
+            },
+        }
+    }
+
+    pub async fn rejection(err: warp::reject::Rejection) -> Result<impl Reply, Infallible> {
+        let code =
+            if err.is_not_found() {
+                warp::http::StatusCode::NOT_FOUND
+            } else if let Some(missing_header) = err.find::<warp::reject::MissingHeader>() {
+                if missing_header.name() == "Authorization" {
+                    warp::http::StatusCode::UNAUTHORIZED
+                }
+                else {
+                    error!("unhandled rejection: {:?}", err);
+                    warp::http::StatusCode::INTERNAL_SERVER_ERROR
+                }
+            } else if let Some(_) = err.find::<Unauthorized>() {
+                warp::http::StatusCode::UNAUTHORIZED
+            } else {
+                error!("unhandled rejection: {:?}", err);
+                warp::http::StatusCode::INTERNAL_SERVER_ERROR
+            };
+
+        Ok(code)
+    }
 }
 
 mod models {
@@ -374,6 +465,18 @@ mod models {
 
     pub type Metadata = serde_yaml::Value;
     pub type ListEntry = (String, Option<Metadata>);
+
+    #[derive(Debug)]
+    pub struct Unauthorized;
+
+    impl warp::reject::Reject for Unauthorized {}
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct Claims {
+        pub sub: String,
+        pub exp: usize,
+        pub email: String,
+    }
 
     pub enum Cached<T> {
         Computed {
@@ -418,6 +521,12 @@ mod models {
                 cached_entries: Arc::new(Mutex::new(Cached::None)),
             }
         }
+    }
+
+    #[derive(Debug, Deserialize, Serialize, Clone)]
+    pub struct Login {
+        pub user: String,
+        pub password: String,
     }
 
     #[derive(Debug, Deserialize, Serialize, Clone)]
