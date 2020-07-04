@@ -44,6 +44,8 @@ interface Query {
 
 @Component
 export default class Find extends Vue {
+  @Prop(String) readonly token!: null | string;
+
   entries: [string, any][] = [];
   queryText = '';
 
@@ -116,6 +118,16 @@ export default class Find extends Vue {
     return matched;
   }
 
+  @Watch('token')
+  onTokenChanged(token: null | string) {
+    if (token) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    }
+    else {
+      delete axios.defaults.headers.common['Authorization'];
+    }
+  }
+
   @Watch('queryText')
   onQueryTextChanged(q: string) {
     if (q !== this.$route.query.q) {
@@ -136,6 +148,19 @@ export default class Find extends Vue {
     axios.get('/notes')
       .then(res => {
         this.entries = res.data;
+      }).catch(error => {
+        if (error.response) {
+          if (error.response.status === 401) {
+            // Unauthorized
+            this.$emit('tokenExpired');
+          }
+          else {
+            console.log('Unhandled error: {}', error.response);
+          }
+        }
+        else {
+          console.log('Unhandled error: {}', error);
+        }
       });
 
     if (this.$route.query.q) {
