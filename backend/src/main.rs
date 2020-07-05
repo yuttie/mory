@@ -1,9 +1,7 @@
 use std::env;
 use std::net::ToSocketAddrs;
-use std::sync::Arc;
 
 use dotenv::dotenv;
-use tokio::sync::{Mutex};
 use git2::Repository;
 use warp::Filter;
 
@@ -52,11 +50,7 @@ mod filters {
     use super::handlers;
     use super::models;
 
-    use std::sync::Arc;
-
     use warp::Filter;
-    use git2::Repository;
-    use tokio::sync::{Mutex};
 
     pub fn notes(
         root_path: Option<String>,
@@ -142,20 +136,17 @@ mod filters {
 }
 
 mod handlers {
-    use super::models::{Unauthorized, Claims, State, Cached, ListEntry, Login, NoteSave};
+    use super::models::{Unauthorized, Claims, State, Cached, Login, NoteSave};
 
     use std::env;
-    use std::sync::Arc;
     use std::convert::Infallible;
     use std::vec::Vec;
     use std::string::String;
 
     use argon2;
     use chrono::{DateTime, Duration, Utc};
-    use git2::{Repository, Index, IndexEntry, IndexTime, Oid, Signature};
+    use git2::{Index, IndexEntry, IndexTime};
     use jsonwebtoken as jwt;
-    use tokio::sync::{Mutex};
-    use tokio;
     use log::{debug, error};
     use warp::reply::Reply;
     use mime_guess;
