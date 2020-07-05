@@ -15,14 +15,14 @@ import 'ace-builds/src-noconflict/theme-nord_dark';
 @Component
 export default class Editor extends Vue {
   @Prop(String) readonly value!: string;
-  editor: any = null;
+  editor: any = null;  // eslint-disable-line @typescript-eslint/no-explicit-any
 
   @Watch('value')
   onValueChanged(value: string) {
-    if (value !== this.editor!.getValue()) {
-      const cursor = this.editor!.getCursorPosition();
-      this.editor!.setValue(value, -1);
-      this.editor!.moveCursorToPosition(cursor);
+    if (value !== this.editor!.getValue()) {  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+      const cursor = this.editor!.getCursorPosition();  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+      this.editor!.setValue(value, -1);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+      this.editor!.moveCursorToPosition(cursor);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
     }
   }
 
@@ -35,17 +35,17 @@ export default class Editor extends Vue {
       fontFamily: 'Menlo, monospace',
       navigateWithinSoftTabs: true,
     });
-    this.editor!.on('change', () => {
-      this.$emit('change', this.editor!.getValue());
+    this.editor!.on('change', () => {  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+      this.$emit('change', this.editor!.getValue());  // eslint-disable-line @typescript-eslint/no-non-null-assertion
     });
   }
 
   focus() {
-    this.editor!.focus();
+    this.editor!.focus();  // eslint-disable-line @typescript-eslint/no-non-null-assertion
   }
 
   blur() {
-    this.editor!.blur();
+    this.editor!.blur();  // eslint-disable-line @typescript-eslint/no-non-null-assertion
   }
 }
 </script>

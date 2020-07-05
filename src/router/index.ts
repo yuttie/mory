@@ -17,7 +17,7 @@ const routes: Array<RouteConfig> = [
   {
     path: '/create',
     name: 'Create',
-    redirect: to => {
+    redirect: _to => {
       return {
         name: 'View',
         params: { path: uuidv4() },
