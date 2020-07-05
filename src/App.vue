@@ -13,7 +13,7 @@
       </div>
     </div>
     <router-view v-if="token" v-bind:key="$route.path" v-bind:token="token" v-on:tokenExpired="tokenExpired" class="router-view"/>
-    <div v-show="!token" class="login-overlay">
+    <div v-if="!token" class="login-overlay">
       <div class="form">
         <h1>Login</h1>
         <div class="field">
