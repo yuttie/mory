@@ -8,7 +8,9 @@
         <router-link to="/find">Find</router-link> |
         <router-link to="/about">About</router-link>
       </div>
-      <div class="right"></div>
+      <div class="right">
+        <Gravatar v-bind:email="email" v-bind:title="`Logged in as ${username}`"></Gravatar>
+      </div>
     </div>
     <router-view v-if="token" v-bind:key="$route.path" v-bind:token="token" v-on:tokenExpired="tokenExpired" class="router-view"/>
     <div v-show="!token" class="login-overlay">
@@ -31,11 +33,51 @@
 <script lang="ts">
 import { Component, Vue } from 'vue-property-decorator';
 
-import axios from '@/axios';
+import Gravatar from '@/components/Gravatar.vue';
 
-@Component
+import axios from '@/axios';
+import jwtDecode from 'jwt-decode';
+
+interface Claim {
+    sub: string;
+    exp: number;
+    email: string;
+}
+
+@Component({
+  components: {
+    Gravatar,
+  },
+})
 export default class App extends Vue {
   token = localStorage.getItem('token') as null | string;
+
+  get decodedToken() {
+    if (this.token) {
+      return jwtDecode<Claim>(this.token);
+    }
+    else {
+      return null;
+    }
+  }
+
+  get username() {
+    if (this.decodedToken) {
+      return this.decodedToken.sub;
+    }
+    else {
+      return null;
+    }
+  }
+
+  get email() {
+    if (this.decodedToken) {
+      return this.decodedToken.email;
+    }
+    else {
+      return null;
+    }
+  }
 
   login() {
     axios.post(`/login`, {
@@ -89,6 +131,10 @@ html, body {
 
   .middle {
     text-align: center;
+  }
+
+  .right {
+    text-align: right;
   }
 
   a {
