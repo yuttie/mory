@@ -1,7 +1,7 @@
 <template>
   <div class="find">
     <div>
-      <input v-model="queryText" type="text" class="query" autofocus ref="query" placeholder="Search">
+      <input v-model="queryText" type="text" class="query" autofocus autocomplete="off" ref="query" placeholder="Search">
       <div class="tags">
         <span
           v-for="tag of [...tags].sort()"
