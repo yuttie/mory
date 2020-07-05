@@ -13,6 +13,7 @@ module.exports = {
     },
   },
   pwa: {
+    name: 'mory',
     themeColor: '#5e83ae',
     iconPaths: {
       favicon32: 'img/icons/favicon-32x32.png',
