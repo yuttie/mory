@@ -175,7 +175,7 @@ mod handlers {
             let my_claims = Claims {
                 sub: login.user.to_owned(),
                 exp: (now + Duration::hours(6)).timestamp() as usize,
-                email: "aaa@example.com".to_owned(),
+                email: user_email,
             };
             let token = jwt::encode(
                 &jwt::Header::default(),
