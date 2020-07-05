@@ -12,11 +12,11 @@ import { Component, Prop, Vue } from 'vue-property-decorator';
 
 @Component
 export default class About extends Vue {
-  name: string = process.env.VUE_APP_NAME;
-  version: string = process.env.VUE_APP_VERSION;
-  author: string = process.env.VUE_APP_AUTHOR;
+  name: string = process.env.VUE_APP_NAME!;  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+  version: string = process.env.VUE_APP_VERSION!;  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+  author: string = process.env.VUE_APP_AUTHOR!;  // eslint-disable-line @typescript-eslint/no-non-null-assertion
   fromYear = 2020;
-  buildYear: number = process.env.VUE_APP_BUILD_YEAR;
+  buildYear: number = process.env.VUE_APP_BUILD_YEAR!;  // eslint-disable-line @typescript-eslint/no-non-null-assertion
 
   mounted() {
     document.title = `About | ${process.env.VUE_APP_NAME}`;
