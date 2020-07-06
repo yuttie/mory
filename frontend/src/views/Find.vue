@@ -204,20 +204,39 @@ export default class Find extends Vue {
     this.queryText = queryElems.join(' ');
   }
 
-  toggleTag(tag: string) {
+  addTag(tag: string) {
+    let hashtag = '#' + tag;
+    if (/\s/.test(hashtag)) {
+      hashtag = `"${hashtag}"`;
+    }
+
+    const queryElems = [...this.queryText.matchAll(/("[^"]+")|([^\s]+)/g)].map(x => x[1] || x[2]);
+    if (!this.query.tags.has(tag)) {
+      queryElems.push(hashtag);
+    }
+
+    this.queryText = queryElems.join(' ');
+  }
+
+  removeTag(tag: string) {
     let hashtag = '#' + tag;
     if (/\s/.test(hashtag)) {
       hashtag = `"${hashtag}"`;
     }
 
     let queryElems = [...this.queryText.matchAll(/("[^"]+")|([^\s]+)/g)].map(x => x[1] || x[2]);
+    queryElems = queryElems.filter(x => x !== hashtag);
+
+    this.queryText = queryElems.join(' ');
+  }
+
+  toggleTag(tag: string) {
     if (this.query.tags.has(tag)) {
-      queryElems = queryElems.filter(x => x !== hashtag);
+      this.removeTag(tag);
     }
     else {
-      queryElems.push(hashtag);
+      this.addTag(tag);
     }
-    this.queryText = queryElems.join(' ');
   }
 }
 </script>
