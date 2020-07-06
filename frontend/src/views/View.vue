@@ -59,7 +59,7 @@ const renderer = {
   heading(text: string, level: number) {
     const fragmentId = makeFragmentId(text);
 
-    return `<h${level}><a id="${fragmentId}" href="#${fragmentId}" class="header-link material-icons"></a>${text}</h${level}>`;
+    return `<h${level} id="${fragmentId}"><a href="#${fragmentId}" class="header-link material-icons"></a>${text}</h${level}>`;
   },
 };
 
