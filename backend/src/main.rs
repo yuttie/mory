@@ -154,7 +154,6 @@ mod handlers {
 
     pub async fn login(login: Login) -> Result<Box<dyn warp::Reply>, warp::reject::Rejection> {
         debug!("login");
-        debug!("{:?}", login);
         let user_name = env::var("MORIED_USER_NAME").unwrap();
         let user_email = env::var("MORIED_USER_EMAIL").unwrap();
         let user_hash = env::var("MORIED_USER_HASH").unwrap();
