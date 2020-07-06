@@ -104,8 +104,6 @@ export default class App extends Vue {
 html, body {
   padding: 0;
   margin: 0;
-  width: 100%;
-  height: 100%;
 }
 
 html {
@@ -114,9 +112,9 @@ html {
 </style>
 
 <style scoped lang="scss">
+$nav-height: 50px;
+
 #app {
-  width: 100%;
-  height: 100%;
   display: flex;
   flex-direction: column;
 }
@@ -124,7 +122,13 @@ html {
 #nav {
   display: flex;
   align-items: center;
+
+  position: fixed;
+  width: 100%;
+  height: $nav-height;
   padding: 0.5em 1em;
+  background: #fff;
+  z-index: 100;
 
   & > * {
     flex: 1 1 0;
@@ -149,8 +153,8 @@ html {
 }
 
 .router-view {
+  margin-top: $nav-height;
   flex: 1 1 0;
-  overflow: hidden;
   position: relative;
 }
 
@@ -196,8 +200,8 @@ html {
   display: flex;
   flex-direction: column;
 
-  &:before,
-  &:after {
+  &::before,
+  &::after {
     content: '';
     flex: 1 1 0;
   }
