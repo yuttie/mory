@@ -3,6 +3,7 @@
   font-family: 'M+ 1c', 'Source Han Sans', sans-serif;
   line-height: 1.2;
   color: #4c566a;
+  overflow-wrap: anywhere;
 
   h1 {
     font-weight: 800;
@@ -75,21 +76,33 @@
   }
 
   a.header-link {
+    position: absolute;
+    margin-left: -1em;
+    padding-right: 0.5em;
     color: black;
     text-decoration: none;
-    visibility: hidden;
+    opacity: 0;
   }
 
   h1, h2, h3, h4, h5, h6 {
+    $nav-height: 50px;
+
+    &::before {
+      display: block;
+      height: $nav-height;
+      margin-top: -$nav-height;
+      visibility: hidden;
+      content: ' ';
+    }
+
     &:hover a.header-link {
-      visibility: visible;
+      opacity: 1;
     }
   }
 
-  a.header-link:before {
+  a.header-link::before {
     content: 'link';
     display: block;
     width: 1em;
-    margin-left: -1em;
   }
 }

@@ -26,7 +26,7 @@ export default class About extends Vue {
 
 <style scoped lang="scss">
 .about {
-  padding: 1em;
+  padding: 50px 1em;
 
   display: flex;
   flex-direction: column;
