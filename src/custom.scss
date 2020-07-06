@@ -87,7 +87,7 @@
     }
   }
 
-  a.header-link:before {
+  a.header-link::before {
     content: 'link';
     display: block;
     width: 1em;

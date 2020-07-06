@@ -200,8 +200,8 @@ $nav-height: 50px;
   display: flex;
   flex-direction: column;
 
-  &:before,
-  &:after {
+  &::before,
+  &::after {
     content: '';
     flex: 1 1 0;
   }
