@@ -76,14 +76,17 @@
   }
 
   a.header-link {
+    position: absolute;
+    margin-left: -1em;
+    padding-right: 0.5em;
     color: black;
     text-decoration: none;
-    visibility: hidden;
+    opacity: 0;
   }
 
   h1, h2, h3, h4, h5, h6 {
     &:hover a.header-link {
-      visibility: visible;
+      opacity: 1;
     }
   }
 
@@ -91,6 +94,5 @@
     content: 'link';
     display: block;
     width: 1em;
-    margin-left: -1em;
   }
 }
