@@ -1,6 +1,6 @@
 <template>
   <div class="find">
-    <div>
+    <div class="query-panel">
       <input v-model="queryText" type="text" class="query" autofocus autocomplete="off" ref="query" placeholder="Search">
       <div class="tags">
         <span
@@ -250,6 +250,13 @@ export default class Find extends Vue {
 .find {
   display: flex;
   flex-direction: column;
+}
+
+.query-panel {
+  position: sticky;
+  top: 50px;
+
+  background: #fff;
   padding: 1em;
 }
 
