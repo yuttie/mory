@@ -186,7 +186,12 @@ export default class Find extends Vue {
       this.toggleTag(tag);
     }
     else {
-      this.selectSingleTag(tag);
+      if (this.query.tags.size === 1 && this.query.tags.has(tag)) {
+        this.removeTag(tag);
+      }
+      else {
+        this.selectSingleTag(tag);
+      }
     }
   }
 
