@@ -186,11 +186,11 @@ export default class Find extends Vue {
       this.toggleTag(tag);
     }
     else {
-      this.selectTag(tag);
+      this.selectSingleTag(tag);
     }
   }
 
-  selectTag(tag: string) {
+  selectSingleTag(tag: string) {
     let hashtag = '#' + tag;
     if (/\s/.test(hashtag)) {
       hashtag = `"${hashtag}"`;
