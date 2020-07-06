@@ -85,6 +85,16 @@
   }
 
   h1, h2, h3, h4, h5, h6 {
+    $nav-height: 50px;
+
+    &::before {
+      display: block;
+      height: $nav-height;
+      margin-top: -$nav-height;
+      visibility: hidden;
+      content: ' ';
+    }
+
     &:hover a.header-link {
       opacity: 1;
     }
