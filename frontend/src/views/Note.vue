@@ -1,5 +1,5 @@
 <template>
-  <div class="view">
+  <div class="note">
     <div class="panes" v-bind:class="{ shifted: editorIsVisible }">
       <Editor v-bind:value="text" v-on:change="text = $event" ref="editor"></Editor>
       <div class="rendered">
@@ -70,7 +70,7 @@ const renderer = {
     Editor,
   },
 })
-export default class View extends Vue {
+export default class Note extends Vue {
   @Prop(String) readonly token!: null | string;
 
   text = '';
@@ -244,7 +244,7 @@ export default class View extends Vue {
 <style scoped lang="scss">
 $nav-height: 50px;
 
-.view {
+.note {
   display: flex;
   flex-direction: column;
 }

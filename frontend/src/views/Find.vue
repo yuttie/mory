@@ -17,7 +17,7 @@
         v-for="entry of matchedEntries"
         v-bind:key="entry[0]"
       >
-        <router-link v-bind:to="{ path: `/view/${entry[0]}` }">{{ entry[0] }}</router-link>
+        <router-link v-bind:to="{ path: `/note/${entry[0]}` }">{{ entry[0] }}</router-link>
         <span class="note-tags">
           <span
             v-for="tag of [...(entry[1] || {}).tags || []].sort()"
