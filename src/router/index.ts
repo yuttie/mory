@@ -2,7 +2,7 @@ import Vue from 'vue'
 import VueRouter, { RouteConfig } from 'vue-router'
 import Home from '../views/Home.vue'
 import Find from '../views/Find.vue'
-import View from '../views/View.vue'
+import Note from '../views/Note.vue'
 
 import { v4 as uuidv4 } from 'uuid';
 
@@ -19,7 +19,7 @@ const routes: Array<RouteConfig> = [
     name: 'Create',
     redirect: _to => {
       return {
-        name: 'View',
+        name: 'Note',
         params: { path: uuidv4() },
         query: { mode: 'create' },
       };
@@ -31,9 +31,9 @@ const routes: Array<RouteConfig> = [
     component: Find,
   },
   {
-    path: '/view/:path*',
-    name: 'View',
-    component: View,
+    path: '/note/:path*',
+    name: 'Note',
+    component: Note,
   },
   {
     path: '/about',
