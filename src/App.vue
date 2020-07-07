@@ -1,9 +1,12 @@
 <template>
   <div id="app">
     <div id="nav">
-      <div class="left logo">mory</div>
+      <div class="left">
+        <router-link to="/">
+          <div class="logo">mory</div>
+        </router-link>
+      </div>
       <div class="middle">
-        <router-link to="/">Home</router-link> |
         <router-link to="/create">Create</router-link> |
         <router-link to="/find">Find</router-link> |
         <router-link to="/about">About</router-link>
@@ -134,6 +137,14 @@ $nav-height: 50px;
     flex: 1 1 0;
   }
 
+  .left {
+    text-align: left;
+
+    a {
+      text-decoration: none;
+    }
+  }
+
   .middle {
     text-align: center;
   }
@@ -159,7 +170,7 @@ $nav-height: 50px;
 }
 
 .logo {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   vertical-align: bottom;
   color: #333;
