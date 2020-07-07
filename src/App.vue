@@ -15,7 +15,7 @@
         <Gravatar v-bind:email="email" v-bind:title="`Logged in as ${username}`"></Gravatar>
       </div>
     </div>
-    <router-view v-if="token" v-bind:key="$route.path" v-bind:token="token" v-on:tokenExpired="tokenExpired" class="router-view"/>
+    <router-view v-if="!(!token && !$refs.routerView)" v-bind:key="$route.path" v-bind:token="token" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerView"/>
     <div v-if="!token" class="login-overlay">
       <div class="form">
         <h1>Login</h1>
