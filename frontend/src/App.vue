@@ -30,6 +30,9 @@
         <button v-on:click="login">Login</button>
       </div>
     </div>
+    <v-overlay v-bind:value="isLoggingIn">
+      <v-progress-circular indeterminate size="64"></v-progress-circular>
+    </v-overlay>
   </v-app>
 </template>
 
@@ -54,6 +57,7 @@ interface Claim {
 })
 export default class App extends Vue {
   token = localStorage.getItem('token') as null | string;
+  isLoggingIn = false;
 
   get decodedToken() {
     if (this.token) {
@@ -83,12 +87,15 @@ export default class App extends Vue {
   }
 
   login() {
+    this.isLoggingIn = true;
+
     axios.post(`/login`, {
       user: (this.$refs.username as HTMLInputElement).value,
       password: (this.$refs.password as HTMLInputElement).value,
     }).then(res => {
       this.token = res.data;
       localStorage.setItem('token', res.data);
+      this.isLoggingIn = false;
     });
   }
 
@@ -131,7 +138,7 @@ $nav-height: 50px;
   height: $nav-height;
   padding: 0.5em 1em;
   background: #fff;
-  z-index: 100;
+  z-index: 1;
 
   & > * {
     flex: 1 1 0;
@@ -202,7 +209,7 @@ $nav-height: 50px;
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: 100;
+  z-index: 3;
 
   background: rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(8px);
