@@ -5,13 +5,6 @@ process.env.VUE_APP_BUILD_YEAR = new Date().getFullYear();
 
 module.exports = {
   publicPath: process.env.VUE_APP_APPLICATION_ROOT,
-  css: {
-    loaderOptions: {
-      sass: {
-        prependData: '@import "@/custom.scss";',
-      },
-    },
-  },
   pwa: {
     name: 'mory',
     themeColor: '#5e83ae',

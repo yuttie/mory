@@ -241,6 +241,10 @@ export default class Note extends Vue {
 }
 </script>
 
+<style lang="scss">
+@import "@/custom.scss";
+</style>
+
 <style scoped lang="scss">
 $nav-height: 50px;
 
