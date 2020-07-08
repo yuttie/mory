@@ -1,5 +1,5 @@
 <template>
-  <div id="app">
+  <v-app id="app">
     <div id="nav">
       <div class="left">
         <router-link to="/">
@@ -30,7 +30,7 @@
         <button v-on:click="login">Login</button>
       </div>
     </div>
-  </div>
+  </v-app>
 </template>
 
 <script lang="ts">
