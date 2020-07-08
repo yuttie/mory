@@ -35,7 +35,7 @@ import Editor from '@/components/Editor.vue';
 
 import axios from '@/axios';
 import marked from 'marked';
-import 'material-design-icons/iconfont/material-icons.css';
+import '@mdi/font/css/materialdesignicons.css';
 import Prism from 'prismjs';
 import 'prism-themes/themes/prism-nord.css';
 
@@ -59,7 +59,7 @@ const renderer = {
   heading(text: string, level: number) {
     const fragmentId = makeFragmentId(text);
 
-    return `<h${level} id="${fragmentId}"><a href="#${fragmentId}" class="header-link material-icons"></a>${text}</h${level}>`;
+    return `<h${level} id="${fragmentId}"><a href="#${fragmentId}" class="header-link mdi mdi-link"></a>${text}</h${level}>`;
   },
 };
 
