@@ -1,34 +1,48 @@
 <template>
   <div class="find">
-    <div class="query-panel">
-      <input v-model="queryText" type="text" class="query" autofocus autocomplete="off" ref="query" placeholder="Search">
-      <div class="tags">
-        <span
+    <div class="mx-5 my-3">
+      <v-text-field
+        v-model="queryText"
+        solo
+        clearable
+        prepend-inner-icon="mdi-magnify"
+        type="text"
+        label="Search"
+        autofocus
+        autocomplete="off"
+        hide-details="auto"
+        ref="query"
+      ></v-text-field>
+      <div class="d-flex flex-row align-center flex-wrap my-5">
+        <v-chip
+          small
+          class="ma-1"
           v-for="tag of [...tags].sort()"
           v-bind:key="tag"
-          v-bind:class="{ 'not-in-query': !query.tags.has(tag) }"
+          v-bind:color="query.tags.has(tag) ? 'primary' : 'normal'"
           v-on:click="handleTagClick(tag, $event)"
-          class="tag"
-        >{{ tag }}</span>
+        >{{ tag }}</v-chip>
       </div>
     </div>
-    <ul class="list">
-      <li
-        v-for="entry of matchedEntries"
-        v-bind:key="entry[0]"
-      >
-        <router-link v-bind:to="{ path: `/note/${entry[0]}` }">{{ entry[0] }}</router-link>
-        <span class="note-tags">
-          <span
-            v-for="tag of [...(entry[1] || {}).tags || []].sort()"
-            v-bind:key="tag"
-            v-bind:class="{ 'not-in-query': !query.tags.has(tag) }"
-            v-on:click="handleTagClick(tag, $event)"
-            class="tag"
-            >{{ tag }}</span>
-        </span>
-      </li>
-    </ul>
+    <v-data-table
+      v-bind:headers="headers"
+      v-bind:items="matchedEntries"
+      class="mx-5"
+    >
+      <template v-slot:item.path="{ item }">
+        <router-link v-bind:to="{ path: `/note/${item.path}` }">{{ item.path }}</router-link>
+      </template>
+      <template v-slot:item.tags="{ item }">
+        <v-chip
+          small
+          class="ma-1"
+          v-for="tag of [...(item.tags || {}).tags || []].sort()"
+          v-bind:key="tag"
+          v-bind:color="query.tags.has(tag) ? 'primary' : 'normal'"
+          v-on:click="handleTagClick(tag, $event)"
+          >{{ tag }}</v-chip>
+      </template>
+    </v-data-table>
   </div>
 </template>
 
@@ -48,6 +62,13 @@ export default class Find extends Vue {
 
   entries: [string, any][] = [];
   queryText = '';
+
+  get headers() {
+    return [
+      { text: 'Path', value: 'path' },
+      { text: 'Tags', value: 'tags', sortable: false },
+    ];
+  }
 
   get tags() {
     const tags = new Set();
@@ -112,7 +133,10 @@ export default class Find extends Vue {
           }
         }
       }
-      matched.push(entry);
+      matched.push({
+        path: entry[0],
+        tags: entry[1],
+      });
     }
 
     return matched;
@@ -247,66 +271,4 @@ export default class Find extends Vue {
 </script>
 
 <style scoped lang="scss">
-.find {
-  display: flex;
-  flex-direction: column;
-}
-
-.query-panel {
-  position: sticky;
-  top: 50px;
-
-  background: #fff;
-  padding: 1em;
-}
-
-.query {
-  display: block;
-  width: 100%;
-  font-size: 1.2em;
-  padding: 0.2em 0.4em;
-}
-
-.list {
-  flex: 1 1 0;
-  margin: 0;
-  padding: 1em;
-}
-
-.tags {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  flex-wrap: wrap;
-  margin: 1em;
-}
-
-.note-tags {
-  .tag {
-    font-size: 0.8em;
-  }
-}
-
-.tag {
-  display: inline-block;
-  color: #ffffff;
-  background-color: #cb4b63;
-  border-radius: 4px;
-  padding: 0.2em 0.4em;
-  margin: 0.1em 0.2em;
-  cursor: pointer;
-  user-select: none;
-  transition: color 100ms,
-              background-color 100ms;
-
-  &.not-in-query {
-    color: #ccc;
-    background-color: #fafafa;
-  }
-
-  &.not-in-query:hover {
-    color: #ccc;
-    background-color: #fef3f5;
-  }
-}
 </style>
