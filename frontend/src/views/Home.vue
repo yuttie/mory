@@ -4,7 +4,7 @@
       v-for="category of categorizedEntries.entries()"
       v-bind:key="category"
       class="ma-5"
-      elevation="2"
+      outlined
     >
       <v-card-title>{{ category[0] }}</v-card-title>
       <v-card-text>
