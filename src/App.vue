@@ -152,12 +152,6 @@ export default class App extends Vue {
 }
 </script>
 
-<style lang="scss">
-html {
-  overflow-y: auto;
-}
-</style>
-
 <style scoped lang="scss">
 #nav {
   a {
