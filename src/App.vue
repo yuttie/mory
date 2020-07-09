@@ -1,36 +1,48 @@
 <template>
-  <div id="app">
-    <div id="nav">
-      <div class="left">
+  <v-app id="app">
+    <v-app-bar app id="nav" color="white" elevate-on-scroll fixed>
+      <v-toolbar-title>
         <router-link to="/">
           <div class="logo">mory</div>
         </router-link>
-      </div>
-      <div class="middle">
-        <router-link to="/create">Create</router-link> |
-        <router-link to="/find">Find</router-link> |
-        <router-link to="/about">About</router-link>
-      </div>
-      <div class="right">
+      </v-toolbar-title>
+      <v-spacer></v-spacer>
+      <v-btn icon to="/create"><v-icon>mdi-plus-box</v-icon></v-btn>
+      <v-btn icon to="/find"><v-icon>mdi-view-list</v-icon></v-btn>
+      <v-btn icon to="/about"><v-icon>mdi-information</v-icon></v-btn>
+      <v-spacer></v-spacer>
+      <v-btn icon>
         <Gravatar v-bind:email="email" v-bind:title="`Logged in as ${username}`"></Gravatar>
-      </div>
-    </div>
-    <router-view v-if="!(!token && !$refs.routerView)" v-bind:key="$route.path" v-bind:token="token" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerView"/>
+      </v-btn>
+    </v-app-bar>
+    <v-main>
+      <router-view v-if="!(!token && !$refs.routerView)" v-bind:key="$route.path" v-bind:token="token" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerView"/>
+    </v-main>
     <div v-if="!token" class="login-overlay">
       <div class="form">
         <h1>Login</h1>
-        <div class="field">
-          <label for="username">Username</label>
-          <input v-on:keypress.enter="login" id="username" type="text" ref="username" autofocus>
-        </div>
-        <div class="field">
-          <label for="password">Password</label>
-          <input v-on:keypress.enter="login" id="password" type="password" ref="password">
-        </div>
-        <button v-on:click="login">Login</button>
+        <v-text-field
+          v-on:keydown.enter="login"
+          v-model="loginUsername"
+          label="Username"
+          name="username"
+          type="text"
+          autofocus
+        ></v-text-field>
+        <v-text-field
+          v-on:keydown.enter="login"
+          v-model="loginPassword"
+          label="Password"
+          name="password"
+          type="password"
+        ></v-text-field>
+        <v-btn v-on:click="login">Login</v-btn>
       </div>
     </div>
-  </div>
+    <v-overlay v-bind:value="isLoggingIn" z-index="20">
+      <v-progress-circular indeterminate size="64"></v-progress-circular>
+    </v-overlay>
+  </v-app>
 </template>
 
 <script lang="ts">
@@ -54,6 +66,9 @@ interface Claim {
 })
 export default class App extends Vue {
   token = localStorage.getItem('token') as null | string;
+  loginUsername = "";
+  loginPassword = "";
+  isLoggingIn = false;
 
   get decodedToken() {
     if (this.token) {
@@ -83,12 +98,18 @@ export default class App extends Vue {
   }
 
   login() {
+    this.isLoggingIn = true;
+
     axios.post(`/login`, {
-      user: (this.$refs.username as HTMLInputElement).value,
-      password: (this.$refs.password as HTMLInputElement).value,
+      user: this.loginUsername,
+      password: this.loginPassword,
     }).then(res => {
       this.token = res.data;
       localStorage.setItem('token', res.data);
+
+      this.loginUsername = '';
+      this.loginPassword = '';
+      this.isLoggingIn = false;
     });
   }
 
@@ -100,73 +121,16 @@ export default class App extends Vue {
 </script>
 
 <style lang="scss">
-* {
-  box-sizing: border-box;
-}
-
-html, body {
-  padding: 0;
-  margin: 0;
-}
-
 html {
-  font-family: sans-serif;
+  overflow-y: auto;
 }
 </style>
 
 <style scoped lang="scss">
-$nav-height: 50px;
-
-#app {
-  display: flex;
-  flex-direction: column;
-}
-
 #nav {
-  display: flex;
-  align-items: center;
-
-  position: fixed;
-  width: 100%;
-  height: $nav-height;
-  padding: 0.5em 1em;
-  background: #fff;
-  z-index: 100;
-
-  & > * {
-    flex: 1 1 0;
-  }
-
-  .left {
-    text-align: left;
-
-    a {
-      text-decoration: none;
-    }
-  }
-
-  .middle {
-    text-align: center;
-  }
-
-  .right {
-    text-align: right;
-  }
-
   a {
-    font-weight: bold;
-    color: #456487;
-
-    &.router-link-exact-active {
-      color: #5e83ae;
-    }
+    text-decoration: none;
   }
-}
-
-.router-view {
-  margin-top: $nav-height;
-  flex: 1 1 0;
-  position: relative;
 }
 
 .logo {
@@ -202,7 +166,7 @@ $nav-height: 50px;
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: 100;
+  z-index: 10;
 
   background: rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(8px);

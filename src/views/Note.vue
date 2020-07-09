@@ -4,27 +4,37 @@
       <Editor v-bind:value="text" v-on:change="text = $event" ref="editor"></Editor>
       <div class="rendered">
         <div>
-          <button type="button" v-on:click="toggleEditor">{{ editorIsVisible ? 'Hide editor' : 'Edit' }}</button>
           <span v-show="isModified">Modified</span>
         </div>
         <div v-html="rendered"></div>
       </div>
     </div>
-    <div class="toc" v-on:click="toggleToc">
-      <div class="header">TOC</div>
-      <ol class="tree" v-bind:class="{ collapsed: !tocIsVisible }">
-        <li v-for="h1 of toc" v-bind:key="h1.title"><a v-bind:href="'#' + makeFragmentId(h1.title)">{{ h1.title }}</a>
-          <ol>
-            <li v-for="h2 of h1.children" v-bind:key="h2.title"><a v-bind:href="'#' + makeFragmentId(h2.title)">{{ h2.title }}</a>
+    <div
+      style="position: fixed; right: 0; display: flex; flex-direction: column;"
+      class="mx-2 my-2"
+    >
+      <v-btn fab small color="primary" class="my-1" v-bind:outlined="!editorIsVisible" v-on:click="toggleEditor"><v-icon>mdi-pencil</v-icon></v-btn>
+      <v-btn fab small color="primary" class="my-1" outlined id="toc-toggle"><v-icon>mdi-table-of-contents</v-icon></v-btn>
+    </div>
+    <v-menu offset-y activator="#toc-toggle">
+      <v-card>
+        <v-card-title>Table of Contents</v-card-title>
+        <v-card-text>
+          <ol class="tree" v-bind:class="{ collapsed: !tocIsVisible }">
+            <li v-for="h1 of toc" v-bind:key="h1.title"><a v-bind:href="'#' + makeFragmentId(h1.title)">{{ h1.title }}</a>
               <ol>
-                <li v-for="h3 of h2.children" v-bind:key="h3.title"><a v-bind:href="'#' + makeFragmentId(h3.title)">{{ h3.title }}</a>
+                <li v-for="h2 of h1.children" v-bind:key="h2.title"><a v-bind:href="'#' + makeFragmentId(h2.title)">{{ h2.title }}</a>
+                  <ol>
+                    <li v-for="h3 of h2.children" v-bind:key="h3.title"><a v-bind:href="'#' + makeFragmentId(h3.title)">{{ h3.title }}</a>
+                    </li>
+                  </ol>
                 </li>
               </ol>
             </li>
           </ol>
-        </li>
-      </ol>
-    </div>
+        </v-card-text>
+      </v-card>
+    </v-menu>
   </div>
 </template>
 
@@ -246,15 +256,13 @@ export default class Note extends Vue {
 </style>
 
 <style scoped lang="scss">
-$nav-height: 50px;
+$nav-height: 64px;
 
 .note {
   display: flex;
-  flex-direction: column;
 }
 
 .panes {
-  flex: 1 1 0;
   position: relative;
 
   & > * {
@@ -288,27 +296,5 @@ $nav-height: 50px;
 .editor {
   position: fixed;
   height: calc(100vh - #{$nav-height});
-}
-
-.toc {
-  position: fixed;
-  right: 20px;
-  overflow: hidden;
-  background: white;
-  box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
-
-  .header {
-    font-weight: bold;
-    text-align: center;
-  }
-
-  .tree {
-    margin: 0;
-
-    &.collapsed {
-      width: 0;
-      height: 0;
-    }
-  }
 }
 </style>
