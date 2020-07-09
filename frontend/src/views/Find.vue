@@ -35,7 +35,7 @@
       class="mx-5"
     >
       <template v-slot:item.path="{ item }">
-        <router-link v-bind:to="{ path: `/note/${item.path}` }">{{ item.path }}</router-link>
+        <router-link class="path" v-bind:to="{ path: `/note/${item.path}` }">{{ item.path }}</router-link>
       </template>
       <template v-slot:item.tags="{ item }">
         <v-chip
@@ -276,4 +276,13 @@ export default class Find extends Vue {
 </script>
 
 <style scoped lang="scss">
+.path {
+  color: rgba(0, 0, 0, 0.87);
+  text-decoration: none;
+
+  &:hover {
+    color: var(--v-anchor-base);
+    text-decoration: underline;
+  }
+}
 </style>
