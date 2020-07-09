@@ -4,7 +4,6 @@
       <v-text-field
         v-model="queryText"
         solo
-        clearable
         prepend-inner-icon="mdi-magnify"
         type="text"
         label="Search"
@@ -12,7 +11,13 @@
         autocomplete="off"
         hide-details="auto"
         ref="query"
-      ></v-text-field>
+      >
+        <template v-slot:append>
+          <v-btn icon v-bind:ripple="false" v-on:click="queryText = ''" v-if="queryText !== ''">
+            <v-icon>mdi-close</v-icon>
+          </v-btn>
+        </template>
+      </v-text-field>
       <div class="d-flex flex-row align-center flex-wrap my-5">
         <v-chip
           small
