@@ -30,4 +30,7 @@ module.exports = {
       ],
     },
   },
+  transpileDependencies: [
+    'vuetify',
+  ],
 };
