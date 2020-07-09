@@ -11,9 +11,40 @@
       <v-btn icon to="/find"><v-icon>mdi-view-list</v-icon></v-btn>
       <v-btn icon to="/about"><v-icon>mdi-information</v-icon></v-btn>
       <v-spacer></v-spacer>
-      <v-btn icon>
-        <Gravatar v-bind:email="email" v-bind:title="`Logged in as ${username}`"></Gravatar>
-      </v-btn>
+      <v-menu offset-y>
+        <template v-slot:activator="{ attrs, on }">
+          <v-btn
+            icon
+            v-bind="attrs"
+            v-on="on"
+          >
+            <Gravatar v-bind:email="email" v-bind:title="`Logged in as ${username}`"></Gravatar>
+          </v-btn>
+        </template>
+        <v-card>
+          <v-list>
+            <v-list-item>
+              <v-list-item-avatar>
+                <Gravatar v-bind:email="email" v-bind:title="`Logged in as ${username}`"></Gravatar>
+              </v-list-item-avatar>
+              <v-list-item-content>
+                <v-list-item-title>{{ username }}</v-list-item-title>
+                <v-list-item-subtitle>{{ email }}</v-list-item-subtitle>
+              </v-list-item-content>
+            </v-list-item>
+            <v-divider></v-divider>
+            <v-list-item
+              dense
+              v-on:click="tokenExpired()"
+            >
+              <v-list-item-icon>
+                <v-icon>mdi-logout</v-icon>
+              </v-list-item-icon>
+              <v-list-item-title>Logout</v-list-item-title>
+            </v-list-item>
+          </v-list>
+        </v-card>
+      </v-menu>
     </v-app-bar>
     <v-main>
       <router-view v-if="!(!token && !$refs.routerView)" v-bind:key="$route.path" v-bind:token="token" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerView"/>
