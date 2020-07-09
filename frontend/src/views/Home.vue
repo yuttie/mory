@@ -1,18 +1,21 @@
 <template>
   <div class="home">
-    <div
+    <v-card
       v-for="category of categorizedEntries.entries()"
       v-bind:key="category"
-      class="category"
+      class="ma-5"
+      elevation="2"
     >
-      <h1>{{ category[0] }}</h1>
-      <ul>
-        <li
-          v-for="entry of category[1]"
-          v-bind:key="entry[0]"
-        ><router-link v-bind:to="{ name: 'Note', params: { path: entry[0] } }">{{ entry[0] }}</router-link></li>
-      </ul>
-    </div>
+      <v-card-title>{{ category[0] }}</v-card-title>
+      <v-card-text>
+        <ul>
+          <li
+            v-for="entry of category[1]"
+            v-bind:key="entry[0]"
+            ><router-link v-bind:to="{ name: 'Note', params: { path: entry[0] } }">{{ entry[0] }}</router-link></li>
+        </ul>
+      </v-card-text>
+    </v-card>
   </div>
 </template>
 
@@ -86,8 +89,4 @@ export default class Home extends Vue {
 </script>
 
 <style scoped lang="scss">
-.category {
-  border: 1px solid #ccc;
-  border-radius: 0.5em;
-}
 </style>
