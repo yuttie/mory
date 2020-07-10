@@ -1,6 +1,6 @@
 <template>
   <div class="note">
-    <div class="panes" v-bind:class="{ shifted: editorIsVisible }">
+    <div class="panes" v-bind:class="panesState">
       <Editor v-bind:value="text" v-on:change="text = $event" ref="editor"></Editor>
       <div class="rendered">
         <div>
@@ -14,6 +14,7 @@
       class="mx-2 my-2"
     >
       <v-btn fab small color="primary" class="my-1" v-bind:outlined="!editorIsVisible" v-on:click="toggleEditor"><v-icon>mdi-pencil</v-icon></v-btn>
+      <v-btn fab small color="primary" class="my-1" v-bind:outlined="!viewerIsVisible" v-on:click="toggleViewer"><v-icon>mdi-file-document</v-icon></v-btn>
       <v-btn fab small color="primary" class="my-1" outlined id="toc-toggle"><v-icon>mdi-table-of-contents</v-icon></v-btn>
     </div>
     <v-menu offset-y activator="#toc-toggle">
@@ -86,6 +87,7 @@ export default class Note extends Vue {
   text = '';
   initialText = '';
   editorIsVisible = false;
+  viewerIsVisible = true;
   tocIsVisible = false;
 
   mounted() {
@@ -149,6 +151,14 @@ export default class Note extends Vue {
     window.removeEventListener('keydown', this.handleKeydown);
   }
 
+  get panesState() {
+    return {
+      onlyEditor: this.editorIsVisible && !this.viewerIsVisible,
+      onlyViewer: !this.editorIsVisible && this.viewerIsVisible,
+      both: this.editorIsVisible && this.viewerIsVisible,
+    };
+  }
+
   get rendered() {
     return marked(this.text);
   }
@@ -200,7 +210,52 @@ export default class Note extends Vue {
   }
 
   toggleEditor() {
-    this.editorIsVisible = !this.editorIsVisible;
+    if (this.viewerIsVisible) {
+      if (this.editorIsVisible) {
+        this.editorIsVisible = false;
+      }
+      else {
+        this.editorIsVisible = true;
+      }
+    }
+    else {
+      if (this.editorIsVisible) {
+        this.editorIsVisible = false;
+        this.viewerIsVisible = true;
+      }
+      else {
+        // Though this case shouldn't happen...
+        this.editorIsVisible = true;
+      }
+    }
+
+    this.focusOrBlurEditor();
+  }
+
+  toggleViewer() {
+    if (this.editorIsVisible) {
+      if (this.viewerIsVisible) {
+        this.viewerIsVisible = false;
+      }
+      else {
+        this.viewerIsVisible = true;
+      }
+    }
+    else {
+      if (this.viewerIsVisible) {
+        this.viewerIsVisible = false;
+        this.editorIsVisible = true;
+      }
+      else {
+        // Though this case shouldn't happen...
+        this.viewerIsVisible = true;
+      }
+    }
+
+    this.focusOrBlurEditor();
+  }
+
+  focusOrBlurEditor() {
     if (this.editorIsVisible) {
       (this.$refs.editor as Editor).focus();
     }
@@ -264,6 +319,7 @@ $nav-height: 64px;
 
 .panes {
   position: relative;
+  width: 100%;
 
   & > * {
     width: 50%;
@@ -272,29 +328,50 @@ $nav-height: 64px;
 }
 
 .editor {
-  position: absolute;
-  margin-left: -50%;
-  transition: margin-left 300ms;
-}
-
-.rendered {
-  margin-left: 0;
-  width: 100%;
+  position: fixed;
+  height: calc(100vh - #{$nav-height});
   transition: margin-left 300ms,
               width 300ms;
 }
 
-.panes.shifted .editor {
-  margin-left: 0;
+.rendered {
+  transition: margin-left 300ms,
+              width 300ms;
 }
 
-.panes.shifted .rendered {
-  margin-left: 50%;
-  width: 50%;
+.panes.onlyEditor {
+  .editor {
+    margin-left: 0%;
+    width: 100%;
+  }
+
+  .rendered {
+    margin-left: 100%;
+    width: 50%;
+  }
 }
 
-.editor {
-  position: fixed;
-  height: calc(100vh - #{$nav-height});
+.panes.onlyViewer {
+  .editor {
+    margin-left: -50%;
+    width: 50%;
+  }
+
+  .rendered {
+    margin-left: 0%;
+    width: 100%;
+  }
+}
+
+.panes.both {
+  .editor {
+    margin-left: 0%;
+    width: 50%;
+  }
+
+  .rendered {
+    margin-left: 50%;
+    width: 50%;
+  }
 }
 </style>
