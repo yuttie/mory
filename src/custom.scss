@@ -1,3 +1,25 @@
+.v-application {
+  p {
+    margin-bottom: unset;
+  }
+
+  code {
+    background-color: unset;
+    color: unset;
+    padding: unset;
+  }
+
+  code, kbd {
+    border-radius: unset;
+    font-size: unset;
+    font-weight: unset;
+  }
+
+  ul, ol {
+    padding-left: unset;
+  }
+}
+
 .rendered {
   $nav-height: 64px;
 
@@ -8,6 +30,23 @@
   color: #4c566a;
   overflow-wrap: anywhere;
 
+  h1, h2, h3, h4, h5, h6 {
+    margin-block-start: 1em;
+    margin-block-end: 1em;
+
+    &::before {
+      display: block;
+      height: $nav-height;
+      margin-top: -$nav-height;
+      visibility: hidden;
+      content: ' ';
+    }
+
+    &:hover a.header-link {
+      opacity: 1;
+    }
+  }
+
   h1 {
     font-weight: 800;
   }
@@ -17,7 +56,7 @@
   h4,
   h5,
   h6 {
-    font-weight: 500;
+    font-weight: 600;
   }
 
   h1 { font-size: 1.875rem; }
@@ -33,6 +72,16 @@
     border-top: 2px solid rgb(237,242,247);
   }
 
+  p {
+    margin: 1em 0;
+  }
+
+  ul, ol {
+    padding-left: 24px;
+    margin-block-start: 1em;
+    margin-block-end: 1em;
+  }
+
   pre, pre[class*="language-"],
   code, code[class*="language-"] {
     font-family: monospace;
@@ -41,6 +90,7 @@
 
   pre {
     border-radius: 0.5rem;
+    margin: 1em 0;
     padding: 0.5em 1.5em;
     overflow: auto;
 
@@ -52,6 +102,7 @@
     font-family: serif;
     font-style: italic;
     background-color: #eff2f6;
+    margin: 1em 0;
     padding: 0.8em 1.2em;
 
     & > p:first-of-type {
@@ -85,19 +136,5 @@
     color: black;
     text-decoration: none;
     opacity: 0;
-  }
-
-  h1, h2, h3, h4, h5, h6 {
-    &::before {
-      display: block;
-      height: $nav-height;
-      margin-top: -$nav-height;
-      visibility: hidden;
-      content: ' ';
-    }
-
-    &:hover a.header-link {
-      opacity: 1;
-    }
   }
 }
