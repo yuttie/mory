@@ -314,13 +314,14 @@ export default class Note extends Vue {
 
   save() {
     const path = this.$route.params.path;
+    const content = this.text;
     axios.put(`/notes/${path}`, {
       Save: {
-        content: this.text,
+        content: content,
         message: `Update ${path}`,
       },
     }).then(res => {
-      this.initialText = this.text;
+      this.initialText = content;
     }).catch(error => {
       if (error.response) {
         if (error.response.status === 401) {
