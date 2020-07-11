@@ -16,6 +16,9 @@
         </ul>
       </v-card-text>
     </v-card>
+    <v-overlay v-bind:value="isLoading" z-index="10">
+      <v-progress-circular indeterminate size="64"></v-progress-circular>
+    </v-overlay>
   </div>
 </template>
 
@@ -29,6 +32,7 @@ export default class Home extends Vue {
   @Prop(String) readonly token!: null | string;
 
   entries: [string, any][] = [];
+  isLoading = false;
 
   get categorizedEntries() {
     const categorized: Map<string, [string, any][]> = new Map();
@@ -66,9 +70,11 @@ export default class Home extends Vue {
 
     this.onTokenChanged(this.token);
 
+    this.isLoading = true;
     axios.get('/notes')
       .then(res => {
         this.entries = res.data;
+        this.isLoading = false;
       }).catch(error => {
         if (error.response) {
           if (error.response.status === 401) {
@@ -82,6 +88,7 @@ export default class Home extends Vue {
         else {
           console.log('Unhandled error: {}', error);
         }
+        this.isLoading = false;
       });
   }
 
