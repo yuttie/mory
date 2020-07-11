@@ -42,7 +42,7 @@
       </v-card>
     </v-menu>
     <v-menu offset-y activator="#toc-toggle">
-      <v-card>
+      <v-card class="toc">
         <v-card-title>Table of Contents</v-card-title>
         <v-card-text>
           <ol class="tree" v-bind:class="{ collapsed: !tocIsVisible }">
@@ -444,6 +444,12 @@ $nav-height: 64px;
   .rendered {
     margin-left: 50%;
     width: 50%;
+  }
+}
+
+.toc {
+  ol {
+    padding-left: 1.5em;
   }
 }
 </style>
