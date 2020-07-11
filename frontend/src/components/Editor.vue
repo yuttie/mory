@@ -38,6 +38,95 @@ export default class Editor extends Vue {
     this.editor!.on('change', () => {  // eslint-disable-line @typescript-eslint/no-non-null-assertion
       this.$emit('change', this.editor!.getValue());  // eslint-disable-line @typescript-eslint/no-non-null-assertion
     });
+
+    // Adjust keybindings
+    // Ctrl-a
+    this.editor!.commands.removeCommand('gotolinestart', false);
+    this.editor!.commands.addCommand({
+      name: "gotolinestart",
+      description: "Go to line start",
+      bindKey: { win: "Alt-Left|Home|Ctrl-A", mac: "Command-Left|Home|Ctrl-A" },
+      exec: function(editor: any) { editor.navigateLineStart(); },
+      multiSelectAction: "forEach",
+      scrollIntoView: "cursor",
+      readOnly: true
+    });
+    // Ctrl-e
+    this.editor!.commands.removeCommand('gotolineend', false);
+    this.editor!.commands.addCommand({
+      name: "gotolineend",
+      description: "Go to line end",
+      bindKey: { win: "Alt-Right|End|Ctrl-E", mac: "Command-Right|End|Ctrl-E" },
+      exec: function(editor: any) { editor.navigateLineEnd(); },
+      multiSelectAction: "forEach",
+      scrollIntoView: "cursor",
+      readOnly: true
+    });
+    // Ctrl-f
+    this.editor!.commands.removeCommand('gotoright', false);
+    this.editor!.commands.addCommand({
+      name: "gotoright",
+      description: "Go to right",
+      bindKey: { win: "Right|Ctrl-F", mac: "Right|Ctrl-F" },
+      exec: function(editor: any, args: any) { editor.navigateRight(args.times); },
+      multiSelectAction: "forEach",
+      scrollIntoView: "cursor",
+      readOnly: true
+    });
+    // Ctrl-b
+    this.editor!.commands.removeCommand('gotoleft', false);
+    this.editor!.commands.addCommand({
+      name: "gotoleft",
+      description: "Go to left",
+      bindKey: { win: "Left|Ctrl-B", mac: "Left|Ctrl-B" },
+      exec: function(editor: any, args: any) { editor.navigateLeft(args.times); },
+      multiSelectAction: "forEach",
+      scrollIntoView: "cursor",
+      readOnly: true
+    });
+    // Ctrl-d
+    this.editor!.commands.removeCommand('del', false);
+    this.editor!.commands.addCommand({
+      name: "del",
+      description: "Delete",
+      bindKey: { win: "Delete|Ctrl-D", mac: "Delete|Ctrl-D|Shift-Delete" },
+      exec: function(editor: any) { editor.remove("right"); },
+      multiSelectAction: "forEach",
+      scrollIntoView: "cursor"
+    });
+    // Ctrl-h
+    this.editor!.commands.removeCommand('backspace', false);
+    this.editor!.commands.addCommand({
+      name: "backspace",
+      description: "Backspace",
+      bindKey: {
+        win: "Shift-Backspace|Backspace|Ctrl-H",
+        mac: "Ctrl-Backspace|Shift-Backspace|Backspace|Ctrl-H"
+      },
+      exec: function(editor: any) { editor.remove("left"); },
+      multiSelectAction: "forEach",
+      scrollIntoView: "cursor"
+    });
+    // Alt-Right
+    this.editor!.commands.removeCommand('blockindent', false);
+    this.editor!.commands.addCommand({
+      name: "blockindent",
+      description: "Block indent",
+      bindKey: { win: "Ctrl-]|Alt-Right", mac: "Ctrl-]|Alt-Right" },
+      exec: function(editor: any) { editor.blockIndent(); },
+      multiSelectAction: "forEachLine",
+      scrollIntoView: "selectionPart"
+    });
+    // Alt-Left
+    this.editor!.commands.removeCommand('blockoutdent', false);
+    this.editor!.commands.addCommand({
+      name: "blockoutdent",
+      description: "Block outdent",
+      bindKey: { win: "Ctrl-[|Alt-Left", mac: "Ctrl-[|Alt-Left" },
+      exec: function(editor: any) { editor.blockOutdent(); },
+      multiSelectAction: "forEachLine",
+      scrollIntoView: "selectionPart"
+    });
   }
 
   focus() {
