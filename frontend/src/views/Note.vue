@@ -206,10 +206,6 @@ export default class Note extends Vue {
     return makeFragmentId(text);
   }
 
-  toggleToc() {
-    this.tocIsVisible = !this.tocIsVisible;
-  }
-
   toggleEditor() {
     if (this.viewerIsVisible) {
       if (this.editorIsVisible) {
