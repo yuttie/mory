@@ -27,6 +27,12 @@ export default class Editor extends Vue {
   }
 
   mounted() {
+    ace.config.loadModule("ace/keyboard/vim", function(m) {
+      // Remove <C-d> for the insert mode from the default keymap
+      const i = m.handler.defaultKeymap.findIndex((entry: any) => entry.keys === '<C-d>' && entry.context === 'insert');
+      m.handler.defaultKeymap.splice(i, 1);
+    });
+
     this.editor = ace.edit(this.$refs.editor as Element, {
       mode: 'ace/mode/markdown',
       theme: 'ace/theme/nord_dark',
