@@ -4,11 +4,11 @@
       style="position: fixed; right: 0; display: flex; flex-direction: column; z-index: 1;"
       class="mx-2 my-2"
     >
-      <v-btn small fab color="primary" class="my-1" v-on:click="editorIsVisible = true;  viewerIsVisible = false;" v-bind:outlined="!editorIsVisible ||  viewerIsVisible"><v-icon>mdi-pencil</v-icon></v-btn>
-      <v-btn small fab color="primary" class="my-1" v-on:click="editorIsVisible = true;  viewerIsVisible = true; " v-bind:outlined="!editorIsVisible || !viewerIsVisible"><v-icon>mdi-file-document-edit</v-icon></v-btn>
-      <v-btn small fab color="primary" class="my-1" v-on:click="editorIsVisible = false; viewerIsVisible = true; " v-bind:outlined=" editorIsVisible || !viewerIsVisible"><v-icon>mdi-file-document</v-icon></v-btn>
+      <v-btn small fab color="primary" class="mt-0" v-on:click="editorIsVisible = true;  viewerIsVisible = false;" v-bind:outlined="!editorIsVisible ||  viewerIsVisible"><v-icon>mdi-pencil</v-icon></v-btn>
+      <v-btn small fab color="primary" class="mt-1" v-on:click="editorIsVisible = true;  viewerIsVisible = true; " v-bind:outlined="!editorIsVisible || !viewerIsVisible"><v-icon>mdi-file-document-edit</v-icon></v-btn>
+      <v-btn small fab color="primary" class="mt-1" v-on:click="editorIsVisible = false; viewerIsVisible = true; " v-bind:outlined=" editorIsVisible || !viewerIsVisible"><v-icon>mdi-file-document</v-icon></v-btn>
       <v-btn small fab color="gray" class="mt-5" outlined id="rename-toggle"><v-icon>mdi-rename-box</v-icon></v-btn>
-      <v-btn small fab color="gray" class="mt-1" outlined id="toc-toggle"><v-icon>mdi-table-of-contents</v-icon></v-btn>
+      <v-btn small fab color="gray" class="mt-5" outlined id="toc-toggle"><v-icon>mdi-table-of-contents</v-icon></v-btn>
     </div>
     <div class="panes" v-bind:class="panesState">
       <Editor v-bind:value="text" v-on:change="text = $event" ref="editor"></Editor>
