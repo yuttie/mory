@@ -48,6 +48,9 @@
           >{{ tag }}</v-chip>
       </template>
     </v-data-table>
+    <v-overlay v-bind:value="isLoading" z-index="10">
+      <v-progress-circular indeterminate size="64"></v-progress-circular>
+    </v-overlay>
   </div>
 </template>
 
@@ -67,6 +70,7 @@ export default class Find extends Vue {
 
   entries: [string, any][] = [];
   queryText = '';
+  isLoading = false;
 
   get headers() {
     return [
@@ -176,9 +180,11 @@ export default class Find extends Vue {
 
     window.addEventListener('keydown', this.handleKeydown);
 
+    this.isLoading = true;
     axios.get('/notes')
       .then(res => {
         this.entries = res.data;
+        this.isLoading = false;
       }).catch(error => {
         if (error.response) {
           if (error.response.status === 401) {
@@ -192,6 +198,7 @@ export default class Find extends Vue {
         else {
           console.log('Unhandled error: {}', error);
         }
+        this.isLoading = false;
       });
 
     if (this.$route.query.q) {
