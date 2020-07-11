@@ -7,8 +7,8 @@
       <v-btn small fab color="primary" class="mt-0" v-on:click="editorIsVisible = true;  viewerIsVisible = false;" v-bind:outlined="!editorIsVisible ||  viewerIsVisible"><v-icon>mdi-pencil</v-icon></v-btn>
       <v-btn small fab color="primary" class="mt-1" v-on:click="editorIsVisible = true;  viewerIsVisible = true; " v-bind:outlined="!editorIsVisible || !viewerIsVisible"><v-icon>mdi-file-document-edit</v-icon></v-btn>
       <v-btn small fab color="primary" class="mt-1" v-on:click="editorIsVisible = false; viewerIsVisible = true; " v-bind:outlined=" editorIsVisible || !viewerIsVisible"><v-icon>mdi-file-document</v-icon></v-btn>
-      <v-btn small fab color="pink" class="mt-5" v-bind:outlined="!isModified" v-bind:disabled="!isModified" v-on:click="saveIfModified"><v-icon color="white">mdi-content-save</v-icon></v-btn>
-      <v-btn small fab color="gray" class="mt-1" outlined id="rename-toggle"><v-icon>mdi-rename-box</v-icon></v-btn>
+      <v-btn small fab color="pink" class="mt-5" v-bind:outlined="!isModified" v-bind:disabled="!isModified" v-bind:loading="isSaving" v-on:click="saveIfModified"><v-icon color="white">mdi-content-save</v-icon></v-btn>
+      <v-btn small fab color="gray" class="mt-1" outlined id="rename-toggle" v-bind:loading="isRenaming"><v-icon>mdi-rename-box</v-icon></v-btn>
       <v-btn small fab color="gray" class="mt-5" outlined id="toc-toggle"><v-icon>mdi-table-of-contents</v-icon></v-btn>
     </div>
     <div class="panes" v-bind:class="panesState">
@@ -115,6 +115,8 @@ export default class Note extends Vue {
   tocIsVisible = false;
   renameMenuIsVisible = false;
   newPath = null as null | string;
+  isSaving = false;
+  isRenaming = false;
 
   mounted() {
     document.title = `${this.$route.params.path} | ${process.env.VUE_APP_NAME}`;
@@ -313,6 +315,7 @@ export default class Note extends Vue {
   }
 
   save() {
+    this.isSaving = true;
     const path = this.$route.params.path;
     const content = this.text;
     axios.put(`/notes/${path}`, {
@@ -322,6 +325,7 @@ export default class Note extends Vue {
       },
     }).then(res => {
       this.initialText = content;
+      this.isSaving = false;
     }).catch(error => {
       if (error.response) {
         if (error.response.status === 401) {
@@ -335,6 +339,7 @@ export default class Note extends Vue {
       else {
         console.log('Unhandled error: {}', error);
       }
+      this.isSaving = false;
     });
   }
 
@@ -343,6 +348,7 @@ export default class Note extends Vue {
     const newPath = this.newPath;
 
     if (newPath !== null && newPath !== oldPath) {
+      this.isRenaming = true;
       axios.put(`/notes/${newPath}`, {
         Rename: {
           from: oldPath,
@@ -351,6 +357,7 @@ export default class Note extends Vue {
         this.$router.replace({
           path: `/note/${newPath}`,
         });
+        this.isRenaming = false;
       }).catch(error => {
         if (error.response) {
           if (error.response.status === 401) {
@@ -364,6 +371,7 @@ export default class Note extends Vue {
         else {
           console.log('Unhandled error: {}', error);
         }
+        this.isRenaming = false;
       });
     }
   }
