@@ -7,7 +7,8 @@
       <v-btn small fab color="primary" class="my-1" v-on:click="editorIsVisible = true;  viewerIsVisible = false;" v-bind:outlined="!editorIsVisible ||  viewerIsVisible"><v-icon>mdi-pencil</v-icon></v-btn>
       <v-btn small fab color="primary" class="my-1" v-on:click="editorIsVisible = true;  viewerIsVisible = true; " v-bind:outlined="!editorIsVisible || !viewerIsVisible"><v-icon>mdi-file-document-edit</v-icon></v-btn>
       <v-btn small fab color="primary" class="my-1" v-on:click="editorIsVisible = false; viewerIsVisible = true; " v-bind:outlined=" editorIsVisible || !viewerIsVisible"><v-icon>mdi-file-document</v-icon></v-btn>
-      <v-btn small fab color="gray" class="my-5" outlined id="toc-toggle"><v-icon>mdi-table-of-contents</v-icon></v-btn>
+      <v-btn small fab color="gray" class="mt-5" outlined id="rename-toggle"><v-icon>mdi-rename-box</v-icon></v-btn>
+      <v-btn small fab color="gray" class="mt-1" outlined id="toc-toggle"><v-icon>mdi-table-of-contents</v-icon></v-btn>
     </div>
     <div class="panes" v-bind:class="panesState">
       <Editor v-bind:value="text" v-on:change="text = $event" ref="editor"></Editor>
@@ -18,6 +19,30 @@
         <div v-html="rendered"></div>
       </div>
     </div>
+    <v-menu
+      v-model="renameMenuIsVisible"
+      activator="#rename-toggle"
+      v-bind:close-on-content-click="false"
+    >
+      <v-card>
+        <v-card-text>
+          <v-text-field label="New path" v-model="newPath"></v-text-field>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn
+            text
+            v-on:click="renameMenuIsVisible = false;"
+          >Cancel</v-btn>
+          <v-btn
+            text
+            color="primary"
+            v-on:click="rename(); renameMenuIsVisible = false;"
+            v-bind:disabled="newPath === $route.params.path"
+          >Rename</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-menu>
     <v-menu offset-y activator="#toc-toggle">
       <v-card>
         <v-card-title>Table of Contents</v-card-title>
@@ -90,6 +115,8 @@ export default class Note extends Vue {
   editorIsVisible = false;
   viewerIsVisible = true;
   tocIsVisible = false;
+  renameMenuIsVisible = false;
+  newPath = null as null | string;
 
   mounted() {
     document.title = `${this.$route.params.path} | ${process.env.VUE_APP_NAME}`;
@@ -202,6 +229,13 @@ export default class Note extends Vue {
     }
   }
 
+  @Watch('renameMenuIsVisible')
+  onRenameMenuIsVisibleChanged(isVisible: boolean) {
+    if (isVisible) {
+      this.newPath = this.$route.params.path;
+    }
+  }
+
   makeFragmentId(text: string) {
     return makeFragmentId(text);
   }
@@ -299,6 +333,36 @@ export default class Note extends Vue {
         console.log('Unhandled error: {}', error);
       }
     });
+  }
+
+  rename() {
+    const oldPath = this.$route.params.path;
+    const newPath = this.newPath;
+
+    if (newPath !== null && newPath !== oldPath) {
+      axios.put(`/notes/${newPath}`, {
+        Rename: {
+          from: oldPath,
+        },
+      }).then(res => {
+        this.$router.replace({
+          path: `/note/${newPath}`,
+        });
+      }).catch(error => {
+        if (error.response) {
+          if (error.response.status === 401) {
+            // Unauthorized
+            this.$emit('tokenExpired');
+          }
+          else {
+            console.log('Unhandled error: {}', error.response);
+          }
+        }
+        else {
+          console.log('Unhandled error: {}', error);
+        }
+      });
+    }
   }
 }
 </script>
