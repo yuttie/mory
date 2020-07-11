@@ -1,4 +1,6 @@
 .rendered {
+  $nav-height: 64px;
+
   padding: 32px;
   font-family: sans-serif;
   font-feature-settings: "palt";
@@ -86,8 +88,6 @@
   }
 
   h1, h2, h3, h4, h5, h6 {
-    $nav-height: 64px;
-
     &::before {
       display: block;
       height: $nav-height;
