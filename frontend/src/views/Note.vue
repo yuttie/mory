@@ -379,7 +379,35 @@ export default class Note extends Vue {
 </script>
 
 <style lang="scss">
-@import "@/custom.scss";
+// Disable Vuetify's styles
+.v-application {
+  .rendered {
+    p {
+      margin-bottom: unset;
+    }
+
+    code {
+      background-color: unset;
+      color: unset;
+      padding: unset;
+    }
+
+    code, kbd {
+      border-radius: unset;
+      font-size: unset;
+      font-weight: unset;
+    }
+
+    ul, ol {
+      padding-left: unset;
+    }
+  }
+}
+
+// Apply custom styles for rendered notes
+.note {
+  @import "@/custom.scss";
+}
 </style>
 
 <style scoped lang="scss">
