@@ -11,8 +11,8 @@
         <ul>
           <li
             v-for="entry of category[1]"
-            v-bind:key="entry[0]"
-            ><router-link v-bind:to="{ name: 'Note', params: { path: entry[0] } }">{{ entry[0] }}</router-link></li>
+            v-bind:key="entry.path"
+            ><router-link v-bind:to="{ name: 'Note', params: { path: entry.path } }">{{ entry.path }}</router-link></li>
         </ul>
       </v-card-text>
     </v-card>
@@ -37,9 +37,9 @@ export default class Home extends Vue {
   get categorizedEntries() {
     const categorized: Map<string, [string, any][]> = new Map();
     for (const entry of this.entries) {
-      if (entry[1] !== null) {
-        if (Object.prototype.hasOwnProperty.call(entry[1], 'tags')) {
-          for (const tag of entry[1].tags) {
+      if (entry.metadata !== null) {
+        if (Object.prototype.hasOwnProperty.call(entry.metadata, 'tags')) {
+          for (const tag of entry.metadata.tags) {
             const match = tag.match(/^home:(.+)$/);
             if (match) {
               const category = match[1];
