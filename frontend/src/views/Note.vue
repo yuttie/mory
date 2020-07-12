@@ -425,6 +425,7 @@ $nav-height: 64px;
 .panes {
   position: relative;
   width: 100%;
+  overflow: hidden;
 
   & > * {
     width: 50%;
