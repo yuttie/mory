@@ -136,7 +136,7 @@ mod filters {
 }
 
 mod handlers {
-    use super::models::{Unauthorized, Claims, State, Cached, Login, NoteSave};
+    use super::models::{Unauthorized, Claims, State, ListEntry, Cached, Login, NoteSave};
 
     use std::env;
     use std::convert::Infallible;
@@ -181,19 +181,27 @@ mod handlers {
 
     pub async fn list_notes(state: State) -> Result<impl warp::Reply, Infallible> {
         debug!("list");
+
+        // Check if a cache exists
         let repo = state.repo.lock().await;
         let mut cached_entries = state.cached_entries.lock().await;
         if let Some(entries) = cached_entries.get(&repo) {
+            // Return the cache
             Ok(warp::reply::json(&entries))
         }
         else {
+            // Create a new list
+
+            // Find the head commit and tree
             let head = repo.head().unwrap();
             let head_commit = head.peel_to_commit().unwrap();
             let head_tree = head.peel_to_tree().unwrap();
 
+            // Load the head tree into an index
             let mut index = Index::new().unwrap();
             index.read_tree(&head_tree).unwrap();
 
+            // Populate the list
             let mut entries = Vec::new();
             for entry in index.iter() {
                 let path = String::from_utf8(entry.path).unwrap();
@@ -203,18 +211,18 @@ mod handlers {
                         if let Ok(yaml) = std::str::from_utf8(&blob.content()[4..j]) {
                             let doc: serde_yaml::Value = serde_yaml::from_str(yaml).unwrap();
                             debug!("{:?}", &doc);
-                            entries.push((path.clone(), Some(doc)));
+                            entries.push(ListEntry { path: path.clone(), metadata: Some(doc) });
                         }
                         else {
-                            entries.push((path.clone(), None));
+                            entries.push(ListEntry { path: path.clone(), metadata: None });
                         }
                     }
                     else {
-                        entries.push((path.clone(), None));
+                        entries.push(ListEntry { path: path.clone(), metadata: None });
                     }
                 }
                 else {
-                    entries.push((path.clone(), None));
+                    entries.push(ListEntry { path: path.clone(), metadata: None });
                 }
             }
             let reply = warp::reply::json(&entries);
@@ -454,7 +462,12 @@ mod models {
     use tokio::sync::Mutex;
 
     pub type Metadata = serde_yaml::Value;
-    pub type ListEntry = (String, Option<Metadata>);
+
+    #[derive(Debug, Deserialize, Serialize, Clone)]
+    pub struct ListEntry {
+        pub path: String,
+        pub metadata: Option<Metadata>,
+    }
 
     #[derive(Debug)]
     pub struct Unauthorized;
