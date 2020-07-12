@@ -64,11 +64,16 @@ interface Query {
   tags: Set<any>;
 }
 
+interface ListEntry {
+  path: string;
+  metadata: { tags: string[] };
+}
+
 @Component
 export default class Find extends Vue {
   @Prop(String) readonly token!: null | string;
 
-  entries: [string, any][] = [];
+  entries: ListEntry[] = [];
   queryText = '';
   isLoading = false;
 

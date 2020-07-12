@@ -27,15 +27,20 @@ import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 
 import axios from '@/axios';
 
+interface ListEntry {
+  path: string;
+  metadata: { tags: string[] };
+}
+
 @Component
 export default class Home extends Vue {
   @Prop(String) readonly token!: null | string;
 
-  entries: [string, any][] = [];
+  entries: ListEntry[] = [];
   isLoading = false;
 
   get categorizedEntries() {
-    const categorized: Map<string, [string, any][]> = new Map();
+    const categorized: Map<string, ListEntry[]> = new Map();
     for (const entry of this.entries) {
       if (entry.metadata !== null) {
         if (Object.prototype.hasOwnProperty.call(entry.metadata, 'tags')) {
