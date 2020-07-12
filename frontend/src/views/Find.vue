@@ -82,9 +82,9 @@ export default class Find extends Vue {
   get tags() {
     const tags = new Set();
     for (const entry of this.entries) {
-      if (entry[1] !== null) {
-        if (Object.prototype.hasOwnProperty.call(entry[1], 'tags')) {
-          for (const tag of entry[1].tags) {
+      if (entry.metadata !== null) {
+        if (Object.prototype.hasOwnProperty.call(entry.metadata, 'tags')) {
+          for (const tag of entry.metadata.tags) {
             tags.add(tag);
           }
         }
@@ -121,21 +121,21 @@ export default class Find extends Vue {
 
     for (const entry of this.entries) {
       if (queryKeywords.length > 0) {
-        const entryPath = entry[0].toLowerCase();
+        const entryPath = entry.path.toLowerCase();
         if (queryKeywords.some(kw => !entryPath.includes(kw))) {
           continue;
         }
       }
       if (queryTags.length > 0) {
-        if (entry[1] === null) {
+        if (entry.metadata === null) {
           continue;
         }
         else {
-          if (!Object.prototype.hasOwnProperty.call(entry[1], 'tags')) {
+          if (!Object.prototype.hasOwnProperty.call(entry.metadata, 'tags')) {
             continue;
           }
           else {
-            const entryTags = entry[1].tags.map((x: string) => x.toLowerCase());
+            const entryTags = entry.metadata.tags.map((x: string) => x.toLowerCase());
             if (queryTags.some(tag => !entryTags.includes(tag))) {
               continue;
             }
@@ -143,8 +143,8 @@ export default class Find extends Vue {
         }
       }
       matched.push({
-        path: entry[0],
-        tags: entry[1],
+        path: entry.path,
+        tags: entry.metadata,
       });
     }
 
