@@ -379,6 +379,9 @@ export default class Note extends Vue {
 </script>
 
 <style lang="scss">
+@use "@/custom.scss";
+$nav-height: 64px;
+
 // Disable Vuetify's styles
 .v-application {
   .rendered {
@@ -406,7 +409,9 @@ export default class Note extends Vue {
 
 // Apply custom styles for rendered notes
 .note {
-  @import "@/custom.scss";
+  .rendered {
+    @include custom.rendered-note-styles($nav-height);
+  }
 }
 </style>
 
