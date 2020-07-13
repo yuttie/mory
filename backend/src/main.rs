@@ -209,9 +209,24 @@ mod handlers {
                 if blob.content().starts_with(b"---\n") {
                     if let Some(j) = blob.content().windows(5).position(|window| window == b"\n---\n") {
                         if let Ok(yaml) = std::str::from_utf8(&blob.content()[4..j]) {
-                            let doc: serde_yaml::Value = serde_yaml::from_str(yaml).unwrap();
-                            debug!("{:?}", &doc);
-                            entries.push(ListEntry { path: path.clone(), metadata: Some(doc) });
+                            match serde_yaml::from_str::<serde_yaml::Value>(yaml) {
+                                Ok(doc) => {
+                                    debug!("parsed YAML metadata: {:?}", &doc);
+                                    entries.push(ListEntry {
+                                        path: path.clone(),
+                                        metadata: Some(doc),
+                                    });
+                                },
+                                Err(err) => {
+                                    debug!("failed to parse YAML metadata: {:?}", &err);
+                                    let mut error_object = serde_yaml::Mapping::new();
+                                    error_object.insert("error".into(), format!("{}", err).into());
+                                    entries.push(ListEntry {
+                                        path: path.clone(),
+                                        metadata: Some(serde_yaml::Value::Mapping(error_object)),
+                                    });
+                                },
+                            }
                         }
                         else {
                             entries.push(ListEntry { path: path.clone(), metadata: None });
