@@ -56,24 +56,24 @@ mod filters {
         root_path: Option<String>,
         state: models::State,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+        // APIs
+        let closed = notes_list(state.clone())
+            .or(notes_load(state.clone()))
+            .or(notes_save(state.clone()))
+            .or(notes_delete(state));
+        let open = notes_login();
+        let api = auth().and(closed)
+            .or(open);
+
+        // Construct routes
         if let Some(root_path) = root_path {
             warp::path(root_path)
-                .and(auth()
-                    .and(notes_list(state.clone())
-                        .or(notes_load(state.clone()))
-                        .or(notes_save(state.clone()))
-                        .or(notes_delete(state)))
-                    .or(notes_login()))
+                .and(api)
                 .recover(handlers::rejection)
                 .boxed()
         }
         else {
-            auth()
-                .and(notes_list(state.clone())
-                    .or(notes_load(state.clone()))
-                    .or(notes_save(state.clone()))
-                    .or(notes_delete(state)))
-                .or(notes_login())
+            api
                 .recover(handlers::rejection)
                 .boxed()
         }
