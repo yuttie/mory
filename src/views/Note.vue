@@ -143,35 +143,7 @@ export default class Note extends Vue {
       (this.$refs.editor as Editor).focus();
     }
     else {
-      axios.get(`/notes/${this.$route.params.path}`)
-        .then(res => {
-          this.text = res.data;
-          this.initialText = this.text;
-
-          // Jump to a header if specified
-          if (this.$route.hash) {
-            const anchorSelector = decodeURIComponent(this.$route.hash);
-            this.$nextTick(() => {
-              const anchor = document.querySelector(anchorSelector);
-              if (anchor) {
-                anchor.scrollIntoView();
-              }
-            });
-          }
-        }).catch(error => {
-          if (error.response) {
-            if (error.response.status === 401) {
-              // Unauthorized
-              this.$emit('tokenExpired');
-            }
-            else {
-              console.log('Unhandled error: {}', error.response);
-            }
-          }
-          else {
-            console.log('Unhandled error: {}', error);
-          }
-        });
+      this.load(this.$route.params.path);
     }
   }
 
@@ -234,6 +206,38 @@ export default class Note extends Vue {
     if (isVisible) {
       this.newPath = this.$route.params.path;
     }
+  }
+
+  load(path: string) {
+    axios.get(`/notes/${path}`)
+      .then(res => {
+        this.text = res.data;
+        this.initialText = this.text;
+
+        // Jump to a header if specified
+        if (this.$route.hash) {
+          const anchorSelector = decodeURIComponent(this.$route.hash);
+          this.$nextTick(() => {
+            const anchor = document.querySelector(anchorSelector);
+            if (anchor) {
+              anchor.scrollIntoView();
+            }
+          });
+        }
+      }).catch(error => {
+        if (error.response) {
+          if (error.response.status === 401) {
+            // Unauthorized
+            this.$emit('tokenExpired');
+          }
+          else {
+            console.log('Unhandled error: {}', error.response);
+          }
+        }
+        else {
+          console.log('Unhandled error: {}', error);
+        }
+      });
   }
 
   makeFragmentId(text: string) {
