@@ -185,6 +185,18 @@ export default class Find extends Vue {
 
     window.addEventListener('keydown', this.handleKeydown);
 
+    this.load();
+
+    if (this.$route.query.q) {
+      this.queryText = this.$route.query.q as string;
+    }
+  }
+
+  destroyed() {
+    window.removeEventListener('keydown', this.handleKeydown);
+  }
+
+  load() {
     this.isLoading = true;
     axios.get('/notes')
       .then(res => {
@@ -194,25 +206,18 @@ export default class Find extends Vue {
         if (error.response) {
           if (error.response.status === 401) {
             // Unauthorized
-            this.$emit('tokenExpired');
+            this.$emit('tokenExpired', () => this.load());
           }
           else {
             console.log('Unhandled error: {}', error.response);
+            this.isLoading = false;
           }
         }
         else {
           console.log('Unhandled error: {}', error);
+          this.isLoading = false;
         }
-        this.isLoading = false;
       });
-
-    if (this.$route.query.q) {
-      this.queryText = this.$route.query.q as string;
-    }
-  }
-
-  destroyed() {
-    window.removeEventListener('keydown', this.handleKeydown);
   }
 
   handleKeydown(e: KeyboardEvent) {
