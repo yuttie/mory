@@ -75,6 +75,10 @@ export default class Home extends Vue {
 
     this.onTokenChanged(this.token);
 
+    this.load();
+  }
+
+  load() {
     this.isLoading = true;
     axios.get('/notes')
       .then(res => {
@@ -84,19 +88,19 @@ export default class Home extends Vue {
         if (error.response) {
           if (error.response.status === 401) {
             // Unauthorized
-            this.$emit('tokenExpired');
+            this.$emit('tokenExpired', () => this.load());
           }
           else {
             console.log('Unhandled error: {}', error.response);
+            this.isLoading = false;
           }
         }
         else {
           console.log('Unhandled error: {}', error);
+          this.isLoading = false;
         }
-        this.isLoading = false;
       });
   }
-
 }
 </script>
 

@@ -238,16 +238,17 @@ export default class Note extends Vue {
         if (error.response) {
           if (error.response.status === 401) {
             // Unauthorized
-            this.$emit('tokenExpired');
+            this.$emit('tokenExpired', () => this.load(path));
           }
           else {
             console.log('Unhandled error: {}', error.response);
+            this.isLoading = false;
           }
         }
         else {
           console.log('Unhandled error: {}', error);
+          this.isLoading = false;
         }
-        this.isLoading = false;
       });
   }
 
@@ -349,16 +350,17 @@ export default class Note extends Vue {
       if (error.response) {
         if (error.response.status === 401) {
           // Unauthorized
-          this.$emit('tokenExpired');
+          this.$emit('tokenExpired', () => this.save());
         }
         else {
           console.log('Unhandled error: {}', error.response);
+          this.isSaving = false;
         }
       }
       else {
         console.log('Unhandled error: {}', error);
+        this.isSaving = false;
       }
-      this.isSaving = false;
     });
   }
 
@@ -381,16 +383,17 @@ export default class Note extends Vue {
         if (error.response) {
           if (error.response.status === 401) {
             // Unauthorized
-            this.$emit('tokenExpired');
+            this.$emit('tokenExpired', () => this.rename());
           }
           else {
             console.log('Unhandled error: {}', error.response);
+            this.isRenaming = false;
           }
         }
         else {
           console.log('Unhandled error: {}', error);
+          this.isRenaming = false;
         }
-        this.isRenaming = false;
       });
     }
   }

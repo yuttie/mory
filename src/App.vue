@@ -101,6 +101,7 @@ export default class App extends Vue {
   loginUsername = "";
   loginPassword = "";
   isLoggingIn = false;
+  loginCallback = null as (() => void) | null;
 
   get decodedToken() {
     if (this.token) {
@@ -142,12 +143,20 @@ export default class App extends Vue {
       this.loginUsername = '';
       this.loginPassword = '';
       this.isLoggingIn = false;
+
+      this.$nextTick(() => {
+        if (this.loginCallback) {
+          this.loginCallback();
+        }
+        this.loginCallback = null;
+      });
     });
   }
 
-  tokenExpired() {
+  tokenExpired(callback: () => void) {
     this.token = null;
     localStorage.removeItem('token');
+    this.loginCallback = callback;
   }
 }
 </script>
