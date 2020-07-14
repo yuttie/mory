@@ -7,8 +7,11 @@
       <v-btn small fab color="primary" class="mt-0" v-on:click="editorIsVisible = true;  viewerIsVisible = false;" v-bind:outlined="!editorIsVisible ||  viewerIsVisible"><v-icon>mdi-pencil</v-icon></v-btn>
       <v-btn small fab color="primary" class="mt-1" v-on:click="editorIsVisible = true;  viewerIsVisible = true; " v-bind:outlined="!editorIsVisible || !viewerIsVisible"><v-icon>mdi-file-document-edit</v-icon></v-btn>
       <v-btn small fab color="primary" class="mt-1" v-on:click="editorIsVisible = false; viewerIsVisible = true; " v-bind:outlined=" editorIsVisible || !viewerIsVisible"><v-icon>mdi-file-document</v-icon></v-btn>
-      <v-btn small fab color="pink" class="mt-5" v-bind:outlined="!isModified" v-bind:disabled="!isModified" v-bind:loading="isSaving" v-on:click="saveIfModified"><v-icon color="white">mdi-content-save</v-icon></v-btn>
+
+      <v-btn small fab color="gray" class="mt-5" outlined v-bind:disabled="isModified" v-on:click="reload"><v-icon>mdi-reload</v-icon></v-btn>
+      <v-btn small fab color="pink" class="mt-1" v-bind:outlined="!isModified" v-bind:disabled="!isModified" v-bind:loading="isSaving" v-on:click="saveIfModified"><v-icon color="white">mdi-content-save</v-icon></v-btn>
       <v-btn small fab color="gray" class="mt-1" outlined id="rename-toggle" v-bind:loading="isRenaming"><v-icon>mdi-rename-box</v-icon></v-btn>
+
       <v-btn small fab color="gray" class="mt-5" outlined id="toc-toggle"><v-icon>mdi-table-of-contents</v-icon></v-btn>
     </div>
     <div class="panes" v-bind:class="panesState">
@@ -238,6 +241,10 @@ export default class Note extends Vue {
           console.log('Unhandled error: {}', error);
         }
       });
+  }
+
+  reload() {
+    this.load(this.$route.params.path);
   }
 
   makeFragmentId(text: string) {
