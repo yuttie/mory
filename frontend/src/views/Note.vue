@@ -63,6 +63,9 @@
         </v-card-text>
       </v-card>
     </v-menu>
+    <v-overlay v-bind:value="isLoading" z-index="10">
+      <v-progress-circular indeterminate size="64"></v-progress-circular>
+    </v-overlay>
   </div>
 </template>
 
@@ -118,6 +121,7 @@ export default class Note extends Vue {
   tocIsVisible = false;
   renameMenuIsVisible = false;
   newPath = null as null | string;
+  isLoading = false;
   isSaving = false;
   isRenaming = false;
 
@@ -212,6 +216,7 @@ export default class Note extends Vue {
   }
 
   load(path: string) {
+    this.isLoading = true;
     axios.get(`/notes/${path}`)
       .then(res => {
         this.text = res.data;
@@ -227,6 +232,8 @@ export default class Note extends Vue {
             }
           });
         }
+
+        this.isLoading = false;
       }).catch(error => {
         if (error.response) {
           if (error.response.status === 401) {
@@ -240,6 +247,7 @@ export default class Note extends Vue {
         else {
           console.log('Unhandled error: {}', error);
         }
+        this.isLoading = false;
       });
   }
 
