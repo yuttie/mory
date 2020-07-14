@@ -80,9 +80,9 @@ mod filters {
     }
 
     pub fn notes_login() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        warp::path("login")
+        warp::post()
+            .and(warp::path("login"))
             .and(warp::path::end())
-            .and(warp::post())
             .and(warp::body::json())
             .and_then(handlers::login)
     }
@@ -90,9 +90,9 @@ mod filters {
     pub fn notes_list(
         state: models::State,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        warp::path("notes")
+        warp::get()
+            .and(warp::path("notes"))
             .and(warp::path::end())
-            .and(warp::get())
             .and(warp::any().map(move || state.clone()))
             .and_then(handlers::list_notes)
     }
@@ -100,9 +100,9 @@ mod filters {
     pub fn notes_load(
         state: models::State,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        warp::path("notes")
+        warp::get()
+            .and(warp::path("notes"))
             .and(warp::path::tail())
-            .and(warp::get())
             .and(warp::any().map(move || state.clone()))
             .and_then(handlers::load_note)
     }
@@ -110,9 +110,9 @@ mod filters {
     pub fn notes_save(
         state: models::State,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        warp::path("notes")
+        warp::put()
+            .and(warp::path("notes"))
             .and(warp::path::tail())
-            .and(warp::put())
             .and(warp::body::json())
             .and(warp::any().map(move || state.clone()))
             .and_then(handlers::save_note)
@@ -121,9 +121,9 @@ mod filters {
     pub fn notes_delete(
         state: models::State,
     ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        warp::path("notes")
+        warp::delete()
+            .and(warp::path("notes"))
             .and(warp::path::tail())
-            .and(warp::delete())
             .and(warp::any().map(move || state.clone()))
             .and_then(handlers::delete_note)
     }
