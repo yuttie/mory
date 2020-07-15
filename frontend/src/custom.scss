@@ -1,6 +1,7 @@
 @mixin rendered-note-styles($nav-height) {
   padding: 32px;
   font-family: sans-serif;
+  font-size: 14px;
   font-feature-settings: "palt";
   line-height: 1.2;
   color: #4c566a;
