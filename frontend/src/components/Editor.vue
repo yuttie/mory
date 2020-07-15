@@ -156,6 +156,10 @@ export default class Editor extends Vue {
   blur() {
     this.editor!.blur();  // eslint-disable-line @typescript-eslint/no-non-null-assertion
   }
+
+  resize() {
+    this.editor!.resize();  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+  }
 }
 </script>
 

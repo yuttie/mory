@@ -152,6 +152,11 @@ export default class Note extends Vue {
     else {
       this.load(this.$route.params.path);
     }
+
+    ((this.$refs.editor as Vue).$el as HTMLElement).addEventListener('transitionend', () => {
+      console.log('transitionend');
+      (this.$refs.editor as Editor).resize();
+    });
   }
 
   destroyed() {
