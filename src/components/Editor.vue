@@ -37,7 +37,7 @@ export default class Editor extends Vue {
       mode: 'ace/mode/markdown',
       theme: 'ace/theme/nord_dark',
       keyboardHandler: 'ace/keyboard/vim',
-      fontSize: 14,
+      fontSize: 13,
       fontFamily: 'Menlo, monospace',
       navigateWithinSoftTabs: true,
     });
