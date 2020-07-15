@@ -39,7 +39,21 @@ export default class Editor extends Vue {
       keyboardHandler: 'ace/keyboard/vim',
       fontSize: 13,
       fontFamily: 'Menlo, monospace',
+      useSoftTabs: true,
       navigateWithinSoftTabs: true,
+      enableAutoIndent: true,
+      showGutter: true,
+      showLineNumbers: true,
+      showPrintMargin: false,
+      displayIndentGuides: true,
+      highlightActiveLine: true,
+      highlightGutterLine: true,
+      highlightSelectedWord: true,
+      showInvisibles: false,
+      wrap: true,
+      indentedSoftWrap: true,
+      scrollPastEnd: true,
+      animatedScroll: false,
     });
     this.editor!.on('change', () => {  // eslint-disable-line @typescript-eslint/no-non-null-assertion
       this.$emit('change', this.editor!.getValue());  // eslint-disable-line @typescript-eslint/no-non-null-assertion
