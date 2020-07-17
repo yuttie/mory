@@ -58,6 +58,7 @@
           v-model="loginUsername"
           label="Username"
           name="username"
+          autocomplete="username"
           type="text"
           autofocus
         ></v-text-field>
@@ -66,6 +67,7 @@
           v-model="loginPassword"
           label="Password"
           name="password"
+          autocomplete="current-password"
           type="password"
         ></v-text-field>
         <v-btn v-on:click="login">Login</v-btn>
