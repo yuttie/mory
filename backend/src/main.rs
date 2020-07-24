@@ -136,7 +136,7 @@ mod filters {
 }
 
 mod handlers {
-    use super::models::{Unauthorized, Claims, State, ListEntry, Cached, Login, NoteSave};
+    use super::models::{Unauthorized, NotFound, Claims, State, ListEntry, Cached, Login, NoteSave};
 
     use std::env;
     use std::convert::Infallible;
@@ -278,11 +278,11 @@ mod handlers {
                     }
                     Ok(res)
                 },
-                Err(_) => Err(warp::reject::not_found()),
+                Err(_) => Err(warp::reject::custom(NotFound))
             }
         }
         else {
-            Err(warp::reject::not_found())
+            Err(warp::reject::custom(NotFound))
         }
     }
 
@@ -376,7 +376,7 @@ mod handlers {
                     Ok(warp::reply::json(&true))
                 }
                 else {
-                    Err(warp::reject::not_found())
+                    Err(warp::reject::custom(NotFound))
                 }
             },
         }
@@ -424,7 +424,7 @@ mod handlers {
             Ok(warp::reply::json(&true))
         }
         else {
-            Err(warp::reject::not_found())
+            Err(warp::reject::custom(NotFound))
         }
     }
 
@@ -446,10 +446,12 @@ mod handlers {
     }
 
     pub async fn rejection(err: warp::reject::Rejection) -> Result<impl Reply, Infallible> {
+        debug!("recovering from: {:?}", &err);
         let code =
-            if err.is_not_found() {
+            if let Some(_) = err.find::<NotFound>() {
                 warp::http::StatusCode::NOT_FOUND
-            } else if let Some(missing_header) = err.find::<warp::reject::MissingHeader>() {
+            }
+            else if let Some(missing_header) = err.find::<warp::reject::MissingHeader>() {
                 if missing_header.name() == "Authorization" {
                     warp::http::StatusCode::UNAUTHORIZED
                 }
@@ -488,6 +490,11 @@ mod models {
     pub struct Unauthorized;
 
     impl warp::reject::Reject for Unauthorized {}
+
+    #[derive(Debug)]
+    pub struct NotFound;
+
+    impl warp::reject::Reject for NotFound {}
 
     #[derive(Debug, Serialize, Deserialize)]
     pub struct Claims {
