@@ -73,6 +73,7 @@
         <v-progress-circular indeterminate size="64"></v-progress-circular>
       </v-overlay>
     </div>
+    <v-snackbar v-model="error" color="error" top timeout="5000">{{ errorText }}</v-snackbar>
   </div>
 </template>
 
@@ -132,6 +133,8 @@ export default class Note extends Vue {
   isSaving = false;
   isRenaming = false;
   notFound = false;
+  error = false;
+  errorText = '';
 
   mounted() {
     document.title = `${this.$route.params.path} | ${process.env.VUE_APP_NAME}`;
@@ -260,11 +263,15 @@ export default class Note extends Vue {
             this.notFound = true;
           }
           else {
+            this.error = true;
+            this.errorText = error.response;
             console.log('Unhandled error: {}', error.response);
             this.isLoading = false;
           }
         }
         else {
+          this.error = true;
+          this.errorText = error.toString();
           console.log('Unhandled error: {}', error);
           this.isLoading = false;
         }
@@ -372,11 +379,15 @@ export default class Note extends Vue {
           this.$emit('tokenExpired', () => this.save());
         }
         else {
+          this.error = true;
+          this.errorText = error.response;
           console.log('Unhandled error: {}', error.response);
           this.isSaving = false;
         }
       }
       else {
+        this.error = true;
+        this.errorText = error.toString();
         console.log('Unhandled error: {}', error);
         this.isSaving = false;
       }
@@ -405,11 +416,15 @@ export default class Note extends Vue {
             this.$emit('tokenExpired', () => this.rename());
           }
           else {
+            this.error = true;
+            this.errorText = error.response;
             console.log('Unhandled error: {}', error.response);
             this.isRenaming = false;
           }
         }
         else {
+          this.error = true;
+          this.errorText = error.toString();
           console.log('Unhandled error: {}', error);
           this.isRenaming = false;
         }
