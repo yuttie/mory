@@ -1,71 +1,78 @@
 <template>
   <div class="note">
-    <div
-      style="position: fixed; right: 0; display: flex; flex-direction: column; z-index: 1;"
-      class="mx-2 my-2"
-    >
-      <v-btn small fab color="primary" class="mt-0" v-on:click="editorIsVisible = true;  viewerIsVisible = false;" v-bind:outlined="!editorIsVisible ||  viewerIsVisible"><v-icon>mdi-pencil</v-icon></v-btn>
-      <v-btn small fab color="primary" class="mt-1" v-on:click="editorIsVisible = true;  viewerIsVisible = true; " v-bind:outlined="!editorIsVisible || !viewerIsVisible"><v-icon>mdi-file-document-edit</v-icon></v-btn>
-      <v-btn small fab color="primary" class="mt-1" v-on:click="editorIsVisible = false; viewerIsVisible = true; " v-bind:outlined=" editorIsVisible || !viewerIsVisible"><v-icon>mdi-file-document</v-icon></v-btn>
-
-      <v-btn small fab color="gray" class="mt-5" outlined v-bind:disabled="isModified" v-on:click="reload"><v-icon>mdi-reload</v-icon></v-btn>
-      <v-btn small fab color="pink" class="mt-1" v-bind:outlined="!isModified" v-bind:disabled="!isModified" v-bind:loading="isSaving" v-on:click="saveIfModified"><v-icon color="white">mdi-content-save</v-icon></v-btn>
-      <v-btn small fab color="gray" class="mt-1" outlined id="rename-toggle" v-bind:loading="isRenaming"><v-icon>mdi-rename-box</v-icon></v-btn>
-
-      <v-btn small fab color="gray" class="mt-5" outlined id="toc-toggle"><v-icon>mdi-table-of-contents</v-icon></v-btn>
-    </div>
-    <div class="panes" v-bind:class="panesState">
-      <Editor v-bind:value="text" v-on:change="text = $event" ref="editor"></Editor>
-      <div class="rendered">
-        <div v-html="rendered"></div>
+    <div class="not-found" v-if="notFound">
+      <div>
+        <h1>Not Found</h1>
       </div>
     </div>
-    <v-menu
-      v-model="renameMenuIsVisible"
-      activator="#rename-toggle"
-      v-bind:close-on-content-click="false"
-    >
-      <v-card>
-        <v-card-text>
-          <v-text-field label="New path" v-model="newPath"></v-text-field>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn
-            text
-            v-on:click="renameMenuIsVisible = false;"
-          >Cancel</v-btn>
-          <v-btn
-            text
-            color="primary"
-            v-on:click="rename(); renameMenuIsVisible = false;"
-            v-bind:disabled="newPath === $route.params.path"
-          >Rename</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-menu>
-    <v-menu offset-y activator="#toc-toggle">
-      <v-card class="toc">
-        <v-card-title>Table of Contents</v-card-title>
-        <v-card-text>
-          <ol class="tree" v-bind:class="{ collapsed: !tocIsVisible }">
-            <li v-for="h1 of toc" v-bind:key="h1.title"><a v-bind:href="'#' + makeFragmentId(h1.title)">{{ h1.title }}</a>
-              <ol>
-                <li v-for="h2 of h1.children" v-bind:key="h2.title"><a v-bind:href="'#' + makeFragmentId(h2.title)">{{ h2.title }}</a>
-                  <ol>
-                    <li v-for="h3 of h2.children" v-bind:key="h3.title"><a v-bind:href="'#' + makeFragmentId(h3.title)">{{ h3.title }}</a>
-                    </li>
-                  </ol>
-                </li>
-              </ol>
-            </li>
-          </ol>
-        </v-card-text>
-      </v-card>
-    </v-menu>
-    <v-overlay v-bind:value="isLoading" z-index="10">
-      <v-progress-circular indeterminate size="64"></v-progress-circular>
-    </v-overlay>
+    <div class="found" v-if="!notFound">
+      <div
+        style="position: fixed; right: 0; display: flex; flex-direction: column; z-index: 1;"
+        class="mx-2 my-2"
+      >
+        <v-btn small fab color="primary" class="mt-0" v-on:click="editorIsVisible = true;  viewerIsVisible = false;" v-bind:outlined="!editorIsVisible ||  viewerIsVisible"><v-icon>mdi-pencil</v-icon></v-btn>
+        <v-btn small fab color="primary" class="mt-1" v-on:click="editorIsVisible = true;  viewerIsVisible = true; " v-bind:outlined="!editorIsVisible || !viewerIsVisible"><v-icon>mdi-file-document-edit</v-icon></v-btn>
+        <v-btn small fab color="primary" class="mt-1" v-on:click="editorIsVisible = false; viewerIsVisible = true; " v-bind:outlined=" editorIsVisible || !viewerIsVisible"><v-icon>mdi-file-document</v-icon></v-btn>
+
+        <v-btn small fab color="gray" class="mt-5" outlined v-bind:disabled="isModified" v-on:click="reload"><v-icon>mdi-reload</v-icon></v-btn>
+        <v-btn small fab color="pink" class="mt-1" v-bind:outlined="!isModified" v-bind:disabled="!isModified" v-bind:loading="isSaving" v-on:click="saveIfModified"><v-icon color="white">mdi-content-save</v-icon></v-btn>
+        <v-btn small fab color="gray" class="mt-1" outlined id="rename-toggle" v-bind:loading="isRenaming"><v-icon>mdi-rename-box</v-icon></v-btn>
+
+        <v-btn small fab color="gray" class="mt-5" outlined id="toc-toggle"><v-icon>mdi-table-of-contents</v-icon></v-btn>
+      </div>
+      <div class="panes" v-bind:class="panesState">
+        <Editor v-bind:value="text" v-on:change="text = $event" ref="editor"></Editor>
+        <div class="rendered">
+          <div v-html="rendered"></div>
+        </div>
+      </div>
+      <v-menu
+        v-model="renameMenuIsVisible"
+        activator="#rename-toggle"
+        v-bind:close-on-content-click="false"
+      >
+        <v-card>
+          <v-card-text>
+            <v-text-field label="New path" v-model="newPath"></v-text-field>
+          </v-card-text>
+          <v-card-actions>
+            <v-spacer></v-spacer>
+            <v-btn
+              text
+              v-on:click="renameMenuIsVisible = false;"
+            >Cancel</v-btn>
+            <v-btn
+              text
+              color="primary"
+              v-on:click="rename(); renameMenuIsVisible = false;"
+              v-bind:disabled="newPath === $route.params.path"
+            >Rename</v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-menu>
+      <v-menu offset-y activator="#toc-toggle">
+        <v-card class="toc">
+          <v-card-title>Table of Contents</v-card-title>
+          <v-card-text>
+            <ol class="tree" v-bind:class="{ collapsed: !tocIsVisible }">
+              <li v-for="h1 of toc" v-bind:key="h1.title"><a v-bind:href="'#' + makeFragmentId(h1.title)">{{ h1.title }}</a>
+                <ol>
+                  <li v-for="h2 of h1.children" v-bind:key="h2.title"><a v-bind:href="'#' + makeFragmentId(h2.title)">{{ h2.title }}</a>
+                    <ol>
+                      <li v-for="h3 of h2.children" v-bind:key="h3.title"><a v-bind:href="'#' + makeFragmentId(h3.title)">{{ h3.title }}</a>
+                      </li>
+                    </ol>
+                  </li>
+                </ol>
+              </li>
+            </ol>
+          </v-card-text>
+        </v-card>
+      </v-menu>
+      <v-overlay v-bind:value="isLoading" z-index="10">
+        <v-progress-circular indeterminate size="64"></v-progress-circular>
+      </v-overlay>
+    </div>
   </div>
 </template>
 
@@ -124,6 +131,7 @@ export default class Note extends Vue {
   isLoading = false;
   isSaving = false;
   isRenaming = false;
+  notFound = false;
 
   mounted() {
     document.title = `${this.$route.params.path} | ${process.env.VUE_APP_NAME}`;
@@ -239,11 +247,17 @@ export default class Note extends Vue {
         }
 
         this.isLoading = false;
+        this.notFound = false;
       }).catch(error => {
         if (error.response) {
           if (error.response.status === 401) {
             // Unauthorized
             this.$emit('tokenExpired', () => this.load(path));
+          }
+          else if (error.response.status === 404) {
+            // Not Found
+            this.isLoading = false;
+            this.notFound = true;
           }
           else {
             console.log('Unhandled error: {}', error.response);
@@ -447,6 +461,11 @@ $nav-height: 64px;
 
 .note {
   position: relative;
+
+  & > .not-found,
+  & > .found {
+    display: contents;
+  }
 }
 
 .panes {
