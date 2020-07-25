@@ -19,6 +19,7 @@
     <v-overlay v-bind:value="isLoading" z-index="10">
       <v-progress-circular indeterminate size="64"></v-progress-circular>
     </v-overlay>
+    <v-snackbar v-model="error" color="error" top timeout="5000">{{ errorText }}</v-snackbar>
   </div>
 </template>
 
@@ -38,6 +39,8 @@ export default class Home extends Vue {
 
   entries: ListEntry[] = [];
   isLoading = false;
+  error = false;
+  errorText = '';
 
   get categorizedEntries() {
     const categorized: Map<string, ListEntry[]> = new Map();
@@ -91,11 +94,15 @@ export default class Home extends Vue {
             this.$emit('tokenExpired', () => this.load());
           }
           else {
+            this.error = true;
+            this.errorText = error.response;
             console.log('Unhandled error: {}', error.response);
             this.isLoading = false;
           }
         }
         else {
+          this.error = true;
+          this.errorText = error.toString();
           console.log('Unhandled error: {}', error);
           this.isLoading = false;
         }
