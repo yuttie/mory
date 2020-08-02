@@ -104,6 +104,7 @@ export default class App extends Vue {
   loginPassword = "";
   isLoggingIn = false;
   loginCallback = null as (() => void) | null;
+  registration = null as null | ServiceWorkerRegistration;
 
   get decodedToken() {
     if (this.token) {
@@ -132,6 +133,30 @@ export default class App extends Vue {
     }
   }
 
+  created() {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker
+        .register(`${process.env.VUE_APP_APPLICATION_ROOT}files-proxy.js`, {
+          scope: process.env.VUE_APP_APPLICATION_ROOT,
+        })
+        .then(registration => {
+          console.log('ServiceWorker registration successful with scope: ', registration.scope);
+          this.registration = registration;
+          this.registration.active.postMessage({
+            type: 'api-url',
+            value: new URL(process.env.VUE_APP_API_URL, window.location.href).href,
+          });
+          this.registration.active.postMessage({
+            type: 'api-token',
+            value: this.token,
+          });
+        })
+        .catch(err => {
+          console.log('ServiceWorker registration failed: ', err);
+        });
+    }
+  }
+
   login() {
     this.isLoggingIn = true;
 
@@ -152,6 +177,11 @@ export default class App extends Vue {
         }
         this.loginCallback = null;
       });
+
+      this.registration.active.postMessage({
+        type: 'api-token',
+        value: this.token,
+      });
     });
   }
 
@@ -159,6 +189,11 @@ export default class App extends Vue {
     this.token = null;
     localStorage.removeItem('token');
     this.loginCallback = callback;
+
+    this.registration.active.postMessage({
+      type: 'api-token',
+      value: this.token,
+    });
   }
 }
 </script>
