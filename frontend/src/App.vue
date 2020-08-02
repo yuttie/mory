@@ -142,11 +142,11 @@ export default class App extends Vue {
         .then(registration => {
           console.log('ServiceWorker registration successful with scope: ', registration.scope);
           this.registration = registration;
-          this.registration.active.postMessage({
+          this.registration.active!.postMessage({
             type: 'api-url',
-            value: new URL(process.env.VUE_APP_API_URL, window.location.href).href,
+            value: new URL(process.env.VUE_APP_API_URL!, window.location.href).href,
           });
-          this.registration.active.postMessage({
+          this.registration.active!.postMessage({
             type: 'api-token',
             value: this.token,
           });
@@ -178,10 +178,12 @@ export default class App extends Vue {
         this.loginCallback = null;
       });
 
-      this.registration.active.postMessage({
-        type: 'api-token',
-        value: this.token,
-      });
+      if (this.registration) {
+        this.registration.active!.postMessage({
+          type: 'api-token',
+          value: this.token,
+        });
+      }
     });
   }
 
@@ -190,10 +192,12 @@ export default class App extends Vue {
     localStorage.removeItem('token');
     this.loginCallback = callback;
 
-    this.registration.active.postMessage({
-      type: 'api-token',
-      value: this.token,
-    });
+    if (this.registration) {
+      this.registration.active!.postMessage({
+        type: 'api-token',
+        value: this.token,
+      });
+    }
   }
 }
 </script>
