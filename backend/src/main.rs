@@ -35,6 +35,7 @@ async fn main() {
 
     let cors = warp::cors()
         .allow_any_origin()
+        .allow_credentials(true)
         .allow_methods(vec!["GET", "POST", "PUT", "DELETE"])
         .allow_headers(vec!["Authorization", "Content-Type"]);
 
@@ -61,6 +62,7 @@ mod filters {
             .or(notes_load(state.clone()))
             .or(notes_save(state.clone()))
             .or(notes_delete(state.clone()))
+            .or(files_download(state.clone()))
             .or(files_upload(state));
         let open = notes_login();
         let api = auth().and(closed)
@@ -127,6 +129,16 @@ mod filters {
             .and(warp::path::tail())
             .and(warp::any().map(move || state.clone()))
             .and_then(handlers::delete_note)
+    }
+
+    pub fn files_download(
+        state: models::State,
+    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+        warp::get()
+            .and(warp::path("files"))
+            .and(warp::path::tail())
+            .and(warp::any().map(move || state.clone()))
+            .and_then(handlers::download_file)
     }
 
     pub fn files_upload(
@@ -437,6 +449,43 @@ mod handlers {
                 &[&head_commit],
             ).unwrap();
             Ok(warp::reply::json(&true))
+        }
+        else {
+            Err(warp::reject::custom(NotFound))
+        }
+    }
+
+    pub async fn download_file(path: warp::path::Tail, state: State) -> Result<impl warp::Reply, warp::reject::Rejection> {
+        debug!("download");
+        let path = urlencoding::decode(path.as_str()).unwrap();
+        let found = {
+            let repo = state.repo.lock().await;
+
+            let head = repo.head().unwrap();
+            let head_tree = head.peel_to_tree().unwrap();
+
+            let mut index = Index::new().unwrap();
+            index.read_tree(&head_tree).unwrap();
+
+            index.iter().find(|entry| std::str::from_utf8(&entry.path).unwrap() == path.as_str())
+        };
+        if let Some(entry) = found {
+            let found = {
+                let repo = state.repo.lock().await;
+                repo.find_blob(entry.id).map(|blob| Vec::from(blob.content()))
+            };
+            match found {
+                Ok(content) => {
+                    let mut res = content.into_response();
+                    // Guess the mime type
+                    let guess = mime_guess::from_path(std::str::from_utf8(&entry.path).unwrap());
+                    if let Some(mime) = guess.first() {
+                        res.headers_mut().insert(CONTENT_TYPE, mime.as_ref().parse().unwrap()).unwrap();
+                    }
+                    Ok(res)
+                },
+                Err(_) => Err(warp::reject::custom(NotFound))
+            }
         }
         else {
             Err(warp::reject::custom(NotFound))
