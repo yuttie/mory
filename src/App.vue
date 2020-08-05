@@ -153,7 +153,7 @@ interface Claim {
 
 interface UploadEntry {
     uuid: string;
-    filename: number;
+    filename: string;
     status: string;
 }
 
