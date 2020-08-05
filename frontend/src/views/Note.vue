@@ -89,7 +89,7 @@ import Prism from 'prismjs';
 import 'prism-themes/themes/prism-nord.css';
 
 marked.setOptions({
-  baseUrl: new URL('files/', process.env.VUE_APP_API_URL).href,
+  baseUrl: new URL('files/', new URL(process.env.VUE_APP_API_URL, window.location.href)).href,
   gfm: true,
   highlight: function(code, lang) {
     if (Prism.languages[lang]) {
