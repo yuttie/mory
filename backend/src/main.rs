@@ -35,6 +35,7 @@ async fn main() {
 
     let cors = warp::cors()
         .allow_any_origin()
+        .allow_credentials(true)
         .allow_methods(vec!["GET", "POST", "PUT", "DELETE"])
         .allow_headers(vec!["Authorization", "Content-Type"]);
 
@@ -60,7 +61,9 @@ mod filters {
         let closed = notes_list(state.clone())
             .or(notes_load(state.clone()))
             .or(notes_save(state.clone()))
-            .or(notes_delete(state));
+            .or(notes_delete(state.clone()))
+            .or(files_download(state.clone()))
+            .or(files_upload(state));
         let open = notes_login();
         let api = auth().and(closed)
             .or(open);
@@ -128,6 +131,27 @@ mod filters {
             .and_then(handlers::delete_note)
     }
 
+    pub fn files_download(
+        state: models::State,
+    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+        warp::get()
+            .and(warp::path("files"))
+            .and(warp::path::tail())
+            .and(warp::any().map(move || state.clone()))
+            .and_then(handlers::download_file)
+    }
+
+    pub fn files_upload(
+        state: models::State,
+    ) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+        warp::post()
+            .and(warp::path("files"))
+            .and(warp::path::end())
+            .and(warp::multipart::form())
+            .and(warp::any().map(move || state.clone()))
+            .and_then(handlers::upload_file)
+    }
+
     pub fn auth() -> impl Filter<Extract = (), Error = warp::Rejection> + Copy {
         warp::header::<String>("Authorization")
             .and_then(handlers::auth)
@@ -140,11 +164,14 @@ mod handlers {
 
     use std::env;
     use std::convert::Infallible;
+    use std::io::Write;
     use std::vec::Vec;
     use std::string::String;
 
     use argon2;
+    use bytes::buf::Buf;
     use chrono::{DateTime, Duration, Utc};
+    use futures::stream::StreamExt;
     use git2::{Index, IndexEntry, IndexTime};
     use jsonwebtoken as jwt;
     use log::{debug, error};
@@ -426,6 +453,122 @@ mod handlers {
         else {
             Err(warp::reject::custom(NotFound))
         }
+    }
+
+    pub async fn download_file(path: warp::path::Tail, state: State) -> Result<impl warp::Reply, warp::reject::Rejection> {
+        debug!("download");
+        let path = urlencoding::decode(path.as_str()).unwrap();
+        let found = {
+            let repo = state.repo.lock().await;
+
+            let head = repo.head().unwrap();
+            let head_tree = head.peel_to_tree().unwrap();
+
+            let mut index = Index::new().unwrap();
+            index.read_tree(&head_tree).unwrap();
+
+            index.iter().find(|entry| std::str::from_utf8(&entry.path).unwrap() == path.as_str())
+        };
+        if let Some(entry) = found {
+            let found = {
+                let repo = state.repo.lock().await;
+                repo.find_blob(entry.id).map(|blob| Vec::from(blob.content()))
+            };
+            match found {
+                Ok(content) => {
+                    let mut res = content.into_response();
+                    // Guess the mime type
+                    let guess = mime_guess::from_path(std::str::from_utf8(&entry.path).unwrap());
+                    if let Some(mime) = guess.first() {
+                        res.headers_mut().insert(CONTENT_TYPE, mime.as_ref().parse().unwrap()).unwrap();
+                    }
+                    Ok(res)
+                },
+                Err(_) => Err(warp::reject::custom(NotFound))
+            }
+        }
+        else {
+            Err(warp::reject::custom(NotFound))
+        }
+    }
+
+    pub async fn upload_file(mut form_data: warp::multipart::FormData, state: State) -> Result<impl warp::Reply, warp::reject::Rejection> {
+        debug!("upload");
+
+        // Create a blob for each part (file) in the form data
+        let mut files = Vec::new();
+        let mut result = Vec::new();
+        while let Some(part) = form_data.next().await {
+            debug!("{:?}", part);
+            let mut part = part.unwrap();
+            let data = part.data().await.unwrap();
+            let mut buf = data.unwrap();
+
+            let blob_oid = {
+                let repo = state.repo.lock().await;
+
+                let mut writer = repo.blob_writer(None).unwrap();
+                while buf.has_remaining() {
+                    let count = {
+                        let bytes = buf.bytes();
+                        writer.write_all(bytes).unwrap();
+                        bytes.len()
+                    };
+                    buf.advance(count);
+                }
+                writer.commit().unwrap()
+            };
+
+            let filename = part.filename().unwrap().as_bytes().to_vec();
+            files.push((filename, blob_oid));
+
+            let uuid = part.name().to_owned();
+            result.push((uuid, "success"));
+        }
+
+        // Commit
+        let repo = state.repo.lock().await;
+
+        let head = repo.head().unwrap();
+        let head_tree = head.peel_to_tree().unwrap();
+        let head_commit = head.peel_to_commit().unwrap();
+
+        let mut index = Index::new().unwrap();
+        index.read_tree(&head_tree).unwrap();
+
+        let count = files.len();
+        for (path, blob_oid) in files {
+            let entry = IndexEntry {
+                ctime: IndexTime::new(0, 0),
+                mtime: IndexTime::new(0, 0),
+                dev: 0,
+                ino: 0,
+                mode: 0o100644,
+                uid: 0,
+                gid: 0,
+                file_size: 0,
+                id: blob_oid,
+                flags: 0,
+                flags_extended: 0,
+                path: path,
+            };
+            index.add(&entry).unwrap();
+        }
+
+        let tree_oid = index.write_tree_to(&repo).unwrap();
+        let tree = repo.find_tree(tree_oid).unwrap();
+
+        let signature = repo.signature().unwrap();
+        repo.commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            &format!("Upload {} files", count),
+            &tree,
+            &[&head_commit],
+        ).unwrap();
+
+        Ok(warp::reply::json(&result))
     }
 
     pub async fn auth(header_value: String) -> Result<(), warp::reject::Rejection> {
