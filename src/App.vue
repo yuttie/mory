@@ -278,19 +278,36 @@ export default class App extends Vue {
       }
     });
 
+    // Function to determine if files are dragged or not
+    function containsFiles(event: any) {
+      if (event.dataTransfer.types) {
+        for (const typ of event.dataTransfer.types) {
+          if (typ == "Files") {
+            return true;
+          }
+        }
+      }
+
+      return false;
+    }
+
     // Handle drag and drop of files
     const appEl = (this.$refs.app as Vue).$el;
 
     appEl.addEventListener('dragenter', (e: any) => {
-      // Show the drop area
-      appEl.classList.add('drop-target');
+      if (containsFiles(e)) {
+        // Show the drop area
+        appEl.classList.add('drop-target');
+      }
     });
 
     appEl.addEventListener('dragleave', (e: any) => {
       // Ignore if it's still inside appEl
       if (!e.currentTarget.contains(e.relatedTarget)) {
-        // Hide the drop area
-        appEl.classList.remove('drop-target');
+        if (containsFiles(e)) {
+          // Hide the drop area
+          appEl.classList.remove('drop-target');
+        }
       }
     });
 
@@ -301,11 +318,13 @@ export default class App extends Vue {
     appEl.addEventListener('drop', (e: any) => {
       e.preventDefault();
 
-      // Start to upload the dropped files
-      this.uploadFiles(e.dataTransfer.files);
+      if (containsFiles(e)) {
+        // Start to upload the dropped files
+        this.uploadFiles(e.dataTransfer.files);
 
-      // Hide the drop area
-      appEl.classList.remove('drop-target');
+        // Hide the drop area
+        appEl.classList.remove('drop-target');
+      }
     });
   }
 
