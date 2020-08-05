@@ -497,6 +497,7 @@ mod handlers {
 
         // Create a blob for each part (file) in the form data
         let mut files = Vec::new();
+        let mut result = Vec::new();
         while let Some(part) = form_data.next().await {
             debug!("{:?}", part);
             let mut part = part.unwrap();
@@ -520,6 +521,9 @@ mod handlers {
 
             let filename = part.filename().unwrap().as_bytes().to_vec();
             files.push((filename, blob_oid));
+
+            let uuid = part.name().to_owned();
+            result.push((uuid, "success"));
         }
 
         // Commit
@@ -564,7 +568,7 @@ mod handlers {
             &[&head_commit],
         ).unwrap();
 
-        Ok(warp::reply::json(&true))
+        Ok(warp::reply::json(&result))
     }
 
     pub async fn auth(header_value: String) -> Result<(), warp::reject::Rejection> {
