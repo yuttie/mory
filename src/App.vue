@@ -3,7 +3,7 @@
     <v-app-bar app id="nav" color="white" elevate-on-scroll fixed>
       <v-toolbar-title>
         <router-link to="/">
-          <div class="logo">mory</div>
+          <div class="logo"></div>
         </router-link>
       </v-toolbar-title>
       <v-spacer></v-spacer>
@@ -463,7 +463,6 @@ export default class App extends Vue {
     background-position: left center;
     background-repeat: no-repeat;
     background-image: url("assets/logo.png");
-    border-right: 1px solid #cccccc;
     vertical-align: bottom;
     margin-right: 0.5em;
   }
