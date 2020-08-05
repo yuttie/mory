@@ -1,5 +1,5 @@
 <template>
-  <v-app id="app">
+  <v-app id="app" ref="app">
     <v-app-bar app id="nav" color="white" elevate-on-scroll fixed>
       <v-toolbar-title>
         <router-link to="/">
@@ -12,6 +12,63 @@
       <v-btn icon to="/find"><v-icon>mdi-view-list</v-icon></v-btn>
       <v-btn icon to="/about"><v-icon>mdi-information</v-icon></v-btn>
       <v-spacer></v-spacer>
+      <input type="file" multiple class="d-none" ref="fileInput">
+      <v-menu
+        v-bind:close-on-content-click="false"
+        offset-y
+      >
+        <template v-slot:activator="{ attrs, on }">
+          <v-badge
+            v-bind:color="uploadListBadgeColor"
+            v-bind:icon="uploadListBadgeIcon"
+            v-bind:value="uploadList.length > 0"
+            overlap
+            offset-x="20"
+            offset-y="20"
+            bordered
+          >
+            <v-btn
+              icon
+              v-bind="attrs"
+              v-on="on"
+            >
+              <v-icon>mdi-cloud-upload-outline</v-icon>
+            </v-btn>
+          </v-badge>
+        </template>
+        <v-card>
+          <v-card-text>
+            <v-btn
+              text
+              block
+              color="primary"
+              v-on:click="chooseFile"
+            >Upload</v-btn>
+            <div v-if="uploadList.length > 0">
+              <v-divider class="my-2"></v-divider>
+              <div
+                v-for="entry of uploadList"
+                v-bind:key="entry.uuid"
+                style="white-space: nowrap;"
+                class="my-2"
+              >
+                <v-icon
+                  v-bind:color="uploadStatusColor(entry.status)"
+                  small
+                  class="mr-1"
+                >{{ uploadStatusIcon(entry.status) }}</v-icon>
+                <span>{{ entry.filename }}</span>
+              </div>
+              <v-btn
+                text
+                block
+                color="error"
+                v-on:click="cleanUploadList"
+              >Clean</v-btn>
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-menu>
       <v-menu offset-y>
         <template v-slot:activator="{ attrs, on }">
           <v-btn
@@ -86,11 +143,18 @@ import Gravatar from '@/components/Gravatar.vue';
 
 import axios from '@/axios';
 import jwtDecode from 'jwt-decode';
+import { v4 as uuidv4 } from 'uuid';
 
 interface Claim {
     sub: string;
     exp: number;
     email: string;
+}
+
+interface UploadEntry {
+    uuid: string;
+    filename: string;
+    status: string;
 }
 
 @Component({
@@ -104,6 +168,8 @@ export default class App extends Vue {
   loginPassword = "";
   isLoggingIn = false;
   loginCallback = null as (() => void) | null;
+  registration = null as null | ServiceWorkerRegistration;
+  uploadList = [] as UploadEntry[];
 
   get decodedToken() {
     if (this.token) {
@@ -132,6 +198,117 @@ export default class App extends Vue {
     }
   }
 
+  get uploadListBadgeColor() {
+    const [status, _] = this.uploadListStatus;
+
+    if      (status === 'in-progress') { return 'blue';  }
+    else if (status === 'error')       { return 'red';   }
+    else if (status === 'success')     { return 'green'; }
+    else {
+      return 'gray';
+    }
+  }
+
+  get uploadListBadgeIcon() {
+    const [status, num] = this.uploadListStatus;
+
+    if      (status === 'in-progress') { return 'mdi-autorenew';         }
+    else if (status === 'error')       { return 'mdi-exclamation-thick'; }
+    else if (status === 'success')     { return 'mdi-check';             }
+    else {
+      return 'mdi-help';
+    }
+  }
+
+  get uploadListStatus() {
+    let numInProgresses = 0;
+    let numErrors = 0;
+    let numSuccesses = 0;
+    for (const e of this.uploadList) {
+      if (e.status === 'in-progress') {
+        numInProgresses += 1;
+      }
+      else if (e.status === 'error') {
+        numErrors += 1;
+      }
+      else if (e.status === 'success') {
+        numSuccesses += 1;
+      }
+    }
+
+    if      (numInProgresses > 0)                     { return ['in-progress', numInProgresses]; }
+    else if (numErrors > 0)                           { return ['error',       numErrors      ]; }
+    else if (numSuccesses === this.uploadList.length) { return ['success',     numSuccesses   ]; }
+    else {
+      return ['unknown', -1];
+    }
+  }
+
+  created() {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker
+        .register(`${process.env.VUE_APP_APPLICATION_ROOT}files-proxy.js`, {
+          scope: process.env.VUE_APP_APPLICATION_ROOT,
+        })
+        .then(registration => {
+          console.log('ServiceWorker registration successful with scope: ', registration.scope);
+          this.registration = registration;
+          this.registration.active!.postMessage({
+            type: 'api-url',
+            value: new URL(process.env.VUE_APP_API_URL!, window.location.href).href,
+          });
+          this.registration.active!.postMessage({
+            type: 'api-token',
+            value: this.token,
+          });
+        })
+        .catch(err => {
+          console.log('ServiceWorker registration failed: ', err);
+        });
+    }
+  }
+
+  mounted() {
+    (this.$refs.fileInput as HTMLInputElement).addEventListener('change', (e: any) => {
+      if (e.target.files.length > 0) {
+        // Start to upload the selected files
+        this.uploadFiles(e.target.files);
+        // Clear the selection
+        e.target.value = '';
+      }
+    });
+
+    // Handle drag and drop of files
+    const appEl = (this.$refs.app as Vue).$el;
+
+    appEl.addEventListener('dragenter', (e: any) => {
+      // Show the drop area
+      appEl.classList.add('drop-target');
+    });
+
+    appEl.addEventListener('dragleave', (e: any) => {
+      // Ignore if it's still inside appEl
+      if (!e.currentTarget.contains(e.relatedTarget)) {
+        // Hide the drop area
+        appEl.classList.remove('drop-target');
+      }
+    });
+
+    appEl.addEventListener('dragover', (e: any) => {
+      e.preventDefault();
+    });
+
+    appEl.addEventListener('drop', (e: any) => {
+      e.preventDefault();
+
+      // Start to upload the dropped files
+      this.uploadFiles(e.dataTransfer.files);
+
+      // Hide the drop area
+      appEl.classList.remove('drop-target');
+    });
+  }
+
   login() {
     this.isLoggingIn = true;
 
@@ -152,6 +329,13 @@ export default class App extends Vue {
         }
         this.loginCallback = null;
       });
+
+      if (this.registration) {
+        this.registration.active!.postMessage({
+          type: 'api-token',
+          value: this.token,
+        });
+      }
     });
   }
 
@@ -159,11 +343,99 @@ export default class App extends Vue {
     this.token = null;
     localStorage.removeItem('token');
     this.loginCallback = callback;
+
+    if (this.registration) {
+      this.registration.active!.postMessage({
+        type: 'api-token',
+        value: this.token,
+      });
+    }
+  }
+
+  cleanUploadList() {
+    this.uploadList = this.uploadList.filter(e => e.status === 'in-progress');
+  }
+
+  uploadStatusColor(status: string) {
+    if      (status === 'in-progress') { return 'blue';  }
+    else if (status === 'error')       { return 'red';   }
+    else if (status === 'success')     { return 'green'; }
+    else {
+      return 'gray';
+    }
+  }
+
+  uploadStatusIcon(status: string) {
+    if      (status === 'in-progress') { return 'mdi-autorenew';         }
+    else if (status === 'error')       { return 'mdi-exclamation-thick'; }
+    else if (status === 'success')     { return 'mdi-check';             }
+    else {
+      return 'mdi-help';
+    }
+  }
+
+  chooseFile() {
+    (this.$refs.fileInput as HTMLInputElement).click();
+  }
+
+  uploadFiles(files: File[]) {
+    // Add the files to a FormData and uploadList
+    const fd = new FormData();
+    for (const file of files) {
+      const uuid = uuidv4();
+
+      fd.append(uuid, file);
+
+      this.uploadList.push({
+        uuid: uuid,
+        filename: file.name,
+        status: 'in-progress',
+      });
+    }
+
+    // POST the FormData
+    axios.post(`/files`, fd).then(res => {
+      for (const [uuid, result] of res.data) {
+        const entry = this.uploadList.find(e => e.uuid === uuid);
+        if (entry) {
+          entry.status = result;
+        }
+      }
+    }).catch(error => {
+      console.error(error);
+      for (const uuid of fd.keys()) {
+        const entry = this.uploadList.find(e => e.uuid === uuid);
+        if (entry) {
+          entry.status = 'error';
+        }
+      }
+    });
   }
 }
 </script>
 
 <style scoped lang="scss">
+#app {
+  &.drop-target {
+    &::after {
+      content: '';
+      display: block;
+      pointer-events: none;
+
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 5;
+
+      outline: 4px solid hsl(212, 100%, 50%);
+      outline-offset: -4px;
+      background-color: hsla(212, 100%, 50%, 0.33);
+    }
+  }
+}
+
 #nav {
   a {
     text-decoration: none;
