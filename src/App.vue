@@ -12,6 +12,7 @@
       <v-btn icon to="/find"><v-icon>mdi-view-list</v-icon></v-btn>
       <v-btn icon to="/about"><v-icon>mdi-information</v-icon></v-btn>
       <v-spacer></v-spacer>
+      <input type="file" multiple class="d-none" ref="fileInput">
       <v-menu
         v-bind:close-on-content-click="false"
         offset-y
@@ -37,6 +38,11 @@
         </template>
         <v-card>
           <v-card-text>
+            <v-btn
+              text
+              color="primary"
+              v-on:click="chooseFile"
+            >Upload</v-btn>
             <div
               v-for="entry of uploadList"
               v-bind:key="entry.uuid"
@@ -260,6 +266,15 @@ export default class App extends Vue {
   }
 
   mounted() {
+    (this.$refs.fileInput as HTMLInputElement).addEventListener('change', (e: any) => {
+      if (e.target.files.length > 0) {
+        // Start to upload the selected files
+        this.uploadFiles(e.target.files);
+        // Clear the selection
+        e.target.value = '';
+      }
+    });
+
     // Handle drag and drop of files
     const appEl = (this.$refs.app as Vue).$el;
 
@@ -283,37 +298,8 @@ export default class App extends Vue {
     appEl.addEventListener('drop', (e: any) => {
       e.preventDefault();
 
-      // Add dropped files to the FormData and uploadList
-      const fd = new FormData();
-      for (const file of e.dataTransfer.files) {
-        const uuid = uuidv4();
-
-        fd.append(uuid, file);
-
-        this.uploadList.push({
-          uuid: uuid,
-          filename: file.name,
-          status: 'in-progress',
-        });
-      }
-
-      // POST the FormData
-      axios.post(`/files`, fd).then(res => {
-        for (const [uuid, result] of res.data) {
-          const entry = this.uploadList.find(e => e.uuid === uuid);
-          if (entry) {
-            entry.status = result;
-          }
-        }
-      }).catch(error => {
-        console.error(error);
-        for (const uuid of fd.keys()) {
-          const entry = this.uploadList.find(e => e.uuid === uuid);
-          if (entry) {
-            entry.status = 'error';
-          }
-        }
-      });
+      // Start to upload the dropped files
+      this.uploadFiles(e.dataTransfer.files);
 
       // Hide the drop area
       appEl.classList.remove('drop-target');
@@ -383,6 +369,44 @@ export default class App extends Vue {
     else {
       return 'mdi-help';
     }
+  }
+
+  chooseFile() {
+    (this.$refs.fileInput as HTMLInputElement).click();
+  }
+
+  uploadFiles(files: File[]) {
+    // Add the files to a FormData and uploadList
+    const fd = new FormData();
+    for (const file of files) {
+      const uuid = uuidv4();
+
+      fd.append(uuid, file);
+
+      this.uploadList.push({
+        uuid: uuid,
+        filename: file.name,
+        status: 'in-progress',
+      });
+    }
+
+    // POST the FormData
+    axios.post(`/files`, fd).then(res => {
+      for (const [uuid, result] of res.data) {
+        const entry = this.uploadList.find(e => e.uuid === uuid);
+        if (entry) {
+          entry.status = result;
+        }
+      }
+    }).catch(error => {
+      console.error(error);
+      for (const uuid of fd.keys()) {
+        const entry = this.uploadList.find(e => e.uuid === uuid);
+        if (entry) {
+          entry.status = 'error';
+        }
+      }
+    });
   }
 }
 </script>
