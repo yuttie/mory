@@ -40,30 +40,33 @@
           <v-card-text>
             <v-btn
               text
+              block
               color="primary"
               v-on:click="chooseFile"
             >Upload</v-btn>
-            <div
-              v-for="entry of uploadList"
-              v-bind:key="entry.uuid"
-              style="white-space: nowrap;"
-            >
-              <v-icon
-                v-bind:color="uploadStatusColor(entry.status)"
-                small
-                class="mr-1"
-              >{{ uploadStatusIcon(entry.status) }}</v-icon>
-              <span>{{ entry.filename }}</span>
+            <div v-if="uploadList.length > 0">
+              <v-divider class="my-2"></v-divider>
+              <div
+                v-for="entry of uploadList"
+                v-bind:key="entry.uuid"
+                style="white-space: nowrap;"
+                class="my-2"
+              >
+                <v-icon
+                  v-bind:color="uploadStatusColor(entry.status)"
+                  small
+                  class="mr-1"
+                >{{ uploadStatusIcon(entry.status) }}</v-icon>
+                <span>{{ entry.filename }}</span>
+              </div>
+              <v-btn
+                text
+                block
+                color="error"
+                v-on:click="cleanUploadList"
+              >Clean</v-btn>
             </div>
           </v-card-text>
-          <v-card-actions>
-            <v-spacer></v-spacer>
-            <v-btn
-              text
-              color="error"
-              v-on:click="cleanUploadList"
-            >Clean</v-btn>
-          </v-card-actions>
         </v-card>
       </v-menu>
       <v-menu offset-y>
