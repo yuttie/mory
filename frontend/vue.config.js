@@ -7,7 +7,7 @@ module.exports = {
   publicPath: process.env.VUE_APP_APPLICATION_ROOT,
   pwa: {
     name: 'mory',
-    themeColor: '#5e83ae',
+    themeColor: '#303030',
     iconPaths: {
       favicon32: 'img/icons/favicon-32x32.png',
       favicon16: 'img/icons/favicon-16x16.png',
