@@ -35,7 +35,7 @@
       class="mx-5"
     >
       <template v-slot:item.path="{ item }">
-        <router-link class="path" v-bind:to="{ path: `/note/${item.path}` }">{{ item.path }}</router-link>
+        <v-icon class="mr-1">mdi-file-document-outline</v-icon><router-link class="path" v-bind:to="{ path: `/note/${item.path}` }">{{ item.path }}</router-link>
       </template>
       <template v-slot:item.tags="{ item }">
         <v-chip
