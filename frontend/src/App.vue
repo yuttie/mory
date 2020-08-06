@@ -359,15 +359,24 @@ export default class App extends Vue {
   }
 
   tokenExpired(callback: () => void) {
-    this.token = null;
-    localStorage.removeItem('token');
-    this.loginCallback = callback;
+    if (this.token !== localStorage.getItem('token')) {
+      // The token may have been updated on another window
+      this.token = localStorage.getItem('token');
+      // Retry
+      callback();
+    }
+    else {
+      // Delete the token and let a user to login again
+      this.token = null;
+      localStorage.removeItem('token');
+      this.loginCallback = callback;
 
-    if (this.registration) {
-      this.registration.active!.postMessage({
-        type: 'api-token',
-        value: this.token,
-      });
+      if (this.registration) {
+        this.registration.active!.postMessage({
+          type: 'api-token',
+          value: this.token,
+        });
+      }
     }
   }
 
