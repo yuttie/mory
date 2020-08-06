@@ -31,7 +31,9 @@
         activator="#rename-toggle"
         v-bind:close-on-content-click="false"
       >
-        <v-card>
+        <v-card
+          min-width="30em"
+        >
           <v-card-text>
             <v-text-field label="New path" v-model="newPath"></v-text-field>
           </v-card-text>
