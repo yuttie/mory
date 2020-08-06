@@ -16,7 +16,7 @@
 
         <v-btn small fab color="gray" class="mt-5" outlined v-bind:disabled="isModified" v-on:click="reload"><v-icon>mdi-reload</v-icon></v-btn>
         <v-btn small fab color="pink" class="mt-1" v-bind:outlined="!isModified" v-bind:disabled="!isModified" v-bind:loading="isSaving" v-on:click="saveIfModified"><v-icon color="white">mdi-content-save</v-icon></v-btn>
-        <v-btn small fab color="gray" class="mt-1" outlined id="rename-toggle" v-bind:loading="isRenaming"><v-icon>mdi-rename-box</v-icon></v-btn>
+        <v-btn small fab color="gray" class="mt-1" outlined id="rename-toggle" v-bind:disabled="!noteIsLoaded" v-bind:loading="isRenaming"><v-icon>mdi-rename-box</v-icon></v-btn>
 
         <v-btn small fab color="gray" class="mt-5" outlined id="toc-toggle"><v-icon>mdi-table-of-contents</v-icon></v-btn>
       </div>
@@ -127,6 +127,7 @@ export default class Note extends Vue {
 
   text = '';
   initialText = '';
+  noteIsLoaded = false;
   editorIsVisible = false;
   viewerIsVisible = true;
   tocIsVisible = false;
@@ -240,6 +241,7 @@ export default class Note extends Vue {
       .then(res => {
         this.text = res.data;
         this.initialText = this.text;
+        this.noteIsLoaded = true;
 
         // Jump to a header if specified
         if (this.$route.hash) {
@@ -374,6 +376,7 @@ export default class Note extends Vue {
       },
     }).then(res => {
       this.initialText = content;
+      this.noteIsLoaded = true;
       this.isSaving = false;
     }).catch(error => {
       if (error.response) {
