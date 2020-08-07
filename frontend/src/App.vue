@@ -52,11 +52,18 @@
                 style="white-space: nowrap;"
                 class="my-2"
               >
-                <v-icon
-                  v-bind:color="uploadStatusColor(entry.status)"
-                  small
-                  class="mr-1"
-                >{{ uploadStatusIcon(entry.status) }}</v-icon>
+                <v-tooltip top>
+                  <template v-slot:activator="{ on, attrs }">
+                    <v-icon
+                      v-bind:color="uploadStatusColor(entry.status)"
+                      v-bind="attrs"
+                      v-on="on"
+                      small
+                      class="mr-1"
+                    >{{ uploadStatusIcon(entry.status) }}</v-icon>
+                  </template>
+                  <span>{{ entry.statusMessage }}</span>
+                </v-tooltip>
                 <span>{{ entry.filename }}</span>
               </div>
               <v-btn
@@ -155,6 +162,7 @@ interface UploadEntry {
     uuid: string;
     filename: string;
     status: string;
+    statusMessage: string;
 }
 
 @Component({
@@ -418,6 +426,7 @@ export default class App extends Vue {
         uuid: uuid,
         filename: file.name,
         status: 'in-progress',
+        statusMessage: 'Being uploaded...',
       });
     }
 
@@ -427,14 +436,15 @@ export default class App extends Vue {
         const entry = this.uploadList.find(e => e.uuid === uuid);
         if (entry) {
           entry.status = result;
+          entry.statusMessage = 'Successfully uploaded';
         }
       }
     }).catch(error => {
-      console.error(error);
       for (const uuid of fd.keys()) {
         const entry = this.uploadList.find(e => e.uuid === uuid);
         if (entry) {
           entry.status = 'error';
+          entry.statusMessage = error.message;
         }
       }
     });
