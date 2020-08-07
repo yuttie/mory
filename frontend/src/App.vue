@@ -53,6 +53,7 @@
               <v-list-item
                 v-for="entry of uploadList"
                 v-bind:key="entry.uuid"
+                v-on:click="copyToClipboard(entry.filename)"
                 style="white-space: nowrap;"
               >
                 <v-list-item-content>
@@ -458,6 +459,10 @@ export default class App extends Vue {
         }
       }
     });
+  }
+
+  copyToClipboard(text) {
+    navigator.clipboard.writeText(text);
   }
 }
 </script>
