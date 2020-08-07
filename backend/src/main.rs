@@ -147,7 +147,7 @@ mod filters {
         warp::post()
             .and(warp::path("files"))
             .and(warp::path::end())
-            .and(warp::multipart::form())
+            .and(warp::multipart::form().max_length(8 * 1024 * 1024))
             .and(warp::any().map(move || state.clone()))
             .and_then(handlers::upload_file)
     }
