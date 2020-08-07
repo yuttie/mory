@@ -15,6 +15,7 @@
       <input type="file" multiple class="d-none" ref="fileInput">
       <v-menu
         v-bind:close-on-content-click="false"
+        v-model="uploadMenuIsVisible"
         offset-y
       >
         <template v-slot:activator="{ attrs, on }">
@@ -178,6 +179,7 @@ export default class App extends Vue {
   loginCallback = null as (() => void) | null;
   registration = null as null | ServiceWorkerRegistration;
   uploadList = [] as UploadEntry[];
+  uploadMenuIsVisible = false;
 
   get decodedToken() {
     if (this.token) {
@@ -412,6 +414,7 @@ export default class App extends Vue {
 
   chooseFile() {
     (this.$refs.fileInput as HTMLInputElement).click();
+    this.uploadMenuIsVisible = false;
   }
 
   uploadFiles(files: File[]) {
