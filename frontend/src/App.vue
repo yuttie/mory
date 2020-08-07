@@ -45,35 +45,42 @@
               color="primary"
               v-on:click="chooseFile"
             >Upload</v-btn>
-            <div v-if="uploadList.length > 0">
-              <v-divider class="my-2"></v-divider>
-              <div
+            <v-divider v-if="uploadList.length > 0" class="my-2"></v-divider>
+            <v-list
+              v-if="uploadList.length > 0"
+              dense
+            >
+              <v-list-item
                 v-for="entry of uploadList"
                 v-bind:key="entry.uuid"
                 style="white-space: nowrap;"
-                class="my-2"
               >
-                <v-tooltip top>
-                  <template v-slot:activator="{ on, attrs }">
-                    <v-icon
-                      v-bind:color="uploadStatusColor(entry.status)"
-                      v-bind="attrs"
-                      v-on="on"
-                      small
-                      class="mr-1"
-                    >{{ uploadStatusIcon(entry.status) }}</v-icon>
-                  </template>
-                  <span>{{ entry.statusMessage }}</span>
-                </v-tooltip>
-                <span>{{ entry.filename }}</span>
-              </div>
-              <v-btn
-                text
-                block
-                color="error"
-                v-on:click="cleanUploadList"
-              >Clean</v-btn>
-            </div>
+                <v-list-item-content>
+                  <v-list-item-title>
+                  <v-tooltip top>
+                    <template v-slot:activator="{ on, attrs }">
+                      <v-icon
+                        v-bind:color="uploadStatusColor(entry.status)"
+                        v-bind="attrs"
+                        v-on="on"
+                        small
+                        class="mr-1"
+                      >{{ uploadStatusIcon(entry.status) }}</v-icon>
+                    </template>
+                    <span>{{ entry.statusMessage }}</span>
+                  </v-tooltip>
+                  <span>{{ entry.filename }}</span>
+                  </v-list-item-title>
+                </v-list-item-content>
+              </v-list-item>
+            </v-list>
+            <v-btn
+              v-if="uploadList.length > 0"
+              v-on:click="cleanUploadList"
+              text
+              block
+              color="error"
+            >Clean</v-btn>
           </v-card-text>
         </v-card>
       </v-menu>
