@@ -38,51 +38,54 @@
           </v-badge>
         </template>
         <v-card>
-          <v-card-text>
+          <v-card-actions>
             <v-btn
               text
               block
               color="primary"
               v-on:click="chooseFile"
             >Upload</v-btn>
-            <v-divider v-if="uploadList.length > 0" class="my-2"></v-divider>
-            <v-list
-              v-if="uploadList.length > 0"
-              dense
+          </v-card-actions>
+          <v-divider v-if="uploadList.length > 0"></v-divider>
+          <v-list
+            v-if="uploadList.length > 0"
+            dense
+          >
+            <v-list-item
+              v-for="entry of uploadList"
+              v-bind:key="entry.uuid"
+              v-on:click="copyToClipboard(entry.filename)"
+              style="white-space: nowrap;"
             >
-              <v-list-item
-                v-for="entry of uploadList"
-                v-bind:key="entry.uuid"
-                v-on:click="copyToClipboard(entry.filename)"
-                style="white-space: nowrap;"
-              >
-                <v-list-item-content>
-                  <v-list-item-title>
-                  <v-tooltip top>
-                    <template v-slot:activator="{ on, attrs }">
-                      <v-icon
-                        v-bind:color="uploadStatusColor(entry.status)"
-                        v-bind="attrs"
-                        v-on="on"
-                        small
-                        class="mr-1"
-                      >{{ uploadStatusIcon(entry.status) }}</v-icon>
-                    </template>
-                    <span>{{ entry.statusMessage }}</span>
-                  </v-tooltip>
-                  <span>{{ entry.filename }}</span>
-                  </v-list-item-title>
-                </v-list-item-content>
-              </v-list-item>
-            </v-list>
+              <v-list-item-content>
+                <v-list-item-title>
+                <v-tooltip top>
+                  <template v-slot:activator="{ on, attrs }">
+                    <v-icon
+                      v-bind:color="uploadStatusColor(entry.status)"
+                      v-bind="attrs"
+                      v-on="on"
+                      small
+                      class="mr-1"
+                    >{{ uploadStatusIcon(entry.status) }}</v-icon>
+                  </template>
+                  <span>{{ entry.statusMessage }}</span>
+                </v-tooltip>
+                <span>{{ entry.filename }}</span>
+                </v-list-item-title>
+              </v-list-item-content>
+            </v-list-item>
+          </v-list>
+          <v-card-actions
+            v-if="uploadList.length > 0"
+          >
             <v-btn
-              v-if="uploadList.length > 0"
               v-on:click="cleanUploadList"
               text
               block
               color="error"
             >Clean</v-btn>
-          </v-card-text>
+          </v-card-actions>
         </v-card>
       </v-menu>
       <v-menu offset-y>
@@ -400,6 +403,7 @@ export default class App extends Vue {
 
   cleanUploadList() {
     this.uploadList = this.uploadList.filter(e => e.status === 'in-progress');
+    this.uploadMenuIsVisible = false;
   }
 
   uploadStatusColor(status: string) {
