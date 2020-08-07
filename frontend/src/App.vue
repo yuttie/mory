@@ -465,7 +465,7 @@ export default class App extends Vue {
     });
   }
 
-  copyToClipboard(text) {
+  copyToClipboard(text: string) {
     navigator.clipboard.writeText(text);
   }
 }
