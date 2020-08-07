@@ -604,6 +604,8 @@ mod handlers {
                 }
             } else if let Some(_) = err.find::<Unauthorized>() {
                 warp::http::StatusCode::UNAUTHORIZED
+            } else if let Some(_) = err.find::<warp::reject::PayloadTooLarge>() {
+                warp::http::StatusCode::PAYLOAD_TOO_LARGE
             } else {
                 error!("unhandled rejection: {:?}", err);
                 warp::http::StatusCode::INTERNAL_SERVER_ERROR
