@@ -167,7 +167,6 @@ mod handlers {
     use std::convert::Infallible;
     use std::ffi::OsStr;
     use std::io::Write;
-    use std::ops::Deref;
     use std::os::unix::ffi::OsStrExt;
     use std::path::PathBuf;
     use std::vec::Vec;
@@ -178,7 +177,7 @@ mod handlers {
     use chrono::{DateTime, Duration, Utc, FixedOffset};
     use chrono::offset::TimeZone;
     use futures::stream::StreamExt;
-    use git2::{Index, IndexEntry, IndexTime, Oid, Repository};
+    use git2::{Index, IndexEntry, IndexTime, Oid};
     use jsonwebtoken as jwt;
     use log::{debug, error};
     use warp::reply::Reply;
@@ -212,11 +211,10 @@ mod handlers {
         }
     }
 
-    fn load_metadata<T: Deref<Target = Repository>>(repo: &T, id: Oid) -> Option<serde_yaml::Value> {
-        let blob = repo.find_blob(id).unwrap();
-        if blob.content().starts_with(b"---\n") {
-            if let Some(j) = blob.content().windows(5).position(|window| window == b"\n---\n") {
-                if let Ok(yaml) = std::str::from_utf8(&blob.content()[4..j]) {
+    fn load_metadata(content: &[u8]) -> Option<serde_yaml::Value> {
+        if content.starts_with(b"---\n") {
+            if let Some(j) = content.windows(5).position(|window| window == b"\n---\n") {
+                if let Ok(yaml) = std::str::from_utf8(&content[4..j]) {
                     match serde_yaml::from_str::<serde_yaml::Value>(yaml) {
                         Ok(doc) => {
                             debug!("parsed YAML metadata: {:?}", &doc);
@@ -310,8 +308,11 @@ mod handlers {
                                     else {
                                         "application/octet-stream".to_string()
                                     };
+                                    // Get the file size
+                                    let blob = repo.find_blob(file.id()).unwrap();
+                                    let size = blob.size();
                                     // Extract metadata
-                                    let metadata = load_metadata(&repo, file.id());
+                                    let metadata = load_metadata(blob.content());
                                     // Time
                                     let t = commit.time();
                                     let tz = FixedOffset::east(t.offset_minutes() * 60);
@@ -320,6 +321,7 @@ mod handlers {
                                     debug!("{:?} {:?} {:?}", time, delta.status(), path);
                                     entries.push(ListEntry {
                                         path: path,
+                                        size: size,
                                         mime_type: mime_type,
                                         metadata: metadata,
                                         time: time,
@@ -699,6 +701,7 @@ mod models {
     #[derive(Debug, Deserialize, Serialize, Clone)]
     pub struct ListEntry {
         pub path: PathBuf,
+        pub size: usize,
         pub mime_type: String,
         pub metadata: Option<Metadata>,
         pub time: DateTime<FixedOffset>,
