@@ -75,6 +75,18 @@ interface ListEntry {
   time: string;
 }
 
+function compareTags(a: string, b: string): number {
+  const A = a.toUpperCase();
+  const B = b.toUpperCase();
+  if (A < B) {
+    return -1;
+  }
+  if (A > B) {
+    return 1;
+  }
+  return 0;
+}
+
 @Component
 export default class Find extends Vue {
   @Prop(String) readonly token!: null | string;
@@ -105,7 +117,7 @@ export default class Find extends Vue {
         }
       }
     }
-    return Array.from(tags).sort() as string[];
+    return Array.from(tags).sort(compareTags) as string[];
   }
 
   get query() {
@@ -160,7 +172,7 @@ export default class Find extends Vue {
       matched.push({
         path: entry.path,
         mimeType: entry.mime_type,
-        tags: ((entry.metadata || {}).tags || []).sort(),
+        tags: ((entry.metadata || {}).tags || []).sort(compareTags),
         time: new Date(entry.time),
       });
     }
