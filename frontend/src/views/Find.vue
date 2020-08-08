@@ -22,7 +22,7 @@
         <v-chip
           small
           class="ma-1"
-          v-for="tag of [...tags].sort()"
+          v-for="tag of tags"
           v-bind:key="tag"
           v-bind:color="query.tags.has(tag) ? 'primary' : 'normal'"
           v-on:click="handleTagClick(tag, $event)"
@@ -44,7 +44,7 @@
         <v-chip
           small
           class="ma-1"
-          v-for="tag of [...(item.tags || {}).tags || []].sort()"
+          v-for="tag of item.tags"
           v-bind:key="tag"
           v-bind:color="query.tags.has(tag) ? 'primary' : 'normal'"
           v-on:click="handleTagClick(tag, $event)"
@@ -71,7 +71,7 @@ interface Query {
 interface ListEntry {
   path: string;
   mime_type: string;
-  metadata: { tags: string[] };
+  metadata: { tags: string[] } | null;
   time: string;
 }
 
@@ -105,7 +105,7 @@ export default class Find extends Vue {
         }
       }
     }
-    return Array.from(tags) as string[];
+    return Array.from(tags).sort() as string[];
   }
 
   get query() {
@@ -160,7 +160,7 @@ export default class Find extends Vue {
       matched.push({
         path: entry.path,
         mimeType: entry.mime_type,
-        tags: entry.metadata,
+        tags: ((entry.metadata || {}).tags || []).sort(),
         time: new Date(entry.time),
       });
     }
