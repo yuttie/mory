@@ -165,6 +165,7 @@ mod handlers {
     use std::env;
     use std::convert::Infallible;
     use std::io::Write;
+    use std::ops::Deref;
     use std::vec::Vec;
     use std::string::String;
 
@@ -172,7 +173,7 @@ mod handlers {
     use bytes::buf::Buf;
     use chrono::{DateTime, Duration, Utc};
     use futures::stream::StreamExt;
-    use git2::{Index, IndexEntry, IndexTime};
+    use git2::{Index, IndexEntry, IndexTime, Oid, Repository};
     use jsonwebtoken as jwt;
     use log::{debug, error};
     use warp::reply::Reply;
@@ -206,6 +207,37 @@ mod handlers {
         }
     }
 
+    fn load_metadata<T: Deref<Target = Repository>>(repo: &T, id: Oid) -> Option<serde_yaml::Value> {
+        let blob = repo.find_blob(id).unwrap();
+        if blob.content().starts_with(b"---\n") {
+            if let Some(j) = blob.content().windows(5).position(|window| window == b"\n---\n") {
+                if let Ok(yaml) = std::str::from_utf8(&blob.content()[4..j]) {
+                    match serde_yaml::from_str::<serde_yaml::Value>(yaml) {
+                        Ok(doc) => {
+                            debug!("parsed YAML metadata: {:?}", &doc);
+                            Some(doc)
+                        },
+                        Err(err) => {
+                            debug!("failed to parse YAML metadata: {:?}", &err);
+                            let mut error_object = serde_yaml::Mapping::new();
+                            error_object.insert("error".into(), format!("{}", err).into());
+                            Some(serde_yaml::Value::Mapping(error_object))
+                        },
+                    }
+                }
+                else {
+                    None
+                }
+            }
+            else {
+                None
+            }
+        }
+        else {
+            None
+        }
+    }
+
     pub async fn list_notes(state: State) -> Result<impl warp::Reply, Infallible> {
         debug!("list");
 
@@ -232,40 +264,8 @@ mod handlers {
             let mut entries = Vec::new();
             for entry in index.iter() {
                 let path = String::from_utf8(entry.path).unwrap();
-                let blob = repo.find_blob(entry.id).unwrap();
-                if blob.content().starts_with(b"---\n") {
-                    if let Some(j) = blob.content().windows(5).position(|window| window == b"\n---\n") {
-                        if let Ok(yaml) = std::str::from_utf8(&blob.content()[4..j]) {
-                            match serde_yaml::from_str::<serde_yaml::Value>(yaml) {
-                                Ok(doc) => {
-                                    debug!("parsed YAML metadata: {:?}", &doc);
-                                    entries.push(ListEntry {
-                                        path: path.clone(),
-                                        metadata: Some(doc),
-                                    });
-                                },
-                                Err(err) => {
-                                    debug!("failed to parse YAML metadata: {:?}", &err);
-                                    let mut error_object = serde_yaml::Mapping::new();
-                                    error_object.insert("error".into(), format!("{}", err).into());
-                                    entries.push(ListEntry {
-                                        path: path.clone(),
-                                        metadata: Some(serde_yaml::Value::Mapping(error_object)),
-                                    });
-                                },
-                            }
-                        }
-                        else {
-                            entries.push(ListEntry { path: path.clone(), metadata: None });
-                        }
-                    }
-                    else {
-                        entries.push(ListEntry { path: path.clone(), metadata: None });
-                    }
-                }
-                else {
-                    entries.push(ListEntry { path: path.clone(), metadata: None });
-                }
+                let metadata = load_metadata(&repo, entry.id);
+                entries.push(ListEntry { path: path.clone(), metadata: metadata });
             }
             let reply = warp::reply::json(&entries);
             *cached_entries = Cached::Computed {
