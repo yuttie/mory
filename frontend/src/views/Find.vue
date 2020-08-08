@@ -117,7 +117,7 @@ export default class Find extends Vue {
         }
       }
     }
-    return Array.from(tags).sort(compareTags) as string[];
+    return Array.from(tags).sort(compareTags as (a: any, b: any) => number) as string[];
   }
 
   get query() {
@@ -172,7 +172,7 @@ export default class Find extends Vue {
       matched.push({
         path: entry.path,
         mimeType: entry.mime_type,
-        tags: ((entry.metadata || {}).tags || []).sort(compareTags),
+        tags: ((entry.metadata || {}).tags || []).sort(compareTags as (a: any, b: any) => number),
         time: new Date(entry.time),
       });
     }
