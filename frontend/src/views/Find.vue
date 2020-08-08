@@ -40,6 +40,9 @@
       <template v-slot:item.time="{ item }">
         {{ item.time.toLocaleString() }}
       </template>
+      <template v-slot:item.size="{ item }">
+        {{ formatFileSize(item.size) }}
+      </template>
       <template v-slot:item.tags="{ item }">
         <v-chip
           small
@@ -70,6 +73,7 @@ interface Query {
 
 interface ListEntry {
   path: string;
+  size: number;
   mime_type: string;
   metadata: { tags: string[] } | null;
   time: string;
@@ -101,6 +105,7 @@ export default class Find extends Vue {
     return [
       { text: 'Path', value: 'path' },
       { text: 'Modified', value: 'time', sort: (a: any, b: any) => a.getTime() - b.getTime() },
+      { text: 'Size', value: 'size' },
       { text: 'Type', value: 'mimeType' },
       { text: 'Tags', value: 'tags', sortable: false },
     ];
@@ -171,6 +176,7 @@ export default class Find extends Vue {
       }
       matched.push({
         path: entry.path,
+        size: entry.size,
         mimeType: entry.mime_type,
         tags: ((entry.metadata || {}).tags || []).sort(compareTags as (a: any, b: any) => number),
         time: new Date(entry.time),
@@ -315,6 +321,21 @@ export default class Find extends Vue {
     }
     else {
       this.addTag(tag);
+    }
+  }
+
+  formatFileSize(size: number) {
+    const units = ['B', 'KiB', 'MiB', 'GiB'];
+    let i = 0;
+    while (size >= 0.9 * 1024 && i < units.length - 1) {
+      size /= 1024;
+      i += 1;
+    }
+    if (i === 0) {
+      return `${size.toFixed(0)} ${units[i]}`;
+    }
+    else {
+      return `${size.toFixed(1)} ${units[i]}`;
     }
   }
 }
