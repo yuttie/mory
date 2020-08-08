@@ -38,10 +38,13 @@
         <v-icon class="mr-1">mdi-file-document-outline</v-icon><router-link class="path" v-bind:to="{ path: `/note/${item.path}` }">{{ item.path }}</router-link>
       </template>
       <template v-slot:item.time="{ item }">
-        {{ item.time.toLocaleString() }}
+        <div class="text-no-wrap">{{ item.time.toLocaleString() }}</div>
       </template>
       <template v-slot:item.size="{ item }">
-        {{ formatFileSize(item.size) }}
+        <div class="text-no-wrap">{{ formatFileSize(item.size) }}</div>
+      </template>
+      <template v-slot:item.mimeType="{ item }">
+        <div class="text-no-wrap">{{ item.mimeType }}</div>
       </template>
       <template v-slot:item.tags="{ item }">
         <v-chip
