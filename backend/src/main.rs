@@ -163,15 +163,20 @@ mod handlers {
     use super::models::{Unauthorized, NotFound, Claims, State, ListEntry, Cached, Login, NoteSave};
 
     use std::env;
+    use std::collections::HashMap;
     use std::convert::Infallible;
+    use std::ffi::OsStr;
     use std::io::Write;
     use std::ops::Deref;
+    use std::os::unix::ffi::OsStrExt;
+    use std::path::PathBuf;
     use std::vec::Vec;
     use std::string::String;
 
     use argon2;
     use bytes::buf::Buf;
-    use chrono::{DateTime, Duration, Utc};
+    use chrono::{DateTime, Duration, Utc, FixedOffset};
+    use chrono::offset::TimeZone;
     use futures::stream::StreamExt;
     use git2::{Index, IndexEntry, IndexTime, Oid, Repository};
     use jsonwebtoken as jwt;
@@ -261,12 +266,76 @@ mod handlers {
             index.read_tree(&head_tree).unwrap();
 
             // Populate the list
-            let mut entries = Vec::new();
+            let mut oid_path_map: HashMap<Oid, PathBuf> = HashMap::new();
             for entry in index.iter() {
-                let path = String::from_utf8(entry.path).unwrap();
-                let metadata = load_metadata(&repo, entry.id);
-                entries.push(ListEntry { path: path.clone(), metadata: metadata });
+                let path = PathBuf::from(OsStr::from_bytes(&entry.path));
+                oid_path_map.insert(entry.id, path);
             }
+
+            // Iterate over commit history to find out last modified time for each file
+            let mut entries = Vec::new();
+            let mut revwalk = repo.revwalk().unwrap();
+            revwalk.set_sorting(git2::Sort::TOPOLOGICAL).unwrap();
+            revwalk.push_head().unwrap();
+            'search: for oid in revwalk {
+                let oid = oid.unwrap();
+                let commit = repo.find_commit(oid).unwrap();
+                let tree = commit.tree().unwrap();
+                debug!("{:?}", commit);
+
+                for parent in commit.parents() {
+                    let parent_tree = parent.tree().unwrap();
+                    let diff = repo.diff_tree_to_tree(Some(&parent_tree), Some(&tree), None).unwrap();
+                    for delta in diff.deltas() {
+                        use git2::Delta;
+                        match delta.status() {
+                            Delta::Added | Delta::Modified => {
+                                let file = delta.new_file();
+                                let found = {
+                                    if let Some(path) = oid_path_map.get(&file.id()) {
+                                        path == file.path().unwrap()
+                                    }
+                                    else {
+                                        false
+                                    }
+                                };
+                                if found {
+                                    // Remove the entry from oid_path_map
+                                    let path = oid_path_map.remove(&file.id()).unwrap();
+                                    // Guess the mime type
+                                    let guess = mime_guess::from_path(&path);
+                                    let mime_type = if let Some(mime) = guess.first() {
+                                        mime.as_ref().parse().unwrap()
+                                    }
+                                    else {
+                                        "application/octet-stream".to_string()
+                                    };
+                                    // Extract metadata
+                                    let metadata = load_metadata(&repo, file.id());
+                                    // Time
+                                    let t = commit.time();
+                                    let tz = FixedOffset::east(t.offset_minutes() * 60);
+                                    let time = tz.timestamp(t.seconds(), 0);
+                                    // Add an entry
+                                    debug!("{:?} {:?} {:?}", time, delta.status(), path);
+                                    entries.push(ListEntry {
+                                        path: path,
+                                        mime_type: mime_type,
+                                        metadata: metadata,
+                                        time: time,
+                                    });
+                                    if oid_path_map.is_empty() {
+                                        break 'search;
+                                    }
+                                }
+                            },
+                            _ => (),
+                        }
+                    }
+                }
+            }
+
+            // Reply
             let reply = warp::reply::json(&entries);
             *cached_entries = Cached::Computed {
                 commit_id: head_commit.id(),
@@ -616,9 +685,11 @@ mod handlers {
 }
 
 mod models {
+    use std::path::PathBuf;
     use std::sync::Arc;
     use std::option::Option;
 
+    use chrono::{DateTime, FixedOffset};
     use git2::{Repository, Oid};
     use serde::{Deserialize, Serialize};
     use tokio::sync::Mutex;
@@ -627,8 +698,10 @@ mod models {
 
     #[derive(Debug, Deserialize, Serialize, Clone)]
     pub struct ListEntry {
-        pub path: String,
+        pub path: PathBuf,
+        pub mime_type: String,
         pub metadata: Option<Metadata>,
+        pub time: DateTime<FixedOffset>,
     }
 
     #[derive(Debug)]
