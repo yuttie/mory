@@ -37,6 +37,9 @@
       <template v-slot:item.path="{ item }">
         <v-icon class="mr-1">mdi-file-document-outline</v-icon><router-link class="path" v-bind:to="{ path: `/note/${item.path}` }">{{ item.path }}</router-link>
       </template>
+      <template v-slot:item.time="{ item }">
+        {{ item.time.toLocaleString() }}
+      </template>
       <template v-slot:item.tags="{ item }">
         <v-chip
           small
@@ -67,7 +70,9 @@ interface Query {
 
 interface ListEntry {
   path: string;
+  mime_type: string;
   metadata: { tags: string[] };
+  time: string;
 }
 
 @Component
@@ -83,6 +88,8 @@ export default class Find extends Vue {
   get headers() {
     return [
       { text: 'Path', value: 'path' },
+      { text: 'Modified', value: 'time', sort: (a: any, b: any) => a.getTime() - b.getTime() },
+      { text: 'Type', value: 'mimeType' },
       { text: 'Tags', value: 'tags', sortable: false },
     ];
   }
@@ -152,7 +159,9 @@ export default class Find extends Vue {
       }
       matched.push({
         path: entry.path,
+        mimeType: entry.mime_type,
         tags: entry.metadata,
+        time: new Date(entry.time),
       });
     }
 
