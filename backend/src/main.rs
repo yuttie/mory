@@ -252,7 +252,133 @@ mod handlers {
                 // Return the cache
                 Ok(warp::reply::json(&entries))
             },
-            Cache::Invalid(_, _) | Cache::None => {
+            Cache::Invalid(last_commit_id, old_entries) => {
+                use git2::Delta;
+
+                // Iterate over recent commit history to collect operations on files
+                let mut latest_ops: HashMap<PathBuf, (Delta, DateTime<FixedOffset>, Oid)> = HashMap::new();
+                let mut revwalk = repo.revwalk().unwrap();
+                revwalk.set_sorting(git2::Sort::TOPOLOGICAL).unwrap();
+                revwalk.push_range(&format!("{}..HEAD", last_commit_id)).unwrap();
+                for oid in revwalk {
+                    let oid = oid.unwrap();
+                    let commit = repo.find_commit(oid).unwrap();
+                    debug!("{:?}", commit);
+
+                    let time = {
+                        let t = commit.time();
+                        let tz = FixedOffset::east(t.offset_minutes() * 60);
+                        tz.timestamp(t.seconds(), 0)
+                    };
+
+                    let tree = commit.tree().unwrap();
+                    for parent in commit.parents() {
+                        let parent_tree = parent.tree().unwrap();
+                        let diff = repo.diff_tree_to_tree(Some(&parent_tree), Some(&tree), None).unwrap();
+                        for delta in diff.deltas() {
+                            match delta.status() {
+                                Delta::Added | Delta::Modified => {
+                                    let file = delta.new_file();
+                                    let path = file.path().unwrap().to_owned();
+                                    latest_ops.entry(path).or_insert((
+                                        delta.status(),
+                                        time,
+                                        file.id(),
+                                    ));
+                                },
+                                Delta::Deleted => {
+                                    let file = delta.old_file();
+                                    let path = file.path().unwrap().to_owned();
+                                    latest_ops.entry(path).or_insert((
+                                        delta.status(),
+                                        time,
+                                        file.id(),
+                                    ));
+                                },
+                                _ => (),
+                            }
+                        }
+                    }
+                }
+
+                // Update existing entries
+                let mut entries: Vec<ListEntry> = Vec::with_capacity(old_entries.len());
+                for entry in old_entries {
+                    let mut found = false;
+                    match latest_ops.get(&entry.path) {
+                        None => {
+                            // Entry is untouched
+                            entries.push(entry.clone());
+                        },
+                        Some(&(op, time, blob_id)) => {
+                            // Entry is modified or deleted
+                            found = true;
+                            match op {
+                                Delta::Added | Delta::Modified => {
+                                    // Get the file size
+                                    let blob = repo.find_blob(blob_id).unwrap();
+                                    let size = blob.size();
+                                    // Extract metadata
+                                    let metadata = extract_metadata(blob.content());
+                                    // Add an entry
+                                    entries.push(ListEntry {
+                                        path: entry.path.to_owned(),
+                                        size: size,
+                                        mime_type: entry.mime_type.to_owned(),
+                                        metadata: metadata,
+                                        time: time,
+                                    });
+                                },
+                                Delta::Deleted => {
+                                    // Ignore the entry
+                                },
+                                _ => unreachable!(),
+                            }
+                        },
+                    }
+                    if found {
+                        latest_ops.remove(&entry.path);
+                    }
+                }
+
+                // Add newly created entries
+                for (path, (_, time, blob_id)) in latest_ops {
+                    // Guess the mime type
+                    let guess = mime_guess::from_path(&path);
+                    let mime_type = if let Some(mime) = guess.first() {
+                        mime.as_ref().parse().unwrap()
+                    }
+                    else {
+                        "application/octet-stream".to_string()
+                    };
+                    // Get the file size
+                    let blob = repo.find_blob(blob_id).unwrap();
+                    let size = blob.size();
+                    // Extract metadata
+                    let metadata = extract_metadata(blob.content());
+                    // Add an entry
+                    entries.push(ListEntry {
+                        path: path,
+                        size: size,
+                        mime_type: mime_type,
+                        metadata: metadata,
+                        time: time,
+                    });
+                }
+
+                // Find the head commit
+                let head = repo.head().unwrap();
+                let head_commit = head.peel_to_commit().unwrap();
+
+                // Reply
+                let reply = warp::reply::json(&entries);
+                *cached_entries = Cached::Computed {
+                    commit_id: head_commit.id(),
+                    data: entries,
+                };
+                Ok(reply)
+            },
+            Cache::None => {
                 // Create a new list
 
                 // Find the head commit and tree
