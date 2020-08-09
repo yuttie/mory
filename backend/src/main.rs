@@ -247,103 +247,105 @@ mod handlers {
         // Check if a cache exists
         let repo = state.repo.lock().await;
         let mut cached_entries = state.cached_entries.lock().await;
-        if let Cache::Valid(entries) = cached_entries.get(&repo) {
-            // Return the cache
-            Ok(warp::reply::json(&entries))
-        }
-        else {
-            // Create a new list
+        match cached_entries.get(&repo) {
+            Cache::Valid(entries) => {
+                // Return the cache
+                Ok(warp::reply::json(&entries))
+            },
+            Cache::Invalid(_, _) | Cache::None => {
+                // Create a new list
 
-            // Find the head commit and tree
-            let head = repo.head().unwrap();
-            let head_commit = head.peel_to_commit().unwrap();
-            let head_tree = head.peel_to_tree().unwrap();
+                // Find the head commit and tree
+                let head = repo.head().unwrap();
+                let head_commit = head.peel_to_commit().unwrap();
+                let head_tree = head.peel_to_tree().unwrap();
 
-            // Load the head tree into an index
-            let mut index = Index::new().unwrap();
-            index.read_tree(&head_tree).unwrap();
+                // Load the head tree into an index
+                let mut index = Index::new().unwrap();
+                index.read_tree(&head_tree).unwrap();
 
-            // Populate the list
-            let mut oid_path_map: HashMap<Oid, PathBuf> = HashMap::new();
-            for entry in index.iter() {
-                let path = PathBuf::from(OsStr::from_bytes(&entry.path));
-                oid_path_map.insert(entry.id, path);
-            }
+                // Populate the list
+                let mut oid_path_map: HashMap<Oid, PathBuf> = HashMap::new();
+                for entry in index.iter() {
+                    let path = PathBuf::from(OsStr::from_bytes(&entry.path));
+                    oid_path_map.insert(entry.id, path);
+                }
 
-            // Iterate over commit history to find out last modified time for each file
-            let mut entries = Vec::new();
-            let mut revwalk = repo.revwalk().unwrap();
-            revwalk.set_sorting(git2::Sort::TOPOLOGICAL).unwrap();
-            revwalk.push_head().unwrap();
-            'search: for oid in revwalk {
-                let oid = oid.unwrap();
-                let commit = repo.find_commit(oid).unwrap();
-                let tree = commit.tree().unwrap();
-                debug!("{:?}", commit);
+                // Iterate over commit history to find out last modified time for each file
+                let mut entries = Vec::new();
+                let mut revwalk = repo.revwalk().unwrap();
+                revwalk.set_sorting(git2::Sort::TOPOLOGICAL).unwrap();
+                revwalk.push_head().unwrap();
+                'search: for oid in revwalk {
+                    let oid = oid.unwrap();
+                    let commit = repo.find_commit(oid).unwrap();
+                    let tree = commit.tree().unwrap();
+                    debug!("{:?}", commit);
 
-                for parent in commit.parents() {
-                    let parent_tree = parent.tree().unwrap();
-                    let diff = repo.diff_tree_to_tree(Some(&parent_tree), Some(&tree), None).unwrap();
-                    for delta in diff.deltas() {
-                        use git2::Delta;
-                        match delta.status() {
-                            Delta::Added | Delta::Modified => {
-                                let file = delta.new_file();
-                                let found = {
-                                    if let Some(path) = oid_path_map.get(&file.id()) {
-                                        path == file.path().unwrap()
-                                    }
-                                    else {
-                                        false
-                                    }
-                                };
-                                if found {
-                                    // Remove the entry from oid_path_map
-                                    let path = oid_path_map.remove(&file.id()).unwrap();
-                                    // Guess the mime type
-                                    let guess = mime_guess::from_path(&path);
-                                    let mime_type = if let Some(mime) = guess.first() {
-                                        mime.as_ref().parse().unwrap()
-                                    }
-                                    else {
-                                        "application/octet-stream".to_string()
+                    for parent in commit.parents() {
+                        let parent_tree = parent.tree().unwrap();
+                        let diff = repo.diff_tree_to_tree(Some(&parent_tree), Some(&tree), None).unwrap();
+                        for delta in diff.deltas() {
+                            use git2::Delta;
+                            match delta.status() {
+                                Delta::Added | Delta::Modified => {
+                                    let file = delta.new_file();
+                                    let found = {
+                                        if let Some(path) = oid_path_map.get(&file.id()) {
+                                            path == file.path().unwrap()
+                                        }
+                                        else {
+                                            false
+                                        }
                                     };
-                                    // Get the file size
-                                    let blob = repo.find_blob(file.id()).unwrap();
-                                    let size = blob.size();
-                                    // Extract metadata
-                                    let metadata = extract_metadata(blob.content());
-                                    // Time
-                                    let t = commit.time();
-                                    let tz = FixedOffset::east(t.offset_minutes() * 60);
-                                    let time = tz.timestamp(t.seconds(), 0);
-                                    // Add an entry
-                                    debug!("{:?} {:?} {:?}", time, delta.status(), path);
-                                    entries.push(ListEntry {
-                                        path: path,
-                                        size: size,
-                                        mime_type: mime_type,
-                                        metadata: metadata,
-                                        time: time,
-                                    });
-                                    if oid_path_map.is_empty() {
-                                        break 'search;
+                                    if found {
+                                        // Remove the entry from oid_path_map
+                                        let path = oid_path_map.remove(&file.id()).unwrap();
+                                        // Guess the mime type
+                                        let guess = mime_guess::from_path(&path);
+                                        let mime_type = if let Some(mime) = guess.first() {
+                                            mime.as_ref().parse().unwrap()
+                                        }
+                                        else {
+                                            "application/octet-stream".to_string()
+                                        };
+                                        // Get the file size
+                                        let blob = repo.find_blob(file.id()).unwrap();
+                                        let size = blob.size();
+                                        // Extract metadata
+                                        let metadata = extract_metadata(blob.content());
+                                        // Time
+                                        let t = commit.time();
+                                        let tz = FixedOffset::east(t.offset_minutes() * 60);
+                                        let time = tz.timestamp(t.seconds(), 0);
+                                        // Add an entry
+                                        debug!("{:?} {:?} {:?}", time, delta.status(), path);
+                                        entries.push(ListEntry {
+                                            path: path,
+                                            size: size,
+                                            mime_type: mime_type,
+                                            metadata: metadata,
+                                            time: time,
+                                        });
+                                        if oid_path_map.is_empty() {
+                                            break 'search;
+                                        }
                                     }
-                                }
-                            },
-                            _ => (),
+                                },
+                                _ => (),
+                            }
                         }
                     }
                 }
-            }
 
-            // Reply
-            let reply = warp::reply::json(&entries);
-            *cached_entries = Cached::Computed {
-                commit_id: head_commit.id(),
-                data: entries,
-            };
-            Ok(reply)
+                // Reply
+                let reply = warp::reply::json(&entries);
+                *cached_entries = Cached::Computed {
+                    commit_id: head_commit.id(),
+                    data: entries,
+                };
+                Ok(reply)
+            },
         }
     }
 
