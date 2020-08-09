@@ -160,7 +160,7 @@ mod filters {
 }
 
 mod handlers {
-    use super::models::{Unauthorized, NotFound, Claims, State, ListEntry, Cached, Login, NoteSave};
+    use super::models::{Unauthorized, NotFound, Claims, State, ListEntry, Cache, Cached, Login, NoteSave};
 
     use std::env;
     use std::collections::HashMap;
@@ -247,7 +247,7 @@ mod handlers {
         // Check if a cache exists
         let repo = state.repo.lock().await;
         let mut cached_entries = state.cached_entries.lock().await;
-        if let Some(entries) = cached_entries.get(&repo) {
+        if let Cache::Valid(entries) = cached_entries.get(&repo) {
             // Return the cache
             Ok(warp::reply::json(&entries))
         }
@@ -724,6 +724,12 @@ mod models {
         pub email: String,
     }
 
+    pub enum Cache<'a, T> {
+        Valid(&'a T),
+        Invalid(Oid, &'a T),
+        None,
+    }
+
     pub enum Cached<T> {
         Computed {
             commit_id: Oid,
@@ -733,21 +739,17 @@ mod models {
     }
 
     impl<T> Cached<T> {
-        pub fn get(&self, repo: &Repository) -> Option<&T> {
+        pub fn get(&self, repo: &Repository) -> Cache<T> {
             match self {
-                Cached::None => None,
+                Cached::None => Cache::None,
                 Cached::Computed { commit_id, data } => {
                     let head = repo.head().unwrap();
-                    match head.peel_to_commit() {
-                        Err(_) => None,
-                        Ok(commit) => {
-                            if *commit_id == commit.id() {
-                                Some(data)
-                            }
-                            else {
-                                None
-                            }
-                        },
+                    let commit = head.peel_to_commit().expect("Failed to obtain the commit of HEAD");
+                    if *commit_id == commit.id() {
+                        Cache::Valid(data)
+                    }
+                    else {
+                        Cache::Invalid(*commit_id, data)
                     }
                 },
             }
