@@ -211,7 +211,7 @@ mod handlers {
         }
     }
 
-    fn load_metadata(content: &[u8]) -> Option<serde_yaml::Value> {
+    fn extract_metadata(content: &[u8]) -> Option<serde_yaml::Value> {
         if content.starts_with(b"---\n") {
             if let Some(j) = content.windows(5).position(|window| window == b"\n---\n") {
                 if let Ok(yaml) = std::str::from_utf8(&content[4..j]) {
@@ -312,7 +312,7 @@ mod handlers {
                                     let blob = repo.find_blob(file.id()).unwrap();
                                     let size = blob.size();
                                     // Extract metadata
-                                    let metadata = load_metadata(blob.content());
+                                    let metadata = extract_metadata(blob.content());
                                     // Time
                                     let t = commit.time();
                                     let tz = FixedOffset::east(t.offset_minutes() * 60);
