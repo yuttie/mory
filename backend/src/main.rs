@@ -327,6 +327,7 @@ mod handlers {
                                             metadata: metadata,
                                             time: time,
                                         });
+                                        // Finish if all of the entries have been processed
                                         if oid_path_map.is_empty() {
                                             break 'revwalk;
                                         }
