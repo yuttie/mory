@@ -32,6 +32,8 @@
     <v-data-table
       v-bind:headers="headers"
       v-bind:items="matchedEntries"
+      sortBy="time"
+      sort-desc
       class="mx-5"
     >
       <template v-slot:item.path="{ item }">
