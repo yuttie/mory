@@ -34,6 +34,7 @@
       v-bind:items="matchedEntries"
       sortBy="time"
       sort-desc
+      must-sort
       class="mx-5"
     >
       <template v-slot:item.path="{ item }">
