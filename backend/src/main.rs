@@ -276,7 +276,7 @@ mod handlers {
                 let mut revwalk = repo.revwalk().unwrap();
                 revwalk.set_sorting(git2::Sort::TOPOLOGICAL).unwrap();
                 revwalk.push_head().unwrap();
-                'search: for oid in revwalk {
+                'revwalk: for oid in revwalk {
                     let oid = oid.unwrap();
                     let commit = repo.find_commit(oid).unwrap();
                     let tree = commit.tree().unwrap();
@@ -328,7 +328,7 @@ mod handlers {
                                             time: time,
                                         });
                                         if oid_path_map.is_empty() {
-                                            break 'search;
+                                            break 'revwalk;
                                         }
                                     }
                                 },
