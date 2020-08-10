@@ -198,10 +198,19 @@ export default class Note extends Vue {
       if (endMarkerIndex >= 0) {
         const yaml = text.slice(4, endMarkerIndex);
         const body = text.slice(endMarkerIndex + '\n---\n'.length);
-        return {
-          metadata: JSON.stringify(YAML.parse(yaml), null, 2),
-          content: marked(body),
-        };
+        try {
+          const metadata = YAML.parse(yaml);
+          return {
+            metadata: JSON.stringify(metadata, null, 2),
+            content: marked(body),
+          };
+        }
+        catch (e) {
+          return {
+            metadata: yaml,
+            content: marked(body),
+          };
+        }
       }
     }
     return {
