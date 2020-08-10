@@ -93,6 +93,7 @@ import marked from 'marked';
 import '@mdi/font/css/materialdesignicons.css';
 import Prism from 'prismjs';
 import 'prism-themes/themes/prism-nord.css';
+import YAML from 'yaml';
 
 marked.setOptions({
   baseUrl: new URL('files/', new URL(process.env.VUE_APP_API_URL!, window.location.href)).href,
@@ -198,7 +199,7 @@ export default class Note extends Vue {
         const yaml = text.slice(4, endMarkerIndex);
         const body = text.slice(endMarkerIndex + '\n---\n'.length);
         return {
-          metadata: yaml,
+          metadata: JSON.stringify(YAML.parse(yaml), null, 2),
           content: marked(body),
         };
       }
