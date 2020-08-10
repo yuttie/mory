@@ -1,5 +1,10 @@
 <template>
   <div class="home">
+    <div class="pa-5">
+      <v-calendar
+        v-bind:events="events"
+      ></v-calendar>
+    </div>
     <v-card
       v-for="category of categorizedEntries.entries()"
       v-bind:key="category"
@@ -28,9 +33,19 @@ import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 
 import axios from '@/axios';
 
+interface MetadataEvent {
+  start: string;
+  end?: string;
+}
+
+interface Metadata {
+  tags?: string[];
+  events?: { [key: string]: MetadataEvent };
+}
+
 interface ListEntry {
   path: string;
-  metadata: { tags: string[] };
+  metadata: Metadata;
 }
 
 @Component
@@ -42,12 +57,32 @@ export default class Home extends Vue {
   error = false;
   errorText = '';
 
+  get events() {
+    const events = [];
+    for (const entry of this.entries) {
+      if (entry.metadata !== null) {
+        if (Object.prototype.hasOwnProperty.call(entry.metadata, 'events')) {
+          console.log(entry.metadata);
+          console.log(entry.metadata.events);
+          for (const [eventName, event] of Object.entries(entry.metadata.events!)) {
+            events.push({
+              name: eventName,
+              start: event.start,
+              end: event.end,
+            });
+          }
+        }
+      }
+    }
+    return events;
+  }
+
   get categorizedEntries() {
     const categorized: Map<string, ListEntry[]> = new Map();
     for (const entry of this.entries) {
       if (entry.metadata !== null) {
         if (Object.prototype.hasOwnProperty.call(entry.metadata, 'tags')) {
-          for (const tag of entry.metadata.tags) {
+          for (const tag of entry.metadata.tags!) {
             const match = tag.match(/^home:(.+)$/);
             if (match) {
               const category = match[1];
