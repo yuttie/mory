@@ -23,7 +23,11 @@
       <div class="panes" v-bind:class="panesState">
         <Editor v-bind:value="text" v-on:change="text = $event" ref="editor"></Editor>
         <div class="rendered">
-          <div v-html="rendered"></div>
+          <div class="metadata" v-if="rendered.metadata">
+            <h2>Metadata</h2>
+            <pre>{{ rendered.metadata }}</pre>
+          </div>
+          <div class="content" v-html="rendered.content"></div>
         </div>
       </div>
       <v-menu
@@ -187,7 +191,22 @@ export default class Note extends Vue {
   }
 
   get rendered() {
-    return marked(this.text);
+    const text = this.text;
+    if (text.startsWith('---\n')) {
+      const endMarkerIndex = text.indexOf('\n---\n', 4);
+      if (endMarkerIndex >= 0) {
+        const yaml = text.slice(4, endMarkerIndex);
+        const body = text.slice(endMarkerIndex + '\n---\n'.length);
+        return {
+          metadata: yaml,
+          content: marked(body),
+        };
+      }
+    }
+    return {
+      metadata: null,
+      content: marked(text),
+    };
   }
 
   get toc() {
@@ -472,7 +491,14 @@ $nav-height: 64px;
 // Apply custom styles for rendered notes
 .note {
   .rendered {
-    @include custom.rendered-note-styles($nav-height);
+    .metadata {
+      padding: 0.3em 1em;
+      background-color: #eee;
+      color: #222;
+    }
+    .content {
+      @include custom.rendered-note-styles($nav-height);
+    }
   }
 }
 </style>
