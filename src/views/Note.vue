@@ -222,7 +222,7 @@ export default class Note extends Vue {
   get toc() {
     const rendered = this.rendered;
     const root = document.createElement('div');
-    root.innerHTML = rendered;
+    root.innerHTML = rendered.content;
 
     const toc: any = [];
     const stack = [{ level: 0, title: '/', children: toc }];
