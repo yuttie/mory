@@ -14,8 +14,8 @@
         <v-btn small fab color="primary" class="mt-1" v-on:click="editorIsVisible = true;  viewerIsVisible = true; " v-bind:outlined="!editorIsVisible || !viewerIsVisible"><v-icon>mdi-file-document-edit</v-icon></v-btn>
         <v-btn small fab color="primary" class="mt-1" v-on:click="editorIsVisible = false; viewerIsVisible = true; " v-bind:outlined=" editorIsVisible || !viewerIsVisible"><v-icon>mdi-file-document</v-icon></v-btn>
 
-        <v-btn small fab color="gray" class="mt-5" outlined v-bind:disabled="!noteIsLoaded || isModified" v-on:click="reload"><v-icon>mdi-reload</v-icon></v-btn>
-        <v-btn small fab color="pink" class="mt-1" v-bind:outlined="!isModified" v-bind:disabled="!isModified" v-bind:loading="isSaving" v-on:click="saveIfModified"><v-icon color="white">mdi-content-save</v-icon></v-btn>
+        <v-btn small fab color="gray" class="mt-5" outlined v-bind:disabled="needSave" v-on:click="reload"><v-icon>mdi-reload</v-icon></v-btn>
+        <v-btn small fab color="pink" class="mt-1" v-bind:outlined="!needSave" v-bind:disabled="!needSave" v-bind:loading="isSaving" v-on:click="saveIfNeeded"><v-icon color="white">mdi-content-save</v-icon></v-btn>
         <v-btn small fab color="gray" class="mt-1" outlined id="rename-toggle" v-bind:disabled="!noteIsLoaded" v-bind:loading="isRenaming"><v-icon>mdi-rename-box</v-icon></v-btn>
 
         <v-btn small fab color="gray" class="mt-5" outlined id="toc-toggle"><v-icon>mdi-table-of-contents</v-icon></v-btn>
@@ -253,6 +253,20 @@ event color:
     return this.text !== this.initialText;
   }
 
+  get needSave(): boolean {
+    if (this.noteIsLoaded) {
+      if (this.isModified) {
+        return true;
+      }
+      else {
+        return false;
+      }
+    }
+    else {
+      return true;
+    }
+  }
+
   @Watch('token')
   onTokenChanged(token: null | string) {
     if (token) {
@@ -389,13 +403,13 @@ event color:
       this.toggleEditor();
     }
     else if (e.ctrlKey && e.key === 's') {
-      this.saveIfModified();
+      this.saveIfNeeded();
       e.preventDefault();
     }
   }
 
-  saveIfModified() {
-    if (this.isModified) {
+  saveIfNeeded() {
+    if (this.needSave) {
       this.save();
     }
   }
