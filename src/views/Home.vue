@@ -11,7 +11,7 @@
     </div>
     <v-card
       v-for="category of categorizedEntries.entries()"
-      v-bind:key="category"
+      v-bind:key="category[0]"
       class="ma-5"
       outlined
     >
