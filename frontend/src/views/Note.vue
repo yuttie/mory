@@ -164,7 +164,13 @@ export default class Note extends Vue {
     window.addEventListener('keydown', this.handleKeydown);
 
     if (this.$route.query.mode === 'create') {
-      this.text = '';
+      this.text = `---
+tags:
+events:
+event color:
+---
+
+# ${this.$route.params.path}`;
       this.initialText = this.text;
       this.editorIsVisible = true;
       (this.$refs.editor as Editor).focus();
