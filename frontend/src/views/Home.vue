@@ -3,6 +3,7 @@
     <div class="pa-5">
       <v-calendar
         v-bind:events="events"
+        v-bind:event-color="getEventColor"
         v-on:click:event="onEventClick"
         color="primary"
       ></v-calendar>
@@ -38,11 +39,13 @@ import axios from '@/axios';
 interface MetadataEvent {
   start: string;
   end?: string;
+  color?: string;
 }
 
 interface Metadata {
   tags?: string[];
   events?: { [key: string]: MetadataEvent };
+  'event color'?: string;
 }
 
 interface ListEntry {
@@ -63,12 +66,17 @@ export default class Home extends Vue {
     const events = [];
     for (const entry of this.entries) {
       if (entry.metadata !== null) {
+        let defaultColor = 'primary';
+        if (Object.prototype.hasOwnProperty.call(entry.metadata, 'event color')) {
+          defaultColor = entry.metadata['event color'];
+        }
         if (Object.prototype.hasOwnProperty.call(entry.metadata, 'events')) {
           for (const [eventName, event] of Object.entries(entry.metadata.events!)) {
             events.push({
               name: eventName,
               start: event.start,
               end: event.end,
+              color: event.color || defaultColor,
               notePath: entry.path,
             });
           }
@@ -150,6 +158,10 @@ export default class Home extends Vue {
       name: 'Note',
       params: { path: e.event.notePath }
     });
+  }
+
+  getEventColor(event: any): string {
+    return event.color;
   }
 }
 </script>
