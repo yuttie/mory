@@ -1,14 +1,30 @@
 <template>
   <div class="home">
-    <div class="pa-5">
+    <v-sheet class="px-5 d-flex">
+      <v-toolbar flat>
+        <v-btn outlined v-on:click="setToday" class="mr-3">Today</v-btn>
+        <v-btn icon small v-on:click="$refs.calendar.prev()">
+          <v-icon>mdi-chevron-left</v-icon>
+        </v-btn>
+        <v-btn icon small v-on:click="$refs.calendar.next()" class="mr-3">
+          <v-icon>mdi-chevron-right</v-icon>
+        </v-btn>
+        <v-toolbar-title v-if="$refs.calendar" class="mr-3">
+          {{ $refs.calendar.title }}
+        </v-toolbar-title>
+      </v-toolbar>
+    </v-sheet>
+    <v-sheet class="px-5">
       <v-calendar
+        ref="calendar"
+        v-model="calendarCursor"
         v-bind:events="events"
         v-bind:event-color="getEventColor"
         v-bind:event-text-color="getEventTextColor"
         v-on:click:event="onEventClick"
         color="primary"
       ></v-calendar>
-    </div>
+    </v-sheet>
     <v-card
       v-for="category of categorizedEntries.entries()"
       v-bind:key="category[0]"
@@ -69,6 +85,7 @@ export default class Home extends Vue {
   isLoading = false;
   error = false;
   errorText = '';
+  calendarCursor = '';
 
   get events() {
     const events = [];
@@ -174,6 +191,10 @@ export default class Home extends Vue {
           this.isLoading = false;
         }
       });
+  }
+
+  setToday() {
+    this.calendarCursor = '';
   }
 
   onEventClick(e: any) {
