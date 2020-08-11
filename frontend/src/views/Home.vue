@@ -3,6 +3,7 @@
     <div class="pa-5">
       <v-calendar
         v-bind:events="events"
+        v-on:click:event="onEventClick"
       ></v-calendar>
     </div>
     <v-card
@@ -69,6 +70,7 @@ export default class Home extends Vue {
               name: eventName,
               start: event.start,
               end: event.end,
+              notePath: entry.path,
             });
           }
         }
@@ -142,6 +144,13 @@ export default class Home extends Vue {
           this.isLoading = false;
         }
       });
+  }
+
+  onEventClick(e: any) {
+    this.$router.push({
+      name: 'Note',
+      params: { path: e.event.notePath }
+    });
   }
 }
 </script>
