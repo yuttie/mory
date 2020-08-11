@@ -64,8 +64,6 @@ export default class Home extends Vue {
     for (const entry of this.entries) {
       if (entry.metadata !== null) {
         if (Object.prototype.hasOwnProperty.call(entry.metadata, 'events')) {
-          console.log(entry.metadata);
-          console.log(entry.metadata.events);
           for (const [eventName, event] of Object.entries(entry.metadata.events!)) {
             events.push({
               name: eventName,
