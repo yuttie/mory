@@ -12,6 +12,7 @@
     "@mdi/font": "^5.3.45",
     "ace-builds": "^1.4.11",
     "axios": "^0.19.2",
+    "color": "^3.1.2",
     "core-js": "^3.6.5",
     "jwt-decode": "^2.2.0",
     "marked": "^1.1.0",
@@ -29,6 +30,7 @@
     "yaml": "^1.10.0"
   },
   "devDependencies": {
+    "@types/color": "^3.0.1",
     "@types/jwt-decode": "^2.2.1",
     "@types/marked": "^1.1.0",
     "@types/md5": "^2.2.0",

@@ -4,6 +4,7 @@
       <v-calendar
         v-bind:events="events"
         v-bind:event-color="getEventColor"
+        v-bind:event-text-color="getEventTextColor"
         v-on:click:event="onEventClick"
         color="primary"
       ></v-calendar>
@@ -35,6 +36,8 @@
 import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 
 import axios from '@/axios';
+import Color from 'color';
+import materialColors from 'vuetify/lib/util/colors';
 import XXH from 'xxhashjs';
 
 interface MetadataEvent {
@@ -54,7 +57,9 @@ interface ListEntry {
   metadata: Metadata;
 }
 
-const EVENT_COLOR_PALETTE = ['red', 'pink', 'purple', 'deep-purple', 'indigo', 'blue', 'light-blue', 'cyan', 'teal', 'green', 'light-green', 'lime', 'yellow', 'amber', 'orange', 'deep-orange', 'brown', 'blue-grey', 'grey'];
+const EVENT_COLOR_PALETTE = Object.entries(materialColors)
+  .filter(([name, _]) => name !== 'shades')
+  .map(([_, variants]) => variants.base);
 
 @Component
 export default class Home extends Vue {
@@ -167,6 +172,15 @@ export default class Home extends Vue {
 
   getEventColor(event: any): string {
     return event.color;
+  }
+
+  getEventTextColor(event: any): string {
+    if (Color(event.color).isDark()) {
+      return '#ffffff';
+    }
+    else {
+      return '#000000';
+    }
   }
 }
 </script>
