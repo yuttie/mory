@@ -35,6 +35,7 @@
 import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 
 import axios from '@/axios';
+import XXH from 'xxhashjs';
 
 interface MetadataEvent {
   start: string;
@@ -53,6 +54,8 @@ interface ListEntry {
   metadata: Metadata;
 }
 
+const EVENT_COLOR_PALETTE = ['red', 'pink', 'purple', 'deep-purple', 'indigo', 'blue', 'light-blue', 'cyan', 'teal', 'green', 'light-green', 'lime', 'yellow', 'amber', 'orange', 'deep-orange', 'brown', 'blue-grey', 'grey'];
+
 @Component
 export default class Home extends Vue {
   @Prop(String) readonly token!: null | string;
@@ -66,9 +69,11 @@ export default class Home extends Vue {
     const events = [];
     for (const entry of this.entries) {
       if (entry.metadata !== null) {
-        let defaultColor = 'primary';
+        // Choose a default color for the note based on its path
+        const defaultColorIndex = XXH.h32(entry.path, 0xabcd).toNumber() % EVENT_COLOR_PALETTE.length;
+        let defaultColor = EVENT_COLOR_PALETTE[defaultColorIndex];
         if (Object.prototype.hasOwnProperty.call(entry.metadata, 'event color')) {
-          defaultColor = entry.metadata['event color'];
+          defaultColor = entry.metadata['event color']!;
         }
         if (Object.prototype.hasOwnProperty.call(entry.metadata, 'events')) {
           for (const [eventName, event] of Object.entries(entry.metadata.events!)) {
