@@ -121,7 +121,7 @@ export default class Find extends Vue {
     const tags = new Set();
     for (const entry of this.entries) {
       if (entry.metadata !== null) {
-        if (Object.prototype.hasOwnProperty.call(entry.metadata, 'tags')) {
+        if (Object.prototype.hasOwnProperty.call(entry.metadata, 'tags') && Array.isArray(entry.metadata.tags)) {
           for (const tag of entry.metadata.tags) {
             tags.add(tag);
           }
@@ -169,7 +169,7 @@ export default class Find extends Vue {
           continue;
         }
         else {
-          if (!Object.prototype.hasOwnProperty.call(entry.metadata, 'tags')) {
+          if (!(Object.prototype.hasOwnProperty.call(entry.metadata, 'tags') && Array.isArray(entry.metadata.tags))) {
             continue;
           }
           else {

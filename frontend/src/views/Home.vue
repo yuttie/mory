@@ -77,11 +77,11 @@ export default class Home extends Vue {
         // Choose a default color for the note based on its path
         const defaultColorIndex = XXH.h32(entry.path, 0xabcd).toNumber() % EVENT_COLOR_PALETTE.length;
         let defaultColor = EVENT_COLOR_PALETTE[defaultColorIndex];
-        if (Object.prototype.hasOwnProperty.call(entry.metadata, 'event color')) {
-          defaultColor = entry.metadata['event color']!;
+        if (Object.prototype.hasOwnProperty.call(entry.metadata, 'event color') && typeof entry.metadata['event color'] === 'string') {
+          defaultColor = entry.metadata['event color'];
         }
-        if (Object.prototype.hasOwnProperty.call(entry.metadata, 'events')) {
-          for (const [eventName, event] of Object.entries(entry.metadata.events!)) {
+        if (Object.prototype.hasOwnProperty.call(entry.metadata, 'events') && typeof entry.metadata.events === 'object' && entry.metadata.events !== null) {
+          for (const [eventName, event] of Object.entries(entry.metadata.events)) {
             events.push({
               name: eventName,
               start: event.start,
@@ -100,8 +100,8 @@ export default class Home extends Vue {
     const categorized: Map<string, ListEntry[]> = new Map();
     for (const entry of this.entries) {
       if (entry.metadata !== null) {
-        if (Object.prototype.hasOwnProperty.call(entry.metadata, 'tags')) {
-          for (const tag of entry.metadata.tags!) {
+        if (Object.prototype.hasOwnProperty.call(entry.metadata, 'tags') && Array.isArray(entry.metadata.tags)) {
+          for (const tag of entry.metadata.tags) {
             const match = tag.match(/^home:(.+)$/);
             if (match) {
               const category = match[1];
