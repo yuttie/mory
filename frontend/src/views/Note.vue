@@ -521,11 +521,6 @@ $nav-height: 64px;
 // Apply custom styles for rendered notes
 .note {
   .rendered {
-    .metadata {
-      padding: 0.3em 1em;
-      background-color: #eee;
-      color: #222;
-    }
     .content {
       @include custom.rendered-note-styles($nav-height);
     }
@@ -566,6 +561,12 @@ $nav-height: 64px;
 .rendered {
   transition: margin-left 300ms,
               width 300ms;
+
+  .metadata {
+    padding: 0.3em 1em;
+    background-color: #eee;
+    color: #222;
+  }
 }
 
 .panes.onlyEditor {
