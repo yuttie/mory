@@ -81,14 +81,27 @@ export default class Home extends Vue {
           defaultColor = entry.metadata['event color'];
         }
         if (Object.prototype.hasOwnProperty.call(entry.metadata, 'events') && typeof entry.metadata.events === 'object' && entry.metadata.events !== null) {
-          for (const [eventName, event] of Object.entries(entry.metadata.events)) {
-            events.push({
-              name: eventName,
-              start: event.start,
-              end: event.end,
-              color: event.color || defaultColor,
-              notePath: entry.path,
-            });
+          for (const [eventName, eventDetail] of Object.entries(entry.metadata.events)) {
+            if (Array.isArray(eventDetail)) {
+              for (const event of eventDetail) {
+                events.push({
+                  name: eventName,
+                  start: event.start,
+                  end: event.end,
+                  color: event.color || defaultColor,
+                  notePath: entry.path,
+                });
+              }
+            }
+            else if (typeof eventDetail === 'object' && eventDetail !== null) {
+              events.push({
+                name: eventName,
+                start: eventDetail.start,
+                end: eventDetail.end,
+                color: eventDetail.color || defaultColor,
+                notePath: entry.path,
+              });
+            }
           }
         }
       }
