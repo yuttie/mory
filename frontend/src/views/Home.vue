@@ -4,6 +4,7 @@
       <v-calendar
         v-bind:events="events"
         v-on:click:event="onEventClick"
+        color="primary"
       ></v-calendar>
     </div>
     <v-card
