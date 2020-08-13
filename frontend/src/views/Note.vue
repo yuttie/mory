@@ -27,7 +27,11 @@
             <h2>Metadata</h2>
             <pre>{{ rendered.metadata }}</pre>
           </div>
-          <div class="content" v-html="rendered.content"></div>
+          <div
+            ref="renderedContent"
+            class="content"
+            v-html="rendered.content"
+          ></div>
         </div>
       </div>
       <v-menu
@@ -95,6 +99,8 @@ import Prism from 'prismjs';
 import 'prism-themes/themes/prism-nord.css';
 import YAML from 'yaml';
 
+declare const MathJax: any;
+
 marked.setOptions({
   baseUrl: new URL('files/', new URL(process.env.VUE_APP_API_URL!, window.location.href)).href,
   gfm: true,
@@ -144,6 +150,7 @@ export default class Note extends Vue {
   notFound = false;
   error = false;
   errorText = '';
+  mathjaxTypesetPromise = Promise.resolve();
 
   mounted() {
     document.title = `${this.$route.params.path} | ${process.env.VUE_APP_NAME}`;
@@ -198,6 +205,10 @@ event color:
   }
 
   get rendered() {
+    this.mathjaxTypesetPromise = this.mathjaxTypesetPromise.then(() => {
+      return MathJax.typesetPromise([this.$refs.renderedContent]);
+    });
+
     const text = this.text;
     if (text.startsWith('---\n')) {
       const endMarkerIndex = text.indexOf('\n---\n', 4);
