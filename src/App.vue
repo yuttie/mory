@@ -162,6 +162,7 @@ import Gravatar from '@/components/Gravatar.vue';
 
 import axios from '@/axios';
 import jwtDecode from 'jwt-decode';
+import { register } from 'register-service-worker';
 import { v4 as uuidv4 } from 'uuid';
 
 interface Claim {
@@ -266,27 +267,41 @@ export default class App extends Vue {
   }
 
   created() {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker
-        .register(`${process.env.VUE_APP_APPLICATION_ROOT}files-proxy.js`, {
-          scope: process.env.VUE_APP_APPLICATION_ROOT,
-        })
-        .then(registration => {
-          console.log('ServiceWorker registration successful with scope: ', registration.scope);
-          this.registration = registration;
-          this.registration.active!.postMessage({
-            type: 'api-url',
-            value: new URL(process.env.VUE_APP_API_URL!, window.location.href).href,
-          });
-          this.registration.active!.postMessage({
-            type: 'api-token',
-            value: this.token,
-          });
-        })
-        .catch(err => {
-          console.log('ServiceWorker registration failed: ', err);
+    register(`${process.env.BASE_URL}service-worker.js`, {
+      registrationOptions: {
+        scope: process.env.BASE_URL,
+      },
+      ready: (registration) => {
+        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+        this.registration = registration;
+        this.registration.active!.postMessage({
+          type: 'api-url',
+          value: new URL(process.env.VUE_APP_API_URL!, window.location.href).href,
         });
-    }
+        this.registration.active!.postMessage({
+          type: 'api-token',
+          value: this.token,
+        });
+      },
+      registered: (registration) => {
+        console.log('Service worker has been registered.');
+      },
+      cached: (registration) => {
+        console.log('Content has been cached for offline use.');
+      },
+      updatefound: (registration) => {
+        console.log('New content is downloading.');
+      },
+      updated: (registration) => {
+        console.log('New content is available; please refresh.');
+      },
+      offline: () => {
+        console.log('No internet connection found. App is running in offline mode.');
+      },
+      error: (error) => {
+        console.error('Error during service worker registration:', error);
+      }
+    });
   }
 
   mounted() {
