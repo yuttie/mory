@@ -6,6 +6,10 @@ process.env.VUE_APP_BUILD_YEAR = new Date().getFullYear();
 module.exports = {
   publicPath: process.env.VUE_APP_APPLICATION_ROOT,
   pwa: {
+    workboxPluginMode: 'InjectManifest',
+    workboxOptions: {
+      swSrc: 'src/service-worker.js',
+    },
     name: 'mory',
     themeColor: '#303030',
     iconPaths: {

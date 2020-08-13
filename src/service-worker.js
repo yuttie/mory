@@ -1,13 +1,21 @@
 self.addEventListener('message', event => {
-  if (event.data.type === 'api-url') {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    // https://developers.google.com/web/tools/workbox/guides/advanced-recipes
+    console.log("skip-waiting");
+    self.skipWaiting();
+  }
+  else if (event.data.type === 'api-url') {
+    console.log("api-url");
     self.apiUrl = event.data.value;
   }
   else if (event.data.type === 'api-token') {
+    console.log("api-token");
     self.apiToken = event.data.value;
   }
 });
 
 self.addEventListener('fetch', event => {
+  console.log("fetch");
   if (event.request.url.startsWith(new URL('files/', self.apiUrl).href)) {
     event.respondWith(
       fetch(event.request, {
@@ -20,6 +28,8 @@ self.addEventListener('fetch', event => {
     );
   }
   else {
+    console.log("I don't know about this:");
+    console.log(event);
     return;
   }
 });
