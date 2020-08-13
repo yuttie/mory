@@ -1,3 +1,11 @@
+## 0.3.2 (2020-08-14)
+* Fix the malfunctioning service worker
+* Stop using @vue/cli-plugin-pwa
+* Add more variations of the icon
+* Upgrade dependencies
+
+
+
 ## 0.3.1 (2020-08-12)
 * Add a toolbar for controlling the calendar
 
