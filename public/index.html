@@ -7,10 +7,22 @@
     <link rel="icon" type="image/png" href="<%= BASE_URL %>favicon.png" sizes="512x512">
     <title><%= htmlWebpackPlugin.options.title %></title>
   </head>
-  <body>
+  <body class="mathjax_ignore">
     <noscript>
       <strong>We're sorry but <%= htmlWebpackPlugin.options.title %> doesn't work properly without JavaScript enabled. Please enable it to continue.</strong>
     </noscript>
+    <script>
+      'use strict';
+      window.MathJax = {
+        tex: {
+          inlineMath: [['$', '$'], ['\\(', '\\)']],
+          processEscapes: true,
+        },
+        options: {
+        },
+      };
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.0.5/es5/tex-chtml.js" integrity="sha512-WIPUeuVusAT6dUtN6xKArYCBEa76ltyvaz3ltvQd+dy7ISdGJv1Y3y7eDBEF986YfNtmZGLdAaEBSgeBb+8OSg==" crossorigin="anonymous"></script>
     <div id="app"></div>
     <!-- built files will be auto injected -->
   </body>
