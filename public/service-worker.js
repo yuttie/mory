@@ -1,4 +1,6 @@
-workbox.core.setCacheNameDetails({prefix: "mory"});
+if ('workbox' in self) {
+  workbox.core.setCacheNameDetails({prefix: "mory"});
+}
 
 self.addEventListener('message', event => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
@@ -36,10 +38,12 @@ self.addEventListener('fetch', event => {
   }
 });
 
-/**
- * The workboxSW.precacheAndRoute() method efficiently caches and responds to
- * requests for URLs in the manifest.
- * See https://goo.gl/S9QRab
- */
-self.__precacheManifest = [].concat(self.__precacheManifest || []);
-workbox.precaching.precacheAndRoute(self.__precacheManifest, {});
+if ('workbox' in self) {
+  /**
+   * The workboxSW.precacheAndRoute() method efficiently caches and responds to
+   * requests for URLs in the manifest.
+   * See https://goo.gl/S9QRab
+   */
+  self.__precacheManifest = [].concat(self.__precacheManifest || []);
+  workbox.precaching.precacheAndRoute(self.__precacheManifest, {});
+}
