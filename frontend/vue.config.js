@@ -5,31 +5,6 @@ process.env.VUE_APP_BUILD_YEAR = new Date().getFullYear();
 
 module.exports = {
   publicPath: process.env.VUE_APP_APPLICATION_ROOT,
-  pwa: {
-    name: 'mory',
-    themeColor: '#303030',
-    iconPaths: {
-      favicon32: 'img/icons/favicon-32x32.png',
-      favicon16: 'img/icons/favicon-16x16.png',
-      appleTouchIcon: 'img/icons/apple-touch-icon-152x152.png',
-      maskIcon: null,
-      msTileImage: 'img/icons/msapplication-icon-144x144.png',
-    },
-    manifestOptions: {
-      icons: [
-        {
-          'src': './img/icons/android-chrome-192x192.png',
-          'sizes': '192x192',
-          'type': 'image/png'
-        },
-        {
-          'src': './img/icons/android-chrome-512x512.png',
-          'sizes': '512x512',
-          'type': 'image/png'
-        },
-      ],
-    },
-  },
   transpileDependencies: [
     'vuetify',
   ],
