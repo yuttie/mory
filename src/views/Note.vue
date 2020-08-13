@@ -7,6 +7,7 @@
     </div>
     <div class="found" v-if="!notFound">
       <div
+        v-show="!isLoading"
         style="position: fixed; right: 0; display: flex; flex-direction: column; z-index: 1;"
         class="mx-2 my-2"
       >
