@@ -88,6 +88,26 @@ const EVENT_COLOR_PALETTE = Object.entries(materialColors)
   .filter(([name, _]) => name !== 'shades')
   .map(([_, variants]) => variants.base);
 
+function validateEvent(event: any): boolean {
+  if (typeof event.name !== "string") {
+    console.error("%s: Event's name is not a string: %o", event.notePath, event);
+    return false;
+  }
+  if (typeof event.start !== "string") {
+    console.error("%s: Event's start is not a string: %o", event.notePath, event);
+    return false;
+  }
+  if (typeof event.end !== "string" && typeof event.end !== "undefined") {
+    console.error("%s: Event's end is neither a string nor the undefined: %o", event.notePath, event);
+    return false;
+  }
+  if (typeof event.color !== "string") {
+    console.error("%s: Event's color is not a string: %o", event.notePath, event);
+    return false;
+  }
+  return true;
+}
+
 @Component
 export default class Home extends Vue {
   @Prop(String) readonly token!: null | string;
@@ -113,24 +133,30 @@ export default class Home extends Vue {
             if (typeof eventDetail === 'object' && eventDetail !== null) {
               // If eventDetail has the 'times' property and it is an array
               if (isMetadataEventMultiple(eventDetail)) {
-                for (const event of eventDetail.times) {
-                  events.push({
+                for (const time of eventDetail.times) {
+                  const event = {
                     name: eventName,
-                    start: event.start,
-                    end: event.end,
-                    color: event.color || eventDetail.color || defaultColor,
+                    start: time.start,
+                    end: time.end,
+                    color: time.color || eventDetail.color || defaultColor,
                     notePath: entry.path,
-                  });
+                  };
+                  if (validateEvent(event)) {
+                    events.push(event);
+                  }
                 }
               }
               else {
-                events.push({
+                const event = {
                   name: eventName,
                   start: eventDetail.start,
                   end: eventDetail.end,
                   color: eventDetail.color || defaultColor,
                   notePath: entry.path,
-                });
+                };
+                if (validateEvent(event)) {
+                  events.push(event);
+                }
               }
             }
           }
