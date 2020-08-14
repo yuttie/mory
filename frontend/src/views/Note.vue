@@ -326,7 +326,10 @@ event color:
         if (error.response) {
           if (error.response.status === 401) {
             // Unauthorized
-            this.$emit('tokenExpired', () => this.load(path));
+            this.$emit('tokenExpired', () => {
+              this.load(path);
+              this.focusOrBlurEditor();
+            });
           }
           else if (error.response.status === 404) {
             // Not Found
@@ -448,7 +451,10 @@ event color:
       if (error.response) {
         if (error.response.status === 401) {
           // Unauthorized
-          this.$emit('tokenExpired', () => this.save());
+          this.$emit('tokenExpired', () => {
+            this.save();
+            this.focusOrBlurEditor();
+          });
         }
         else {
           this.error = true;
@@ -485,7 +491,10 @@ event color:
         if (error.response) {
           if (error.response.status === 401) {
             // Unauthorized
-            this.$emit('tokenExpired', () => this.rename());
+            this.$emit('tokenExpired', () => {
+              this.rename();
+              this.focusOrBlurEditor();
+            });
           }
           else {
             this.error = true;
