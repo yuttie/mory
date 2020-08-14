@@ -194,7 +194,6 @@ event color:
     }
 
     ((this.$refs.editor as Vue).$el as HTMLElement).addEventListener('transitionend', () => {
-      console.log('transitionend');
       (this.$refs.editor as Editor).resize();
     });
   }
