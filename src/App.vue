@@ -128,6 +128,9 @@
     </v-main>
     <div v-if="!token" class="login-overlay">
       <div class="form">
+        <v-alert type="error" v-show="loginError">
+          {{ loginError }}
+        </v-alert>
         <h1>Login</h1>
         <v-text-field
           v-on:keydown.enter="login"
@@ -189,6 +192,7 @@ export default class App extends Vue {
   loginPassword = "";
   isLoggingIn = false;
   loginCallback = null as (() => void) | null;
+  loginError = null as null | string;
   registration = null as null | ServiceWorkerRegistration;
   uploadList = [] as UploadEntry[];
   uploadMenuIsVisible = false;
@@ -377,6 +381,7 @@ export default class App extends Vue {
       this.loginUsername = '';
       this.loginPassword = '';
       this.isLoggingIn = false;
+      this.loginError = null;
 
       this.$nextTick(() => {
         if (this.loginCallback) {
@@ -391,6 +396,11 @@ export default class App extends Vue {
           value: this.token,
         });
       }
+    }).catch(error => {
+      this.loginError = "Incorrect username or password";
+
+      this.loginPassword = '';
+      this.isLoggingIn = false;
     });
   }
 
