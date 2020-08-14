@@ -48,6 +48,7 @@
               label="New path"
               v-model="newPath"
               v-on:focus="$event.target.select()"
+              v-on:keydown="onNewPathKeydown"
               autofocus
             ></v-text-field>
           </v-card-text>
@@ -473,6 +474,12 @@ event color:
         this.isSaving = false;
       }
     });
+  }
+
+  onNewPathKeydown(e: KeyboardEvent) {
+    if (e.key === 'Enter') {
+      this.rename();
+    }
   }
 
   rename() {
