@@ -44,7 +44,12 @@
           min-width="30em"
         >
           <v-card-text>
-            <v-text-field label="New path" v-model="newPath" autofocus></v-text-field>
+            <v-text-field
+              label="New path"
+              v-model="newPath"
+              v-on:focus="$event.target.select()"
+              autofocus
+            ></v-text-field>
           </v-card-text>
           <v-card-actions>
             <v-spacer></v-spacer>
