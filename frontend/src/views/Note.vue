@@ -422,6 +422,9 @@ event color:
     else if (e.ctrlKey && e.key === 'Enter') {
       this.toggleEditor();
     }
+    else if (e.shiftKey && e.key === 'Enter') {
+      this.toggleViewer();
+    }
     else if (e.ctrlKey && e.key === 's') {
       this.saveIfNeeded();
       e.preventDefault();
