@@ -56,10 +56,21 @@ import Color from 'color';
 import materialColors from 'vuetify/lib/util/colors';
 import XXH from 'xxhashjs';
 
-interface MetadataEvent {
+interface MetadataEventSingle {
   start: string;
   end?: string;
   color?: string;
+}
+
+interface MetadataEventMultiple {
+  color?: string;
+  times: MetadataEventSingle[];
+}
+
+type MetadataEvent = MetadataEventSingle | MetadataEventMultiple;
+
+function isMetadataEventMultiple(ev: MetadataEvent): ev is MetadataEventMultiple {
+  return Array.isArray((ev as MetadataEventMultiple).times);
 }
 
 interface Metadata {
@@ -99,25 +110,28 @@ export default class Home extends Vue {
         }
         if (Object.prototype.hasOwnProperty.call(entry.metadata, 'events') && typeof entry.metadata.events === 'object' && entry.metadata.events !== null) {
           for (const [eventName, eventDetail] of Object.entries(entry.metadata.events)) {
-            if (Array.isArray(eventDetail)) {
-              for (const event of eventDetail) {
+            if (typeof eventDetail === 'object' && eventDetail !== null) {
+              // If eventDetail has the 'times' property and it is an array
+              if (isMetadataEventMultiple(eventDetail)) {
+                for (const event of eventDetail.times) {
+                  events.push({
+                    name: eventName,
+                    start: event.start,
+                    end: event.end,
+                    color: event.color || eventDetail.color || defaultColor,
+                    notePath: entry.path,
+                  });
+                }
+              }
+              else {
                 events.push({
                   name: eventName,
-                  start: event.start,
-                  end: event.end,
-                  color: event.color || defaultColor,
+                  start: eventDetail.start,
+                  end: eventDetail.end,
+                  color: eventDetail.color || defaultColor,
                   notePath: entry.path,
                 });
               }
-            }
-            else if (typeof eventDetail === 'object' && eventDetail !== null) {
-              events.push({
-                name: eventName,
-                start: eventDetail.start,
-                end: eventDetail.end,
-                color: eventDetail.color || defaultColor,
-                notePath: entry.path,
-              });
             }
           }
         }
