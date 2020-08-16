@@ -84,10 +84,6 @@ interface ListEntry {
   metadata: Metadata;
 }
 
-const EVENT_COLOR_PALETTE = Object.entries(materialColors)
-  .filter(([name, _]) => name !== 'shades')
-  .map(([_, variants]) => variants.base);
-
 function validateEvent(event: any): boolean {
   if (typeof event.name !== "string") {
     console.error("%s: Event's name is not a string: %o", event.notePath, event);
@@ -123,8 +119,7 @@ export default class Home extends Vue {
     for (const entry of this.entries) {
       if (entry.metadata !== null) {
         // Choose a default color for the note based on its path
-        const defaultColorIndex = XXH.h32(entry.path, 0xabcd).toNumber() % EVENT_COLOR_PALETTE.length;
-        let defaultColor = EVENT_COLOR_PALETTE[defaultColorIndex];
+        let defaultColor = "#666666";
         if (Object.prototype.hasOwnProperty.call(entry.metadata, 'event color') && typeof entry.metadata['event color'] === 'string') {
           defaultColor = entry.metadata['event color'];
         }
