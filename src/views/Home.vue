@@ -245,15 +245,46 @@ export default class Home extends Vue {
   }
 
   getEventColor(event: any): string {
-    return event.color;
+    const color = Object.prototype.hasOwnProperty.call(materialColors, event.color)
+                ? Color((materialColors as any)[event.color].base)
+                : Color(event.color);
+
+    const now = new Date();
+    const time = typeof event.end !== 'undefined'
+               ? new Date(event.end)
+               : new Date(event.start);
+    if (time < now) {
+      return color.fade(0.75).string();
+    }
+    else {
+      return color.string();
+    }
   }
 
   getEventTextColor(event: any): string {
-    if (Color(event.color).isDark()) {
-      return '#ffffff';
+    const now = new Date();
+    const time = typeof event.end !== 'undefined'
+               ? new Date(event.end)
+               : new Date(event.start);
+    if (time < now) {
+      return Color('#000000').fade(0.7).string();
     }
     else {
-      return '#000000';
+      const bg = Color(this.getEventColor(event));
+      const white = Color('#ffffff');
+      const black = Color('#000000');
+      if (bg.contrast(white) >= 4.5) {  // Prefer white over black
+        return white.string();
+      }
+      else if (bg.contrast(black) >= 4.5) {
+        return black.string();
+      }
+      else if (bg.contrast(white) >= bg.contrast(black)) {
+        return white.string();
+      }
+      else {
+        return black.string();
+      }
     }
   }
 }
