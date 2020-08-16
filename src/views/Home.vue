@@ -240,8 +240,9 @@ export default class Home extends Vue {
   }
 
   getEventColor(event: any): string {
-    const color = Object.prototype.hasOwnProperty.call(materialColors, event.color)
-                ? Color((materialColors as any)[event.color].base)
+    const toPropName = (s: string) => s.replace(/-./g, (match: string) => match[1].toUpperCase());
+    const color = Object.prototype.hasOwnProperty.call(materialColors, toPropName(event.color))
+                ? Color((materialColors as any)[toPropName(event.color)].base)
                 : Color(event.color);
 
     const now = new Date();
