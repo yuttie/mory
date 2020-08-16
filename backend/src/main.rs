@@ -342,28 +342,36 @@ mod handlers {
                 }
 
                 // Add newly created entries
-                for (path, (_, time, blob_id)) in latest_ops {
-                    // Guess the mime type
-                    let guess = mime_guess::from_path(&path);
-                    let mime_type = if let Some(mime) = guess.first() {
-                        mime.as_ref().parse().unwrap()
+                for (path, (op, time, blob_id)) in latest_ops {
+                    match op {
+                        Delta::Added | Delta::Modified => {
+                            // Guess the mime type
+                            let guess = mime_guess::from_path(&path);
+                            let mime_type = if let Some(mime) = guess.first() {
+                                mime.as_ref().parse().unwrap()
+                            }
+                            else {
+                                "application/octet-stream".to_string()
+                            };
+                            // Get the file size
+                            let blob = repo.find_blob(blob_id).unwrap();
+                            let size = blob.size();
+                            // Extract metadata
+                            let metadata = extract_metadata(blob.content());
+                            // Add an entry
+                            entries.push(ListEntry {
+                                path: path,
+                                size: size,
+                                mime_type: mime_type,
+                                metadata: metadata,
+                                time: time,
+                            });
+                        },
+                        Delta::Deleted => {
+                            // Ignore the entry
+                        },
+                        _ => unreachable!(),
                     }
-                    else {
-                        "application/octet-stream".to_string()
-                    };
-                    // Get the file size
-                    let blob = repo.find_blob(blob_id).unwrap();
-                    let size = blob.size();
-                    // Extract metadata
-                    let metadata = extract_metadata(blob.content());
-                    // Add an entry
-                    entries.push(ListEntry {
-                        path: path,
-                        size: size,
-                        mime_type: mime_type,
-                        metadata: metadata,
-                        time: time,
-                    });
                 }
 
                 // Find the head commit
