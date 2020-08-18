@@ -32,20 +32,33 @@
     <v-data-table
       v-bind:headers="headers"
       v-bind:items="matchedEntries"
+      v-model="selected"
+      item-key="path"
       hide-default-footer
       sortBy="time"
       sort-desc
       must-sort
+      show-select
       class="mx-5"
     >
       <template v-slot:top="{ pagination, options, updateOptions }">
-        <v-data-footer
-          v-bind:pagination="pagination"
-          v-bind:options="options"
-          v-on:update:options="updateOptions"
-          items-per-page-text="$vuetify.dataTable.itemsPerPageText"
-          style="border-top: none;"
-        ></v-data-footer>
+        <v-toolbar flat style="border-bottom: thin solid rgba(0, 0, 0, 0.12);">
+          <v-btn
+            v-bind:disabled="selected.length === 0"
+            v-on:click="deleteSelected"
+            icon
+          >
+            <v-icon>mdi-delete</v-icon>
+          </v-btn>
+          <v-spacer></v-spacer>
+          <v-data-footer
+            v-bind:pagination="pagination"
+            v-bind:options="options"
+            v-on:update:options="updateOptions"
+            items-per-page-text="$vuetify.dataTable.itemsPerPageText"
+            style="border-top: none; margin-right: -16px;"
+            ></v-data-footer>
+        </v-toolbar>
       </template>
       <template v-slot:item.path="{ item }">
         <v-icon class="mr-1">mdi-file-document-outline</v-icon><router-link class="path" v-bind:to="{ path: `/note/${item.path}` }">{{ item.path }}</router-link>
@@ -116,6 +129,7 @@ export default class Find extends Vue {
   isLoading = false;
   error = false;
   errorText = '';
+  selected = [] as any[];
 
   get headers() {
     return [
@@ -352,6 +366,41 @@ export default class Find extends Vue {
     }
     else {
       return `${size.toFixed(1)} ${units[i]}`;
+    }
+  }
+
+  deleteSelected() {
+    for (const item of this.selected) {
+      axios.delete(`/notes/${item.path}`)
+        .then(res => {
+          if (res.data === true) {
+            const i = this.entries.findIndex(e => e.path === item.path);
+            this.entries.splice(i, 1);
+          }
+          else {
+            this.error = true;
+            this.errorText = `Something wrong happened when deleting ${item.path}`;
+          }
+        }).catch(error => {
+          if (error.response) {
+            if (error.response.status === 401) {
+              // Unauthorized
+              this.$emit('tokenExpired', () => this.deleteSelected());
+            }
+            else {
+              this.error = true;
+              this.errorText = error.response;
+              console.log('Unhandled error: {}', error.response);
+              this.isLoading = false;
+            }
+          }
+          else {
+            this.error = true;
+            this.errorText = error.toString();
+            console.log('Unhandled error: {}', error);
+            this.isLoading = false;
+          }
+        });
     }
   }
 }
