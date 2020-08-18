@@ -32,11 +32,21 @@
     <v-data-table
       v-bind:headers="headers"
       v-bind:items="matchedEntries"
+      hide-default-footer
       sortBy="time"
       sort-desc
       must-sort
       class="mx-5"
     >
+      <template v-slot:top="{ pagination, options, updateOptions }">
+        <v-data-footer
+          v-bind:pagination="pagination"
+          v-bind:options="options"
+          v-on:update:options="updateOptions"
+          items-per-page-text="$vuetify.dataTable.itemsPerPageText"
+          style="border-top: none;"
+        ></v-data-footer>
+      </template>
       <template v-slot:item.path="{ item }">
         <v-icon class="mr-1">mdi-file-document-outline</v-icon><router-link class="path" v-bind:to="{ path: `/note/${item.path}` }">{{ item.path }}</router-link>
       </template>
