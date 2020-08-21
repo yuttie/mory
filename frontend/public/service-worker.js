@@ -1,6 +1,7 @@
 self.addEventListener('message', event => {
   if (event.data.type === 'api-url') {
     self.apiUrl = event.data.value;
+    self.filesUrl = new URL('files/', self.apiUrl).href;
   }
   else if (event.data.type === 'api-token') {
     self.apiToken = event.data.value;
@@ -8,7 +9,7 @@ self.addEventListener('message', event => {
 });
 
 self.addEventListener('fetch', event => {
-  if (event.request.url.startsWith(new URL('files/', self.apiUrl).href)) {
+  if (event.request.url.startsWith(self.filesUrl)) {
     event.respondWith(
       fetch(event.request, {
         mode: 'cors',
