@@ -22,7 +22,7 @@
         <v-btn small fab color="gray" class="mt-5" outlined id="toc-toggle"><v-icon>mdi-table-of-contents</v-icon></v-btn>
       </div>
       <div class="panes" v-bind:class="panesState">
-        <Editor v-bind:value="text" v-on:change="text = $event" ref="editor"></Editor>
+        <Editor v-bind:value="text" v-on:change="onEditorChange" ref="editor"></Editor>
         <div class="rendered">
           <div class="metadata" v-if="rendered.metadata">
             <h2>Metadata</h2>
@@ -145,6 +145,7 @@ export default class Note extends Vue {
 
   text = '';
   initialText = '';
+  rendered = { metadata: null as null | string, content: '' };
   noteIsLoaded = false;
   editorIsVisible = false;
   viewerIsVisible = true;
@@ -158,6 +159,7 @@ export default class Note extends Vue {
   error = false;
   errorText = '';
   mathjaxTypesetPromise = Promise.resolve();
+  renderTimeoutId = null as null | number;
 
   mounted() {
     document.title = `${this.$route.params.path} | ${process.env.VUE_APP_NAME}`;
@@ -188,6 +190,9 @@ event color:
       this.initialText = this.text;
       this.editorIsVisible = true;
       (this.$refs.editor as Editor).focus();
+
+      // Update immediately
+      this.updateRendered();
     }
     else {
       this.load(this.$route.params.path);
@@ -200,6 +205,10 @@ event color:
 
   destroyed() {
     window.removeEventListener('keydown', this.handleKeydown);
+    if (this.renderTimeoutId) {
+      window.clearTimeout(this.renderTimeoutId);
+      this.renderTimeoutId = null;
+    }
   }
 
   get panesState() {
@@ -210,7 +219,7 @@ event color:
     };
   }
 
-  get rendered() {
+  updateRendered() {
     this.mathjaxTypesetPromise = this.mathjaxTypesetPromise.then(() => {
       return MathJax.typesetPromise([this.$refs.renderedContent]);
     });
@@ -223,23 +232,35 @@ event color:
         const body = text.slice(endMarkerIndex + '\n---\n'.length);
         try {
           const metadata = YAML.parse(yaml);
-          return {
+          this.rendered = {
             metadata: JSON.stringify(metadata, null, 2),
             content: marked(body),
           };
+          return;
         }
         catch (e) {
-          return {
+          this.rendered = {
             metadata: yaml,
             content: marked(body),
           };
+          return;
         }
       }
     }
-    return {
+    this.rendered = {
       metadata: null,
       content: marked(text),
     };
+  }
+
+  updateRenderedLazy() {
+    if (this.renderTimeoutId) {
+      window.clearTimeout(this.renderTimeoutId);
+      this.renderTimeoutId = null;
+    }
+    this.renderTimeoutId = window.setTimeout(() => {
+      this.updateRendered();
+    }, 500);
   }
 
   get toc() {
@@ -301,6 +322,12 @@ event color:
     }
   }
 
+  onEditorChange(text: string) {
+    this.text = text;
+    // Update lazily
+    this.updateRenderedLazy();
+  }
+
   load(path: string) {
     this.isLoading = true;
     axios.get(`/notes/${path}`)
@@ -308,6 +335,9 @@ event color:
         this.text = res.data;
         this.initialText = this.text;
         this.noteIsLoaded = true;
+
+        // Update immediately
+        this.updateRendered();
 
         // Jump to a header if specified
         if (this.$route.hash) {
