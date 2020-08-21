@@ -239,6 +239,17 @@ export default class Home extends Vue {
     });
   }
 
+  getEventEndTime(event: any): Date {
+    if (typeof event.end !== 'undefined') {
+      return new Date(event.end);
+    }
+    else {
+      const d = new Date(event.start);
+      d.setHours(23, 59, 59, 999);
+      return d;
+    }
+  }
+
   getEventColor(event: any): string {
     const toPropName = (s: string) => s.replace(/-./g, (match: string) => match[1].toUpperCase());
     const color = Object.prototype.hasOwnProperty.call(materialColors, toPropName(event.color))
@@ -246,9 +257,7 @@ export default class Home extends Vue {
                 : Color(event.color);
 
     const now = new Date();
-    const time = typeof event.end !== 'undefined'
-               ? new Date(event.end)
-               : new Date(event.start);
+    const time = this.getEventEndTime(event);
     if (time < now) {
       return color.fade(0.75).string();
     }
@@ -259,9 +268,7 @@ export default class Home extends Vue {
 
   getEventTextColor(event: any): string {
     const now = new Date();
-    const time = typeof event.end !== 'undefined'
-               ? new Date(event.end)
-               : new Date(event.start);
+    const time = this.getEventEndTime(event);
     if (time < now) {
       return Color('#000000').fade(0.7).string();
     }
