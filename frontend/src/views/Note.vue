@@ -11,15 +11,15 @@
         style="position: fixed; right: 0; display: flex; flex-direction: column; z-index: 1;"
         class="mx-2 my-2"
       >
-        <v-btn small fab color="primary" class="mt-0" v-on:click="editorIsVisible = true;  viewerIsVisible = false;" v-bind:outlined="!editorIsVisible ||  viewerIsVisible"><v-icon>mdi-pencil</v-icon></v-btn>
-        <v-btn small fab color="primary" class="mt-1" v-on:click="editorIsVisible = true;  viewerIsVisible = true; " v-bind:outlined="!editorIsVisible || !viewerIsVisible"><v-icon>mdi-file-document-edit</v-icon></v-btn>
-        <v-btn small fab color="primary" class="mt-1" v-on:click="editorIsVisible = false; viewerIsVisible = true; " v-bind:outlined=" editorIsVisible || !viewerIsVisible"><v-icon>mdi-file-document</v-icon></v-btn>
+        <v-btn icon color="primary" v-on:click="editorIsVisible = true;  viewerIsVisible = false;" v-bind:outlined=" editorIsVisible && !viewerIsVisible"><v-icon>mdi-pencil</v-icon></v-btn>
+        <v-btn icon color="primary" v-on:click="editorIsVisible = true;  viewerIsVisible = true; " v-bind:outlined=" editorIsVisible &&  viewerIsVisible"><v-icon>mdi-file-document-edit</v-icon></v-btn>
+        <v-btn icon color="primary" v-on:click="editorIsVisible = false; viewerIsVisible = true; " v-bind:outlined="!editorIsVisible &&  viewerIsVisible"><v-icon>mdi-file-document</v-icon></v-btn>
 
-        <v-btn small fab color="gray" class="mt-5" outlined v-bind:disabled="needSave" v-on:click="reload"><v-icon>mdi-reload</v-icon></v-btn>
-        <v-btn small fab color="pink" class="mt-1" v-bind:outlined="!needSave" v-bind:disabled="!needSave" v-bind:loading="isSaving" v-on:click="saveIfNeeded"><v-icon color="white">mdi-content-save</v-icon></v-btn>
-        <v-btn small fab color="gray" class="mt-1" outlined id="rename-toggle" v-bind:disabled="!noteIsLoaded" v-bind:loading="isRenaming"><v-icon>mdi-rename-box</v-icon></v-btn>
+        <v-btn icon color="gray" class="mt-5"                    v-bind:disabled="needSave" v-on:click="reload"><v-icon>mdi-reload</v-icon></v-btn>
+        <v-btn icon color="pink" class="mt-0"                    v-bind:disabled="!needSave" v-bind:loading="isSaving" v-on:click="saveIfNeeded"><v-icon color="white">mdi-content-save</v-icon></v-btn>
+        <v-btn icon color="gray" class="mt-0" id="rename-toggle" v-bind:disabled="!noteIsLoaded" v-bind:loading="isRenaming"><v-icon>mdi-rename-box</v-icon></v-btn>
 
-        <v-btn small fab color="gray" class="mt-5" outlined id="toc-toggle"><v-icon>mdi-table-of-contents</v-icon></v-btn>
+        <v-btn icon color="gray" class="mt-5" id="toc-toggle"><v-icon>mdi-table-of-contents</v-icon></v-btn>
       </div>
       <div class="panes" v-bind:class="panesState">
         <Editor v-bind:value="text" v-on:change="onEditorChange" ref="editor"></Editor>
