@@ -1,19 +1,19 @@
 <template>
   <v-app id="app" ref="app">
-    <v-app-bar app id="nav" color="white" elevate-on-scroll fixed>
+    <v-app-bar app dense id="nav" color="white" elevate-on-scroll fixed>
       <v-toolbar-title>
         <router-link to="/">
           <div class="logo"></div>
         </router-link>
       </v-toolbar-title>
       <v-spacer></v-spacer>
-      <v-btn icon to="/"><v-icon>mdi-home</v-icon></v-btn>
-      <v-btn icon to="/calendar"><v-icon>mdi-calendar</v-icon></v-btn>
-      <v-btn icon to="/create"><v-icon>mdi-plus-box</v-icon></v-btn>
-      <v-btn icon to="/find"><v-icon>mdi-view-list</v-icon></v-btn>
-      <v-btn icon to="/about"><v-icon>mdi-information</v-icon></v-btn>
+      <v-btn tile icon to="/"><v-icon>mdi-home</v-icon></v-btn>
+      <v-btn tile icon to="/calendar"><v-icon>mdi-calendar</v-icon></v-btn>
+      <v-btn tile icon to="/find"><v-icon>mdi-view-list</v-icon></v-btn>
+      <v-btn tile icon to="/about"><v-icon>mdi-information</v-icon></v-btn>
       <v-spacer></v-spacer>
       <input type="file" multiple class="d-none" ref="fileInput">
+      <v-btn icon to="/create"><v-icon>mdi-plus-box-outline</v-icon></v-btn>
       <v-menu
         v-bind:close-on-content-click="false"
         v-model="uploadMenuIsVisible"
