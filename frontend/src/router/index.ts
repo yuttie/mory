@@ -1,6 +1,7 @@
 import Vue from 'vue'
 import VueRouter, { RouteConfig } from 'vue-router'
 import Home from '../views/Home.vue'
+import Calendar from '../views/Calendar.vue'
 import Find from '../views/Find.vue'
 import Note from '../views/Note.vue'
 
@@ -13,6 +14,11 @@ const routes: Array<RouteConfig> = [
     path: '/',
     name: 'Home',
     component: Home
+  },
+  {
+    path: '/calendar',
+    name: 'Calendar',
+    component: Calendar,
   },
   {
     path: '/create',

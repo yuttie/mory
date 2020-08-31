@@ -8,6 +8,7 @@
       </v-toolbar-title>
       <v-spacer></v-spacer>
       <v-btn icon to="/"><v-icon>mdi-home</v-icon></v-btn>
+      <v-btn icon to="/calendar"><v-icon>mdi-calendar</v-icon></v-btn>
       <v-btn icon to="/create"><v-icon>mdi-plus-box</v-icon></v-btn>
       <v-btn icon to="/find"><v-icon>mdi-view-list</v-icon></v-btn>
       <v-btn icon to="/about"><v-icon>mdi-information</v-icon></v-btn>
