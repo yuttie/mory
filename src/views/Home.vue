@@ -1,30 +1,5 @@
 <template>
   <div class="home">
-    <v-sheet class="px-5 d-flex">
-      <v-toolbar flat>
-        <v-btn outlined v-on:click="setToday" class="mr-3">Today</v-btn>
-        <v-btn icon small v-on:click="$refs.calendar.prev()">
-          <v-icon>mdi-chevron-left</v-icon>
-        </v-btn>
-        <v-btn icon small v-on:click="$refs.calendar.next()" class="mr-3">
-          <v-icon>mdi-chevron-right</v-icon>
-        </v-btn>
-        <v-toolbar-title v-if="$refs.calendar" class="mr-3">
-          {{ $refs.calendar.title }}
-        </v-toolbar-title>
-      </v-toolbar>
-    </v-sheet>
-    <v-sheet class="px-5">
-      <v-calendar
-        ref="calendar"
-        v-model="calendarCursor"
-        v-bind:events="events"
-        v-bind:event-color="getEventColor"
-        v-bind:event-text-color="getEventTextColor"
-        v-on:click:event="onEventClick"
-        color="primary"
-      ></v-calendar>
-    </v-sheet>
     <v-card
       v-for="category of categorizedEntries.entries()"
       v-bind:key="category[0]"
@@ -84,26 +59,6 @@ interface ListEntry {
   metadata: Metadata;
 }
 
-function validateEvent(event: any): boolean {
-  if (typeof event.name !== "string") {
-    console.error("%s: Event's name is not a string: %o", event.notePath, event);
-    return false;
-  }
-  if (typeof event.start !== "string") {
-    console.error("%s: Event's start is not a string: %o", event.notePath, event);
-    return false;
-  }
-  if (typeof event.end !== "string" && typeof event.end !== "undefined") {
-    console.error("%s: Event's end is neither a string nor the undefined: %o", event.notePath, event);
-    return false;
-  }
-  if (typeof event.color !== "string") {
-    console.error("%s: Event's color is not a string: %o", event.notePath, event);
-    return false;
-  }
-  return true;
-}
-
 @Component
 export default class Home extends Vue {
   @Prop(String) readonly token!: null | string;
@@ -112,54 +67,6 @@ export default class Home extends Vue {
   isLoading = false;
   error = false;
   errorText = '';
-  calendarCursor = '';
-
-  get events() {
-    const events = [];
-    for (const entry of this.entries) {
-      if (entry.metadata !== null) {
-        // Choose a default color for the note based on its path
-        let defaultColor = "#666666";
-        if (Object.prototype.hasOwnProperty.call(entry.metadata, 'event color') && typeof entry.metadata['event color'] === 'string') {
-          defaultColor = entry.metadata['event color'];
-        }
-        if (Object.prototype.hasOwnProperty.call(entry.metadata, 'events') && typeof entry.metadata.events === 'object' && entry.metadata.events !== null) {
-          for (const [eventName, eventDetail] of Object.entries(entry.metadata.events)) {
-            if (typeof eventDetail === 'object' && eventDetail !== null) {
-              // If eventDetail has the 'times' property and it is an array
-              if (isMetadataEventMultiple(eventDetail)) {
-                for (const time of eventDetail.times) {
-                  const event = {
-                    name: eventName,
-                    start: time.start,
-                    end: time.end,
-                    color: time.color || eventDetail.color || defaultColor,
-                    notePath: entry.path,
-                  };
-                  if (validateEvent(event)) {
-                    events.push(event);
-                  }
-                }
-              }
-              else {
-                const event = {
-                  name: eventName,
-                  start: eventDetail.start,
-                  end: eventDetail.end,
-                  color: eventDetail.color || defaultColor,
-                  notePath: entry.path,
-                };
-                if (validateEvent(event)) {
-                  events.push(event);
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-    return events;
-  }
 
   get categorizedEntries() {
     const categorized: Map<string, ListEntry[]> = new Map();
@@ -226,69 +133,6 @@ export default class Home extends Vue {
           this.isLoading = false;
         }
       });
-  }
-
-  setToday() {
-    this.calendarCursor = '';
-  }
-
-  onEventClick(e: any) {
-    this.$router.push({
-      name: 'Note',
-      params: { path: e.event.notePath }
-    });
-  }
-
-  getEventEndTime(event: any): Date {
-    if (typeof event.end !== 'undefined') {
-      return new Date(event.end);
-    }
-    else {
-      const d = new Date(event.start);
-      d.setHours(23, 59, 59, 999);
-      return d;
-    }
-  }
-
-  getEventColor(event: any): string {
-    const toPropName = (s: string) => s.replace(/-./g, (match: string) => match[1].toUpperCase());
-    const color = Object.prototype.hasOwnProperty.call(materialColors, toPropName(event.color))
-                ? Color((materialColors as any)[toPropName(event.color)].base)
-                : Color(event.color);
-
-    const now = new Date();
-    const time = this.getEventEndTime(event);
-    if (time < now) {
-      return color.fade(0.75).string();
-    }
-    else {
-      return color.string();
-    }
-  }
-
-  getEventTextColor(event: any): string {
-    const now = new Date();
-    const time = this.getEventEndTime(event);
-    if (time < now) {
-      return Color('#000000').fade(0.7).string();
-    }
-    else {
-      const bg = Color(this.getEventColor(event));
-      const white = Color('#ffffff');
-      const black = Color('#000000');
-      if (bg.contrast(white) >= 4.5) {  // Prefer white over black
-        return white.string();
-      }
-      else if (bg.contrast(black) >= 4.5) {
-        return black.string();
-      }
-      else if (bg.contrast(white) >= bg.contrast(black)) {
-        return white.string();
-      }
-      else {
-        return black.string();
-      }
-    }
   }
 }
 </script>
