@@ -1,3 +1,36 @@
+## 0.3.3 (2020-09-02)
+* Add some documentation using docsify
+* Improve UI usability
+    + Make login errors recoverable
+    + App bar
+        - Organize the content
+        - Change the appearance of center buttons into tabs
+    + List
+        - Move pagination controls to the top of a table
+        - Add the "delete" button
+    + Note view
+        - Autofocus and select the rename text field
+        - Make it possible to execute rename by Enter key
+        - Focus the editor if it's visible after re-login
+        - Toggle the viewer by Shift-Enter
+        - Lower the frequency of rendering notes
+        - Hide the right toolbar when loading a note
+        - Simplify the appearance of buttons
+        - Limit the maximum width of images
+        - Limit the height of images to 500px
+        - Support math rendering with MathJax
+* Calendar
+    + Separate the calendar view from Home
+    + Report invalid events on console
+    + Fix judgement of past events for day-long events
+    + Event colors
+        - Support specifying a color for multiple occurrences of an event
+        - Adjust colors for events
+        - Use a gray color for events without color specification
+        - Support two-word color names of Material Design, e.g. "light-green"
+
+
+
 ## 0.3.2 (2020-08-14)
 * Fix the malfunctioning service worker
 * Stop using @vue/cli-plugin-pwa
