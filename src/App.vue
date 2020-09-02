@@ -167,22 +167,10 @@ import { Component, Vue } from 'vue-property-decorator';
 import Gravatar from '@/components/Gravatar.vue';
 
 import axios from '@/axios';
+import { Claim, UploadEntry } from '@/api';
 import jwtDecode from 'jwt-decode';
 import { register } from 'register-service-worker';
 import { v4 as uuidv4 } from 'uuid';
-
-interface Claim {
-    sub: string;
-    exp: number;
-    email: string;
-}
-
-interface UploadEntry {
-    uuid: string;
-    filename: string;
-    status: string;
-    statusMessage: string;
-}
 
 @Component({
   components: {

@@ -27,37 +27,10 @@
 import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 
 import axios from '@/axios';
+import { ListEntry } from '@/api';
 import Color from 'color';
 import materialColors from 'vuetify/lib/util/colors';
 import XXH from 'xxhashjs';
-
-interface MetadataEventSingle {
-  start: string;
-  end?: string;
-  color?: string;
-}
-
-interface MetadataEventMultiple {
-  color?: string;
-  times: MetadataEventSingle[];
-}
-
-type MetadataEvent = MetadataEventSingle | MetadataEventMultiple;
-
-function isMetadataEventMultiple(ev: MetadataEvent): ev is MetadataEventMultiple {
-  return Array.isArray((ev as MetadataEventMultiple).times);
-}
-
-interface Metadata {
-  tags?: string[];
-  events?: { [key: string]: MetadataEvent };
-  'event color'?: string;
-}
-
-interface ListEntry {
-  path: string;
-  metadata: Metadata;
-}
 
 @Component
 export default class Home extends Vue {

@@ -94,37 +94,13 @@
 import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 
 import axios from '@/axios';
-
-interface Query {
-  keywords: Set<any>;
-  tags: Set<any>;
-}
-
-interface ListEntry {
-  path: string;
-  size: number;
-  mime_type: string;
-  metadata: { tags: string[] } | null;
-  time: string;
-}
-
-function compareTags(a: string, b: string): number {
-  const A = a.toUpperCase();
-  const B = b.toUpperCase();
-  if (A < B) {
-    return -1;
-  }
-  if (A > B) {
-    return 1;
-  }
-  return 0;
-}
+import { Query, ListEntry2, compareTags } from '@/api';
 
 @Component
 export default class Find extends Vue {
   @Prop(String) readonly token!: null | string;
 
-  entries: ListEntry[] = [];
+  entries: ListEntry2[] = [];
   queryText = '';
   isLoading = false;
   error = false;
