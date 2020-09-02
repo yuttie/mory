@@ -36,57 +36,10 @@
 import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 
 import axios from '@/axios';
+import { isMetadataEventMultiple, ListEntry, validateEvent } from '@/api';
 import Color from 'color';
 import materialColors from 'vuetify/lib/util/colors';
 import XXH from 'xxhashjs';
-
-interface MetadataEventSingle {
-  start: string;
-  end?: string;
-  color?: string;
-}
-
-interface MetadataEventMultiple {
-  color?: string;
-  times: MetadataEventSingle[];
-}
-
-type MetadataEvent = MetadataEventSingle | MetadataEventMultiple;
-
-function isMetadataEventMultiple(ev: MetadataEvent): ev is MetadataEventMultiple {
-  return Array.isArray((ev as MetadataEventMultiple).times);
-}
-
-interface Metadata {
-  tags?: string[];
-  events?: { [key: string]: MetadataEvent };
-  'event color'?: string;
-}
-
-interface ListEntry {
-  path: string;
-  metadata: Metadata;
-}
-
-function validateEvent(event: any): boolean {
-  if (typeof event.name !== "string") {
-    console.error("%s: Event's name is not a string: %o", event.notePath, event);
-    return false;
-  }
-  if (typeof event.start !== "string") {
-    console.error("%s: Event's start is not a string: %o", event.notePath, event);
-    return false;
-  }
-  if (typeof event.end !== "string" && typeof event.end !== "undefined") {
-    console.error("%s: Event's end is neither a string nor the undefined: %o", event.notePath, event);
-    return false;
-  }
-  if (typeof event.color !== "string") {
-    console.error("%s: Event's color is not a string: %o", event.notePath, event);
-    return false;
-  }
-  return true;
-}
 
 @Component
 export default class Calendar extends Vue {
