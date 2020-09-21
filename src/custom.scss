@@ -4,12 +4,12 @@
   font-size: 14px;
   font-feature-settings: "palt";
   line-height: 1.2;
-  color: #4c566a;
+  color: #3d424d;
   overflow-wrap: anywhere;
 
   h1, h2, h3, h4, h5, h6 {
     margin-block-start: 1em;
-    margin-block-end: 1em;
+    margin-block-end: 0;
 
     &::before {
       display: block;
@@ -59,6 +59,18 @@
     margin-block-end: 1em;
   }
 
+  li {
+    margin-block-start: 0.2em;
+    margin-block-end: 0.2em;
+  }
+
+  li > ul,
+  li > ol,
+  li > p:first-of-type {
+    margin-block-start: 0;
+    margin-block-end: 0;
+  }
+
   pre, pre[class*="language-"],
   code, code[class*="language-"] {
     font-family: monospace;
@@ -66,10 +78,20 @@
     border: none;
   }
 
+  code {
+    background-color: #e7edf4;
+    padding: 0 0.3em;
+  }
+
+  pre > code {
+    background-color: unset;
+    padding: unset;
+    border-radius: unset;
+  }
+
   pre {
-    border-radius: 0.5rem;
     margin: 1em 0;
-    padding: 0.5em 1.5em;
+    padding: 0.25em 0.5em;
     overflow: auto;
 
     color: #f8f8f2;
@@ -104,6 +126,11 @@
 
   thead {
     border-bottom: 3px solid #e0e0e0;
+  }
+
+  a {
+    color: #2952ae;
+    text-decoration: none;
   }
 
   a.header-link {
