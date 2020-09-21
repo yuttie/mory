@@ -7,7 +7,7 @@
         </router-link>
       </v-toolbar-title>
       <v-spacer></v-spacer>
-      <v-tabs centered>
+      <v-tabs centered optional>
         <v-tab to="/"><v-icon>mdi-home</v-icon></v-tab>
         <v-tab to="/calendar"><v-icon>mdi-calendar</v-icon></v-tab>
         <v-tab to="/find"><v-icon>mdi-view-list</v-icon></v-tab>
