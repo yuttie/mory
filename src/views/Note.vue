@@ -9,7 +9,7 @@
       <div
         v-show="!isLoading"
         style="position: fixed; right: 0; display: flex; flex-direction: column; z-index: 1;"
-        class="mx-2 my-2"
+        class="toolbar mx-2 my-2"
       >
         <v-btn icon color="primary" v-on:click="editorIsVisible = true;  viewerIsVisible = false;" v-bind:outlined=" editorIsVisible && !viewerIsVisible"><v-icon>mdi-pencil</v-icon></v-btn>
         <v-btn icon color="primary" v-on:click="editorIsVisible = true;  viewerIsVisible = true; " v-bind:outlined=" editorIsVisible &&  viewerIsVisible"><v-icon>mdi-file-document-edit</v-icon></v-btn>
@@ -602,6 +602,15 @@ $nav-height: 64px;
   & > .not-found,
   & > .found {
     display: contents;
+  }
+}
+
+.toolbar {
+  opacity: 0.2;
+  transition: opacity 200ms;
+
+  &:hover {
+    opacity: 1;
   }
 }
 
