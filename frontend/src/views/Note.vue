@@ -16,7 +16,7 @@
         <v-btn icon color="primary" v-on:click="editorIsVisible = false; viewerIsVisible = true; " v-bind:outlined="!editorIsVisible &&  viewerIsVisible"><v-icon>mdi-file-document</v-icon></v-btn>
 
         <v-btn icon color="gray" class="mt-5"                    v-bind:disabled="needSave" v-on:click="reload"><v-icon>mdi-reload</v-icon></v-btn>
-        <v-btn icon color="pink" class="mt-0"                    v-bind:disabled="!needSave" v-bind:loading="isSaving" v-on:click="saveIfNeeded"><v-icon color="white">mdi-content-save</v-icon></v-btn>
+        <v-btn icon color="pink" class="mt-0"                    v-bind:disabled="!needSave" v-bind:loading="isSaving" v-on:click="saveIfNeeded"><v-icon>mdi-content-save</v-icon></v-btn>
         <v-btn icon color="gray" class="mt-0" id="rename-toggle" v-bind:disabled="!noteIsLoaded" v-bind:loading="isRenaming"><v-icon>mdi-rename-box</v-icon></v-btn>
 
         <v-btn icon color="gray" class="mt-5" id="toc-toggle"><v-icon>mdi-table-of-contents</v-icon></v-btn>
