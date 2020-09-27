@@ -135,24 +135,26 @@
           {{ loginError }}
         </v-alert>
         <h1>Login</h1>
-        <v-text-field
-          v-on:keydown.enter="login"
-          v-model="loginUsername"
-          label="Username"
-          name="username"
-          autocomplete="username"
-          type="text"
-          autofocus
-        ></v-text-field>
-        <v-text-field
-          v-on:keydown.enter="login"
-          v-model="loginPassword"
-          label="Password"
-          name="password"
-          autocomplete="current-password"
-          type="password"
-        ></v-text-field>
-        <v-btn v-on:click="login">Login</v-btn>
+        <form>
+          <v-text-field
+            v-on:keydown.enter="login"
+            v-model="loginUsername"
+            label="Username"
+            name="username"
+            autocomplete="username"
+            type="text"
+            autofocus
+          ></v-text-field>
+          <v-text-field
+            v-on:keydown.enter="login"
+            v-model="loginPassword"
+            label="Password"
+            name="password"
+            autocomplete="current-password"
+            type="password"
+          ></v-text-field>
+          <v-btn v-on:click="login">Login</v-btn>
+        </form>
       </div>
     </div>
     <v-overlay v-bind:value="isLoggingIn" z-index="20">
