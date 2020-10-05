@@ -24,10 +24,16 @@
       <div class="panes" v-bind:class="panesState">
         <Editor v-bind:value="text" v-on:change="onEditorChange" ref="editor"></Editor>
         <div class="rendered">
-          <div class="metadata" v-if="rendered.metadata">
-            <h2>Metadata</h2>
-            <pre>{{ rendered.metadata }}</pre>
-          </div>
+          <v-expansion-panels accordion flat hover class="metadata" v-if="rendered.metadata">
+            <v-expansion-panel>
+              <v-expansion-panel-header>
+                Metadata
+              </v-expansion-panel-header>
+              <v-expansion-panel-content>
+                <pre>{{ rendered.metadata }}</pre>
+              </v-expansion-panel-content>
+            </v-expansion-panel>
+          </v-expansion-panels>
           <div
             ref="renderedContent"
             class="content"
@@ -635,12 +641,6 @@ $nav-height: 64px;
 .rendered {
   transition: margin-left 300ms,
               width 300ms;
-
-  .metadata {
-    padding: 0.3em 1em;
-    background-color: #eee;
-    color: #222;
-  }
 }
 
 .panes.onlyEditor {
