@@ -8,7 +8,7 @@
     <div class="found" v-if="!notFound">
       <div
         v-show="!isLoading"
-        style="position: fixed; right: 0; display: flex; flex-direction: column; z-index: 1;"
+        style="position: fixed; right: 0; transform: translateY(40px); display: flex; flex-direction: column; z-index: 3;"
         class="toolbar mx-2 my-2"
       >
         <v-btn icon color="primary" v-on:click="editorIsVisible = true;  viewerIsVisible = false;" v-bind:outlined=" editorIsVisible && !viewerIsVisible"><v-icon>mdi-pencil</v-icon></v-btn>
@@ -24,13 +24,41 @@
       <div class="panes" v-bind:class="panesState">
         <Editor v-bind:value="text" v-on:change="onEditorChange" ref="editor"></Editor>
         <div class="rendered">
-          <v-expansion-panels accordion flat hover class="metadata" v-if="rendered.metadata">
+          <v-expansion-panels
+            accordion
+            flat
+            tile
+            hover
+            class="metadata"
+            v-if="rendered.metadata"
+          >
             <v-expansion-panel>
-              <v-expansion-panel-header>
+              <v-expansion-panel-header disable-icon-rotate>
                 Metadata
+                <template v-slot:actions>
+                  <span
+                    v-if="rendered.metadata.yamlParsed"
+                    class="light-green--text"
+                  >
+                    <v-icon color="light-green">
+                      mdi-check
+                    </v-icon>
+                    Valid YAML
+                  </span>
+                  <span
+                    v-else
+                    class="red--text"
+                  >
+                    <v-icon color="red">
+                      mdi-alert
+                    </v-icon>
+                    Invalid YAML
+                  </span>
+                </template>
               </v-expansion-panel-header>
               <v-expansion-panel-content>
-                <pre>{{ rendered.metadata }}</pre>
+                <pre v-if="rendered.metadata.yamlParsed">{{ JSON.stringify(rendered.metadata.value, null, 2) }}</pre>
+                <pre v-else>{{ rendered.metadata.parseError.toString() }}</pre>
               </v-expansion-panel-content>
             </v-expansion-panel>
           </v-expansion-panels>
@@ -151,7 +179,7 @@ export default class Note extends Vue {
 
   text = '';
   initialText = '';
-  rendered = { metadata: null as null | string, content: '' };
+  rendered = { metadata: null as null | any, content: '' };
   noteIsLoaded = false;
   editorIsVisible = false;
   viewerIsVisible = true;
@@ -239,14 +267,21 @@ event color:
         try {
           const metadata = YAML.parse(yaml);
           this.rendered = {
-            metadata: JSON.stringify(metadata, null, 2),
+            metadata: {
+              yamlParsed: true,  // Metadata could be parsed as a YAML value
+              value: metadata,
+            },
             content: marked(body),
           };
           return;
         }
-        catch (e) {
+        catch (err) {
           this.rendered = {
-            metadata: yaml,
+            metadata: {
+              yamlParsed: false,  // Failed to parse the metadata
+              sourceYaml: yaml,
+              parseError: err,
+            },
             content: marked(body),
           };
           return;
@@ -254,7 +289,7 @@ event color:
       }
     }
     this.rendered = {
-      metadata: null,
+      metadata: null,  // Metadata does not exist
       content: marked(text),
     };
   }
