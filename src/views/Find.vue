@@ -139,8 +139,8 @@ export default class Find extends Vue {
       if (text.startsWith('#')) {
         queryTags.add(text.slice(1));
       }
-      else {
-        queryPaths.add(text);
+      else if (text.startsWith('/')) {
+        queryPaths.add(text.slice(1));
       }
     }
 
