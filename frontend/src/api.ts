@@ -63,7 +63,7 @@ export function validateEvent(event: any): boolean {
 
 // Find
 export interface Query {
-  keywords: Set<any>;
+  paths: Set<any>;
   tags: Set<any>;
 }
 

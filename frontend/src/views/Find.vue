@@ -132,7 +132,7 @@ export default class Find extends Vue {
   }
 
   get query() {
-    const queryKeywords = new Set();
+    const queryPaths = new Set();
     const queryTags = new Set();
     for (const match of this.queryText.matchAll(/"([^"]+)"|([^\s]+)/g)) {
       const text = match[1] || match[2];
@@ -140,12 +140,12 @@ export default class Find extends Vue {
         queryTags.add(text.slice(1));
       }
       else {
-        queryKeywords.add(text);
+        queryPaths.add(text);
       }
     }
 
     return {
-      keywords: queryKeywords,
+      paths: queryPaths,
       tags: queryTags,
     };
   }
@@ -154,13 +154,13 @@ export default class Find extends Vue {
     const matched = [];
 
     const query: Query = this.query;
-    const queryKeywords: string[] = [...query.keywords].map(x => x.toLowerCase());
+    const queryPaths: string[] = [...query.paths].map(x => x.toLowerCase());
     const queryTags: string[] = [...query.tags].map(x => x.toLowerCase());
 
     for (const entry of this.entries) {
-      if (queryKeywords.length > 0) {
+      if (queryPaths.length > 0) {
         const entryPath = entry.path.toLowerCase();
-        if (queryKeywords.some(kw => !entryPath.includes(kw))) {
+        if (queryPaths.some(kw => !entryPath.includes(kw))) {
           continue;
         }
       }
