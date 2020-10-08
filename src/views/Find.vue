@@ -158,6 +158,7 @@ export default class Find extends Vue {
     const queryTags: string[] = [...query.tags].map(x => x.toLowerCase());
 
     for (const entry of this.entries) {
+      // Find matching entries by rejecting ones that doesn't match some of the queries
       if (queryPaths.length > 0) {
         const entryPath = entry.path.toLowerCase();
         if (queryPaths.some(kw => !entryPath.includes(kw))) {
@@ -180,6 +181,7 @@ export default class Find extends Vue {
           }
         }
       }
+      // OK, this entry matches all the queries
       matched.push({
         path: entry.path,
         size: entry.size,
