@@ -24,7 +24,7 @@
           class="ma-1"
           v-for="tag of tags"
           v-bind:key="tag"
-          v-bind:color="query.tags.has(tag) ? 'primary' : 'normal'"
+          v-bind:color="[...query.tags].some(x => tag.includes(x)) || [...query.any].some(x => tag.includes(x)) ? 'primary' : 'normal'"
           v-on:click="handleTagClick(tag, $event)"
         >{{ tag }}</v-chip>
       </div>
@@ -78,7 +78,7 @@
           class="ma-1"
           v-for="tag of item.tags"
           v-bind:key="tag"
-          v-bind:color="query.tags.has(tag) ? 'primary' : 'normal'"
+          v-bind:color="[...query.tags].some(x => tag.includes(x)) || [...query.any].some(x => tag.includes(x)) ? 'primary' : 'normal'"
           v-on:click="handleTagClick(tag, $event)"
           >{{ tag }}</v-chip>
       </template>
@@ -183,10 +183,10 @@ export default class Find extends Vue {
       if (queryPaths.some(kw => !entryPath.includes(kw))) {
         continue;
       }
-      if (queryTags.some(tag => !entryTags.includes(tag))) {
+      if (queryTags.some(tag => !entryTags.some(entryTag => entryTag.includes(tag)))) {
         continue;
       }
-      if (queryAny.some(kw => !entryPath.includes(kw) && !entryTags.includes(kw))) {
+      if (queryAny.some(kw => !entryPath.includes(kw) && !entryTags.some(entryTag => entryTag.includes(kw)))) {
         continue;
       }
       // OK, this entry matches all the queries
