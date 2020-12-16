@@ -24,7 +24,7 @@
           class="ma-1"
           v-for="tag of tags"
           v-bind:key="tag"
-          v-bind:color="[...query.tags].some(x => tag.includes(x)) || [...query.any].some(x => tag.includes(x)) ? 'primary' : 'normal'"
+          v-bind:color="tagColor(tag)"
           v-on:click="handleTagClick(tag, $event)"
         >{{ tag }}</v-chip>
       </div>
@@ -78,7 +78,7 @@
           class="ma-1"
           v-for="tag of item.tags"
           v-bind:key="tag"
-          v-bind:color="[...query.tags].some(x => tag.includes(x)) || [...query.any].some(x => tag.includes(x)) ? 'primary' : 'normal'"
+          v-bind:color="tagColor(tag)"
           v-on:click="handleTagClick(tag, $event)"
           >{{ tag }}</v-chip>
       </template>
@@ -337,6 +337,18 @@ export default class Find extends Vue {
     }
     else {
       this.addTag(tag);
+    }
+  }
+
+  tagColor(tag: string) {
+    const query: Query = this.query;
+    const queryTags: string[] = [...query.tags].map(x => x.toLowerCase());
+    const queryAny: string[] = [...query.any].map(x => x.toLowerCase());
+    if (queryTags.some(x => tag.toLowerCase().includes(x)) || queryAny.some(x => tag.toLowerCase().includes(x))) {
+      return 'primary';
+    }
+    else {
+      return 'normal';
     }
   }
 
