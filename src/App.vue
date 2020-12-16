@@ -170,7 +170,7 @@ import Gravatar from '@/components/Gravatar.vue';
 
 import axios from '@/axios';
 import { Claim, UploadEntry } from '@/api';
-import jwtDecode from 'jwt-decode';
+import jwt_decode from 'jwt-decode';
 import { register } from 'register-service-worker';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -192,7 +192,7 @@ export default class App extends Vue {
 
   get decodedToken() {
     if (this.token) {
-      return jwtDecode<Claim>(this.token);
+      return jwt_decode<Claim>(this.token);
     }
     else {
       return null;
