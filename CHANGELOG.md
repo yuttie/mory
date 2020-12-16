@@ -1,3 +1,15 @@
+## 0.4.0 (2020-12-17)
+* Update dependencies
+* More flexible search
+* Better display of metadata
+* Fix autocomplete for username and password
+* Remove tabs' indicator when it is not necessary
+* Better appearance of note toolbar
+* Improved note appearance
+* Add 'api' module
+
+
+
 ## 0.3.3 (2020-09-02)
 * Add some documentation using docsify
 * Improve UI usability
