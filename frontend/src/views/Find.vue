@@ -24,7 +24,7 @@
           class="ma-1"
           v-for="tag of tags"
           v-bind:key="tag"
-          v-bind:color="query.tags.has(tag) ? 'primary' : 'normal'"
+          v-bind:color="tagColor(tag)"
           v-on:click="handleTagClick(tag, $event)"
         >{{ tag }}</v-chip>
       </div>
@@ -78,7 +78,7 @@
           class="ma-1"
           v-for="tag of item.tags"
           v-bind:key="tag"
-          v-bind:color="query.tags.has(tag) ? 'primary' : 'normal'"
+          v-bind:color="tagColor(tag)"
           v-on:click="handleTagClick(tag, $event)"
           >{{ tag }}</v-chip>
       </template>
@@ -132,21 +132,26 @@ export default class Find extends Vue {
   }
 
   get query() {
-    const queryKeywords = new Set();
+    const queryPaths = new Set();
     const queryTags = new Set();
+    const queryAny = new Set();
     for (const match of this.queryText.matchAll(/"([^"]+)"|([^\s]+)/g)) {
       const text = match[1] || match[2];
       if (text.startsWith('#')) {
         queryTags.add(text.slice(1));
       }
+      else if (text.startsWith('/')) {
+        queryPaths.add(text.slice(1));
+      }
       else {
-        queryKeywords.add(text);
+        queryAny.add(text);
       }
     }
 
     return {
-      keywords: queryKeywords,
+      paths: queryPaths,
       tags: queryTags,
+      any: queryAny,
     };
   }
 
@@ -154,32 +159,37 @@ export default class Find extends Vue {
     const matched = [];
 
     const query: Query = this.query;
-    const queryKeywords: string[] = [...query.keywords].map(x => x.toLowerCase());
+    const queryPaths: string[] = [...query.paths].map(x => x.toLowerCase());
     const queryTags: string[] = [...query.tags].map(x => x.toLowerCase());
+    const queryAny: string[] = [...query.any].map(x => x.toLowerCase());
 
     for (const entry of this.entries) {
-      if (queryKeywords.length > 0) {
-        const entryPath = entry.path.toLowerCase();
-        if (queryKeywords.some(kw => !entryPath.includes(kw))) {
-          continue;
-        }
-      }
-      if (queryTags.length > 0) {
+      const entryPath = entry.path.toLowerCase();
+      const entryTags = (() => {
         if (entry.metadata === null) {
-          continue;
+          return [];
+        }
+        else if (!Object.prototype.hasOwnProperty.call(entry.metadata, 'tags')) {
+          return [];
+        }
+        else if (!Array.isArray(entry.metadata.tags)) {
+          return [];
         }
         else {
-          if (!(Object.prototype.hasOwnProperty.call(entry.metadata, 'tags') && Array.isArray(entry.metadata.tags))) {
-            continue;
-          }
-          else {
-            const entryTags = entry.metadata.tags.map((x: string) => x.toLowerCase());
-            if (queryTags.some(tag => !entryTags.includes(tag))) {
-              continue;
-            }
-          }
+          return entry.metadata.tags.map((x: string) => x.toLowerCase());
         }
+      })();
+      // Check if all conditions are met or notl
+      if (queryPaths.some(kw => !entryPath.includes(kw))) {
+        continue;
       }
+      if (queryTags.some(tag => !entryTags.some(entryTag => entryTag.includes(tag)))) {
+        continue;
+      }
+      if (queryAny.some(kw => !entryPath.includes(kw) && !entryTags.some(entryTag => entryTag.includes(kw)))) {
+        continue;
+      }
+      // OK, this entry matches all the queries
       matched.push({
         path: entry.path,
         size: entry.size,
@@ -327,6 +337,18 @@ export default class Find extends Vue {
     }
     else {
       this.addTag(tag);
+    }
+  }
+
+  tagColor(tag: string) {
+    const query: Query = this.query;
+    const queryTags: string[] = [...query.tags].map(x => x.toLowerCase());
+    const queryAny: string[] = [...query.any].map(x => x.toLowerCase());
+    if (queryTags.some(x => tag.toLowerCase().includes(x)) || queryAny.some(x => tag.toLowerCase().includes(x))) {
+      return 'primary';
+    }
+    else {
+      return 'normal';
     }
   }
 
