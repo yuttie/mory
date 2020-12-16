@@ -164,45 +164,33 @@ export default class Find extends Vue {
     const queryAny: string[] = [...query.any].map(x => x.toLowerCase());
 
     for (const entry of this.entries) {
+      const entryPath = entry.path.toLowerCase();
+      const entryTags = (() => {
+        if (entry.metadata === null) {
+          return [];
+        }
+        else if (!Object.prototype.hasOwnProperty.call(entry.metadata, 'tags')) {
+          return [];
+        }
+        else if (!Array.isArray(entry.metadata.tags)) {
+          return [];
+        }
+        else {
+          return entry.metadata.tags.map((x: string) => x.toLowerCase());
+        }
+      })();
       // Find matching entries by rejecting ones that doesn't match some of the queries
       if (queryPaths.length > 0) {
-        const entryPath = entry.path.toLowerCase();
         if (queryPaths.some(kw => !entryPath.includes(kw))) {
           continue;
         }
       }
       if (queryTags.length > 0) {
-        if (entry.metadata === null) {
+        if (queryTags.some(tag => !entryTags.includes(tag))) {
           continue;
-        }
-        else {
-          if (!(Object.prototype.hasOwnProperty.call(entry.metadata, 'tags') && Array.isArray(entry.metadata.tags))) {
-            continue;
-          }
-          else {
-            const entryTags = entry.metadata.tags.map((x: string) => x.toLowerCase());
-            if (queryTags.some(tag => !entryTags.includes(tag))) {
-              continue;
-            }
-          }
         }
       }
       if (queryAny.length > 0) {
-        const entryPath = entry.path.toLowerCase();
-        const entryTags = (() => {
-          if (entry.metadata === null) {
-            return [];
-          }
-          else if (!Object.prototype.hasOwnProperty.call(entry.metadata, 'tags')) {
-            return [];
-          }
-          else if (!Array.isArray(entry.metadata.tags)) {
-            return [];
-          }
-          else {
-            return entry.metadata.tags.map((x: string) => x.toLowerCase());
-          }
-        })();
         if (queryAny.some(kw => !entryPath.includes(kw) && !entryTags.includes(kw))) {
           continue;
         }
