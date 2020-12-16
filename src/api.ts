@@ -65,6 +65,7 @@ export function validateEvent(event: any): boolean {
 export interface Query {
   paths: Set<any>;
   tags: Set<any>;
+  any: Set<any>;
 }
 
 export interface ListEntry2 {

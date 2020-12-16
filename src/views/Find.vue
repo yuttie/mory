@@ -134,6 +134,7 @@ export default class Find extends Vue {
   get query() {
     const queryPaths = new Set();
     const queryTags = new Set();
+    const queryAny = new Set();
     for (const match of this.queryText.matchAll(/"([^"]+)"|([^\s]+)/g)) {
       const text = match[1] || match[2];
       if (text.startsWith('#')) {
@@ -142,11 +143,15 @@ export default class Find extends Vue {
       else if (text.startsWith('/')) {
         queryPaths.add(text.slice(1));
       }
+      else {
+        queryAny.add(text);
+      }
     }
 
     return {
       paths: queryPaths,
       tags: queryTags,
+      any: queryAny,
     };
   }
 
@@ -156,6 +161,7 @@ export default class Find extends Vue {
     const query: Query = this.query;
     const queryPaths: string[] = [...query.paths].map(x => x.toLowerCase());
     const queryTags: string[] = [...query.tags].map(x => x.toLowerCase());
+    const queryAny: string[] = [...query.any].map(x => x.toLowerCase());
 
     for (const entry of this.entries) {
       // Find matching entries by rejecting ones that doesn't match some of the queries
@@ -179,6 +185,26 @@ export default class Find extends Vue {
               continue;
             }
           }
+        }
+      }
+      if (queryAny.length > 0) {
+        const entryPath = entry.path.toLowerCase();
+        const entryTags = (() => {
+          if (entry.metadata === null) {
+            return [];
+          }
+          else if (!Object.prototype.hasOwnProperty.call(entry.metadata, 'tags')) {
+            return [];
+          }
+          else if (!Array.isArray(entry.metadata.tags)) {
+            return [];
+          }
+          else {
+            return entry.metadata.tags.map((x: string) => x.toLowerCase());
+          }
+        })();
+        if (queryAny.some(kw => !entryPath.includes(kw) && !entryTags.includes(kw))) {
+          continue;
         }
       }
       // OK, this entry matches all the queries
