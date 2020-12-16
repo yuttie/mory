@@ -179,21 +179,15 @@ export default class Find extends Vue {
           return entry.metadata.tags.map((x: string) => x.toLowerCase());
         }
       })();
-      // Find matching entries by rejecting ones that doesn't match some of the queries
-      if (queryPaths.length > 0) {
-        if (queryPaths.some(kw => !entryPath.includes(kw))) {
-          continue;
-        }
+      // Check if all conditions are met or notl
+      if (queryPaths.some(kw => !entryPath.includes(kw))) {
+        continue;
       }
-      if (queryTags.length > 0) {
-        if (queryTags.some(tag => !entryTags.includes(tag))) {
-          continue;
-        }
+      if (queryTags.some(tag => !entryTags.includes(tag))) {
+        continue;
       }
-      if (queryAny.length > 0) {
-        if (queryAny.some(kw => !entryPath.includes(kw) && !entryTags.includes(kw))) {
-          continue;
-        }
+      if (queryAny.some(kw => !entryPath.includes(kw) && !entryTags.includes(kw))) {
+        continue;
       }
       // OK, this entry matches all the queries
       matched.push({
