@@ -21,6 +21,11 @@ const routes: Array<RouteConfig> = [
     component: Calendar,
   },
   {
+    path: '/calendar/:type/:date*',
+    name: 'CalendarWithDate',
+    component: Calendar,
+  },
+  {
     path: '/create',
     name: 'Create',
     redirect: _to => {

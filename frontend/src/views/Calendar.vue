@@ -17,10 +17,12 @@
     <v-sheet class="flex-grow-1">
       <v-calendar
         ref="calendar"
-        v-model="calendarCursor"
+        v-bind:type="calendarType"
+        v-bind:value="calendarCursor"
         v-bind:events="events"
         v-bind:event-color="getEventColor"
         v-bind:event-text-color="getEventTextColor"
+        v-on:input="onCalendarInput"
         v-on:click:event="onEventClick"
         color="primary"
       ></v-calendar>
@@ -39,6 +41,7 @@ import axios from '@/axios';
 import { isMetadataEventMultiple, ListEntry, validateEvent } from '@/api';
 import Color from 'color';
 import materialColors from 'vuetify/lib/util/colors';
+import moment from 'moment';
 import XXH from 'xxhashjs';
 
 @Component
@@ -49,7 +52,8 @@ export default class Calendar extends Vue {
   isLoading = false;
   error = false;
   errorText = '';
-  calendarCursor = '';
+  calendarType = 'month';
+  calendarCursor = moment().format('YYYY-MM-DD');
 
   get events() {
     const events = [];
@@ -108,10 +112,21 @@ export default class Calendar extends Vue {
     }
   }
 
+  onCalendarInput(date: string) {
+    this.$router.push({
+      path: `/calendar/${this.calendarType}/${moment(date, 'YYYY-MM-DD').format('YYYY/MM/DD')}`,
+    });
+  }
+
   mounted() {
     document.title = `Calendar | ${process.env.VUE_APP_NAME}`;
 
     this.onTokenChanged(this.token);
+
+    if (this.$route.name === 'CalendarWithDate') {
+      this.calendarType = this.$route.params.type;
+      this.calendarCursor = moment(this.$route.params.date, 'YYYY/MM/DD').format('YYYY-MM-DD');
+    }
 
     this.load();
   }
@@ -145,7 +160,9 @@ export default class Calendar extends Vue {
   }
 
   setToday() {
-    this.calendarCursor = '';
+    this.$router.push({
+      name: 'Calendar',
+    });
   }
 
   onEventClick(e: any) {
