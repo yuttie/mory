@@ -1,3 +1,9 @@
+## 0.5.0 (2020-12-18)
+* Change URL according to current state of calendar
+* Use first `<h1>` as page title
+
+
+
 ## 0.4.0 (2020-12-17)
 * Update dependencies
 * More flexible search
