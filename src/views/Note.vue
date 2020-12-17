@@ -196,7 +196,7 @@ export default class Note extends Vue {
   renderTimeoutId = null as null | number;
 
   mounted() {
-    document.title = `${this.$route.params.path} | ${process.env.VUE_APP_NAME}`;
+    document.title = `${this.title} | ${process.env.VUE_APP_NAME}`;
 
     this.onTokenChanged(this.token);
 
@@ -273,6 +273,7 @@ event color:
             },
             content: marked(body),
           };
+          document.title = `${this.title} | ${process.env.VUE_APP_NAME}`;
           return;
         }
         catch (err) {
@@ -284,6 +285,7 @@ event color:
             },
             content: marked(body),
           };
+          document.title = `${this.title} | ${process.env.VUE_APP_NAME}`;
           return;
         }
       }
@@ -292,6 +294,7 @@ event color:
       metadata: null,  // Metadata does not exist
       content: marked(text),
     };
+    document.title = `${this.title} | ${process.env.VUE_APP_NAME}`;
   }
 
   updateRenderedLazy() {
@@ -302,6 +305,19 @@ event color:
     this.renderTimeoutId = window.setTimeout(() => {
       this.updateRendered();
     }, 500);
+  }
+
+  get title() {
+    const rendered = this.rendered;
+    const root = document.createElement('div');
+    root.innerHTML = rendered.content;
+    const h1 = root.querySelector('h1');
+    if (h1) {
+      return h1.textContent;
+    }
+    else {
+      return this.$route.params.path;
+    }
   }
 
   get toc() {
