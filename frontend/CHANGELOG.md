@@ -1,3 +1,10 @@
+## 0.7.0 (2020-12-19)
+* Note templates
+* Enhancements of the calendar
+* Allow root metadata properties to be null
+
+
+
 ## 0.6.0 (2020-12-18)
 * Validate metadata on Note view
 * Define the JSON scheme for metadata
