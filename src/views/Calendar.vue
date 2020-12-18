@@ -24,6 +24,8 @@
         v-bind:event-text-color="getEventTextColor"
         v-on:input="onCalendarInput"
         v-on:click:event="onEventClick"
+        v-on:click:more="viewDay"
+        v-on:click:date="viewDay"
         color="primary"
       ></v-calendar>
     </v-sheet>
@@ -162,6 +164,12 @@ export default class Calendar extends Vue {
   setToday() {
     this.$router.push({
       name: 'Calendar',
+    });
+  }
+
+  viewDay({ date }: { date: string }) {
+    this.$router.push({
+      path: `/calendar/day/${moment(date, 'YYYY-MM-DD').format('YYYY/MM/DD')}`,
     });
   }
 
