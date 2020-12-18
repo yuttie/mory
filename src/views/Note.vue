@@ -252,19 +252,24 @@ export default class Note extends Vue {
     window.addEventListener('keydown', this.handleKeydown);
 
     if (this.$route.query.mode === 'create') {
-      this.text = `---
+      if (this.$route.query.template) {
+        this.loadTemplate(this.$route.query.template);
+      }
+      else {
+        this.text = `---
 tags:
 events:
 event color:
 ---
 
 # ${this.$route.params.path}`;
-      this.initialText = this.text;
-      this.editorIsVisible = true;
-      (this.$refs.editor as Editor).focus();
+        this.initialText = this.text;
+        this.editorIsVisible = true;
+        (this.$refs.editor as Editor).focus();
 
-      // Update immediately
-      this.updateRendered();
+        // Update immediately
+        this.updateRendered();
+      }
     }
     else {
       this.load(this.$route.params.path);
@@ -506,6 +511,50 @@ event color:
             }
           });
         }
+
+        this.isLoading = false;
+        this.notFound = false;
+      }).catch(error => {
+        if (error.response) {
+          if (error.response.status === 401) {
+            // Unauthorized
+            this.$emit('tokenExpired', () => {
+              this.load(path);
+              this.focusOrBlurEditor();
+            });
+          }
+          else if (error.response.status === 404) {
+            // Not Found
+            this.isLoading = false;
+            this.notFound = true;
+          }
+          else {
+            this.error = true;
+            this.errorText = error.response;
+            console.log('Unhandled error: {}', error.response);
+            this.isLoading = false;
+          }
+        }
+        else {
+          this.error = true;
+          this.errorText = error.toString();
+          console.log('Unhandled error: {}', error);
+          this.isLoading = false;
+        }
+      });
+  }
+
+  loadTemplate(path: string) {
+    this.isLoading = true;
+    axios.get(`/notes/${path}`)
+      .then(res => {
+        this.text = res.data;
+        this.initialText = this.text;
+        this.editorIsVisible = true;
+        (this.$refs.editor as Editor).focus();
+
+        // Update immediately
+        this.updateRendered();
 
         this.isLoading = false;
         this.notFound = false;
