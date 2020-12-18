@@ -1,0 +1,69 @@
+{
+    "definitions": {
+        "event-single": {
+            "type": "object",
+            "properties": {
+                "start": { "type": "string" },
+                "end": { "type": "string" },
+                "finished": { "type": "boolean" },
+                "color": { "type": "string" },
+                "note": { "type": "string" }
+            },
+            "required": ["start"]
+        },
+        "event-multiple": {
+            "type": "object",
+            "properties": {
+                "color": { "type": "string" },
+                "times": {
+                    "type": "array",
+                    "items": { "$ref": "#/definitions/event-single" }
+                }
+            },
+            "required": ["times"]
+        },
+        "strict-event-single": {
+            "allOf": [
+                { "$ref": "#/definitions/event-single" },
+                {
+                    "not": {
+                        "type": "object",
+                        "required": ["times"]
+                    }
+                }
+            ]
+        },
+        "strict-event-multiple": {
+            "allOf": [
+                { "$ref": "#/definitions/event-multiple" },
+                {
+                    "not": {
+                        "type": "object",
+                        "required": ["start"]
+                    }
+                }
+            ]
+        }
+    },
+    "type": "object",
+    "properties": {
+        "tags": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            }
+        },
+        "events": {
+            "type": "object",
+            "additionalProperties": {
+                "oneOf": [
+                    { "$ref": "#/definitions/strict-event-single" },
+                    { "$ref": "#/definitions/strict-event-multiple" }
+                ]
+            }
+        },
+        "event color": {
+            "type": "string"
+        }
+    }
+}
