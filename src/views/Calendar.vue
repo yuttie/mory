@@ -76,7 +76,9 @@ export default class Calendar extends Vue {
                     name: eventName,
                     start: time.start,
                     end: time.end,
+                    finished: time.finished,
                     color: time.color || eventDetail.color || defaultColor,
+                    note: time.note,
                     notePath: entry.path,
                   };
                   if (validateEvent(event)) {
@@ -89,7 +91,9 @@ export default class Calendar extends Vue {
                   name: eventName,
                   start: eventDetail.start,
                   end: eventDetail.end,
+                  finished: eventDetail.finished,
                   color: eventDetail.color || defaultColor,
+                  note: eventDetail.note,
                   notePath: entry.path,
                 };
                 if (validateEvent(event)) {
