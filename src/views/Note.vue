@@ -33,32 +33,65 @@
             v-if="rendered.metadata"
           >
             <v-expansion-panel>
-              <v-expansion-panel-header disable-icon-rotate>
-                Metadata
-                <template v-slot:actions>
-                  <span
-                    v-if="rendered.metadata.yamlParsed"
-                    class="light-green--text"
-                  >
-                    <v-icon color="light-green">
-                      mdi-check
-                    </v-icon>
-                    Valid YAML
-                  </span>
-                  <span
-                    v-else
-                    class="red--text"
-                  >
-                    <v-icon color="red">
-                      mdi-alert
-                    </v-icon>
-                    Invalid YAML
-                  </span>
-                </template>
+              <v-expansion-panel-header>
+                <span>
+                  Metadata
+                  <template v-if="rendered.metadata.hasOwnProperty('validationErrors')">
+                    <v-tooltip bottom color="success">
+                      <template v-slot:activator="{ on, attrs }">
+                        <v-icon color="success" v-bind="attrs" v-on="on">
+                          mdi-check
+                        </v-icon>
+                      </template>
+                      <span>YAML parse succeeded</span>
+                    </v-tooltip>
+                    <template v-if="rendered.metadata.validationErrors === null">
+                      <v-tooltip bottom color="success">
+                        <template v-slot:activator="{ on, attrs }">
+                          <v-icon color="success" v-bind="attrs" v-on="on">
+                            mdi-check
+                          </v-icon>
+                        </template>
+                        <span>Schema validation succeeded</span>
+                      </v-tooltip>
+                    </template>
+                    <template v-else>
+                      <v-tooltip bottom color="error">
+                        <template v-slot:activator="{ on, attrs }">
+                          <v-icon color="error" v-bind="attrs" v-on="on">
+                            mdi-alert
+                          </v-icon>
+                        </template>
+                        <span>Schema validation failed</span>
+                      </v-tooltip>
+                    </template>
+                  </template>
+                  <template v-else>
+                    <v-tooltip bottom color="error">
+                      <template v-slot:activator="{ on, attrs }">
+                        <v-icon color="error" v-bind="attrs" v-on="on">
+                          mdi-alert
+                        </v-icon>
+                      </template>
+                      <span>YAML parse failed</span>
+                    </v-tooltip>
+                  </template>
+                </span>
               </v-expansion-panel-header>
               <v-expansion-panel-content>
-                <pre v-if="rendered.metadata.yamlParsed">{{ JSON.stringify(rendered.metadata.value, null, 2) }}</pre>
-                <pre v-else>{{ rendered.metadata.parseError.toString() }}</pre>
+                <template v-if="rendered.metadata.hasOwnProperty('validationErrors')">
+                  <template v-if="rendered.metadata.validationErrors !== null">
+                    <ul>
+                      <li v-for="error of rendered.metadata.validationErrors" v-bind:key="error.dataPath + error.schemaPath">
+                        <span class="font-weight-bold">{{error.dataPath}}: <span class="error--text">error:</span> {{error.message}}</span> (schema path: {{error.schemaPath}})
+                      </li>
+                    </ul>
+                  </template>
+                  <pre>{{ JSON.stringify(rendered.metadata.value, null, 2) }}</pre>
+                </template>
+                <template v-else>
+                  <span class="error--text font-weight-bold">{{ rendered.metadata.parseError.toString() }}</span>
+                </template>
               </v-expansion-panel-content>
             </v-expansion-panel>
           </v-expansion-panels>
@@ -132,7 +165,9 @@
 import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 
 import Editor from '@/components/Editor.vue';
+import metadataSchema from '@/metadata-schema.json';
 
+import Ajv, { JSONSchemaType, DefinedError } from 'ajv';
 import axios from '@/axios';
 import marked from 'marked';
 import '@mdi/font/css/materialdesignicons.css';
@@ -141,6 +176,9 @@ import 'prism-themes/themes/prism-nord.css';
 import YAML from 'yaml';
 
 declare const MathJax: any;
+
+const ajv = new Ajv();
+const validateMetadata = ajv.compile(metadataSchema);
 
 marked.setOptions({
   baseUrl: new URL('files/', new URL(process.env.VUE_APP_API_URL!, window.location.href)).href,
@@ -259,41 +297,103 @@ event color:
     });
 
     const text = this.text;
-    if (text.startsWith('---\n')) {
-      const endMarkerIndex = text.indexOf('\n---\n', 4);
-      if (endMarkerIndex >= 0) {
-        const yaml = text.slice(4, endMarkerIndex);
-        const body = text.slice(endMarkerIndex + '\n---\n'.length);
-        try {
-          const metadata = YAML.parse(yaml);
-          this.rendered = {
-            metadata: {
-              yamlParsed: true,  // Metadata could be parsed as a YAML value
-              value: metadata,
-            },
-            content: marked(body),
-          };
-          document.title = `${this.title} | ${process.env.VUE_APP_NAME}`;
-          return;
+
+    // Split the note text into a YAML part and a body part
+    const [yaml, body] = ((): [null | string, string] => {
+      if (text.startsWith('---\n')) {
+        const endMarkerIndex = text.indexOf('\n---\n', 4);
+        if (endMarkerIndex >= 0) {
+          const yaml = text.slice(4, endMarkerIndex);
+          const body = text.slice(endMarkerIndex + '\n---\n'.length);
+          return [yaml, body];
         }
-        catch (err) {
-          this.rendered = {
-            metadata: {
-              yamlParsed: false,  // Failed to parse the metadata
-              sourceYaml: yaml,
-              parseError: err,
-            },
-            content: marked(body),
-          };
-          document.title = `${this.title} | ${process.env.VUE_APP_NAME}`;
-          return;
+        else {
+          return [null, text];
         }
       }
+      else {
+        return [null, text];
+      }
+    })();
+
+    // Render the body
+    const renderedContent = marked(body);
+
+    // Parse a YAML part
+    const [parseError, metadata] = (() => {
+      if (yaml !== null) {
+        try {
+          return [null, YAML.parse(yaml)];
+        }
+        catch (err) {
+          return [err, null];
+        }
+      }
+      else {
+        return [null, null];
+      }
+    })();
+
+    // Validate metadata
+    const validationErrors = (() => {
+      if (metadata !== null) {
+        if (validateMetadata(metadata)) {
+          return null;
+        }
+        else {
+          const errors = [];
+          for (const err of validateMetadata.errors as DefinedError[]) {
+            errors.push(err);
+          }
+          errors.sort((a, b) => {
+            if (a.dataPath < b.dataPath) {
+              return -1;
+            }
+            else if (a.dataPath > b.dataPath) {
+              return 1;
+            }
+            else {
+              return 0;
+            }
+          });
+          return errors;
+        }
+      }
+      else {
+        return null;
+      }
+    })();
+
+    // Set this.rendered
+    if (metadata !== null) {
+      // Metadata could be parsed correctly
+      this.rendered = {
+        metadata: {
+          validationErrors: validationErrors,
+          value: metadata
+        },
+        content: renderedContent,
+      };
     }
-    this.rendered = {
-      metadata: null,  // Metadata does not exist
-      content: marked(text),
-    };
+    else if (parseError !== null) {
+      // YAML parse error
+      this.rendered = {
+        metadata: {
+          parseError: parseError,
+          value: null,
+        },
+        content: renderedContent,
+      };
+    }
+    else {
+      // Metadata part does not exist
+      this.rendered = {
+        metadata: null,
+        content: renderedContent,
+      };
+    }
+
+    // Update the page title
     document.title = `${this.title} | ${process.env.VUE_APP_NAME}`;
   }
 
