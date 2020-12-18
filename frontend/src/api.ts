@@ -16,7 +16,9 @@ export interface UploadEntry {
 export interface MetadataEventSingle {
   start: string;
   end?: string;
+  finished?: boolean;
   color?: string;
+  note?: string;
 }
 
 export interface MetadataEventMultiple {
