@@ -23,11 +23,63 @@
         v-bind:event-color="getEventColor"
         v-bind:event-text-color="getEventTextColor"
         v-on:input="onCalendarInput"
-        v-on:click:event="onEventClick"
+        v-on:click:event="showEvent"
         v-on:click:more="viewDay"
         v-on:click:date="viewDay"
         color="primary"
       ></v-calendar>
+      <v-menu
+        v-model="selectedOpen"
+        v-bind:close-on-content-click="false"
+        v-bind:activator="selectedElement"
+        offset-x
+        offset-y
+        max-width="100%"
+      >
+        <v-card flat>
+          <v-toolbar
+            v-bind:color="selectedEvent.color"
+            dark
+            flat
+          >
+            <v-toolbar-title>{{ selectedEvent.name }}</v-toolbar-title>
+            <v-spacer></v-spacer>
+            <v-icon v-if="selectedEvent.finished">mdi-check</v-icon>
+          </v-toolbar>
+          <v-card-text>
+            <v-list dense>
+              <v-list-item>
+                <v-list-item-icon>
+                  <v-icon>mdi-clock-start</v-icon>
+                </v-list-item-icon>
+                <v-list-item-content>
+                  {{ selectedEvent.start }}
+                </v-list-item-content>
+              </v-list-item>
+              <v-list-item v-if="selectedEvent.end">
+                <v-list-item-icon>
+                  <v-icon>mdi-clock-end</v-icon>
+                </v-list-item-icon>
+                <v-list-item-content>
+                  {{ selectedEvent.end }}
+                </v-list-item-content>
+              </v-list-item>
+              <v-list-item>
+                <v-list-item-icon>
+                  <v-icon>mdi-file-document-outline</v-icon>
+                </v-list-item-icon>
+                <v-list-item-content>
+                  <router-link v-bind:to="{ name: 'Note', params: { path: selectedEvent.notePath } }">{{ selectedEvent.notePath }}</router-link>
+                </v-list-item-content>
+              </v-list-item>
+            </v-list>
+            <template v-if="selectedEvent.note">
+              <v-divider></v-divider>
+              <pre class="mt-3">{{ selectedEvent.note }}</pre>
+            </template>
+          </v-card-text>
+        </v-card>
+      </v-menu>
     </v-sheet>
     <v-overlay v-bind:value="isLoading" z-index="10">
       <v-progress-circular indeterminate size="64"></v-progress-circular>
@@ -56,6 +108,9 @@ export default class Calendar extends Vue {
   errorText = '';
   calendarType = 'month';
   calendarCursor = moment().format('YYYY-MM-DD');
+  selectedEvent = {};
+  selectedElement = null;
+  selectedOpen = false;
 
   get events() {
     const events = [];
@@ -177,11 +232,23 @@ export default class Calendar extends Vue {
     });
   }
 
-  onEventClick({ event }: { event: any }) {
-    this.$router.push({
-      name: 'Note',
-      params: { path: event.notePath }
-    });
+  showEvent ({ nativeEvent, event }: { nativeEvent: any, event: any }) {
+    const open = () => {
+      this.selectedEvent = event;
+      this.selectedElement = nativeEvent.target;
+      setTimeout(() => {
+        this.selectedOpen = true;
+      }, 10);
+    };
+
+    if (this.selectedOpen) {
+      this.selectedOpen = false;
+      setTimeout(open, 10);
+    } else {
+      open();
+    }
+
+    nativeEvent.stopPropagation();
   }
 
   getEventEndTime(event: any): Date {
