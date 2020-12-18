@@ -165,10 +165,10 @@ export default class Calendar extends Vue {
     });
   }
 
-  onEventClick(e: any) {
+  onEventClick({ event }: { event: any }) {
     this.$router.push({
       name: 'Note',
-      params: { path: e.event.notePath }
+      params: { path: event.notePath }
     });
   }
 
