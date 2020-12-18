@@ -34,7 +34,7 @@
         v-bind:activator="selectedElement"
         offset-x
         offset-y
-        max-width="100%"
+        max-width="30em"
       >
         <v-card flat>
           <v-toolbar
@@ -75,7 +75,7 @@
             </v-list>
             <template v-if="selectedEvent.note">
               <v-divider></v-divider>
-              <pre class="mt-3">{{ selectedEvent.note }}</pre>
+              <div class="mt-3" style="white-space: pre-wrap;">{{ selectedEvent.note }}</div>
             </template>
           </v-card-text>
         </v-card>
