@@ -48,22 +48,35 @@
     "type": "object",
     "properties": {
         "tags": {
-            "type": "array",
-            "items": {
-                "type": "string"
-            }
+            "oneOf": [
+                { "type": "null" },
+                {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            ]
         },
         "events": {
-            "type": "object",
-            "additionalProperties": {
-                "oneOf": [
-                    { "$ref": "#/definitions/strict-event-single" },
-                    { "$ref": "#/definitions/strict-event-multiple" }
-                ]
-            }
+            "oneOf": [
+                { "type": "null" },
+                {
+                    "type": "object",
+                    "additionalProperties": {
+                        "oneOf": [
+                            { "$ref": "#/definitions/strict-event-single" },
+                            { "$ref": "#/definitions/strict-event-multiple" }
+                        ]
+                    }
+                }
+            ]
         },
         "event color": {
-            "type": "string"
+            "oneOf": [
+                { "type": "null" },
+                { "type": "string" }
+            ]
         }
     }
 }
