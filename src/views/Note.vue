@@ -253,7 +253,7 @@ export default class Note extends Vue {
 
     if (this.$route.query.mode === 'create') {
       if (this.$route.query.template) {
-        this.loadTemplate(this.$route.query.template);
+        this.loadTemplate(this.$route.query.template as string);
       }
       else {
         this.text = `---
