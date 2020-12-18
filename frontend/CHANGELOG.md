@@ -1,3 +1,9 @@
+## 0.6.0 (2020-12-18)
+* Validate metadata on Note view
+* Define the JSON scheme for metadata
+
+
+
 ## 0.5.0 (2020-12-18)
 * Change URL according to current state of calendar
 * Use first `<h1>` as page title
