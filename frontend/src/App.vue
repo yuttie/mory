@@ -15,7 +15,27 @@
       </v-tabs>
       <v-spacer></v-spacer>
       <input type="file" multiple class="d-none" ref="fileInput">
-      <v-btn icon to="/create"><v-icon>mdi-plus-box-outline</v-icon></v-btn>
+      <v-menu
+        offset-y
+      >
+        <template v-slot:activator="{ on, attrs }">
+          <v-btn
+            v-bind="attrs"
+            v-on="on"
+            icon
+          >
+            <v-icon>mdi-plus-box-outline</v-icon>
+          </v-btn>
+        </template>
+        <v-list dense>
+          <v-list-item to="/create">New</v-list-item>
+          <v-list-item
+            v-for="path in templates"
+            v-bind:key="path"
+            v-bind:to="{ name: 'Create', query: { from: path } }"
+          >{{ path.replace(/\.template$/i, '') }}</v-list-item>
+        </v-list>
+      </v-menu>
       <v-menu
         v-bind:close-on-content-click="false"
         v-model="uploadMenuIsVisible"
@@ -187,6 +207,7 @@ export default class App extends Vue {
   loginCallback = null as (() => void) | null;
   loginError = null as null | string;
   registration = null as null | ServiceWorkerRegistration;
+  templates = [] as string[];
   uploadList = [] as UploadEntry[];
   uploadMenuIsVisible = false;
 
@@ -323,6 +344,23 @@ export default class App extends Vue {
 
       return false;
     }
+
+    axios.get('/notes')
+      .then(res => {
+        this.templates = res.data.map(entry => entry.path).filter(path => path.match(/\.template$/i));
+      }).catch(error => {
+        if (error.response) {
+          if (error.response.status === 401) {
+            console.log('Unauthorized');
+          }
+          else {
+            console.log('Unhandled error: {}', error.response);
+          }
+        }
+        else {
+          console.log('Unhandled error: {}', error);
+        }
+      });
 
     // Handle drag and drop of files
     const appEl = (this.$refs.app as Vue).$el;

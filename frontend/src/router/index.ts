@@ -28,11 +28,11 @@ const routes: Array<RouteConfig> = [
   {
     path: '/create',
     name: 'Create',
-    redirect: _to => {
+    redirect: to => {
       return {
         name: 'Note',
         params: { path: uuidv4() },
-        query: { mode: 'create' },
+        query: { mode: 'create', template: to.query.from },
       };
     },
   },
