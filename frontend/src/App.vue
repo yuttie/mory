@@ -189,7 +189,7 @@ import { Component, Vue } from 'vue-property-decorator';
 import Gravatar from '@/components/Gravatar.vue';
 
 import axios from '@/axios';
-import { Claim, UploadEntry } from '@/api';
+import { Claim, ListEntry2, UploadEntry } from '@/api';
 import jwt_decode from 'jwt-decode';
 import { register } from 'register-service-worker';
 import { v4 as uuidv4 } from 'uuid';
@@ -347,7 +347,9 @@ export default class App extends Vue {
 
     axios.get('/notes')
       .then(res => {
-        this.templates = res.data.map(entry => entry.path).filter(path => path.match(/\.template$/i));
+        this.templates = res.data
+          .map((entry: ListEntry2) => entry.path)
+          .filter((path: string) => path.match(/\.template$/i));
       }).catch(error => {
         if (error.response) {
           if (error.response.status === 401) {
