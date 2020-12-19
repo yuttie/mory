@@ -1,3 +1,10 @@
+## 0.8.0 (2020-12-19)
+* New logo
+* Improved appearance
+* Include manifest.json
+
+
+
 ## 0.7.0 (2020-12-19)
 * Note templates
 * Enhancements of the calendar
