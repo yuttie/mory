@@ -1,3 +1,10 @@
+## 0.8.1 (2020-12-19)
+* Prefix path to manifest.json with '<%= BASE_URL %>'
+* Optimize icons
+* Provide an apple touch icon
+
+
+
 ## 0.8.0 (2020-12-19)
 * New logo
 * Improved appearance
