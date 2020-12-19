@@ -64,7 +64,7 @@
         <v-icon class="mr-1">mdi-file-document-outline</v-icon><router-link class="path" v-bind:to="{ path: `/note/${item.path}` }">{{ item.path }}</router-link>
       </template>
       <template v-slot:item.time="{ item }">
-        <div class="text-no-wrap">{{ item.time.toLocaleString() }}</div>
+        <div class="text-no-wrap">{{ item.time.format('YYYY-MM-DD HH:mm:ss') }}</div>
       </template>
       <template v-slot:item.size="{ item }">
         <div class="text-no-wrap">{{ formatFileSize(item.size) }}</div>
@@ -96,6 +96,8 @@ import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 import axios from '@/axios';
 import { Query, ListEntry2, compareTags } from '@/api';
 
+import moment from 'moment';
+
 @Component
 export default class Find extends Vue {
   @Prop(String) readonly token!: null | string;
@@ -110,7 +112,7 @@ export default class Find extends Vue {
   get headers() {
     return [
       { text: 'Path', value: 'path' },
-      { text: 'Modified', value: 'time', sort: (a: any, b: any) => a.getTime() - b.getTime() },
+      { text: 'Modified', value: 'time', sort: (a: any, b: any) => a - b },
       { text: 'Size', value: 'size' },
       { text: 'Type', value: 'mimeType' },
       { text: 'Tags', value: 'tags', sortable: false },
@@ -195,7 +197,7 @@ export default class Find extends Vue {
         size: entry.size,
         mimeType: entry.mime_type,
         tags: ((entry.metadata || {}).tags || []).sort(compareTags as (a: any, b: any) => number),
-        time: new Date(entry.time),
+        time: moment(entry.time),
       });
     }
 
