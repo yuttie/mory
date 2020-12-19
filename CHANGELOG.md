@@ -1,3 +1,8 @@
+## 0.8.2 (2020-12-19)
+* Fix an old icon entry in manifest.json
+
+
+
 ## 0.8.1 (2020-12-19)
 * Prefix path to manifest.json with '<%= BASE_URL %>'
 * Optimize icons
