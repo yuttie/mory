@@ -50,7 +50,7 @@ export default class About extends Vue {
 
 .name {
   color: #333;
-  font-family: sans-serif;
+  font-family: Goldman, sans-serif;
   font-size: 4em;
   font-weight: normal;
   line-height: 1.2em;
