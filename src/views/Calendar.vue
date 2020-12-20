@@ -254,9 +254,7 @@ export default class Calendar extends Vue {
     }
     else {
       console.log(event.start);
-      const d = moment(event.start);
-      d.setHours(23, 59, 59, 999);
-      return d;
+      return moment(event.start).endOf('day');
     }
   }
 
