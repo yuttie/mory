@@ -248,12 +248,13 @@ export default class Calendar extends Vue {
     nativeEvent.stopPropagation();
   }
 
-  getEventEndTime(event: any): Date {
+  getEventEndTime(event: any): moment.Moment {
     if (typeof event.end !== 'undefined') {
-      return new Date(event.end);
+      return moment(event.end);
     }
     else {
-      const d = new Date(event.start);
+      console.log(event.start);
+      const d = moment(event.start);
       d.setHours(23, 59, 59, 999);
       return d;
     }
@@ -265,7 +266,7 @@ export default class Calendar extends Vue {
                 ? Color((materialColors as any)[toPropName(event.color)].base)
                 : Color(event.color);
 
-    const now = new Date();
+    const now = moment();
     const time = this.getEventEndTime(event);
     if (time < now || event.finished) {
       return color.fade(0.75).string();
@@ -276,7 +277,7 @@ export default class Calendar extends Vue {
   }
 
   getEventTextColor(event: any): string {
-    const now = new Date();
+    const now = moment();
     const time = this.getEventEndTime(event);
     if (time < now || event.finished) {
       return Color('#000000').fade(0.7).string();
