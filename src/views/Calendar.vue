@@ -270,7 +270,7 @@ export default class Calendar extends Vue {
 
     const now = new Date();
     const time = this.getEventEndTime(event);
-    if (time < now) {
+    if (time < now || event.finished) {
       return color.fade(0.75).string();
     }
     else {
@@ -281,7 +281,7 @@ export default class Calendar extends Vue {
   getEventTextColor(event: any): string {
     const now = new Date();
     const time = this.getEventEndTime(event);
-    if (time < now) {
+    if (time < now || event.finished) {
       return Color('#000000').fade(0.7).string();
     }
     else {
