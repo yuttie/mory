@@ -253,7 +253,6 @@ export default class Calendar extends Vue {
       return moment(event.end);
     }
     else {
-      console.log(event.start);
       return moment(event.start).endOf('day');
     }
   }
