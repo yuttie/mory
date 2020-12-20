@@ -1,86 +1,83 @@
 <template>
   <div class="calendar d-flex flex-column">
-    <v-sheet class="px-5 d-flex">
-      <v-toolbar flat>
-        <v-btn outlined v-on:click="setToday" class="mr-3">Today</v-btn>
-        <v-btn icon small v-on:click="$refs.calendar.prev()">
-          <v-icon>mdi-chevron-left</v-icon>
-        </v-btn>
-        <v-btn icon small v-on:click="$refs.calendar.next()" class="mr-3">
-          <v-icon>mdi-chevron-right</v-icon>
-        </v-btn>
-        <v-toolbar-title v-if="$refs.calendar" class="mr-3">
-          {{ $refs.calendar.title }}
-        </v-toolbar-title>
-      </v-toolbar>
-    </v-sheet>
-    <v-sheet class="flex-grow-1">
-      <v-calendar
-        ref="calendar"
-        v-bind:type="calendarType"
-        v-bind:value="calendarCursor"
-        v-bind:events="events"
-        v-bind:event-color="getEventColor"
-        v-bind:event-text-color="getEventTextColor"
-        v-on:input="onCalendarInput"
-        v-on:click:event="showEvent"
-        v-on:click:more="viewDay"
-        v-on:click:date="viewDay"
-        color="primary"
-      ></v-calendar>
-      <v-menu
-        v-model="selectedOpen"
-        v-bind:close-on-content-click="false"
-        v-bind:activator="selectedElement"
-        offset-x
-        offset-y
-        max-width="30em"
-      >
-        <v-card flat>
-          <v-toolbar
-            v-bind:color="selectedEvent.color"
-            dark
-            flat
-          >
-            <v-toolbar-title>{{ selectedEvent.name }}</v-toolbar-title>
-            <v-spacer></v-spacer>
-            <v-icon v-if="selectedEvent.finished">mdi-check</v-icon>
-          </v-toolbar>
-          <v-card-text>
-            <v-list dense>
-              <v-list-item>
-                <v-list-item-icon>
-                  <v-icon>mdi-clock-start</v-icon>
-                </v-list-item-icon>
-                <v-list-item-content>
-                  {{ selectedEvent.start }}
-                </v-list-item-content>
-              </v-list-item>
-              <v-list-item v-if="selectedEvent.end">
-                <v-list-item-icon>
-                  <v-icon>mdi-clock-end</v-icon>
-                </v-list-item-icon>
-                <v-list-item-content>
-                  {{ selectedEvent.end }}
-                </v-list-item-content>
-              </v-list-item>
-              <v-list-item>
-                <v-list-item-icon>
-                  <v-icon>mdi-file-document-outline</v-icon>
-                </v-list-item-icon>
-                <v-list-item-content>
-                  <router-link v-bind:to="{ name: 'Note', params: { path: selectedEvent.notePath } }">{{ selectedEvent.notePath }}</router-link>
-                </v-list-item-content>
-              </v-list-item>
-            </v-list>
-            <template v-if="selectedEvent.note">
-              <v-divider></v-divider>
-              <div class="mt-3" style="white-space: pre-wrap;">{{ selectedEvent.note }}</div>
-            </template>
-          </v-card-text>
-        </v-card>
-      </v-menu>
-    </v-sheet>
+    <v-toolbar flat class="px-5 d-flex">
+      <v-btn outlined v-on:click="setToday" class="mr-3">Today</v-btn>
+      <v-btn icon small v-on:click="$refs.calendar.prev()">
+        <v-icon>mdi-chevron-left</v-icon>
+      </v-btn>
+      <v-btn icon small v-on:click="$refs.calendar.next()" class="mr-3">
+        <v-icon>mdi-chevron-right</v-icon>
+      </v-btn>
+      <v-toolbar-title v-if="$refs.calendar" class="mr-3">
+        {{ $refs.calendar.title }}
+      </v-toolbar-title>
+    </v-toolbar>
+    <v-calendar
+      ref="calendar"
+      v-bind:type="calendarType"
+      v-bind:value="calendarCursor"
+      v-bind:events="events"
+      v-bind:event-color="getEventColor"
+      v-bind:event-text-color="getEventTextColor"
+      v-on:input="onCalendarInput"
+      v-on:click:event="showEvent"
+      v-on:click:more="viewDay"
+      v-on:click:date="viewDay"
+      color="primary"
+      class="flex-grow-1"
+    ></v-calendar>
+    <v-menu
+      v-model="selectedOpen"
+      v-bind:close-on-content-click="false"
+      v-bind:activator="selectedElement"
+      offset-x
+      offset-y
+      max-width="30em"
+    >
+      <v-card flat>
+        <v-toolbar
+          v-bind:color="selectedEvent.color"
+          dark
+          flat
+        >
+          <v-toolbar-title>{{ selectedEvent.name }}</v-toolbar-title>
+          <v-spacer></v-spacer>
+          <v-icon v-if="selectedEvent.finished">mdi-check</v-icon>
+        </v-toolbar>
+        <v-card-text>
+          <v-list dense>
+            <v-list-item>
+              <v-list-item-icon>
+                <v-icon>mdi-clock-start</v-icon>
+              </v-list-item-icon>
+              <v-list-item-content>
+                {{ selectedEvent.start }}
+              </v-list-item-content>
+            </v-list-item>
+            <v-list-item v-if="selectedEvent.end">
+              <v-list-item-icon>
+                <v-icon>mdi-clock-end</v-icon>
+              </v-list-item-icon>
+              <v-list-item-content>
+                {{ selectedEvent.end }}
+              </v-list-item-content>
+            </v-list-item>
+            <v-list-item>
+              <v-list-item-icon>
+                <v-icon>mdi-file-document-outline</v-icon>
+              </v-list-item-icon>
+              <v-list-item-content>
+                <router-link v-bind:to="{ name: 'Note', params: { path: selectedEvent.notePath } }">{{ selectedEvent.notePath }}</router-link>
+              </v-list-item-content>
+            </v-list-item>
+          </v-list>
+          <template v-if="selectedEvent.note">
+            <v-divider></v-divider>
+            <div class="mt-3" style="white-space: pre-wrap;">{{ selectedEvent.note }}</div>
+          </template>
+        </v-card-text>
+      </v-card>
+    </v-menu>
     <v-overlay v-bind:value="isLoading" z-index="10">
       <v-progress-circular indeterminate size="64"></v-progress-circular>
     </v-overlay>
