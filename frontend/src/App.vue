@@ -30,6 +30,10 @@
         <v-list dense>
           <v-list-item to="/create">New</v-list-item>
           <v-list-item
+            v-if="$route.name === 'Note'"
+            v-bind:to="{ name: 'Create', query: { from: $route.params.path } }"
+          >Duplicate</v-list-item>
+          <v-list-item
             v-for="path in templates"
             v-bind:key="path"
             v-bind:to="{ name: 'Create', query: { from: path } }"
