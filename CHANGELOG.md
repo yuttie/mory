@@ -1,3 +1,22 @@
+## 0.9.0 (2020-12-27)
+
+* Dependencies are upgraded
+* App
+    * Menus are shown just by hovering
+* Logo
+    * Replace PNG version with SVG
+* Calendar
+    * Finished events are now semi-transparent
+    * Calendar now fills all available space on Safari
+    * Use Moment.js for parsing datetimes
+    * Now one can use arrow keys to go to next/prev month
+* Note
+    * Add functionality to create a new note from existing one
+* Find
+    * Limit height of tags area
+
+
+
 ## 0.8.2 (2020-12-19)
 * Fix an old icon entry in manifest.json
 
