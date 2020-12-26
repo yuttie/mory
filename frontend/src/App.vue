@@ -15,6 +15,7 @@
       <input type="file" multiple class="d-none" ref="fileInput">
       <v-menu
         offset-y
+        open-on-hover
       >
         <template v-slot:activator="{ on, attrs }">
           <v-btn
@@ -41,6 +42,7 @@
       <v-menu
         v-bind:close-on-content-click="false"
         v-model="uploadMenuIsVisible"
+        open-on-hover
         offset-y
       >
         <template v-slot:activator="{ attrs, on }">
@@ -113,7 +115,10 @@
           </v-card-actions>
         </v-card>
       </v-menu>
-      <v-menu offset-y>
+      <v-menu
+        offset-y
+        open-on-hover
+      >
         <template v-slot:activator="{ attrs, on }">
           <v-btn
             icon
