@@ -1,11 +1,9 @@
 <template>
   <v-app id="app" ref="app">
-    <v-app-bar app dense id="nav" color="white" elevate-on-scroll fixed>
-      <v-toolbar-title>
-        <router-link to="/">
-          <div class="logo"></div>
-        </router-link>
-      </v-toolbar-title>
+    <v-app-bar app height="48" id="nav" color="white" elevate-on-scroll fixed>
+      <v-btn to="/" icon flat v-bind:ripple="false">
+        <div class="logo"></div>
+      </v-btn>
       <v-spacer></v-spacer>
       <v-tabs centered optional>
         <v-tab to="/"><v-icon>mdi-home</v-icon></v-tab>
@@ -562,29 +560,13 @@ export default class App extends Vue {
 }
 
 .logo {
-  display: inline-flex;
-  align-items: center;
-  vertical-align: bottom;
-  color: #333;
-  font-family: 'Source Code Pro', monospace;
-  font-size: 1.3em;
-  font-weight: normal;
-  letter-spacing: 0.4em;
-  transition: transform 200ms ease;
-  user-select: none;
-
-  &::before {
-    display: inline-block;
-    content: '';
-    width: 2.0em;
-    height: 1.5em;
-    background-size: contain;
-    background-position: left center;
-    background-repeat: no-repeat;
-    background-image: url("assets/logo.png");
-    vertical-align: bottom;
-    margin-right: 0.5em;
-  }
+  display: inline-block;
+  width: 48px;
+  height: 48px;
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-image: url("assets/logo.svg");
 }
 
 .login-overlay {

@@ -1,7 +1,6 @@
 <template>
   <div class="about">
-    <div class="logo"><img src="@/assets/logo.png"></div>
-    <div class="name">{{ name }}</div>
+    <div class="logo"></div>
     <div class="version">Version {{ version }}</div>
     <div class="copyright">Copyright © {{ fromYear }}&ndash;{{ buildYear }} {{ author }}</div>
   </div>
@@ -39,24 +38,15 @@ export default class About extends Vue {
 }
 
 .logo {
-  padding-bottom: 1em;
-  border-bottom: 1px solid #ccc;
+  width: 256px;
+  height: 256px;
 
-  & > img {
-    width: 192px;
-    height: 192px;
-  }
-}
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-image: url("../assets/logo-with-name.svg");
 
-.name {
-  color: #333;
-  font-family: Goldman, sans-serif;
-  font-size: 4em;
-  font-weight: normal;
-  line-height: 1.2em;
-  $letter-spacing: 0.5em;
-  padding-left: $letter-spacing;
-  letter-spacing: $letter-spacing;
+  margin-bottom: 0.2em;
 }
 
 .copyright {
