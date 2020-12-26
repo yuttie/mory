@@ -1,7 +1,7 @@
 <template>
   <v-app id="app" ref="app">
     <v-app-bar app height="48" id="nav" color="white" elevate-on-scroll fixed>
-      <v-btn to="/" icon flat v-bind:ripple="false">
+      <v-btn to="/" icon text v-bind:ripple="false">
         <div class="logo"></div>
       </v-btn>
       <v-spacer></v-spacer>
