@@ -186,7 +186,22 @@ export default class Calendar extends Vue {
       this.calendarCursor = moment(this.$route.params.date, 'YYYY/MM/DD').format('YYYY-MM-DD');
     }
 
+    window.addEventListener('keydown', this.onKeydown);
+
     this.load();
+  }
+
+  destroyed() {
+    window.removeEventListener('keydown', this.onKeydown);
+  }
+
+  onKeydown(e: KeyboardEvent) {
+    if (e.key === 'ArrowLeft') {
+      this.$refs.calendar.prev();
+    }
+    else if (e.key === 'ArrowRight') {
+      this.$refs.calendar.next();
+    }
   }
 
   load() {
