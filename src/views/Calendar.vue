@@ -197,10 +197,10 @@ export default class Calendar extends Vue {
 
   onKeydown(e: KeyboardEvent) {
     if (e.key === 'ArrowLeft') {
-      this.$refs.calendar.prev();
+      (this.$refs.calendar as any).prev();
     }
     else if (e.key === 'ArrowRight') {
-      this.$refs.calendar.next();
+      (this.$refs.calendar as any).next();
     }
   }
 
