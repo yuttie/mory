@@ -1,33 +1,32 @@
 <template>
-  <div class="find">
-    <div class="mx-5 my-3">
-      <v-text-field
-        v-model="queryText"
-        solo
-        prepend-inner-icon="mdi-magnify"
-        type="text"
-        label="Search"
-        autofocus
-        autocomplete="off"
-        hide-details="auto"
-        ref="query"
-      >
-        <template v-slot:append>
-          <v-btn icon v-bind:ripple="false" v-on:click="queryText = ''" v-if="queryText !== ''">
-            <v-icon>mdi-close</v-icon>
-          </v-btn>
-        </template>
-      </v-text-field>
-      <div class="d-flex flex-row align-center flex-wrap my-5">
-        <v-chip
-          small
-          class="ma-1"
-          v-for="tag of tags"
-          v-bind:key="tag"
-          v-bind:color="tagColor(tag)"
-          v-on:click="handleTagClick(tag, $event)"
-        >{{ tag }}</v-chip>
-      </div>
+  <div class="find d-flex flex-column">
+    <v-text-field
+      v-model="queryText"
+      solo
+      prepend-inner-icon="mdi-magnify"
+      type="text"
+      label="Search"
+      autofocus
+      autocomplete="off"
+      hide-details="auto"
+      ref="query"
+      class="mx-3 mt-3"
+    >
+      <template v-slot:append>
+        <v-btn icon v-bind:ripple="false" v-on:click="clearQuery" v-if="queryText !== ''">
+          <v-icon>mdi-close</v-icon>
+        </v-btn>
+      </template>
+    </v-text-field>
+    <div class="tags d-flex flex-row align-center flex-wrap mx-3 mt-3">
+      <v-chip
+        small
+        class="ma-1"
+        v-for="tag of tags"
+        v-bind:key="tag"
+        v-bind:color="tagColor(tag)"
+        v-on:click="handleTagClick(tag, $event)"
+      >{{ tag }}</v-chip>
     </div>
     <v-data-table
       v-bind:headers="headers"
@@ -39,7 +38,7 @@
       sort-desc
       must-sort
       show-select
-      class="mx-5"
+      class="mt-3"
     >
       <template v-slot:top="{ pagination, options, updateOptions }">
         <v-toolbar flat style="border-bottom: thin solid rgba(0, 0, 0, 0.12);">
@@ -279,6 +278,10 @@ export default class Find extends Vue {
     }
   }
 
+  clearQuery(e: MouseEvent) {
+    this.queryText = '';
+  }
+
   handleTagClick(tag: string, e: MouseEvent) {
     if (e.ctrlKey) {
       this.toggleTag(tag);
@@ -407,6 +410,11 @@ export default class Find extends Vue {
 </script>
 
 <style scoped lang="scss">
+.tags {
+  max-height: 15em;
+  overflow-y: auto;
+}
+
 .path {
   color: rgba(0, 0, 0, 0.87);
   text-decoration: none;
