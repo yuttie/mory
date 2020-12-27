@@ -18,6 +18,8 @@ COPY --from=build-stage /usr/src/app/target/release/moried /usr/local/bin/moried
 ENV MORIED_GIT_DIR /repo
 ENV MORIED_LISTEN 0.0.0.0:3030
 
+RUN mkdir $MORIED_GIT_DIR
+
 VOLUME $MORIED_GIT_DIR
 EXPOSE 3030
 
