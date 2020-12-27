@@ -1,24 +1,21 @@
 # mory
 
-## Project setup
-```
-yarn install
+## Usage
+
+### With Docker
+
+Build a Docker image:
+```shell
+docker build -t mory .
 ```
 
-### Compiles and hot-reloads for development
+Configure environment variables in `env.list`:
 ```
-yarn serve
-```
-
-### Compiles and minifies for production
-```
-yarn build
+VUE_APP_APPLICATION_ROOT=http://127.0.0.1:8080
+VUE_APP_API_URL=http://127.0.0.1:3030/
 ```
 
-### Lints and fixes files
+Run a container:
+```shell
+docker run --env-file env.list -p 127.0.0.1:8080:80 mory
 ```
-yarn lint
-```
-
-### Customize configuration
-See [Configuration Reference](https://cli.vuejs.org/config/).
