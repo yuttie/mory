@@ -121,9 +121,19 @@ export default class Calendar extends Vue {
         if (Object.prototype.hasOwnProperty.call(entry.metadata, 'events') && typeof entry.metadata.events === 'object' && entry.metadata.events !== null) {
           for (const [eventName, eventDetail] of Object.entries(entry.metadata.events)) {
             if (typeof eventDetail === 'object' && eventDetail !== null) {
+              const endTimeDurationRegexp =
+                /^\+(\d+) *(years?|y|quarters?|Q|months?|M|weeks?|w|days?|d|hours?|h|minutes?|m|seconds?|s|milliseconds?|ms)$/i;
               // If eventDetail has the 'times' property and it is an array
               if (isMetadataEventMultiple(eventDetail)) {
                 for (const time of eventDetail.times) {
+                  const match = endTimeDurationRegexp.exec(time.end || '');
+                  if (match !== null) {
+                    const amount = parseInt(match[1]);
+                    const unit = match[2] as moment.DurationInputArg2;
+                    time.end = moment(time.start)
+                      .add(amount, unit)
+                      .format('YYYY-MM-DD HH:mm:ss');
+                  }
                   const event = {
                     name: eventName,
                     start: time.start,
@@ -139,6 +149,14 @@ export default class Calendar extends Vue {
                 }
               }
               else {
+                const match = endTimeDurationRegexp.exec(eventDetail.end || '');
+                if (match !== null) {
+                  const amount = parseInt(match[1]);
+                  const unit = match[2] as moment.DurationInputArg2;
+                  eventDetail.end = moment(eventDetail.start)
+                    .add(amount, unit)
+                    .format('YYYY-MM-DD HH:mm:ss');
+                }
                 const event = {
                   name: eventName,
                   start: eventDetail.start,
