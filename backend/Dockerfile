@@ -4,8 +4,10 @@ FROM rust:latest as build-stage
 WORKDIR /usr/src/app
 COPY Cargo.toml .
 COPY Cargo.lock .
-COPY src src
+COPY docker/dummy-main.rs src/main.rs
+RUN cargo build --release
 
+COPY src src
 RUN cargo build --release
 
 # production stage
