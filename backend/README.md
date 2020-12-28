@@ -22,3 +22,12 @@ Run a container:
 ```shell
 docker run --env-file env.list -p 127.0.0.1:3030:3030 -v /path/to/local/repo:/repo -u $(id -u $USER):$(id -g $USER) moried
 ```
+
+Please make sure Git's configs `user.name` and `user.email` are set correctly.
+When moried make a commit, it doesn't use neither MORIED_USER_NAME nor MORIED_USER_EMAIL.
+One way of achieving this is setting repository-local configs:
+```
+cd /path/to/local/repo
+git config user.name "John Doe"
+git config user.email "john.doe@example.com"
+```
