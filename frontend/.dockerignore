@@ -1,0 +1,18 @@
+# Project files
+.dockerignore
+.env.template
+.gitignore
+CHANGELOG.md
+Dockerfile
+LICENSE
+README.md
+docs/.nojekyll
+docs/README.md
+docs/index.html
+logo.svg
+tools/generate-icons.sh
+tools/git-hooks/post-receive
+
+# Generated files
+*~
+node_modules
