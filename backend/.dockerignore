@@ -1,2 +1,13 @@
-target/
-.git/
+# Project files
+.dockerignore
+.env.template
+.git
+.gitignore
+Dockerfile
+LICENSE
+README.md
+tools
+
+# Generated files
+*~
+target
