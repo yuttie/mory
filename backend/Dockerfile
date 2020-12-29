@@ -8,7 +8,7 @@ COPY docker/dummy-main.rs src/main.rs
 RUN cargo build --release
 
 COPY src src
-RUN cargo build --release
+RUN touch src/main.rs && cargo build --release
 
 # production stage
 FROM debian:buster-slim as production-stage
