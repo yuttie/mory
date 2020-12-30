@@ -92,7 +92,7 @@ import axios from '@/axios';
 import { isMetadataEventMultiple, ListEntry, validateEvent } from '@/api';
 import Color from 'color';
 import materialColors from 'vuetify/lib/util/colors';
-import moment from 'moment';
+import dayjs from 'dayjs';
 import XXH from 'xxhashjs';
 
 @Component
@@ -104,7 +104,7 @@ export default class Calendar extends Vue {
   error = false;
   errorText = '';
   calendarType = 'month';
-  calendarCursor = moment().format('YYYY-MM-DD');
+  calendarCursor = dayjs().format('YYYY-MM-DD');
   selectedEvent = {};
   selectedElement = null;
   selectedOpen = false;
@@ -121,16 +121,18 @@ export default class Calendar extends Vue {
         if (Object.prototype.hasOwnProperty.call(entry.metadata, 'events') && typeof entry.metadata.events === 'object' && entry.metadata.events !== null) {
           for (const [eventName, eventDetail] of Object.entries(entry.metadata.events)) {
             if (typeof eventDetail === 'object' && eventDetail !== null) {
-              const endTimeDurationRegexp =
-                /^\+(\d+) *(years?|y|quarters?|Q|months?|M|weeks?|w|days?|d|hours?|h|minutes?|m|seconds?|s|milliseconds?|ms)$/i;
+              const endTimeDurationLongRegexp =
+                /^\+(\d+) *(years?|months?|weeks?|days?|hours?|minutes?|seconds?|milliseconds?)$/i;
+              const endTimeDurationShortRegexp =
+                /^\+(\d+) *(y|M|w|d|h|m|s|ms)$/;
               // If eventDetail has the 'times' property and it is an array
               if (isMetadataEventMultiple(eventDetail)) {
                 for (const time of eventDetail.times) {
-                  const match = endTimeDurationRegexp.exec(time.end || '');
+                  const match = endTimeDurationShortRegexp.exec(time.end || '') || endTimeDurationLongRegexp.exec(time.end || '');
                   if (match !== null) {
                     const amount = parseInt(match[1]);
-                    const unit = match[2] as moment.DurationInputArg2;
-                    time.end = moment(time.start)
+                    const unit = match[2] as dayjs.OpUnitType;
+                    time.end = dayjs(time.start)
                       .add(amount, unit)
                       .format('YYYY-MM-DD HH:mm:ss');
                   }
@@ -149,11 +151,11 @@ export default class Calendar extends Vue {
                 }
               }
               else {
-                const match = endTimeDurationRegexp.exec(eventDetail.end || '');
+                const match = endTimeDurationShortRegexp.exec(eventDetail.end || '') || endTimeDurationLongRegexp.exec(eventDetail.end || '');
                 if (match !== null) {
                   const amount = parseInt(match[1]);
-                  const unit = match[2] as moment.DurationInputArg2;
-                  eventDetail.end = moment(eventDetail.start)
+                  const unit = match[2] as dayjs.OpUnitType;
+                  eventDetail.end = dayjs(eventDetail.start)
                     .add(amount, unit)
                     .format('YYYY-MM-DD HH:mm:ss');
                 }
@@ -190,7 +192,7 @@ export default class Calendar extends Vue {
 
   onCalendarInput(date: string) {
     this.$router.push({
-      path: `/calendar/${this.calendarType}/${moment(date, 'YYYY-MM-DD').format('YYYY/MM/DD')}`,
+      path: `/calendar/${this.calendarType}/${dayjs(date, 'YYYY-MM-DD').format('YYYY/MM/DD')}`,
     });
   }
 
@@ -201,7 +203,7 @@ export default class Calendar extends Vue {
 
     if (this.$route.name === 'CalendarWithDate') {
       this.calendarType = this.$route.params.type;
-      this.calendarCursor = moment(this.$route.params.date, 'YYYY/MM/DD').format('YYYY-MM-DD');
+      this.calendarCursor = dayjs(this.$route.params.date, 'YYYY/MM/DD').format('YYYY-MM-DD');
     }
 
     window.addEventListener('keydown', this.onKeydown);
@@ -258,7 +260,7 @@ export default class Calendar extends Vue {
 
   viewDay({ date }: { date: string }) {
     this.$router.push({
-      path: `/calendar/day/${moment(date, 'YYYY-MM-DD').format('YYYY/MM/DD')}`,
+      path: `/calendar/day/${dayjs(date, 'YYYY-MM-DD').format('YYYY/MM/DD')}`,
     });
   }
 
@@ -281,12 +283,12 @@ export default class Calendar extends Vue {
     nativeEvent.stopPropagation();
   }
 
-  getEventEndTime(event: any): moment.Moment {
+  getEventEndTime(event: any): dayjs.Dayjs {
     if (typeof event.end !== 'undefined') {
-      return moment(event.end);
+      return dayjs(event.end);
     }
     else {
-      return moment(event.start).endOf('day');
+      return dayjs(event.start).endOf('day');
     }
   }
 
@@ -296,7 +298,7 @@ export default class Calendar extends Vue {
                 ? Color((materialColors as any)[toPropName(event.color)].base)
                 : Color(event.color);
 
-    const now = moment();
+    const now = dayjs();
     const time = this.getEventEndTime(event);
     if (time < now || event.finished) {
       return color.fade(0.75).string();
@@ -307,7 +309,7 @@ export default class Calendar extends Vue {
   }
 
   getEventTextColor(event: any): string {
-    const now = moment();
+    const now = dayjs();
     const time = this.getEventEndTime(event);
     if (time < now || event.finished) {
       return Color('#000000').fade(0.7).string();
