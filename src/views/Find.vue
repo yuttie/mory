@@ -95,7 +95,7 @@ import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 import axios from '@/axios';
 import { Query, ListEntry2, compareTags } from '@/api';
 
-import moment from 'moment';
+import dayjs from 'dayjs';
 
 @Component
 export default class Find extends Vue {
@@ -196,7 +196,7 @@ export default class Find extends Vue {
         size: entry.size,
         mimeType: entry.mime_type,
         tags: ((entry.metadata || {}).tags || []).sort(compareTags as (a: any, b: any) => number),
-        time: moment(entry.time),
+        time: dayjs(entry.time),
       });
     }
 
