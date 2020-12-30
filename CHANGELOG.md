@@ -1,3 +1,6 @@
+## 0.10.0 (2020-12-31)
+* Brush up Docker image
+
 ## 0.9.1 (2020-12-27)
 * Now event's end time can be a relative time to its start
 
