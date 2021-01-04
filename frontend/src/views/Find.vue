@@ -46,6 +46,7 @@
             v-bind:disabled="selected.length === 0"
             v-on:click="deleteSelected"
             icon
+            color="pink"
           >
             <v-icon>mdi-delete</v-icon>
           </v-btn>
