@@ -652,8 +652,13 @@ event color:
   }
 
   handleKeydown(e: KeyboardEvent) {
-    if (!this.editorIsVisible && e.key === 'e') {
-      this.toggleEditor();
+    if (e.key === 'e') {
+      if (!this.editorIsVisible) {
+        this.toggleEditor();
+      }
+      else {
+        this.focusOrBlurEditor();
+      }
     }
     else if (e.ctrlKey && e.key === 'Enter') {
       this.toggleEditor();
