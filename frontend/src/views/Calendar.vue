@@ -122,15 +122,15 @@ export default class Calendar extends Vue {
           for (const [eventName, eventDetail] of Object.entries(entry.metadata.events)) {
             if (typeof eventDetail === 'object' && eventDetail !== null) {
               const endTimeDurationLongRegexp =
-                /^\+(\d+) *(years?|months?|weeks?|days?|hours?|minutes?|seconds?|milliseconds?)$/i;
+                /^\+([\d.]+) *(years?|months?|weeks?|days?|hours?|minutes?|seconds?|milliseconds?)$/i;
               const endTimeDurationShortRegexp =
-                /^\+(\d+) *(y|M|w|d|h|m|s|ms)$/;
+                /^\+([\d.]+) *(y|M|w|d|h|m|s|ms)$/;
               // If eventDetail has the 'times' property and it is an array
               if (isMetadataEventMultiple(eventDetail)) {
                 for (const time of eventDetail.times) {
                   const match = endTimeDurationShortRegexp.exec(time.end || '') || endTimeDurationLongRegexp.exec(time.end || '');
                   if (match !== null) {
-                    const amount = parseInt(match[1]);
+                    const amount = parseFloat(match[1]);
                     const unit = match[2] as dayjs.OpUnitType;
                     time.end = dayjs(time.start)
                       .add(amount, unit)
@@ -153,7 +153,7 @@ export default class Calendar extends Vue {
               else {
                 const match = endTimeDurationShortRegexp.exec(eventDetail.end || '') || endTimeDurationLongRegexp.exec(eventDetail.end || '');
                 if (match !== null) {
-                  const amount = parseInt(match[1]);
+                  const amount = parseFloat(match[1]);
                   const unit = match[2] as dayjs.OpUnitType;
                   eventDetail.end = dayjs(eventDetail.start)
                     .add(amount, unit)
