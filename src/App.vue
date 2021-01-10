@@ -1,11 +1,19 @@
 <template>
   <v-app id="app" ref="app">
     <v-app-bar app height="48" id="nav" color="white" elevate-on-scroll fixed>
+      <v-app-bar-nav-icon
+        v-if="$vuetify.breakpoint.xs"
+        v-on:click.stop="showDrawer = !showDrawer">
+      </v-app-bar-nav-icon>
       <v-btn to="/" icon text v-bind:ripple="false">
         <div class="logo"></div>
       </v-btn>
       <v-spacer></v-spacer>
-      <v-tabs centered optional>
+      <v-tabs
+        v-if="!$vuetify.breakpoint.xs"
+        centered
+        optional
+      >
         <v-tab to="/"><v-icon>mdi-home</v-icon></v-tab>
         <v-tab to="/calendar"><v-icon>mdi-calendar</v-icon></v-tab>
         <v-tab to="/find"><v-icon>mdi-view-list</v-icon></v-tab>
@@ -153,6 +161,47 @@
         </v-card>
       </v-menu>
     </v-app-bar>
+    <v-navigation-drawer
+      v-if="$vuetify.breakpoint.xs"
+      v-model="showDrawer"
+      fixed
+      temporary
+    >
+      <v-list dense>
+        <v-list-item to="/">
+          <v-list-item-icon>
+            <v-icon>mdi-home</v-icon>
+          </v-list-item-icon>
+          <v-list-item-content>
+            Home
+          </v-list-item-content>
+        </v-list-item>
+        <v-list-item to="/calendar">
+          <v-list-item-icon>
+            <v-icon>mdi-calendar</v-icon>
+          </v-list-item-icon>
+          <v-list-item-content>
+            Calendar
+          </v-list-item-content>
+        </v-list-item>
+        <v-list-item to="/find">
+          <v-list-item-icon>
+            <v-icon>mdi-view-list</v-icon>
+          </v-list-item-icon>
+          <v-list-item-content>
+            Find
+          </v-list-item-content>
+        </v-list-item>
+        <v-list-item to="/about">
+          <v-list-item-icon>
+            <v-icon>mdi-information</v-icon>
+          </v-list-item-icon>
+          <v-list-item-content>
+            About
+          </v-list-item-content>
+        </v-list-item>
+      </v-list>
+    </v-navigation-drawer>
     <v-main>
       <router-view v-if="!(!token && !$refs.routerView)" v-bind:key="$route.path" v-bind:token="token" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerView"/>
     </v-main>
@@ -217,6 +266,7 @@ export default class App extends Vue {
   templates = [] as string[];
   uploadList = [] as UploadEntry[];
   uploadMenuIsVisible = false;
+  showDrawer = false;
 
   get decodedToken() {
     if (this.token) {
