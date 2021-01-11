@@ -1,3 +1,12 @@
+## 0.11.0 (2021-01-11)
+* UI improvements
+    * Support narrow screens
+    * Focus editor by 'e' when editor is already shown
+    * Support fractional event durations
+    * Change color of "Delete Note" button
+* Remove <link>s which are no longer needed
+* Replace Moment.js with Day.js
+
 ## 0.10.0 (2020-12-31)
 * Brush up Docker image
 
