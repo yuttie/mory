@@ -167,7 +167,7 @@
       fixed
       temporary
     >
-      <v-list dense>
+      <v-list>
         <v-list-item to="/">
           <v-list-item-icon>
             <v-icon>mdi-home</v-icon>
