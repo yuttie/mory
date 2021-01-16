@@ -396,7 +396,7 @@ event color:
     // We have to update the innerHTML immediately here instead of letting Vue
     // update it reactively, otherwise MathJax will not be able to see the new
     // content.
-    this.$refs.renderedContent.innerHTML = this.rendered.content;
+    (this.$refs.renderedContent as Element).innerHTML = this.rendered.content;
 
     // Schedule math rendering
     this.mathjaxTypesetPromise = this.mathjaxTypesetPromise.then(() => {
