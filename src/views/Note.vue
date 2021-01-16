@@ -98,7 +98,6 @@
           <div
             ref="renderedContent"
             class="content"
-            v-html="rendered.content"
           ></div>
         </div>
       </div>
@@ -297,10 +296,6 @@ event color:
   }
 
   updateRendered() {
-    this.mathjaxTypesetPromise = this.mathjaxTypesetPromise.then(() => {
-      return MathJax.typesetPromise([this.$refs.renderedContent]);
-    });
-
     const text = this.text;
 
     // Split the note text into a YAML part and a body part
@@ -397,6 +392,16 @@ event color:
         content: renderedContent,
       };
     }
+
+    // We have to update the innerHTML immediately here instead of letting Vue
+    // update it reactively, otherwise MathJax will not be able to see the new
+    // content.
+    this.$refs.renderedContent.innerHTML = this.rendered.content;
+
+    // Schedule math rendering
+    this.mathjaxTypesetPromise = this.mathjaxTypesetPromise.then(() => {
+      return MathJax.typesetPromise([this.$refs.renderedContent]);
+    });
 
     // Update the page title
     document.title = `${this.title} | ${process.env.VUE_APP_NAME}`;
