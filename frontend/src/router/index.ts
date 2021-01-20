@@ -4,6 +4,7 @@ import Home from '../views/Home.vue'
 import Calendar from '../views/Calendar.vue'
 import Find from '../views/Find.vue'
 import Note from '../views/Note.vue'
+import Config from '../views/Config.vue'
 
 import { v4 as uuidv4 } from 'uuid';
 
@@ -45,6 +46,11 @@ const routes: Array<RouteConfig> = [
     path: '/note/:path*',
     name: 'Note',
     component: Note,
+  },
+  {
+    path: '/config',
+    name: 'Config',
+    component: Config,
   },
   {
     path: '/about',
