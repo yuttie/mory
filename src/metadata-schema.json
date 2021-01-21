@@ -14,7 +14,9 @@
         "event-multiple": {
             "type": "object",
             "properties": {
+                "end": { "type": "string" },
                 "color": { "type": "string" },
+                "note": { "type": "string" },
                 "times": {
                     "type": "array",
                     "items": { "$ref": "#/definitions/event-single" }

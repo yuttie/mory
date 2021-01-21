@@ -110,6 +110,23 @@ export default class Calendar extends Vue {
   selectedOpen = false;
 
   get events() {
+    function normalizeEndTime(end: any, start: any): any {
+      const durationShortRegexp =
+        /^\+([\d.]+) *(y|M|w|d|h|m|s|ms)$/;
+      const durationLongRegexp =
+        /^\+([\d.]+) *(years?|months?|weeks?|days?|hours?|minutes?|seconds?|milliseconds?)$/i;
+      const match = durationShortRegexp.exec(end || '') || durationLongRegexp.exec(end || '');
+      if (match === null) {
+        return end;
+      }
+      else {
+        const amount = parseFloat(match[1]);
+        const unit = match[2] as dayjs.OpUnitType;
+        return dayjs(start)
+          .add(amount, unit)
+          .format('YYYY-MM-DD HH:mm:ss');
+      }
+    }
     const events = [];
     for (const entry of this.entries) {
       if (entry.metadata !== null) {
@@ -121,28 +138,17 @@ export default class Calendar extends Vue {
         if (Object.prototype.hasOwnProperty.call(entry.metadata, 'events') && typeof entry.metadata.events === 'object' && entry.metadata.events !== null) {
           for (const [eventName, eventDetail] of Object.entries(entry.metadata.events)) {
             if (typeof eventDetail === 'object' && eventDetail !== null) {
-              const endTimeDurationLongRegexp =
-                /^\+([\d.]+) *(years?|months?|weeks?|days?|hours?|minutes?|seconds?|milliseconds?)$/i;
-              const endTimeDurationShortRegexp =
-                /^\+([\d.]+) *(y|M|w|d|h|m|s|ms)$/;
               // If eventDetail has the 'times' property and it is an array
               if (isMetadataEventMultiple(eventDetail)) {
                 for (const time of eventDetail.times) {
-                  const match = endTimeDurationShortRegexp.exec(time.end || '') || endTimeDurationLongRegexp.exec(time.end || '');
-                  if (match !== null) {
-                    const amount = parseFloat(match[1]);
-                    const unit = match[2] as dayjs.OpUnitType;
-                    time.end = dayjs(time.start)
-                      .add(amount, unit)
-                      .format('YYYY-MM-DD HH:mm:ss');
-                  }
+                  time.end = normalizeEndTime(time.end || eventDetail.end, time.start);
                   const event = {
                     name: eventName,
                     start: time.start,
                     end: time.end,
                     finished: time.finished,
                     color: time.color || eventDetail.color || defaultColor,
-                    note: time.note,
+                    note: time.note || eventDetail.note,
                     notePath: entry.path,
                   };
                   if (validateEvent(event)) {
@@ -151,14 +157,7 @@ export default class Calendar extends Vue {
                 }
               }
               else {
-                const match = endTimeDurationShortRegexp.exec(eventDetail.end || '') || endTimeDurationLongRegexp.exec(eventDetail.end || '');
-                if (match !== null) {
-                  const amount = parseFloat(match[1]);
-                  const unit = match[2] as dayjs.OpUnitType;
-                  eventDetail.end = dayjs(eventDetail.start)
-                    .add(amount, unit)
-                    .format('YYYY-MM-DD HH:mm:ss');
-                }
+                eventDetail.end = normalizeEndTime(eventDetail.end, eventDetail.start);
                 const event = {
                   name: eventName,
                   start: eventDetail.start,
