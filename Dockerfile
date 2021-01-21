@@ -1,12 +1,12 @@
 # build stage
 FROM node:lts-alpine as build-stage
 WORKDIR /app
-COPY package*.json ./
-RUN npm install
+COPY package.json yarn.lock ./
+RUN yarn install
 COPY . .
 RUN VUE_APP_APPLICATION_ROOT="VUE_APP_APPLICATION_ROOT_VALUE_TO_BE_REPLACED_LATER" \
     VUE_APP_API_URL="VUE_APP_API_URL_VALUE_TO_BE_REPLACED_LATER" \
-    npm run build
+    yarn build
 
 # production stage
 FROM nginx:stable-alpine as production-stage
