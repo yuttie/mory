@@ -22,7 +22,9 @@ export interface MetadataEventSingle {
 }
 
 export interface MetadataEventMultiple {
+  end?: string;
   color?: string;
+  note?: string;
   times: MetadataEventSingle[];
 }
 
