@@ -293,8 +293,8 @@ event color:
   }
 
   get editorMode() {
-    if (/\.css$/i.test(this.$route.params.path)) {
-      return 'css';
+    if (/\.less$/i.test(this.$route.params.path)) {
+      return 'less';
     }
     else {
       return 'markdown';
