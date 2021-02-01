@@ -389,6 +389,8 @@ export default class App extends Vue {
   }
 
   mounted() {
+    this.loadCustomCss();
+
     (this.$refs.fileInput as HTMLInputElement).addEventListener('change', (e: any) => {
       if (e.target.files.length > 0) {
         // Start to upload the selected files
@@ -467,6 +469,10 @@ export default class App extends Vue {
     });
   }
 
+  destroyed() {
+    this.unloadCustomCss();
+  }
+
   login() {
     this.isLoggingIn = true;
 
@@ -522,6 +528,25 @@ export default class App extends Vue {
           value: this.token,
         });
       }
+    }
+  }
+
+  loadCustomCss() {
+    axios.get(`/notes/.custom.css`)
+      .then(res => {
+        const style = document.createElement('style');
+        style.setAttribute('type', 'text/css');
+        style.setAttribute('id', 'custom-css');
+        style.innerText = res.data;
+        document.head.appendChild(style);
+      }).catch(error => {
+        // We can simply ignore the error
+      });
+  }
+
+  unloadCustomCss() {
+    for (const style of document.head.querySelectorAll('#custom-css')) {
+      style.remove();
     }
   }
 
