@@ -532,7 +532,7 @@ export default class App extends Vue {
   }
 
   loadCustomCss() {
-    axios.get(`/notes/.custom.css`)
+    axios.get(`/notes/.mory/custom.css`)
       .then(res => {
         const style = document.createElement('style');
         style.setAttribute('type', 'text/css');
