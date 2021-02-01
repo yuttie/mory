@@ -20,6 +20,33 @@
     </script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js"></script>
     <title><%= htmlWebpackPlugin.options.title %></title>
+    <style>
+      /* Disable Vuetify's styles for rendered note content.
+       *
+       * This must be here for ensuring this reset comes before custom.css.
+       */
+      .v-application .note-viewer-content p {
+        margin-bottom: unset;
+      }
+
+      .v-application .note-viewer-content code {
+        background-color: unset;
+        color: unset;
+        padding: unset;
+      }
+
+      .v-application .note-viewer-content code,
+      .v-application .note-viewer-content kbd {
+        border-radius: unset;
+        font-size: unset;
+        font-weight: unset;
+      }
+
+      .v-application .note-viewer-content ul,
+      .v-application .note-viewer-content ol {
+        padding-left: unset;
+      }
+    </style>
   </head>
   <body class="mathjax_ignore">
     <noscript>
