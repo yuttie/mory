@@ -22,7 +22,12 @@
         <v-btn icon color="gray" class="mt-5" id="toc-toggle"><v-icon>mdi-table-of-contents</v-icon></v-btn>
       </div>
       <div class="panes" v-bind:class="panesState">
-        <Editor v-bind:value="text" v-on:change="onEditorChange" ref="editor"></Editor>
+        <Editor
+          v-bind:value="text"
+          v-bind:mode="editorMode"
+          v-on:change="onEditorChange"
+          ref="editor"
+        ></Editor>
         <div class="rendered">
           <v-expansion-panels
             accordion
@@ -284,6 +289,15 @@ event color:
     if (this.renderTimeoutId) {
       window.clearTimeout(this.renderTimeoutId);
       this.renderTimeoutId = null;
+    }
+  }
+
+  get editorMode() {
+    if (/\.css$/i.test(this.$route.params.path)) {
+      return 'css';
+    }
+    else {
+      return 'markdown';
     }
   }
 

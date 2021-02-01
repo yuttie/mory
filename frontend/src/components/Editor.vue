@@ -9,12 +9,14 @@ import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 
 import ace from 'ace-builds';
 import 'ace-builds/src-noconflict/keybinding-vim';
+import 'ace-builds/src-noconflict/mode-css';
 import 'ace-builds/src-noconflict/mode-markdown';
 import 'ace-builds/src-noconflict/theme-nord_dark';
 
 @Component
 export default class Editor extends Vue {
   @Prop(String) readonly value!: string;
+  @Prop(String) readonly mode!: string;
   editor: any = null;  // eslint-disable-line @typescript-eslint/no-explicit-any
 
   @Watch('value')
@@ -26,9 +28,14 @@ export default class Editor extends Vue {
     }
   }
 
+  @Watch('mode')
+  onModeChanged(mode: string) {
+    this.editor!.getSession().setMode(mode);
+  }
+
   mounted() {
     this.editor = ace.edit(this.$refs.editor as Element, {
-      mode: 'ace/mode/markdown',
+      mode: `ace/mode/${this.mode}`,
       theme: 'ace/theme/nord_dark',
       fontSize: 13,
       fontFamily: 'Menlo, monospace',
