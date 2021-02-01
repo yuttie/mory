@@ -28,7 +28,7 @@
           v-on:change="onEditorChange"
           ref="editor"
         ></Editor>
-        <div class="rendered">
+        <div class="viewer">
           <v-expansion-panels
             accordion
             flat
@@ -790,7 +790,7 @@ $nav-height: 64px;
 
 // Disable Vuetify's styles
 .v-application {
-  .rendered {
+  .viewer {
     p {
       margin-bottom: unset;
     }
@@ -815,7 +815,7 @@ $nav-height: 64px;
 
 // Apply custom styles for rendered notes
 .note {
-  .rendered {
+  .viewer {
     .content {
       @include custom.rendered-note-styles($nav-height);
     }
@@ -857,7 +857,7 @@ $nav-height: 64px;
               width 300ms;
 }
 
-.rendered {
+.viewer {
   transition: margin-left 300ms,
               width 300ms;
 }
@@ -868,7 +868,7 @@ $nav-height: 64px;
     width: 100%;
   }
 
-  .rendered {
+  .viewer {
     margin-left: 100%;
     width: 50%;
   }
@@ -880,7 +880,7 @@ $nav-height: 64px;
     width: 50%;
   }
 
-  .rendered {
+  .viewer {
     margin-left: 0%;
     width: 100%;
   }
@@ -892,7 +892,7 @@ $nav-height: 64px;
     width: 50%;
   }
 
-  .rendered {
+  .viewer {
     margin-left: 50%;
     width: 50%;
   }
