@@ -256,6 +256,7 @@ import Gravatar from '@/components/Gravatar.vue';
 import axios from '@/axios';
 import { Claim, ListEntry2, UploadEntry } from '@/api';
 import jwt_decode from 'jwt-decode';
+import less from 'less';
 import { register } from 'register-service-worker';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -532,13 +533,21 @@ export default class App extends Vue {
   }
 
   loadCustomCss() {
-    axios.get(`/notes/.mory/custom.css`)
+    axios.get(`/notes/.mory/custom.less`)
       .then(res => {
-        const style = document.createElement('style');
-        style.setAttribute('type', 'text/css');
-        style.setAttribute('id', 'custom-css');
-        style.innerText = res.data.replace(/\$nav-height/g, '64px');
-        document.head.appendChild(style);
+        less.render(res.data, {
+          globalVars: {
+            'nav-height': '64px',
+          },
+        }).then(output => {
+          const style = document.createElement('style');
+          style.setAttribute('type', 'text/css');
+          style.setAttribute('id', 'custom-css');
+          style.innerText = output.css;
+          document.head.appendChild(style);
+        });
+      }, error => {
+        // FIXME
       }).catch(error => {
         // We can simply ignore the error
       });

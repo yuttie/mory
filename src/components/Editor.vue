@@ -9,7 +9,7 @@ import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 
 import ace from 'ace-builds';
 import 'ace-builds/src-noconflict/keybinding-vim';
-import 'ace-builds/src-noconflict/mode-css';
+import 'ace-builds/src-noconflict/mode-less';
 import 'ace-builds/src-noconflict/mode-markdown';
 import 'ace-builds/src-noconflict/theme-nord_dark';
 
