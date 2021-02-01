@@ -102,7 +102,7 @@
           </v-expansion-panels>
           <div
             ref="renderedContent"
-            class="content"
+            class="content note-viewer-content"
           ></div>
         </div>
       </div>
@@ -783,45 +783,6 @@ event color:
   }
 }
 </script>
-
-<style lang="scss">
-@use "@/custom.scss";
-$nav-height: 64px;
-
-// Disable Vuetify's styles
-.v-application {
-  .viewer {
-    p {
-      margin-bottom: unset;
-    }
-
-    code {
-      background-color: unset;
-      color: unset;
-      padding: unset;
-    }
-
-    code, kbd {
-      border-radius: unset;
-      font-size: unset;
-      font-weight: unset;
-    }
-
-    ul, ol {
-      padding-left: unset;
-    }
-  }
-}
-
-// Apply custom styles for rendered notes
-.note {
-  .viewer {
-    .content {
-      @include custom.rendered-note-styles($nav-height);
-    }
-  }
-}
-</style>
 
 <style scoped lang="scss">
 $nav-height: 64px;
