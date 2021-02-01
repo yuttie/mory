@@ -1,11 +1,11 @@
 <template>
   <div class="note">
-    <div class="not-found" v-if="notFound">
+    <template v-if="notFound">
       <div>
         <h1>Not Found</h1>
       </div>
-    </div>
-    <div class="found" v-if="!notFound">
+    </template>
+    <template v-if="!notFound">
       <div
         v-show="!isLoading"
         style="position: fixed; right: 0; transform: translateY(40px); display: flex; flex-direction: column; z-index: 3;"
@@ -160,7 +160,7 @@
       <v-overlay v-bind:value="isLoading" z-index="10">
         <v-progress-circular indeterminate size="64"></v-progress-circular>
       </v-overlay>
-    </div>
+    </template>
     <v-snackbar v-model="error" color="error" top timeout="5000">{{ errorText }}</v-snackbar>
   </div>
 </template>
@@ -828,11 +828,6 @@ $nav-height: 64px;
 
 .note {
   position: relative;
-
-  & > .not-found,
-  & > .found {
-    display: contents;
-  }
 }
 
 .toolbar {
