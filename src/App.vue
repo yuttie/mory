@@ -256,6 +256,7 @@ import Gravatar from '@/components/Gravatar.vue';
 import axios from '@/axios';
 import { Claim, ListEntry2, UploadEntry } from '@/api';
 import jwt_decode from 'jwt-decode';
+import less from 'less';
 import { register } from 'register-service-worker';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -389,6 +390,8 @@ export default class App extends Vue {
   }
 
   mounted() {
+    this.loadCustomCss();
+
     (this.$refs.fileInput as HTMLInputElement).addEventListener('change', (e: any) => {
       if (e.target.files.length > 0) {
         // Start to upload the selected files
@@ -467,6 +470,10 @@ export default class App extends Vue {
     });
   }
 
+  destroyed() {
+    this.unloadCustomCss();
+  }
+
   login() {
     this.isLoggingIn = true;
 
@@ -522,6 +529,33 @@ export default class App extends Vue {
           value: this.token,
         });
       }
+    }
+  }
+
+  loadCustomCss() {
+    axios.get(`/notes/.mory/custom.less`)
+      .then(res => {
+        less.render(res.data, {
+          globalVars: {
+            'nav-height': '64px',
+          },
+        }).then(output => {
+          const style = document.createElement('style');
+          style.setAttribute('type', 'text/css');
+          style.setAttribute('id', 'custom-css');
+          style.innerText = output.css;
+          document.head.appendChild(style);
+        });
+      }, error => {
+        // FIXME
+      }).catch(error => {
+        // We can simply ignore the error
+      });
+  }
+
+  unloadCustomCss() {
+    for (const style of document.head.querySelectorAll('#custom-css')) {
+      style.remove();
     }
   }
 

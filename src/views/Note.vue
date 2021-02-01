@@ -1,11 +1,11 @@
 <template>
   <div class="note">
-    <div class="not-found" v-if="notFound">
+    <template v-if="notFound">
       <div>
         <h1>Not Found</h1>
       </div>
-    </div>
-    <div class="found" v-if="!notFound">
+    </template>
+    <template v-if="!notFound">
       <div
         v-show="!isLoading"
         style="position: fixed; right: 0; transform: translateY(40px); display: flex; flex-direction: column; z-index: 3;"
@@ -22,8 +22,13 @@
         <v-btn icon color="gray" class="mt-5" id="toc-toggle"><v-icon>mdi-table-of-contents</v-icon></v-btn>
       </div>
       <div class="panes" v-bind:class="panesState">
-        <Editor v-bind:value="text" v-on:change="onEditorChange" ref="editor"></Editor>
-        <div class="rendered">
+        <Editor
+          v-bind:value="text"
+          v-bind:mode="editorMode"
+          v-on:change="onEditorChange"
+          ref="editor"
+        ></Editor>
+        <div class="viewer">
           <v-expansion-panels
             accordion
             flat
@@ -97,7 +102,7 @@
           </v-expansion-panels>
           <div
             ref="renderedContent"
-            class="content"
+            class="content note-viewer-content"
           ></div>
         </div>
       </div>
@@ -155,7 +160,7 @@
       <v-overlay v-bind:value="isLoading" z-index="10">
         <v-progress-circular indeterminate size="64"></v-progress-circular>
       </v-overlay>
-    </div>
+    </template>
     <v-snackbar v-model="error" color="error" top timeout="5000">{{ errorText }}</v-snackbar>
   </div>
 </template>
@@ -274,6 +279,11 @@ event color:
       this.load(this.$route.params.path);
     }
 
+    if (/\.less$/i.test(this.$route.params.path)) {
+      this.editorIsVisible = true;
+      this.viewerIsVisible = false;
+    }
+
     ((this.$refs.editor as Vue).$el as HTMLElement).addEventListener('transitionend', () => {
       (this.$refs.editor as Editor).resize();
     });
@@ -284,6 +294,15 @@ event color:
     if (this.renderTimeoutId) {
       window.clearTimeout(this.renderTimeoutId);
       this.renderTimeoutId = null;
+    }
+  }
+
+  get editorMode() {
+    if (/\.less$/i.test(this.$route.params.path)) {
+      return 'less';
+    }
+    else {
+      return 'markdown';
     }
   }
 
@@ -770,55 +789,11 @@ event color:
 }
 </script>
 
-<style lang="scss">
-@use "@/custom.scss";
-$nav-height: 64px;
-
-// Disable Vuetify's styles
-.v-application {
-  .rendered {
-    p {
-      margin-bottom: unset;
-    }
-
-    code {
-      background-color: unset;
-      color: unset;
-      padding: unset;
-    }
-
-    code, kbd {
-      border-radius: unset;
-      font-size: unset;
-      font-weight: unset;
-    }
-
-    ul, ol {
-      padding-left: unset;
-    }
-  }
-}
-
-// Apply custom styles for rendered notes
-.note {
-  .rendered {
-    .content {
-      @include custom.rendered-note-styles($nav-height);
-    }
-  }
-}
-</style>
-
 <style scoped lang="scss">
 $nav-height: 64px;
 
 .note {
   position: relative;
-
-  & > .not-found,
-  & > .found {
-    display: contents;
-  }
 }
 
 .toolbar {
@@ -848,7 +823,7 @@ $nav-height: 64px;
               width 300ms;
 }
 
-.rendered {
+.viewer {
   transition: margin-left 300ms,
               width 300ms;
 }
@@ -859,7 +834,7 @@ $nav-height: 64px;
     width: 100%;
   }
 
-  .rendered {
+  .viewer {
     margin-left: 100%;
     width: 50%;
   }
@@ -871,7 +846,7 @@ $nav-height: 64px;
     width: 50%;
   }
 
-  .rendered {
+  .viewer {
     margin-left: 0%;
     width: 100%;
   }
@@ -883,7 +858,7 @@ $nav-height: 64px;
     width: 50%;
   }
 
-  .rendered {
+  .viewer {
     margin-left: 50%;
     width: 50%;
   }
