@@ -537,7 +537,7 @@ export default class App extends Vue {
         const style = document.createElement('style');
         style.setAttribute('type', 'text/css');
         style.setAttribute('id', 'custom-css');
-        style.innerText = res.data;
+        style.innerText = res.data.replace(/\$nav-height/g, '64px');
         document.head.appendChild(style);
       }).catch(error => {
         // We can simply ignore the error
