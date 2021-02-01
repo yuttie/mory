@@ -279,6 +279,11 @@ event color:
       this.load(this.$route.params.path);
     }
 
+    if (/\.less$/i.test(this.$route.params.path)) {
+      this.editorIsVisible = true;
+      this.viewerIsVisible = false;
+    }
+
     ((this.$refs.editor as Vue).$el as HTMLElement).addEventListener('transitionend', () => {
       (this.$refs.editor as Editor).resize();
     });
