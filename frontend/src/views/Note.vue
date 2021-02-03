@@ -282,6 +282,7 @@ event color:
     if (/\.less$/i.test(this.$route.params.path)) {
       this.editorIsVisible = true;
       this.viewerIsVisible = false;
+      this.focusOrBlurEditor();
     }
 
     ((this.$refs.editor as Vue).$el as HTMLElement).addEventListener('transitionend', () => {
