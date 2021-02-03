@@ -138,7 +138,7 @@
           </v-card-actions>
         </v-card>
       </v-menu>
-      <v-menu offset-y activator="#toc-toggle">
+      <v-menu offset-y activator="#toc-toggle" max-height="90vh">
         <v-card class="toc">
           <v-card-title>Table of Contents</v-card-title>
           <v-card-text>
