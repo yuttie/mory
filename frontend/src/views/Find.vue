@@ -61,7 +61,7 @@
         </v-toolbar>
       </template>
       <template v-slot:item.path="{ item }">
-        <v-icon class="mr-1">mdi-file-document-outline</v-icon><router-link class="path" v-bind:to="{ path: `/note/${item.path}` }">{{ item.path }}</router-link>
+        <span class="path"><v-icon class="mr-1">mdi-file-document-outline</v-icon><router-link v-bind:to="{ path: `/note/${item.path}` }">{{ item.path }}</router-link></span>
       </template>
       <template v-slot:item.time="{ item }">
         <div class="text-no-wrap">{{ item.time.format('YYYY-MM-DD HH:mm:ss') }}</div>
@@ -417,12 +417,16 @@ export default class Find extends Vue {
 }
 
 .path {
-  color: rgba(0, 0, 0, 0.87);
-  text-decoration: none;
+  line-break: anywhere;
 
-  &:hover {
-    color: var(--v-anchor-base);
-    text-decoration: underline;
+  a {
+    color: rgba(0, 0, 0, 0.87);
+    text-decoration: none;
+
+    &:hover {
+      color: var(--v-anchor-base);
+      text-decoration: underline;
+    }
   }
 }
 </style>
