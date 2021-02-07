@@ -390,6 +390,13 @@ export default class App extends Vue {
   }
 
   mounted() {
+    if (this.token) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`;
+    }
+    else {
+      delete axios.defaults.headers.common['Authorization'];
+    }
+
     this.loadCustomCss();
 
     (this.$refs.fileInput as HTMLInputElement).addEventListener('change', (e: any) => {
