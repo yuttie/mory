@@ -1,10 +1,5 @@
 import Vue from 'vue'
 import VueRouter, { RouteConfig } from 'vue-router'
-import Home from '../views/Home.vue'
-import Calendar from '../views/Calendar.vue'
-import Find from '../views/Find.vue'
-import Note from '../views/Note.vue'
-import Config from '../views/Config.vue'
 
 import { v4 as uuidv4 } from 'uuid';
 
@@ -14,17 +9,17 @@ const routes: Array<RouteConfig> = [
   {
     path: '/',
     name: 'Home',
-    component: Home
+    component: () => import(/* webpackChunkName: "Home" */ '../views/Home.vue'),
   },
   {
     path: '/calendar',
     name: 'Calendar',
-    component: Calendar,
+    component: () => import(/* webpackChunkName: "Calendar" */ '../views/Calendar.vue'),
   },
   {
     path: '/calendar/:type/:date*',
     name: 'CalendarWithDate',
-    component: Calendar,
+    component: () => import(/* webpackChunkName: "Calendar" */ '../views/Calendar.vue'),
   },
   {
     path: '/create',
@@ -40,17 +35,17 @@ const routes: Array<RouteConfig> = [
   {
     path: '/find',
     name: 'Find',
-    component: Find,
+    component: () => import(/* webpackChunkName: "Find" */ '../views/Find.vue'),
   },
   {
     path: '/note/:path*',
     name: 'Note',
-    component: Note,
+    component: () => import(/* webpackChunkName: "Note" */ '../views/Note.vue'),
   },
   {
     path: '/config',
     name: 'Config',
-    component: Config,
+    component: () => import(/* webpackChunkName: "Config" */ '../views/Config.vue'),
   },
   {
     path: '/about',
@@ -58,7 +53,7 @@ const routes: Array<RouteConfig> = [
     // route level code-splitting
     // this generates a separate chunk (about.[hash].js) for this route
     // which is lazy-loaded when the route is visited.
-    component: () => import(/* webpackChunkName: "about" */ '../views/About.vue')
+    component: () => import(/* webpackChunkName: "About" */ '../views/About.vue')
   }
 ]
 
