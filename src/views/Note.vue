@@ -174,7 +174,6 @@ import metadataSchema from '@/metadata-schema.json';
 import Ajv, { JSONSchemaType, DefinedError } from 'ajv';
 import axios from '@/axios';
 import marked from 'marked';
-import '@mdi/font/css/materialdesignicons.css';
 import Prism from 'prismjs';
 import 'prism-themes/themes/prism-nord.css';
 import YAML from 'yaml';
