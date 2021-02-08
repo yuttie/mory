@@ -8,7 +8,6 @@
 import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 
 import ace from 'ace-builds';
-import 'ace-builds/src-noconflict/keybinding-vim';
 import 'ace-builds/src-noconflict/mode-less';
 import 'ace-builds/src-noconflict/mode-markdown';
 import 'ace-builds/src-noconflict/theme-nord_dark';
@@ -64,20 +63,24 @@ export default class Editor extends Vue {
       this.editor!.setKeyboardHandler(null);
     }
     else if (keybinding === 'vim') {
-      ace.config.loadModule("ace/keyboard/vim", function() {
-        // Do nothing
+      import('ace-builds/src-noconflict/keybinding-vim').then(() => {
+        ace.config.loadModule("ace/keyboard/vim", function() {
+          // Do nothing
+        });
+        this.editor!.setKeyboardHandler('ace/keyboard/vim');
       });
-      this.editor!.setKeyboardHandler('ace/keyboard/vim');
     }
     else if (keybinding === 'vim-modified') {
-      ace.config.loadModule("ace/keyboard/vim", function(m) {
-        // Remove <C-d> for the insert mode from the default keymap
-        const i = m.handler.defaultKeymap.findIndex((entry: any) => entry.keys === '<C-d>' && entry.context === 'insert');
-        m.handler.defaultKeymap.splice(i, 1);
+      import('ace-builds/src-noconflict/keybinding-vim').then(() => {
+        ace.config.loadModule("ace/keyboard/vim", function(m) {
+          // Remove <C-d> for the insert mode from the default keymap
+          const i = m.handler.defaultKeymap.findIndex((entry: any) => entry.keys === '<C-d>' && entry.context === 'insert');
+          m.handler.defaultKeymap.splice(i, 1);
+        });
+        this.editor!.setKeyboardHandler('ace/keyboard/vim');
+        // Adjust keybindings
+        this.adjustKeybindings(this.editor);
       });
-      this.editor!.setKeyboardHandler('ace/keyboard/vim');
-      // Adjust keybindings
-      this.adjustKeybindings(this.editor);
     }
   }
 
