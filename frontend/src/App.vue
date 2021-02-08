@@ -270,7 +270,7 @@ export default class App extends Vue {
   loginUsername = "";
   loginPassword = "";
   isLoggingIn = false;
-  loginCallback = null as (() => void) | null;
+  loginCallbacks = [] as (() => void)[];
   loginError = null as null | string;
   registration = null as null | ServiceWorkerRegistration;
   templates = [] as string[];
@@ -421,24 +421,7 @@ export default class App extends Vue {
       return false;
     }
 
-    axios.get('/notes')
-      .then(res => {
-        this.templates = res.data
-          .map((entry: ListEntry2) => entry.path)
-          .filter((path: string) => path.match(/\.template$/i));
-      }).catch(error => {
-        if (error.response) {
-          if (error.response.status === 401) {
-            console.log('Unauthorized');
-          }
-          else {
-            console.log('Unhandled error: {}', error.response);
-          }
-        }
-        else {
-          console.log('Unhandled error: {}', error);
-        }
-      });
+    this.loadTemplates();
 
     // Handle drag and drop of files
     const appEl = (this.$refs.app as Vue).$el;
@@ -497,10 +480,10 @@ export default class App extends Vue {
       this.loginError = null;
 
       this.$nextTick(() => {
-        if (this.loginCallback) {
-          this.loginCallback();
+        for (const callback of this.loginCallbacks) {
+          callback();
         }
-        this.loginCallback = null;
+        this.loginCallbacks = [];
       });
 
       if (this.registration) {
@@ -528,7 +511,7 @@ export default class App extends Vue {
       // Delete the token and let a user to login again
       this.token = null;
       localStorage.removeItem('token');
-      this.loginCallback = callback;
+      this.loginCallbacks.push(callback);
 
       if (this.registration) {
         this.registration.active!.postMessage({
@@ -537,6 +520,28 @@ export default class App extends Vue {
         });
       }
     }
+  }
+
+  loadTemplates() {
+    axios.get('/notes')
+      .then(res => {
+        this.templates = res.data
+          .map((entry: ListEntry2) => entry.path)
+          .filter((path: string) => path.match(/\.template$/i));
+      }).catch(error => {
+        if (error.response) {
+          if (error.response.status === 401) {
+            // Unauthorized
+            this.tokenExpired(() => this.loadTemplates());
+          }
+          else {
+            console.log('Unhandled error: {}', error.response);
+          }
+        }
+        else {
+          console.log('Unhandled error: {}', error);
+        }
+      });
   }
 
   loadCustomCss() {
@@ -552,11 +557,25 @@ export default class App extends Vue {
           style.setAttribute('id', 'custom-css');
           style.innerText = output.css;
           document.head.appendChild(style);
+        }, error => {
+          // FIXME
         });
-      }, error => {
-        // FIXME
       }).catch(error => {
-        // We can simply ignore the error
+        if (error.response) {
+          if (error.response.status === 401) {
+            // Unauthorized
+            this.tokenExpired(() => this.loadCustomCss());
+          }
+          else if (error.response.status === 404) {
+            // We can simply ignore the error
+          }
+          else {
+            console.log('Unhandled error: {}', error.response);
+          }
+        }
+        else {
+          console.log('Unhandled error: {}', error);
+        }
       });
   }
 
