@@ -62,7 +62,8 @@ export default class Editor extends Vue {
       this.$emit('change', this.editor!.getValue());  // eslint-disable-line @typescript-eslint/no-non-null-assertion
     });
 
-    this.setTheme('nord_dark');
+    const theme = localStorage.getItem('theme') || 'default';
+    this.setTheme(theme);
 
     if (this.mode === 'markdown') {
       import('ace-builds/src-noconflict/mode-markdown').then(() => {
@@ -159,6 +160,9 @@ export default class Editor extends Vue {
       loading.then(() => {
 	this.editor!.setTheme(`ace/theme/${theme}`);
       });
+    }
+    else {
+      this.editor!.setTheme(null);
     }
   }
 
