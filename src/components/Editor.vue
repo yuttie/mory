@@ -8,7 +8,6 @@
 import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 
 import ace from 'ace-builds';
-import 'ace-builds/src-noconflict/theme-nord_dark';
 
 @Component
 export default class Editor extends Vue {
@@ -41,7 +40,6 @@ export default class Editor extends Vue {
 
   mounted() {
     this.editor = ace.edit(this.$refs.editor as Element, {
-      theme: 'ace/theme/nord_dark',
       fontSize: 13,
       fontFamily: 'Menlo, monospace',
       useSoftTabs: true,
@@ -63,6 +61,8 @@ export default class Editor extends Vue {
     this.editor!.on('change', () => {  // eslint-disable-line @typescript-eslint/no-non-null-assertion
       this.$emit('change', this.editor!.getValue());  // eslint-disable-line @typescript-eslint/no-non-null-assertion
     });
+
+    this.setTheme('nord_dark');
 
     if (this.mode === 'markdown') {
       import('ace-builds/src-noconflict/mode-markdown').then(() => {
@@ -111,6 +111,55 @@ export default class Editor extends Vue {
 
   resize() {
     this.editor!.resize();  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+  }
+
+  setTheme(theme: string) {
+    let loading = null;
+
+    if      (theme === 'ambiance')                { loading = import('ace-builds/src-noconflict/theme-ambiance');                }
+    else if (theme === 'chaos')                   { loading = import('ace-builds/src-noconflict/theme-chaos');                   }
+    else if (theme === 'chrome')                  { loading = import('ace-builds/src-noconflict/theme-chrome');                  }
+    else if (theme === 'clouds')                  { loading = import('ace-builds/src-noconflict/theme-clouds');                  }
+    else if (theme === 'clouds_midnight')         { loading = import('ace-builds/src-noconflict/theme-clouds_midnight');         }
+    else if (theme === 'cobalt')                  { loading = import('ace-builds/src-noconflict/theme-cobalt');                  }
+    else if (theme === 'crimson_editor')          { loading = import('ace-builds/src-noconflict/theme-crimson_editor');          }
+    else if (theme === 'dawn')                    { loading = import('ace-builds/src-noconflict/theme-dawn');                    }
+    else if (theme === 'dracula')                 { loading = import('ace-builds/src-noconflict/theme-dracula');                 }
+    else if (theme === 'dreamweaver')             { loading = import('ace-builds/src-noconflict/theme-dreamweaver');             }
+    else if (theme === 'eclipse')                 { loading = import('ace-builds/src-noconflict/theme-eclipse');                 }
+    else if (theme === 'github')                  { loading = import('ace-builds/src-noconflict/theme-github');                  }
+    else if (theme === 'gob')                     { loading = import('ace-builds/src-noconflict/theme-gob');                     }
+    else if (theme === 'gruvbox')                 { loading = import('ace-builds/src-noconflict/theme-gruvbox');                 }
+    else if (theme === 'idle_fingers')            { loading = import('ace-builds/src-noconflict/theme-idle_fingers');            }
+    else if (theme === 'iplastic')                { loading = import('ace-builds/src-noconflict/theme-iplastic');                }
+    else if (theme === 'katzenmilch')             { loading = import('ace-builds/src-noconflict/theme-katzenmilch');             }
+    else if (theme === 'kr_theme')                { loading = import('ace-builds/src-noconflict/theme-kr_theme');                }
+    else if (theme === 'kuroir')                  { loading = import('ace-builds/src-noconflict/theme-kuroir');                  }
+    else if (theme === 'merbivore')               { loading = import('ace-builds/src-noconflict/theme-merbivore');               }
+    else if (theme === 'merbivore_soft')          { loading = import('ace-builds/src-noconflict/theme-merbivore_soft');          }
+    else if (theme === 'mono_industrial')         { loading = import('ace-builds/src-noconflict/theme-mono_industrial');         }
+    else if (theme === 'monokai')                 { loading = import('ace-builds/src-noconflict/theme-monokai');                 }
+    else if (theme === 'nord_dark')               { loading = import('ace-builds/src-noconflict/theme-nord_dark');               }
+    else if (theme === 'pastel_on_dark')          { loading = import('ace-builds/src-noconflict/theme-pastel_on_dark');          }
+    else if (theme === 'solarized_dark')          { loading = import('ace-builds/src-noconflict/theme-solarized_dark');          }
+    else if (theme === 'solarized_light')         { loading = import('ace-builds/src-noconflict/theme-solarized_light');         }
+    else if (theme === 'sqlserver')               { loading = import('ace-builds/src-noconflict/theme-sqlserver');               }
+    else if (theme === 'terminal')                { loading = import('ace-builds/src-noconflict/theme-terminal');                }
+    else if (theme === 'textmate')                { loading = import('ace-builds/src-noconflict/theme-textmate');                }
+    else if (theme === 'tomorrow')                { loading = import('ace-builds/src-noconflict/theme-tomorrow');                }
+    else if (theme === 'tomorrow_night')          { loading = import('ace-builds/src-noconflict/theme-tomorrow_night');          }
+    else if (theme === 'tomorrow_night_blue')     { loading = import('ace-builds/src-noconflict/theme-tomorrow_night_blue');     }
+    else if (theme === 'tomorrow_night_bright')   { loading = import('ace-builds/src-noconflict/theme-tomorrow_night_bright');   }
+    else if (theme === 'tomorrow_night_eighties') { loading = import('ace-builds/src-noconflict/theme-tomorrow_night_eighties'); }
+    else if (theme === 'twilight')                { loading = import('ace-builds/src-noconflict/theme-twilight');                }
+    else if (theme === 'vibrant_ink')             { loading = import('ace-builds/src-noconflict/theme-vibrant_ink');             }
+    else if (theme === 'xcode')                   { loading = import('ace-builds/src-noconflict/theme-xcode');                   }
+
+    if (loading) {
+      loading.then(() => {
+	this.editor!.setTheme(`ace/theme/${theme}`);
+      });
+    }
   }
 
   adjustKeybindings(editor: any) {
