@@ -8,8 +8,6 @@
 import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 
 import ace from 'ace-builds';
-import 'ace-builds/src-noconflict/mode-less';
-import 'ace-builds/src-noconflict/mode-markdown';
 import 'ace-builds/src-noconflict/theme-nord_dark';
 
 @Component
@@ -29,12 +27,20 @@ export default class Editor extends Vue {
 
   @Watch('mode')
   onModeChanged(mode: string) {
-    this.editor!.getSession().setMode(mode);
+    if (mode === 'markdown') {
+      import('ace-builds/src-noconflict/mode-markdown').then(() => {
+        this.editor!.getSession().setMode(`ace/mode/${mode}`);
+      });
+    }
+    else if (mode === 'less') {
+      import('ace-builds/src-noconflict/mode-less').then(() => {
+        this.editor!.getSession().setMode(`ace/mode/${mode}`);
+      });
+    }
   }
 
   mounted() {
     this.editor = ace.edit(this.$refs.editor as Element, {
-      mode: `ace/mode/${this.mode}`,
       theme: 'ace/theme/nord_dark',
       fontSize: 13,
       fontFamily: 'Menlo, monospace',
@@ -57,6 +63,17 @@ export default class Editor extends Vue {
     this.editor!.on('change', () => {  // eslint-disable-line @typescript-eslint/no-non-null-assertion
       this.$emit('change', this.editor!.getValue());  // eslint-disable-line @typescript-eslint/no-non-null-assertion
     });
+
+    if (this.mode === 'markdown') {
+      import('ace-builds/src-noconflict/mode-markdown').then(() => {
+        this.editor!.getSession().setMode(`ace/mode/${this.mode}`);
+      });
+    }
+    else if (this.mode === 'less') {
+      import('ace-builds/src-noconflict/mode-less').then(() => {
+        this.editor!.getSession().setMode(`ace/mode/${this.mode}`);
+      });
+    }
 
     const keybinding = localStorage.getItem('keybinding') || 'default';
     if (keybinding === 'default') {
