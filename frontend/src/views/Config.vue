@@ -84,12 +84,10 @@ export default class Config extends Vue {
   }
 
   updateTheme(newTheme: string) {
-    console.log(newTheme);
     localStorage.setItem('theme', newTheme);
   }
 
   updateKeybinding(newKeybinding: string) {
-    console.log(newKeybinding);
     localStorage.setItem('keybinding', newKeybinding);
   }
 }
