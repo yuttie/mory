@@ -81,9 +81,12 @@ export default class Config extends Vue {
     { name: 'Xcode',                   value: 'xcode'                   },
   ];
   editorKeybindings = [
-    { name: 'Default', value: 'default' },
-    { name: 'Vim', value: 'vim' },
+    { name: 'Default',                                    value: 'default'      },
+    { name: 'Emacs',                                      value: 'emacs'        },
+    { name: 'Sublime',                                    value: 'sublime'      },
+    { name: 'Vim',                                        value: 'vim'          },
     { name: 'Vim (with Emacs-like insert mode mappings)', value: 'vim-modified' },
+    { name: 'VSCode',                                     value: 'vscode'       },
   ];
   prismThemes = [
     { name: '(None)',                    value: null,                             },
