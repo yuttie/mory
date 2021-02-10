@@ -77,29 +77,7 @@ export default class Editor extends Vue {
     }
 
     const keybinding = localStorage.getItem('editor-keybinding') || 'default';
-    if (keybinding === 'default') {
-      this.editor!.setKeyboardHandler(null);
-    }
-    else if (keybinding === 'vim') {
-      import('ace-builds/src-noconflict/keybinding-vim').then(() => {
-        ace.config.loadModule("ace/keyboard/vim", function() {
-          // Do nothing
-        });
-        this.editor!.setKeyboardHandler('ace/keyboard/vim');
-      });
-    }
-    else if (keybinding === 'vim-modified') {
-      import('ace-builds/src-noconflict/keybinding-vim').then(() => {
-        ace.config.loadModule("ace/keyboard/vim", function(m) {
-          // Remove <C-d> for the insert mode from the default keymap
-          const i = m.handler.defaultKeymap.findIndex((entry: any) => entry.keys === '<C-d>' && entry.context === 'insert');
-          m.handler.defaultKeymap.splice(i, 1);
-        });
-        this.editor!.setKeyboardHandler('ace/keyboard/vim');
-        // Adjust keybindings
-        this.adjustKeybindings(this.editor);
-      });
-    }
+    this.setKeybinding(keybinding);
   }
 
   focus() {
@@ -163,6 +141,56 @@ export default class Editor extends Vue {
     }
     else {
       this.editor!.setTheme(null);
+    }
+  }
+
+  setKeybinding(keybinding: string) {
+    if (keybinding === 'default') {
+      this.editor!.setKeyboardHandler(null);
+    }
+    else if (keybinding === 'emacs') {
+      import('ace-builds/src-noconflict/keybinding-emacs').then(() => {
+        ace.config.loadModule("ace/keyboard/emacs", function() {
+          // Do nothing
+        });
+        this.editor!.setKeyboardHandler('ace/keyboard/emacs');
+      });
+    }
+    else if (keybinding === 'sublime') {
+      import('ace-builds/src-noconflict/keybinding-sublime').then(() => {
+        ace.config.loadModule("ace/keyboard/sublime", function() {
+          // Do nothing
+        });
+        this.editor!.setKeyboardHandler('ace/keyboard/sublime');
+      });
+    }
+    else if (keybinding === 'vim') {
+      import('ace-builds/src-noconflict/keybinding-vim').then(() => {
+        ace.config.loadModule("ace/keyboard/vim", function() {
+          // Do nothing
+        });
+        this.editor!.setKeyboardHandler('ace/keyboard/vim');
+      });
+    }
+    else if (keybinding === 'vim-modified') {
+      import('ace-builds/src-noconflict/keybinding-vim').then(() => {
+        ace.config.loadModule("ace/keyboard/vim", function(m) {
+          // Remove <C-d> for the insert mode from the default keymap
+          const i = m.handler.defaultKeymap.findIndex((entry: any) => entry.keys === '<C-d>' && entry.context === 'insert');
+          m.handler.defaultKeymap.splice(i, 1);
+        });
+        this.editor!.setKeyboardHandler('ace/keyboard/vim');
+        // Adjust keybindings
+        this.adjustKeybindings(this.editor);
+      });
+    }
+    else if (keybinding === 'vscode') {
+      import('ace-builds/src-noconflict/keybinding-vscode').then(() => {
+        ace.config.loadModule("ace/keyboard/vscode", function() {
+          // Do nothing
+        });
+        this.editor!.setKeyboardHandler('ace/keyboard/vscode');
+      });
     }
   }
 
