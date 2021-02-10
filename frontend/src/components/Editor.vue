@@ -62,7 +62,7 @@ export default class Editor extends Vue {
       this.$emit('change', this.editor!.getValue());  // eslint-disable-line @typescript-eslint/no-non-null-assertion
     });
 
-    const theme = localStorage.getItem('theme') || 'default';
+    const theme = localStorage.getItem('editor-theme') || 'default';
     this.setTheme(theme);
 
     if (this.mode === 'markdown') {
@@ -76,7 +76,7 @@ export default class Editor extends Vue {
       });
     }
 
-    const keybinding = localStorage.getItem('keybinding') || 'default';
+    const keybinding = localStorage.getItem('editor-keybinding') || 'default';
     if (keybinding === 'default') {
       this.editor!.setKeyboardHandler(null);
     }

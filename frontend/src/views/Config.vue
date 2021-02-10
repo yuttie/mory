@@ -5,19 +5,19 @@
       These settings are only applied to the current environment and never be saved in the repository.
     </v-alert>
     <v-select
-      v-bind:items="themes"
-      v-bind:value="currentTheme"
-      v-on:change="updateTheme"
-      label="Theme"
+      v-bind:items="editorThemes"
+      v-bind:value="currentEditorTheme"
+      v-on:change="updateEditorTheme"
+      label="Editor Theme"
       item-text="name"
       item-value="value"
     >
     </v-select>
     <v-select
-      v-bind:items="keybindings"
-      v-bind:value="currentKeybinding"
-      v-on:change="updateKeybinding"
-      label="Keybinding"
+      v-bind:items="editorKeybindings"
+      v-bind:value="currentEditorKeybinding"
+      v-on:change="updateEditorKeybinding"
+      label="Editor Keybinding"
       item-text="name"
       item-value="value"
     >
@@ -39,7 +39,7 @@ import { Component, Vue } from 'vue-property-decorator';
 
 @Component
 export default class Config extends Vue {
-  themes = [
+  editorThemes = [
     { name: 'Default',                 value: 'default'                },
     { name: 'Ambiance',                value: 'ambiance'                },
     { name: 'Chaos',                   value: 'chaos'                   },
@@ -80,7 +80,7 @@ export default class Config extends Vue {
     { name: 'Vibrant Ink',             value: 'vibrant_ink'             },
     { name: 'Xcode',                   value: 'xcode'                   },
   ];
-  keybindings = [
+  editorKeybindings = [
     { name: 'Default', value: 'default' },
     { name: 'Vim', value: 'vim' },
     { name: 'Vim (with Emacs-like insert mode mappings)', value: 'vim-modified' },
@@ -115,20 +115,20 @@ export default class Config extends Vue {
     { name: 'Vsc Dark Plus',             value: 'vsc-dark-plus'                   },
     { name: 'Xonokai',                   value: 'xonokai'                         },
   ];
-  currentTheme = localStorage.getItem('theme') || 'default';
-  currentKeybinding = localStorage.getItem('keybinding') || 'default';
+  currentEditorTheme = localStorage.getItem('editor-theme') || 'default';
+  currentEditorKeybinding = localStorage.getItem('editor-keybinding') || 'default';
   currentPrismTheme = localStorage.getItem('prism-theme') || null;
 
   mounted() {
     document.title = `Config | ${process.env.VUE_APP_NAME}`;
   }
 
-  updateTheme(newTheme: string) {
-    localStorage.setItem('theme', newTheme);
+  updateEditorTheme(newEditorTheme: string) {
+    localStorage.setItem('editor-theme', newEditorTheme);
   }
 
-  updateKeybinding(newKeybinding: string) {
-    localStorage.setItem('keybinding', newKeybinding);
+  updateEditorKeybinding(newEditorKeybinding: string) {
+    localStorage.setItem('editor-keybinding', newEditorKeybinding);
   }
 
   updatePrismTheme(newPrismTheme: string) {
