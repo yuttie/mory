@@ -22,6 +22,15 @@
       item-value="value"
     >
     </v-select>
+    <v-select
+      v-bind:items="prismThemes"
+      v-bind:value="currentPrismTheme"
+      v-on:change="updatePrismTheme"
+      label="Code Block Syntax Highlight Theme"
+      item-text="name"
+      item-value="value"
+    >
+    </v-select>
   </div>
 </template>
 
@@ -76,8 +85,39 @@ export default class Config extends Vue {
     { name: 'Vim', value: 'vim' },
     { name: 'Vim (with Emacs-like insert mode mappings)', value: 'vim-modified' },
   ];
+  prismThemes = [
+    { name: '(None)',                    value: null,                             },
+    { name: 'A11y Dark',                 value: 'a11y-dark'                       },
+    { name: 'Atom Dark',                 value: 'atom-dark'                       },
+    { name: 'Base16 Ateliersulphurpool', value: 'base16-ateliersulphurpool.light' },
+    { name: 'Cb',                        value: 'cb'                              },
+    { name: 'Coldark Cold',              value: 'coldark-cold'                    },
+    { name: 'Coldark Dark',              value: 'coldark-dark'                    },
+    { name: 'Coy without Shadows',       value: 'coy-without-shadows'             },
+    { name: 'Darcula',                   value: 'darcula'                         },
+    { name: 'Dracula',                   value: 'dracula'                         },
+    { name: 'Duotone Dark',              value: 'duotone-dark'                    },
+    { name: 'Duotone Earth',             value: 'duotone-earth'                   },
+    { name: 'Duotone Forest',            value: 'duotone-forest'                  },
+    { name: 'Duotone Light',             value: 'duotone-light'                   },
+    { name: 'Duotone Sea',               value: 'duotone-sea'                     },
+    { name: 'Duotone Space',             value: 'duotone-space'                   },
+    { name: 'Ghcolors',                  value: 'ghcolors'                        },
+    { name: 'Hopscotch',                 value: 'hopscotch'                       },
+    { name: 'Material Dark',             value: 'material-dark'                   },
+    { name: 'Material Light',            value: 'material-light'                  },
+    { name: 'Material Oceanic',          value: 'material-oceanic'                },
+    { name: 'Nord',                      value: 'nord'                            },
+    { name: 'Pojoaque',                  value: 'pojoaque'                        },
+    { name: 'Shades of Purple',          value: 'shades-of-purple'                },
+    { name: 'Synthwave84',               value: 'synthwave84'                     },
+    { name: 'Vs',                        value: 'vs'                              },
+    { name: 'Vsc Dark Plus',             value: 'vsc-dark-plus'                   },
+    { name: 'Xonokai',                   value: 'xonokai'                         },
+  ];
   currentTheme = localStorage.getItem('theme') || 'default';
   currentKeybinding = localStorage.getItem('keybinding') || 'default';
+  currentPrismTheme = localStorage.getItem('prism-theme') || null;
 
   mounted() {
     document.title = `Config | ${process.env.VUE_APP_NAME}`;
@@ -89,6 +129,10 @@ export default class Config extends Vue {
 
   updateKeybinding(newKeybinding: string) {
     localStorage.setItem('keybinding', newKeybinding);
+  }
+
+  updatePrismTheme(newPrismTheme: string) {
+    localStorage.setItem('prism-theme', newPrismTheme);
   }
 }
 </script>
