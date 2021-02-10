@@ -71,7 +71,7 @@ export default class Config extends Vue {
     { name: 'Vibrant Ink',             value: 'vibrant_ink'             },
     { name: 'Xcode',                   value: 'xcode'                   },
   ];
-  keybindings  = [
+  keybindings = [
     { name: 'Default', value: 'default' },
     { name: 'Vim', value: 'vim' },
     { name: 'Vim (with Emacs-like insert mode mappings)', value: 'vim-modified' },
