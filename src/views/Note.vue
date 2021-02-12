@@ -264,7 +264,6 @@ export default class Note extends Vue {
         this.text = `---
 tags:
 events:
-event color:
 ---
 
 # ${this.$route.params.path}`;
