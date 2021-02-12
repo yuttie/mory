@@ -73,12 +73,6 @@
                     }
                 }
             ]
-        },
-        "event color": {
-            "oneOf": [
-                { "type": "null" },
-                { "type": "string" }
-            ]
         }
     }
 }

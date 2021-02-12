@@ -132,9 +132,6 @@ export default class Calendar extends Vue {
       if (entry.metadata !== null) {
         // Choose a default color for the note based on its path
         let defaultColor = "#666666";
-        if (Object.prototype.hasOwnProperty.call(entry.metadata, 'event color') && typeof entry.metadata['event color'] === 'string') {
-          defaultColor = entry.metadata['event color'];
-        }
         if (Object.prototype.hasOwnProperty.call(entry.metadata, 'events') && typeof entry.metadata.events === 'object' && entry.metadata.events !== null) {
           for (const [eventName, eventDetail] of Object.entries(entry.metadata.events)) {
             if (typeof eventDetail === 'object' && eventDetail !== null) {

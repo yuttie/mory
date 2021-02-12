@@ -37,7 +37,6 @@ export function isMetadataEventMultiple(ev: MetadataEvent): ev is MetadataEventM
 export interface Metadata {
   tags?: string[];
   events?: { [key: string]: MetadataEvent };
-  'event color'?: string;
 }
 
 export interface ListEntry {
