@@ -1,3 +1,25 @@
+## 0.12.0 (2021-02-12)
+This release provides enhanced customizability, optimized startup time, and
+more improvements.
+
+* Customization
+    * Removed built-in style sheet for rendered notes
+    * Support custom style sheet written in LESS
+    * Make code block's syntax highlight theme selectable
+    * Make editor's theme selectable
+    * Make editor's keybinding selectable
+* Optimized load time by utilizing lazy loading
+* Fix
+    * Fixed broken realtime math rendering
+    * Fixed ugly line breakings in note list
+    * Bump marked from 1.2.7 to 2.0.0 for fixing a security vulnerability
+* Misc.
+    * Use full version of tex-chtml of MathJax
+    * Too long table of contents is now scrollable
+    * Allow one to put default values of event attributes for multiple occurrences of a single event
+    * Use yarn instead of npm in Dockerfile
+    * Remove 'event color' metadata
+
 ## 0.11.0 (2021-01-11)
 * UI improvements
     * Support narrow screens
