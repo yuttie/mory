@@ -249,7 +249,7 @@
 </template>
 
 <script lang="ts">
-import { Component, Vue } from 'vue-property-decorator';
+import { Component, Watch, Vue } from 'vue-property-decorator';
 
 import Gravatar from '@/components/Gravatar.vue';
 
@@ -348,6 +348,16 @@ export default class App extends Vue {
     else if (numSuccesses === this.uploadList.length) { return ['success',     numSuccesses   ]; }
     else {
       return ['unknown', -1];
+    }
+  }
+
+  @Watch('token')
+  onTokenChanged(token: null | string) {
+    if (token) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    }
+    else {
+      delete axios.defaults.headers.common['Authorization'];
     }
   }
 
