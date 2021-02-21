@@ -173,7 +173,8 @@ import metadataSchema from '@/metadata-schema.json';
 
 import Ajv, { JSONSchemaType, DefinedError } from 'ajv';
 import axios from '@/axios';
-import marked from 'marked';
+import MarkdownIt from 'markdown-it';
+import mdit_anchor from 'markdown-it-anchor';
 import Prism from 'prismjs';
 import YAML from 'yaml';
 
@@ -182,15 +183,75 @@ declare const MathJax: any;
 const ajv = new Ajv();
 const validateMetadata = ajv.compile(metadataSchema);
 
-marked.setOptions({
-  baseUrl: new URL('files/', new URL(process.env.VUE_APP_API_URL!, window.location.href)).href,
-  gfm: true,
-  highlight: function(code, lang) {
+const mdit = new MarkdownIt('default', {
+  html: true,
+  linkify: true,
+  highlight: (code: string, lang: string) => {
     if (Prism.languages[lang]) {
       return Prism.highlight(code, Prism.languages[lang], lang);
     }
     else {
-      return code;
+      return '';  // use external default escaping
+    }
+  },
+});
+mdit.core.ruler.push('baseurl', (state: any): any => {
+  const baseUrl = new URL('files/', new URL(process.env.VUE_APP_API_URL!, window.location.href)).href;
+  function rewrite(tokens: any[]) {
+    for (const token of tokens) {
+      if (token.type === 'image') {
+        for (const attr of token.attrs) {
+          if (attr[0] === 'src') {
+            if (!/^(\/|https?:\/\/)/.test(attr[1])) {
+              attr[1] = baseUrl + attr[1];
+            }
+          }
+        }
+      }
+      // Process recursively
+      if (token.children !== null) {
+        rewrite(token.children);
+      }
+    }
+  }
+  rewrite(state.tokens);
+});
+mdit.use(mdit_anchor, {
+  level: 2,
+  permalink: true,
+  permalinkBefore: true,
+  permalinkSpace: false,
+  permalinkSymbol: '',
+  renderPermalink: (slug: any, opts: any, state: any, idx: any) => {
+    const space = () => Object.assign(new state.Token('text', '', 0), { content: ' ' })
+
+    const linkTokens = [
+      Object.assign(new state.Token('link_open', 'a', 1), {
+        attrs: [
+          ...(opts.permalinkClass ? [['class', opts.permalinkClass + ' mdi mdi-link-variant']] : []),
+          ['href', opts.permalinkHref(slug, state)],
+          ...Object.entries(opts.permalinkAttrs(slug, state))
+        ]
+      }),
+      Object.assign(new state.Token('html_block', '', 0), { content: opts.permalinkSymbol }),
+      new state.Token('link_close', 'a', -1)
+    ]
+
+    // `push` or `unshift` according to position option.
+    // Space is at the opposite side.
+    if (opts.permalinkSpace) {
+      if (opts.permalinkBefore) {
+        linkTokens.push(space())
+      }
+      else {
+        linkTokens.unshift(space())
+      }
+    }
+    if (opts.permalinkBefore) {
+      state.tokens[idx + 1].children.unshift(...linkTokens)
+    }
+    else {
+      state.tokens[idx + 1].children.push(...linkTokens)
     }
   },
 });
@@ -198,16 +259,6 @@ marked.setOptions({
 function makeFragmentId(text: string) {
   return text.toLowerCase().replace(/ /g, '-').replace(/[^-\p{Letter}\p{Number}]+/gu, '');
 }
-
-const renderer = {
-  heading(text: string, level: number) {
-    const fragmentId = makeFragmentId(text);
-
-    return `<h${level} id="${fragmentId}"><a href="#${fragmentId}" class="header-link mdi mdi-link-variant"></a>${text}</h${level}>`;
-  },
-};
-
-(marked as any).use({ renderer });
 
 @Component({
   components: {
@@ -367,7 +418,7 @@ events:
     })();
 
     // Render the body
-    const renderedContent = marked(body);
+    const renderedContent = mdit.render(body);
 
     // Parse a YAML part
     const [parseError, metadata] = (() => {
