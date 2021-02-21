@@ -175,6 +175,7 @@ import Ajv, { JSONSchemaType, DefinedError } from 'ajv';
 import axios from '@/axios';
 import MarkdownIt from 'markdown-it';
 import mdit_anchor from 'markdown-it-anchor';
+const mdit_task_lists = require('markdown-it-task-lists');  // eslint-disable-line @typescript-eslint/no-var-requires
 import Prism from 'prismjs';
 import YAML from 'yaml';
 
@@ -400,6 +401,7 @@ mdit.use(mdit_anchor, {
     }
   },
 });
+mdit.use(mdit_task_lists);
 
 function makeFragmentId(text: string) {
   return text.toLowerCase().replace(/ /g, '-').replace(/[^-\p{Letter}\p{Number}]+/gu, '');
