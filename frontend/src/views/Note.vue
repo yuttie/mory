@@ -202,7 +202,9 @@ mdit.core.ruler.push('baseurl', (state: any): any => {
       if (token.type === 'image') {
         for (const attr of token.attrs) {
           if (attr[0] === 'src') {
-            attr[1] = baseUrl + attr[1];
+            if (!/^(\/|https?:\/\/)/.test(attr[1])) {
+              attr[1] = baseUrl + attr[1];
+            }
           }
         }
       }
