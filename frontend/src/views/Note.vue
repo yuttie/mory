@@ -173,7 +173,7 @@ import metadataSchema from '@/metadata-schema.json';
 
 import Ajv, { JSONSchemaType, DefinedError } from 'ajv';
 import axios from '@/axios';
-import marked from 'marked';
+import MarkdownIt from 'markdown-it';
 import Prism from 'prismjs';
 import YAML from 'yaml';
 
@@ -182,32 +182,34 @@ declare const MathJax: any;
 const ajv = new Ajv();
 const validateMetadata = ajv.compile(metadataSchema);
 
-marked.setOptions({
-  baseUrl: new URL('files/', new URL(process.env.VUE_APP_API_URL!, window.location.href)).href,
-  gfm: true,
-  highlight: function(code, lang) {
+const mdit = new MarkdownIt('default', {
+  html: true,
+  linkify: true,
+  highlight: (code: string, lang: string) => {
     if (Prism.languages[lang]) {
       return Prism.highlight(code, Prism.languages[lang], lang);
     }
     else {
-      return code;
+      return '';  // use external default escaping
     }
   },
+  // TODO baseUrl: new URL('files/', new URL(process.env.VUE_APP_API_URL!, window.location.href)).href,
 });
 
 function makeFragmentId(text: string) {
   return text.toLowerCase().replace(/ /g, '-').replace(/[^-\p{Letter}\p{Number}]+/gu, '');
 }
 
-const renderer = {
-  heading(text: string, level: number) {
-    const fragmentId = makeFragmentId(text);
-
-    return `<h${level} id="${fragmentId}"><a href="#${fragmentId}" class="header-link mdi mdi-link-variant"></a>${text}</h${level}>`;
-  },
-};
-
-(marked as any).use({ renderer });
+// TODO Header anchor
+// const renderer = {
+//   heading(text: string, level: number) {
+//     const fragmentId = makeFragmentId(text);
+// 
+//     return `<h${level} id="${fragmentId}"><a href="#${fragmentId}" class="header-link mdi mdi-link-variant"></a>${text}</h${level}>`;
+//   },
+// };
+// 
+// (marked as any).use({ renderer });
 
 @Component({
   components: {
@@ -367,7 +369,7 @@ events:
     })();
 
     // Render the body
-    const renderedContent = marked(body);
+    const renderedContent = mdit.render(body);
 
     // Parse a YAML part
     const [parseError, metadata] = (() => {
