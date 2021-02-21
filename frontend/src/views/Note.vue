@@ -175,6 +175,7 @@ import Ajv, { JSONSchemaType, DefinedError } from 'ajv';
 import axios from '@/axios';
 import MarkdownIt from 'markdown-it';
 import mdit_anchor from 'markdown-it-anchor';
+import mdit_container from 'markdown-it-container';
 const mdit_deflist = require('markdown-it-deflist');  // eslint-disable-line @typescript-eslint/no-var-requires
 const mdit_task_lists = require('markdown-it-task-lists');  // eslint-disable-line @typescript-eslint/no-var-requires
 import Prism from 'prismjs';
@@ -399,6 +400,17 @@ mdit.use(mdit_anchor, {
     }
     else {
       state.tokens[idx + 1].children.push(...linkTokens)
+    }
+  },
+});
+mdit.use(mdit_container, 'dynamic', {
+  validate: () => true,
+  render: (tokens: any, idx: any) => {
+    const token = tokens[idx];
+    if (token.nesting === 1) {
+      return `<div class="${token.info.trim()}">`;
+    } else {
+      return '</div>';
     }
   },
 });
