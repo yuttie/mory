@@ -194,7 +194,25 @@ const mdit = new MarkdownIt('default', {
       return '';  // use external default escaping
     }
   },
-  // TODO baseUrl: new URL('files/', new URL(process.env.VUE_APP_API_URL!, window.location.href)).href,
+});
+mdit.core.ruler.push('baseurl', (state: any): any => {
+  const baseUrl = new URL('files/', new URL(process.env.VUE_APP_API_URL!, window.location.href)).href;
+  function rewrite(tokens: any[]) {
+    for (const token of tokens) {
+      if (token.type === 'image') {
+        for (const attr of token.attrs) {
+          if (attr[0] === 'src') {
+            attr[1] = baseUrl + attr[1];
+          }
+        }
+      }
+      // Process recursively
+      if (token.children !== null) {
+        rewrite(token.children);
+      }
+    }
+  }
+  rewrite(state.tokens);
 });
 mdit.use(mdit_anchor, {
   level: 2,
