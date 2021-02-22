@@ -1,3 +1,11 @@
+## 0.13.0 (2021-02-22)
+* Change Markdown parser/renderer to markdown-it from marked
+    * Better handling of base URL for images
+* Implement proper recognition of regions of maths
+* Support Markdown extensions with markdown-it's plugins
+    * (Pandoc-style) Definition lists
+    * Custom <div> with arbitrary class name
+
 ## 0.12.0 (2021-02-12)
 This release provides enhanced customizability, optimized startup time, and
 more improvements.
