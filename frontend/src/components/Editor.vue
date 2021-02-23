@@ -61,6 +61,10 @@ export default class Editor extends Vue {
     this.editor!.on('change', () => {  // eslint-disable-line @typescript-eslint/no-non-null-assertion
       this.$emit('change', this.editor!.getValue());  // eslint-disable-line @typescript-eslint/no-non-null-assertion
     });
+    this.editor!.getSession().on('changeScrollTop', (e: any) => {  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+      const lineNumber = this.editor!.renderer.getFirstFullyVisibleRow();
+      this.$emit('scroll', lineNumber);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+    });
 
     const theme = localStorage.getItem('editor-theme') || 'default';
     this.setTheme(theme);
