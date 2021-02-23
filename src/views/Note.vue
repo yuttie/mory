@@ -15,6 +15,15 @@
         <v-btn icon color="primary" v-on:click="editorIsVisible = true;  viewerIsVisible = true; " v-bind:outlined=" editorIsVisible &&  viewerIsVisible"><v-icon>mdi-file-document-edit</v-icon></v-btn>
         <v-btn icon color="primary" v-on:click="editorIsVisible = false; viewerIsVisible = true; " v-bind:outlined="!editorIsVisible &&  viewerIsVisible"><v-icon>mdi-file-document</v-icon></v-btn>
 
+        <v-btn icon color="gray" class="mt-5" v-on:click="lockScroll = !lockScroll;">
+          <template v-if="lockScroll">
+            <v-icon>mdi-lock</v-icon>
+          </template>
+          <template v-else>
+            <v-icon>mdi-lock-open</v-icon>
+          </template>
+        </v-btn>
+
         <v-btn icon color="gray" class="mt-5"                    v-bind:disabled="needSave" v-on:click="reload"><v-icon>mdi-reload</v-icon></v-btn>
         <v-btn icon color="pink" class="mt-0"                    v-bind:disabled="!needSave" v-bind:loading="isSaving" v-on:click="saveIfNeeded"><v-icon>mdi-content-save</v-icon></v-btn>
         <v-btn icon color="gray" class="mt-0" id="rename-toggle" v-bind:disabled="!noteIsLoaded" v-bind:loading="isRenaming"><v-icon>mdi-rename-box</v-icon></v-btn>
@@ -449,6 +458,7 @@ export default class Note extends Vue {
   initialText = '';
   rendered = { metadata: null as null | any, content: '' };
   observer = null as null | IntersectionObserver;
+  lockScroll = true;
   noteIsLoaded = false;
   editorIsVisible = false;
   viewerIsVisible = true;
@@ -648,7 +658,7 @@ events:
             return 0;
           }
         });
-        if (visibleEntries.length > 0) {
+        if (this.lockScroll && visibleEntries.length > 0) {
           const lineNumber = (visibleEntries[0].target as any).dataset.line;
           (this.$refs.editor as Editor).scrollTo(lineNumber);
         }
@@ -840,18 +850,20 @@ events:
   }
 
   onEditorScroll(lineNumber: number) {
-    const renderedContent = this.$refs.renderedContent as Element;
-    const candidates = [...renderedContent.querySelectorAll('[data-line]')];
-    while (candidates.length > 0 ) {
-      if (parseInt((candidates[0] as any).dataset['line']) >= lineNumber) {
-        break;
+    if (this.lockScroll) {
+      const renderedContent = this.$refs.renderedContent as Element;
+      const candidates = [...renderedContent.querySelectorAll('[data-line]')];
+      while (candidates.length > 0 ) {
+        if (parseInt((candidates[0] as any).dataset['line']) >= lineNumber) {
+          break;
+        }
+        else {
+          candidates.shift();
+        }
       }
-      else {
-        candidates.shift();
+      if (candidates.length > 0) {
+        candidates[0].scrollIntoView(true);
       }
-    }
-    if (candidates.length > 0) {
-      candidates[0].scrollIntoView(true);
     }
   }
 
