@@ -14,6 +14,7 @@ export default class Editor extends Vue {
   @Prop(String) readonly value!: string;
   @Prop(String) readonly mode!: string;
   editor: any = null;  // eslint-disable-line @typescript-eslint/no-explicit-any
+  ignoreNextChangeScrollTopEvent = false;
 
   @Watch('value')
   onValueChanged(value: string) {
@@ -62,8 +63,13 @@ export default class Editor extends Vue {
       this.$emit('change', this.editor!.getValue());  // eslint-disable-line @typescript-eslint/no-non-null-assertion
     });
     this.editor!.getSession().on('changeScrollTop', (e: any) => {  // eslint-disable-line @typescript-eslint/no-non-null-assertion
-      const lineNumber = this.editor!.renderer.getFirstFullyVisibleRow();
-      this.$emit('scroll', lineNumber);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+      if (!this.ignoreNextChangeScrollTopEvent) {
+        const lineNumber = this.editor!.renderer.getFirstFullyVisibleRow();
+        this.$emit('scroll', lineNumber);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+      }
+      else {
+        this.ignoreNextChangeScrollTopEvent = false;
+      }
     });
 
     const theme = localStorage.getItem('editor-theme') || 'default';
@@ -94,6 +100,11 @@ export default class Editor extends Vue {
 
   resize() {
     this.editor!.resize();  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+  }
+
+  scrollTo(lineNumber: number) {
+    this.editor!.scrollToLine(lineNumber, false, false, null);
+    this.ignoreNextChangeScrollTopEvent = true;
   }
 
   setTheme(theme: string) {

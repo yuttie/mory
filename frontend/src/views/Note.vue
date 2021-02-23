@@ -448,6 +448,7 @@ export default class Note extends Vue {
   text = '';
   initialText = '';
   rendered = { metadata: null as null | any, content: '' };
+  observer = null as null | IntersectionObserver;
   noteIsLoaded = false;
   editorIsVisible = false;
   viewerIsVisible = true;
@@ -617,6 +618,50 @@ events:
 
     // Render the body
     const renderedContent = mdit.render(body);
+
+    // Observe elements for scroll sync
+    this.$nextTick(() => {
+      if (this.observer) {
+        this.observer.disconnect();
+      }
+      // Create a new observer
+      let visibleEntries = [] as IntersectionObserverEntry[];
+      this.observer = new IntersectionObserver((entries: IntersectionObserverEntry[], observer: IntersectionObserver) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            visibleEntries.push(entry);
+          }
+          else {
+            visibleEntries = visibleEntries.filter(el => {
+              return el.target === entry.target;
+            });
+          }
+        }
+        visibleEntries.sort((a, b) => {
+          if (a.boundingClientRect.top < b.boundingClientRect.top) {
+            return -1;
+          }
+          else if (a.boundingClientRect.top > b.boundingClientRect.top) {
+            return 1;
+          }
+          else {
+            return 0;
+          }
+        });
+        if (visibleEntries.length > 0) {
+          const lineNumber = (visibleEntries[0].target as any).dataset.line;
+          (this.$refs.editor as Editor).scrollTo(lineNumber);
+        }
+      }, {
+        root: null,
+        rootMargin: '48px 0px 0px 0px',
+        threshold: 1.0,
+      });
+      const candidates = (this.$refs.renderedContent as Element).querySelectorAll('[data-line]');
+      for (const el of candidates) {
+        this.observer.observe(el);
+      }
+    });
 
     // Parse a YAML part
     const [parseError, metadata] = (() => {
