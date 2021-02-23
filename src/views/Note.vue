@@ -26,6 +26,7 @@
           v-bind:value="text"
           v-bind:mode="editorMode"
           v-on:change="onEditorChange"
+          v-on:scroll="onEditorScroll"
           ref="editor"
         ></Editor>
         <div class="viewer">
@@ -364,6 +365,21 @@ mdit.inline.ruler.after('escape', 'math_inline', math_inline);
 mdit.block.ruler.after('blockquote', 'math_block', math_block, {
   alt: ['paragraph', 'reference', 'blockquote', 'list'],
 });
+// Borrowed from https://github.com/markdown-it/markdown-it/blob/5789a3fe9693aa3ef6aa882b0f57e0ea61efafc0/support/demo_template/index.js#L166-L181
+// Inject line numbers for sync scroll. Notes:
+// - We track only headings and paragraphs on first level. That's enough.
+// - Footnotes content causes jumps. Level limit filter it automatically.
+let metadataLineCount = 0;
+function injectLineNumbers(tokens: any, idx: any, options: any, env: any, slf: any) {
+  if (tokens[idx].map && tokens[idx].level === 0) {
+    const lineNumber = tokens[idx].map[0];
+    tokens[idx].attrJoin('class', 'line');
+    tokens[idx].attrSet('data-line', String(metadataLineCount + lineNumber));
+  }
+  return slf.renderToken(tokens, idx, options, env, slf);
+}
+mdit.renderer.rules.paragraph_open = injectLineNumbers;
+mdit.renderer.rules.heading_open = injectLineNumbers;
 mdit.use(mdit_anchor, {
   level: 2,
   permalink: true,
@@ -578,6 +594,27 @@ events:
       }
     })();
 
+    // Memorize the number of lines of metadata block
+    if (yaml !== null) {
+      // Count the lines including '---'
+      let count = 2;  // Opening '---' and its next line
+      let start = 0;
+      let i = 0;
+      while (true) {  // eslint-disable-line no-constant-condition
+        const i = yaml.indexOf('\n', start);
+        if (i === -1) {
+          break;
+        }
+        else {
+          count += 1;
+          start = i + 1;
+        }
+      }
+      count += 1;  // Closing '---'
+      // Memorize it
+      metadataLineCount = count;
+    }
+
     // Render the body
     const renderedContent = mdit.render(body);
 
@@ -755,6 +792,22 @@ events:
     this.text = text;
     // Update lazily
     this.updateRenderedLazy();
+  }
+
+  onEditorScroll(lineNumber: number) {
+    const renderedContent = this.$refs.renderedContent as Element;
+    const candidates = [...renderedContent.querySelectorAll('[data-line]')];
+    while (candidates.length > 0 ) {
+      if (parseInt((candidates[0] as any).dataset['line']) >= lineNumber) {
+        break;
+      }
+      else {
+        candidates.shift();
+      }
+    }
+    if (candidates.length > 0) {
+      candidates[0].scrollIntoView(true);
+    }
   }
 
   load(path: string) {
