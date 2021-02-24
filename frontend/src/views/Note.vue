@@ -629,6 +629,7 @@ events:
 
     // Render the body
     const renderedContent = mdit.render(body);
+    this.ignoreNext = true;
 
     // Observe elements for scroll sync
     this.$nextTick(() => {
