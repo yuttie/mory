@@ -459,6 +459,7 @@ export default class Note extends Vue {
   rendered = { metadata: null as null | any, content: '' };
   observer = null as null | IntersectionObserver;
   lockScroll = true;
+  ignoreNext = false;
   noteIsLoaded = false;
   editorIsVisible = false;
   viewerIsVisible = true;
@@ -658,9 +659,14 @@ events:
             return 0;
           }
         });
-        if (this.lockScroll && visibleEntries.length > 0) {
-          const lineNumber = (visibleEntries[0].target as any).dataset.line;
-          (this.$refs.editor as Editor).scrollTo(lineNumber);
+        if (this.ignoreNext) {
+          this.ignoreNext = false;
+        }
+        else {
+          if (this.lockScroll && visibleEntries.length > 0) {
+            const lineNumber = (visibleEntries[0].target as any).dataset.line;
+            (this.$refs.editor as Editor).scrollTo(lineNumber);
+          }
         }
       }, {
         root: null,
@@ -863,6 +869,7 @@ events:
       }
       if (candidates.length > 0) {
         candidates[0].scrollIntoView(true);
+        this.ignoreNext = true;
       }
     }
   }
