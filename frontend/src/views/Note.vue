@@ -1044,6 +1044,7 @@ events:
       else {
         this.focusOrBlurEditor();
       }
+      e.preventDefault();
     }
     else if (e.ctrlKey && e.key === 'Enter') {
       this.toggleEditor();
