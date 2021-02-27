@@ -1,6 +1,6 @@
 <template>
   <v-app id="app" ref="app">
-    <v-app-bar app height="48" id="nav" color="white" elevate-on-scroll fixed>
+    <v-app-bar app height="48" id="nav" color="white" flat fixed>
       <v-app-bar-nav-icon
         v-if="$vuetify.breakpoint.xs"
         v-on:click.stop="showDrawer = !showDrawer">
