@@ -221,6 +221,17 @@ mdit.core.ruler.push('baseurl', (state: any): any => {
           }
         }
       }
+      else if (token.type === 'html_block') {
+        const root = document.createElement('div');
+        root.innerHTML = token.content;
+        for (const img of root.querySelectorAll('img')) {
+          const src = img.getAttribute('src');
+          if (src !== null && !/^(\/|https?:\/\/)/.test(src)) {
+            img.setAttribute('src', baseUrl + src);
+          }
+        }
+        token.content = root.innerHTML;
+      }
       // Process recursively
       if (token.children !== null) {
         rewrite(token.children);
