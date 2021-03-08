@@ -1051,11 +1051,11 @@ events:
     if (e.key === 'e') {
       if (!this.editorIsVisible) {
         this.toggleEditor();
+        e.preventDefault();
       }
       else {
         this.focusOrBlurEditor();
       }
-      e.preventDefault();
     }
     else if (e.ctrlKey && e.key === 'Enter') {
       this.toggleEditor();
