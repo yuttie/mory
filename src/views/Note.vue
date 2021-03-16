@@ -24,7 +24,10 @@
           </template>
         </v-btn>
 
-        <v-btn icon color="gray" class="mt-5"                    v-bind:disabled="needSave" v-on:click="reload"><v-icon>mdi-reload</v-icon></v-btn>
+        <v-btn icon color="gray" class="mt-5" v-on:click="checkUpstreamChange(); showUpstreamState = true;">
+          <v-icon>mdi-compare-vertical</v-icon>
+        </v-btn>
+        <v-btn icon color="gray" class="mt-0"                    v-bind:disabled="needSave" v-on:click="reload"><v-icon>mdi-reload</v-icon></v-btn>
         <v-btn icon color="pink" class="mt-0"                    v-bind:disabled="!needSave" v-bind:loading="isSaving" v-on:click="saveIfNeeded"><v-icon>mdi-content-save</v-icon></v-btn>
         <v-btn icon color="gray" class="mt-0" id="rename-toggle" v-bind:disabled="!noteIsLoaded" v-bind:loading="isRenaming"><v-icon>mdi-rename-box</v-icon></v-btn>
 
@@ -39,6 +42,14 @@
           ref="editor"
         ></Editor>
         <div class="viewer">
+          <v-snackbar top timeout="3000" v-model="showUpstreamState" v-bind:color="upstreamStateSnackbarColor">
+            <template  v-if="upstreamUpdated">
+              Upstream has been modified since it was loaded.
+            </template>
+            <template  v-else>
+              This is the latest version.
+            </template>
+          </v-snackbar>
           <v-expansion-panels
             accordion
             flat
@@ -467,6 +478,8 @@ export default class Note extends Vue {
 
   text = '';
   initialText = '';
+  upstreamUpdated = false;
+  showUpstreamState = false;
   rendered = { metadata: null as null | any, content: '' };
   observer = null as null | IntersectionObserver;
   lockScroll = true;
@@ -830,6 +843,15 @@ events:
     return this.text !== this.initialText;
   }
 
+  get upstreamStateSnackbarColor(): string {
+    if (this.upstreamUpdated) {
+      return 'error';
+    }
+    else {
+      return 'success';
+    }
+  }
+
   get needSave(): boolean {
     if (this.noteIsLoaded) {
       if (this.isModified) {
@@ -886,12 +908,23 @@ events:
     }
   }
 
+  checkUpstreamChange() {
+    const path = this.$route.params.path;
+    axios.get(`/notes/${path}`)
+      .then(res => {
+        this.upstreamUpdated = this.initialText !== res.data;
+      }).catch(error => {
+        // Just ignore it
+      });
+  }
+
   load(path: string) {
     this.isLoading = true;
     axios.get(`/notes/${path}`)
       .then(res => {
         this.text = res.data;
         this.initialText = this.text;
+        this.upstreamUpdated = false;
         this.noteIsLoaded = true;
 
         // Update immediately
