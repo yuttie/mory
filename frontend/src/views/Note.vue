@@ -5,7 +5,7 @@
         <h1>Not Found</h1>
       </div>
     </template>
-    <template v-if="!notFound">
+    <template v-else>
       <div
         v-show="!isLoading"
         style="position: fixed; right: 0; transform: translateY(40px); display: flex; flex-direction: column; z-index: 3;"
