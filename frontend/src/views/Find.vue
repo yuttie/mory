@@ -124,7 +124,7 @@ export default class Find extends Vue {
     for (const entry of this.entries) {
       if (entry.metadata !== null) {
         if (Object.prototype.hasOwnProperty.call(entry.metadata, 'tags') && Array.isArray(entry.metadata.tags)) {
-          for (const tag of entry.metadata.tags) {
+          for (const tag of entry.metadata.tags.map(String)) {
             tags.add(tag);
           }
         }
@@ -178,7 +178,7 @@ export default class Find extends Vue {
           return [];
         }
         else {
-          return entry.metadata.tags.map((x: string) => x.toLowerCase());
+          return entry.metadata.tags.map((tag: any) => String(tag).toLowerCase());
         }
       })();
       // Check if all conditions are met or notl
