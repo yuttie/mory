@@ -46,7 +46,7 @@ export default class Home extends Vue {
     for (const entry of this.entries) {
       if (entry.metadata !== null) {
         if (Object.prototype.hasOwnProperty.call(entry.metadata, 'tags') && Array.isArray(entry.metadata.tags)) {
-          for (const tag of entry.metadata.tags) {
+          for (const tag of entry.metadata.tags.map(String)) {
             const match = tag.match(/^home:(.+)$/);
             if (match) {
               const category = match[1];
