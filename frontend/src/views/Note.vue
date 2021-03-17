@@ -1121,6 +1121,10 @@ events:
       this.initialText = content;
       this.noteIsLoaded = true;
       this.isSaving = false;
+      // Remove 'mode' query parameter
+      const newQuery = { ...this.$route.query };
+      delete newQuery.mode;
+      this.$router.replace({ query: newQuery });
     }).catch(error => {
       if (error.response) {
         if (error.response.status === 401) {
