@@ -24,7 +24,7 @@
           </template>
         </v-btn>
 
-        <v-btn icon color="gray" class="mt-5" v-on:click="checkUpstreamChange(); showUpstreamState = true;">
+        <v-btn icon color="gray" class="mt-5" v-on:click="checkUpstreamChange().then(() => showUpstreamState = true);">
           <v-icon>mdi-compare-vertical</v-icon>
         </v-btn>
         <v-btn icon color="gray" class="mt-0"                    v-bind:disabled="needSave" v-on:click="reload"><v-icon>mdi-reload</v-icon></v-btn>
@@ -508,8 +508,7 @@ export default class Note extends Vue {
     this.onTokenChanged(this.token);
 
     window.addEventListener('focus', e => {
-      this.checkUpstreamChange();
-      this.showUpstreamState = true;
+      this.checkUpstreamChange().then(() => this.showUpstreamState = true);
     });
 
     window.addEventListener('beforeunload', e => {
@@ -915,7 +914,7 @@ events:
 
   checkUpstreamChange() {
     const path = this.$route.params.path;
-    axios.get(`/notes/${path}`)
+    return axios.get(`/notes/${path}`)
       .then(res => {
         this.upstreamUpdated = this.initialText !== res.data;
       }).catch(error => {
