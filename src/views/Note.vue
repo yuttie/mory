@@ -28,11 +28,43 @@
           <v-icon>mdi-compare-vertical</v-icon>
         </v-btn>
         <v-btn icon color="gray" class="mt-0"                    v-bind:disabled="needSave" v-on:click="reload"><v-icon>mdi-reload</v-icon></v-btn>
-        <v-btn icon color="pink" class="mt-0"                    v-bind:disabled="!needSave" v-bind:loading="isSaving" v-on:click="saveIfNeeded"><v-icon>mdi-content-save</v-icon></v-btn>
+        <v-btn icon color="pink" class="mt-0"                    v-bind:disabled="!needSave" v-bind:loading="isSaving" v-on:click.stop="saveIfNeeded"><v-icon>mdi-content-save</v-icon></v-btn>
         <v-btn icon color="gray" class="mt-0" id="rename-toggle" v-bind:disabled="!noteIsLoaded" v-bind:loading="isRenaming"><v-icon>mdi-rename-box</v-icon></v-btn>
 
         <v-btn icon color="gray" class="mt-5" id="toc-toggle"><v-icon>mdi-table-of-contents</v-icon></v-btn>
       </div>
+      <v-dialog
+        v-model="showOverwriteConfirmationDialog"
+        max-width="300"
+      >
+        <v-card>
+          <v-card-title class="headline">
+            Really overwrite note?
+          </v-card-title>
+          <v-card-text>
+            Upstream has been modified since the note was loaded.
+            Those changes will be lost if you continue to save the note.
+          </v-card-text>
+          <v-card-actions>
+            <v-spacer></v-spacer>
+            <v-btn
+              color="primary darken-1"
+              text
+              v-on:click="showOverwriteConfirmationDialog = false;"
+            >
+              Cancel
+            </v-btn>
+
+            <v-btn
+              color="primary darken-1"
+              text
+              v-on:click="showOverwriteConfirmationDialog = false; save();"
+            >
+              OK
+            </v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
       <div class="panes" v-bind:class="panesState">
         <Editor
           v-bind:value="text"
@@ -494,6 +526,7 @@ export default class Note extends Vue {
   isSaving = false;
   isRenaming = false;
   notFound = false;
+  showOverwriteConfirmationDialog = false;
   error = false;
   errorText = '';
   mathjaxTypesetPromise = Promise.resolve();
@@ -1108,7 +1141,14 @@ events:
 
   saveIfNeeded() {
     if (this.needSave) {
-      this.save();
+      this.checkUpstreamChange().then(() => {
+        if (this.upstreamUpdated) {
+          this.showOverwriteConfirmationDialog = true;
+        }
+        else {
+          this.save();
+        }
+      });
     }
   }
 
