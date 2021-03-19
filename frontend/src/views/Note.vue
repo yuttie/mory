@@ -507,6 +507,11 @@ export default class Note extends Vue {
 
     this.onTokenChanged(this.token);
 
+    window.addEventListener('focus', e => {
+      this.checkUpstreamChange();
+      this.showUpstreamState = true;
+    });
+
     window.addEventListener('beforeunload', e => {
       if (this.isModified) {
         // Cancel the event
