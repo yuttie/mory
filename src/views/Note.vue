@@ -24,7 +24,7 @@
           </template>
         </v-btn>
 
-        <v-btn icon color="gray" class="mt-5" v-on:click="checkUpstreamChange().then(() => showUpstreamState = true);">
+        <v-btn icon color="gray" class="mt-5" v-on:click="notifyUpstreamState">
           <v-icon>mdi-compare-vertical</v-icon>
         </v-btn>
         <v-btn icon color="gray" class="mt-0"                    v-bind:disabled="needSave" v-on:click="reload"><v-icon>mdi-reload</v-icon></v-btn>
@@ -540,20 +540,9 @@ export default class Note extends Vue {
 
     this.onTokenChanged(this.token);
 
-    window.addEventListener('focus', e => {
-      this.checkUpstreamChange().then(() => this.showUpstreamState = true);
-    });
+    window.addEventListener('focus', this.notifyUpstreamState);
 
-    window.addEventListener('beforeunload', e => {
-      if (this.isModified) {
-        // Cancel the event
-        e.preventDefault();
-        e.returnValue = '';  // Chrome requires returnValue to be set
-      }
-      else {
-        delete e['returnValue'];  // This guarantees the browser unload happens
-      }
-    });
+    window.addEventListener('beforeunload', this.onBeforeunload);
 
     window.addEventListener('keydown', this.handleKeydown);
 
@@ -592,6 +581,10 @@ events:
   }
 
   destroyed() {
+    window.removeEventListener('focus', this.notifyUpstreamState);
+
+    window.removeEventListener('beforeunload', this.onBeforeunload);
+
     window.removeEventListener('keydown', this.handleKeydown);
     if (this.renderTimeoutId) {
       window.clearTimeout(this.renderTimeoutId);
@@ -1114,6 +1107,21 @@ events:
     }
     else {
       (this.$refs.editor as Editor).blur();
+    }
+  }
+
+  notifyUpstreamState(e: FocusEvent) {
+    this.checkUpstreamChange().then(() => this.showUpstreamState = true);
+  }
+
+  onBeforeunload(e: any) {
+    if (this.isModified) {
+      // Cancel the event
+      e.preventDefault();
+      e.returnValue = '';  // Chrome requires returnValue to be set
+    }
+    else {
+      delete e['returnValue'];  // This guarantees the browser unload happens
     }
   }
 
