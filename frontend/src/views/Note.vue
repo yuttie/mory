@@ -42,7 +42,7 @@
           ref="editor"
         ></Editor>
         <div class="viewer">
-          <v-snackbar top timeout="3000" v-model="showUpstreamState" v-bind:color="upstreamStateSnackbarColor">
+          <v-snackbar top timeout="1000" v-model="showUpstreamState" v-bind:color="upstreamStateSnackbarColor">
             <template  v-if="upstreamUpdated">
               Upstream has been modified since it was loaded.
             </template>
