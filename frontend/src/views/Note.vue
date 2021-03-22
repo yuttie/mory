@@ -48,7 +48,6 @@
           <v-card-actions>
             <v-spacer></v-spacer>
             <v-btn
-              color="primary darken-1"
               text
               v-on:click="showOverwriteConfirmationDialog = false;"
             >
@@ -56,7 +55,7 @@
             </v-btn>
 
             <v-btn
-              color="primary darken-1"
+              color="error darken-1"
               text
               v-on:click="showOverwriteConfirmationDialog = false; save();"
             >
