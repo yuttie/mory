@@ -74,10 +74,13 @@
         ></Editor>
         <div class="viewer">
           <v-snackbar top timeout="1000" v-model="showUpstreamState" v-bind:color="upstreamStateSnackbarColor">
-            <template  v-if="upstreamUpdated">
+            <template v-if="upstreamState === 'updated'">
               Upstream has been modified since it was loaded.
             </template>
-            <template  v-else>
+            <template v-else-if="upstreamState === 'deleted'">
+              Upstream has been deleted.
+            </template>
+            <template v-else>
               This is the latest version.
             </template>
           </v-snackbar>
@@ -509,7 +512,7 @@ export default class Note extends Vue {
 
   text = '';
   initialText = '';
-  upstreamUpdated = false;
+  upstreamState = 'unchanged';
   showUpstreamState = false;
   rendered = { metadata: null as null | any, content: '' };
   observer = null as null | IntersectionObserver;
@@ -873,11 +876,17 @@ events:
   }
 
   get upstreamStateSnackbarColor(): string {
-    if (this.upstreamUpdated) {
+    if (this.upstreamState === 'updated') {
       return 'error';
     }
-    else {
+    else if (this.upstreamState === 'deleted') {
+      return 'error';
+    }
+    else if (this.upstreamState === 'unchanged') {
       return 'success';
+    }
+    else {
+      throw 'Invalid upstream state!';
     }
   }
 
@@ -937,13 +946,30 @@ events:
     }
   }
 
-  checkUpstreamChange() {
+  checkUpstreamState() {
     const path = this.$route.params.path;
     return axios.get(`/notes/${path}`)
       .then(res => {
-        this.upstreamUpdated = this.initialText !== res.data;
-      }).catch(error => {
-        // Just ignore it
+        if (res.data === this.initialText) {
+          return 'unchanged';
+        }
+        else {
+          return 'updated';
+        }
+      })
+      .catch(error => {
+        if (error.response) {
+          if (error.response.status === 404) {
+            // Not Found
+            return 'deleted';
+          }
+          else {
+            throw error;
+          }
+        }
+        else {
+          throw error;
+        }
       });
   }
 
@@ -953,7 +979,7 @@ events:
       .then(res => {
         this.text = res.data;
         this.initialText = this.text;
-        this.upstreamUpdated = false;
+        this.upstreamState = 'unchanged';
         this.noteIsLoaded = true;
 
         // Update immediately
@@ -1110,7 +1136,31 @@ events:
   }
 
   notifyUpstreamState(e: FocusEvent) {
-    this.checkUpstreamChange().then(() => this.showUpstreamState = true);
+    this.checkUpstreamState()
+      .then(state => {
+        this.upstreamState = state;
+        this.showUpstreamState = true;
+      })
+      .catch(error => {
+        if (error.response) {
+          if (error.response.status === 401) {
+            // Unauthorized
+            this.$emit('tokenExpired', () => {
+              this.notifyUpstreamState(e);
+            });
+          }
+          else {
+            this.error = true;
+            this.errorText = error.response;
+            console.log('Unhandled error: {}', error.response);
+          }
+        }
+        else {
+          this.error = true;
+          this.errorText = error.toString();
+          console.log('Unhandled error: {}', error);
+        }
+      });
   }
 
   onBeforeunload(e: any) {
@@ -1148,14 +1198,35 @@ events:
 
   saveIfNeeded() {
     if (this.needSave) {
-      this.checkUpstreamChange().then(() => {
-        if (this.upstreamUpdated) {
-          this.showOverwriteConfirmationDialog = true;
-        }
-        else {
-          this.save();
-        }
-      });
+      this.checkUpstreamState()
+        .then(state => {
+          if (state === 'unchanged') {
+            this.save();
+          }
+          else {
+            this.showOverwriteConfirmationDialog = true;
+          }
+        })
+        .catch(error => {
+          if (error.response) {
+            if (error.response.status === 401) {
+              // Unauthorized
+              this.$emit('tokenExpired', () => {
+                this.saveIfNeeded();
+              });
+            }
+            else {
+              this.error = true;
+              this.errorText = error.response;
+              console.log('Unhandled error: {}', error.response);
+            }
+          }
+          else {
+            this.error = true;
+            this.errorText = error.toString();
+            console.log('Unhandled error: {}', error);
+          }
+        });
     }
   }
 
