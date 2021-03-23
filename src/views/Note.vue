@@ -29,16 +29,16 @@
         </v-btn>
         <v-btn icon color="gray" class="mt-0"                    v-bind:disabled="needSave" v-on:click="reload"><v-icon>mdi-reload</v-icon></v-btn>
         <v-btn icon color="pink" class="mt-0"                    v-bind:disabled="!needSave" v-bind:loading="isSaving" v-on:click.stop="saveIfNeeded"><v-icon>mdi-content-save</v-icon></v-btn>
-        <v-btn icon color="gray" class="mt-0" id="rename-toggle" v-bind:disabled="!noteIsLoaded" v-bind:loading="isRenaming"><v-icon>mdi-rename-box</v-icon></v-btn>
+        <v-btn icon color="gray" class="mt-0" id="rename-toggle" v-bind:disabled="!noteHasUpstream" v-bind:loading="isRenaming"><v-icon>mdi-rename-box</v-icon></v-btn>
 
         <v-btn icon color="gray" class="mt-5" id="toc-toggle"><v-icon>mdi-table-of-contents</v-icon></v-btn>
       </div>
       <v-dialog
-        v-model="showOverwriteConfirmationDialog"
+        v-model="showConfirmationDialog"
         max-width="25em"
       >
         <v-card>
-          <template v-if="upstreamState === 'updated'">
+          <template v-if="upstreamState === 'different'">
             <v-card-title class="headline">
               Really overwrite note?
             </v-card-title>
@@ -68,7 +68,7 @@
             <v-spacer></v-spacer>
             <v-btn
               text
-              v-on:click="showOverwriteConfirmationDialog = false;"
+              v-on:click="showConfirmationDialog = false;"
             >
               Cancel
             </v-btn>
@@ -76,7 +76,7 @@
             <v-btn
               color="error darken-1"
               text
-              v-on:click="showOverwriteConfirmationDialog = false; save();"
+              v-on:click="showConfirmationDialog = false; save();"
             >
               OK
             </v-btn>
@@ -93,7 +93,7 @@
         ></Editor>
         <div class="viewer">
           <v-snackbar top timeout="1000" v-model="showUpstreamState" v-bind:color="upstreamStateSnackbarColor">
-            <template v-if="upstreamState === 'updated'">
+            <template v-if="upstreamState === 'different'">
               Upstream has been modified since it was loaded.
             </template>
             <template v-else-if="upstreamState === 'deleted'">
@@ -531,13 +531,13 @@ export default class Note extends Vue {
 
   text = '';
   initialText = '';
-  upstreamState = 'unchanged';
+  upstreamState = 'same';
   showUpstreamState = false;
   rendered = { metadata: null as null | any, content: '' };
   observer = null as null | IntersectionObserver;
   lockScroll = true;
   ignoreNext = false;
-  noteIsLoaded = false;
+  noteHasUpstream = false;
   editorIsVisible = false;
   viewerIsVisible = true;
   tocIsVisible = false;
@@ -547,7 +547,7 @@ export default class Note extends Vue {
   isSaving = false;
   isRenaming = false;
   notFound = false;
-  showOverwriteConfirmationDialog = false;
+  showConfirmationDialog = false;
   error = false;
   errorText = '';
   mathjaxTypesetPromise = Promise.resolve();
@@ -895,13 +895,13 @@ events:
   }
 
   get upstreamStateSnackbarColor(): string {
-    if (this.upstreamState === 'updated') {
+    if (this.upstreamState === 'different') {
       return 'error';
     }
     else if (this.upstreamState === 'deleted') {
       return 'warning';
     }
-    else if (this.upstreamState === 'unchanged') {
+    else if (this.upstreamState === 'same') {
       return 'success';
     }
     else {
@@ -910,7 +910,7 @@ events:
   }
 
   get needSave(): boolean {
-    if (this.noteIsLoaded) {
+    if (this.noteHasUpstream) {
       if (this.isModified) {
         return true;
       }
@@ -970,10 +970,10 @@ events:
     return axios.get(`/notes/${path}`)
       .then(res => {
         if (res.data === this.initialText) {
-          return 'unchanged';
+          return 'same';
         }
         else {
-          return 'updated';
+          return 'different';
         }
       })
       .catch(error => {
@@ -998,8 +998,8 @@ events:
       .then(res => {
         this.text = res.data;
         this.initialText = this.text;
-        this.upstreamState = 'unchanged';
-        this.noteIsLoaded = true;
+        this.upstreamState = 'same';
+        this.noteHasUpstream = true;
 
         // Update immediately
         this.updateRendered();
@@ -1157,7 +1157,7 @@ events:
   notifyUpstreamState(e: FocusEvent) {
     this.checkUpstreamState()
       .then(state => {
-        if (this.noteIsLoaded || state === 'updated') {
+        if (this.noteHasUpstream || state === 'different') {
           this.upstreamState = state;
           this.showUpstreamState = true;
         }
@@ -1221,22 +1221,22 @@ events:
     if (this.needSave) {
       this.checkUpstreamState()
         .then(state => {
-          if (this.noteIsLoaded) {
-            if (state === 'unchanged') {
+          if (this.noteHasUpstream) {
+            if (state === 'same') {
               this.save();
             }
             else {
               this.upstreamState = state;
-              this.showOverwriteConfirmationDialog = true;
+              this.showConfirmationDialog = true;
             }
           }
           else {
-            if (state === 'unchanged' || state === 'deleted') {
+            if (state === 'same' || state === 'deleted') {
               this.save();
             }
             else {
               this.upstreamState = state;
-              this.showOverwriteConfirmationDialog = true;
+              this.showConfirmationDialog = true;
             }
           }
         })
@@ -1274,7 +1274,7 @@ events:
       },
     }).then(res => {
       this.initialText = content;
-      this.noteIsLoaded = true;
+      this.noteHasUpstream = true;
       this.isSaving = false;
       // Remove 'mode' query parameter
       const newQuery = { ...this.$route.query };
