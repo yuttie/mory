@@ -35,25 +35,35 @@
       </div>
       <v-dialog
         v-model="showOverwriteConfirmationDialog"
-        max-width="300"
+        max-width="25em"
       >
         <v-card>
-          <v-card-title class="headline">
-            Really overwrite note?
-          </v-card-title>
-          <v-card-text>
-            <template v-if="upstreamState === 'updated'">
+          <template v-if="upstreamState === 'updated'">
+            <v-card-title class="headline">
+              Really overwrite note?
+            </v-card-title>
+            <v-card-text>
               Upstream has been modified since the note was loaded.
               Those changes will be lost if you continue to save the note.
-            </template>
-            <template v-else-if="upstreamState === 'deleted'">
+            </v-card-text>
+          </template>
+          <template v-else-if="upstreamState === 'deleted'">
+            <v-card-title class="headline">
+              Really create a new note?
+            </v-card-title>
+            <v-card-text>
               Upstream has been deleted.
               A new note will be created if you continue to save the note.
-            </template>
-            <template v-else>
-              Upstream is in unknown state.
-            </template>
-          </v-card-text>
+            </v-card-text>
+          </template>
+          <template v-else>
+            <v-card-title class="headline">
+              Something is wrong.
+            </v-card-title>
+            <v-card-text>
+              This message should not be shown to you...
+            </v-card-text>
+          </template>
           <v-card-actions>
             <v-spacer></v-spacer>
             <v-btn
