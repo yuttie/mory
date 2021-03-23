@@ -1157,8 +1157,10 @@ events:
   notifyUpstreamState(e: FocusEvent) {
     this.checkUpstreamState()
       .then(state => {
-        this.upstreamState = state;
-        this.showUpstreamState = true;
+        if (this.noteIsLoaded || state === 'updated') {
+          this.upstreamState = state;
+          this.showUpstreamState = true;
+        }
       })
       .catch(error => {
         if (error.response) {
@@ -1219,11 +1221,23 @@ events:
     if (this.needSave) {
       this.checkUpstreamState()
         .then(state => {
-          if (state === 'unchanged') {
-            this.save();
+          if (this.noteIsLoaded) {
+            if (state === 'unchanged') {
+              this.save();
+            }
+            else {
+              this.upstreamState = state;
+              this.showOverwriteConfirmationDialog = true;
+            }
           }
           else {
-            this.showOverwriteConfirmationDialog = true;
+            if (state === 'unchanged' || state === 'deleted') {
+              this.save();
+            }
+            else {
+              this.upstreamState = state;
+              this.showOverwriteConfirmationDialog = true;
+            }
           }
         })
         .catch(error => {
