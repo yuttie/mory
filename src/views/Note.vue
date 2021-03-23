@@ -231,8 +231,8 @@
           </v-card-text>
         </v-card>
       </v-menu>
-      <v-overlay v-bind:value="isLoading" z-index="10">
-        <v-progress-circular indeterminate size="64"></v-progress-circular>
+      <v-overlay v-bind:value="isLoading" z-index="10" opacity="0">
+        <v-progress-circular indeterminate color="blue-grey lighten-3" size="64"></v-progress-circular>
       </v-overlay>
     </template>
     <v-snackbar v-model="error" color="error" top timeout="5000">{{ errorText }}</v-snackbar>
