@@ -889,7 +889,7 @@ events:
       return 'error';
     }
     else if (this.upstreamState === 'deleted') {
-      return 'error';
+      return 'warning';
     }
     else if (this.upstreamState === 'unchanged') {
       return 'success';
