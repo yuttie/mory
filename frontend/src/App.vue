@@ -242,8 +242,8 @@
         </form>
       </div>
     </div>
-    <v-overlay v-bind:value="isLoggingIn" z-index="20">
-      <v-progress-circular indeterminate size="64"></v-progress-circular>
+    <v-overlay v-bind:value="isLoggingIn" z-index="20" opacity="0">
+      <v-progress-circular indeterminate color="blue-grey lighten-3" size="64"></v-progress-circular>
     </v-overlay>
   </v-app>
 </template>
