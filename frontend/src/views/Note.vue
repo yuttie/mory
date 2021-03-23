@@ -42,8 +42,17 @@
             Really overwrite note?
           </v-card-title>
           <v-card-text>
-            Upstream has been modified since the note was loaded.
-            Those changes will be lost if you continue to save the note.
+            <template v-if="upstreamState === 'updated'">
+              Upstream has been modified since the note was loaded.
+              Those changes will be lost if you continue to save the note.
+            </template>
+            <template v-else-if="upstreamState === 'deleted'">
+              Upstream has been deleted.
+              A new note will be created if you continue to save the note.
+            </template>
+            <template v-else>
+              Upstream is in unknown state.
+            </template>
           </v-card-text>
           <v-card-actions>
             <v-spacer></v-spacer>
