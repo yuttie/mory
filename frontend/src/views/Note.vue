@@ -265,7 +265,7 @@ const mdit = new MarkdownIt('default', {
   linkify: true,
   highlight: (code: string, lang: string) => {
     if (Prism.languages[lang]) {
-      return Prism.highlight(code, Prism.languages[lang], lang);
+      return `<pre class="language-${lang}"><code class="language-${lang}">${Prism.highlight(code, Prism.languages[lang], lang)}</code></pre>`;
     }
     else {
       return '';  // use external default escaping
