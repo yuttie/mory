@@ -39,7 +39,7 @@ async fn main() {
         .allow_methods(vec!["GET", "POST", "PUT", "DELETE"])
         .allow_headers(vec!["Authorization", "Content-Type"]);
 
-    let routes = api.with(cors);
+    let routes = api.with(cors).with(warp::compression::brotli());
     let addr = {
         let mut addrs_iter = env::var("MORIED_LISTEN").unwrap().to_socket_addrs().unwrap();
         addrs_iter.next().unwrap()
