@@ -219,7 +219,7 @@
         <v-alert type="error" v-show="loginError">
           {{ loginError }}
         </v-alert>
-        <h1>Login</h1>
+        <v-icon x-large>mdi-lock</v-icon>
         <form>
           <v-text-field
             v-on:keydown.enter="login"
@@ -238,7 +238,13 @@
             autocomplete="current-password"
             type="password"
           ></v-text-field>
-          <v-btn v-on:click="login">Login</v-btn>
+          <v-btn
+            v-on:click="login"
+            color="primary"
+            block
+            text
+            outline
+          >Login</v-btn>
         </form>
       </div>
     </div>
@@ -727,6 +733,11 @@ export default class App extends Vue {
   .form {
     max-width: 60em;
     margin: 0 auto;
+    padding: 1em;
+    border-radius: 4px;
+    background: #ffffffc0;
+    backdrop-filter: blur(16px);
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.2);
 
     display: flex;
     flex-direction: column;
@@ -735,7 +746,6 @@ export default class App extends Vue {
       margin-top: 1em;
     }
 
-    h1,
     .field label {
       color: #000;
       text-shadow: 0 0 2px rgba(255, 255, 255, 0.5);
