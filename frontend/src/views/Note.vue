@@ -217,11 +217,11 @@
           <v-card-title>Table of Contents</v-card-title>
           <v-card-text>
             <ol class="tree" v-bind:class="{ collapsed: !tocIsVisible }">
-              <li v-for="h1 of toc" v-bind:key="h1.title"><a v-bind:href="'#' + makeFragmentId(h1.title)">{{ h1.title }}</a>
+              <li v-for="h1 of toc" v-bind:key="h1.title"><a v-bind:href="h1.href">{{ h1.title }}</a>
                 <ol>
-                  <li v-for="h2 of h1.children" v-bind:key="h2.title"><a v-bind:href="'#' + makeFragmentId(h2.title)">{{ h2.title }}</a>
+                  <li v-for="h2 of h1.children" v-bind:key="h2.title"><a v-bind:href="h2.href">{{ h2.title }}</a>
                     <ol>
-                      <li v-for="h3 of h2.children" v-bind:key="h3.title"><a v-bind:href="'#' + makeFragmentId(h3.title)">{{ h3.title }}</a>
+                      <li v-for="h3 of h2.children" v-bind:key="h3.title"><a v-bind:href="h3.href">{{ h3.title }}</a>
                       </li>
                     </ol>
                   </li>
@@ -516,10 +516,6 @@ mdit.use(mdit_container, 'dynamic', {
 });
 mdit.use(mdit_deflist);
 mdit.use(mdit_task_lists);
-
-function makeFragmentId(text: string) {
-  return text.toLowerCase().replace(/ /g, '-').replace(/[^-\p{Letter}\p{Number}]+/gu, '');
-}
 
 @Component({
   components: {
@@ -882,7 +878,12 @@ events:
       }
 
       const parent = stack[stack.length - 1];
-      const child = { level: level, title: (hx as HTMLElement).innerText, children: [] };
+      const child = {
+        level: level,
+        title: (hx as HTMLElement).innerText,
+        href: hx.querySelector('a.header-anchor')?.getAttribute('href'),
+        children: [],
+      };
       parent.children.push(child);
       stack.push(child);
     }
@@ -1093,10 +1094,6 @@ events:
 
   reload() {
     this.load(this.$route.params.path);
-  }
-
-  makeFragmentId(text: string) {
-    return makeFragmentId(text);
   }
 
   toggleEditor() {
