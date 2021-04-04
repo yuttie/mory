@@ -148,6 +148,11 @@ export default class Config extends Vue {
   flex-direction: column;
   align-items: center;
 
+  & > * {
+    width: 480px;
+    max-width: 100%;
+  }
+
   &::before, &::after {
     content: '';
     flex-grow: 1;
