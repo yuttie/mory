@@ -220,6 +220,7 @@
           {{ loginError }}
         </v-alert>
         <v-icon x-large>mdi-lock</v-icon>
+        <h2>Login</h2>
         <form>
           <v-text-field
             v-on:keydown.enter="login"
@@ -731,9 +732,10 @@ export default class App extends Vue {
   }
 
   .form {
-    max-width: 60em;
+    width: calc(100% - 20px);
+    max-width: 400px;
     margin: 0 auto;
-    padding: 1em;
+    padding: 2em;
     border-radius: 4px;
     background: #ffffffc0;
     backdrop-filter: blur(16px);
