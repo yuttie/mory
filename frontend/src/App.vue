@@ -151,7 +151,7 @@
             <v-divider></v-divider>
             <v-list-item
               dense
-              v-on:click="tokenExpired()"
+              v-on:click="logout"
             >
               <v-list-item-icon>
                 <v-icon>mdi-logout</v-icon>
@@ -508,6 +508,13 @@ export default class App extends Vue {
     });
   }
 
+  logout() {
+      // Delete the current token
+      this.token = null;
+      localStorage.removeItem('token');
+      delete axios.defaults.headers.common['Authorization'];
+  }
+
   tokenExpired(callback: () => void) {
     if (this.token !== localStorage.getItem('token')) {
       // The token may have been updated on another window
@@ -518,9 +525,7 @@ export default class App extends Vue {
     }
     else {
       // Delete the token and let a user to login again
-      this.token = null;
-      delete axios.defaults.headers.common['Authorization'];
-      localStorage.removeItem('token');
+      this.logout();
       this.loginCallbacks.push(callback);
 
       if (this.registration) {
