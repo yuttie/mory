@@ -93,10 +93,12 @@
 <script lang="ts">
 import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 
-import axios from '@/axios';
+import { getAxios } from '@/axios';
 import { Query, ListEntry2, compareTags } from '@/api';
 
 import dayjs from 'dayjs';
+
+const axios = getAxios();
 
 @Component
 export default class Find extends Vue {

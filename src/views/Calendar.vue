@@ -88,12 +88,14 @@
 <script lang="ts">
 import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 
-import axios from '@/axios';
+import { getAxios } from '@/axios';
 import { isMetadataEventMultiple, ListEntry, validateEvent } from '@/api';
 import Color from 'color';
 import materialColors from 'vuetify/lib/util/colors';
 import dayjs from 'dayjs';
 import XXH from 'xxhashjs';
+
+const axios = getAxios();
 
 @Component
 export default class Calendar extends Vue {

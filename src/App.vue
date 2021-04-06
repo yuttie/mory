@@ -260,12 +260,14 @@ import { Component, Watch, Vue } from 'vue-property-decorator';
 
 import Gravatar from '@/components/Gravatar.vue';
 
-import axios from '@/axios';
+import { getAxios } from '@/axios';
 import { Claim, ListEntry2, UploadEntry } from '@/api';
 import jwt_decode from 'jwt-decode';
 import less from 'less';
 import { register } from 'register-service-worker';
 import { v4 as uuidv4 } from 'uuid';
+
+const axios = getAxios();
 
 @Component({
   components: {
