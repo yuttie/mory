@@ -358,16 +358,6 @@ export default class App extends Vue {
     }
   }
 
-  @Watch('token')
-  onTokenChanged(token: null | string) {
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    }
-    else {
-      delete axios.defaults.headers.common['Authorization'];
-    }
-  }
-
   created() {
     register(`${process.env.BASE_URL}service-worker.js`, {
       registrationOptions: {
@@ -489,6 +479,7 @@ export default class App extends Vue {
       password: this.loginPassword,
     }).then(res => {
       this.token = res.data;
+      axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`;
       localStorage.setItem('token', res.data);
 
       this.loginUsername = '';
@@ -521,12 +512,14 @@ export default class App extends Vue {
     if (this.token !== localStorage.getItem('token')) {
       // The token may have been updated on another window
       this.token = localStorage.getItem('token');
+      axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`;
       // Retry
       callback();
     }
     else {
       // Delete the token and let a user to login again
       this.token = null;
+      delete axios.defaults.headers.common['Authorization'];
       localStorage.removeItem('token');
       this.loginCallbacks.push(callback);
 
