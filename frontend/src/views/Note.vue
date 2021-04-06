@@ -246,7 +246,7 @@ import Editor from '@/components/Editor.vue';
 import metadataSchema from '@/metadata-schema.json';
 
 import Ajv, { JSONSchemaType, DefinedError } from 'ajv';
-import axios from '@/axios';
+import { getAxios } from '@/axios';
 import MarkdownIt from 'markdown-it';
 import mdit_anchor from 'markdown-it-anchor';
 import mdit_container from 'markdown-it-container';
@@ -254,6 +254,8 @@ const mdit_deflist = require('markdown-it-deflist');  // eslint-disable-line @ty
 const mdit_task_lists = require('markdown-it-task-lists');  // eslint-disable-line @typescript-eslint/no-var-requires
 import Prism from 'prismjs';
 import YAML from 'yaml';
+
+const axios = getAxios();
 
 declare const MathJax: any;
 
