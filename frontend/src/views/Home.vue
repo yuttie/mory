@@ -32,12 +32,8 @@ import Color from 'color';
 import materialColors from 'vuetify/lib/util/colors';
 import XXH from 'xxhashjs';
 
-const axios = getAxios();
-
 @Component
 export default class Home extends Vue {
-  @Prop(String) readonly token!: null | string;
-
   entries: ListEntry[] = [];
   isLoading = false;
   error = false;
@@ -64,27 +60,15 @@ export default class Home extends Vue {
     return categorized;
   }
 
-  @Watch('token')
-  onTokenChanged(token: null | string) {
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    }
-    else {
-      delete axios.defaults.headers.common['Authorization'];
-    }
-  }
-
   mounted() {
     document.title = `Home | ${process.env.VUE_APP_NAME}`;
-
-    this.onTokenChanged(this.token);
 
     this.load();
   }
 
   load() {
     this.isLoading = true;
-    axios.get('/notes')
+    getAxios().get('/notes')
       .then(res => {
         this.entries = res.data;
         this.isLoading = false;

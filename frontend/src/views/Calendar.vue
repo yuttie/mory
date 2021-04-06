@@ -95,12 +95,8 @@ import materialColors from 'vuetify/lib/util/colors';
 import dayjs from 'dayjs';
 import XXH from 'xxhashjs';
 
-const axios = getAxios();
-
 @Component
 export default class Calendar extends Vue {
-  @Prop(String) readonly token!: null | string;
-
   entries: ListEntry[] = [];
   isLoading = false;
   error = false;
@@ -178,16 +174,6 @@ export default class Calendar extends Vue {
     return events;
   }
 
-  @Watch('token')
-  onTokenChanged(token: null | string) {
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    }
-    else {
-      delete axios.defaults.headers.common['Authorization'];
-    }
-  }
-
   onCalendarInput(date: string) {
     this.$router.push({
       path: `/calendar/${this.calendarType}/${dayjs(date, 'YYYY-MM-DD').format('YYYY/MM/DD')}`,
@@ -196,8 +182,6 @@ export default class Calendar extends Vue {
 
   mounted() {
     document.title = `Calendar | ${process.env.VUE_APP_NAME}`;
-
-    this.onTokenChanged(this.token);
 
     if (this.$route.name === 'CalendarWithDate') {
       this.calendarType = this.$route.params.type;
@@ -224,7 +208,7 @@ export default class Calendar extends Vue {
 
   load() {
     this.isLoading = true;
-    axios.get('/notes')
+    getAxios().get('/notes')
       .then(res => {
         this.entries = res.data;
         this.isLoading = false;

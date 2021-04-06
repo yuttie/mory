@@ -255,8 +255,6 @@ const mdit_task_lists = require('markdown-it-task-lists');  // eslint-disable-li
 import Prism from 'prismjs';
 import YAML from 'yaml';
 
-const axios = getAxios();
-
 declare const MathJax: any;
 
 const ajv = new Ajv();
@@ -525,8 +523,6 @@ mdit.use(mdit_task_lists);
   },
 })
 export default class Note extends Vue {
-  @Prop(String) readonly token!: null | string;
-
   text = '';
   initialText = '';
   upstreamState = 'same';
@@ -556,8 +552,6 @@ export default class Note extends Vue {
     this.loadPrismTheme(prismTheme);
 
     document.title = `${this.title} | ${process.env.VUE_APP_NAME}`;
-
-    this.onTokenChanged(this.token);
 
     window.addEventListener('focus', this.notifyUpstreamState);
 
@@ -926,16 +920,6 @@ events:
     }
   }
 
-  @Watch('token')
-  onTokenChanged(token: null | string) {
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    }
-    else {
-      delete axios.defaults.headers.common['Authorization'];
-    }
-  }
-
   @Watch('renameMenuIsVisible')
   onRenameMenuIsVisibleChanged(isVisible: boolean) {
     if (isVisible) {
@@ -970,7 +954,7 @@ events:
 
   checkUpstreamState() {
     const path = this.$route.params.path;
-    return axios.get(`/notes/${path}`)
+    return getAxios().get(`/notes/${path}`)
       .then(res => {
         if (res.data === this.initialText) {
           return 'same';
@@ -997,7 +981,7 @@ events:
 
   load(path: string) {
     this.isLoading = true;
-    axios.get(`/notes/${path}`)
+    getAxios().get(`/notes/${path}`)
       .then(res => {
         this.text = res.data;
         this.initialText = this.text;
@@ -1052,7 +1036,7 @@ events:
 
   loadTemplate(path: string) {
     this.isLoading = true;
-    axios.get(`/notes/${path}`)
+    getAxios().get(`/notes/${path}`)
       .then(res => {
         this.text = res.data;
         this.initialText = this.text;
@@ -1266,7 +1250,7 @@ events:
     this.isSaving = true;
     const path = this.$route.params.path;
     const content = this.text;
-    axios.put(`/notes/${path}`, {
+    getAxios().put(`/notes/${path}`, {
       Save: {
         content: content,
         message: `Update ${path}`,
@@ -1316,7 +1300,7 @@ events:
 
     if (newPath !== null && newPath !== oldPath) {
       this.isRenaming = true;
-      axios.put(`/notes/${newPath}`, {
+      getAxios().put(`/notes/${newPath}`, {
         Rename: {
           from: oldPath,
         },
