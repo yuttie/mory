@@ -5,6 +5,11 @@ export function getAxios() {
     baseURL: process.env.VUE_APP_API_URL,
   });
   const token = localStorage.getItem('token');
-  customAxios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  if (token === null) {
+    delete axios.defaults.headers.common['Authorization'];
+  }
+  else {
+    customAxios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  }
   return customAxios;
 }
