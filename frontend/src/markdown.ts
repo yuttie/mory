@@ -1,4 +1,3 @@
-/* eslint no-var: "warn", prefer-const: "warn" --- FIXME "warn" is specified because most of the code was just copied from other repositories. */
 import MarkdownIt from 'markdown-it';
 import mdit_anchor from 'markdown-it-anchor';
 import mdit_container from 'markdown-it-container';
@@ -55,13 +54,11 @@ mdit.core.ruler.push('baseurl', (state: any): any => {
 // Test if potential opening or closing delimieter
 // Assumes that there is a "$" at state.src[pos]
 function isValidDelim(state: any, pos: any) {
-  var prevChar, nextChar,
-    max = state.posMax,
-    can_open = true,
-    can_close = true;
-
-  prevChar = pos > 0 ? state.src.charCodeAt(pos - 1) : -1;
-  nextChar = pos + 1 <= max ? state.src.charCodeAt(pos + 1) : -1;
+  let can_open = true;
+  let can_close = true;
+  const max = state.posMax;
+  const prevChar = pos > 0 ? state.src.charCodeAt(pos - 1) : -1;
+  const nextChar = pos + 1 <= max ? state.src.charCodeAt(pos + 1) : -1;
 
   // Check non-whitespace conditions for opening and closing, and
   // check that closing delimeter isn't followed by a number
@@ -80,11 +77,9 @@ function isValidDelim(state: any, pos: any) {
 }
 
 function math_inline(state: any, silent: any) {
-  var start, match, token, res, pos, esc_count;
-
   if (state.src[state.pos] !== "$") { return false; }
 
-  res = isValidDelim(state, state.pos);
+  let res = isValidDelim(state, state.pos);
   if (!res.can_open) {
     if (!silent) { state.pending += "$"; }
     state.pos += 1;
@@ -95,12 +90,12 @@ function math_inline(state: any, silent: any) {
   // This loop will assume that the first leading backtick can not
   // be the first character in state.src, which is known since
   // we have found an opening delimieter already.
-  start = state.pos + 1;
-  match = start;
+  const start = state.pos + 1;
+  let match = start;
   while ( (match = state.src.indexOf("$", match)) !== -1) {
     // Found potential $, look for escapes, pos will point to
     // first non escape when complete
-    pos = match - 1;
+    let pos = match - 1;
     while (state.src[pos] === "\\") { pos -= 1; }
 
     // Even number of escapes, potential closing delimiter found
@@ -131,7 +126,7 @@ function math_inline(state: any, silent: any) {
   }
 
   if (!silent) {
-    token         = state.push('text', '', 0);
+    const token     = state.push('text', '', 0);
     token.markup  = "$";
     token.content = '$' + state.src.slice(start, match) + '$';
   }
@@ -141,16 +136,17 @@ function math_inline(state: any, silent: any) {
 }
 
 function math_block(state: any, start: any, end: any, silent: any){
-  var firstLine, lastLine, next, lastPos, found = false, token,
-    pos = state.bMarks[start] + state.tShift[start],
-    max = state.eMarks[start]
+  let pos = state.bMarks[start] + state.tShift[start];
+  let max = state.eMarks[start];
 
   if(pos + 2 > max){ return false; }
   if(state.src.slice(pos,pos+2)!=='$$'){ return false; }
 
   pos += 2;
-  firstLine = state.src.slice(pos,max);
+  let firstLine = state.src.slice(pos,max);
+  let lastLine;
 
+  let found = false;
   if(silent){ return true; }
   if(firstLine.trim().slice(-2)==='$$'){
     // Single line expression
@@ -158,6 +154,7 @@ function math_block(state: any, start: any, end: any, silent: any){
     found = true;
   }
 
+  let next;
   for(next = start; !found; ){
 
     next++;
@@ -173,7 +170,7 @@ function math_block(state: any, start: any, end: any, silent: any){
     }
 
     if(state.src.slice(pos,max).trim().slice(-2)==='$$'){
-      lastPos = state.src.slice(0,max).lastIndexOf('$$');
+      const lastPos = state.src.slice(0,max).lastIndexOf('$$');
       lastLine = state.src.slice(pos,lastPos);
       found = true;
     }
@@ -182,7 +179,7 @@ function math_block(state: any, start: any, end: any, silent: any){
 
   state.line = next + 1;
 
-  token = state.push('text', '', 0);
+  const token = state.push('text', '', 0);
   token.block = true;
   token.content = '$$' + (firstLine && firstLine.trim() ? firstLine + '\n' : '')
     + state.getLines(start + 1, next, state.tShift[start], true)
@@ -210,7 +207,6 @@ function injectLineNumbers(tokens: any, idx: any, options: any, env: any, slf: a
   return slf.renderToken(tokens, idx, options, env, slf);
 }
 function updateMetadataLineCount(count: number) {
-  console.log(`count is updated from ${metadataLineCount} to ${count}`);
   metadataLineCount = count;
 }
 mdit.renderer.rules.paragraph_open = injectLineNumbers;
