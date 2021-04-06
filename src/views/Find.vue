@@ -98,12 +98,8 @@ import { Query, ListEntry2, compareTags } from '@/api';
 
 import dayjs from 'dayjs';
 
-const axios = getAxios();
-
 @Component
 export default class Find extends Vue {
-  @Prop(String) readonly token!: null | string;
-
   entries: ListEntry2[] = [];
   queryText = '';
   isLoading = false;
@@ -206,16 +202,6 @@ export default class Find extends Vue {
     return matched;
   }
 
-  @Watch('token')
-  onTokenChanged(token: null | string) {
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    }
-    else {
-      delete axios.defaults.headers.common['Authorization'];
-    }
-  }
-
   @Watch('queryText')
   onQueryTextChanged(q: string) {
     if (q !== this.$route.query.q) {
@@ -230,8 +216,6 @@ export default class Find extends Vue {
 
   mounted() {
     document.title = `Find | ${process.env.VUE_APP_NAME}`;
-
-    this.onTokenChanged(this.token);
 
     window.addEventListener('keydown', this.handleKeydown);
 
@@ -248,7 +232,7 @@ export default class Find extends Vue {
 
   load() {
     this.isLoading = true;
-    axios.get('/notes')
+    getAxios().get('/notes')
       .then(res => {
         this.entries = res.data;
         this.isLoading = false;
@@ -377,7 +361,7 @@ export default class Find extends Vue {
 
   deleteSelected() {
     for (const item of this.selected) {
-      axios.delete(`/notes/${item.path}`)
+      getAxios().delete(`/notes/${item.path}`)
         .then(res => {
           if (res.data === true) {
             const i = this.entries.findIndex(e => e.path === item.path);

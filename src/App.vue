@@ -212,9 +212,9 @@
       </v-list>
     </v-navigation-drawer>
     <v-main>
-      <router-view v-if="!(!token && !$refs.routerView)" v-bind:key="$route.path" v-bind:token="token" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerView"/>
+      <router-view v-if="!(!hasToken && !$refs.routerView)" v-bind:key="$route.path" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerView"/>
     </v-main>
-    <div v-if="!token" class="login-overlay">
+    <div v-if="!hasToken" class="login-overlay">
       <div class="form">
         <v-alert type="error" v-show="loginError">
           {{ loginError }}
@@ -267,15 +267,13 @@ import less from 'less';
 import { register } from 'register-service-worker';
 import { v4 as uuidv4 } from 'uuid';
 
-const axios = getAxios();
-
 @Component({
   components: {
     Gravatar,
   },
 })
 export default class App extends Vue {
-  token = localStorage.getItem('token') as null | string;
+  hasToken = !!localStorage.getItem('token');
   loginUsername = "";
   loginPassword = "";
   isLoggingIn = false;
@@ -286,6 +284,10 @@ export default class App extends Vue {
   uploadList = [] as UploadEntry[];
   uploadMenuIsVisible = false;
   showDrawer = false;
+
+  get token() {
+    return localStorage.getItem('token');
+  }
 
   get decodedToken() {
     if (this.token) {
@@ -399,13 +401,6 @@ export default class App extends Vue {
   }
 
   mounted() {
-    if (this.token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`;
-    }
-    else {
-      delete axios.defaults.headers.common['Authorization'];
-    }
-
     this.loadCustomCss();
 
     (this.$refs.fileInput as HTMLInputElement).addEventListener('change', (e: any) => {
@@ -476,13 +471,12 @@ export default class App extends Vue {
   login() {
     this.isLoggingIn = true;
 
-    axios.post(`/login`, {
+    getAxios().post(`/login`, {
       user: this.loginUsername,
       password: this.loginPassword,
     }).then(res => {
-      this.token = res.data;
-      axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`;
       localStorage.setItem('token', res.data);
+      this.hasToken = true;
 
       this.loginUsername = '';
       this.loginPassword = '';
@@ -511,36 +505,26 @@ export default class App extends Vue {
   }
 
   logout() {
-      // Delete the current token
-      this.token = null;
-      localStorage.removeItem('token');
-      delete axios.defaults.headers.common['Authorization'];
+    // Delete the current token
+    localStorage.removeItem('token');
+    this.hasToken = false;
   }
 
   tokenExpired(callback: () => void) {
-    if (this.token !== localStorage.getItem('token')) {
-      // The token may have been updated on another window
-      this.token = localStorage.getItem('token');
-      axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`;
-      // Retry
-      callback();
-    }
-    else {
-      // Delete the token and let a user to login again
-      this.logout();
-      this.loginCallbacks.push(callback);
+    this.loginCallbacks.push(callback);
 
-      if (this.registration) {
-        this.registration.active!.postMessage({
-          type: 'api-token',
-          value: this.token,
-        });
-      }
+    // Delete the token and let a user to login again
+    this.logout();
+    if (this.registration) {
+      this.registration.active!.postMessage({
+        type: 'api-token',
+        value: this.token,
+      });
     }
   }
 
   loadTemplates() {
-    axios.get('/notes')
+    getAxios().get('/notes')
       .then(res => {
         this.templates = res.data
           .map((entry: ListEntry2) => entry.path)
@@ -562,7 +546,7 @@ export default class App extends Vue {
   }
 
   loadCustomCss() {
-    axios.get(`/notes/.mory/custom.less`)
+    getAxios().get(`/notes/.mory/custom.less`)
       .then(res => {
         less.render(res.data, {
           globalVars: {
@@ -647,7 +631,7 @@ export default class App extends Vue {
     }
 
     // POST the FormData
-    axios.post(`/files`, fd).then(res => {
+    getAxios().post(`/files`, fd).then(res => {
       for (const [uuid, result] of res.data) {
         const entry = this.uploadList.find(e => e.uuid === uuid);
         if (entry) {
