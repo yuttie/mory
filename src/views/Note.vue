@@ -246,7 +246,7 @@ import Editor from '@/components/Editor.vue';
 import metadataSchema from '@/metadata-schema.json';
 
 import Ajv, { JSONSchemaType, DefinedError } from 'ajv';
-import { getAxios } from '@/axios';
+import * as api from '@/api';
 import MarkdownIt from 'markdown-it';
 import mdit_anchor from 'markdown-it-anchor';
 import mdit_container from 'markdown-it-container';
@@ -954,7 +954,7 @@ events:
 
   checkUpstreamState() {
     const path = this.$route.params.path;
-    return getAxios().get(`/notes/${path}`)
+    return api.getNote(path)
       .then(res => {
         if (res.data === this.initialText) {
           return 'same';
@@ -981,7 +981,7 @@ events:
 
   load(path: string) {
     this.isLoading = true;
-    getAxios().get(`/notes/${path}`)
+    api.getNote(path)
       .then(res => {
         this.text = res.data;
         this.initialText = this.text;
@@ -1036,7 +1036,7 @@ events:
 
   loadTemplate(path: string) {
     this.isLoading = true;
-    getAxios().get(`/notes/${path}`)
+    api.getNote(path)
       .then(res => {
         this.text = res.data;
         this.initialText = this.text;
@@ -1250,12 +1250,10 @@ events:
     this.isSaving = true;
     const path = this.$route.params.path;
     const content = this.text;
-    getAxios().put(`/notes/${path}`, {
-      Save: {
-        content: content,
-        message: `Update ${path}`,
-      },
-    }).then(res => {
+    api.addNote(
+      path,
+      content
+    ).then(res => {
       this.initialText = content;
       this.noteHasUpstream = true;
       this.isSaving = false;
@@ -1300,11 +1298,10 @@ events:
 
     if (newPath !== null && newPath !== oldPath) {
       this.isRenaming = true;
-      getAxios().put(`/notes/${newPath}`, {
-        Rename: {
-          from: oldPath,
-        },
-      }).then(res => {
+      api.renameNote(
+        oldPath,
+        newPath
+      ).then(res => {
         this.$router.replace({
           path: `/note/${newPath}`,
         });

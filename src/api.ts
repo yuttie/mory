@@ -1,3 +1,5 @@
+import { getAxios } from '@/axios';
+
 // App
 export interface Claim {
     sub: string;
@@ -90,3 +92,45 @@ export function compareTags(a: string, b: string): number {
   }
   return 0;
 }
+
+// APIs
+export function login(user: string, password: string) {
+  return getAxios().post(`/login`, {
+    user: user,
+    password: password,
+  });
+}
+
+export function listNotes() {
+  return getAxios().get('/notes');
+}
+
+export function addNote(path: string, content: string) {
+  return getAxios().put(`/notes/${path}`, {
+    Save: {
+      content: content,
+      message: `Update ${path}`,
+    },
+  });
+}
+
+export function renameNote(oldPath: string, newPath: string) {
+  return getAxios().put(`/notes/${newPath}`, {
+    Rename: {
+      from: oldPath,
+    },
+  });
+}
+
+export function getNote(path: string) {
+  return getAxios().get(`/notes/${path}`);
+}
+
+export function deleteNote(path: string) {
+  return getAxios().delete(`/notes/${path}`);
+}
+
+export function uploadFiles(fd: FormData) {
+  return getAxios().post(`/files`, fd);
+}
+

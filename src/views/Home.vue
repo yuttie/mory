@@ -26,7 +26,7 @@
 <script lang="ts">
 import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 
-import { getAxios } from '@/axios';
+import * as api from '@/api';
 import { ListEntry } from '@/api';
 import Color from 'color';
 import materialColors from 'vuetify/lib/util/colors';
@@ -68,7 +68,7 @@ export default class Home extends Vue {
 
   load() {
     this.isLoading = true;
-    getAxios().get('/notes')
+    api.listNotes()
       .then(res => {
         this.entries = res.data;
         this.isLoading = false;
