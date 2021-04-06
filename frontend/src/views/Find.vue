@@ -93,7 +93,7 @@
 <script lang="ts">
 import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 
-import { getAxios } from '@/axios';
+import * as api from '@/api';
 import { Query, ListEntry2, compareTags } from '@/api';
 
 import dayjs from 'dayjs';
@@ -232,7 +232,7 @@ export default class Find extends Vue {
 
   load() {
     this.isLoading = true;
-    getAxios().get('/notes')
+    api.listNotes()
       .then(res => {
         this.entries = res.data;
         this.isLoading = false;
@@ -361,7 +361,7 @@ export default class Find extends Vue {
 
   deleteSelected() {
     for (const item of this.selected) {
-      getAxios().delete(`/notes/${item.path}`)
+      api.deleteNote(item.path)
         .then(res => {
           if (res.data === true) {
             const i = this.entries.findIndex(e => e.path === item.path);

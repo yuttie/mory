@@ -260,7 +260,7 @@ import { Component, Watch, Vue } from 'vue-property-decorator';
 
 import Gravatar from '@/components/Gravatar.vue';
 
-import { getAxios } from '@/axios';
+import * as api from '@/api';
 import { Claim, ListEntry2, UploadEntry } from '@/api';
 import jwt_decode from 'jwt-decode';
 import less from 'less';
@@ -471,10 +471,10 @@ export default class App extends Vue {
   login() {
     this.isLoggingIn = true;
 
-    getAxios().post(`/login`, {
-      user: this.loginUsername,
-      password: this.loginPassword,
-    }).then(res => {
+    api.login(
+      this.loginUsername,
+      this.loginPassword,
+    ).then(res => {
       localStorage.setItem('token', res.data);
       this.hasToken = true;
 
@@ -524,7 +524,7 @@ export default class App extends Vue {
   }
 
   loadTemplates() {
-    getAxios().get('/notes')
+    api.listNotes()
       .then(res => {
         this.templates = res.data
           .map((entry: ListEntry2) => entry.path)
@@ -546,7 +546,7 @@ export default class App extends Vue {
   }
 
   loadCustomCss() {
-    getAxios().get(`/notes/.mory/custom.less`)
+    api.getNote('.mory/custom.less')
       .then(res => {
         less.render(res.data, {
           globalVars: {
@@ -631,7 +631,7 @@ export default class App extends Vue {
     }
 
     // POST the FormData
-    getAxios().post(`/files`, fd).then(res => {
+    api.uploadFiles(fd).then(res => {
       for (const [uuid, result] of res.data) {
         const entry = this.uploadList.find(e => e.uuid === uuid);
         if (entry) {
