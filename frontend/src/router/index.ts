@@ -22,6 +22,11 @@ const routes: Array<RouteConfig> = [
     component: () => import(/* webpackChunkName: "Calendar" */ '../views/Calendar.vue'),
   },
   {
+    path: '/tasks',
+    name: 'Tasks',
+    component: () => import(/* webpackChunkName: "Tasks" */ '../views/Tasks.vue'),
+  },
+  {
     path: '/create',
     name: 'Create',
     redirect: to => {
