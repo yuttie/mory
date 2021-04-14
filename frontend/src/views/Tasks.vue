@@ -1,14 +1,31 @@
 <template>
   <div class="tasks d-flex flex-column">
-    <div>
-      <h2>New Task</h2>
-      <TaskEditor v-model="newTask" v-bind:knownTags="knownTags"></TaskEditor>
-      <v-btn
-        v-on:click="add"
-        v-bind:disabled="newTask.name.length === 0"
-      >Add</v-btn>
-    </div>
-    <div class="lists d-flex flex-row">
+    <v-toolbar flat outlined dense class="flex-grow-0">
+      <v-menu offset-y v-bind:close-on-content-click="false" v-model="newTaskMenu">
+        <template v-slot:activator="{ on, attrs }">
+          <v-btn
+            icon
+            v-bind="attrs"
+            v-on="on"
+          >
+            <v-icon>mdi-plus-box-outline</v-icon>
+          </v-btn>
+        </template>
+        <v-card>
+          <v-card-title>New Task</v-card-title>
+          <v-card-text>
+            <TaskEditor v-model="newTask" v-bind:knownTags="knownTags"></TaskEditor>
+          </v-card-text>
+          <v-card-actions>
+            <v-btn
+              v-on:click="add"
+              v-bind:disabled="newTask.name.length === 0"
+            >Add</v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-menu>
+    </v-toolbar>
+    <div class="lists d-flex flex-row flex-grow-1 my-3">
       <div class="list">
         <h2>Backlog</h2>
         <ol>
@@ -60,6 +77,7 @@ export default class Tasks extends Vue {
     tags: [],
     note: '',
   };
+  newTaskMenu = false;
   knownTags: string[] = [];
   isLoading = false;
   error = false;
@@ -129,6 +147,7 @@ export default class Tasks extends Vue {
   }
 
   async add() {
+    // Create a new entry
     const task: any = {
       name: this.newTask.name,
     };
@@ -154,8 +173,10 @@ export default class Tasks extends Vue {
       tags: [],
       note: '',
     };
-
-    api.addNote('.mory/tasks.yaml', YAML.stringify(this.tasks));
+    // Save
+    await api.addNote('.mory/tasks.yaml', YAML.stringify(this.tasks));
+    // Hide the menu
+    this.newTaskMenu = false;
   }
 }
 </script>
