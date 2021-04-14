@@ -192,5 +192,6 @@ export default class Tasks extends Vue {
   border-radius: 8px;
   margin-left: 1em;
   padding: 0.5em;
+  align-self: flex-start;
 }
 </style>
