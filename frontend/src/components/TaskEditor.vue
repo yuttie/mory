@@ -69,8 +69,8 @@
           v-bind="attrs"
           v-bind:input-value="selected"
           close
-          @click="select"
-          @click:close="remove(item)"
+          v-on:click="select"
+          v-on:click:close="removeTag(item)"
         >
           <span>{{ item }}</span>
         </v-chip>
@@ -96,6 +96,10 @@ export default class TaskEditor extends Vue {
 
   deadlineMenu = false;
   scheduleMenu = false;
+
+  removeTag(tag: string) {
+    this.value.tags.splice(this.value.tags.indexOf(tag), 1);
+  }
 }
 </script>
 
