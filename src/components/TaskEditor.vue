@@ -59,7 +59,7 @@
       v-bind:items="knownTags"
       chips
       clearable
-      label="Your favorite hobbies"
+      label="Tags"
       multiple
       prepend-icon="mdi-filter-variant"
       solo
