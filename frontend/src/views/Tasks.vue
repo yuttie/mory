@@ -2,89 +2,10 @@
   <div class="tasks d-flex flex-column">
     <div>
       <h2>New Task</h2>
-      <v-text-field
-        label="Name"
-        v-model="newName"
-      ></v-text-field>
-      <v-menu
-        v-model="newDeadlineMenu"
-        v-bind:close-on-content-click="false"
-        v-bind:nudge-right="40"
-        transition="scale-transition"
-        offset-y
-        min-width="auto"
-      >
-        <template v-slot:activator="{ on, attrs }">
-          <v-text-field
-            v-model="newDeadline"
-            label="Deadline"
-            prepend-icon="mdi-calendar"
-            readonly
-            v-bind="attrs"
-            v-on="on"
-          ></v-text-field>
-        </template>
-        <v-date-picker
-          v-model="newDeadline"
-          @input="menu2 = false"
-        ></v-date-picker>
-      </v-menu>
-      <v-menu
-        v-model="newScheduleMenu"
-        v-bind:close-on-content-click="false"
-        v-bind:nudge-right="40"
-        transition="scale-transition"
-        offset-y
-        min-width="auto"
-      >
-        <template v-slot:activator="{ on, attrs }">
-          <v-text-field
-            v-model="newSchedule"
-            label="Schedule on"
-            prepend-icon="mdi-calendar"
-            readonly
-            v-bind="attrs"
-            v-on="on"
-          ></v-text-field>
-        </template>
-        <v-date-picker
-          v-model="newSchedule"
-          @input="menu2 = false"
-        ></v-date-picker>
-      </v-menu>
-      <v-checkbox
-        label="Done"
-        v-model="newDone"
-      ></v-checkbox>
-      <v-combobox
-        v-model="newTags"
-        v-bind:items="tags"
-        chips
-        clearable
-        label="Your favorite hobbies"
-        multiple
-        prepend-icon="mdi-filter-variant"
-        solo
-      >
-        <template v-slot:selection="{ attrs, item, select, selected }">
-          <v-chip
-            v-bind="attrs"
-            v-bind:input-value="selected"
-            close
-            @click="select"
-            @click:close="remove(item)"
-          >
-            <span>{{ item }}</span>
-          </v-chip>
-        </template>
-      </v-combobox>
-      <v-textarea
-        label="Note"
-        v-model="newNote"
-      ></v-textarea>
+      <TaskEditor v-model="newTask" v-bind:knownTags="knownTags"></TaskEditor>
       <v-btn
         v-on:click="add"
-        v-bind:disabled="newName.length === 0"
+        v-bind:disabled="newTask.name.length === 0"
       >Add</v-btn>
     </div>
     <div>
@@ -112,22 +33,31 @@
 <script lang="ts">
 import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 
+import TaskEditor from '@/components/TaskEditor.vue';
+
 import * as api from '@/api';
+import { Task } from '@/api';
 import { isMetadataEventMultiple, ListEntry, validateEvent } from '@/api';
 import Color from 'color';
 import materialColors from 'vuetify/lib/util/colors';
 import dayjs from 'dayjs';
 import YAML from 'yaml';
 
-@Component
+@Component({
+  components: {
+    TaskEditor,
+  },
+})
 export default class Tasks extends Vue {
   tasks: any = [];
-  newName = '';
-  newDeadline: null | string = null;
-  newSchedule: null | string = null;
-  newDone = false;
-  newTags: string[] = [];
-  newNote = '';
+  newTask: Task = {
+    name: '',
+    deadline: null,
+    schedule: null,
+    done: false,
+    tags: [],
+    note: '',
+  };
   isLoading = false;
   error = false;
   errorText = '';
@@ -177,27 +107,30 @@ export default class Tasks extends Vue {
 
   async add() {
     const task: any = {
-      name: this.newName,
+      name: this.newTask.name,
     };
-    if (this.newDeadline) { task.deadline = this.newDeadline; }
-    if (this.newDone) { task.done = this.newDone; }
-    if (this.newTags.length > 0) { task.tags = this.newTags; }
-    if (this.newNote.length > 0) { task.note = this.newNote; }
-    if (this.newSchedule !== null) {
-      if (!Object.prototype.hasOwnProperty.call(this.tasks.scheduled, this.newSchedule)) {
-        this.tasks.scheduled[this.newSchedule] = [];
+    if (this.newTask.deadline) { task.deadline = this.newTask.deadline; }
+    if (this.newTask.done) { task.done = this.newTask.done; }
+    if (this.newTask.tags.length > 0) { task.tags = this.newTask.tags; }
+    if (this.newTask.note.length > 0) { task.note = this.newTask.note; }
+    if (this.newTask.schedule !== null) {
+      if (!Object.prototype.hasOwnProperty.call(this.tasks.scheduled, this.newTask.schedule)) {
+        this.tasks.scheduled[this.newTask.schedule] = [];
       }
-      this.tasks.scheduled[this.newSchedule].push(task);
+      this.tasks.scheduled[this.newTask.schedule].push(task);
     }
     else {
       this.tasks.backlog.push(task);
     }
-    this.newName = '';
-    this.newDeadline = null;
-    this.newSchedule = null;
-    this.newDone = false;
-    this.newTags = [];
-    this.newNote = '';
+    // Reset
+    this.newTask = {
+      name: '',
+      deadline: null,
+      schedule: null,
+      done: false,
+      tags: [],
+      note: '',
+    };
 
     api.addNote('.mory/tasks.yaml', YAML.stringify(this.tasks));
   }
