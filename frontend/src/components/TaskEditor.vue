@@ -6,7 +6,7 @@
     ></v-text-field>
     <v-menu
       v-model="deadlineMenu"
-      v-bind:close-on-content-click="true"
+      v-bind:close-on-content-click="false"
       v-bind:nudge-right="40"
       transition="scale-transition"
       offset-y
@@ -24,12 +24,12 @@
       </template>
       <v-date-picker
         v-model="value.deadline"
-        @input="menu2 = false"
+        v-on:input="deadlineMenu = false"
       ></v-date-picker>
     </v-menu>
     <v-menu
       v-model="scheduleMenu"
-      v-bind:close-on-content-click="true"
+      v-bind:close-on-content-click="false"
       v-bind:nudge-right="40"
       transition="scale-transition"
       offset-y
@@ -47,7 +47,7 @@
       </template>
       <v-date-picker
         v-model="value.schedule"
-        @input="menu2 = false"
+        v-on:input="scheduleMenu = false"
       ></v-date-picker>
     </v-menu>
     <v-checkbox
