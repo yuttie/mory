@@ -26,11 +26,32 @@
         </v-card>
       </v-menu>
     </v-toolbar>
+    <v-menu offset-y v-if="editTarget !== null" v-bind:close-on-content-click="false" v-model="editTaskMenu">
+      <v-card>
+        <v-card-title>Edit Task</v-card-title>
+        <v-card-text>
+          <TaskEditor v-model="editTarget" v-bind:knownTags="knownTags"></TaskEditor>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn
+            text
+            v-on:click="select(null)"
+          >Cancel</v-btn>
+          <v-btn
+            text
+            color="primary"
+            v-on:click="update"
+            v-bind:disabled="editTarget.name.length === 0"
+          >Update</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-menu>
     <div class="lists d-flex flex-row flex-grow-1 my-3">
       <div class="list">
         <h2>Backlog</h2>
         <ol>
-          <li v-for="task of tasks.backlog" v-bind:key="task">{{ task }}</li>
+          <li v-for="task of tasks.backlog" v-bind:key="task" v-on:click="select(task)">{{ task }}</li>
         </ol>
       </div>
       <div class="list">
@@ -38,7 +59,7 @@
         <div v-for="(tasks, day) of tasks.scheduled" v-bind:key="day">
           <h3>{{ day }}</h3>
           <ol>
-            <li v-for="task of tasks" v-bind:key="task">{{ task }}</li>
+            <li v-for="task of tasks" v-bind:key="task" v-on:click="select(task)">{{ task }}</li>
           </ol>
         </div>
       </div>
@@ -79,6 +100,8 @@ export default class Tasks extends Vue {
     note: '',
   };
   newTaskMenu = false;
+  selectedTask: null | Task = null;
+  editTarget: null | Task = null;
   knownTags: string[] = [];
   isLoading = false;
   error = false;
@@ -87,6 +110,21 @@ export default class Tasks extends Vue {
   mounted() {
     document.title = `Tasks | ${process.env.VUE_APP_NAME}`;
     this.load();
+  }
+
+  get editTaskMenu(): boolean {
+    return this.selectedTask !== null;
+  }
+
+  set editTaskMenu(value: boolean) {
+    if (value === false) {
+      this.select(null);
+    }
+  }
+
+  select(task: Task | null) {
+    this.selectedTask = task;
+    this.editTarget = JSON.parse(JSON.stringify(task));
   }
 
   async load() {
@@ -178,6 +216,19 @@ export default class Tasks extends Vue {
     await api.addNote('.mory/tasks.yaml', YAML.stringify(this.tasks));
     // Hide the menu
     this.newTaskMenu = false;
+  }
+
+  async update() {
+    // Copy back
+    this.selectedTask.name = this.editTarget.name;
+    this.selectedTask.deadline = this.editTarget.deadline;
+    this.selectedTask.done = this.editTarget.done;
+    this.selectedTask.tags = this.editTarget.tags;
+    this.selectedTask.note = this.editTarget.note;
+    // Reset
+    this.select(null);
+    // Save
+    await api.addNote('.mory/tasks.yaml', YAML.stringify(this.tasks));
   }
 }
 </script>
