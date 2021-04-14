@@ -66,6 +66,16 @@ export function validateEvent(event: any): boolean {
   return true;
 }
 
+// Tasks
+export interface Task {
+  name: string;
+  deadline: null | string;
+  schedule: null | string;
+  done: boolean;
+  tags: string[];
+  note: string;
+}
+
 // Find
 export interface Query {
   paths: Set<any>;
