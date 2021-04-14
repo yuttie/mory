@@ -8,19 +8,21 @@
         v-bind:disabled="newTask.name.length === 0"
       >Add</v-btn>
     </div>
-    <div>
-      <h2>Backlog</h2>
-      <ol>
-        <li v-for="task of tasks.backlog" v-bind:key="task">{{ task }}</li>
-      </ol>
-    </div>
-    <div>
-      <h2>Scheduled</h2>
-      <div v-for="(tasks, day) of tasks.scheduled" v-bind:key="day">
-        <h3>{{ day }}</h3>
+    <div class="lists d-flex flex-row">
+      <div class="list">
+        <h2>Backlog</h2>
         <ol>
-          <li v-for="task of tasks" v-bind:key="task">{{ task }}</li>
+          <li v-for="task of tasks.backlog" v-bind:key="task">{{ task }}</li>
         </ol>
+      </div>
+      <div class="list">
+        <h2>Scheduled</h2>
+        <div v-for="(tasks, day) of tasks.scheduled" v-bind:key="day">
+          <h3>{{ day }}</h3>
+          <ol>
+            <li v-for="task of tasks" v-bind:key="task">{{ task }}</li>
+          </ol>
+        </div>
       </div>
     </div>
     <v-overlay v-bind:value="isLoading" z-index="10" opacity="0">
@@ -161,5 +163,13 @@ export default class Tasks extends Vue {
 <style scoped lang="scss">
 .tasks {
   height: 100%;
+}
+.list {
+  width: 270px;
+  border: 1px solid #ccc;
+  background: #eee;
+  border-radius: 8px;
+  margin-left: 1em;
+  padding: 0.5em;
 }
 </style>
