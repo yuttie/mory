@@ -17,6 +17,7 @@
             <TaskEditor v-model="newTask" v-bind:knownTags="knownTags"></TaskEditor>
           </v-card-text>
           <v-card-actions>
+            <v-spacer></v-spacer>
             <v-btn
               v-on:click="add"
               v-bind:disabled="newTask.name.length === 0"
