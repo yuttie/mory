@@ -58,6 +58,7 @@ export default class Tasks extends Vue {
     tags: [],
     note: '',
   };
+  knownTags: string[] = [];
   isLoading = false;
   error = false;
   errorText = '';
@@ -103,6 +104,26 @@ export default class Tasks extends Vue {
         this.isLoading = false;
       }
     }
+
+    // Collect tags
+    const knownTags: string[] = [];
+    for (const task of this.tasks.backlog as Task[]) {
+      for (const tag of task.tags || []) {
+        if (!knownTags.includes(tag)) {
+          knownTags.push(tag);
+        }
+      }
+    }
+    for (const [date, tasks] of Object.entries(this.tasks.scheduled)) {
+      for (const task of tasks as Task[]) {
+        for (const tag of task.tags || []) {
+          if (!knownTags.includes(tag)) {
+            knownTags.push(tag);
+          }
+        }
+      }
+    }
+    this.knownTags = knownTags;
   }
 
   async add() {
