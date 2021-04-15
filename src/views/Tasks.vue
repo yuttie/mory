@@ -27,13 +27,11 @@
       </v-menu>
     </v-toolbar>
     <v-menu
-      absolute
       offset-x
       v-if="editTarget !== null"
       v-model="editTaskMenu"
       v-bind:close-on-content-click="false"
-      v-bind:position-x="editTaskMenuX"
-      v-bind:position-y="editTaskMenuY"
+      v-bind:activator="editTaskMenuActivator"
     >
       <v-card>
         <v-card-title>Edit Task</v-card-title>
@@ -125,8 +123,7 @@ export default class Tasks extends Vue {
   selectedTask: null | Task = null;
   editTarget: null | Task = null;
   editTaskMenu = false;
-  editTaskMenuX = 0;
-  editTaskMenuY = 0;
+  editTaskMenuActivator: any = null;
   knownTags: string[] = [];
   isLoading = false;
   error = false;
@@ -145,8 +142,7 @@ export default class Tasks extends Vue {
   showEditTaskMenu(task: Task, event: MouseEvent) {
     const open = () => {
       this.select(task);
-      this.editTaskMenuX = event.clientX;
-      this.editTaskMenuY = event.clientY;
+      this.editTaskMenuActivator = event.target;
       setTimeout(() => {
         this.editTaskMenu = true;
       }, 0);
