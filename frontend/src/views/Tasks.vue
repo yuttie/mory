@@ -288,6 +288,12 @@ export default class Tasks extends Vue {
   }
 
   async update() {
+    if (this.selectedTask === null) {
+      throw new Error('selectedTask is null');
+    }
+    if (this.editTarget === null) {
+      throw new Error('editTarget is null');
+    }
     // Copy back
     this.selectedTask.name = this.editTarget.name;
     this.selectedTask.deadline = this.editTarget.deadline;
