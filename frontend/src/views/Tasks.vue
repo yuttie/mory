@@ -14,17 +14,17 @@
           </v-btn>
         </template>
         <v-card>
-          <v-card-title>New Task</v-card-title>
-          <v-card-text>
-            <TaskEditor v-model="newTask" v-bind:knownTags="knownTags"></TaskEditor>
-          </v-card-text>
           <v-card-actions>
+            <v-card-title>New Task</v-card-title>
             <v-spacer></v-spacer>
             <v-btn
               v-on:click="add"
               v-bind:disabled="newTask.name.length === 0"
             >Add</v-btn>
           </v-card-actions>
+          <v-card-text>
+            <TaskEditor v-model="newTask" v-bind:knownTags="knownTags"></TaskEditor>
+          </v-card-text>
         </v-card>
       </v-menu>
       <v-menu offset-y v-bind:close-on-content-click="false" v-model="newGroupMenu">
@@ -39,24 +39,26 @@
           </v-btn>
         </template>
         <v-card>
-          <v-card-title>New Group</v-card-title>
-          <v-card-text>
-            <v-text-field
-              label="Name"
-              v-model="newGroupName"
-            ></v-text-field>
-            <v-text-field
-              label="Tag"
-              v-model="newGroupFilter"
-            ></v-text-field>
-          </v-card-text>
           <v-card-actions>
+            <v-card-title>New Group</v-card-title>
             <v-spacer></v-spacer>
             <v-btn
               v-on:click="addGroup"
               v-bind:disabled="newGroupName.length === 0 || newGroupFilter.length === 0"
             >Add</v-btn>
           </v-card-actions>
+          <v-card-text>
+            <v-text-field
+              label="Name"
+              prepend-icon="mdi-pencil"
+              v-model="newGroupName"
+            ></v-text-field>
+            <v-text-field
+              label="Tag"
+              prepend-icon="mdi-tag-outline"
+              v-model="newGroupFilter"
+            ></v-text-field>
+          </v-card-text>
         </v-card>
       </v-menu>
     </v-toolbar>
@@ -68,23 +70,19 @@
       v-bind:activator="editTaskMenuActivator"
     >
       <v-card>
-        <v-card-title>Edit Task</v-card-title>
-        <v-card-text>
-          <TaskEditor v-model="editTarget" v-bind:knownTags="knownTags"></TaskEditor>
-        </v-card-text>
         <v-card-actions>
+          <v-card-title>Edit Task</v-card-title>
           <v-spacer></v-spacer>
-          <v-btn
-            text
-            v-on:click="select(null, null, null)"
-          >Cancel</v-btn>
           <v-btn
             text
             color="primary"
             v-on:click="update"
             v-bind:disabled="editTarget.name.length === 0"
-          >Update</v-btn>
+          >Save</v-btn>
         </v-card-actions>
+        <v-card-text>
+          <TaskEditor v-model="editTarget" v-bind:knownTags="knownTags"></TaskEditor>
+        </v-card-text>
       </v-card>
     </v-menu>
     <div class="lists-container flex-grow-1">

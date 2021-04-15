@@ -2,13 +2,13 @@
   <div class="task">
     <v-text-field
       label="Name"
+      prepend-icon="mdi-pencil"
       v-model="value.name"
     ></v-text-field>
     <v-menu
       v-model="deadlineMenu"
       v-bind:close-on-content-click="false"
       v-bind:nudge-right="40"
-      transition="scale-transition"
       offset-y
       min-width="auto"
     >
@@ -18,6 +18,7 @@
           label="Deadline"
           prepend-icon="mdi-calendar"
           readonly
+          clearable
           v-bind="attrs"
           v-on="on"
         ></v-text-field>
@@ -31,7 +32,6 @@
       v-model="scheduleMenu"
       v-bind:close-on-content-click="false"
       v-bind:nudge-right="40"
-      transition="scale-transition"
       offset-y
       min-width="auto"
     >
@@ -41,6 +41,7 @@
           label="Schedule on"
           prepend-icon="mdi-calendar"
           readonly
+          clearable
           v-bind="attrs"
           v-on="on"
         ></v-text-field>
@@ -61,8 +62,7 @@
       clearable
       label="Tags"
       multiple
-      prepend-icon="mdi-filter-variant"
-      solo
+      prepend-icon="mdi-tag-multiple-outline"
     >
       <template v-slot:selection="{ attrs, item, select, selected }">
         <v-chip
@@ -79,6 +79,7 @@
     <v-textarea
       label="Note"
       v-model="value.note"
+      prepend-icon="mdi-text"
     ></v-textarea>
   </div>
 </template>
