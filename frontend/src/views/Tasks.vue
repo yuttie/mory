@@ -1,7 +1,7 @@
 <template>
   <div class="tasks d-flex flex-column">
     <v-toolbar flat outlined dense class="flex-grow-0">
-      <v-menu offset-y v-bind:close-on-content-click="false" v-model="newTaskMenu">
+      <v-menu offset-x v-bind:close-on-content-click="false" v-model="newTaskMenu">
         <template v-slot:activator="{ on, attrs }">
           <v-btn
             icon
