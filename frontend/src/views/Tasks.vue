@@ -178,7 +178,8 @@ export default class Tasks extends Vue {
     this.isLoading = true;
     try {
       const res = await api.getNote('.mory/tasks.yaml');
-      this.tasks = YAML.parse(res.data);
+      const data = YAML.parse(res.data);
+      this.tasks = data.tasks;
       console.log(this.tasks);
       this.isLoading = false;
     }
@@ -191,8 +192,10 @@ export default class Tasks extends Vue {
         else if (error.response.status === 404) {
           // Create a new one
           await api.addNote('.mory/tasks.yaml', YAML.stringify({
-            backlog: [],
-            scheduled: {},
+            tasks: {
+              backlog: [],
+              scheduled: {},
+            },
           }));
           this.load();
         }
@@ -233,7 +236,9 @@ export default class Tasks extends Vue {
   }
 
   save() {
-    return api.addNote('.mory/tasks.yaml', YAML.stringify(this.tasks));
+    return api.addNote('.mory/tasks.yaml', YAML.stringify({
+      tasks: this.tasks,
+    }));
   }
 
   clean() {
