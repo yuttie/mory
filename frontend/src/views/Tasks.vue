@@ -84,7 +84,7 @@
         </v-card-actions>
       </v-card>
     </v-menu>
-    <div class="lists d-flex flex-row flex-grow-1 my-3">
+    <div class="lists d-flex flex-row flex-grow-1 mt-3">
       <div class="list">
         <h2>Backlog</h2>
         <v-list dense>
@@ -459,6 +459,12 @@ export default class Tasks extends Vue {
 <style scoped lang="scss">
 .tasks {
   height: 100%;
+  max-height: 100%;
+}
+.lists {
+  flex: 1 1 0;
+  overflow-x: auto;
+  overflow-y: auto;
 }
 .list {
   width: 270px;
