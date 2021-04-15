@@ -57,25 +57,8 @@
       <div class="list">
         <h2>Backlog</h2>
         <v-list dense>
-          <v-list-item v-for="(task, index) of tasks.backlog" v-bind:key="task" v-on:click="showEditTaskMenu(task, $event);">
-            <v-list-item-action>
-              <v-checkbox v-model="task.done" class="task-checkbox"></v-checkbox>
-            </v-list-item-action>
-            <v-list-item-content>
-              {{ task.name }}
-            </v-list-item-content>
-            <v-list-item-action>
-              <v-btn icon v-on:click="remove(tasks.backlog, index)"><v-icon>mdi-delete</v-icon></v-btn>
-            </v-list-item-action>
-          </v-list-item>
-        </v-list>
-      </div>
-      <div class="list">
-        <h2>Scheduled</h2>
-        <div v-for="(tasks, day) of tasks.scheduled" v-bind:key="day">
-          <h3>{{ day }}</h3>
-          <v-list dense>
-            <v-list-item v-for="(task, index) of tasks" v-bind:key="task" v-on:click="showEditTaskMenu(task, $event);">
+          <draggable v-bind:options="{ group: 'tasks' }">
+            <v-list-item v-for="(task, index) of tasks.backlog" v-bind:key="task" v-on:click="showEditTaskMenu(task, $event);">
               <v-list-item-action>
                 <v-checkbox v-model="task.done" class="task-checkbox"></v-checkbox>
               </v-list-item-action>
@@ -83,9 +66,30 @@
                 {{ task.name }}
               </v-list-item-content>
               <v-list-item-action>
-                <v-btn icon v-on:click="remove(tasks, index)"><v-icon>mdi-delete</v-icon></v-btn>
+                <v-btn icon v-on:click="remove(tasks.backlog, index)"><v-icon>mdi-delete</v-icon></v-btn>
               </v-list-item-action>
             </v-list-item>
+          </draggable>
+        </v-list>
+      </div>
+      <div class="list">
+        <h2>Scheduled</h2>
+        <div v-for="(tasks, day) of tasks.scheduled" v-bind:key="day">
+          <h3>{{ day }}</h3>
+          <v-list dense>
+            <draggable v-bind:options="{ group: 'tasks' }">
+              <v-list-item v-for="(task, index) of tasks" v-bind:key="task" v-on:click="showEditTaskMenu(task, $event);">
+                <v-list-item-action>
+                  <v-checkbox v-model="task.done" class="task-checkbox"></v-checkbox>
+                </v-list-item-action>
+                <v-list-item-content>
+                  {{ task.name }}
+                </v-list-item-content>
+                <v-list-item-action>
+                  <v-btn icon v-on:click="remove(tasks, index)"><v-icon>mdi-delete</v-icon></v-btn>
+                </v-list-item-action>
+              </v-list-item>
+            </draggable>
           </v-list>
         </div>
       </div>
@@ -107,12 +111,14 @@ import { Task } from '@/api';
 import { isMetadataEventMultiple, ListEntry, validateEvent } from '@/api';
 import Color from 'color';
 import materialColors from 'vuetify/lib/util/colors';
+import draggable from 'vuedraggable';
 import dayjs from 'dayjs';
 import YAML from 'yaml';
 
 @Component({
   components: {
     TaskEditor,
+    draggable,
   },
 })
 export default class Tasks extends Vue {
