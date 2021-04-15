@@ -1,14 +1,16 @@
 <template>
   <div class="tasks d-flex flex-column">
     <v-toolbar flat outlined dense class="flex-grow-0">
-      <v-menu offset-x v-bind:close-on-content-click="false" v-model="newTaskMenu">
+      <v-menu offset-y v-bind:close-on-content-click="false" v-model="newTaskMenu">
         <template v-slot:activator="{ on, attrs }">
           <v-btn
-            icon
+            text
             v-bind="attrs"
             v-on="on"
+            class="mr-2"
           >
-            <v-icon>mdi-plus-box-outline</v-icon>
+            <v-icon class="mr-1">mdi-plus-box-outline</v-icon>
+            New Task
           </v-btn>
         </template>
         <v-card>
@@ -25,13 +27,14 @@
           </v-card-actions>
         </v-card>
       </v-menu>
-      <v-menu offset-x v-bind:close-on-content-click="false" v-model="newGroupMenu">
+      <v-menu offset-y v-bind:close-on-content-click="false" v-model="newGroupMenu">
         <template v-slot:activator="{ on, attrs }">
           <v-btn
+            text
             v-bind="attrs"
             v-on="on"
           >
-            <v-icon>mdi-plus-box-outline</v-icon>
+            <v-icon class="mr-1">mdi-plus-box-outline</v-icon>
             New Group
           </v-btn>
         </template>
@@ -43,7 +46,7 @@
               v-model="newGroupName"
             ></v-text-field>
             <v-text-field
-              label="Tag filter"
+              label="Tag"
               v-model="newGroupFilter"
             ></v-text-field>
           </v-card-text>
