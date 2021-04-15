@@ -57,7 +57,7 @@
       <div class="list">
         <h2>Backlog</h2>
         <v-list dense>
-          <draggable v-model="tasks.backlog" group="tasks" v-on:end="save">
+          <draggable v-model="tasks.backlog" group="tasks" v-on:end="clean(); save();">
             <v-list-item v-for="(task, index) of tasks.backlog" v-bind:key="task" v-on:click="showEditTaskMenu(null, index, task, $event);">
               <v-list-item-action>
                 <v-checkbox v-model="task.done" class="task-checkbox"></v-checkbox>
@@ -77,7 +77,7 @@
         <div v-for="(dailyTasks, date) of tasks.scheduled" v-bind:key="date">
           <h3>{{ date }}</h3>
           <v-list dense>
-            <draggable v-model="tasks.scheduled[date]" group="tasks" v-on:end="save">
+            <draggable v-model="tasks.scheduled[date]" group="tasks" v-on:end="clean(); save();">
               <v-list-item v-for="(task, index) of dailyTasks" v-bind:key="task" v-on:click="showEditTaskMenu(date, index, task, $event);">
                 <v-list-item-action>
                   <v-checkbox v-model="task.done" class="task-checkbox"></v-checkbox>
@@ -236,6 +236,15 @@ export default class Tasks extends Vue {
     return api.addNote('.mory/tasks.yaml', YAML.stringify(this.tasks));
   }
 
+  clean() {
+    console.log(this.tasks.scheduled);
+    for (const [date, dailyTasks] of Object.entries(this.tasks.scheduled)) {
+      if ((dailyTasks as Task[]).length === 0) {
+        this.$delete(this.tasks.scheduled, date);
+      }
+    }
+  }
+
   async add() {
     // Create a new entry
     const task: any = {
@@ -295,12 +304,14 @@ export default class Tasks extends Vue {
     // Reset
     this.select(null, null, null);
     // Save
+    this.clean();
     await this.save();
   }
 
   async remove(list: Task[], index: number) {
     list.splice(index, 1);
     // Save
+    this.clean();
     await this.save();
   }
 }
