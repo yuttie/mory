@@ -42,7 +42,7 @@
           <v-spacer></v-spacer>
           <v-btn
             text
-            v-on:click="select(null)"
+            v-on:click="select(null, null, null)"
           >Cancel</v-btn>
           <v-btn
             text
@@ -57,25 +57,8 @@
       <div class="list">
         <h2>Backlog</h2>
         <v-list dense>
-          <v-list-item v-for="(task, index) of tasks.backlog" v-bind:key="task" v-on:click="showEditTaskMenu(task, $event);">
-            <v-list-item-action>
-              <v-checkbox v-model="task.done" class="task-checkbox"></v-checkbox>
-            </v-list-item-action>
-            <v-list-item-content>
-              {{ task.name }}
-            </v-list-item-content>
-            <v-list-item-action>
-              <v-btn icon v-on:click="remove(tasks.backlog, index)"><v-icon>mdi-delete</v-icon></v-btn>
-            </v-list-item-action>
-          </v-list-item>
-        </v-list>
-      </div>
-      <div class="list">
-        <h2>Scheduled</h2>
-        <div v-for="(tasks, day) of tasks.scheduled" v-bind:key="day">
-          <h3>{{ day }}</h3>
-          <v-list dense>
-            <v-list-item v-for="(task, index) of tasks" v-bind:key="task" v-on:click="showEditTaskMenu(task, $event);">
+          <draggable v-model="tasks.backlog" group="tasks" v-on:end="clean(); save();">
+            <v-list-item v-for="(task, index) of tasks.backlog" v-bind:key="task" v-on:click="showEditTaskMenu(null, index, task, $event);">
               <v-list-item-action>
                 <v-checkbox v-model="task.done" class="task-checkbox"></v-checkbox>
               </v-list-item-action>
@@ -83,9 +66,30 @@
                 {{ task.name }}
               </v-list-item-content>
               <v-list-item-action>
-                <v-btn icon v-on:click="remove(tasks, index)"><v-icon>mdi-delete</v-icon></v-btn>
+                <v-btn icon v-on:click="remove(tasks.backlog, index)"><v-icon>mdi-delete</v-icon></v-btn>
               </v-list-item-action>
             </v-list-item>
+          </draggable>
+        </v-list>
+      </div>
+      <div class="list">
+        <h2>Scheduled</h2>
+        <div v-for="(dailyTasks, date) of tasks.scheduled" v-bind:key="date">
+          <h3>{{ date }}</h3>
+          <v-list dense>
+            <draggable v-model="tasks.scheduled[date]" group="tasks" v-on:end="clean(); save();">
+              <v-list-item v-for="(task, index) of dailyTasks" v-bind:key="task" v-on:click="showEditTaskMenu(date, index, task, $event);">
+                <v-list-item-action>
+                  <v-checkbox v-model="task.done" class="task-checkbox"></v-checkbox>
+                </v-list-item-action>
+                <v-list-item-content>
+                  {{ task.name }}
+                </v-list-item-content>
+                <v-list-item-action>
+                  <v-btn icon v-on:click="remove(dailyTasks, index)"><v-icon>mdi-delete</v-icon></v-btn>
+                </v-list-item-action>
+              </v-list-item>
+            </draggable>
           </v-list>
         </div>
       </div>
@@ -107,12 +111,14 @@ import { Task } from '@/api';
 import { isMetadataEventMultiple, ListEntry, validateEvent } from '@/api';
 import Color from 'color';
 import materialColors from 'vuetify/lib/util/colors';
+import draggable from 'vuedraggable';
 import dayjs from 'dayjs';
 import YAML from 'yaml';
 
 @Component({
   components: {
     TaskEditor,
+    draggable,
   },
 })
 export default class Tasks extends Vue {
@@ -126,6 +132,7 @@ export default class Tasks extends Vue {
     note: '',
   };
   newTaskMenu = false;
+  selectedTaskIndex: null | number = null;
   selectedTask: null | Task = null;
   editTarget: null | Task = null;
   editTaskMenu = false;
@@ -140,14 +147,18 @@ export default class Tasks extends Vue {
     this.load();
   }
 
-  select(task: Task | null) {
+  select(date: string | null, index: number | null, task: Task | null) {
+    this.selectedTaskIndex = index;
+    if (task !== null) {
+      task.schedule = date;
+    }
     this.selectedTask = task;
     this.editTarget = JSON.parse(JSON.stringify(task));
   }
 
-  showEditTaskMenu(task: Task, event: MouseEvent) {
+  showEditTaskMenu(date: string | null, index: number, task: Task, event: MouseEvent) {
     const open = () => {
-      this.select(task);
+      this.select(date, index, task);
       this.editTaskMenuActivator = event.target;
       setTimeout(() => {
         this.editTaskMenu = true;
@@ -221,6 +232,19 @@ export default class Tasks extends Vue {
     this.knownTags = knownTags;
   }
 
+  save() {
+    return api.addNote('.mory/tasks.yaml', YAML.stringify(this.tasks));
+  }
+
+  clean() {
+    console.log(this.tasks.scheduled);
+    for (const [date, dailyTasks] of Object.entries(this.tasks.scheduled)) {
+      if ((dailyTasks as Task[]).length === 0) {
+        this.$delete(this.tasks.scheduled, date);
+      }
+    }
+  }
+
   async add() {
     // Create a new entry
     const task: any = {
@@ -249,7 +273,7 @@ export default class Tasks extends Vue {
       note: '',
     };
     // Save
-    await api.addNote('.mory/tasks.yaml', YAML.stringify(this.tasks));
+    await this.save();
     // Hide the menu
     this.newTaskMenu = false;
   }
@@ -261,16 +285,34 @@ export default class Tasks extends Vue {
     this.selectedTask.done = this.editTarget.done;
     this.selectedTask.tags = this.editTarget.tags;
     this.selectedTask.note = this.editTarget.note;
+    // Move to other list
+    if (this.editTarget.schedule !== this.selectedTask.schedule) {
+      // Remove it from the original list
+      const list = this.selectedTask.schedule === null ? this.tasks.backlog : this.tasks.scheduled[this.selectedTask.schedule];
+      list.splice(this.selectedTaskIndex, 1);
+      // Put into a new list
+      if (this.editTarget.schedule === null) {
+        this.tasks.backlog.push(this.selectedTask);
+      }
+      else {
+        if (!Object.prototype.hasOwnProperty.call(this.tasks.scheduled, this.editTarget.schedule)) {
+          this.tasks.scheduled[this.editTarget.schedule] = [];
+        }
+        this.tasks.scheduled[this.editTarget.schedule].push(this.selectedTask);
+      }
+    }
     // Reset
-    this.select(null);
+    this.select(null, null, null);
     // Save
-    await api.addNote('.mory/tasks.yaml', YAML.stringify(this.tasks));
+    this.clean();
+    await this.save();
   }
 
-  async remove(list, index) {
+  async remove(list: Task[], index: number) {
     list.splice(index, 1);
     // Save
-    await api.addNote('.mory/tasks.yaml', YAML.stringify(this.tasks));
+    this.clean();
+    await this.save();
   }
 }
 </script>
