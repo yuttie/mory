@@ -74,11 +74,11 @@
       </div>
       <div class="list">
         <h2>Scheduled</h2>
-        <div v-for="(dayTasks, date) of tasks.scheduled" v-bind:key="date">
+        <div v-for="(dailyTasks, date) of tasks.scheduled" v-bind:key="date">
           <h3>{{ date }}</h3>
           <v-list dense>
             <draggable v-model="tasks.scheduled[date]" group="tasks" v-on:end="save">
-              <v-list-item v-for="(task, index) of dayTasks" v-bind:key="task" v-on:click="showEditTaskMenu(date, index, task, $event);">
+              <v-list-item v-for="(task, index) of dailyTasks" v-bind:key="task" v-on:click="showEditTaskMenu(date, index, task, $event);">
                 <v-list-item-action>
                   <v-checkbox v-model="task.done" class="task-checkbox"></v-checkbox>
                 </v-list-item-action>
@@ -86,7 +86,7 @@
                   {{ task.name }}
                 </v-list-item-content>
                 <v-list-item-action>
-                  <v-btn icon v-on:click="remove(dayTasks, index)"><v-icon>mdi-delete</v-icon></v-btn>
+                  <v-btn icon v-on:click="remove(dailyTasks, index)"><v-icon>mdi-delete</v-icon></v-btn>
                 </v-list-item-action>
               </v-list-item>
             </draggable>
