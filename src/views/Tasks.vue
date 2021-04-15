@@ -198,8 +198,11 @@ import YAML from 'yaml';
   },
 })
 export default class Tasks extends Vue {
-  tasks: any = [];
-  groups: any = [];
+  tasks = {
+    backlog: [] as Task[],
+    scheduled: {} as { [key: string]: Task[] }
+  };
+  groups: { name: string, filter: string }[] = [];
   // Task
   newTask: Task = {
     name: '',
@@ -234,8 +237,8 @@ export default class Tasks extends Vue {
     const result = [];
     for (const group of this.groups) {
       const grouped = {
-        backlog: [],
-        scheduled: {},
+        backlog: [] as Task[],
+        scheduled: {} as { [key: string]: Task[] },
       };
       // Backlog
       for (const task of this.tasks.backlog) {
@@ -272,7 +275,7 @@ export default class Tasks extends Vue {
   showEditTaskMenu(date: string | null, index: number, task: Task, event: MouseEvent) {
     const open = () => {
       this.select(date, index, task);
-      this.editTaskMenuActivator = event.target.parentElement;
+      this.editTaskMenuActivator = (event.target as Element).parentElement!;
       setTimeout(() => {
         this.editTaskMenu = true;
       }, 0);
@@ -418,7 +421,7 @@ export default class Tasks extends Vue {
     if (newDate !== oldDate) {
       // Remove it from the original list
       const list = oldDate === null ? this.tasks.backlog : this.tasks.scheduled[oldDate];
-      list.splice(this.selectedTaskIndex, 1);
+      list.splice(this.selectedTaskIndex!, 1);
       // Put into a new list
       if (newDate === null) {
         this.tasks.backlog.push(this.selectedTask);
