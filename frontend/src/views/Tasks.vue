@@ -123,6 +123,7 @@ import YAML from 'yaml';
 })
 export default class Tasks extends Vue {
   tasks: any = [];
+  views: any = [];
   newTask: Task = {
     name: '',
     deadline: null,
@@ -180,6 +181,7 @@ export default class Tasks extends Vue {
       const res = await api.getNote('.mory/tasks.yaml');
       const data = YAML.parse(res.data);
       this.tasks = data.tasks;
+      this.views = data.views;
       console.log(this.tasks);
       this.isLoading = false;
     }
@@ -196,6 +198,7 @@ export default class Tasks extends Vue {
               backlog: [],
               scheduled: {},
             },
+            views: [],
           }));
           this.load();
         }
@@ -238,6 +241,7 @@ export default class Tasks extends Vue {
   save() {
     return api.addNote('.mory/tasks.yaml', YAML.stringify({
       tasks: this.tasks,
+      views: this.views,
     }));
   }
 
