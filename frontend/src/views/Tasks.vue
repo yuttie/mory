@@ -26,7 +26,15 @@
         </v-card>
       </v-menu>
     </v-toolbar>
-    <v-menu offset-y v-if="editTarget !== null" v-bind:close-on-content-click="false" v-model="editTaskMenu">
+    <v-menu
+      absolute
+      offset-x
+      v-if="editTarget !== null"
+      v-model="editTaskMenu"
+      v-bind:close-on-content-click="false"
+      v-bind:position-x="editTaskMenuX"
+      v-bind:position-y="editTaskMenuY"
+    >
       <v-card>
         <v-card-title>Edit Task</v-card-title>
         <v-card-text>
@@ -102,6 +110,9 @@ export default class Tasks extends Vue {
   newTaskMenu = false;
   selectedTask: null | Task = null;
   editTarget: null | Task = null;
+  editTaskMenu = false;
+  editTaskMenuX = 0;
+  editTaskMenuY = 0;
   knownTags: string[] = [];
   isLoading = false;
   error = false;
@@ -112,19 +123,28 @@ export default class Tasks extends Vue {
     this.load();
   }
 
-  get editTaskMenu(): boolean {
-    return this.selectedTask !== null;
-  }
-
-  set editTaskMenu(value: boolean) {
-    if (value === false) {
-      this.select(null);
-    }
-  }
-
   select(task: Task | null) {
     this.selectedTask = task;
     this.editTarget = JSON.parse(JSON.stringify(task));
+  }
+
+  showEditTaskMenu(task: Task, event: MouseEvent) {
+    const open = () => {
+      this.select(task);
+      this.editTaskMenuX = event.clientX;
+      this.editTaskMenuY = event.clientY;
+      setTimeout(() => {
+        this.editTaskMenu = true;
+      }, 0);
+    };
+
+    if (this.editTaskMenu) {
+      this.editTaskMenu = false;
+      setTimeout(open, 0);
+    }
+    else {
+      open();
+    }
   }
 
   async load() {
