@@ -273,7 +273,7 @@ export default class Tasks extends Vue {
     await api.addNote('.mory/tasks.yaml', YAML.stringify(this.tasks));
   }
 
-  async remove(list, index) {
+  async remove(list: Task[], index: number) {
     list.splice(index, 1);
     // Save
     await api.addNote('.mory/tasks.yaml', YAML.stringify(this.tasks));
