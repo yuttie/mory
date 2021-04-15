@@ -124,13 +124,13 @@
           </v-list>
         </div>
       </div>
-      <div v-for="group of groups" v-bind:key="group.name" class="list">
-        <h2>{{ group.name }}</h2>
-        <div v-for="date of Object.keys(tasks.scheduled).sort((a, b) => a < b ? 1 : a > b ? -1 : 0)" v-bind:key="date">
+      <div v-for="[name, grouped] of groupedTasks" v-bind:key="name" class="list">
+        <h2>{{ name }}</h2>
+        <div v-for="date of Object.keys(grouped.scheduled).sort((a, b) => a < b ? 1 : a > b ? -1 : 0)" v-bind:key="date">
           <h3>{{ date }}</h3>
           <v-list dense>
-            <template v-for="(task, index) of tasks.scheduled[date]">
-              <v-list-item v-if="(task.tags || []).includes(group.filter)" v-bind:key="task" v-on:click="showEditTaskMenu(date, index, task, $event);">
+            <template v-for="(task, index) of grouped.scheduled[date]">
+              <v-list-item v-bind:key="task" v-on:click="showEditTaskMenu(date, index, task, $event);">
                 <v-list-item-action>
                   <v-checkbox v-model="task.done" class="task-checkbox"></v-checkbox>
                 </v-list-item-action>
@@ -138,17 +138,17 @@
                   {{ task.name }}
                 </v-list-item-content>
                 <v-list-item-action>
-                  <v-btn icon v-on:click="remove(tasks.scheduled[date], index)"><v-icon>mdi-delete</v-icon></v-btn>
+                  <v-btn icon v-on:click="remove(grouped.scheduled[date], index)"><v-icon>mdi-delete</v-icon></v-btn>
                 </v-list-item-action>
               </v-list-item>
             </template>
           </v-list>
         </div>
-        <div>
+        <div v-if="grouped.backlog.length !== 0">
           <h3>Backlog</h3>
           <v-list dense>
-            <template v-for="(task, index) of tasks.backlog">
-              <v-list-item v-if="(task.tags || []).includes(group.filter)" v-bind:key="task" v-on:click="showEditTaskMenu(null, index, task, $event);">
+            <template v-for="(task, index) of grouped.backlog">
+              <v-list-item v-bind:key="task" v-on:click="showEditTaskMenu(null, index, task, $event);">
                 <v-list-item-action>
                   <v-checkbox v-model="task.done" class="task-checkbox"></v-checkbox>
                 </v-list-item-action>
@@ -156,7 +156,7 @@
                   {{ task.name }}
                 </v-list-item-content>
                 <v-list-item-action>
-                  <v-btn icon v-on:click="remove(tasks.backlog, index)"><v-icon>mdi-delete</v-icon></v-btn>
+                  <v-btn icon v-on:click="remove(grouped.backlog, index)"><v-icon>mdi-delete</v-icon></v-btn>
                 </v-list-item-action>
               </v-list-item>
             </template>
@@ -222,6 +222,36 @@ export default class Tasks extends Vue {
   mounted() {
     document.title = `Tasks | ${process.env.VUE_APP_NAME}`;
     this.load();
+  }
+
+  get groupedTasks() {
+    const result = [];
+    for (const group of this.groups) {
+      const grouped = {
+        backlog: [],
+        scheduled: {},
+      };
+      // Backlog
+      for (const task of this.tasks.backlog) {
+        if ((task.tags || []).includes(group.filter)) {
+          grouped.backlog.push(task);
+        }
+      }
+      // Scheduled
+      for (const [date, tasks] of Object.entries(this.tasks.scheduled)) {
+        for (const task of tasks) {
+          if ((task.tags || []).includes(group.filter)) {
+            if (!Object.prototype.hasOwnProperty.call(grouped.scheduled, date)) {
+              grouped.scheduled[date] = [];
+            }
+            grouped.scheduled[date].push(task);
+          }
+        }
+      }
+      // Add
+      result.push([group.name, grouped]);
+    }
+    return result;
   }
 
   select(date: string | null, index: number | null, task: Task | null) {
