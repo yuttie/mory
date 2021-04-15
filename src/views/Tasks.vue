@@ -57,7 +57,7 @@
       <div class="list">
         <h2>Backlog</h2>
         <v-list dense>
-          <draggable v-bind:options="{ group: 'tasks' }">
+          <draggable v-model="tasks.backlog" group="tasks" v-on:end="save">
             <v-list-item v-for="(task, index) of tasks.backlog" v-bind:key="task" v-on:click="showEditTaskMenu(task, $event);">
               <v-list-item-action>
                 <v-checkbox v-model="task.done" class="task-checkbox"></v-checkbox>
@@ -74,11 +74,11 @@
       </div>
       <div class="list">
         <h2>Scheduled</h2>
-        <div v-for="(tasks, day) of tasks.scheduled" v-bind:key="day">
+        <div v-for="(dayTasks, day) of tasks.scheduled" v-bind:key="day">
           <h3>{{ day }}</h3>
           <v-list dense>
-            <draggable v-bind:options="{ group: 'tasks' }">
-              <v-list-item v-for="(task, index) of tasks" v-bind:key="task" v-on:click="showEditTaskMenu(task, $event);">
+            <draggable v-model="tasks.scheduled[day]" group="tasks" v-on:end="save">
+              <v-list-item v-for="(task, index) of dayTasks" v-bind:key="task" v-on:click="showEditTaskMenu(task, $event);">
                 <v-list-item-action>
                   <v-checkbox v-model="task.done" class="task-checkbox"></v-checkbox>
                 </v-list-item-action>
@@ -86,7 +86,7 @@
                   {{ task.name }}
                 </v-list-item-content>
                 <v-list-item-action>
-                  <v-btn icon v-on:click="remove(tasks, index)"><v-icon>mdi-delete</v-icon></v-btn>
+                  <v-btn icon v-on:click="remove(dayTasks, index)"><v-icon>mdi-delete</v-icon></v-btn>
                 </v-list-item-action>
               </v-list-item>
             </draggable>
