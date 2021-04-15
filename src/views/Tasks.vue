@@ -74,10 +74,10 @@
       </div>
       <div class="list">
         <h2>Scheduled</h2>
-        <div v-for="(dayTasks, day) of tasks.scheduled" v-bind:key="day">
-          <h3>{{ day }}</h3>
+        <div v-for="(dayTasks, date) of tasks.scheduled" v-bind:key="date">
+          <h3>{{ date }}</h3>
           <v-list dense>
-            <draggable v-model="tasks.scheduled[day]" group="tasks" v-on:end="save">
+            <draggable v-model="tasks.scheduled[date]" group="tasks" v-on:end="save">
               <v-list-item v-for="(task, index) of dayTasks" v-bind:key="task" v-on:click="showEditTaskMenu(task, $event);">
                 <v-list-item-action>
                   <v-checkbox v-model="task.done" class="task-checkbox"></v-checkbox>
