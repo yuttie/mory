@@ -58,17 +58,31 @@
     <div class="lists d-flex flex-row flex-grow-1 my-3">
       <div class="list">
         <h2>Backlog</h2>
-        <ol>
-          <li v-for="task of tasks.backlog" v-bind:key="task" v-on:click="select(task)">{{ task }}</li>
-        </ol>
+        <v-list dense>
+          <v-list-item v-for="task of tasks.backlog" v-bind:key="task" v-on:click="showEditTaskMenu(task, $event);">
+            <v-list-item-action>
+              <v-checkbox v-model="task.done" class="task-checkbox"></v-checkbox>
+            </v-list-item-action>
+            <v-list-item-content>
+              {{ task.name }}
+            </v-list-item-content>
+          </v-list-item>
+        </v-list>
       </div>
       <div class="list">
         <h2>Scheduled</h2>
         <div v-for="(tasks, day) of tasks.scheduled" v-bind:key="day">
           <h3>{{ day }}</h3>
-          <ol>
-            <li v-for="task of tasks" v-bind:key="task" v-on:click="select(task)">{{ task }}</li>
-          </ol>
+          <v-list dense>
+            <v-list-item v-for="task of tasks" v-bind:key="task" v-on:click="showEditTaskMenu(task, $event);">
+              <v-list-item-action>
+                <v-checkbox v-model="task.done" class="task-checkbox"></v-checkbox>
+              </v-list-item-action>
+              <v-list-item-content>
+                {{ task.name }}
+              </v-list-item-content>
+            </v-list-item>
+          </v-list>
         </div>
       </div>
     </div>
@@ -265,5 +279,8 @@ export default class Tasks extends Vue {
   margin-left: 1em;
   padding: 0.5em;
   align-self: flex-start;
+}
+.task-checkbox {
+  pointer-events: none;
 }
 </style>
