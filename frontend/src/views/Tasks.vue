@@ -274,7 +274,7 @@ export default class Tasks extends Vue {
   showEditTaskMenu(date: string | null, index: number, task: Task, event: MouseEvent) {
     const open = () => {
       this.select(date, index, task);
-      this.editTaskMenuActivator = event.target;
+      this.editTaskMenuActivator = event.target.parentElement;
       setTimeout(() => {
         this.editTaskMenu = true;
       }, 0);
