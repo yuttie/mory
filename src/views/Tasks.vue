@@ -25,6 +25,37 @@
           </v-card-actions>
         </v-card>
       </v-menu>
+      <v-menu offset-x v-bind:close-on-content-click="false" v-model="newGroupMenu">
+        <template v-slot:activator="{ on, attrs }">
+          <v-btn
+            v-bind="attrs"
+            v-on="on"
+          >
+            <v-icon>mdi-plus-box-outline</v-icon>
+            New Group
+          </v-btn>
+        </template>
+        <v-card>
+          <v-card-title>New Group</v-card-title>
+          <v-card-text>
+            <v-text-field
+              label="Name"
+              v-model="newGroupName"
+            ></v-text-field>
+            <v-text-field
+              label="Tag filter"
+              v-model="newGroupFilter"
+            ></v-text-field>
+          </v-card-text>
+          <v-card-actions>
+            <v-spacer></v-spacer>
+            <v-btn
+              v-on:click="addGroup"
+              v-bind:disabled="newGroupName.length === 0 || newGroupFilter.length === 0"
+            >Add</v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-menu>
     </v-toolbar>
     <v-menu
       offset-x
@@ -93,6 +124,45 @@
           </v-list>
         </div>
       </div>
+      <div v-for="group of groups" v-bind:key="group.name" class="list">
+        <h2>{{ group.name }}</h2>
+        <div v-for="date of Object.keys(tasks.scheduled).sort((a, b) => a < b ? 1 : a > b ? -1 : 0)" v-bind:key="date">
+          <h3>{{ date }}</h3>
+          <v-list dense>
+            <template v-for="(task, index) of tasks.scheduled[date]">
+              <v-list-item v-if="(task.tags || []).includes(group.filter)" v-bind:key="task" v-on:click="showEditTaskMenu(date, index, task, $event);">
+                <v-list-item-action>
+                  <v-checkbox v-model="task.done" class="task-checkbox"></v-checkbox>
+                </v-list-item-action>
+                <v-list-item-content>
+                  {{ task.name }}
+                </v-list-item-content>
+                <v-list-item-action>
+                  <v-btn icon v-on:click="remove(tasks.scheduled[date], index)"><v-icon>mdi-delete</v-icon></v-btn>
+                </v-list-item-action>
+              </v-list-item>
+            </template>
+          </v-list>
+        </div>
+        <div>
+          <h3>Backlog</h3>
+          <v-list dense>
+            <template v-for="(task, index) of tasks.backlog">
+              <v-list-item v-if="(task.tags || []).includes(group.filter)" v-bind:key="task" v-on:click="showEditTaskMenu(null, index, task, $event);">
+                <v-list-item-action>
+                  <v-checkbox v-model="task.done" class="task-checkbox"></v-checkbox>
+                </v-list-item-action>
+                <v-list-item-content>
+                  {{ task.name }}
+                </v-list-item-content>
+                <v-list-item-action>
+                  <v-btn icon v-on:click="remove(tasks.backlog, index)"><v-icon>mdi-delete</v-icon></v-btn>
+                </v-list-item-action>
+              </v-list-item>
+            </template>
+          </v-list>
+        </div>
+      </div>
     </div>
     <v-overlay v-bind:value="isLoading" z-index="10" opacity="0">
       <v-progress-circular indeterminate color="blue-grey lighten-3" size="64"></v-progress-circular>
@@ -123,7 +193,8 @@ import YAML from 'yaml';
 })
 export default class Tasks extends Vue {
   tasks: any = [];
-  views: any = [];
+  groups: any = [];
+  // Task
   newTask: Task = {
     name: '',
     deadline: null,
@@ -139,6 +210,11 @@ export default class Tasks extends Vue {
   editTaskMenu = false;
   editTaskMenuActivator: any = null;
   knownTags: string[] = [];
+  // Group
+  newGroupMenu = false;
+  newGroupName = '';
+  newGroupFilter = '';
+  // Others
   isLoading = false;
   error = false;
   errorText = '';
@@ -181,7 +257,7 @@ export default class Tasks extends Vue {
       const res = await api.getNote('.mory/tasks.yaml');
       const data = YAML.parse(res.data);
       this.tasks = data.tasks;
-      this.views = data.views;
+      this.groups = data.groups;
       console.log(this.tasks);
       this.isLoading = false;
     }
@@ -198,7 +274,7 @@ export default class Tasks extends Vue {
               backlog: [],
               scheduled: {},
             },
-            views: [],
+            groups: [],
           }));
           this.load();
         }
@@ -241,7 +317,7 @@ export default class Tasks extends Vue {
   save() {
     return api.addNote('.mory/tasks.yaml', YAML.stringify({
       tasks: this.tasks,
-      views: this.views,
+      groups: this.groups,
     }));
   }
 
@@ -330,6 +406,22 @@ export default class Tasks extends Vue {
     // Save
     this.clean();
     await this.save();
+  }
+
+  async addGroup() {
+    // Create a new group
+    const group: any = {
+      name: this.newGroupName,
+      filter: this.newGroupFilter,
+    };
+    this.groups.push(group);
+    // Reset
+    this.newGroupName = '';
+    this.newGroupFilter = '';
+    // Save
+    await this.save();
+    // Hide the menu
+    this.newGroupMenu = false;
   }
 }
 </script>
