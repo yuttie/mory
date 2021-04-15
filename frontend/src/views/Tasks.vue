@@ -57,13 +57,16 @@
       <div class="list">
         <h2>Backlog</h2>
         <v-list dense>
-          <v-list-item v-for="task of tasks.backlog" v-bind:key="task" v-on:click="showEditTaskMenu(task, $event);">
+          <v-list-item v-for="(task, index) of tasks.backlog" v-bind:key="task" v-on:click="showEditTaskMenu(task, $event);">
             <v-list-item-action>
               <v-checkbox v-model="task.done" class="task-checkbox"></v-checkbox>
             </v-list-item-action>
             <v-list-item-content>
               {{ task.name }}
             </v-list-item-content>
+            <v-list-item-action>
+              <v-btn icon v-on:click="remove(tasks.backlog, index)"><v-icon>mdi-delete</v-icon></v-btn>
+            </v-list-item-action>
           </v-list-item>
         </v-list>
       </div>
@@ -72,13 +75,16 @@
         <div v-for="(tasks, day) of tasks.scheduled" v-bind:key="day">
           <h3>{{ day }}</h3>
           <v-list dense>
-            <v-list-item v-for="task of tasks" v-bind:key="task" v-on:click="showEditTaskMenu(task, $event);">
+            <v-list-item v-for="(task, index) of tasks" v-bind:key="task" v-on:click="showEditTaskMenu(task, $event);">
               <v-list-item-action>
                 <v-checkbox v-model="task.done" class="task-checkbox"></v-checkbox>
               </v-list-item-action>
               <v-list-item-content>
                 {{ task.name }}
               </v-list-item-content>
+              <v-list-item-action>
+                <v-btn icon v-on:click="remove(tasks, index)"><v-icon>mdi-delete</v-icon></v-btn>
+              </v-list-item-action>
             </v-list-item>
           </v-list>
         </div>
@@ -257,6 +263,12 @@ export default class Tasks extends Vue {
     this.selectedTask.note = this.editTarget.note;
     // Reset
     this.select(null);
+    // Save
+    await api.addNote('.mory/tasks.yaml', YAML.stringify(this.tasks));
+  }
+
+  async remove(list, index) {
+    list.splice(index, 1);
     // Save
     await api.addNote('.mory/tasks.yaml', YAML.stringify(this.tasks));
   }
