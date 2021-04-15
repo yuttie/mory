@@ -227,6 +227,10 @@ export default class Tasks extends Vue {
     this.knownTags = knownTags;
   }
 
+  save() {
+    return api.addNote('.mory/tasks.yaml', YAML.stringify(this.tasks));
+  }
+
   async add() {
     // Create a new entry
     const task: any = {
@@ -255,7 +259,7 @@ export default class Tasks extends Vue {
       note: '',
     };
     // Save
-    await api.addNote('.mory/tasks.yaml', YAML.stringify(this.tasks));
+    await this.save();
     // Hide the menu
     this.newTaskMenu = false;
   }
@@ -270,13 +274,13 @@ export default class Tasks extends Vue {
     // Reset
     this.select(null);
     // Save
-    await api.addNote('.mory/tasks.yaml', YAML.stringify(this.tasks));
+    await this.save();
   }
 
   async remove(list: Task[], index: number) {
     list.splice(index, 1);
     // Save
-    await api.addNote('.mory/tasks.yaml', YAML.stringify(this.tasks));
+    await this.save();
   }
 }
 </script>
