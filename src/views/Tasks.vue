@@ -42,7 +42,7 @@
           <v-spacer></v-spacer>
           <v-btn
             text
-            v-on:click="select(null)"
+            v-on:click="select(null, null, null)"
           >Cancel</v-btn>
           <v-btn
             text
@@ -58,7 +58,7 @@
         <h2>Backlog</h2>
         <v-list dense>
           <draggable v-model="tasks.backlog" group="tasks" v-on:end="save">
-            <v-list-item v-for="(task, index) of tasks.backlog" v-bind:key="task" v-on:click="showEditTaskMenu(task, $event);">
+            <v-list-item v-for="(task, index) of tasks.backlog" v-bind:key="task" v-on:click="showEditTaskMenu(null, index, task, $event);">
               <v-list-item-action>
                 <v-checkbox v-model="task.done" class="task-checkbox"></v-checkbox>
               </v-list-item-action>
@@ -78,7 +78,7 @@
           <h3>{{ date }}</h3>
           <v-list dense>
             <draggable v-model="tasks.scheduled[date]" group="tasks" v-on:end="save">
-              <v-list-item v-for="(task, index) of dayTasks" v-bind:key="task" v-on:click="showEditTaskMenu(task, $event);">
+              <v-list-item v-for="(task, index) of dayTasks" v-bind:key="task" v-on:click="showEditTaskMenu(date, index, task, $event);">
                 <v-list-item-action>
                   <v-checkbox v-model="task.done" class="task-checkbox"></v-checkbox>
                 </v-list-item-action>
@@ -132,6 +132,7 @@ export default class Tasks extends Vue {
     note: '',
   };
   newTaskMenu = false;
+  selectedTaskIndex: null | number = null;
   selectedTask: null | Task = null;
   editTarget: null | Task = null;
   editTaskMenu = false;
@@ -146,14 +147,18 @@ export default class Tasks extends Vue {
     this.load();
   }
 
-  select(task: Task | null) {
+  select(date: string | null, index: number | null, task: Task | null) {
+    this.selectedTaskIndex = index;
+    if (task !== null) {
+      task.schedule = date;
+    }
     this.selectedTask = task;
     this.editTarget = JSON.parse(JSON.stringify(task));
   }
 
-  showEditTaskMenu(task: Task, event: MouseEvent) {
+  showEditTaskMenu(date: string | null, index: number, task: Task, event: MouseEvent) {
     const open = () => {
-      this.select(task);
+      this.select(date, index, task);
       this.editTaskMenuActivator = event.target;
       setTimeout(() => {
         this.editTaskMenu = true;
@@ -271,8 +276,24 @@ export default class Tasks extends Vue {
     this.selectedTask.done = this.editTarget.done;
     this.selectedTask.tags = this.editTarget.tags;
     this.selectedTask.note = this.editTarget.note;
+    // Move to other list
+    if (this.editTarget.schedule !== this.selectedTask.schedule) {
+      // Remove it from the original list
+      const list = this.selectedTask.schedule === null ? this.tasks.backlog : this.tasks.scheduled[this.selectedTask.schedule];
+      list.splice(this.selectedTaskIndex, 1);
+      // Put into a new list
+      if (this.editTarget.schedule === null) {
+        this.tasks.backlog.push(this.selectedTask);
+      }
+      else {
+        if (!Object.prototype.hasOwnProperty.call(this.tasks.scheduled, this.editTarget.schedule)) {
+          this.tasks.scheduled[this.editTarget.schedule] = [];
+        }
+        this.tasks.scheduled[this.editTarget.schedule].push(this.selectedTask);
+      }
+    }
     // Reset
-    this.select(null);
+    this.select(null, null, null);
     // Save
     await this.save();
   }
