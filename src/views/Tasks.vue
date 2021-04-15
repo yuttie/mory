@@ -295,19 +295,21 @@ export default class Tasks extends Vue {
     this.selectedTask.tags = this.editTarget.tags;
     this.selectedTask.note = this.editTarget.note;
     // Move to other list
-    if (this.editTarget.schedule !== this.selectedTask.schedule) {
+    const oldDate = this.selectedTask.schedule;
+    const newDate = this.editTarget.schedule;
+    if (newDate !== oldDate) {
       // Remove it from the original list
-      const list = this.selectedTask.schedule === null ? this.tasks.backlog : this.tasks.scheduled[this.selectedTask.schedule];
+      const list = oldDate === null ? this.tasks.backlog : this.tasks.scheduled[oldDate];
       list.splice(this.selectedTaskIndex, 1);
       // Put into a new list
-      if (this.editTarget.schedule === null) {
+      if (newDate === null) {
         this.tasks.backlog.push(this.selectedTask);
       }
       else {
-        if (!Object.prototype.hasOwnProperty.call(this.tasks.scheduled, this.editTarget.schedule)) {
-          this.tasks.scheduled[this.editTarget.schedule] = [];
+        if (!Object.prototype.hasOwnProperty.call(this.tasks.scheduled, newDate)) {
+          this.tasks.scheduled[newDate] = [];
         }
-        this.tasks.scheduled[this.editTarget.schedule].push(this.selectedTask);
+        this.tasks.scheduled[newDate].push(this.selectedTask);
       }
     }
     // Reset
