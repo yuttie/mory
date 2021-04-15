@@ -1,3 +1,14 @@
+## 0.14.0 (2021-04-16)
+* Detect unsafe note overwrite
+* Scroll sync
+* Improved appearance
+* Better handling of authorization tokens
+* Fixed ToC links
+* Fixed src values of <img>s
+* Better handling of inline codes and code blocks
+* Organized internal API functions
+* Many fixes.
+
 ## 0.13.0 (2021-02-22)
 * Change Markdown parser/renderer to markdown-it from marked
     * Better handling of base URL for images
