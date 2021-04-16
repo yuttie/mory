@@ -32,7 +32,7 @@ const routes: Array<RouteConfig> = [
     redirect: to => {
       return {
         name: 'Note',
-        params: { path: uuidv4() },
+        params: { path: uuidv4() + '.md' },
         query: { mode: 'create', template: to.query.from },
       };
     },
