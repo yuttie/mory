@@ -85,9 +85,9 @@
         </v-card-text>
       </v-card>
     </v-menu>
-    <div class="lists-container flex-grow-1">
-      <div class="lists">
-        <v-card dense class="list">
+    <div class="groups-container flex-grow-1">
+      <div class="groups">
+        <v-card dense class="group">
           <v-card-title>Backlog</v-card-title>
           <v-list dense>
             <draggable v-model="tasks.backlog" group="tasks" v-on:end="clean(); save();">
@@ -105,7 +105,7 @@
             </draggable>
           </v-list>
         </v-card>
-        <v-card class="list">
+        <v-card class="group">
           <v-card-title>Scheduled</v-card-title>
           <div v-for="date of Object.keys(tasks.scheduled).sort((a, b) => a < b ? 1 : a > b ? -1 : 0)" v-bind:key="date">
             <v-subheader>{{ date }}</v-subheader>
@@ -127,7 +127,7 @@
             </v-list>
           </div>
         </v-card>
-        <v-card v-for="[name, grouped] of groupedTasks" v-bind:key="name" class="list">
+        <v-card v-for="[name, grouped] of groupedTasks" v-bind:key="name" class="group">
           <v-card-title>{{ name }}</v-card-title>
           <div v-for="date of Object.keys(grouped.scheduled).sort((a, b) => a < b ? 1 : a > b ? -1 : 0)" v-bind:key="date">
             <v-subheader>{{ date }}</v-subheader>
@@ -470,11 +470,11 @@ export default class Tasks extends Vue {
 .tasks {
   height: 100%;
 }
-.lists-container {
+.groups-container {
   flex: 1 1 0;
   overflow-x: auto;
 }
-.lists {
+.groups {
   $list-width: 270px;
   display: grid;
   width: fit-content;
@@ -486,7 +486,7 @@ export default class Tasks extends Vue {
   column-gap: 1em;
   padding: 1em;
 }
-.list {
+.group {
   align-self: flex-start;
   max-height: 100%;
   overflow-y: auto;
