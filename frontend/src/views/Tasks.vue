@@ -469,24 +469,27 @@ export default class Tasks extends Vue {
 <style scoped lang="scss">
 .tasks {
   height: 100%;
-  max-height: 100%;
 }
 .lists-container {
   flex: 1 1 0;
   overflow-x: auto;
-  overflow-y: auto;
 }
 .lists {
-  $width: 270px;
-  display: inline-grid;
+  $list-width: 270px;
+  display: grid;
+  width: fit-content;
+  height: 100%;
   grid-auto-flow: column;
-  grid-template-columns: repeat(auto-fill, $width);
-  grid-auto-columns: $width;
+  grid-template-columns: repeat(auto-fill, $list-width);
+  grid-template-rows: 100%;
+  grid-auto-columns: $list-width;
   column-gap: 1em;
   padding: 1em;
 }
 .list {
   align-self: flex-start;
+  max-height: 100%;
+  overflow-y: auto;
 }
 .task-checkbox {
   pointer-events: none;
