@@ -320,7 +320,7 @@ events:
       this.load(this.$route.params.path);
     }
 
-    if (/\.less$/i.test(this.$route.params.path)) {
+    if (!/\.(md|markdown)$/i.test(this.$route.params.path)) {
       this.editorIsVisible = true;
       this.viewerIsVisible = false;
       this.focusOrBlurEditor();
