@@ -1,7 +1,7 @@
 <template>
   <div class="tasks d-flex flex-column">
     <v-toolbar flat outlined dense class="flex-grow-0">
-      <v-menu offset-y v-bind:close-on-content-click="false" v-model="newTaskMenu">
+      <v-dialog max-width="600px" v-model="newTaskDialog">
         <template v-slot:activator="{ on, attrs }">
           <v-btn
             text
@@ -26,8 +26,8 @@
             <TaskEditor v-model="newTask" v-bind:knownTags="knownTags"></TaskEditor>
           </v-card-text>
         </v-card>
-      </v-menu>
-      <v-menu offset-y v-bind:close-on-content-click="false" v-model="newGroupMenu">
+      </v-dialog>
+      <v-dialog max-width="600px" v-model="newGroupDialog">
         <template v-slot:activator="{ on, attrs }">
           <v-btn
             text
@@ -60,14 +60,13 @@
             ></v-text-field>
           </v-card-text>
         </v-card>
-      </v-menu>
+      </v-dialog>
     </v-toolbar>
-    <v-menu
-      offset-x
+    <v-dialog
+      max-width="600px"
       v-if="editTarget !== null"
-      v-model="editTaskMenu"
-      v-bind:close-on-content-click="false"
-      v-bind:activator="editTaskMenuActivator"
+      v-model="editTaskDialog"
+      v-bind:activator="editTaskDialogActivator"
     >
       <v-card>
         <v-card-actions>
@@ -84,7 +83,7 @@
           <TaskEditor v-model="editTarget" v-bind:knownTags="knownTags"></TaskEditor>
         </v-card-text>
       </v-card>
-    </v-menu>
+    </v-dialog>
     <div class="groups-container flex-grow-1">
       <div class="groups">
         <v-card dense class="group">
@@ -92,7 +91,7 @@
           <div class="list">
             <v-list dense>
               <draggable v-model="tasks.backlog" group="tasks" v-on:end="clean(); save();">
-                <v-list-item v-for="(task, index) of tasks.backlog" v-bind:key="task" v-on:click="showEditTaskMenu(null, index, task, $event);">
+                <v-list-item v-for="(task, index) of tasks.backlog" v-bind:key="task" v-on:click="showEditTaskDialog(null, index, task, $event);">
                   <v-list-item-action>
                     <v-checkbox dense v-model="task.done" class="task-checkbox"></v-checkbox>
                   </v-list-item-action>
@@ -115,7 +114,7 @@
               <v-divider></v-divider>
               <v-list dense>
                 <draggable v-model="tasks.scheduled[date]" group="tasks" v-on:end="clean(); save();">
-                  <v-list-item v-for="(task, index) of tasks.scheduled[date]" v-bind:key="task" v-on:click="showEditTaskMenu(date, index, task, $event);">
+                  <v-list-item v-for="(task, index) of tasks.scheduled[date]" v-bind:key="task" v-on:click="showEditTaskDialog(date, index, task, $event);">
                     <v-list-item-action>
                       <v-checkbox dense v-model="task.done" class="task-checkbox"></v-checkbox>
                     </v-list-item-action>
@@ -139,7 +138,7 @@
               <v-divider></v-divider>
               <v-list dense>
                 <template v-for="(task, index) of grouped.scheduled[date]">
-                  <v-list-item v-bind:key="task" v-on:click="showEditTaskMenu(date, index, task, $event);">
+                  <v-list-item v-bind:key="task" v-on:click="showEditTaskDialog(date, index, task, $event);">
                     <v-list-item-action>
                       <v-checkbox dense v-model="task.done" class="task-checkbox"></v-checkbox>
                     </v-list-item-action>
@@ -160,7 +159,7 @@
               <v-divider></v-divider>
               <v-list dense>
                 <template v-for="(task, index) of grouped.backlog">
-                  <v-list-item v-bind:key="task" v-on:click="showEditTaskMenu(null, index, task, $event);">
+                  <v-list-item v-bind:key="task" v-on:click="showEditTaskDialog(null, index, task, $event);">
                     <v-list-item-action>
                       <v-checkbox dense v-model="task.done" class="task-checkbox"></v-checkbox>
                     </v-list-item-action>
@@ -220,14 +219,14 @@ export default class Tasks extends Vue {
     tags: [],
     note: '',
   };
-  newTaskMenu = false;
+  newTaskDialog = false;
   selectedTaskIndex: null | number = null;
   selectedTask: null | Task = null;
   editTarget: null | Task = null;
-  editTaskMenu = false;
-  editTaskMenuActivator: any = null;
+  editTaskDialog = false;
+  editTaskDialogActivator: any = null;
   // Group
-  newGroupMenu = false;
+  newGroupDialog = false;
   newGroupName = '';
   newGroupFilter = '';
   // Others
@@ -301,17 +300,17 @@ export default class Tasks extends Vue {
     this.editTarget = JSON.parse(JSON.stringify(task));
   }
 
-  showEditTaskMenu(date: string | null, index: number, task: Task, event: MouseEvent) {
+  showEditTaskDialog(date: string | null, index: number, task: Task, event: MouseEvent) {
     const open = () => {
       this.select(date, index, task);
-      this.editTaskMenuActivator = (event.target as Element).parentElement!;
+      this.editTaskDialogActivator = (event.target as Element).parentElement!;
       setTimeout(() => {
-        this.editTaskMenu = true;
+        this.editTaskDialog = true;
       }, 0);
     };
 
-    if (this.editTaskMenu) {
-      this.editTaskMenu = false;
+    if (this.editTaskDialog) {
+      this.editTaskDialog = false;
       setTimeout(open, 0);
     }
     else {
@@ -407,8 +406,8 @@ export default class Tasks extends Vue {
     };
     // Save
     await this.save();
-    // Hide the menu
-    this.newTaskMenu = false;
+    // Hide the dialog
+    this.newTaskDialog = false;
   }
 
   async update() {
@@ -468,8 +467,8 @@ export default class Tasks extends Vue {
     this.newGroupFilter = '';
     // Save
     await this.save();
-    // Hide the menu
-    this.newGroupMenu = false;
+    // Hide the dialog
+    this.newGroupDialog = false;
   }
 }
 </script>
