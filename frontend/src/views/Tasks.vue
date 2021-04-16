@@ -218,7 +218,6 @@ export default class Tasks extends Vue {
   editTarget: null | Task = null;
   editTaskMenu = false;
   editTaskMenuActivator: any = null;
-  knownTags: string[] = [];
   // Group
   newGroupMenu = false;
   newGroupName = '';
@@ -231,6 +230,28 @@ export default class Tasks extends Vue {
   mounted() {
     document.title = `Tasks | ${process.env.VUE_APP_NAME}`;
     this.load();
+  }
+
+  get knownTags(): string[] {
+    // Collect tags
+    const knownTags: string[] = [];
+    for (const task of this.tasks.backlog as Task[]) {
+      for (const tag of task.tags || []) {
+        if (!knownTags.includes(tag)) {
+          knownTags.push(tag);
+        }
+      }
+    }
+    for (const [date, tasks] of Object.entries(this.tasks.scheduled)) {
+      for (const task of tasks as Task[]) {
+        for (const tag of task.tags || []) {
+          if (!knownTags.includes(tag)) {
+            knownTags.push(tag);
+          }
+        }
+      }
+    }
+    return knownTags;
   }
 
   get groupedTasks() {
@@ -331,26 +352,6 @@ export default class Tasks extends Vue {
         this.isLoading = false;
       }
     }
-
-    // Collect tags
-    const knownTags: string[] = [];
-    for (const task of this.tasks.backlog as Task[]) {
-      for (const tag of task.tags || []) {
-        if (!knownTags.includes(tag)) {
-          knownTags.push(tag);
-        }
-      }
-    }
-    for (const [date, tasks] of Object.entries(this.tasks.scheduled)) {
-      for (const task of tasks as Task[]) {
-        for (const tag of task.tags || []) {
-          if (!knownTags.includes(tag)) {
-            knownTags.push(tag);
-          }
-        }
-      }
-    }
-    this.knownTags = knownTags;
   }
 
   save() {
