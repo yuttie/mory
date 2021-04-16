@@ -390,10 +390,10 @@ export default class Tasks extends Vue {
       if (!Object.prototype.hasOwnProperty.call(this.tasks.scheduled, this.newTask.schedule)) {
         this.tasks.scheduled[this.newTask.schedule] = [];
       }
-      this.tasks.scheduled[this.newTask.schedule].push(task);
+      this.tasks.scheduled[this.newTask.schedule].unshift(task);
     }
     else {
-      this.tasks.backlog.push(task);
+      this.tasks.backlog.unshift(task);
     }
     // Reset
     this.newTask = {
@@ -432,13 +432,13 @@ export default class Tasks extends Vue {
       list.splice(this.selectedTaskIndex!, 1);
       // Put into a new list
       if (newDate === null) {
-        this.tasks.backlog.push(this.selectedTask);
+        this.tasks.backlog.unshift(this.selectedTask);
       }
       else {
         if (!Object.prototype.hasOwnProperty.call(this.tasks.scheduled, newDate)) {
           this.tasks.scheduled[newDate] = [];
         }
-        this.tasks.scheduled[newDate].push(this.selectedTask);
+        this.tasks.scheduled[newDate].unshift(this.selectedTask);
       }
     }
     // Reset
@@ -461,7 +461,7 @@ export default class Tasks extends Vue {
       name: this.newGroupName,
       filter: this.newGroupFilter,
     };
-    this.groups.push(group);
+    this.groups.unshift(group);
     // Reset
     this.newGroupName = '';
     this.newGroupFilter = '';
