@@ -186,6 +186,14 @@
             Calendar
           </v-list-item-content>
         </v-list-item>
+        <v-list-item to="/tasks">
+          <v-list-item-icon>
+            <v-icon>mdi-ballot-outline</v-icon>
+          </v-list-item-icon>
+          <v-list-item-content>
+            Tasks
+          </v-list-item-content>
+        </v-list-item>
         <v-list-item to="/find">
           <v-list-item-icon>
             <v-icon>mdi-view-list</v-icon>
