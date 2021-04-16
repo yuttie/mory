@@ -1,5 +1,5 @@
 <template>
-  <div class="about">
+  <div id="about">
     <div class="logo"></div>
     <div class="version">Version {{ version }}</div>
     <div class="copyright">Copyright © {{ fromYear }}&ndash;{{ buildYear }} {{ author }}</div>
@@ -24,7 +24,7 @@ export default class About extends Vue {
 </script>
 
 <style scoped lang="scss">
-.about {
+#about {
   padding: 50px 1em;
 
   display: flex;

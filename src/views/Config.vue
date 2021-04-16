@@ -1,5 +1,5 @@
 <template>
-  <div class="config">
+  <div id="config">
     <h1>Config</h1>
     <v-alert text type="info">
       These settings are only applied to the current environment and never be saved in the repository.
@@ -141,7 +141,7 @@ export default class Config extends Vue {
 </script>
 
 <style scoped lang="scss">
-.config {
+#config {
   padding: 50px 1em;
 
   display: flex;

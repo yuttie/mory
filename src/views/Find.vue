@@ -1,5 +1,5 @@
 <template>
-  <div class="find d-flex flex-column">
+  <div id="find" class="d-flex flex-column">
     <v-text-field
       v-model="queryText"
       solo

@@ -1,5 +1,5 @@
 <template>
-  <div class="home">
+  <div id="home">
     <v-card
       v-for="category of categorizedEntries.entries()"
       v-bind:key="category[0]"

@@ -1,5 +1,5 @@
 <template>
-  <div class="note">
+  <div id="note">
     <template v-if="notFound">
       <div>
         <h1>Not Found</h1>
@@ -1075,7 +1075,7 @@ events:
 <style scoped lang="scss">
 $nav-height: 64px;
 
-.note {
+#note {
   position: relative;
 }
 

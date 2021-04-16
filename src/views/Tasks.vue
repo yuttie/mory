@@ -1,5 +1,5 @@
 <template>
-  <div class="tasks d-flex flex-column">
+  <div id="tasks" class="d-flex flex-column">
     <v-toolbar flat outlined dense class="flex-grow-0">
       <v-dialog max-width="600px" v-model="newTaskDialog">
         <template v-slot:activator="{ on, attrs }">
@@ -474,7 +474,7 @@ export default class Tasks extends Vue {
 </script>
 
 <style scoped lang="scss">
-.tasks {
+#tasks {
   height: 100%;
 }
 .groups-container {
