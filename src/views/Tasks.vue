@@ -264,11 +264,15 @@ export default class Tasks extends Vue {
   }
 
   get groupedTasks() {
-    const result = {};
+    type Grouped = {
+      backlog: Task[];
+      scheduled: { [key: string]: Task[] };
+    };
+    const result: { [key: string]: Grouped } = {};
     for (const group of this.groups) {
-      const grouped = {
-        backlog: [] as Task[],
-        scheduled: {} as { [key: string]: Task[] },
+      const grouped: Grouped = {
+        backlog: [],
+        scheduled: {},
       };
       // Backlog
       for (const task of this.tasks.backlog) {
