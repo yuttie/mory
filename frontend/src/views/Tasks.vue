@@ -325,7 +325,6 @@ export default class Tasks extends Vue {
       const data = YAML.parse(res.data);
       this.tasks = data.tasks;
       this.groups = data.groups;
-      console.log(this.tasks);
       this.isLoading = false;
     }
     catch (error) {
@@ -369,7 +368,6 @@ export default class Tasks extends Vue {
   }
 
   clean() {
-    console.log(this.tasks.scheduled);
     for (const [date, dailyTasks] of Object.entries(this.tasks.scheduled)) {
       if ((dailyTasks as Task[]).length === 0) {
         this.$delete(this.tasks.scheduled, date);
