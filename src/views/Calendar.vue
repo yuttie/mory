@@ -73,7 +73,7 @@
           </v-list>
           <template v-if="selectedEvent.note">
             <v-divider></v-divider>
-            <div class="mt-3" style="white-space: pre-wrap;">{{ selectedEvent.note }}</div>
+            <div class="mt-3" v-html="renderEventNote(selectedEvent.note)"></div>
           </template>
         </v-card-text>
       </v-card>
@@ -93,7 +93,13 @@ import { isMetadataEventMultiple, ListEntry, validateEvent } from '@/api';
 import Color from 'color';
 import materialColors from 'vuetify/lib/util/colors';
 import dayjs from 'dayjs';
+import MarkdownIt from 'markdown-it';
 import XXH from 'xxhashjs';
+
+const mdit = new MarkdownIt('default', {
+  html: true,
+  linkify: true,
+});
 
 @Component
 export default class Calendar extends Vue {
@@ -313,6 +319,10 @@ export default class Calendar extends Vue {
         return black.string();
       }
     }
+  }
+
+  renderEventNote(text: string): string {
+    return mdit.render(text);
   }
 }
 </script>
