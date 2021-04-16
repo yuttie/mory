@@ -17,7 +17,7 @@
         <v-tab to="/"><v-icon>mdi-home</v-icon></v-tab>
         <v-tab to="/calendar"><v-icon>mdi-calendar</v-icon></v-tab>
         <v-tab to="/tasks"><v-icon>mdi-ballot-outline</v-icon></v-tab>
-        <v-tab to="/find"><v-icon>mdi-view-list</v-icon></v-tab>
+        <v-tab to="/find"><v-icon>mdi-magnify</v-icon></v-tab>
         <v-tab to="/config"><v-icon>mdi-cog</v-icon></v-tab>
         <v-tab to="/about"><v-icon>mdi-information</v-icon></v-tab>
       </v-tabs>
@@ -196,7 +196,7 @@
         </v-list-item>
         <v-list-item to="/find">
           <v-list-item-icon>
-            <v-icon>mdi-view-list</v-icon>
+            <v-icon>mdi-magnify</v-icon>
           </v-list-item-icon>
           <v-list-item-content>
             Find
