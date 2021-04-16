@@ -1,5 +1,5 @@
 <template>
-  <div class="calendar d-flex flex-column">
+  <div id="calendar" class="d-flex flex-column">
     <v-toolbar flat class="px-5 d-flex">
       <v-btn outlined v-on:click="setToday" class="mr-3">Today</v-btn>
       <v-btn icon small v-on:click="$refs.calendar.prev()">
@@ -318,7 +318,7 @@ export default class Calendar extends Vue {
 </script>
 
 <style scoped lang="scss">
-.calendar {
+#calendar {
   height: 100%;
 }
 </style>
