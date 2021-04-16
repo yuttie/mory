@@ -130,9 +130,9 @@
             </div>
           </div>
         </v-card>
-        <draggable class="custom-groups" v-model="groups" group="groups" v-on:end="clean(); save();">
+        <draggable class="custom-groups" v-model="groups" group="groups" handle=".handle" v-on:end="clean(); save();">
           <v-card v-for="group of groups" v-bind:key="group.name" class="group">
-            <v-card-title>{{ group.name }}</v-card-title>
+            <v-card-title class="handle">{{ group.name }}</v-card-title>
             <div class="list">
               <div v-for="date of Object.keys(groupedTasks[group.name].scheduled).sort((a, b) => a < b ? 1 : a > b ? -1 : 0)" v-bind:key="date">
                 <v-subheader>{{ date }}</v-subheader>
@@ -510,6 +510,9 @@ $list-width: 270px;
   flex-direction: column;
   align-self: flex-start;
   max-height: 100%;
+}
+.handle {
+  cursor: pointer;
 }
 .list {
   overflow-y: auto;
