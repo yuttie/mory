@@ -474,7 +474,8 @@ export default class Tasks extends Vue {
 </script>
 
 <style scoped lang="scss">
-$list-width: 270px;
+$group-width: 270px;
+$space: 12px;
 
 #tasks {
   height: 100%;
@@ -489,21 +490,21 @@ $list-width: 270px;
   width: fit-content;
   height: 100%;
   grid-auto-flow: column;
-  grid-template-columns: $list-width $list-width min-content;
+  grid-template-columns: $group-width $group-width min-content;
   grid-template-rows: 100%;
-  grid-auto-columns: $list-width;
-  column-gap: 1em;
-  padding: 1em;
+  grid-auto-columns: $group-width;
+  column-gap: $space;
+  padding: $space;
 }
 .custom-groups {
   display: grid;
   width: fit-content;
   height: 100%;
   grid-auto-flow: column;
-  grid-template-columns: repeat(auto-fill, $list-width);
+  grid-template-columns: repeat(auto-fill, $group-width);
   grid-template-rows: 100%;
-  grid-auto-columns: $list-width;
-  column-gap: 1em;
+  grid-auto-columns: $group-width;
+  column-gap: $space;
 }
 .group {
   display: flex;
