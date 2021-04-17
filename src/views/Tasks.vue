@@ -126,7 +126,7 @@
           <v-card-title>Scheduled</v-card-title>
           <div class="list">
             <div v-for="date of Object.keys(tasks.scheduled).sort((a, b) => a < b ? 1 : a > b ? -1 : 0)" v-bind:key="date">
-              <v-subheader>{{ date }}</v-subheader>
+              <v-subheader>{{ isToday(date) ? `Today (${date})` : date }}</v-subheader>
               <v-divider></v-divider>
               <v-list dense>
                 <draggable v-model="tasks.scheduled[date]" group="tasks" v-bind:delay="500" v-bind:delay-on-touch-only="true" v-on:end="clean(); save();">
@@ -318,6 +318,10 @@ export default class Tasks extends Vue {
       result[group.name] = grouped;
     }
     return result;
+  }
+
+  isToday(date: string) {
+    return date === dayjs().format('YYYY-MM-DD');
   }
 
   select(date: string | null, index: number | null, task: Task | null) {
