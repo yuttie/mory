@@ -589,4 +589,7 @@ $space: 12px;
 .v-list-item__action {
   margin: 0 8px 0 0 !important;
 }
+.sortable-ghost {
+  opacity: 0.5;
+}
 </style>
