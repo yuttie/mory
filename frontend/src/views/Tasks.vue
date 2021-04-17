@@ -18,6 +18,7 @@
             <v-card-title>New Task</v-card-title>
             <v-spacer></v-spacer>
             <v-btn
+              text
               v-on:click="add"
               v-bind:disabled="newTask.name.length === 0"
             >Add</v-btn>
@@ -43,6 +44,7 @@
             <v-card-title>New Group</v-card-title>
             <v-spacer></v-spacer>
             <v-btn
+              text
               v-on:click="addGroup"
               v-bind:disabled="newGroupName.length === 0 || newGroupFilter.length === 0"
             >Add</v-btn>
