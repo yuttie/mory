@@ -104,7 +104,7 @@
           <v-card-title>Backlog</v-card-title>
           <div class="list">
             <v-list dense>
-              <draggable v-model="tasks.backlog" group="tasks" v-on:end="clean(); save();">
+              <draggable v-model="tasks.backlog" group="tasks" v-bind:delay="500" v-bind:delay-on-touch-only="true" v-on:end="clean(); save();">
                 <v-list-item
                   v-for="(task, index) of tasks.backlog"
                   v-bind:key="`backlog/${task.name}`"
@@ -129,7 +129,7 @@
               <v-subheader>{{ date }}</v-subheader>
               <v-divider></v-divider>
               <v-list dense>
-                <draggable v-model="tasks.scheduled[date]" group="tasks" v-on:end="clean(); save();">
+                <draggable v-model="tasks.scheduled[date]" group="tasks" v-bind:delay="500" v-bind:delay-on-touch-only="true" v-on:end="clean(); save();">
                   <v-list-item
                     v-for="(task, index) of tasks.scheduled[date]"
                     v-bind:key="`${date}/${task.name}`"
@@ -148,7 +148,7 @@
             </div>
           </div>
         </v-card>
-        <draggable class="custom-groups" v-model="groups" group="groups" handle=".handle" v-on:end="clean(); save();">
+        <draggable class="custom-groups" v-model="groups" group="groups" v-bind:delay="500" v-bind:delay-on-touch-only="true" handle=".handle" v-on:end="clean(); save();">
           <v-card v-for="group of groups" v-bind:key="group.name" class="group">
             <v-card-title class="handle">{{ group.name }}</v-card-title>
             <div class="list">
