@@ -426,10 +426,71 @@ export default class Tasks extends Vue {
   }
 
   save() {
-    return api.addNote('.mory/tasks.yaml', YAML.stringify({
+    const datePattern = /\d{4}-\d{2}-\d{2}/;
+    const taskPropertyOrder = {
+      name: 0,
+      deadline: 1,
+      schedule: 2,
+      done: 3,
+      tags: 4,
+      note: 5,
+    };
+    const groupPropertyOrder = {
+      name: 0,
+      filter: 1,
+    };
+    const yaml = YAML.stringify({
       tasks: this.tasks,
       groups: this.groups,
-    }));
+    }, {
+      sortMapEntries: (a, b) => {
+        if (datePattern.test(a.key.value) && datePattern.test(b.key.value)) {
+          if (a.key.value < b.key.value) {
+            return 1;
+          }
+          else if (a.key.value > b.key.value) {
+            return -1;
+          }
+          else {
+            return 0;
+          }
+        }
+        else if (a.key.value in taskPropertyOrder && b.key.value in taskPropertyOrder) {
+          if (taskPropertyOrder[a.key.value] < taskPropertyOrder[b.key.value]) {
+            return -1;
+          }
+          else if (taskPropertyOrder[a.key.value] > taskPropertyOrder[b.key.value]) {
+            return 1;
+          }
+          else {
+            return 0;
+          }
+        }
+        else if (a.key.value in groupPropertyOrder && b.key.value in groupPropertyOrder) {
+          if (groupPropertyOrder[a.key.value] < groupPropertyOrder[b.key.value]) {
+            return -1;
+          }
+          else if (groupPropertyOrder[a.key.value] > groupPropertyOrder[b.key.value]) {
+            return 1;
+          }
+          else {
+            return 0;
+          }
+        }
+        else {
+          if (a.key.value < b.key.value) {
+            return -1;
+          }
+          else if (a.key.value > b.key.value) {
+            return 1;
+          }
+          else {
+            return 0;
+          }
+        }
+      },
+    });
+    return api.addNote('.mory/tasks.yaml', yaml);
   }
 
   clean() {
