@@ -584,4 +584,7 @@ $space: 12px;
 .task-checkbox {
   pointer-events: none;
 }
+.v-list-item__action {
+  margin: 0 8px 0 0 !important;
+}
 </style>
