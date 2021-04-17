@@ -61,6 +61,13 @@
           </v-card-text>
         </v-card>
       </v-dialog>
+      <v-btn
+        text
+        v-on:click="collectUndone"
+      >
+        <v-icon class="mr-1">mdi-checkbox-multiple-blank-outline</v-icon>
+        Collect Undone
+      </v-btn>
     </v-toolbar>
     <v-dialog
       max-width="600px"
@@ -198,7 +205,10 @@ import Color from 'color';
 import materialColors from 'vuetify/lib/util/colors';
 import draggable from 'vuedraggable';
 import dayjs from 'dayjs';
+import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
 import YAML from 'yaml';
+
+dayjs.extend(isSameOrAfter);
 
 @Component({
   components: {
@@ -322,6 +332,38 @@ export default class Tasks extends Vue {
     else {
       open();
     }
+  }
+
+  async collectUndone() {
+    const today = dayjs().startOf('day');
+    // Collect undone tasks
+    const undone = [];
+    const dates = Object.keys(this.tasks.scheduled).sort();
+    for (const date of dates) {
+      if (dayjs(date).isSameOrAfter(today)) {
+        break;
+      }
+      const tasks: Task[] = this.tasks.scheduled[date];
+      for (let i = 0; i < tasks.length;) {
+        const task = tasks[i];
+        if (task.done) {
+          ++i;
+        }
+        else {
+          undone.push(task)
+          tasks.splice(i, 1);
+        }
+      }
+    }
+    // Schedule them today
+    const todayDate = today.format('YYYY-MM-DD');
+    if (!Object.prototype.hasOwnProperty.call(this.tasks.scheduled, todayDate)) {
+      this.tasks.scheduled[todayDate] = [];
+    }
+    this.tasks.scheduled[todayDate].unshift(...undone);
+    // Save
+    this.clean();
+    await this.save();
   }
 
   async load() {
