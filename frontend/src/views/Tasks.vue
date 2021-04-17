@@ -87,7 +87,7 @@
           <v-btn
             text
             color="primary"
-            v-on:click="update"
+            v-on:click="updateSelected"
             v-bind:disabled="editTarget.name.length === 0"
           >Save</v-btn>
         </v-card-actions>
@@ -449,7 +449,7 @@ export default class Tasks extends Vue {
     this.newTaskDialog = false;
   }
 
-  async update() {
+  async updateSelected() {
     if (this.selectedTask === null) {
       throw new Error('selectedTask is null');
     }
