@@ -103,7 +103,12 @@
           <div class="list">
             <v-list dense>
               <draggable v-model="tasks.backlog" group="tasks" v-on:end="clean(); save();">
-                <v-list-item v-for="(task, index) of tasks.backlog" v-bind:key="`backlog/${task.name}`" v-on:click="showEditTaskDialog(null, index, task, $event);">
+                <v-list-item
+                  v-for="(task, index) of tasks.backlog"
+                  v-bind:key="`backlog/${task.name}`"
+                  v-on:click="showEditTaskDialog(null, index, task, $event);"
+                  class="text-body-2"
+                >
                   <v-list-item-action>
                     <v-checkbox dense v-model="task.done" class="task-checkbox"></v-checkbox>
                   </v-list-item-action>
@@ -123,7 +128,12 @@
               <v-divider></v-divider>
               <v-list dense>
                 <draggable v-model="tasks.scheduled[date]" group="tasks" v-on:end="clean(); save();">
-                  <v-list-item v-for="(task, index) of tasks.scheduled[date]" v-bind:key="`${date}/${task.name}`" v-on:click="showEditTaskDialog(date, index, task, $event);">
+                  <v-list-item
+                    v-for="(task, index) of tasks.scheduled[date]"
+                    v-bind:key="`${date}/${task.name}`"
+                    v-on:click="showEditTaskDialog(date, index, task, $event);"
+                    class="text-body-2"
+                  >
                     <v-list-item-action>
                       <v-checkbox dense v-model="task.done" class="task-checkbox"></v-checkbox>
                     </v-list-item-action>
@@ -145,7 +155,11 @@
                 <v-divider></v-divider>
                 <v-list dense>
                   <template v-for="(task, index) of groupedTasks[group.name].scheduled[date]">
-                    <v-list-item v-bind:key="`${date}/${task.name}`" v-on:click="showEditTaskDialog(date, index, task, $event);">
+                    <v-list-item
+                      v-bind:key="`${date}/${task.name}`"
+                      v-on:click="showEditTaskDialog(date, index, task, $event);"
+                      class="text-body-2"
+                    >
                       <v-list-item-action>
                         <v-checkbox dense v-model="task.done" class="task-checkbox"></v-checkbox>
                       </v-list-item-action>
@@ -163,7 +177,11 @@
                 <v-divider></v-divider>
                 <v-list dense>
                   <template v-for="(task, index) of groupedTasks[group.name].backlog">
-                    <v-list-item v-bind:key="`backlog/${task.name}`" v-on:click="showEditTaskDialog(null, index, task, $event);">
+                    <v-list-item
+                      v-bind:key="`backlog/${task.name}`"
+                      v-on:click="showEditTaskDialog(null, index, task, $event);"
+                      class="text-body-2"
+                    >
                       <v-list-item-action>
                         <v-checkbox dense v-model="task.done" class="task-checkbox"></v-checkbox>
                       </v-list-item-action>
