@@ -81,6 +81,11 @@
           <v-spacer></v-spacer>
           <v-btn
             text
+            color="error"
+            v-on:click="removeSelected"
+          >Delete</v-btn>
+          <v-btn
+            text
             color="primary"
             v-on:click="update"
             v-bind:disabled="editTarget.name.length === 0"
@@ -105,9 +110,6 @@
                   <v-list-item-content>
                     {{ task.name }}
                   </v-list-item-content>
-                  <v-list-item-action>
-                    <v-btn x-small icon v-on:click="remove(tasks.backlog, index)"><v-icon>mdi-delete</v-icon></v-btn>
-                  </v-list-item-action>
                 </v-list-item>
               </draggable>
             </v-list>
@@ -128,9 +130,6 @@
                     <v-list-item-content>
                       {{ task.name }}
                     </v-list-item-content>
-                    <v-list-item-action>
-                      <v-btn x-small icon v-on:click="remove(tasks.scheduled[date], index)"><v-icon>mdi-delete</v-icon></v-btn>
-                    </v-list-item-action>
                   </v-list-item>
                 </draggable>
               </v-list>
@@ -153,9 +152,6 @@
                       <v-list-item-content>
                         {{ task.name }}
                       </v-list-item-content>
-                      <v-list-item-action>
-                        <v-btn x-small icon v-on:click="remove(groupedTasks[group.name].scheduled[date], index)"><v-icon>mdi-delete</v-icon></v-btn>
-                      </v-list-item-action>
                     </v-list-item>
                   </template>
                 </v-list>
@@ -174,9 +170,6 @@
                       <v-list-item-content>
                         {{ task.name }}
                       </v-list-item-content>
-                      <v-list-item-action>
-                        <v-btn x-small icon v-on:click="remove(groupedTasks[group.name].backlog, index)"><v-icon>mdi-delete</v-icon></v-btn>
-                      </v-list-item-action>
                     </v-list-item>
                   </template>
                 </v-list>
@@ -494,8 +487,14 @@ export default class Tasks extends Vue {
     await this.save();
   }
 
-  async remove(list: Task[], index: number) {
-    list.splice(index, 1);
+  async removeSelected() {
+    if (this.selectedTask === null) {
+      throw new Error('selectedTask is null');
+    }
+    const list = this.selectedTask.schedule === null ? this.tasks.backlog : this.tasks.scheduled[this.selectedTask.schedule];
+    list.splice(this.selectedTaskIndex!, 1);
+    // Reset
+    this.select(null, null, null);
     // Save
     this.clean();
     await this.save();
