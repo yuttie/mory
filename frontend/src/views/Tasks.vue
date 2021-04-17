@@ -582,7 +582,7 @@ $space: 12px;
   max-height: 100%;
 }
 .handle {
-  cursor: pointer;
+  cursor: grab;
 }
 .list {
   overflow-y: auto;
