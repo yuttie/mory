@@ -427,7 +427,7 @@ export default class Tasks extends Vue {
 
   save() {
     const datePattern = /\d{4}-\d{2}-\d{2}/;
-    const taskPropertyOrder = {
+    const taskPropertyOrder: { [key: string]: number } = {
       name: 0,
       deadline: 1,
       schedule: 2,
@@ -435,7 +435,7 @@ export default class Tasks extends Vue {
       tags: 4,
       note: 5,
     };
-    const groupPropertyOrder = {
+    const groupPropertyOrder: { [key: string]: number } = {
       name: 0,
       filter: 1,
     };
