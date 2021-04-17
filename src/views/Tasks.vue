@@ -494,9 +494,23 @@ export default class Tasks extends Vue {
   }
 
   clean() {
+    for (const task of this.tasks.backlog) {
+      for (const [prop, value] of Object.entries(task)) {
+        if (value === null) {
+          this.$delete(task, prop);
+        }
+      }
+    }
     for (const [date, dailyTasks] of Object.entries(this.tasks.scheduled)) {
       if ((dailyTasks as Task[]).length === 0) {
         this.$delete(this.tasks.scheduled, date);
+      }
+      for (const task of dailyTasks) {
+        for (const [prop, value] of Object.entries(task)) {
+          if (value === null) {
+            this.$delete(task, prop);
+          }
+        }
       }
     }
   }
