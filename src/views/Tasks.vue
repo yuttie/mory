@@ -262,6 +262,11 @@ export default class Tasks extends Vue {
   mounted() {
     document.title = `Tasks | ${process.env.VUE_APP_NAME}`;
     this.load();
+    window.addEventListener('focus', this.load);
+  }
+
+  destroyed() {
+    window.removeEventListener('focus', this.load);
   }
 
   get knownTags(): string[] {
