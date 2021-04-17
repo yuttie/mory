@@ -3,7 +3,8 @@
     <v-text-field
       label="Name"
       prepend-icon="mdi-pencil"
-      v-model="value.name"
+      v-bind:value="value.name"
+      v-on:change="value.name = $event"
     ></v-text-field>
     <v-menu
       v-model="deadlineMenu"
@@ -78,7 +79,8 @@
     </v-combobox>
     <v-textarea
       label="Note"
-      v-model="value.note"
+      v-bind:value="value.note"
+      v-on:change="value.note = $event"
       prepend-icon="mdi-text"
     ></v-textarea>
   </div>
