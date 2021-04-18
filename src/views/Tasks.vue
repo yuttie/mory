@@ -628,6 +628,7 @@ $space: 12px;
 
 #tasks {
   height: 100%;
+  user-select: none;
 }
 .groups-container {
   flex: 1 1 0;
