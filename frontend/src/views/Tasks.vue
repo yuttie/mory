@@ -19,6 +19,7 @@
             <v-spacer></v-spacer>
             <v-btn
               text
+              color="primary"
               v-on:click="add"
               v-bind:disabled="newTask.name.length === 0"
             >Add</v-btn>
@@ -45,6 +46,7 @@
             <v-spacer></v-spacer>
             <v-btn
               text
+              color="primary"
               v-on:click="addGroup"
               v-bind:disabled="newGroupName.length === 0 || newGroupFilter.length === 0"
             >Add</v-btn>
