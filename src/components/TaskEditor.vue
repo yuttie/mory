@@ -2,6 +2,7 @@
   <div class="task">
     <v-text-field
       label="Name"
+      autofocus
       prepend-icon="mdi-pencil"
       v-bind:value="value.name"
       v-on:change="value.name = $event"
