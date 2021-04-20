@@ -125,8 +125,7 @@
           <v-card-title>Scheduled</v-card-title>
           <div class="task-list">
             <div v-for="date of Object.keys(tasks.scheduled).sort((a, b) => a < b ? 1 : a > b ? -1 : 0)" v-bind:key="date">
-              <v-subheader>{{ isToday(date) ? `Today (${date})` : date }}</v-subheader>
-              <v-divider></v-divider>
+              <div class="date-header">{{ isToday(date) ? `Today (${date})` : date }}</div>
               <draggable v-model="tasks.scheduled[date]" group="tasks" v-bind:delay="500" v-bind:delay-on-touch-only="true" v-on:end="clean(); save();">
                 <TaskListItem
                   v-for="(task, index) of tasks.scheduled[date]"
@@ -144,7 +143,7 @@
             <v-card-title class="handle">{{ group.name }}</v-card-title>
             <div class="task-list">
               <div v-for="date of Object.keys(groupedTasks[group.name].scheduled).sort((a, b) => a < b ? 1 : a > b ? -1 : 0)" v-bind:key="date">
-                <v-subheader>{{ date }}</v-subheader>
+                <div class="date-header">{{ date }}</div>
                 <v-divider></v-divider>
                 <template v-for="(task, index) of groupedTasks[group.name].scheduled[date]">
                   <TaskListItem
@@ -158,7 +157,7 @@
             </div>
             <div class="task-list">
               <div v-if="groupedTasks[group.name].backlog.length !== 0">
-                <v-subheader>Backlog</v-subheader>
+                <div class="date-header">Backlog</div>
                 <v-divider></v-divider>
                 <template v-for="(task, index) of groupedTasks[group.name].backlog">
                   <TaskListItem
@@ -641,6 +640,14 @@ $space: 12px;
 }
 .handle {
   cursor: grab;
+}
+.task-list {
+  div > .date-header {
+    border-bottom: 2px solid #ccc;
+  }
+  div + div > .date-header {
+    margin-top: 12px;
+  }
 }
 .task-list {
   overflow-y: auto;
