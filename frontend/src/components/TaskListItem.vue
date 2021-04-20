@@ -75,6 +75,10 @@ export default class TaskEditor extends Vue {
     background: #eee;
   }
 
+  &.sortable-chosen {
+    background-color: #ffffff;
+  }
+
   &.sortable-drag {
     background-color: #ffffff;
   }
