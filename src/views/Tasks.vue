@@ -663,7 +663,8 @@ $space: 12px;
 }
 .task-list {
   div > .date-header {
-    border-bottom: 2px solid #ccc;
+    border-bottom: 2px solid #ddd;
+    margin-bottom: 2px;
   }
   div + div > .date-header {
     margin-top: 12px;
