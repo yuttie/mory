@@ -117,6 +117,7 @@
               v-bind:key="`backlog/${task.name}`"
               v-bind:value="task"
               v-on:click="showEditTaskDialog(null, index, task, $event);"
+              v-on:change="clean(); save();"
             ></TaskListItem>
           </draggable>
         </v-card>
@@ -132,6 +133,7 @@
                   v-bind:key="`${date}/${task.name}`"
                   v-bind:value="task"
                   v-on:click="showEditTaskDialog(date, index, task, $event);"
+                  v-on:change="clean(); save();"
                 ></TaskListItem>
               </draggable>
             </div>
@@ -149,6 +151,7 @@
                     v-bind:key="`${date}/${task.name}`"
                     v-bind:value="task"
                     v-on:click="showEditTaskDialog(date, index, task, $event);"
+                    v-on:change="clean(); save();"
                   ></TaskListItem>
                 </template>
               </div>
@@ -162,6 +165,7 @@
                     v-bind:key="`backlog/${task.name}`"
                     v-bind:value="task"
                     v-on:click="showEditTaskDialog(null, index, task, $event);"
+                    v-on:change="clean(); save();"
                   ></TaskListItem>
                 </template>
               </div>

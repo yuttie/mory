@@ -3,13 +3,17 @@
     v-on:click="$emit('click', $event)"
     class="task-list-item"
   >
-    <v-icon
-      v-if="!value.done"
-    >mdi-checkbox-blank-outline</v-icon>
-    <v-icon
-      color="primary"
-      v-if="value.done"
-    >mdi-checkbox-marked</v-icon>
+    <span
+      v-on:click.stop="toggleDone"
+    >
+      <v-icon
+        v-if="!value.done"
+      >mdi-checkbox-blank-outline</v-icon>
+      <v-icon
+        color="primary"
+        v-if="value.done"
+      >mdi-checkbox-marked</v-icon>
+    </span>
     <span
       class="tag"
       v-for="tag of value.tags"
@@ -51,6 +55,11 @@ export default class TaskEditor extends Vue {
     return {
       color: color,
     };
+  }
+
+  toggleDone() {
+    this.value.done = !this.value.done;
+    this.$emit('change');
   }
 }
 </script>
