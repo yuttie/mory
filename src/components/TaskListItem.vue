@@ -8,7 +8,17 @@
       v-model="value.done"
       class="task-checkbox"
     >
+    <span
+      class="tag"
+      v-for="tag of value.tags"
+      v-bind:key="tag"
+    >{{ tag }}</span>
     <span>{{ value.name }}</span>
+    <span
+      class="deadline"
+      v-if="value.deadline"
+      v-bind:style="deadlineStyle(value.deadline)"
+    >(Due {{ value.deadline }})</span>
   </div>
 </template>
 
@@ -17,9 +27,20 @@ import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 
 import { Task } from '@/api';
 
+import dayjs from 'dayjs';
+
 @Component
 export default class TaskEditor extends Vue {
   @Prop() readonly value!: Task;
+
+  deadlineStyle(date) {
+    const now = dayjs();
+    const alpha = 0.2 + 0.8 * Math.exp(now.diff(date, 'day'));
+    const color = `rgba(255, 0, 0, ${alpha})`;
+    return {
+      color: color,
+    };
+  }
 }
 </script>
 
@@ -47,6 +68,17 @@ export default class TaskEditor extends Vue {
     margin-right: 6px;
     transform: scale(1.2);
   }
+}
+.deadline {
+  color: #e36e6e;
+  margin-left: 3px;
+}
+.tag {
+  color: #888;
+  background: #fafafa;
+  padding: 1px 2px;
+  border: 1px solid #eee;
+  margin-right: 3px;
 }
 .task-checkbox {
   pointer-events: none;
