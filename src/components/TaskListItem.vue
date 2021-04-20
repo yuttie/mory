@@ -31,7 +31,7 @@
       v-if="value.deadline"
       v-bind:style="deadlineStyle"
     >
-      <v-icon small>mdi-calendar</v-icon>{{ value.deadline }}
+      <v-icon small v-bind:style="deadlineStyle">mdi-calendar</v-icon>{{ value.deadline }}
     </span>
   </div>
 </template>
