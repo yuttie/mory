@@ -1,20 +1,15 @@
 <template>
-  <v-list-item
+  <div
     v-on:click="$emit('click', $event)"
-    class="task-list-item text-body-2"
+    class="task-list-item"
   >
-    <v-list-item-action>
-      <v-checkbox
-        dense
-        v-bind:value="value.done"
-        v-on:change="value.done = $event"
-        class="task-checkbox"
-      ></v-checkbox>
-    </v-list-item-action>
-    <v-list-item-content>
-      {{ value.name }}
-    </v-list-item-content>
-  </v-list-item>
+    <input
+      type="checkbox"
+      v-model="value.done"
+      class="task-checkbox"
+    >
+    <span>{{ value.name }}</span>
+  </div>
 </template>
 
 <script lang="ts">
@@ -30,6 +25,28 @@ export default class TaskEditor extends Vue {
 
 <style scoped lang="scss">
 .task-list-item {
+  font-size: 14px;
+  background: #ffffff;
+  padding: 4px 4px;
+  cursor: pointer;
+
+  &:hover {
+    background: #eee;
+  }
+
+  &.sortable-drag {
+    background-color: #ffffff;
+  }
+
+  &.sortable-ghost {
+    opacity: 0.5;
+    background-color: #eeeeee;
+  }
+
+  input {
+    margin-right: 6px;
+    transform: scale(1.2);
+  }
 }
 .task-checkbox {
   pointer-events: none;
