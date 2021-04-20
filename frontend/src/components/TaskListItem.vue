@@ -3,11 +3,13 @@
     v-on:click="$emit('click', $event)"
     class="task-list-item"
   >
-    <input
-      type="checkbox"
-      v-model="value.done"
-      class="task-checkbox"
-    >
+    <v-icon
+      v-if="!value.done"
+    >mdi-checkbox-blank-outline</v-icon>
+    <v-icon
+      color="primary"
+      v-if="value.done"
+    >mdi-checkbox-marked</v-icon>
     <span
       class="tag"
       v-for="tag of value.tags"
@@ -88,8 +90,5 @@ export default class TaskEditor extends Vue {
   padding: 1px 2px;
   border: 1px solid #eee;
   margin-right: 3px;
-}
-.task-checkbox {
-  pointer-events: none;
 }
 </style>
