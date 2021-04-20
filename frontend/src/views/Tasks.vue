@@ -164,7 +164,6 @@
             <div class="task-list">
               <div v-for="date of Object.keys(groupedTasks[group.name].scheduled).sort((a, b) => a < b ? 1 : a > b ? -1 : 0)" v-bind:key="date">
                 <div class="date-header">{{ date }}</div>
-                <v-divider></v-divider>
                 <template v-for="(task, index) of groupedTasks[group.name].scheduled[date]">
                   <TaskListItem
                     v-bind:key="`${date}/${task.name}`"
@@ -178,7 +177,6 @@
             <div class="task-list">
               <div v-if="groupedTasks[group.name].backlog.length !== 0">
                 <div class="date-header">Backlog</div>
-                <v-divider></v-divider>
                 <template v-for="(task, index) of groupedTasks[group.name].backlog">
                   <TaskListItem
                     v-bind:key="`backlog/${task.name}`"
