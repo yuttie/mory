@@ -15,10 +15,18 @@
     >{{ tag }}</span>
     <span>{{ value.name }}</span>
     <span
-      class="deadline"
+      class="additional-info"
+      v-if="value.note"
+    >
+      <v-icon small>mdi-note-text-outline</v-icon>
+    </span>
+    <span
+      class="additional-info"
       v-if="value.deadline"
       v-bind:style="deadlineStyle(value.deadline)"
-    >(Due {{ value.deadline }})</span>
+    >
+      <v-icon small>mdi-calendar</v-icon>{{ value.deadline }}
+    </span>
   </div>
 </template>
 
@@ -33,10 +41,11 @@ import dayjs from 'dayjs';
 export default class TaskEditor extends Vue {
   @Prop() readonly value!: Task;
 
-  deadlineStyle(date) {
+  deadlineStyle(date: string) {
     const now = dayjs();
-    const alpha = 0.2 + 0.8 * Math.exp(now.diff(date, 'day'));
-    const color = `rgba(255, 0, 0, ${alpha})`;
+    const daysLeft = dayjs(date).diff(now, 'day');
+    const r = daysLeft < 7 ? 255 : 0;
+    const color = `rgb(${r}, 0, 0)`;
     return {
       color: color,
     };
@@ -69,9 +78,9 @@ export default class TaskEditor extends Vue {
     transform: scale(1.2);
   }
 }
-.deadline {
-  color: #e36e6e;
-  margin-left: 3px;
+.additional-info {
+  margin-left: 4px;
+  opacity: 0.5;
 }
 .tag {
   color: #888;
