@@ -4,8 +4,7 @@
       label="Name"
       autofocus
       prepend-icon="mdi-pencil"
-      v-bind:value="value.name"
-      v-on:change="value.name = $event"
+      v-model="value.name"
     ></v-text-field>
     <v-menu
       v-model="deadlineMenu"
@@ -80,8 +79,7 @@
     </v-combobox>
     <v-textarea
       label="Note"
-      v-bind:value="value.note"
-      v-on:change="value.note = $event"
+      v-model="value.note"
       prepend-icon="mdi-text"
     ></v-textarea>
   </div>
