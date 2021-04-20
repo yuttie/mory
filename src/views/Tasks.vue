@@ -638,6 +638,11 @@ $space: 12px;
   align-self: flex-start;
   max-height: 100%;
 }
+.custom-groups .group {
+  &.sortable-ghost {
+    opacity: 0.5;
+  }
+}
 .handle {
   cursor: grab;
 }
