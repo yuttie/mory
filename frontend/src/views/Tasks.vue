@@ -104,73 +104,66 @@
       <div class="groups">
         <v-card dense class="group">
           <v-card-title>Backlog</v-card-title>
-          <div class="list">
-            <v-list dense>
-              <draggable v-model="tasks.backlog" group="tasks" v-bind:delay="500" v-bind:delay-on-touch-only="true" v-on:end="clean(); save();">
-                <TaskListItem
-                  v-for="(task, index) of tasks.backlog"
-                  v-bind:key="`backlog/${task.name}`"
-                  v-bind:value="task"
-                  v-on:click="showEditTaskDialog(null, index, task, $event);"
-                  class="text-body-2"
-                ></TaskListItem>
-              </draggable>
-            </v-list>
-          </div>
+          <draggable
+            class="task-list"
+            group="tasks"
+            v-model="tasks.backlog"
+            v-bind:delay="500"
+            v-bind:delay-on-touch-only="true"
+            v-on:end="clean(); save();"
+          >
+            <TaskListItem
+              v-for="(task, index) of tasks.backlog"
+              v-bind:key="`backlog/${task.name}`"
+              v-bind:value="task"
+              v-on:click="showEditTaskDialog(null, index, task, $event);"
+            ></TaskListItem>
+          </draggable>
         </v-card>
         <v-card class="group">
           <v-card-title>Scheduled</v-card-title>
-          <div class="list">
+          <div class="task-list">
             <div v-for="date of Object.keys(tasks.scheduled).sort((a, b) => a < b ? 1 : a > b ? -1 : 0)" v-bind:key="date">
               <v-subheader>{{ isToday(date) ? `Today (${date})` : date }}</v-subheader>
               <v-divider></v-divider>
-              <v-list dense>
-                <draggable v-model="tasks.scheduled[date]" group="tasks" v-bind:delay="500" v-bind:delay-on-touch-only="true" v-on:end="clean(); save();">
-                  <TaskListItem
-                    v-for="(task, index) of tasks.scheduled[date]"
-                    v-bind:key="`${date}/${task.name}`"
-                    v-bind:value="task"
-                    v-on:click="showEditTaskDialog(date, index, task, $event);"
-                    class="text-body-2"
-                  ></TaskListItem>
-                </draggable>
-              </v-list>
+              <draggable v-model="tasks.scheduled[date]" group="tasks" v-bind:delay="500" v-bind:delay-on-touch-only="true" v-on:end="clean(); save();">
+                <TaskListItem
+                  v-for="(task, index) of tasks.scheduled[date]"
+                  v-bind:key="`${date}/${task.name}`"
+                  v-bind:value="task"
+                  v-on:click="showEditTaskDialog(date, index, task, $event);"
+                ></TaskListItem>
+              </draggable>
             </div>
           </div>
         </v-card>
         <draggable class="custom-groups" v-model="groups" group="groups" v-bind:delay="500" v-bind:delay-on-touch-only="true" handle=".handle" v-on:end="clean(); save();">
           <v-card v-for="group of groups" v-bind:key="group.name" class="group">
             <v-card-title class="handle">{{ group.name }}</v-card-title>
-            <div class="list">
+            <div class="task-list">
               <div v-for="date of Object.keys(groupedTasks[group.name].scheduled).sort((a, b) => a < b ? 1 : a > b ? -1 : 0)" v-bind:key="date">
                 <v-subheader>{{ date }}</v-subheader>
                 <v-divider></v-divider>
-                <v-list dense>
-                  <template v-for="(task, index) of groupedTasks[group.name].scheduled[date]">
-                    <TaskListItem
-                      v-bind:key="`${date}/${task.name}`"
-                      v-bind:value="task"
-                      v-on:click="showEditTaskDialog(date, index, task, $event);"
-                      class="text-body-2"
-                    ></TaskListItem>
-                  </template>
-                </v-list>
+                <template v-for="(task, index) of groupedTasks[group.name].scheduled[date]">
+                  <TaskListItem
+                    v-bind:key="`${date}/${task.name}`"
+                    v-bind:value="task"
+                    v-on:click="showEditTaskDialog(date, index, task, $event);"
+                  ></TaskListItem>
+                </template>
               </div>
             </div>
-            <div class="list">
+            <div class="task-list">
               <div v-if="groupedTasks[group.name].backlog.length !== 0">
                 <v-subheader>Backlog</v-subheader>
                 <v-divider></v-divider>
-                <v-list dense>
-                  <template v-for="(task, index) of groupedTasks[group.name].backlog">
-                    <TaskListItem
-                      v-bind:key="`backlog/${task.name}`"
-                      v-bind:value="task"
-                      v-on:click="showEditTaskDialog(null, index, task, $event);"
-                      class="text-body-2"
-                    ></TaskListItem>
-                  </template>
-                </v-list>
+                <template v-for="(task, index) of groupedTasks[group.name].backlog">
+                  <TaskListItem
+                    v-bind:key="`backlog/${task.name}`"
+                    v-bind:value="task"
+                    v-on:click="showEditTaskDialog(null, index, task, $event);"
+                  ></TaskListItem>
+                </template>
               </div>
             </div>
           </v-card>
@@ -645,16 +638,8 @@ $space: 12px;
 .handle {
   cursor: grab;
 }
-.list {
+.task-list {
   overflow-y: auto;
-}
-.task-checkbox {
-  pointer-events: none;
-}
-.v-list-item__action {
-  margin: 0 8px 0 0 !important;
-}
-.sortable-ghost {
-  opacity: 0.5;
+  padding: 0 8px;
 }
 </style>
