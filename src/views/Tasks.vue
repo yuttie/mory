@@ -62,6 +62,7 @@
           <v-card-text>
             <v-text-field
               label="Name"
+              autofocus
               prepend-icon="mdi-pencil"
               v-model="newGroupName"
             ></v-text-field>
