@@ -29,7 +29,7 @@
     <span
       class="additional-info"
       v-if="value.deadline"
-      v-bind:style="deadlineStyle(value.deadline)"
+      v-bind:style="deadlineStyle"
     >
       <v-icon small>mdi-calendar</v-icon>{{ value.deadline }}
     </span>
@@ -47,14 +47,19 @@ import dayjs from 'dayjs';
 export default class TaskEditor extends Vue {
   @Prop() readonly value!: Task;
 
-  deadlineStyle(date: string) {
-    const now = dayjs();
-    const daysLeft = dayjs(date).diff(now, 'day');
-    const r = daysLeft < 7 ? 255 : 0;
-    const color = `rgb(${r}, 0, 0)`;
-    return {
-      color: color,
-    };
+  get deadlineStyle(): Record<string, string> {
+    if (!this.value.done && this.value.deadline) {
+      const now = dayjs();
+      const daysLeft = dayjs(this.value.deadline).diff(now, 'day');
+      const r = daysLeft < 7 ? 255 : 0;
+      const color = `rgb(${r}, 0, 0)`;
+      return {
+        color: color,
+      };
+    }
+    else {
+      return {};
+    }
   }
 
   toggleDone() {
