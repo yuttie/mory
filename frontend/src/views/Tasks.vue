@@ -81,6 +81,13 @@
         <v-icon class="mr-1">mdi-checkbox-multiple-blank-outline</v-icon>
         Collect Undone
       </v-btn>
+      <v-progress-linear
+        absolute
+        bottom
+        indeterminate
+        color="primary"
+        v-bind:active="isLoading"
+      ></v-progress-linear>
     </v-toolbar>
     <v-dialog
       max-width="600px"
@@ -186,9 +193,6 @@
         </draggable>
       </div>
     </div>
-    <v-overlay v-bind:value="isLoading" z-index="10" opacity="0">
-      <v-progress-circular indeterminate color="blue-grey lighten-3" size="64"></v-progress-circular>
-    </v-overlay>
     <v-snackbar v-model="error" color="error" top timeout="5000">{{ errorText }}</v-snackbar>
   </div>
 </template>
