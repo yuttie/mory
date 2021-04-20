@@ -23,6 +23,10 @@
               v-on:click="add"
               v-bind:disabled="newTask.name.length === 0"
             >Add</v-btn>
+            <v-btn
+              icon
+              v-on:click="newTaskDialog = false; newTask = { name: '', deadline: null, schedule: null, done: false, tags: [], note: '', }"
+            ><v-icon>mdi-close</v-icon></v-btn>
           </v-card-actions>
           <v-card-text>
             <TaskEditor v-model="newTask" v-bind:knownTags="knownTags"></TaskEditor>
@@ -50,6 +54,10 @@
               v-on:click="addGroup"
               v-bind:disabled="newGroupName.length === 0 || newGroupFilter.length === 0"
             >Add</v-btn>
+            <v-btn
+              icon
+              v-on:click="newGroupDialog = false; newGroupName = ''; newGroupFilter = '';"
+            ><v-icon>mdi-close</v-icon></v-btn>
           </v-card-actions>
           <v-card-text>
             <v-text-field
@@ -94,6 +102,10 @@
             v-on:click="updateSelected"
             v-bind:disabled="editTarget.name.length === 0"
           >Save</v-btn>
+          <v-btn
+            icon
+            v-on:click="select(null, null, null)"
+          ><v-icon>mdi-close</v-icon></v-btn>
         </v-card-actions>
         <v-card-text>
           <TaskEditor v-model="editTarget" v-bind:knownTags="knownTags"></TaskEditor>
