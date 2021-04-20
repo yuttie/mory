@@ -514,6 +514,10 @@ export default class Tasks extends Vue {
     else {
       this.tasks.backlog.unshift(task);
     }
+    // Save
+    await this.save();
+    // Hide the dialog
+    this.newTaskDialog = false;
     // Reset
     this.newTask = {
       name: '',
@@ -523,10 +527,6 @@ export default class Tasks extends Vue {
       tags: [],
       note: '',
     };
-    // Save
-    await this.save();
-    // Hide the dialog
-    this.newTaskDialog = false;
   }
 
   async updateSelected() {
@@ -560,11 +560,11 @@ export default class Tasks extends Vue {
         this.tasks.scheduled[newDate].unshift(this.selectedTask);
       }
     }
-    // Reset
-    this.select(null, null, null);
     // Save
     this.clean();
     await this.save();
+    // Reset
+    this.select(null, null, null);
   }
 
   async removeSelected() {
@@ -573,11 +573,11 @@ export default class Tasks extends Vue {
     }
     const list = this.selectedTask.schedule === null ? this.tasks.backlog : this.tasks.scheduled[this.selectedTask.schedule];
     list.splice(this.selectedTaskIndex!, 1);
-    // Reset
-    this.select(null, null, null);
     // Save
     this.clean();
     await this.save();
+    // Reset
+    this.select(null, null, null);
   }
 
   async addGroup() {
@@ -587,13 +587,13 @@ export default class Tasks extends Vue {
       filter: this.newGroupFilter,
     };
     this.groups.unshift(group);
-    // Reset
-    this.newGroupName = '';
-    this.newGroupFilter = '';
     // Save
     await this.save();
     // Hide the dialog
     this.newGroupDialog = false;
+    // Reset
+    this.newGroupName = '';
+    this.newGroupFilter = '';
   }
 }
 </script>
