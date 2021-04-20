@@ -7,12 +7,12 @@
       v-on:click.stop="toggleDone"
     >
       <v-icon
-        v-if="!value.done"
-      >mdi-checkbox-blank-outline</v-icon>
-      <v-icon
         color="primary"
         v-if="value.done"
       >mdi-checkbox-marked</v-icon>
+      <v-icon
+        v-else
+      >mdi-checkbox-blank-outline</v-icon>
     </span>
     <span
       class="tag"
