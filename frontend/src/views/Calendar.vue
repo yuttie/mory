@@ -1,6 +1,6 @@
 <template>
   <div id="calendar" class="d-flex flex-column">
-    <v-toolbar flat class="px-5 d-flex">
+    <v-toolbar flat outlined dense class="flex-grow-0">
       <v-btn outlined v-on:click="setToday" class="mr-3">Today</v-btn>
       <v-btn icon small v-on:click="$refs.calendar.prev()">
         <v-icon>mdi-chevron-left</v-icon>
@@ -11,6 +11,13 @@
       <v-toolbar-title v-if="$refs.calendar" class="mr-3">
         {{ $refs.calendar.title }}
       </v-toolbar-title>
+      <v-progress-linear
+        absolute
+        bottom
+        indeterminate
+        color="primary"
+        v-bind:active="isLoading"
+      ></v-progress-linear>
     </v-toolbar>
     <v-calendar
       ref="calendar"
@@ -78,9 +85,6 @@
         </v-card-text>
       </v-card>
     </v-menu>
-    <v-overlay v-bind:value="isLoading" z-index="10" opacity="0">
-      <v-progress-circular indeterminate color="blue-grey lighten-3" size="64"></v-progress-circular>
-    </v-overlay>
     <v-snackbar v-model="error" color="error" top timeout="5000">{{ errorText }}</v-snackbar>
   </div>
 </template>
