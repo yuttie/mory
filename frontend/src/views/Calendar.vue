@@ -195,12 +195,14 @@ export default class Calendar extends Vue {
     }
 
     window.addEventListener('keydown', this.onKeydown);
+    window.addEventListener('wheel', this.onWheel);
 
     this.load();
   }
 
   destroyed() {
     window.removeEventListener('keydown', this.onKeydown);
+    window.removeEventListener('wheel', this.onWheel);
   }
 
   onKeydown(e: KeyboardEvent) {
@@ -208,6 +210,15 @@ export default class Calendar extends Vue {
       (this.$refs.calendar as any).prev();
     }
     else if (e.key === 'ArrowRight') {
+      (this.$refs.calendar as any).next();
+    }
+  }
+
+  onWheel(e: WheelEvent) {
+    if (e.deltaY < 0) {
+      (this.$refs.calendar as any).prev();
+    }
+    else if (e.deltaY > 0) {
       (this.$refs.calendar as any).next();
     }
   }
