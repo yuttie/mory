@@ -200,6 +200,7 @@ export default class Calendar extends Vue {
 
     window.addEventListener('keydown', this.onKeydown);
     window.addEventListener('wheel', this.onWheel);
+    window.addEventListener('focus', this.load);
 
     this.load();
   }
@@ -207,6 +208,7 @@ export default class Calendar extends Vue {
   destroyed() {
     window.removeEventListener('keydown', this.onKeydown);
     window.removeEventListener('wheel', this.onWheel);
+    window.removeEventListener('focus', this.load);
   }
 
   onKeydown(e: KeyboardEvent) {
