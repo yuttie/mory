@@ -4,7 +4,8 @@
       label="Name"
       autofocus
       prepend-icon="mdi-pencil"
-      v-model="value.name"
+      v-bind:value="value.name"
+      v-on:input="$emit('input', { ...value, name: $event })"
     ></v-text-field>
     <v-menu
       v-model="deadlineMenu"
@@ -15,7 +16,8 @@
     >
       <template v-slot:activator="{ on, attrs }">
         <v-text-field
-          v-model="value.deadline"
+          v-bind:value="value.deadline"
+          v-on:input="$emit('input', { ...value, deadline: $event })"
           label="Deadline"
           prepend-icon="mdi-calendar"
           readonly
@@ -25,8 +27,8 @@
         ></v-text-field>
       </template>
       <v-date-picker
-        v-model="value.deadline"
-        v-on:input="deadlineMenu = false"
+        v-bind:value="value.deadline"
+        v-on:input="$emit('input', { ...value, deadline: $event }); deadlineMenu = false;"
       ></v-date-picker>
     </v-menu>
     <v-menu
@@ -38,7 +40,8 @@
     >
       <template v-slot:activator="{ on, attrs }">
         <v-text-field
-          v-model="value.schedule"
+          v-bind:value="value.schedule"
+          v-on:input="$emit('input', { ...value, schedule: $event })"
           label="Schedule on"
           prepend-icon="mdi-calendar"
           readonly
@@ -48,16 +51,19 @@
         ></v-text-field>
       </template>
       <v-date-picker
-        v-model="value.schedule"
-        v-on:input="scheduleMenu = false"
+        v-bind:value="value.schedule"
+        v-on:input="$emit('input', { ...value, schedule: $event }); scheduleMenu = false;"
       ></v-date-picker>
     </v-menu>
     <v-checkbox
       label="Done"
-      v-model="value.done"
+      v-bind:input-value="value.done"
+      v-bind:value="value.done"
+      v-on:change="$emit('input', { ...value, done: $event })"
     ></v-checkbox>
     <v-combobox
-      v-model="value.tags"
+      v-bind:value="value.tags"
+      v-on:input="$emit('input', { ...value, tags: $event })"
       v-bind:items="knownTags"
       chips
       clearable
@@ -79,7 +85,8 @@
     </v-combobox>
     <v-textarea
       label="Note"
-      v-model="value.note"
+      v-bind:value="value.note"
+      v-on:input="$emit('input', { ...value, note: $event })"
       prepend-icon="mdi-text"
     ></v-textarea>
   </div>
