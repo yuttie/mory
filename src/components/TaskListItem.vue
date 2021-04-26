@@ -4,7 +4,7 @@
     class="task-list-item"
   >
     <span
-      v-on:click.stop="toggleDone"
+      v-on:click.stop="$emit('done-toggle', !value.done)"
     >
       <v-icon
         color="primary"
@@ -60,11 +60,6 @@ export default class TaskListItem extends Vue {
     else {
       return {};
     }
-  }
-
-  toggleDone() {
-    this.value.done = !this.value.done;
-    this.$emit('change');
   }
 }
 </script>
