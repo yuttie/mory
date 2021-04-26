@@ -44,7 +44,7 @@ import { Task } from '@/api';
 import dayjs from 'dayjs';
 
 @Component
-export default class TaskEditor extends Vue {
+export default class TaskListItem extends Vue {
   @Prop() readonly value!: Task;
 
   get deadlineStyle(): Record<string, string> {
