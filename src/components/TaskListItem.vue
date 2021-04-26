@@ -88,6 +88,7 @@ export default class TaskListItem extends Vue {
   }
 }
 .additional-info {
+  display: inline-block;
   margin-left: 4px;
   opacity: 0.5;
 }
