@@ -3,17 +3,11 @@
     v-on:click="$emit('click', $event)"
     class="task-list-item"
   >
-    <span
-      v-on:click.stop="$emit('done-toggle', !value.done)"
-    >
-      <v-icon
-        color="primary"
-        v-if="value.done"
-      >mdi-checkbox-marked</v-icon>
-      <v-icon
-        v-else
-      >mdi-checkbox-blank-outline</v-icon>
-    </span>
+    <v-simple-checkbox
+      color="primary"
+      v-bind:value="value.done"
+      v-on:input="$emit('done-toggle', $event)"
+    ></v-simple-checkbox>
     <span
       class="tag"
       v-for="tag of value.tags"
@@ -88,9 +82,9 @@ export default class TaskListItem extends Vue {
     background-color: #eeeeee;
   }
 
-  input {
-    margin-right: 6px;
-    transform: scale(1.2);
+  & > * {
+    display: inline;
+    vertical-align: middle;
   }
 }
 .additional-info {
