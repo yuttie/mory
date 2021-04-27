@@ -30,6 +30,12 @@
       v-on:click:event="showEvent"
       v-on:click:more="viewDay"
       v-on:click:date="viewDay"
+      v-touch="{
+        left: () => $refs.calendar.next(),
+        right: () => $refs.calendar.prev(),
+        up: () => $refs.calendar.next(),
+        down: () => $refs.calendar.prev(),
+      }"
       color="primary"
       class="flex-grow-1"
     ></v-calendar>
