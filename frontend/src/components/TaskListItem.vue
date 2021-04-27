@@ -63,6 +63,7 @@ export default class TaskListItem extends Vue {
   font-size: 14px;
   padding: 4px 4px;
   cursor: pointer;
+  word-break: break-all;
 
   &:hover {
     background: #eeeeee;
