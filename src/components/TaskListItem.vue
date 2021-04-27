@@ -69,16 +69,15 @@ export default class TaskListItem extends Vue {
   }
 
   &.sortable-chosen {
-    opacity: 0.5;
+    background: unset;
   }
 
   &.sortable-drag {
-    opacity: 0;
+    background: unset;
   }
 
   &.sortable-ghost {
-    opacity: 0.5;
-    background-color: #eeeeee;
+    visibility: hidden;
   }
 
   & > * {
