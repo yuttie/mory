@@ -31,30 +31,40 @@
         v-on:input="$emit('input', { ...value, deadline: $event }); deadlineMenu = false;"
       ></v-date-picker>
     </v-menu>
-    <v-menu
-      v-model="scheduleMenu"
-      v-bind:close-on-content-click="false"
-      v-bind:nudge-right="40"
-      offset-y
-      min-width="auto"
-    >
-      <template v-slot:activator="{ on, attrs }">
-        <v-text-field
-          v-bind:value="value.schedule"
-          v-on:input="$emit('input', { ...value, schedule: $event })"
-          label="Schedule on"
-          prepend-icon="mdi-calendar"
-          readonly
-          clearable
-          v-bind="attrs"
-          v-on="on"
-        ></v-text-field>
-      </template>
-      <v-date-picker
-        v-bind:value="value.schedule"
-        v-on:input="$emit('input', { ...value, schedule: $event }); scheduleMenu = false;"
-      ></v-date-picker>
-    </v-menu>
+    <v-row>
+      <v-col>
+        <v-menu
+          v-model="scheduleMenu"
+          v-bind:close-on-content-click="false"
+          v-bind:nudge-right="40"
+          offset-y
+          min-width="auto"
+        >
+          <template v-slot:activator="{ on, attrs }">
+            <v-text-field
+              v-bind:value="value.schedule"
+              v-on:input="$emit('input', { ...value, schedule: $event })"
+              label="Schedule on"
+              prepend-icon="mdi-calendar"
+              readonly
+              clearable
+              v-bind="attrs"
+              v-on="on"
+            ></v-text-field>
+          </template>
+          <v-date-picker
+            v-bind:value="value.schedule"
+            v-on:input="$emit('input', { ...value, schedule: $event }); scheduleMenu = false;"
+          ></v-date-picker>
+        </v-menu>
+      </v-col>
+      <v-col cols="auto">
+        <v-btn
+          text
+          v-on:click="setScheduleToday"
+        >Today</v-btn>
+      </v-col>
+    </v-row>
     <v-checkbox
       label="Done"
       v-bind:input-value="value.done"
@@ -98,6 +108,8 @@ import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 import * as api from '@/api';
 import { Task } from '@/api';
 
+import dayjs from 'dayjs';
+
 @Component
 export default class TaskEditor extends Vue {
   @Prop() readonly value!: Task;
@@ -105,6 +117,10 @@ export default class TaskEditor extends Vue {
 
   deadlineMenu = false;
   scheduleMenu = false;
+
+  setScheduleToday() {
+    this.value.schedule = dayjs().format('YYYY-MM-DD');
+  }
 
   removeTag(tag: string) {
     this.value.tags.splice(this.value.tags.indexOf(tag), 1);
