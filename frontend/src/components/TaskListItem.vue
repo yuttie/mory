@@ -61,20 +61,19 @@ export default class TaskListItem extends Vue {
 <style scoped lang="scss">
 .task-list-item {
   font-size: 14px;
-  background: #ffffff;
   padding: 4px 4px;
   cursor: pointer;
 
   &:hover {
-    background: #eee;
+    background: #eeeeee;
   }
 
   &.sortable-chosen {
-    background-color: #ffffff;
+    opacity: 0.5;
   }
 
   &.sortable-drag {
-    background-color: #ffffff;
+    opacity: 0;
   }
 
   &.sortable-ghost {
