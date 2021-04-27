@@ -655,7 +655,7 @@ $space: 12px;
 }
 .custom-groups .group {
   &.sortable-ghost {
-    opacity: 0.5;
+    visibility: hidden;
   }
 }
 .handle {
