@@ -667,6 +667,8 @@ export default class App extends Vue {
 
 <style scoped lang="scss">
 #app {
+  user-select: none;
+
   &.drop-target {
     &::after {
       content: '';
