@@ -5,6 +5,7 @@
   >
     <v-simple-checkbox
       color="primary"
+      v-bind:ripple="false"
       v-bind:value="value.done"
       v-on:input="$emit('done-toggle', $event)"
     ></v-simple-checkbox>
