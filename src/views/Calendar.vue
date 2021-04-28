@@ -47,7 +47,7 @@
       offset-y
       max-width="30em"
     >
-      <v-card flat>
+      <v-card flat class="event-card">
         <v-toolbar
           v-bind:color="selectedEvent.color"
           dark
@@ -353,5 +353,9 @@ export default class Calendar extends Vue {
 <style scoped lang="scss">
 #calendar {
   height: 100%;
+}
+
+.event-card {
+  user-select: text;
 }
 </style>

@@ -31,6 +31,8 @@ export default class About extends Vue {
   flex-direction: column;
   align-items: center;
 
+  user-select: text;
+
   &::before, &::after {
     content: '';
     flex-grow: 1;

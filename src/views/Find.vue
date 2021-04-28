@@ -64,13 +64,13 @@
         <span class="path"><v-icon class="mr-1">mdi-file-document-outline</v-icon><router-link v-bind:to="{ path: `/note/${item.path}` }">{{ item.path }}</router-link></span>
       </template>
       <template v-slot:item.time="{ item }">
-        <div class="text-no-wrap">{{ item.time.format('YYYY-MM-DD HH:mm:ss') }}</div>
+        <div class="modified text-no-wrap">{{ item.time.format('YYYY-MM-DD HH:mm:ss') }}</div>
       </template>
       <template v-slot:item.size="{ item }">
-        <div class="text-no-wrap">{{ formatFileSize(item.size) }}</div>
+        <div class="size text-no-wrap">{{ formatFileSize(item.size) }}</div>
       </template>
       <template v-slot:item.mimeType="{ item }">
-        <div class="text-no-wrap">{{ item.mimeType }}</div>
+        <div class="mime-type text-no-wrap">{{ item.mimeType }}</div>
       </template>
       <template v-slot:item.tags="{ item }">
         <v-chip
@@ -400,6 +400,13 @@ export default class Find extends Vue {
 .tags {
   max-height: 15em;
   overflow-y: auto;
+}
+
+.path,
+.modified,
+.size,
+.mime-type {
+  user-select: text;
 }
 
 .path {
