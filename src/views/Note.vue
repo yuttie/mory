@@ -84,14 +84,22 @@
         </v-card>
       </v-dialog>
       <div class="panes" v-bind:class="panesState">
-        <Editor
-          v-bind:value="text"
-          v-bind:mode="editorMode"
-          v-on:change="onEditorChange"
-          v-on:scroll="onEditorScroll"
-          ref="editor"
-        ></Editor>
-        <div class="viewer">
+        <div class="editor-pane">
+          <v-toolbar
+            flat
+            dense
+            class="flex-grow-0"
+          >
+          </v-toolbar>
+          <Editor
+            v-bind:value="text"
+            v-bind:mode="editorMode"
+            v-on:change="onEditorChange"
+            v-on:scroll="onEditorScroll"
+            ref="editor"
+          ></Editor>
+        </div>
+        <div class="viewer-pane">
           <v-snackbar top timeout="1000" v-model="showUpstreamState" v-bind:color="upstreamStateSnackbarColor">
             <template v-if="upstreamState === 'different'">
               Upstream has been modified since it was loaded.
@@ -1073,7 +1081,7 @@ events:
 </script>
 
 <style scoped lang="scss">
-$nav-height: 64px;
+$nav-height: 48px;
 
 #note {
   position: relative;
@@ -1099,49 +1107,55 @@ $nav-height: 64px;
   }
 }
 
-.editor {
+.editor-pane {
   position: fixed;
   height: calc(100vh - #{$nav-height});
   transition: margin-left 300ms,
               width 300ms;
+  display: flex;
+  flex-direction: column;
+
+  .editor {
+    flex: 1 1 0;
+  }
 }
 
-.viewer {
+.viewer-pane {
   transition: margin-left 300ms,
               width 300ms;
 }
 
 .panes.onlyEditor {
-  .editor {
+  .editor-pane {
     margin-left: 0%;
     width: 100%;
   }
 
-  .viewer {
+  .viewer-pane {
     margin-left: 100%;
     width: 50%;
   }
 }
 
 .panes.onlyViewer {
-  .editor {
+  .editor-pane {
     margin-left: -50%;
     width: 50%;
   }
 
-  .viewer {
+  .viewer-pane {
     margin-left: 0%;
     width: 100%;
   }
 }
 
 .panes.both {
-  .editor {
+  .editor-pane {
     margin-left: 0%;
     width: 50%;
   }
 
-  .viewer {
+  .viewer-pane {
     margin-left: 50%;
     width: 50%;
   }
