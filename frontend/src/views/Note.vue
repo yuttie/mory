@@ -925,6 +925,9 @@ events:
   }
 
   handleKeydown(e: KeyboardEvent) {
+    if (this.renameMenuIsVisible) {
+      return;
+    }
     if (e.key === 'e') {
       if (!this.editorIsVisible) {
         this.toggleEditor();
