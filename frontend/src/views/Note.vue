@@ -174,7 +174,7 @@
                       </li>
                     </ul>
                   </template>
-                  <pre>{{ JSON.stringify(rendered.metadata.value, null, 2) }}</pre>
+                  <pre class="metadata-content">{{ JSON.stringify(rendered.metadata.value, null, 2) }}</pre>
                 </template>
                 <template v-else>
                   <span class="error--text font-weight-bold">{{ rendered.metadata.parseError.toString() }}</span>
@@ -184,7 +184,7 @@
           </v-expansion-panels>
           <div
             ref="renderedContent"
-            class="content note-viewer-content"
+            class="rendered-content"
           ></div>
         </div>
       </div>
@@ -1123,6 +1123,11 @@ $nav-height: 48px;
 .viewer-pane {
   transition: margin-left 300ms,
               width 300ms;
+
+  .metadata-content,
+  .rendered-content {
+    user-select: text;
+  }
 }
 
 .panes.onlyEditor {
