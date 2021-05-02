@@ -19,7 +19,12 @@
       class="additional-info"
       v-if="value.note"
     >
-      <v-icon small>mdi-note-text-outline</v-icon>
+      <v-tooltip bottom>
+        <template v-slot:activator="{ on, attrs }">
+          <v-icon small v-bind="attrs" v-on="on">mdi-note-text-outline</v-icon>
+        </template>
+        <div class="note-tooltip">{{ value.note }}</div>
+      </v-tooltip>
     </span>
     <span
       class="additional-info"
@@ -98,5 +103,8 @@ export default class TaskListItem extends Vue {
   padding: 1px 2px;
   border: 1px solid #eee;
   margin-right: 3px;
+}
+.note-tooltip {
+  white-space: pre-wrap;
 }
 </style>
