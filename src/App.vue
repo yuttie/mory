@@ -713,8 +713,7 @@ export default class App extends Vue {
   height: 100%;
   z-index: 10;
 
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(16px);
 
   text-align: center;
   display: flex;
@@ -731,10 +730,6 @@ export default class App extends Vue {
     max-width: 400px;
     margin: 0 auto;
     padding: 2em;
-    border-radius: 4px;
-    background: #ffffffc0;
-    backdrop-filter: blur(16px);
-    box-shadow: 0 0 6px rgba(0, 0, 0, 0.2);
 
     display: flex;
     flex-direction: column;
