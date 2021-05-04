@@ -145,7 +145,7 @@
           <v-card-title>With Deadline</v-card-title>
           <div class="task-list">
             <TaskListItem
-              v-for="([date, task], index) of tasksWithDeadline"
+              v-for="[date, index, task] of tasksWithDeadline"
               v-bind:key="task.name"
               v-bind:value="task"
               v-on:click="showEditTaskDialog(date, index, task, $event);"
@@ -176,7 +176,7 @@
             <div class="task-list">
               <div v-for="date of Object.keys(groupedTasks[group.name].scheduled).sort((a, b) => a < b ? 1 : a > b ? -1 : 0)" v-bind:key="date">
                 <div class="date-header">{{ date }}</div>
-                <template v-for="(task, index) of groupedTasks[group.name].scheduled[date]">
+                <template v-for="[index, task] of groupedTasks[group.name].scheduled[date]">
                   <TaskListItem
                     v-bind:key="`${date}/${task.name}`"
                     v-bind:value="task"
@@ -189,7 +189,7 @@
             <div class="task-list">
               <div v-if="groupedTasks[group.name].backlog.length !== 0">
                 <div class="date-header">Backlog</div>
-                <template v-for="(task, index) of groupedTasks[group.name].backlog">
+                <template v-for="[index, task] of groupedTasks[group.name].backlog">
                   <TaskListItem
                     v-bind:key="`backlog/${task.name}`"
                     v-bind:value="task"
@@ -297,16 +297,16 @@ export default class Tasks extends Vue {
   get tasksWithDeadline() {
     const result = [];
     // Backlog
-    for (const task of this.tasks.backlog) {
+    for (const [i, task] of this.tasks.backlog.entries()) {
       if (task.deadline) {
-        result.push([null, task]);
+        result.push([null, i, task]);
       }
     }
     // Scheduled
     for (const [date, tasks] of Object.entries(this.tasks.scheduled)) {
-      for (const task of tasks) {
+      for (const [i, task] of tasks.entries()) {
         if (task.deadline) {
-          result.push([date, task]);
+          result.push([date, i, task]);
         }
       }
     }
@@ -315,8 +315,8 @@ export default class Tasks extends Vue {
 
   get groupedTasks() {
     type Grouped = {
-      backlog: Task[];
-      scheduled: { [key: string]: Task[] };
+      backlog: [number, Task][];
+      scheduled: { [key: string]: [number, Task][] };
     };
     const result: { [key: string]: Grouped } = {};
     for (const group of this.groups) {
@@ -325,19 +325,19 @@ export default class Tasks extends Vue {
         scheduled: {},
       };
       // Backlog
-      for (const task of this.tasks.backlog) {
+      for (const [i, task] of this.tasks.backlog.entries()) {
         if ((task.tags || []).includes(group.filter)) {
-          grouped.backlog.push(task);
+          grouped.backlog.push([i, task]);
         }
       }
       // Scheduled
       for (const [date, tasks] of Object.entries(this.tasks.scheduled)) {
-        for (const task of tasks) {
+        for (const [i, task] of tasks.entries()) {
           if ((task.tags || []).includes(group.filter)) {
             if (!Object.prototype.hasOwnProperty.call(grouped.scheduled, date)) {
               grouped.scheduled[date] = [];
             }
-            grouped.scheduled[date].push(task);
+            grouped.scheduled[date].push([i, task]);
           }
         }
       }
