@@ -141,6 +141,18 @@
             ></TaskListItem>
           </draggable>
         </v-card>
+        <v-card dense class="group">
+          <v-card-title>With Deadline</v-card-title>
+          <div class="task-list">
+            <TaskListItem
+              v-for="([date, task], index) of tasksWithDeadline"
+              v-bind:key="task.name"
+              v-bind:value="task"
+              v-on:click="showEditTaskDialog(date, index, task, $event);"
+              v-on:done-toggle="$set(task, 'done', $event); clean(); save();"
+            ></TaskListItem>
+          </div>
+        </v-card>
         <v-card class="group">
           <v-card-title>Scheduled</v-card-title>
           <div class="task-list">
@@ -280,6 +292,25 @@ export default class Tasks extends Vue {
       }
     }
     return knownTags;
+  }
+
+  get tasksWithDeadline() {
+    const result = [];
+    // Backlog
+    for (const task of this.tasks.backlog) {
+      if (task.deadline) {
+        result.push([null, task]);
+      }
+    }
+    // Scheduled
+    for (const [date, tasks] of Object.entries(this.tasks.scheduled)) {
+      for (const task of tasks) {
+        if (task.deadline) {
+          result.push([date, task]);
+        }
+      }
+    }
+    return result;
   }
 
   get groupedTasks() {
@@ -631,7 +662,7 @@ $space: 12px;
   width: fit-content;
   height: 100%;
   grid-auto-flow: column;
-  grid-template-columns: $group-width $group-width min-content;
+  grid-template-columns: $group-width $group-width $group-width min-content;
   grid-template-rows: 100%;
   grid-auto-columns: $group-width;
   column-gap: $space;
