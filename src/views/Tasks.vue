@@ -156,7 +156,11 @@
         <v-card class="group">
           <v-card-title>Scheduled</v-card-title>
           <div class="task-list">
-            <div v-for="date of Object.keys(tasks.scheduled).sort((a, b) => a < b ? 1 : a > b ? -1 : 0)" v-bind:key="date">
+            <div
+              v-for="date of Object.keys(tasks.scheduled).sort((a, b) => a < b ? 1 : a > b ? -1 : 0)"
+              v-bind:key="date"
+              v-bind:class="{ today: isToday(date) }"
+            >
               <div class="date-header">{{ isToday(date) ? `Today (${date})` : date }}</div>
               <draggable v-model="tasks.scheduled[date]" group="tasks" v-bind:delay="500" v-bind:delay-on-touch-only="true" v-on:end="clean(); save();">
                 <TaskListItem
