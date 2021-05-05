@@ -24,6 +24,12 @@
               v-bind:disabled="newTask.name.length === 0"
             >Add</v-btn>
             <v-btn
+              text
+              color="primary"
+              v-on:click="add(false)"
+              v-bind:disabled="newTask.name.length === 0"
+            >Add (continuously)</v-btn>
+            <v-btn
               icon
               v-on:click="newTaskDialog = false; newTask = { name: '', deadline: null, schedule: null, done: false, tags: [], note: '', }"
             ><v-icon>mdi-close</v-icon></v-btn>
@@ -546,7 +552,7 @@ export default class Tasks extends Vue {
     }
   }
 
-  async add() {
+  async add(clear = true) {
     // Create a new entry
     const task: any = {
       name: this.newTask.name,
@@ -566,17 +572,26 @@ export default class Tasks extends Vue {
     }
     // Save
     await this.save();
-    // Hide the dialog
-    this.newTaskDialog = false;
-    // Reset
-    this.newTask = {
-      name: '',
-      deadline: null,
-      schedule: null,
-      done: false,
-      tags: [],
-      note: '',
-    };
+    if (clear) {
+      // Close the dialog
+      this.newTaskDialog = false;
+      // Reset
+      this.newTask = {
+        name: '',
+        deadline: null,
+        schedule: null,
+        done: false,
+        tags: [],
+        note: '',
+      };
+    }
+    else {
+      // Reset partially
+      this.newTask = {
+        ...this.newTask,
+        name: '',
+      };
+    }
   }
 
   async updateSelected() {
