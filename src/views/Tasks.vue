@@ -552,7 +552,7 @@ export default class Tasks extends Vue {
     }
   }
 
-  async add(clear = true) {
+  async add(closeDialog = true) {
     // Create a new entry
     const task: any = {
       name: this.newTask.name,
@@ -572,7 +572,7 @@ export default class Tasks extends Vue {
     }
     // Save
     await this.save();
-    if (clear) {
+    if (closeDialog) {
       // Close the dialog
       this.newTaskDialog = false;
       // Reset
