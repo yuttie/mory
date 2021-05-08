@@ -115,6 +115,10 @@
           <v-spacer></v-spacer>
           <v-btn
             text
+            v-on:click="openNewTaskDialogWithSelection"
+          >Add similar...</v-btn>
+          <v-btn
+            text
             color="error"
             v-on:click="removeSelected"
           >Delete</v-btn>
@@ -443,6 +447,12 @@ export default class Tasks extends Vue {
     this.editTaskDialog = false;
     // Reset
     this.select(null, null, null);
+  }
+
+  openNewTaskDialogWithSelection() {
+    this.newTask = JSON.parse(JSON.stringify(this.editTarget));
+    this.newTaskDialog = true;
+    this.closeEditTaskDialog();
   }
 
   async collectUndone() {
