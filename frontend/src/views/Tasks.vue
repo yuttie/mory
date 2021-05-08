@@ -43,7 +43,11 @@
           </v-card-text>
         </v-card>
       </v-dialog>
-      <v-dialog max-width="600px" v-model="newGroupDialog">
+      <v-dialog
+        max-width="600px"
+        v-model="newGroupDialog"
+        v-on:click:outside="closeNewGroupDialog"
+      >
         <template v-slot:activator="{ on, attrs }">
           <v-btn
             text
@@ -66,7 +70,7 @@
             >Add</v-btn>
             <v-btn
               icon
-              v-on:click="newGroupDialog = false; newGroupName = ''; newGroupFilter = '';"
+              v-on:click="closeNewGroupDialog"
             ><v-icon>mdi-close</v-icon></v-btn>
           </v-card-actions>
           <v-card-text>
@@ -404,6 +408,14 @@ export default class Tasks extends Vue {
       tags: [],
       note: '',
     };
+  }
+
+  closeNewGroupDialog() {
+    // Close the dialog
+    this.newGroupDialog = false;
+    // Reset
+    this.newGroupName = '';
+    this.newGroupFilter = '';
   }
 
   async collectUndone() {
