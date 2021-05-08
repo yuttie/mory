@@ -1,7 +1,11 @@
 <template>
   <div id="tasks" class="d-flex flex-column">
     <v-toolbar flat outlined dense class="flex-grow-0">
-      <v-dialog max-width="600px" v-model="newTaskDialog">
+      <v-dialog
+        max-width="600px"
+        v-model="newTaskDialog"
+        v-on:click:outside="closeNewTaskDialog"
+      >
         <template v-slot:activator="{ on, attrs }">
           <v-btn
             text
@@ -31,7 +35,7 @@
             >Add (continuously)</v-btn>
             <v-btn
               icon
-              v-on:click="newTaskDialog = false; newTask = { name: '', deadline: null, schedule: null, done: false, tags: [], note: '', }"
+              v-on:click="closeNewTaskDialog"
             ><v-icon>mdi-close</v-icon></v-btn>
           </v-card-actions>
           <v-card-text>
@@ -388,6 +392,20 @@ export default class Tasks extends Vue {
     }
   }
 
+  closeNewTaskDialog() {
+    // Close the dialog
+    this.newTaskDialog = false;
+    // Reset
+    this.newTask = {
+      name: '',
+      deadline: null,
+      schedule: null,
+      done: false,
+      tags: [],
+      note: '',
+    };
+  }
+
   async collectUndone() {
     const today = dayjs().startOf('day');
     // Collect undone tasks
@@ -573,17 +591,7 @@ export default class Tasks extends Vue {
     // Save
     await this.save();
     if (closeDialog) {
-      // Close the dialog
-      this.newTaskDialog = false;
-      // Reset
-      this.newTask = {
-        name: '',
-        deadline: null,
-        schedule: null,
-        done: false,
-        tags: [],
-        note: '',
-      };
+      this.closeNewTaskDialog();
     }
     else {
       // Reset partially
