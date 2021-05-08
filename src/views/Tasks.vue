@@ -678,31 +678,24 @@ $space: 12px;
   overflow-y: hidden;
 }
 .groups {
-  display: grid;
+  display: flex;
   width: fit-content;
   height: 100%;
-  grid-auto-flow: column;
-  grid-template-columns: $group-width $group-width $group-width min-content;
-  grid-template-rows: 100%;
-  grid-auto-columns: $group-width;
-  column-gap: $space;
+  gap: $space;
   padding: $space;
 }
 .custom-groups {
-  display: grid;
+  display: flex;
   width: fit-content;
   height: 100%;
-  grid-auto-flow: column;
-  grid-template-columns: repeat(auto-fill, $group-width);
-  grid-template-rows: 100%;
-  grid-auto-columns: $group-width;
-  column-gap: $space;
+  gap: $space;
 }
 .group {
   display: flex;
   flex-direction: column;
   align-self: flex-start;
   max-height: 100%;
+  width: $group-width;
 }
 .custom-groups .group {
   &.sortable-ghost {
