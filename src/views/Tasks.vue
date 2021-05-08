@@ -590,6 +590,7 @@ export default class Tasks extends Vue {
       this.newTask = {
         ...this.newTask,
         name: '',
+        tags: [...this.newTask.tags],
       };
     }
   }
