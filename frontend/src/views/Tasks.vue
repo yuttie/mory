@@ -105,9 +105,9 @@
     </v-toolbar>
     <v-dialog
       max-width="600px"
-      v-if="editTarget !== null"
       v-model="editTaskDialog"
       v-bind:activator="editTaskDialogActivator"
+      v-on:click:outside="closeEditTaskDialog"
     >
       <v-card>
         <v-card-actions>
@@ -126,7 +126,7 @@
           >Save</v-btn>
           <v-btn
             icon
-            v-on:click="select(null, null, null)"
+            v-on:click="closeEditTaskDialog"
           ><v-icon>mdi-close</v-icon></v-btn>
         </v-card-actions>
         <v-card-text>
@@ -268,7 +268,14 @@ export default class Tasks extends Vue {
   newTaskDialog = false;
   selectedTaskIndex: null | number = null;
   selectedTask: null | Task = null;
-  editTarget: null | Task = null;
+  editTarget: Task = {
+    name: '',
+    deadline: null,
+    schedule: null,
+    done: false,
+    tags: [],
+    note: '',
+  };
   editTaskDialog = false;
   editTaskDialogActivator: any = null;
   // Group
@@ -375,7 +382,20 @@ export default class Tasks extends Vue {
       task.schedule = date;
     }
     this.selectedTask = task;
-    this.editTarget = JSON.parse(JSON.stringify(task));
+    if (task !== null) {
+      this.editTarget = JSON.parse(JSON.stringify(task));
+    }
+    else {
+      // Set dummy data
+      this.editTarget = {
+        name: '',
+        deadline: null,
+        schedule: null,
+        done: false,
+        tags: [],
+        note: '',
+      };
+    }
   }
 
   showEditTaskDialog(date: string | null, index: number, task: Task, event: MouseEvent) {
@@ -416,6 +436,13 @@ export default class Tasks extends Vue {
     // Reset
     this.newGroupName = '';
     this.newGroupFilter = '';
+  }
+
+  closeEditTaskDialog() {
+    // Close the dialog
+    this.editTaskDialog = false;
+    // Reset
+    this.select(null, null, null);
   }
 
   async collectUndone() {
@@ -619,9 +646,6 @@ export default class Tasks extends Vue {
     if (this.selectedTask === null) {
       throw new Error('selectedTask is null');
     }
-    if (this.editTarget === null) {
-      throw new Error('editTarget is null');
-    }
     // Copy back
     this.selectedTask.name = this.editTarget.name;
     this.selectedTask.deadline = this.editTarget.deadline;
@@ -649,8 +673,8 @@ export default class Tasks extends Vue {
     // Save
     this.clean();
     await this.save();
-    // Reset
-    this.select(null, null, null);
+    // Close
+    this.closeEditTaskDialog();
   }
 
   async removeSelected() {
@@ -662,8 +686,8 @@ export default class Tasks extends Vue {
     // Save
     this.clean();
     await this.save();
-    // Reset
-    this.select(null, null, null);
+    // Close
+    this.closeEditTaskDialog();
   }
 
   async addGroup() {
