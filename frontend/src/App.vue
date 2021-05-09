@@ -711,7 +711,7 @@ export default class App extends Vue {
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: 10;
+  z-index: 500;
 
   backdrop-filter: blur(16px);
 
