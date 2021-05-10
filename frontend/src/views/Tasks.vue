@@ -24,15 +24,15 @@
             <v-btn
               text
               color="primary"
-              v-on:click="add"
-              v-bind:disabled="newTask.name.length === 0"
-            >Add</v-btn>
-            <v-btn
-              text
-              color="primary"
               v-on:click="add(false)"
               v-bind:disabled="newTask.name.length === 0"
             >Add (continuously)</v-btn>
+            <v-btn
+              text
+              color="primary"
+              v-on:click="add"
+              v-bind:disabled="newTask.name.length === 0"
+            >Add</v-btn>
             <v-btn
               icon
               v-on:click="closeNewTaskDialog"
