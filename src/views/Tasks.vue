@@ -451,6 +451,7 @@ export default class Tasks extends Vue {
 
   openNewTaskDialogWithSelection() {
     this.newTask = JSON.parse(JSON.stringify(this.editTarget));
+    this.newTask.name += ' (copy)';
     this.newTaskDialog = true;
     this.closeEditTaskDialog();
   }
