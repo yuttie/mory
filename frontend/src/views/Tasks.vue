@@ -19,7 +19,6 @@
         </template>
         <v-card>
           <v-card-actions>
-            <v-card-title>New Task</v-card-title>
             <v-spacer></v-spacer>
             <v-btn
               text
@@ -60,7 +59,6 @@
         </template>
         <v-card>
           <v-card-actions>
-            <v-card-title>New Group</v-card-title>
             <v-spacer></v-spacer>
             <v-btn
               text
