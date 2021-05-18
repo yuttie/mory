@@ -31,7 +31,14 @@
       v-if="value.deadline"
       v-bind:style="deadlineStyle"
     >
-      <v-icon small v-bind:style="deadlineStyle">mdi-calendar</v-icon>{{ value.deadline }}
+      <v-tooltip bottom>
+        <template v-slot:activator="{ on, attrs }">
+          <span v-bind="attrs" v-on="on">
+            <v-icon small v-bind:style="deadlineStyle" class="mr-1">mdi-calendar</v-icon>{{ deadlineText }}
+          </span>
+        </template>
+        <div>{{ value.deadline }}</div>
+      </v-tooltip>
     </span>
   </div>
 </template>
@@ -42,10 +49,21 @@ import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 import { Task } from '@/api';
 
 import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
+dayjs.extend(relativeTime);
 
 @Component
 export default class TaskListItem extends Vue {
   @Prop() readonly value!: Task;
+
+  get deadlineText(): string {
+    if (typeof this.value.deadline === 'string') {
+      return dayjs(this.value.deadline).fromNow();
+    }
+    else {
+      return '';
+    }
+  }
 
   get deadlineStyle(): Record<string, string> {
     if (!this.value.done && this.value.deadline) {
