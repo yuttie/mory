@@ -109,7 +109,6 @@
     >
       <v-card>
         <v-card-actions>
-          <v-card-title>Edit Task</v-card-title>
           <v-spacer></v-spacer>
           <v-btn
             text
