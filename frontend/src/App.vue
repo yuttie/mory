@@ -1,10 +1,6 @@
 <template>
   <v-app id="app" ref="app">
     <v-app-bar app height="48" id="nav" color="white" elevation="2" elevate-on-scroll fixed>
-      <v-app-bar-nav-icon
-        v-if="$vuetify.breakpoint.xs"
-        v-on:click.stop="showDrawer = !showDrawer">
-      </v-app-bar-nav-icon>
       <v-btn to="/" icon text v-bind:ripple="false">
         <div class="logo"></div>
       </v-btn>
@@ -163,66 +159,31 @@
         </v-card>
       </v-menu>
     </v-app-bar>
-    <v-navigation-drawer
-      v-if="$vuetify.breakpoint.xs"
-      v-model="showDrawer"
-      fixed
-      temporary
-    >
-      <v-list>
-        <v-list-item to="/">
-          <v-list-item-icon>
-            <v-icon>mdi-home</v-icon>
-          </v-list-item-icon>
-          <v-list-item-content>
-            Home
-          </v-list-item-content>
-        </v-list-item>
-        <v-list-item to="/calendar">
-          <v-list-item-icon>
-            <v-icon>mdi-calendar</v-icon>
-          </v-list-item-icon>
-          <v-list-item-content>
-            Calendar
-          </v-list-item-content>
-        </v-list-item>
-        <v-list-item to="/tasks">
-          <v-list-item-icon>
-            <v-icon>mdi-ballot</v-icon>
-          </v-list-item-icon>
-          <v-list-item-content>
-            Tasks
-          </v-list-item-content>
-        </v-list-item>
-        <v-list-item to="/find">
-          <v-list-item-icon>
-            <v-icon>mdi-magnify</v-icon>
-          </v-list-item-icon>
-          <v-list-item-content>
-            Find
-          </v-list-item-content>
-        </v-list-item>
-        <v-list-item to="/config">
-          <v-list-item-icon>
-            <v-icon>mdi-cog</v-icon>
-          </v-list-item-icon>
-          <v-list-item-content>
-            Config
-          </v-list-item-content>
-        </v-list-item>
-        <v-list-item to="/about">
-          <v-list-item-icon>
-            <v-icon>mdi-information</v-icon>
-          </v-list-item-icon>
-          <v-list-item-content>
-            About
-          </v-list-item-content>
-        </v-list-item>
-      </v-list>
-    </v-navigation-drawer>
     <v-main>
       <router-view v-if="!(!hasToken && !$refs.routerView)" v-bind:key="$route.path" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerView"/>
     </v-main>
+    <v-app-bar
+      app
+      bottom
+      color="white"
+      elevation="0"
+      v-if="$vuetify.breakpoint.xs"
+    >
+      <v-btn-toggle
+        borderless
+        color="primary"
+        group
+        tile
+        class="flex-grow-1 d-flex"
+      >
+        <v-btn text to="/"         class="flex-grow-1"><v-icon>mdi-home</v-icon>       </v-btn>
+        <v-btn text to="/calendar" class="flex-grow-1"><v-icon>mdi-calendar</v-icon>   </v-btn>
+        <v-btn text to="/tasks"    class="flex-grow-1"><v-icon>mdi-ballot</v-icon>     </v-btn>
+        <v-btn text to="/find"     class="flex-grow-1"><v-icon>mdi-magnify</v-icon>    </v-btn>
+        <v-btn text to="/config"   class="flex-grow-1"><v-icon>mdi-cog</v-icon>        </v-btn>
+        <v-btn text to="/about"    class="flex-grow-1"><v-icon>mdi-information</v-icon></v-btn>
+      </v-btn-toggle>
+    </v-app-bar>
     <div v-if="!hasToken" class="login-overlay">
       <div class="form">
         <v-alert type="error" v-show="loginError">
@@ -292,7 +253,6 @@ export default class App extends Vue {
   templates = [] as string[];
   uploadList = [] as UploadEntry[];
   uploadMenuIsVisible = false;
-  showDrawer = false;
 
   get token() {
     return localStorage.getItem('token');
