@@ -90,6 +90,10 @@
             dense
             class="flex-grow-0"
           >
+            <v-btn
+              plain
+              v-on:click="formatTable"
+            >Format Table</v-btn>
           </v-toolbar>
           <Editor
             v-bind:value="text"
@@ -255,6 +259,7 @@ import metadataSchema from '@/metadata-schema.json';
 
 import Ajv, { JSONSchemaType, DefinedError } from 'ajv';
 import * as api from '@/api';
+import { CliPrettify } from 'markdown-table-prettify';
 import { mdit, updateMetadataLineCount } from '@/markdown';
 import YAML from 'yaml';
 
@@ -396,6 +401,14 @@ events:
       onlyViewer: !this.editorIsVisible && this.viewerIsVisible,
       both: this.editorIsVisible && this.viewerIsVisible,
     };
+  }
+
+  formatTable() {
+    const editor = (this.$refs.editor as Editor).editor;
+    const selectedText = editor.session.getTextRange(editor.getSelectionRange());
+    const formattedText = CliPrettify.prettify(selectedText);
+    editor.session.remove(editor.getSelectionRange());
+    editor.insert(formattedText);
   }
 
   updateRendered() {
