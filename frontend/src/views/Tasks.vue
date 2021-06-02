@@ -385,6 +385,12 @@ export default class Tasks extends Vue {
     this.selectedTask = task;
     if (task !== null) {
       this.editTarget = JSON.parse(JSON.stringify(task));
+      this.editTarget.name     ||= '';
+      this.editTarget.deadline ||= null;
+      this.editTarget.schedule ||= null;
+      this.editTarget.done     ||= false;
+      this.editTarget.tags     ||= [];
+      this.editTarget.note     ||= '';
     }
     else {
       // Set dummy data
