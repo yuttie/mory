@@ -58,7 +58,7 @@ export default class TaskListItem extends Vue {
 
   get deadlineText(): string {
     if (typeof this.value.deadline === 'string') {
-      return dayjs(this.value.deadline).fromNow();
+      return dayjs(this.value.deadline).endOf('day').fromNow();
     }
     else {
       return '';
