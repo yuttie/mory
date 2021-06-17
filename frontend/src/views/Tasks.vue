@@ -204,8 +204,6 @@
                   ></TaskListItem>
                 </template>
               </div>
-            </div>
-            <div class="task-list">
               <div v-if="groupedTasks[group.name].backlog.length !== 0">
                 <div class="date-header">Backlog</div>
                 <template v-for="[index, task] of groupedTasks[group.name].backlog">
