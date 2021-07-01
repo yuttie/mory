@@ -176,12 +176,12 @@
         tile
         class="flex-grow-1 d-flex"
       >
-        <v-btn text to="/"         class="flex-grow-1"><v-icon>mdi-home</v-icon>       </v-btn>
-        <v-btn text to="/calendar" class="flex-grow-1"><v-icon>mdi-calendar</v-icon>   </v-btn>
-        <v-btn text to="/tasks"    class="flex-grow-1"><v-icon>mdi-ballot</v-icon>     </v-btn>
+        <v-btn text to="/"         class="flex-grow-1"><v-icon>mdi-home-outline</v-icon>       </v-btn>
+        <v-btn text to="/calendar" class="flex-grow-1"><v-icon>mdi-calendar-outline</v-icon>   </v-btn>
+        <v-btn text to="/tasks"    class="flex-grow-1"><v-icon>mdi-ballot-outline</v-icon>     </v-btn>
         <v-btn text to="/find"     class="flex-grow-1"><v-icon>mdi-magnify</v-icon>    </v-btn>
-        <v-btn text to="/config"   class="flex-grow-1"><v-icon>mdi-cog</v-icon>        </v-btn>
-        <v-btn text to="/about"    class="flex-grow-1"><v-icon>mdi-information</v-icon></v-btn>
+        <v-btn text to="/config"   class="flex-grow-1"><v-icon>mdi-cog-outline</v-icon>        </v-btn>
+        <v-btn text to="/about"    class="flex-grow-1"><v-icon>mdi-information-outline</v-icon></v-btn>
       </v-btn-toggle>
     </v-app-bar>
     <div v-if="!hasToken" class="login-overlay">
