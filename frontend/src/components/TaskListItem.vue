@@ -50,7 +50,21 @@ import { Task } from '@/api';
 
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
-dayjs.extend(relativeTime);
+dayjs.extend(relativeTime, {
+  thresholds: [
+    { l: 's', r: 1 },
+    { l: 'm', r: 1 },
+    { l: 'mm', r: 59, d: 'minute' },
+    { l: 'h', r: 1 },
+    { l: 'hh', r: 23, d: 'hour' },
+    { l: 'd', r: 1 },
+    { l: 'dd', d: 'day' },
+    { l: 'M' },
+    { l: 'MM', d: 'month' },
+    { l: 'y' },
+    { l: 'yy', d: 'year' }
+  ],
+});
 
 @Component
 export default class TaskListItem extends Vue {
