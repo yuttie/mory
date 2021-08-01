@@ -193,10 +193,14 @@ mod handlers {
 
         if matches {
             let secret = env::var("MORIED_SECRET").unwrap();
+            let duration = env::var("MORIED_SESSION_DURATION").map_or(Duration::hours(6), |v| {
+                Duration::minutes(v.parse::<i64>().expect("Session duration in minutes represented as integer value is expected"))
+            });
+            println!("{:?}", duration);
             let now: DateTime<Utc> = Utc::now();
             let my_claims = Claims {
                 sub: login.user.to_owned(),
-                exp: (now + Duration::hours(6)).timestamp() as usize,
+                exp: (now + duration).timestamp() as usize,
                 email: user_email,
             };
             let token = jwt::encode(
