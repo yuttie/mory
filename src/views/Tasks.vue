@@ -296,26 +296,23 @@ export default class Tasks extends Vue {
     window.removeEventListener('focus', this.load);
   }
 
-  get knownTags(): string[] {
+  get knownTags(): [string, number][] {
     // Collect tags
-    const knownTags: string[] = [];
+    const tagCounts = new Map();
     for (const task of this.tasks.backlog as Task[]) {
       for (const tag of task.tags || []) {
-        if (!knownTags.includes(tag)) {
-          knownTags.push(tag);
-        }
+        tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
       }
     }
     for (const [date, tasks] of Object.entries(this.tasks.scheduled)) {
       for (const task of tasks as Task[]) {
         for (const tag of task.tags || []) {
-          if (!knownTags.includes(tag)) {
-            knownTags.push(tag);
-          }
+          tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
         }
       }
     }
-    return knownTags;
+    return [...tagCounts]
+      .sort(([_tag1, count1], [_tag2, count2]) => count2 - count1);
   }
 
   get tasksWithDeadline() {

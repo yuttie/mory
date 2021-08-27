@@ -74,7 +74,8 @@
     <v-combobox
       v-bind:value="value.tags"
       v-on:input="$emit('input', { ...value, tags: $event })"
-      v-bind:items="knownTags"
+      v-bind:items="tagItems"
+      v-bind:return-object="false"
       chips
       clearable
       label="Tags"
@@ -113,10 +114,19 @@ import dayjs from 'dayjs';
 @Component
 export default class TaskEditor extends Vue {
   @Prop() readonly value!: Task;
-  @Prop(Array) readonly knownTags!: string[];
+  @Prop(Array) readonly knownTags!: [string, number][];
 
   deadlineMenu = false;
   scheduleMenu = false;
+
+  get tagItems(): { text: string; value: string; }[] {
+    return this.knownTags.map(([tag, count]) => {
+      return {
+        text: `${tag} (${count})`,
+        value: tag,
+      };
+    });
+  }
 
   setScheduleToday() {
     this.value.schedule = dayjs().format('YYYY-MM-DD');
