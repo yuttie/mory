@@ -1,6 +1,15 @@
 import Vue from 'vue'
 import VueRouter, { RouteConfig } from 'vue-router'
 
+const Home     = () => import('../views/Home.vue');
+const Calendar = () => import('../views/Calendar.vue');
+const Tasks    = () => import('../views/Tasks.vue');
+const Find     = () => import('../views/Find.vue');
+const Note     = () => import('../views/Note.vue');
+const Config   = () => import('../views/Config.vue');
+const About    = () => import('../views/About.vue');
+
+
 import { v4 as uuidv4 } from 'uuid';
 
 Vue.use(VueRouter)
@@ -9,22 +18,22 @@ const routes: Array<RouteConfig> = [
   {
     path: '/',
     name: 'Home',
-    component: () => import(/* webpackChunkName: "Home" */ '../views/Home.vue'),
+    component: Home,
   },
   {
     path: '/calendar',
     name: 'Calendar',
-    component: () => import(/* webpackChunkName: "Calendar" */ '../views/Calendar.vue'),
+    component: Calendar,
   },
   {
     path: '/calendar/:type/:date*',
     name: 'CalendarWithDate',
-    component: () => import(/* webpackChunkName: "Calendar" */ '../views/Calendar.vue'),
+    component: Calendar,
   },
   {
     path: '/tasks',
     name: 'Tasks',
-    component: () => import(/* webpackChunkName: "Tasks" */ '../views/Tasks.vue'),
+    component: Tasks,
   },
   {
     path: '/create',
@@ -40,17 +49,17 @@ const routes: Array<RouteConfig> = [
   {
     path: '/find',
     name: 'Find',
-    component: () => import(/* webpackChunkName: "Find" */ '../views/Find.vue'),
+    component: Find,
   },
   {
     path: '/note/:path*',
     name: 'Note',
-    component: () => import(/* webpackChunkName: "Note" */ '../views/Note.vue'),
+    component: Note,
   },
   {
     path: '/config',
     name: 'Config',
-    component: () => import(/* webpackChunkName: "Config" */ '../views/Config.vue'),
+    component: Config,
   },
   {
     path: '/about',
@@ -58,7 +67,7 @@ const routes: Array<RouteConfig> = [
     // route level code-splitting
     // this generates a separate chunk (about.[hash].js) for this route
     // which is lazy-loaded when the route is visited.
-    component: () => import(/* webpackChunkName: "About" */ '../views/About.vue')
+    component: About,
   }
 ]
 
