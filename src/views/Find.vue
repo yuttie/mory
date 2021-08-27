@@ -20,7 +20,7 @@
         </v-btn>
       </template>
     </v-text-field>
-    <div class="tags d-flex flex-row align-center flex-wrap mx-3 mt-3">
+    <div class="all-tags d-flex flex-row align-center flex-wrap mx-3 mt-3">
       <v-chip
         small
         class="ma-1"
@@ -76,15 +76,17 @@
         <div class="mime-type text-no-wrap">{{ item.mimeType }}</div>
       </template>
       <template v-slot:item.tags="{ item }">
-        <v-chip
-          small
-          class="ma-1"
-          v-for="tag of item.tags"
-          v-bind:key="tag"
-          v-bind:color="tagColor(tag)"
-          v-bind:outlined="tagOutlined(tag)"
-          v-on:click="handleTagClick(tag, $event)"
-          >{{ tag }}</v-chip>
+        <div class="tags">
+          <v-chip
+            small
+            class="ma-1"
+            v-for="tag of item.tags"
+            v-bind:key="tag"
+            v-bind:color="tagColor(tag)"
+            v-bind:outlined="tagOutlined(tag)"
+            v-on:click="handleTagClick(tag, $event)"
+            >{{ tag }}</v-chip>
+        </div>
       </template>
     </v-data-table>
     <v-overlay v-bind:value="isLoading" z-index="10" opacity="0">
@@ -413,7 +415,7 @@ export default class Find extends Vue {
 </script>
 
 <style scoped lang="scss">
-.tags {
+.all-tags {
   max-height: 15em;
   overflow-y: auto;
 }
@@ -426,7 +428,7 @@ export default class Find extends Vue {
 }
 
 .path {
-  line-break: anywhere;
+  white-space: nowrap;
 
   a {
     color: rgba(0, 0, 0, 0.87);
@@ -437,5 +439,9 @@ export default class Find extends Vue {
       text-decoration: underline;
     }
   }
+}
+
+.tags {
+  white-space: nowrap;
 }
 </style>
