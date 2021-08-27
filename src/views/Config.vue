@@ -4,6 +4,11 @@
     <v-alert text type="info">
       These settings are only applied to the current environment and never be saved in the repository.
     </v-alert>
+    <v-checkbox
+      v-model="currentLockScroll"
+      v-on:change="updateLockScroll"
+      label="Lock Scroll by Default"
+    ></v-checkbox>
     <v-select
       v-bind:items="editorThemes"
       v-bind:value="currentEditorTheme"
@@ -118,12 +123,17 @@ export default class Config extends Vue {
     { name: 'Vsc Dark Plus',                    value: 'vsc-dark-plus'                    },
     { name: 'Xonokai',                          value: 'xonokai'                          },
   ];
+  currentLockScroll = localStorage.getItem('lock-scroll') === "true";
   currentEditorTheme = localStorage.getItem('editor-theme') || 'default';
   currentEditorKeybinding = localStorage.getItem('editor-keybinding') || 'default';
   currentPrismTheme = localStorage.getItem('prism-theme') || null;
 
   mounted() {
     document.title = `Config | ${process.env.VUE_APP_NAME}`;
+  }
+
+  updateLockScroll(newLockScroll: boolean) {
+    localStorage.setItem('lock-scroll', newLockScroll.toString());
   }
 
   updateEditorTheme(newEditorTheme: string) {

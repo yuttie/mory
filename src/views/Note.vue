@@ -280,7 +280,7 @@ export default class Note extends Vue {
   showUpstreamState = false;
   rendered = { metadata: null as null | any, content: '' };
   observer = null as null | IntersectionObserver;
-  lockScroll = true;
+  lockScroll = localStorage.getItem('lock-scroll') === "true";
   ignoreNext = false;
   noteHasUpstream = false;
   editorIsVisible = false;
