@@ -2,7 +2,9 @@
   <div id="find" class="d-flex flex-column">
     <v-text-field
       v-model="queryText"
-      solo
+      dense
+      filled
+      rounded
       prepend-inner-icon="mdi-magnify"
       type="text"
       label="Search"
