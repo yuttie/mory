@@ -27,6 +27,7 @@
         v-for="tag of tags"
         v-bind:key="tag"
         v-bind:color="tagColor(tag)"
+        v-bind:outlined="tagOutlined(tag)"
         v-on:click="handleTagClick(tag, $event)"
       >{{ tag }}</v-chip>
     </div>
@@ -81,6 +82,7 @@
           v-for="tag of item.tags"
           v-bind:key="tag"
           v-bind:color="tagColor(tag)"
+          v-bind:outlined="tagOutlined(tag)"
           v-on:click="handleTagClick(tag, $event)"
           >{{ tag }}</v-chip>
       </template>
@@ -331,6 +333,18 @@ export default class Find extends Vue {
     }
     else {
       this.addTag(tag);
+    }
+  }
+
+  tagOutlined(tag: string) {
+    const query: Query = this.query;
+    const queryTags: string[] = [...query.tags].map(x => x.toLowerCase());
+    const queryAny: string[] = [...query.any].map(x => x.toLowerCase());
+    if (queryTags.some(x => tag.toLowerCase().includes(x)) || queryAny.some(x => tag.toLowerCase().includes(x))) {
+      return false;
+    }
+    else {
+      return true;
     }
   }
 
