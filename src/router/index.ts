@@ -1,5 +1,5 @@
-import Vue from 'vue'
-import VueRouter, { RouteConfig } from 'vue-router'
+import Vue from 'vue';
+import VueRouter, { RouteConfig } from 'vue-router';
 
 const Home     = () => import('../views/Home.vue');
 const Calendar = () => import('../views/Calendar.vue');
@@ -12,7 +12,7 @@ const About    = () => import('../views/About.vue');
 
 import { v4 as uuidv4 } from 'uuid';
 
-Vue.use(VueRouter)
+Vue.use(VueRouter);
 
 const routes: Array<RouteConfig> = [
   {
@@ -68,8 +68,8 @@ const routes: Array<RouteConfig> = [
     // this generates a separate chunk (about.[hash].js) for this route
     // which is lazy-loaded when the route is visited.
     component: About,
-  }
-]
+  },
+];
 
 const router = new VueRouter({
   mode: 'history',
@@ -84,7 +84,7 @@ const router = new VueRouter({
     } else {
       return { x: 0, y: 0 };
     }
-  }
-})
+  },
+});
 
-export default router
+export default router;
