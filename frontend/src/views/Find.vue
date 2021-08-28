@@ -16,7 +16,6 @@
           v-on:focus="on.click"
           type="text"
           label="Search"
-          autofocus
           autocomplete="off"
           hide-details="auto"
           ref="query"
