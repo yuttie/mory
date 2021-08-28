@@ -6,7 +6,7 @@
           <v-text-field
             label="Name"
             autofocus
-            dense
+            hide-details="auto"
             prepend-icon="mdi-pencil"
             v-bind:value="value.name"
             v-on:input="$emit('input', { ...value, name: $event })"
@@ -22,7 +22,7 @@
             v-bind:return-object="false"
             chips
             clearable
-            dense
+            hide-details="auto"
             label="Tags"
             multiple
             prepend-icon="mdi-tag-multiple-outline"
@@ -59,7 +59,7 @@
                 prepend-icon="mdi-calendar"
                 readonly
                 clearable
-                dense
+                hide-details="auto"
                 v-bind="attrs"
                 v-on="on"
               ></v-text-field>
@@ -73,7 +73,6 @@
         <v-col cols="auto">
           <v-btn
             text
-            dense
             v-on:click="setScheduleToday"
           >Today</v-btn>
         </v-col>
@@ -95,7 +94,7 @@
                 prepend-icon="mdi-calendar"
                 readonly
                 clearable
-                dense
+                hide-details="auto"
                 v-bind="attrs"
                 v-on="on"
               ></v-text-field>
@@ -109,7 +108,6 @@
         <v-col cols="auto">
           <v-checkbox
             label="Done"
-            dense
             v-bind:input-value="value.done"
             v-bind:value="value.done"
             v-on:change="$emit('input', { ...value, done: $event })"
@@ -120,7 +118,7 @@
         <v-col>
           <v-textarea
             label="Note"
-            dense
+            hide-details="auto"
             v-bind:value="value.note"
             v-on:input="$emit('input', { ...value, note: $event })"
             prepend-icon="mdi-text"
