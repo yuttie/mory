@@ -1,36 +1,48 @@
 <template>
   <div id="find" class="d-flex flex-column">
-    <v-text-field
-      v-model="queryText"
-      dense
-      filled
-      rounded
-      prepend-inner-icon="mdi-magnify"
-      type="text"
-      label="Search"
-      autofocus
-      autocomplete="off"
-      hide-details="auto"
-      ref="query"
-      class="mx-3 mt-3"
+    <v-menu
+      v-model="showingTagList"
+      v-bind:close-on-content-click="false"
+      offset-y
+      bottom
     >
-      <template v-slot:append>
-        <v-btn icon v-bind:ripple="false" v-on:click="clearQuery" v-if="queryText !== ''">
-          <v-icon>mdi-close</v-icon>
-        </v-btn>
+      <template v-slot:activator="{ on }">
+        <v-text-field
+          v-model="queryText"
+          dense
+          filled
+          rounded
+          prepend-inner-icon="mdi-magnify"
+          v-on:focus="on.click"
+          type="text"
+          label="Search"
+          autofocus
+          autocomplete="off"
+          hide-details="auto"
+          ref="query"
+          class="mx-3 mt-3 flex-grow-0"
+        >
+          <template v-slot:append>
+            <v-btn icon v-bind:ripple="false" v-on:click="clearQuery" v-if="queryText !== ''">
+              <v-icon>mdi-close</v-icon>
+            </v-btn>
+          </template>
+        </v-text-field>
       </template>
-    </v-text-field>
-    <div class="all-tags d-flex flex-row align-center flex-wrap mx-3 mt-3">
-      <v-chip
-        small
-        class="ma-1"
-        v-for="tag of tags"
-        v-bind:key="tag"
-        v-bind:color="tagColor(tag)"
-        v-bind:outlined="tagOutlined(tag)"
-        v-on:click="handleTagClick(tag, $event)"
-      >{{ tag }}</v-chip>
-    </div>
+      <v-card>
+        <v-card-text class="all-tags d-flex flex-row align-center flex-wrap">
+          <v-chip
+            small
+            class="ma-1"
+            v-for="tag of tags"
+            v-bind:key="tag"
+            v-bind:color="tagColor(tag)"
+            v-bind:outlined="tagOutlined(tag)"
+            v-on:click="handleTagClick(tag, $event)"
+          >{{ tag }}</v-chip>
+        </v-card-text>
+      </v-card>
+    </v-menu>
     <v-data-table
       v-bind:headers="headers"
       v-bind:items="matchedEntries"
@@ -41,7 +53,7 @@
       sort-desc
       must-sort
       show-select
-      class="mt-3"
+      class="mt-3 flex-grow-1"
     >
       <template v-slot:top="{ pagination, options, updateOptions }">
         <v-toolbar flat style="border-bottom: thin solid rgba(0, 0, 0, 0.12);">
@@ -112,6 +124,7 @@ export default class Find extends Vue {
   error = false;
   errorText = '';
   selected = [] as any[];
+  showingTagList = false;
 
   get headers() {
     return [
@@ -415,8 +428,12 @@ export default class Find extends Vue {
 </script>
 
 <style scoped lang="scss">
+#find {
+  height: 100%;
+}
+
 .all-tags {
-  max-height: 15em;
+  max-height: 30em;
   overflow-y: auto;
 }
 
