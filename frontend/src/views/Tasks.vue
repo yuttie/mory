@@ -14,7 +14,7 @@
             class="mr-2"
           >
             <v-icon class="mr-1">mdi-plus-box-outline</v-icon>
-            New Task
+            Task
           </v-btn>
         </template>
         <v-card>
@@ -54,7 +54,7 @@
             v-on="on"
           >
             <v-icon class="mr-1">mdi-plus-box-outline</v-icon>
-            New Group
+            Group
           </v-btn>
         </template>
         <v-card>
