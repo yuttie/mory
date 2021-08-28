@@ -47,6 +47,7 @@
       v-bind:headers="headers"
       v-bind:items="matchedEntries"
       v-model="selected"
+      v-bind:items-per-page="100"
       item-key="path"
       hide-default-footer
       sortBy="time"
@@ -67,6 +68,7 @@
           </v-btn>
           <v-spacer></v-spacer>
           <v-data-footer
+            v-bind:items-per-page-options="[100, 200, 500, 1000, -1]"
             v-bind:pagination="pagination"
             v-bind:options="options"
             v-on:update:options="updateOptions"
