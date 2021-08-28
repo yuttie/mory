@@ -47,6 +47,7 @@
       v-bind:items="matchedEntries"
       v-model="selected"
       v-bind:items-per-page="100"
+      mobile-breakpoint="0"
       item-key="path"
       hide-default-footer
       sortBy="time"
@@ -71,8 +72,8 @@
             v-bind:pagination="pagination"
             v-bind:options="options"
             v-on:update:options="updateOptions"
-            items-per-page-text="$vuetify.dataTable.itemsPerPageText"
-            style="border-top: none; margin-right: -16px;"
+            items-per-page-text=""
+            style="border: none; flex-wrap: nowrap;"
             ></v-data-footer>
         </v-toolbar>
       </template>
