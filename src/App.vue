@@ -159,7 +159,7 @@
         </v-card>
       </v-menu>
     </v-app-bar>
-    <v-main>
+    <v-main style="overflow: hidden;">
       <router-view v-if="!(!hasToken && !$refs.routerView)" v-bind:key="$route.path" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerView"/>
     </v-main>
     <v-app-bar
