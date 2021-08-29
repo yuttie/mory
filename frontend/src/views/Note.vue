@@ -921,6 +921,17 @@ events:
     }
   }
 
+  editorHasFocus(): boolean {
+    if (this.useSimpleEditor) {
+      const textarea = this.$refs.editor;
+      return document.activeElement === textarea;
+    }
+    else {
+      const textarea = (this.$refs.editor as Editor).$el.querySelector('textarea');
+      return document.activeElement === textarea;
+    }
+  }
+
   notifyUpstreamState(e: FocusEvent) {
     this.checkUpstreamState()
       .then(state => {
@@ -967,13 +978,18 @@ events:
       return;
     }
     if (e.key === 'e') {
+      // Prevent 'e' from being input if editor is already focused
+      if (!this.editorHasFocus()) {
+        e.preventDefault();
+      }
+      // Show editor
       if (!this.editorIsVisible) {
-        this.toggleEditor();
+        this.editorIsVisible = true;
       }
-      else {
-        this.focusOrBlurEditor();
+      // Focus editor
+      if (!this.editorHasFocus()) {
+        (this.$refs.editor as Editor | HTMLTextAreaElement).focus();
       }
-      e.preventDefault();
     }
     else if (e.ctrlKey && e.key === 'Enter') {
       this.toggleEditor();
