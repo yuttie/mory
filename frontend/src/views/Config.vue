@@ -5,6 +5,11 @@
       These settings are only applied to the current environment and never be saved in the repository.
     </v-alert>
     <v-checkbox
+      v-model="currentUseSimpleEditor"
+      v-on:change="updateUseSimpleEditor"
+      label="Use Simple Editor"
+    ></v-checkbox>
+    <v-checkbox
       v-model="currentLockScroll"
       v-on:change="updateLockScroll"
       label="Lock Scroll by Default"
@@ -123,6 +128,7 @@ export default class Config extends Vue {
     { name: 'Vsc Dark Plus',                    value: 'vsc-dark-plus'                    },
     { name: 'Xonokai',                          value: 'xonokai'                          },
   ];
+  currentUseSimpleEditor = localStorage.getItem('use-simple-editor') === "true";
   currentLockScroll = localStorage.getItem('lock-scroll') === "true";
   currentEditorTheme = localStorage.getItem('editor-theme') || 'default';
   currentEditorKeybinding = localStorage.getItem('editor-keybinding') || 'default';
@@ -130,6 +136,10 @@ export default class Config extends Vue {
 
   mounted() {
     document.title = `Config | ${process.env.VUE_APP_NAME}`;
+  }
+
+  updateUseSimpleEditor(newUseSimpleEditor: boolean) {
+    localStorage.setItem('use-simple-editor', newUseSimpleEditor.toString());
   }
 
   updateLockScroll(newLockScroll: boolean) {
