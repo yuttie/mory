@@ -1182,7 +1182,7 @@ $nav-height: 48px;
     outline: none;
     font-size: 13px;
     font-family: Menlo, monospace;
-    white-space: nowrap;
+    white-space: pre;
     overflow: auto;
     resize: none;
   }
