@@ -95,13 +95,24 @@
               v-on:click="formatTable"
             >Format Table</v-btn>
           </v-toolbar>
-          <Editor
-            v-bind:value="text"
-            v-bind:mode="editorMode"
-            v-on:change="onEditorChange"
-            v-on:scroll="onEditorScroll"
-            ref="editor"
-          ></Editor>
+          <template v-if="useSimpleEditor">
+            <textarea
+              v-bind:value="text"
+              v-on:input="onEditorChange($event.target.value)"
+              class="editor simple-editor"
+              ref="editor"
+            ></textarea>
+          </template>
+          <template v-else>
+            <Editor
+              v-bind:value="text"
+              v-bind:mode="editorMode"
+              v-on:change="onEditorChange"
+              v-on:scroll="onEditorScroll"
+              v-on:transitionend.native="$refs.editor.resize()"
+              ref="editor"
+            ></Editor>
+          </template>
         </div>
         <div class="viewer-pane">
           <v-snackbar top timeout="1000" v-model="showUpstreamState" v-bind:color="upstreamStateSnackbarColor">
@@ -280,6 +291,7 @@ export default class Note extends Vue {
   showUpstreamState = false;
   rendered = { metadata: null as null | any, content: '' };
   observer = null as null | IntersectionObserver;
+  useSimpleEditor = localStorage.getItem('use-simple-editor') === "true";
   lockScroll = localStorage.getItem('lock-scroll') === "true";
   ignoreNext = false;
   noteHasUpstream = false;
@@ -323,7 +335,7 @@ events:
 # ${this.$route.params.path}`;
         this.initialText = this.text;
         this.editorIsVisible = true;
-        (this.$refs.editor as Editor).focus();
+        (this.$refs.editor as Editor | HTMLTextAreaElement).focus();
 
         // Update immediately
         this.updateRendered();
@@ -338,10 +350,6 @@ events:
       this.viewerIsVisible = false;
       this.focusOrBlurEditor();
     }
-
-    ((this.$refs.editor as Vue).$el as HTMLElement).addEventListener('transitionend', () => {
-      (this.$refs.editor as Editor).resize();
-    });
   }
 
   destroyed() {
@@ -404,11 +412,19 @@ events:
   }
 
   formatTable() {
-    const editor = (this.$refs.editor as Editor).editor;
-    const selectedText = editor.session.getTextRange(editor.getSelectionRange());
-    const formattedText = CliPrettify.prettify(selectedText);
-    editor.session.remove(editor.getSelectionRange());
-    editor.insert(formattedText);
+    if (this.useSimpleEditor) {
+      const editor = this.$refs.editor as HTMLTextAreaElement;
+      const selectedText = editor.value.slice(editor.selectionStart, editor.selectionEnd);
+      const formattedText = CliPrettify.prettify(selectedText);
+      editor.value = editor.value.slice(0, editor.selectionStart) + formattedText + editor.value.slice(editor.selectionEnd);
+    }
+    else {
+      const editor = (this.$refs.editor as Editor).editor;
+      const selectedText = editor.session.getTextRange(editor.getSelectionRange());
+      const formattedText = CliPrettify.prettify(selectedText);
+      editor.session.remove(editor.getSelectionRange());
+      editor.insert(formattedText);
+    }
   }
 
   updateRendered() {
@@ -492,7 +508,16 @@ events:
         else {
           if (this.lockScroll && visibleEntries.length > 0) {
             const lineNumber = (visibleEntries[0].target as any).dataset.line;
-            (this.$refs.editor as Editor).scrollTo(lineNumber);
+            if (this.useSimpleEditor) {
+              const editor = this.$refs.editor as HTMLTextAreaElement;
+              const style = window.getComputedStyle(editor);
+              const lineHeight = parseFloat(style.getPropertyValue('line-height'));
+              editor.scrollTo({ top: lineNumber * lineHeight });
+            }
+            else {
+              const editor = this.$refs.editor as Editor;
+              editor.scrollTo(lineNumber);
+            }
           }
         }
       }, {
@@ -800,7 +825,7 @@ events:
         this.text = res.data;
         this.initialText = this.text;
         this.editorIsVisible = true;
-        (this.$refs.editor as Editor).focus();
+        (this.$refs.editor as Editor | HTMLTextAreaElement).focus();
 
         // Update immediately
         this.updateRendered();
@@ -889,10 +914,10 @@ events:
 
   focusOrBlurEditor() {
     if (this.editorIsVisible) {
-      (this.$refs.editor as Editor).focus();
+      (this.$refs.editor as Editor | HTMLTextAreaElement).focus();
     }
     else {
-      (this.$refs.editor as Editor).blur();
+      (this.$refs.editor as Editor | HTMLTextAreaElement).blur();
     }
   }
 
@@ -1133,6 +1158,17 @@ $nav-height: 48px;
 
   .editor {
     flex: 1 1 0;
+  }
+
+  .editor.simple-editor {
+    padding: 0.5em;
+    border: none;
+    outline: none;
+    font-size: 13px;
+    font-family: Menlo, monospace;
+    white-space: nowrap;
+    overflow: auto;
+    resize: none;
   }
 }
 
