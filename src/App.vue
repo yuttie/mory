@@ -200,6 +200,7 @@
             autocomplete="username"
             type="text"
             autofocus
+            outlined
           ></v-text-field>
           <v-text-field
             v-on:keydown.enter="login"
@@ -208,13 +209,14 @@
             name="password"
             autocomplete="current-password"
             type="password"
+            outlined
           ></v-text-field>
           <v-btn
             v-on:click="login"
             color="primary"
             block
             text
-            outline
+            outlined
           >Login</v-btn>
         </form>
       </div>
