@@ -759,6 +759,14 @@ $space: 12px;
   cursor: grab;
 }
 .task-list {
+  overflow-y: auto;
+
+  .date-header {
+    padding: 0 8px;
+  }
+  .task-list-item {
+    padding: 4px 8px;
+  }
   div > .date-header {
     border-bottom: 2px solid #ddd;
     margin-bottom: 2px;
@@ -766,9 +774,5 @@ $space: 12px;
   div + div > .date-header {
     margin-top: 12px;
   }
-}
-.task-list {
-  overflow-y: auto;
-  padding: 0 8px;
 }
 </style>
