@@ -103,6 +103,7 @@
     </v-toolbar>
     <v-dialog
       max-width="600px"
+      v-if="editTarget"
       v-model="editTaskDialog"
       v-bind:activator="editTaskDialogActivator"
       v-on:click:outside="closeEditTaskDialog"
@@ -267,14 +268,7 @@ export default class Tasks extends Vue {
   newTaskDialog = false;
   selectedTaskIndex: null | number = null;
   selectedTask: null | Task = null;
-  editTarget: Task = {
-    name: '',
-    deadline: null,
-    schedule: null,
-    done: false,
-    tags: [],
-    note: '',
-  };
+  editTarget: null | Task = null;
   editTaskDialog = false;
   editTaskDialogActivator: any = null;
   // Group
@@ -289,11 +283,11 @@ export default class Tasks extends Vue {
   mounted() {
     document.title = `Tasks | ${process.env.VUE_APP_NAME}`;
     this.load();
-    window.addEventListener('focus', this.load);
+    window.addEventListener('focus', this.loadIfNotEditing);
   }
 
   destroyed() {
-    window.removeEventListener('focus', this.load);
+    window.removeEventListener('focus', this.loadIfNotEditing);
   }
 
   get knownTags(): [string, number][] {
@@ -388,15 +382,7 @@ export default class Tasks extends Vue {
       this.editTarget.note     ||= '';
     }
     else {
-      // Set dummy data
-      this.editTarget = {
-        name: '',
-        deadline: null,
-        schedule: null,
-        done: false,
-        tags: [],
-        note: '',
-      };
+      this.editTarget = null;
     }
   }
 
@@ -484,6 +470,12 @@ export default class Tasks extends Vue {
     // Save
     this.clean();
     await this.save();
+  }
+
+  async loadIfNotEditing() {
+    if (this.editTarget === null) {
+      await this.load();
+    }
   }
 
   async load() {
@@ -654,6 +646,9 @@ export default class Tasks extends Vue {
   async updateSelected() {
     if (this.selectedTask === null) {
       throw new Error('selectedTask is null');
+    }
+    if (this.editTarget === null) {
+      throw new Error('editTarget is null');
     }
     // Copy back
     this.selectedTask.name = this.editTarget.name;
