@@ -762,7 +762,7 @@ $space: 12px;
   overflow-y: auto;
 
   .date-header {
-    padding: 0 8px;
+    padding: 2px 8px 0 8px;
   }
   .task-list-item {
     padding: 4px 8px;
