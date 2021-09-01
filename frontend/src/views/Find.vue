@@ -9,11 +9,13 @@
       <template v-slot:activator="{ on }">
         <v-text-field
           v-model="queryText"
-          dense
           filled
           rounded
+          single-line
+          clearable
           prepend-inner-icon="mdi-magnify"
           v-on:focus="on.click"
+          v-on:click:clear="clearQuery"
           type="text"
           label="Search"
           autocomplete="off"
@@ -21,11 +23,6 @@
           ref="query"
           class="mx-3 mt-3 flex-grow-0"
         >
-          <template v-slot:append>
-            <v-btn icon v-bind:ripple="false" v-on:click="clearQuery" v-if="queryText !== ''">
-              <v-icon>mdi-close</v-icon>
-            </v-btn>
-          </template>
         </v-text-field>
       </template>
       <v-card>
@@ -224,7 +221,12 @@ export default class Find extends Vue {
   }
 
   @Watch('queryText')
-  onQueryTextChanged(q: string) {
+  onQueryTextChanged(q: string | null) {
+    if (q === null) {
+      q = '';
+      // Workaround: 'clearable' <v-text-field> sets its model to null
+      this.queryText = '';
+    }
     if (q !== this.$route.query.q) {
       this.$router.replace({
         query: {
