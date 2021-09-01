@@ -38,6 +38,7 @@
             v-if="$route.name === 'Note'"
             v-bind:to="{ name: 'Create', query: { from: $route.params.path } }"
           >Duplicate</v-list-item>
+          <v-subheader>Templates</v-subheader>
           <v-list-item
             v-for="path in templates"
             v-bind:key="path"
