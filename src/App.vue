@@ -32,18 +32,55 @@
             <v-icon>mdi-plus-box-outline</v-icon>
           </v-btn>
         </template>
-        <v-list dense>
-          <v-list-item to="/create">New</v-list-item>
+        <v-list>
+          <v-subheader>Create</v-subheader>
+          <v-list-item to="/create">
+            <v-list-item-icon>
+              <v-icon>mdi-file-outline</v-icon>
+            </v-list-item-icon>
+            <v-list-item-content>
+              <v-list-item-title>New note</v-list-item-title>
+            </v-list-item-content>
+          </v-list-item>
           <v-list-item
             v-if="$route.name === 'Note'"
             v-bind:to="{ name: 'Create', query: { from: $route.params.path } }"
-          >Duplicate</v-list-item>
+          >
+            <v-list-item-icon>
+              <v-icon>mdi-file-multiple-outline</v-icon>
+            </v-list-item-icon>
+            <v-list-item-content>
+              <v-list-item-title>Copy of this note</v-list-item-title>
+            </v-list-item-content>
+          </v-list-item>
           <v-subheader>Templates</v-subheader>
           <v-list-item
             v-for="path in templates"
             v-bind:key="path"
             v-bind:to="{ name: 'Create', query: { from: path } }"
-          >{{ path.replace(/\.template$/i, '') }}</v-list-item>
+          >
+            <v-list-item-icon>
+              <v-icon>mdi-file-document-outline</v-icon>
+            </v-list-item-icon>
+            <v-list-item-content>
+              <v-list-item-title>{{ path.replace(/\.template$/i, '') }}</v-list-item-title>
+            </v-list-item-content>
+            <v-list-item-action>
+              <v-tooltip top>
+                <template v-slot:activator="{ on, attrs }">
+                  <v-btn
+                    icon
+                    v-bind="attrs"
+                    v-on="on"
+                    v-bind:to="{ name: 'Note', params: { path: path } }"
+                  >
+                    <v-icon>mdi-pencil</v-icon>
+                  </v-btn>
+                </template>
+                <span>Edit template</span>
+              </v-tooltip>
+            </v-list-item-action>
+          </v-list-item>
         </v-list>
       </v-menu>
       <v-menu
