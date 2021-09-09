@@ -250,6 +250,7 @@
             outlined
           ></v-text-field>
           <v-btn
+            v-bind:loading="isLoggingIn"
             v-on:click="login"
             color="primary"
             block
