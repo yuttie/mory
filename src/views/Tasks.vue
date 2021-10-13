@@ -177,7 +177,14 @@
               v-bind:key="date"
               v-bind:class="{ today: isToday(date) }"
             >
-              <div class="date-header">{{ isToday(date) ? `Today (${date})` : date }}</div>
+              <div class="date-header">
+                <span>{{ isToday(date) ? `Today (${date})` : date }}</span>
+                <v-btn
+                  text
+                  x-small
+                  v-on:click="moveUndoneToFront(date)"
+                >Sort</v-btn>
+              </div>
               <draggable v-model="tasks.scheduled[date]" group="tasks" v-bind:delay="500" v-bind:delay-on-touch-only="true" v-on:end="clean(); save();">
                 <TaskListItem
                   v-for="(task, index) of tasks.scheduled[date]"
@@ -438,6 +445,24 @@ export default class Tasks extends Vue {
     this.newTask.name += ' (copy)';
     this.newTaskDialog = true;
     this.closeEditTaskDialog();
+  }
+
+  async moveUndoneToFront(date: string) {
+    // Collect undone tasks
+    const done = [];
+    const undone = [];
+    for (const task of this.tasks.scheduled[date]) {
+      if (task.done) {
+        done.push(task);
+      }
+      else {
+        undone.push(task);
+      }
+    }
+    this.tasks.scheduled[date] = undone.concat(done);
+    // Save
+    this.clean();
+    await this.save();
   }
 
   async collectUndone() {
