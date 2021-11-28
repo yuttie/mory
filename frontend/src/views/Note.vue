@@ -704,6 +704,13 @@ events:
     }
   }
 
+  @Watch('viewerIsVisible')
+  onViewerIsVisibleChanged(newValue: boolean, oldValue: boolean) {
+    if (!oldValue && newValue) {
+      this.updateRendered();
+    }
+  }
+
   @Watch('renameMenuIsVisible')
   onRenameMenuIsVisibleChanged(isVisible: boolean) {
     if (isVisible) {
@@ -713,8 +720,10 @@ events:
 
   onEditorChange(text: string) {
     this.text = text;
-    // Update lazily
-    this.updateRenderedLazy();
+    if (this.viewerIsVisible) {
+      // Update lazily
+      this.updateRenderedLazy();
+    }
   }
 
   onEditorScroll(lineNumber: number) {
