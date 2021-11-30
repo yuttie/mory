@@ -987,17 +987,16 @@ events:
       return;
     }
     if (e.key === 'e') {
-      // Prevent 'e' from being input if editor is already focused
-      if (!this.editorHasFocus()) {
-        e.preventDefault();
+      if (this.editorIsVisible) {
+        // Do nothing
       }
-      // Show editor
-      if (!this.editorIsVisible) {
+      else {
+        // Show editor
         this.editorIsVisible = true;
-      }
-      // Focus editor
-      if (!this.editorHasFocus()) {
+        // Focus editor
         (this.$refs.editor as Editor | HTMLTextAreaElement).focus();
+        // Prevent 'e' from being input if editor is already focused
+        e.preventDefault();
       }
     }
     else if (e.ctrlKey && e.key === 'Enter') {
