@@ -92,10 +92,30 @@
             dense
             class="flex-grow-0"
           >
-            <v-btn
-              plain
-              v-on:click="formatTable"
-            >Format Table</v-btn>
+            <v-btn icon tile v-on:click="insertText('## ')">
+              <v-icon>mdi-format-header-2</v-icon>
+            </v-btn>
+            <v-btn icon tile v-on:click="insertText('* ')">
+              <v-icon>mdi-format-list-bulleted</v-icon>
+            </v-btn>
+            <v-btn icon tile v-on:click="encloseText('*', '*')">
+              <v-icon>mdi-format-italic</v-icon>
+            </v-btn>
+            <v-btn icon tile v-on:click="encloseText('**', '**')">
+              <v-icon>mdi-format-bold</v-icon>
+            </v-btn>
+            <v-btn icon tile v-on:click="encloseText('`', '`')">
+              <v-icon>mdi-xml</v-icon>
+            </v-btn>
+            <v-btn icon tile v-on:click="encloseText('> ', '')">
+              <v-icon>mdi-format-quote-close</v-icon>
+            </v-btn>
+            <v-btn icon tile v-on:click="encloseText('[', ']()')">
+              <v-icon>mdi-link-variant</v-icon>
+            </v-btn>
+            <v-btn icon tile v-on:click="formatTable">
+              <v-icon>mdi-table-check</v-icon>
+            </v-btn>
           </v-toolbar>
           <template v-if="useSimpleEditor">
             <textarea
@@ -412,6 +432,34 @@ events:
       onlyViewer: !this.editorIsVisible && this.viewerIsVisible,
       both: this.editorIsVisible && this.viewerIsVisible,
     };
+  }
+
+  insertText(text: string) {
+    if (this.useSimpleEditor) {
+      const editor = this.$refs.editor as HTMLTextAreaElement;
+      editor.value = editor.value.slice(0, editor.selectionStart) + text + editor.value.slice(editor.selectionEnd);
+    }
+    else {
+      const editor = (this.$refs.editor as Editor).editor;
+      editor.session.remove(editor.getSelectionRange());
+      editor.insert(text);
+    }
+  }
+
+  encloseText(before: string, after: string) {
+    if (this.useSimpleEditor) {
+      const editor = this.$refs.editor as HTMLTextAreaElement;
+      const selectedText = editor.value.slice(editor.selectionStart, editor.selectionEnd);
+      const formattedText = before + selectedText + after;
+      editor.value = editor.value.slice(0, editor.selectionStart) + formattedText + editor.value.slice(editor.selectionEnd);
+    }
+    else {
+      const editor = (this.$refs.editor as Editor).editor;
+      const selectedText = editor.session.getTextRange(editor.getSelectionRange());
+      const formattedText = before + selectedText + after;
+      editor.session.remove(editor.getSelectionRange());
+      editor.insert(formattedText);
+    }
   }
 
   formatTable() {
