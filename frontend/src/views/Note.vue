@@ -87,11 +87,7 @@
         <div class="editor-pane"
           v-on:transitionend="onEditorPaneResize"
         >
-          <v-toolbar
-            flat
-            dense
-            class="flex-grow-0"
-          >
+          <v-sheet outlined class="flex-grow-0">
             <v-btn icon tile v-on:click="insertText('## ')">
               <v-icon>mdi-format-header-2</v-icon>
             </v-btn>
@@ -116,7 +112,7 @@
             <v-btn icon tile v-on:click="formatTable">
               <v-icon>mdi-table-check</v-icon>
             </v-btn>
-          </v-toolbar>
+          </v-sheet>
           <template v-if="useSimpleEditor">
             <textarea
               v-bind:value="text"
