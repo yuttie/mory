@@ -84,7 +84,9 @@
         </v-card>
       </v-dialog>
       <div class="panes" v-bind:class="panesState">
-        <div class="editor-pane">
+        <div class="editor-pane"
+          v-on:transitionend="onEditorPaneResize"
+        >
           <v-toolbar
             flat
             dense
@@ -109,12 +111,13 @@
               v-bind:mode="editorMode"
               v-on:change="onEditorChange"
               v-on:scroll="onEditorScroll"
-              v-on:transitionend.native="$refs.editor.resize()"
               ref="editor"
             ></Editor>
           </template>
         </div>
-        <div class="viewer-pane">
+        <div class="viewer-pane"
+          v-on:transitionend="onViewerPaneResize"
+        >
           <v-snackbar top timeout="1000" v-model="showUpstreamState" v-bind:color="upstreamStateSnackbarColor">
             <template v-if="upstreamState === 'different'">
               Upstream has been modified since it was loaded.
@@ -919,6 +922,14 @@ events:
     }
 
     this.focusOrBlurEditor();
+  }
+
+  onEditorPaneResize() {
+    (this.$refs.editor as Editor).resize();
+  }
+
+  onViewerPaneResize() {
+    // Nothing to do here as of now
   }
 
   focusOrBlurEditor() {
