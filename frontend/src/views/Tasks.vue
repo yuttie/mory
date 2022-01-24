@@ -317,7 +317,7 @@ export default class Tasks extends Vue {
   }
 
   get tasksWithDeadline() {
-    const result = [];
+    const result: [string | null, number, Task][] = [];
     // Backlog
     for (const [i, task] of this.tasks.backlog.entries()) {
       if (task.deadline) {
@@ -332,6 +332,20 @@ export default class Tasks extends Vue {
         }
       }
     }
+    // Sort
+    result.sort(([date1, i1, task1], [date2, i2, task2]) => {
+      const deadline1 = dayjs(task1.deadline);
+      const deadline2 = dayjs(task2.deadline);
+      if (deadline1.isAfter(deadline2)) {
+        return -1;
+      }
+      else if (deadline2.isAfter(deadline1)) {
+        return +1;
+      }
+      else {
+        return 0;
+      }
+    });
     return result;
   }
 
