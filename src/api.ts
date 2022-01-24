@@ -76,6 +76,15 @@ export interface Task {
   note: string;
 }
 
+export function isTask(task: any): task is Task {
+  return 'name' in task
+    && 'deadline' in task
+    && 'schedule' in task
+    && 'done' in task
+    && 'tags' in task
+    && 'note' in task;
+}
+
 // Find
 export interface Query {
   paths: Set<any>;
