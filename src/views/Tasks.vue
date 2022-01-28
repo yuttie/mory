@@ -334,16 +334,24 @@ export default class Tasks extends Vue {
     }
     // Sort
     result.sort(([date1, i1, task1], [date2, i2, task2]) => {
-      const deadline1 = dayjs(task1.deadline);
-      const deadline2 = dayjs(task2.deadline);
-      if (deadline1.isAfter(deadline2)) {
-        return -1;
-      }
-      else if (deadline2.isAfter(deadline1)) {
+      if (task1.done && !task2.done) {
         return +1;
       }
+      else if (!task1.done && task2.done) {
+        return -1;
+      }
       else {
-        return 0;
+        const deadline1 = dayjs(task1.deadline);
+        const deadline2 = dayjs(task2.deadline);
+        if (deadline1.isAfter(deadline2)) {
+          return -1;
+        }
+        else if (deadline2.isAfter(deadline1)) {
+          return +1;
+        }
+        else {
+          return 0;
+        }
       }
     });
     return result;
