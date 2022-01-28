@@ -605,10 +605,10 @@ events:
             errors.push(err);
           }
           errors.sort((a, b) => {
-            if (a.dataPath < b.dataPath) {
+            if (a.instancePath < b.instancePath) {
               return -1;
             }
-            else if (a.dataPath > b.dataPath) {
+            else if (a.instancePath > b.instancePath) {
               return 1;
             }
             else {

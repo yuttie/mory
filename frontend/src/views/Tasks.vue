@@ -239,6 +239,7 @@ import TaskEditor from '@/components/TaskEditor.vue';
 import TaskListItem from '@/components/TaskListItem.vue';
 
 import * as api from '@/api';
+import axios from 'axios';
 import { Task } from '@/api';
 import { isMetadataEventMultiple, ListEntry, validateEvent } from '@/api';
 import Color from 'color';
@@ -535,34 +536,36 @@ export default class Tasks extends Vue {
       this.isLoading = false;
     }
     catch (error) {
-      if (error.response) {
-        if (error.response.status === 401) {
-          // Unauthorized
-          this.$emit('tokenExpired', () => this.load());
-        }
-        else if (error.response.status === 404) {
-          // Create a new one
-          await api.addNote('.mory/tasks.yaml', YAML.stringify({
-            tasks: {
-              backlog: [],
-              scheduled: {},
-            },
-            groups: [],
-          }));
-          this.load();
+      if (axios.isAxiosError(error)) {
+        if (error.response) {
+          if (error.response.status === 401) {
+            // Unauthorized
+            this.$emit('tokenExpired', () => this.load());
+          }
+          else if (error.response.status === 404) {
+            // Create a new one
+            await api.addNote('.mory/tasks.yaml', YAML.stringify({
+              tasks: {
+                backlog: [],
+                scheduled: {},
+              },
+              groups: [],
+            }));
+            this.load();
+          }
+          else {
+            this.error = true;
+            this.errorText = error.toString();
+            console.log('Unhandled error: {}', error.response);
+            this.isLoading = false;
+          }
         }
         else {
           this.error = true;
-          this.errorText = error.response;
-          console.log('Unhandled error: {}', error.response);
+          this.errorText = error.toString();
+          console.log('Unhandled error: {}', error);
           this.isLoading = false;
         }
-      }
-      else {
-        this.error = true;
-        this.errorText = error.toString();
-        console.log('Unhandled error: {}', error);
-        this.isLoading = false;
       }
     }
   }
