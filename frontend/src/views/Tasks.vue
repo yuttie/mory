@@ -184,6 +184,11 @@
                   x-small
                   v-on:click="moveUndoneToFront(date)"
                 >Sort</v-btn>
+                <v-btn
+                  text
+                  x-small
+                  v-on:click="moveUndoneToToday(date)"
+                >Move to today</v-btn>
               </div>
               <draggable v-model="tasks.scheduled[date]" group="tasks" v-bind:delay="500" v-bind:delay-on-touch-only="true" v-on:end="clean(); save();">
                 <TaskListItem
@@ -483,6 +488,33 @@ export default class Tasks extends Vue {
       }
     }
     this.tasks.scheduled[date] = undone.concat(done);
+    // Save
+    this.clean();
+    await this.save();
+  }
+
+  async moveUndoneToToday(date: string) {
+    const tasks = this.tasks.scheduled[date];
+    // Collect undone tasks
+    const undone = [];
+    let i = 0;
+    while (i < tasks.length) {
+      const task = tasks[i];
+      if (task.done) {
+        i += 1;
+      }
+      else {
+        tasks.splice(i, 1);
+        undone.push(task);
+      }
+    }
+    // Schedule them today
+    const today = dayjs().startOf('day');
+    const todayDate = today.format('YYYY-MM-DD');
+    if (!Object.prototype.hasOwnProperty.call(this.tasks.scheduled, todayDate)) {
+      this.tasks.scheduled[todayDate] = [];
+    }
+    this.tasks.scheduled[todayDate].unshift(...undone);
     // Save
     this.clean();
     await this.save();
