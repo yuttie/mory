@@ -93,6 +93,10 @@
         <v-icon class="mr-1">mdi-checkbox-multiple-blank-outline</v-icon>
         Collect Undone
       </v-btn>
+      <v-switch
+        v-model="hideDone"
+        v-bind:label="'Hide done'"
+      ></v-switch>
       <v-progress-linear
         absolute
         bottom
@@ -173,7 +177,7 @@
           <v-card-title>Scheduled</v-card-title>
           <div class="task-list">
             <div
-              v-for="date of Object.keys(tasks.scheduled).sort((a, b) => a < b ? 1 : a > b ? -1 : 0)"
+              v-for="date of scheduledDates"
               v-bind:key="date"
               v-bind:class="{ today: isToday(date) }"
             >
@@ -290,6 +294,7 @@ export default class Tasks extends Vue {
   newGroupFilter = '';
   // Others
   isLoading = false;
+  hideDone = true;
   error = false;
   errorText = '';
 
@@ -322,6 +327,16 @@ export default class Tasks extends Vue {
       .sort(([_tag1, count1], [_tag2, count2]) => count2 - count1);
   }
 
+  get scheduledDates() {
+    let dates = Object.keys(this.tasks.scheduled);
+    dates.sort((a, b) => a < b ? 1 : a > b ? -1 : 0);
+    if (this.hideDone) {
+      // Reject if all tasks are done
+      dates = dates.filter(date => this.tasks.scheduled[date].some(task => !task.done))
+    }
+    return dates;
+  }
+
   get tasksWithDeadline() {
     const result: [string | null, number, Task][] = [];
     // Backlog
@@ -335,6 +350,19 @@ export default class Tasks extends Vue {
       for (const [i, task] of tasks.entries()) {
         if (task.deadline) {
           result.push([date, i, task]);
+        }
+      }
+    }
+    if (this.hideDone) {
+      // Remove scheduled tasks which are done
+      let i = 0;
+      while (i < result.length) {
+        let [_date, _i, task] = result[i];
+        if (task.done) {
+          result.splice(i, 1);
+        }
+        else {
+          i += 1;
         }
       }
     }
@@ -382,13 +410,17 @@ export default class Tasks extends Vue {
       }
       // Scheduled
       for (const [date, tasks] of Object.entries(this.tasks.scheduled)) {
+        grouped.scheduled[date] = [];
         for (const [i, task] of tasks.entries()) {
           if ((task.tags || []).includes(group.filter)) {
-            if (!Object.prototype.hasOwnProperty.call(grouped.scheduled, date)) {
-              grouped.scheduled[date] = [];
-            }
             grouped.scheduled[date].push([i, task]);
           }
+        }
+        // Remove if empty or all tasks are done
+        const empty = grouped.scheduled[date].length === 0;
+        const allDone = grouped.scheduled[date].every(([_, task]) => task.done);
+        if (empty || this.hideDone && allDone) {
+          delete grouped.scheduled[date];
         }
       }
       // Add
