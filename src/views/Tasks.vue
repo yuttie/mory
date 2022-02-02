@@ -208,7 +208,9 @@
         </v-card>
         <draggable class="custom-groups" v-model="groups" group="groups" v-bind:delay="500" v-bind:delay-on-touch-only="true" handle=".handle" v-on:end="clean(); save();">
           <v-card v-for="group of groups" v-bind:key="group.name" class="group">
-            <v-card-title class="handle">{{ group.name }}</v-card-title>
+            <v-card-title class="handle">
+              <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ group.name }}</span>
+            </v-card-title>
             <div class="task-list">
               <div v-for="date of Object.keys(groupedTasks[group.name].scheduled).sort((a, b) => a < b ? 1 : a > b ? -1 : 0)" v-bind:key="date">
                 <div class="date-header">{{ date }}</div>
