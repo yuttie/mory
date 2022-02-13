@@ -333,7 +333,7 @@ export default class Tasks extends Vue {
     let dates = Object.keys(this.tasks.scheduled);
     dates.sort((a, b) => a < b ? 1 : a > b ? -1 : 0);
     if (this.hideDone) {
-      // Reject if all tasks are done
+      // Keep dates that have some undone tasks
       dates = dates.filter(date => this.tasks.scheduled[date].some(task => !task.done))
     }
     return dates;
