@@ -41,7 +41,7 @@ export default class Editor extends Vue {
 
   mounted() {
     this.editor = ace.edit(this.$refs.editor as Element, {
-      fontSize: parseInt(localStorage.getItem('editor-font-size')) || 13,
+      fontSize: parseInt(localStorage.getItem('editor-font-size') || '13'),
       fontFamily: localStorage.getItem('editor-font-family') || 'Menlo, monospace',
       useSoftTabs: true,
       navigateWithinSoftTabs: true,
