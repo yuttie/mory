@@ -156,7 +156,7 @@ export default class Config extends Vue {
   currentUseSimpleEditor = localStorage.getItem('use-simple-editor') === "true";
   currentLockScroll = localStorage.getItem('lock-scroll') === "true";
   currentEditorFontFamily = localStorage.getItem('editor-font-family') || 'Menlo, monospace';
-  currentEditorFontSize = parseInt(localStorage.getItem('editor-font-size')) || 13;
+  currentEditorFontSize = parseInt(localStorage.getItem('editor-font-size') || '13');
   currentEditorTheme = localStorage.getItem('editor-theme') || 'default';
   currentEditorKeybinding = localStorage.getItem('editor-keybinding') || 'default';
   currentPrismTheme = localStorage.getItem('prism-theme') || null;
@@ -178,7 +178,7 @@ export default class Config extends Vue {
   }
 
   updateEditorFontSize(newEditorFontSize: number) {
-    localStorage.setItem('editor-font-size', newEditorFontSize);
+    localStorage.setItem('editor-font-size', newEditorFontSize.toString());
   }
 
   updateEditorTheme(newEditorTheme: string) {
