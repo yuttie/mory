@@ -14,6 +14,31 @@
       v-on:change="updateLockScroll"
       label="Lock Scroll by Default"
     ></v-checkbox>
+    <v-text-field
+      v-model="currentEditorFontFamily"
+      v-on:change="updateEditorFontFamily"
+      label="Editor Font Family"
+    >
+    </v-text-field>
+    <v-slider
+      v-model="currentEditorFontSize"
+      v-on:change="updateEditorFontSize"
+      label="Editor Font Size"
+      min="1"
+      max="100"
+      thumb-label
+    >
+      <template v-slot:append>
+        <v-text-field
+          v-model="currentEditorFontSize"
+          type="number"
+          class="mt-0 pt-0"
+          style="width: 4em"
+          suffix="px"
+          readonly
+        ></v-text-field>
+      </template>
+    </v-slider>
     <v-select
       v-bind:items="editorThemes"
       v-bind:value="currentEditorTheme"
@@ -130,6 +155,8 @@ export default class Config extends Vue {
   ];
   currentUseSimpleEditor = localStorage.getItem('use-simple-editor') === "true";
   currentLockScroll = localStorage.getItem('lock-scroll') === "true";
+  currentEditorFontFamily = localStorage.getItem('editor-font-family') || 'Menlo, monospace';
+  currentEditorFontSize = parseInt(localStorage.getItem('editor-font-size')) || 13;
   currentEditorTheme = localStorage.getItem('editor-theme') || 'default';
   currentEditorKeybinding = localStorage.getItem('editor-keybinding') || 'default';
   currentPrismTheme = localStorage.getItem('prism-theme') || null;
@@ -144,6 +171,14 @@ export default class Config extends Vue {
 
   updateLockScroll(newLockScroll: boolean) {
     localStorage.setItem('lock-scroll', newLockScroll.toString());
+  }
+
+  updateEditorFontFamily(newEditorFontFamily: string) {
+    localStorage.setItem('editor-font-family', newEditorFontFamily);
+  }
+
+  updateEditorFontSize(newEditorFontSize: number) {
+    localStorage.setItem('editor-font-size', newEditorFontSize);
   }
 
   updateEditorTheme(newEditorTheme: string) {
