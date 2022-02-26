@@ -26,7 +26,7 @@
     "markdown-table-prettify": "^3.4.0",
     "md5": "^2.3.0",
     "prism-themes": "^1.5.0",
-    "prismjs": "^1.26.0",
+    "prismjs": "^1.27.0",
     "register-service-worker": "^1.7.2",
     "uuid": "^8.3.2",
     "vue": "^2.6.12",
