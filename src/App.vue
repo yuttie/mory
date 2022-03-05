@@ -1,36 +1,34 @@
 <template>
   <v-app id="app" ref="app">
-    <v-app-bar app height="48" id="nav" color="white" elevation="2" elevate-on-scroll fixed>
-      <v-btn to="/" icon text v-bind:ripple="false">
-        <div class="logo"></div>
-      </v-btn>
-      <v-spacer></v-spacer>
-      <v-tabs
-        v-if="!$vuetify.breakpoint.xs"
-        centered
-        optional
-      >
-        <v-tab to="/"><v-icon>mdi-home-outline</v-icon></v-tab>
-        <v-tab to="/calendar"><v-icon>mdi-calendar-outline</v-icon></v-tab>
-        <v-tab to="/tasks"><v-icon>mdi-ballot-outline</v-icon></v-tab>
-        <v-tab to="/find"><v-icon>mdi-magnify</v-icon></v-tab>
-        <v-tab to="/config"><v-icon>mdi-cog-outline</v-icon></v-tab>
-        <v-tab to="/about"><v-icon>mdi-information-outline</v-icon></v-tab>
-      </v-tabs>
-      <v-spacer></v-spacer>
+    <v-navigation-drawer
+      app
+      permanent
+      expand-on-hover
+    >
+      <v-list-item class="px-2">
+        <v-list-item-avatar>
+          <v-img contain v-bind:src="require('@/assets/logo.svg')"></v-img>
+        </v-list-item-avatar>
+      </v-list-item>
+      <v-divider></v-divider>
+      <v-list-item link to="/"><v-icon>mdi-home-outline</v-icon></v-list-item>
+      <v-list-item link to="/calendar"><v-icon>mdi-calendar-outline</v-icon></v-list-item>
+      <v-list-item link to="/tasks"><v-icon>mdi-ballot-outline</v-icon></v-list-item>
+      <v-list-item link to="/find"><v-icon>mdi-magnify</v-icon></v-list-item>
+      <v-list-item link to="/config"><v-icon>mdi-cog-outline</v-icon></v-list-item>
+      <v-list-item link to="/about"><v-icon>mdi-information-outline</v-icon></v-list-item>
+      <v-divider></v-divider>
       <input type="file" multiple class="d-none" ref="fileInput">
       <v-menu
-        offset-y
-        open-on-hover
+        offset-x
       >
         <template v-slot:activator="{ on, attrs }">
-          <v-btn
+          <v-list-item
             v-bind="attrs"
             v-on="on"
-            icon
           >
             <v-icon>mdi-plus-box-outline</v-icon>
-          </v-btn>
+          </v-list-item>
         </template>
         <v-list>
           <v-subheader>Create</v-subheader>
@@ -86,27 +84,25 @@
       <v-menu
         v-bind:close-on-content-click="false"
         v-model="uploadMenuIsVisible"
-        open-on-hover
-        offset-y
+        offset-x
       >
         <template v-slot:activator="{ attrs, on }">
-          <v-badge
-            v-bind:color="uploadListBadgeColor"
-            v-bind:icon="uploadListBadgeIcon"
-            v-bind:value="uploadList.length > 0"
-            overlap
-            offset-x="20"
-            offset-y="20"
-            bordered
+          <v-list-item
+            v-bind="attrs"
+            v-on="on"
           >
-            <v-btn
-              icon
-              v-bind="attrs"
-              v-on="on"
+            <v-badge
+              v-bind:color="uploadListBadgeColor"
+              v-bind:icon="uploadListBadgeIcon"
+              v-bind:value="uploadList.length > 0"
+              overlap
+              offset-x="20"
+              offset-y="20"
+              bordered
             >
               <v-icon>mdi-cloud-upload-outline</v-icon>
-            </v-btn>
-          </v-badge>
+            </v-badge>
+          </v-list-item>
         </template>
         <v-card>
           <v-card-actions>
@@ -160,17 +156,15 @@
         </v-card>
       </v-menu>
       <v-menu
-        offset-y
-        open-on-hover
+        offset-x
       >
         <template v-slot:activator="{ attrs, on }">
-          <v-btn
-            icon
+          <v-list-item
             v-bind="attrs"
             v-on="on"
           >
             <Gravatar v-bind:email="email" v-bind:title="`Logged in as ${username}`"></Gravatar>
-          </v-btn>
+          </v-list-item>
         </template>
         <v-card>
           <v-list>
@@ -196,9 +190,11 @@
           </v-list>
         </v-card>
       </v-menu>
-    </v-app-bar>
-    <v-main style="overflow: hidden;">
-      <router-view v-if="!(!hasToken && !$refs.routerView)" v-bind:key="$route.path" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerView"/>
+    </v-navigation-drawer>
+    <v-main>
+      <v-container fluid>
+        <router-view v-if="!(!hasToken && !$refs.routerView)" v-bind:key="$route.path" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerView"/>
+      </v-container>
     </v-main>
     <v-app-bar
       app
