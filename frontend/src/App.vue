@@ -3,12 +3,19 @@
     <v-navigation-drawer
       app
       permanent
-      expand-on-hover
+      v-bind:mini-variant.sync="drawerMinimized"
     >
       <v-list-item class="px-2">
         <v-list-item-avatar>
           <v-img contain v-bind:src="require('@/assets/logo.svg')"></v-img>
         </v-list-item-avatar>
+        <v-list-item-title>Mory</v-list-item-title>
+        <v-btn
+          icon
+          @click.stop="drawerMinimized = !drawerMinimized"
+        >
+          <v-icon>mdi-chevron-left</v-icon>
+        </v-btn>
       </v-list-item>
       <v-divider></v-divider>
       <v-list-item link to="/"><v-icon>mdi-home-outline</v-icon></v-list-item>
@@ -283,6 +290,7 @@ export default class App extends Vue {
   hasToken = !!localStorage.getItem('token');
   loginUsername = "";
   loginPassword = "";
+  drawerMinimized = true;
   isLoggingIn = false;
   loginCallbacks = [] as (() => void)[];
   loginError = null as null | string;
