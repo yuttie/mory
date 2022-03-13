@@ -18,12 +18,12 @@
         </v-btn>
       </v-list-item>
       <v-divider></v-divider>
-      <v-list-item link to="/"><v-icon>mdi-home-outline</v-icon></v-list-item>
-      <v-list-item link to="/calendar"><v-icon>mdi-calendar-outline</v-icon></v-list-item>
-      <v-list-item link to="/tasks"><v-icon>mdi-ballot-outline</v-icon></v-list-item>
-      <v-list-item link to="/find"><v-icon>mdi-magnify</v-icon></v-list-item>
-      <v-list-item link to="/config"><v-icon>mdi-cog-outline</v-icon></v-list-item>
-      <v-list-item link to="/about"><v-icon>mdi-information-outline</v-icon></v-list-item>
+      <v-list-item link to="/"><v-list-item-icon><v-icon>mdi-home-outline</v-icon></v-list-item-icon><v-list-item-title>Home</v-list-item-title></v-list-item>
+      <v-list-item link to="/calendar"><v-list-item-icon><v-icon>mdi-calendar-outline</v-icon></v-list-item-icon><v-list-item-title>Calendar</v-list-item-title></v-list-item>
+      <v-list-item link to="/tasks"><v-list-item-icon><v-icon>mdi-ballot-outline</v-icon></v-list-item-icon><v-list-item-title>Tasks</v-list-item-title></v-list-item>
+      <v-list-item link to="/find"><v-list-item-icon><v-icon>mdi-magnify</v-icon></v-list-item-icon><v-list-item-title>Find</v-list-item-title></v-list-item>
+      <v-list-item link to="/config"><v-list-item-icon><v-icon>mdi-cog-outline</v-icon></v-list-item-icon><v-list-item-title>Config</v-list-item-title></v-list-item>
+      <v-list-item link to="/about"><v-list-item-icon><v-icon>mdi-information-outline</v-icon></v-list-item-icon><v-list-item-title>About</v-list-item-title></v-list-item>
       <v-divider></v-divider>
       <input type="file" multiple class="d-none" ref="fileInput">
       <v-menu
@@ -34,7 +34,12 @@
             v-bind="attrs"
             v-on="on"
           >
-            <v-icon>mdi-plus-box-outline</v-icon>
+            <v-list-item-icon>
+              <v-icon>mdi-plus-box-outline</v-icon>
+            </v-list-item-icon>
+            <v-list-item-title>
+              Add note
+            </v-list-item-title>
           </v-list-item>
         </template>
         <v-list>
@@ -98,17 +103,22 @@
             v-bind="attrs"
             v-on="on"
           >
-            <v-badge
-              v-bind:color="uploadListBadgeColor"
-              v-bind:icon="uploadListBadgeIcon"
-              v-bind:value="uploadList.length > 0"
-              overlap
-              offset-x="20"
-              offset-y="20"
-              bordered
-            >
-              <v-icon>mdi-cloud-upload-outline</v-icon>
-            </v-badge>
+            <v-list-item-icon>
+              <v-badge
+                v-bind:color="uploadListBadgeColor"
+                v-bind:icon="uploadListBadgeIcon"
+                v-bind:value="uploadList.length > 0"
+                overlap
+                offset-x="20"
+                offset-y="20"
+                bordered
+              >
+                <v-icon>mdi-cloud-upload-outline</v-icon>
+              </v-badge>
+            </v-list-item-icon>
+            <v-list-item-title>
+              Upload file
+            </v-list-item-title>
           </v-list-item>
         </template>
         <v-card>
