@@ -1201,6 +1201,8 @@ events:
 </script>
 
 <style scoped lang="scss">
+$navbar-width: 56px;
+
 #editable-viewer {
   position: relative;
 }
@@ -1261,7 +1263,7 @@ events:
 .panes.onlyEditor {
   .editor-pane {
     margin-left: 0%;
-    width: 100%;
+    width: calc(100% - $navbar-width / 2);
   }
 
   .viewer-pane {
@@ -1273,7 +1275,7 @@ events:
 .panes.onlyViewer {
   .editor-pane {
     margin-left: -50%;
-    width: 50%;
+    width: calc(50% - $navbar-width / 2);
   }
 
   .viewer-pane {
@@ -1285,7 +1287,7 @@ events:
 .panes.both {
   .editor-pane {
     margin-left: 0%;
-    width: 50%;
+    width: calc(50% - $navbar-width / 2);
   }
 
   .viewer-pane {
