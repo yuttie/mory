@@ -204,7 +204,7 @@
       </v-menu>
     </v-navigation-drawer>
     <v-main>
-      <v-container fluid pa-0>
+      <v-container fluid pa-0 style="height: 100%;">
         <router-view v-if="!(!hasToken && !$refs.routerView)" v-bind:key="$route.path" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerView"/>
       </v-container>
     </v-main>
