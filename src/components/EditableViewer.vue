@@ -1234,6 +1234,8 @@ $navbar-width: 56px;
   display: flex;
   flex-direction: column;
 
+  border-right: thin solid rgba(0, 0, 0, 0.12);
+
   .editor {
     flex: 1 1 0;
   }
