@@ -5,6 +5,7 @@
       permanent
       mini-variant
       width="56"
+      v-if="!$vuetify.breakpoint.xs"
     >
       <v-list-item class="px-2">
         <v-list-item-avatar>
