@@ -262,7 +262,7 @@ export default class Find extends Vue {
 
         // Check if metadata parse errors exist
         for (const entry of this.entries) {
-          if (Object.prototype.hasOwnProperty.call(entry.metadata, 'error')) {
+          if (entry.metadata !== null && Object.prototype.hasOwnProperty.call(entry.metadata, 'error')) {
             console.log(`Failed to parse metadata of ${entry.path}!`);
             console.log(entry);
           }
