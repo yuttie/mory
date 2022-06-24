@@ -579,6 +579,7 @@ export default class App extends Vue {
           document.head.appendChild(style);
         }, error => {
           // FIXME
+          console.log(error);
         });
       }).catch(error => {
         if (error.response) {
