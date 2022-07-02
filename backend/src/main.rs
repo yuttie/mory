@@ -14,10 +14,8 @@ use axum::{
     extract::{
         ContentLengthLimit,
         Extension,
-        FromRequest,
         Multipart,
         Path,
-        RequestParts,
     },
     http::{
         header,
@@ -32,20 +30,17 @@ use axum::{
     Router,
     routing::{get, post},
 };
-use axum_macros::debug_handler;
-use bytes::buf::Buf;
 use chrono::{DateTime, Duration, Utc, FixedOffset};
 use chrono::offset::TimeZone;
 use dotenv::dotenv;
-use futures::stream::StreamExt;
 use git2::{Index, IndexEntry, IndexTime, Repository, Oid};
 use jsonwebtoken as jwt;
-use log::{debug, error};
+use log::debug;
 use mime_guess;
 use tower::ServiceBuilder;
 use tower_http::{
     compression::CompressionLayer,
-    cors::{self, CorsLayer},
+    cors::CorsLayer,
 };
 
 use models::*;
