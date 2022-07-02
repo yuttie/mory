@@ -21,6 +21,7 @@ use axum::{
     },
     http::{
         header,
+        HeaderValue,
         Method,
         Request,
         StatusCode,
@@ -73,7 +74,7 @@ async fn main() {
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
         .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE])
-        .allow_origin(cors::Any)
+        .allow_origin(env::var("MORIED_ORIGIN_ALLOWED").unwrap().parse::<HeaderValue>().unwrap())
         .allow_credentials(true);
 
     let api = Router::new()
