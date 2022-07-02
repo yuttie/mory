@@ -18,7 +18,12 @@ log = "0.4"
 mime_guess = "2.0.3"
 pretty_env_logger = "0.4"
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 serde_yaml = "0.8.13"
-tokio = { version = "0.2", features = ["io-util", "macros"] }
 urlencoding = "1.1.1"
-warp = { version = "0.2", default-features = false, features = ["multipart", "compression"] }
+axum = { version = "0.5.10", features = ["multipart"] }
+axum-macros = "0.2.3"
+hyper = { version = "0.14.19", features = ["full"] }
+tokio = { version = "1.19.2", features = ["full"] }
+tower = "0.4.13"
+tower-http = { version = "0.3.4", features = ["compression-gzip", "cors"] }
