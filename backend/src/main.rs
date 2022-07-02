@@ -622,7 +622,10 @@ async fn get_files_path(
     Extension(state): Extension<Arc<State>>,
 ) -> Response {
     debug!("get_files_path");
-    let path = urlencoding::decode(path.as_str()).unwrap();
+
+    // Remove leading '/'
+    let path = &path[1..];
+
     let found = {
         let repo = state.repo.lock().await;
 
@@ -632,7 +635,7 @@ async fn get_files_path(
         let mut index = Index::new().unwrap();
         index.read_tree(&head_tree).unwrap();
 
-        index.iter().find(|entry| std::str::from_utf8(&entry.path).unwrap() == path.as_str())
+        index.iter().find(|entry| std::str::from_utf8(&entry.path).unwrap() == path)
     };
     if let Some(entry) = found {
         let found = {
