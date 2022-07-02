@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::env;
 use std::ffi::OsStr;
 use std::io::Write;
+use std::iter::once;
 use std::net::ToSocketAddrs;
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
@@ -41,6 +42,7 @@ use tower::ServiceBuilder;
 use tower_http::{
     compression::CompressionLayer,
     cors::CorsLayer,
+    sensitive_headers::SetSensitiveHeadersLayer,
 };
 
 use models::*;
@@ -82,6 +84,7 @@ async fn main() {
         .route("/login", post(post_login))
         .layer(
             ServiceBuilder::new()
+                .layer(SetSensitiveHeadersLayer::new(once(header::AUTHORIZATION)))
                 .layer(CompressionLayer::new())
                 .layer(cors)
         );
