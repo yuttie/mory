@@ -9,9 +9,12 @@ use std::path::PathBuf;
 use std::vec::Vec;
 use std::string::String;
 use std::sync::Arc;
+use std::time;
 
 use argon2;
 use axum::{
+    BoxError,
+    error_handling::HandleErrorLayer,
     extract::{
         ContentLengthLimit,
         Extension,
@@ -74,14 +77,28 @@ async fn main() {
         .allow_origin(env::var("MORIED_ORIGIN_ALLOWED").unwrap().parse::<HeaderValue>().unwrap())
         .allow_credentials(true);
 
-    let api = Router::new()
+    let protected_api = Router::new()
         .route("/notes", get(get_notes))
         .route("/notes/*path", get(get_notes_path).put(put_notes_path).delete(delete_notes_path))
         .route("/files", post(post_files))
         .route("/files/*path", get(get_files_path))
         .layer(Extension(state))
-        .route_layer(middleware::from_fn(auth))
+        .route_layer(middleware::from_fn(auth));
+    let login_api = Router::new()
         .route("/login", post(post_login))
+        .route_layer(
+            ServiceBuilder::new()
+                .layer(HandleErrorLayer::new(|_: BoxError| async {
+                    // Too many requests
+                    StatusCode::SERVICE_UNAVAILABLE
+                }))
+                .load_shed()
+                .buffer(1)  // Required to make it Clone.
+                .rate_limit(1, time::Duration::from_secs(3))
+        );
+    let api = Router::new()
+        .merge(protected_api)
+        .merge(login_api)
         .layer(
             ServiceBuilder::new()
                 .layer(SetSensitiveHeadersLayer::new(once(header::AUTHORIZATION)))
