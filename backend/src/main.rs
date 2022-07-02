@@ -124,7 +124,6 @@ async fn auth<B>(req: Request<B>, next: Next<B>) -> Result<Response, StatusCode>
 
 fn token_is_valid(header_value: &str) -> bool {
     let token = header_value.split_whitespace().nth(1).unwrap();
-    debug!("received token: {}", token);
 
     let secret = env::var("MORIED_SECRET").unwrap();
     match jwt::decode::<Claims>(&token, &jwt::DecodingKey::from_secret(secret.as_ref()), &jwt::Validation::default()) {
