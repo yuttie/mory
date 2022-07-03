@@ -102,7 +102,6 @@ async fn main() {
         .layer(
             ServiceBuilder::new()
                 .layer(SetSensitiveHeadersLayer::new(once(header::AUTHORIZATION)))
-                .layer(CompressionLayer::new())
                 .layer(cors)
         );
 
