@@ -234,8 +234,10 @@
             <v-text-field
               label="New path"
               v-model="newPath"
+              v-bind:rules="[newPathValidationResult]"
               v-on:focus="$event.target.select()"
               v-on:keydown="onNewPathKeydown"
+              v-on:input="onNewPathInput"
               autofocus
             ></v-text-field>
           </v-card-text>
@@ -249,7 +251,7 @@
               text
               color="primary"
               v-on:click="rename(); renameMenuIsVisible = false;"
-              v-bind:disabled="newPath === $route.params.path"
+              v-bind:disabled="newPathConflicting"
             >Rename</v-btn>
           </v-card-actions>
         </v-card>
@@ -319,6 +321,7 @@ export default class EditableViewer extends Vue {
   tocIsVisible = false;
   renameMenuIsVisible = false;
   newPath = null as null | string;
+  newPathConflicting = true;
   isLoading = false;
   isSaving = false;
   isRenaming = false;
@@ -762,6 +765,7 @@ events:
   onRenameMenuIsVisibleChanged(isVisible: boolean) {
     if (isVisible) {
       this.newPath = this.$route.params.path;
+      this.newPathConflicting = true;
     }
   }
 
@@ -1155,6 +1159,24 @@ events:
   onNewPathKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter') {
       this.rename();
+    }
+  }
+
+  onNewPathInput(path: string) {
+    api.getNote(path).then(() => {
+      this.newPathConflicting = true;
+    }).catch(() => {
+      // FIXME Status code should be checked.
+      this.newPathConflicting = false;
+    });
+  }
+
+  get newPathValidationResult(): boolean | string {
+    if (this.newPathConflicting) {
+      return 'Conflicting with existing path';
+    }
+    else {
+      return true;
     }
   }
 
