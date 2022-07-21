@@ -212,7 +212,7 @@ export default class Find extends Vue {
         path: entry.path,
         size: entry.size,
         mimeType: entry.mime_type,
-        tags: ((entry.metadata || {}).tags || []).sort(compareTags as (a: any, b: any) => number),
+        tags: ((entry.metadata || {}).tags || []).map(String).sort(compareTags),
         time: dayjs(entry.time),
       });
     }
