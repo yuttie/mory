@@ -3,6 +3,7 @@ import mdit_anchor from 'markdown-it-anchor';
 import mdit_container from 'markdown-it-container';
 const mdit_deflist = require('markdown-it-deflist');  // eslint-disable-line @typescript-eslint/no-var-requires
 const mdit_task_lists = require('markdown-it-task-lists');  // eslint-disable-line @typescript-eslint/no-var-requires
+import markdownItMermaid from '@liradb2000/markdown-it-mermaid';
 import Prism from 'prismjs';
 
 
@@ -263,5 +264,6 @@ mdit.use(mdit_container, 'dynamic', {
 });
 mdit.use(mdit_deflist);
 mdit.use(mdit_task_lists);
+mdit.use(markdownItMermaid);
 
 export { mdit, updateMetadataLineCount };
