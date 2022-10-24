@@ -39,20 +39,25 @@ use chrono::offset::TimeZone;
 use dotenv::dotenv;
 use git2::{Index, IndexEntry, IndexTime, Repository, Oid};
 use jsonwebtoken as jwt;
-use log::debug;
 use mime_guess;
 use tower::ServiceBuilder;
 use tower_http::{
     compression::CompressionLayer,
     cors::CorsLayer,
     sensitive_headers::SetSensitiveHeadersLayer,
+    trace::TraceLayer,
 };
+use tracing::debug;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use models::*;
 
 #[tokio::main]
 async fn main() {
-    pretty_env_logger::init();
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer())
+        .with(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
 
     dotenv().ok();
 
@@ -101,6 +106,7 @@ async fn main() {
         .merge(login_api)
         .layer(
             ServiceBuilder::new()
+                .layer(TraceLayer::new_for_http())
                 .layer(SetSensitiveHeadersLayer::new(once(header::AUTHORIZATION)))
                 .layer(cors)
         );

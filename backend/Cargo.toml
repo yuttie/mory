@@ -14,9 +14,7 @@ dotenv = "0.15.0"
 futures = "0.3"
 git2 = "0.13"
 jsonwebtoken = "7"
-log = "0.4"
 mime_guess = "2.0.3"
-pretty_env_logger = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.8.13"
@@ -26,4 +24,6 @@ axum-macros = "0.2.3"
 hyper = { version = "0.14.19", features = ["full"] }
 tokio = { version = "1.19.2", features = ["full"] }
 tower = { version = "0.4.13", features = ["buffer", "limit", "load-shed"] }
-tower-http = { version = "0.3.4", features = ["compression-gzip", "cors", "sensitive-headers"] }
+tower-http = { version = "0.3.4", features = ["compression-gzip", "cors", "sensitive-headers", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
