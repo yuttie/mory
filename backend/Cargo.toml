@@ -7,7 +7,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rust-argon2 = "0.8.2"
+rust-argon2 = "1.0.0"
 bytes = "0.5.6"
 chrono = { version = "0.4.12", features = ["serde"] }
 dotenv = "0.15.0"
