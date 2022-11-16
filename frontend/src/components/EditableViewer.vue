@@ -1337,6 +1337,9 @@ $navbar-width: 56px;
   width: 300px;
   position: fixed;
   right: 0;
+  height: 100%;
+  background-color: #ffffff;
+  overflow-y: auto;
 }
 
 .toc {
