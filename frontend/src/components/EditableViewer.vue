@@ -146,7 +146,7 @@
           <div class="d-flex flex-row">
             <div
               ref="renderedContent"
-              class="rendered-content flex-grow-1"
+              class="rendered-content"
             ></div>
             <div class="sidebar pa-3">
               <v-expansion-panels
@@ -1328,7 +1328,7 @@ $navbar-width: 56px;
 }
 
 .rendered-content {
-  margin-right: 300px;
+  width: calc(100% - 300px);
 }
 
 .sidebar {
