@@ -148,7 +148,7 @@
               ref="renderedContent"
               class="rendered-content"
             ></div>
-            <div class="sidebar pa-3">
+            <div class="sidebar">
               <v-expansion-panels
                 accordion
                 multiple
