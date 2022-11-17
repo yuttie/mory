@@ -42,7 +42,6 @@ use jsonwebtoken as jwt;
 use mime_guess;
 use tower::ServiceBuilder;
 use tower_http::{
-    compression::CompressionLayer,
     cors::CorsLayer,
     sensitive_headers::SetSensitiveHeadersLayer,
     trace::TraceLayer,
