@@ -202,7 +202,6 @@ let metadataLineCount = 0;
 function injectLineNumbers(tokens: any, idx: any, options: any, env: any, slf: any) {
   if (tokens[idx].map && tokens[idx].level === 0) {
     const lineNumber = tokens[idx].map[0];
-    tokens[idx].attrJoin('class', 'line');
     tokens[idx].attrSet('data-line', String(metadataLineCount + lineNumber));
   }
   return slf.renderToken(tokens, idx, options, env, slf);
