@@ -200,7 +200,7 @@ mdit.block.ruler.after('blockquote', 'math_block', math_block, {
 // - Footnotes content causes jumps. Level limit filter it automatically.
 let metadataLineCount = 0;
 function injectLineNumbers(tokens: any, idx: any, options: any, env: any, slf: any) {
-  if (tokens[idx].map && tokens[idx].level === 0) {
+  if (tokens[idx].map) {
     const lineNumber = tokens[idx].map[0];
     tokens[idx].attrSet('data-line', String(metadataLineCount + lineNumber));
   }
