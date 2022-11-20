@@ -648,6 +648,10 @@ events:
     if (!this.lockScroll) {
       return;
     }
+    if (this.ignoreNext) {
+      this.ignoreNext = false;
+      return;
+    }
 
     // Build scroll map
     const renderedContent = this.$refs.renderedContent as Element;
@@ -669,6 +673,7 @@ events:
     const [lineNumber2, offset2] = scrollMap[i + 1];
     const lineNumber = lineNumber1 + (lineNumber2 - lineNumber1) * (scrollTop - offset1) / (offset2 - offset1);
     this.editorScrollTo(lineNumber);
+    this.ignoreNext = true;
   }
 
   get title() {
@@ -770,22 +775,34 @@ events:
   }
 
   onEditorScroll(lineNumber: number) {
-    if (this.lockScroll) {
-      const renderedContent = this.$refs.renderedContent as Element;
-      const candidates = [...renderedContent.querySelectorAll('[data-line]')];
-      while (candidates.length > 0 ) {
-        if (parseInt((candidates[0] as any).dataset['line']) >= lineNumber) {
-          break;
-        }
-        else {
-          candidates.shift();
-        }
-      }
-      if (candidates.length > 0) {
-        candidates[0].scrollIntoView(true);
-        this.ignoreNext = true;
+    if (!this.lockScroll) {
+      return;
+    }
+    if (this.ignoreNext) {
+      this.ignoreNext = false;
+      return;
+    }
+
+    // Build scroll map
+    const renderedContent = this.$refs.renderedContent as Element;
+    const scrollMap: [number, number][] = [...renderedContent.querySelectorAll<HTMLElement>('[data-line]')]
+      .map((el) => {
+        const lineNumber = parseInt(el.dataset['line'] as string);
+        const offset = el.offsetTop;
+        return [lineNumber, offset];
+      });
+
+    let i = 0;
+    for (; i < scrollMap.length - 1; ++i) {
+      if (scrollMap[i][0] <= lineNumber && lineNumber < scrollMap[i + 1][0]) {
+        break;
       }
     }
+    const [lineNumber1, offset1] = scrollMap[i];
+    const [lineNumber2, offset2] = scrollMap[i + 1];
+    const offset = offset1 + (offset2 - offset1) * (lineNumber - lineNumber1) / (lineNumber2 - lineNumber1);
+    document.documentElement.scrollTo({ top: offset, left: 0, behavior: 'instant' });
+    this.ignoreNext = true;
   }
 
   checkUpstreamState() {
