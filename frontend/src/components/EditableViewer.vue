@@ -801,7 +801,7 @@ events:
     const [lineNumber1, offset1] = scrollMap[i];
     const [lineNumber2, offset2] = scrollMap[i + 1];
     const offset = offset1 + (offset2 - offset1) * (lineNumber - lineNumber1) / (lineNumber2 - lineNumber1);
-    document.documentElement.scrollTo({ top: offset, left: 0, behavior: 'instant' });
+    document.documentElement.scrollTo({ top: offset, left: 0, behavior: 'auto' });
     this.ignoreNext = true;
   }
 
