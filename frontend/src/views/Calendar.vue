@@ -133,7 +133,7 @@ export default class Calendar extends Vue {
       }
       else {
         const amount = parseFloat(match[1]);
-        const unit = match[2] as dayjs.OpUnitType;
+        const unit = match[2] as dayjs.ManipulateType;
         return dayjs(start)
           .add(amount, unit)
           .format('YYYY-MM-DD HH:mm:ss');
