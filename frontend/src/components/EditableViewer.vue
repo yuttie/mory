@@ -318,7 +318,6 @@ export default class EditableViewer extends Vue {
   upstreamState = 'same';
   showUpstreamState = false;
   rendered = { metadata: null as null | any, content: '' };
-  observer = null as null | IntersectionObserver;
   useSimpleEditor = localStorage.getItem('use-simple-editor') === "true";
   lockScroll = localStorage.getItem('lock-scroll') === "true";
   ignoreNext = false;
@@ -379,6 +378,8 @@ events:
       this.viewerIsVisible = false;
       this.focusOrBlurEditor();
     }
+
+    document.addEventListener('scroll', this.handleDocumentScroll);
   }
 
   destroyed() {
@@ -391,6 +392,8 @@ events:
       window.clearTimeout(this.renderTimeoutId);
       this.renderTimeoutId = null;
     }
+
+    document.removeEventListener('scroll', this.handleDocumentScroll);
   }
 
   loadPrismTheme(theme: string | null) {
@@ -530,64 +533,6 @@ events:
     const renderedContent = mdit.render(body);
     this.ignoreNext = true;
 
-    // Observe elements for scroll sync
-    this.$nextTick(() => {
-      if (this.observer) {
-        this.observer.disconnect();
-      }
-      // Create a new observer
-      let visibleEntries = [] as IntersectionObserverEntry[];
-      this.observer = new IntersectionObserver((entries: IntersectionObserverEntry[], observer: IntersectionObserver) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            visibleEntries.push(entry);
-          }
-          else {
-            visibleEntries = visibleEntries.filter(el => {
-              return el.target === entry.target;
-            });
-          }
-        }
-        visibleEntries.sort((a, b) => {
-          if (a.boundingClientRect.top < b.boundingClientRect.top) {
-            return -1;
-          }
-          else if (a.boundingClientRect.top > b.boundingClientRect.top) {
-            return 1;
-          }
-          else {
-            return 0;
-          }
-        });
-        if (this.ignoreNext) {
-          this.ignoreNext = false;
-        }
-        else {
-          if (this.lockScroll && visibleEntries.length > 0) {
-            const lineNumber = (visibleEntries[0].target as any).dataset.line;
-            if (this.useSimpleEditor) {
-              const editor = this.$refs.editor as HTMLTextAreaElement;
-              const style = window.getComputedStyle(editor);
-              const lineHeight = parseFloat(style.getPropertyValue('line-height'));
-              editor.scrollTo({ top: lineNumber * lineHeight });
-            }
-            else {
-              const editor = this.$refs.editor as Editor;
-              editor.scrollTo(lineNumber);
-            }
-          }
-        }
-      }, {
-        root: null,
-        rootMargin: '48px 0px 0px 0px',
-        threshold: 1.0,
-      });
-      const candidates = (this.$refs.renderedContent as Element).querySelectorAll('[data-line]');
-      for (const el of candidates) {
-        this.observer.observe(el);
-      }
-    });
-
     // Parse a YAML part
     const [parseError, metadata] = (() => {
       if (yaml !== null) {
@@ -684,6 +629,46 @@ events:
     this.renderTimeoutId = window.setTimeout(() => {
       this.updateRendered();
     }, 500);
+  }
+
+  editorScrollTo(lineNumber: number) {
+    if (this.useSimpleEditor) {
+      const editor = this.$refs.editor as HTMLTextAreaElement;
+      const style = window.getComputedStyle(editor);
+      const lineHeight = parseFloat(style.getPropertyValue('line-height'));
+      editor.scrollTo({ top: lineNumber * lineHeight });
+    }
+    else {
+      const editor = this.$refs.editor as Editor;
+      editor.scrollTo(lineNumber);
+    }
+  }
+
+  handleDocumentScroll() {
+    if (!this.lockScroll) {
+      return;
+    }
+
+    // Build scroll map
+    const renderedContent = this.$refs.renderedContent as Element;
+    const scrollMap: [number, number][] = [...renderedContent.querySelectorAll<HTMLElement>('[data-line]')]
+      .map((el) => {
+        const lineNumber = parseInt(el.dataset['line'] as string);
+        const offset = el.offsetTop;
+        return [lineNumber, offset];
+      });
+
+    const scrollTop = document.documentElement.scrollTop;
+    let i = 0;
+    for (; i < scrollMap.length - 1; ++i) {
+      if (scrollMap[i][1] <= scrollTop && scrollTop < scrollMap[i + 1][1]) {
+        break;
+      }
+    }
+    const [lineNumber1, offset1] = scrollMap[i];
+    const [lineNumber2, offset2] = scrollMap[i + 1];
+    const lineNumber = lineNumber1 + (lineNumber2 - lineNumber1) * (scrollTop - offset1) / (offset2 - offset1);
+    this.editorScrollTo(lineNumber);
   }
 
   get title() {
