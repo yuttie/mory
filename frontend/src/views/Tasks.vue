@@ -3,8 +3,8 @@
     <v-toolbar flat outlined dense class="flex-grow-0">
       <v-dialog
         max-width="600px"
+        persistent
         v-model="newTaskDialog"
-        v-on:click:outside="closeNewTaskDialog"
       >
         <template v-slot:activator="{ on, attrs }">
           <v-btn
@@ -44,8 +44,8 @@
       </v-dialog>
       <v-dialog
         max-width="600px"
+        persistent
         v-model="newGroupDialog"
-        v-on:click:outside="closeNewGroupDialog"
       >
         <template v-slot:activator="{ on, attrs }">
           <v-btn
@@ -107,10 +107,10 @@
     </v-toolbar>
     <v-dialog
       max-width="600px"
+      persistent
       v-if="editTarget"
       v-model="editTaskDialog"
       v-bind:activator="editTaskDialogActivator"
-      v-on:click:outside="closeEditTaskDialog"
     >
       <v-card>
         <v-card-actions>
