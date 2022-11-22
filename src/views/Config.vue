@@ -1,8 +1,16 @@
 <template>
   <div id="config">
     <h1>Config</h1>
+    <v-btn
+      v-on:click="loadDefault"
+      class="mt-4 mb-2"
+    >Load default</v-btn>
+    <v-btn
+      v-on:click="saveAsDefault"
+      class="mt-2 mb-4"
+    >Save as default</v-btn>
     <v-alert text type="info">
-      These settings are only applied to the current environment and never be saved in the repository.
+      The following settings are only applied to the current browser and never be saved in the repository unless saved as default.
     </v-alert>
     <v-checkbox
       v-model="currentUseSimpleEditor"
@@ -71,6 +79,9 @@
 
 <script lang="ts">
 import { Component, Vue } from 'vue-property-decorator';
+
+import * as api from '@/api';
+import YAML from 'yaml';
 
 @Component
 export default class Config extends Vue {
@@ -191,6 +202,31 @@ export default class Config extends Vue {
 
   updatePrismTheme(newPrismTheme: string) {
     localStorage.setItem('prism-theme', newPrismTheme);
+  }
+
+  async loadDefault() {
+    const res = await api.getNote('.mory/default_config.yaml');
+    const config = YAML.parse(res.data);
+    this.currentUseSimpleEditor = config.useSimpleEditor;
+    this.currentLockScroll = config.lockScroll;
+    this.currentEditorFontFamily = config.editorFontFamily;
+    this.currentEditorFontSize = config.editorFontSize;
+    this.currentEditorTheme = config.editorTheme;
+    this.currentEditorKeybinding = config.editorKeybinding;
+    this.currentPrismTheme = config.prismTheme;
+  }
+
+  saveAsDefault() {
+    const config = {
+      useSimpleEditor: this.currentUseSimpleEditor,
+      lockScroll: this.currentLockScroll,
+      editorFontFamily: this.currentEditorFontFamily,
+      editorFontSize: this.currentEditorFontSize,
+      editorTheme: this.currentEditorTheme,
+      editorKeybinding: this.currentEditorKeybinding,
+      prismTheme: this.currentPrismTheme,
+    };
+    api.addNote('.mory/default_config.yaml', YAML.stringify(config));
   }
 }
 </script>
