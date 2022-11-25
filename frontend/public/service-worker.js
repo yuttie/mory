@@ -3,21 +3,26 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('message', event => {
-  if (event.data.type === 'api-url') {
-    self.apiUrl = event.data.value;
-    self.filesUrl = new URL('files/', self.apiUrl).href;
-  }
-  else if (event.data.type === 'api-token') {
-    self.apiToken = event.data.value;
-    event.waitUntil((async () => {
-      const allClients = await self.clients.matchAll({
-        includeUncontrolled: true
-      });
+  if (event.data.type === 'configure') {
+    const config = event.data.value;
+    if (config.apiUrl) {
+      self.apiUrl = config.apiUrl;
+      self.filesUrl = new URL('files/', self.apiUrl).href;
+    }
+    if (config.apiToken) {
+      self.apiToken = config.apiToken;
+    }
+    if (self.apiUrl && self.apiToken) {
+      event.waitUntil((async () => {
+        const allClients = await self.clients.matchAll({
+          includeUncontrolled: true
+        });
 
-      for (const client of allClients) {
-        client.postMessage('api-token-received');
-      }
-    })());
+        for (const client of allClients) {
+          client.postMessage('configured');
+        }
+      })());
+    }
   }
 });
 
