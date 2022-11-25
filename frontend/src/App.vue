@@ -474,10 +474,20 @@ export default class App extends Vue {
         appEl.classList.remove('drop-target');
       }
     });
+
+    this.initNotification();
   }
 
   destroyed() {
     this.unloadCustomCss();
+  }
+
+  initNotification() {
+    Notification.requestPermission().then((result) => {
+      if (result === 'granted') {
+        //
+      }
+    });
   }
 
   login() {
