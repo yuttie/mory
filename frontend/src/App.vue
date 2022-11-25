@@ -382,9 +382,7 @@ export default class App extends Vue {
 
   created() {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register(`${process.env.BASE_URL}service-worker.js`, {
-        updateViaCache: 'none',
-      }).then((registration) => {
+      navigator.serviceWorker.register(`${process.env.BASE_URL}service-worker.js`).then((registration) => {
         console.log('Service worker registration succeeded:', registration);
         this.registration = registration;
         this.registration.active!.postMessage({
