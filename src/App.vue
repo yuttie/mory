@@ -298,7 +298,7 @@ export default class App extends Vue {
   isLoggingIn = false;
   loginCallbacks = [] as (() => void)[];
   loginError = null as null | string;
-  registration = null as null | ServiceWorkerRegistration;
+  serviceWorker = null as null | ServiceWorker;
   templates = [] as string[];
   uploadList = [] as UploadEntry[];
   uploadMenuIsVisible = false;
@@ -384,18 +384,23 @@ export default class App extends Vue {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register(`${process.env.BASE_URL}service-worker.js`).then((registration) => {
         console.log('Service worker registration succeeded:', registration);
-        this.registration = registration;
-        this.registration.active!.postMessage({
-          type: 'api-url',
-          value: new URL(process.env.VUE_APP_API_URL!, window.location.href).href,
-        });
-        this.registration.active!.postMessage({
-          type: 'api-token',
-          value: this.token,
-        });
       }).catch((error) => {
         console.error(`Service worker registration failed: ${error}`);
       });
+
+      navigator.serviceWorker.ready
+        .then((registration) => {
+          console.log(`A service worker is active: ${registration.active}`);
+          this.serviceWorker = registration.active!;
+          this.serviceWorker.postMessage({
+            type: 'api-url',
+            value: new URL(process.env.VUE_APP_API_URL!, window.location.href).href,
+          });
+          this.serviceWorker.postMessage({
+            type: 'api-token',
+            value: this.token,
+          });
+        });
     } else {
       console.error('Service workers are not supported.');
     }
@@ -491,8 +496,8 @@ export default class App extends Vue {
         this.loginCallbacks = [];
       });
 
-      if (this.registration) {
-        this.registration.active!.postMessage({
+      if (this.serviceWorker) {
+        this.serviceWorker.postMessage({
           type: 'api-token',
           value: this.token,
         });
@@ -516,8 +521,8 @@ export default class App extends Vue {
 
     // Delete the token and let a user to login again
     this.logout();
-    if (this.registration) {
-      this.registration.active!.postMessage({
+    if (this.serviceWorker) {
+      this.serviceWorker.postMessage({
         type: 'api-token',
         value: this.token,
       });
