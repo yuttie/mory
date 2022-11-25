@@ -394,17 +394,16 @@ export default class App extends Vue {
           console.log(`A service worker is active: ${registration.active}`);
           this.serviceWorker = registration.active!;
           this.serviceWorker.postMessage({
-            type: 'api-url',
-            value: new URL(process.env.VUE_APP_API_URL!, window.location.href).href,
-          });
-          this.serviceWorker.postMessage({
-            type: 'api-token',
-            value: this.token,
+            type: 'configure',
+            value: {
+              apiUrl: new URL(process.env.VUE_APP_API_URL!, window.location.href).href,
+              apiToken: this.token,
+            },
           });
         });
 
       navigator.serviceWorker.addEventListener('message', (event) => {
-        if (event.data === 'api-token-received') {
+        if (event.data === 'configured') {
           this.serviceWorkerReady = true;
         }
       });
