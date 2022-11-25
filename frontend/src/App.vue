@@ -204,7 +204,7 @@
         </v-card>
       </v-menu>
     </v-navigation-drawer>
-    <v-main>
+    <v-main v-if="serviceWorkerReady">
       <v-container fluid pa-0 style="height: 100%;">
         <router-view v-if="!(!hasToken && !$refs.routerView)" v-bind:key="$route.path" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerView"/>
       </v-container>
@@ -299,6 +299,7 @@ export default class App extends Vue {
   loginCallbacks = [] as (() => void)[];
   loginError = null as null | string;
   serviceWorker = null as null | ServiceWorker;
+  serviceWorkerReady = false;
   templates = [] as string[];
   uploadList = [] as UploadEntry[];
   uploadMenuIsVisible = false;
@@ -401,6 +402,12 @@ export default class App extends Vue {
             value: this.token,
           });
         });
+
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data === 'api-token-received') {
+          this.serviceWorkerReady = true;
+        }
+      });
     } else {
       console.error('Service workers are not supported.');
     }

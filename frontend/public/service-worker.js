@@ -9,6 +9,15 @@ self.addEventListener('message', event => {
   }
   else if (event.data.type === 'api-token') {
     self.apiToken = event.data.value;
+    event.waitUntil((async () => {
+      const allClients = await self.clients.matchAll({
+        includeUncontrolled: true
+      });
+
+      for (const client of allClients) {
+        client.postMessage('api-token-received');
+      }
+    })());
   }
 });
 
