@@ -1,3 +1,60 @@
+function updateEvents() {
+  fetch(self.apiUrl + 'notes', {
+      mode: 'cors',
+      credentials: 'include',
+      headers: {
+        'Authorization': `Bearer ${self.apiToken}`,
+      },
+    })
+    .then((res) => {
+      if (!res.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      return res.json();
+    })
+    .then((notes) => {
+      self.events = [];
+      for (const note of notes) {
+        if (note.metadata && note.metadata.events) {
+          for (const [name, event] of Object.entries(note.metadata.events)) {
+            if (event.start) {
+              const time = Date.parse(event.start);
+              if (time >= Date.now()) {
+                self.events.push([time, name]);
+              }
+            }
+            else if (event.times) {
+              for (const instance of event.times) {
+                if (instance.start) {
+                  const time = Date.parse(instance.start);
+                  if (time >= Date.now()) {
+                    self.events.push([time, name]);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+  self.updateEventsThread = setTimeout(updateEvents, 5 * 60 * 1000);
+}
+
+function checkEvents() {
+  const now = Date.now();
+  for (const [time, name] of self.events) {
+    const remainingTime = time - now;
+    if (0 <= remainingTime && remainingTime < 5 * 1000) {
+      setTimeout(() => {
+        self.registration.showNotification(name, {
+          icon: 'favicon.png',
+        });
+      }, remainingTime);
+    }
+  }
+  self.checkEventsThreadc = setTimeout(checkEvents, 5 * 1000);
+}
+
 self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
 });
@@ -22,6 +79,17 @@ self.addEventListener('message', event => {
           client.postMessage('configured');
         }
       })());
+
+      // Start event watching
+      if (!self.events) {
+        self.events = [];
+      }
+      if (!self.updateEventsThread) {
+        self.updateEventsThread = setTimeout(updateEvents, 0);
+      }
+      if (!self.checkEventsThread) {
+        self.checkEventsThread = setTimeout(checkEvents, 0);
+      }
     }
   }
 });
