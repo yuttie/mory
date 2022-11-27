@@ -19,6 +19,25 @@
         <v-list-item color="primary" link to="/config"><v-list-item-icon><v-icon>mdi-cog-outline</v-icon></v-list-item-icon><v-list-item-title>Config</v-list-item-title></v-list-item>
         <v-list-item color="primary" link to="/about"><v-list-item-icon><v-icon>mdi-information-outline</v-icon></v-list-item-icon><v-list-item-title>About</v-list-item-title></v-list-item>
       </v-list>
+
+      <v-divider></v-divider>
+
+      <v-treeview
+        v-bind:active.sync="noteTreeActive"
+        v-bind:items="noteTreeRoot"
+        v-bind:load-children="populateTagChildren"
+        v-bind:open.sync="noteTreeOpen"
+        activatable
+        open-on-click
+        transition
+        dense
+      >
+        <template v-slot:prepend="{ item }">
+          <v-icon v-if="!item.children">
+            mdi-account
+          </v-icon>
+        </template>
+      </v-treeview>
     </v-navigation-drawer>
 
     <v-app-bar
@@ -310,6 +329,13 @@ import jwt_decode from 'jwt-decode';
 import less from 'less';
 import { v4 as uuidv4 } from 'uuid';
 
+interface TreeNode {
+  name: string;
+  id: string;
+  context: string[];
+  children: TreeNode[];
+}
+
 @Component({
   components: {
     Gravatar,
@@ -328,6 +354,9 @@ export default class App extends Vue {
   templates = [] as string[];
   uploadList = [] as UploadEntry[];
   uploadMenuIsVisible = false;
+  noteTree = [] as TreeNode[];
+  noteTreeOpen = [];
+  noteTreeActive = [];
 
   get token() {
     return localStorage.getItem('token');
@@ -700,6 +729,47 @@ export default class App extends Vue {
 
   copyToClipboard(text: string) {
     navigator.clipboard.writeText(text);
+  }
+
+  get noteTreeRoot() {
+    return [
+      {
+        name: 'Tags',
+        id: '',
+        context: [],
+        children: this.noteTree,
+      },
+    ];
+  }
+
+  async populateTagChildren(item: TreeNode) {
+    const entries = await api.listNotes().then(res => res.data);
+    console.log(entries);
+
+    const tags: Set<string> = new Set();
+    for (const entry of entries) {
+      if ('metadata' in entry && entry.metadata !== null) {
+        if ('tags' in entry.metadata && entry.metadata.tags !== null) {
+          if (item.context.every((t) => entry.metadata.tags.includes(t))) {
+            for (const tag of entry.metadata.tags) {
+              tags.add(tag);
+            }
+          }
+        }
+      }
+    }
+    for (const tag of item.context) {
+      tags.delete(tag);
+    }
+    for (const tag of tags) {
+      const context = item.context.concat([tag]);
+      item.children.push({
+        name: tag,
+        id: context.join('/'),
+        context: context,
+        children: [],
+      });
+    }
   }
 }
 </script>
