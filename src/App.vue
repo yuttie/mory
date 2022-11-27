@@ -33,7 +33,7 @@
         class="mr-2"
         style="padding: 0; min-width: 36px"
         v-if="!$vuetify.breakpoint.xs"
-        v-on:click="leftDrawer = true"
+        v-on:click="leftDrawer = !leftDrawer"
       >
         <v-icon>mdi-menu</v-icon>
       </v-btn>
