@@ -18,10 +18,14 @@ export default class Editor extends Vue {
 
   @Watch('value')
   onValueChanged(value: string) {
-    if (value !== this.editor!.getValue()) {  // eslint-disable-line @typescript-eslint/no-non-null-assertion
-      const cursor = this.editor!.getCursorPosition();  // eslint-disable-line @typescript-eslint/no-non-null-assertion
-      this.editor!.setValue(value, -1);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
-      this.editor!.moveCursorToPosition(cursor);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+    if (this.editor === null) {
+      throw new Error('Editor has not been created yet.');
+    }
+
+    if (value !== this.editor.getValue()) {  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+      const cursor = this.editor.getCursorPosition();  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+      this.editor.setValue(value, -1);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+      this.editor.moveCursorToPosition(cursor);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
 
       // Fold metadata
       const MARKER = '---';
@@ -35,7 +39,7 @@ export default class Editor extends Vue {
           }
         }
         if (endLine !== null) {
-          this.editor!.getSession().addFold(
+          this.editor.getSession().addFold(
             MARKER,
             new ace.Range(0, MARKER.length, endLine, Infinity),
           );
