@@ -148,106 +148,106 @@
               ref="renderedContent"
               class="rendered-content"
             ></div>
-            <div
-              class="sidebar hidden-sm-and-down"
+          </div>
+        </div>
+        <div
+          class="sidebar hidden-sm-and-down"
+        >
+          <v-expansion-panels
+            accordion
+            multiple
+            flat
+            tile
+            hover
+            v-model="sidebarPanelState"
+          >
+            <v-expansion-panel
+              class="toc"
             >
-              <v-expansion-panels
-                accordion
-                multiple
-                flat
-                tile
-                hover
-                v-model="sidebarPanelState"
-              >
-                <v-expansion-panel
-                  class="toc"
-                >
-                  <v-expansion-panel-header>
-                    Table of Contents
-                  </v-expansion-panel-header>
-                  <v-expansion-panel-content>
-                    <ol class="tree">
-                      <li v-for="h1 of toc" v-bind:key="h1.title"><a v-bind:href="h1.href">{{ h1.title }}</a>
+              <v-expansion-panel-header>
+                Table of Contents
+              </v-expansion-panel-header>
+              <v-expansion-panel-content>
+                <ol class="tree">
+                  <li v-for="h1 of toc" v-bind:key="h1.title"><a v-bind:href="h1.href">{{ h1.title }}</a>
+                    <ol>
+                      <li v-for="h2 of h1.children" v-bind:key="h2.title"><a v-bind:href="h2.href">{{ h2.title }}</a>
                         <ol>
-                          <li v-for="h2 of h1.children" v-bind:key="h2.title"><a v-bind:href="h2.href">{{ h2.title }}</a>
-                            <ol>
-                              <li v-for="h3 of h2.children" v-bind:key="h3.title"><a v-bind:href="h3.href">{{ h3.title }}</a>
-                              </li>
-                            </ol>
+                          <li v-for="h3 of h2.children" v-bind:key="h3.title"><a v-bind:href="h3.href">{{ h3.title }}</a>
                           </li>
                         </ol>
                       </li>
                     </ol>
-                  </v-expansion-panel-content>
-                </v-expansion-panel>
-                <v-expansion-panel
-                  class="metadata"
-                  v-if="rendered.metadata"
-                >
-                  <v-expansion-panel-header>
-                    <span>
-                      Metadata
-                      <template v-if="rendered.metadata.hasOwnProperty('validationErrors')">
-                        <v-tooltip bottom color="success">
-                          <template v-slot:activator="{ on, attrs }">
-                            <v-icon color="success" v-bind="attrs" v-on="on">
-                              mdi-check
-                            </v-icon>
-                          </template>
-                          <span>YAML parse succeeded</span>
-                        </v-tooltip>
-                        <template v-if="rendered.metadata.validationErrors === null">
-                          <v-tooltip bottom color="success">
-                            <template v-slot:activator="{ on, attrs }">
-                              <v-icon color="success" v-bind="attrs" v-on="on">
-                                mdi-check
-                              </v-icon>
-                            </template>
-                            <span>Schema validation succeeded</span>
-                          </v-tooltip>
+                  </li>
+                </ol>
+              </v-expansion-panel-content>
+            </v-expansion-panel>
+            <v-expansion-panel
+              class="metadata"
+              v-if="rendered.metadata"
+            >
+              <v-expansion-panel-header>
+                <span>
+                  Metadata
+                  <template v-if="rendered.metadata.hasOwnProperty('validationErrors')">
+                    <v-tooltip bottom color="success">
+                      <template v-slot:activator="{ on, attrs }">
+                        <v-icon color="success" v-bind="attrs" v-on="on">
+                          mdi-check
+                        </v-icon>
+                      </template>
+                      <span>YAML parse succeeded</span>
+                    </v-tooltip>
+                    <template v-if="rendered.metadata.validationErrors === null">
+                      <v-tooltip bottom color="success">
+                        <template v-slot:activator="{ on, attrs }">
+                          <v-icon color="success" v-bind="attrs" v-on="on">
+                            mdi-check
+                          </v-icon>
                         </template>
-                        <template v-else>
-                          <v-tooltip bottom color="error">
-                            <template v-slot:activator="{ on, attrs }">
-                              <v-icon color="error" v-bind="attrs" v-on="on">
-                                mdi-alert
-                              </v-icon>
-                            </template>
-                            <span>Schema validation failed</span>
-                          </v-tooltip>
-                        </template>
-                      </template>
-                      <template v-else>
-                        <v-tooltip bottom color="error">
-                          <template v-slot:activator="{ on, attrs }">
-                            <v-icon color="error" v-bind="attrs" v-on="on">
-                              mdi-alert
-                            </v-icon>
-                          </template>
-                          <span>YAML parse failed</span>
-                        </v-tooltip>
-                      </template>
-                    </span>
-                  </v-expansion-panel-header>
-                  <v-expansion-panel-content>
-                    <template v-if="rendered.metadata.hasOwnProperty('validationErrors')">
-                      <template v-if="rendered.metadata.validationErrors !== null">
-                        <ul>
-                          <li v-for="error of rendered.metadata.validationErrors" v-bind:key="error.dataPath + error.schemaPath">
-                            <span class="font-weight-bold">{{error.dataPath}}: <span class="error--text">error:</span> {{error.message}}</span> (schema path: {{error.schemaPath}})
-                          </li>
-                        </ul>
-                      </template>
-                      <pre class="metadata-content">{{ JSON.stringify(rendered.metadata.value, null, 2) }}</pre>
+                        <span>Schema validation succeeded</span>
+                      </v-tooltip>
                     </template>
                     <template v-else>
-                      <span class="error--text font-weight-bold">{{ rendered.metadata.parseError.toString() }}</span>
+                      <v-tooltip bottom color="error">
+                        <template v-slot:activator="{ on, attrs }">
+                          <v-icon color="error" v-bind="attrs" v-on="on">
+                            mdi-alert
+                          </v-icon>
+                        </template>
+                        <span>Schema validation failed</span>
+                      </v-tooltip>
                     </template>
-                  </v-expansion-panel-content>
-                </v-expansion-panel>
-              </v-expansion-panels>
-            </div>
-          </div>
+                  </template>
+                  <template v-else>
+                    <v-tooltip bottom color="error">
+                      <template v-slot:activator="{ on, attrs }">
+                        <v-icon color="error" v-bind="attrs" v-on="on">
+                          mdi-alert
+                        </v-icon>
+                      </template>
+                      <span>YAML parse failed</span>
+                    </v-tooltip>
+                  </template>
+                </span>
+              </v-expansion-panel-header>
+              <v-expansion-panel-content>
+                <template v-if="rendered.metadata.hasOwnProperty('validationErrors')">
+                  <template v-if="rendered.metadata.validationErrors !== null">
+                    <ul>
+                      <li v-for="error of rendered.metadata.validationErrors" v-bind:key="error.dataPath + error.schemaPath">
+                        <span class="font-weight-bold">{{error.dataPath}}: <span class="error--text">error:</span> {{error.message}}</span> (schema path: {{error.schemaPath}})
+                      </li>
+                    </ul>
+                  </template>
+                  <pre class="metadata-content">{{ JSON.stringify(rendered.metadata.value, null, 2) }}</pre>
+                </template>
+                <template v-else>
+                  <span class="error--text font-weight-bold">{{ rendered.metadata.parseError.toString() }}</span>
+                </template>
+              </v-expansion-panel-content>
+            </v-expansion-panel>
+          </v-expansion-panels>
         </div>
       </div>
       <v-menu
@@ -1234,7 +1234,6 @@ events:
 </script>
 
 <style scoped lang="scss">
-$navbar-width: 56px;
 
 #editable-viewer {
   position: relative;
@@ -1250,20 +1249,12 @@ $navbar-width: 56px;
 }
 
 .panes {
-  position: relative;
+  transform: translate(0);
   width: 100%;
   overflow: hidden;
-
-  & > * {
-    width: 50%;
-    height: 100%;
-  }
 }
 
 .editor-pane {
-  position: fixed;
-  transition: margin-left 300ms,
-              width 300ms;
   display: flex;
   flex-direction: column;
 
@@ -1286,49 +1277,29 @@ $navbar-width: 56px;
 }
 
 .viewer-pane {
-  transition: margin-left 300ms,
-              width 300ms;
-
   .metadata-content,
   .rendered-content {
     user-select: text;
   }
 }
 
-.panes.onlyEditor {
-  .editor-pane {
-    margin-left: 0%;
-    width: calc(100% - $navbar-width / 2);
-  }
-
-  .viewer-pane {
-    margin-left: 100%;
-    width: 50%;
-  }
+.editor-pane {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 300px;
 }
 
-.panes.onlyViewer {
-  .editor-pane {
-    margin-left: -50%;
-    width: calc(50% - $navbar-width / 2);
-  }
-
-  .viewer-pane {
-    margin-left: 0%;
-    width: 100%;
-  }
+.viewer-pane {
 }
 
-.panes.both {
-  .editor-pane {
-    margin-left: 0%;
-    width: calc(50% - $navbar-width / 2);
-  }
-
-  .viewer-pane {
-    margin-left: 50%;
-    width: 50%;
-  }
+.sidebar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 300px;
 }
 
 @import '~vuetify/src/styles/settings/_variables';
@@ -1340,21 +1311,52 @@ $navbar-width: 56px;
   }
 }
 
+.panes.onlyEditor {
+  .editor-pane {
+    width: 100%;
+    @include media('md-and-up') { width: calc(100% - 300px); }
+  }
+
+  .viewer-pane {
+    visibility: hidden;
+  }
+}
+
+.panes.onlyViewer {
+  .editor-pane {
+    visibility: hidden;
+  }
+
+  .viewer-pane {
+    width: 100%;
+    @include media('md-and-up') { width: calc(100% - 300px); }
+  }
+}
+
+.panes.both {
+  .editor-pane {
+    width: 50%;
+    @include media('md-and-up') { width: calc((100% - 300px) / 2); }
+  }
+
+  .viewer-pane {
+    margin-left: 50%;
+    width: 50%;
+    @include media('md-and-up') {
+      margin-left: calc((100% - 300px) / 2);
+      width: calc((100% - 300px) / 2);
+    }
+  }
+}
+
 .rendered-content {
   width: 100%;
-
-  @include media('md-and-up') {
-    width: calc(100% - 300px);
-  }
 }
 
 .sidebar {
   border-left: 1px solid #ccc;
   flex: 0 0;
-  width: 300px;
-  position: fixed;
   right: 0;
-  height: 100%;
   background-color: #ffffff;
   overflow-y: auto;
 }
