@@ -82,9 +82,7 @@
         </v-card>
       </v-dialog>
       <div class="panes" v-bind:class="panesState">
-        <div class="editor-pane"
-          v-on:transitionend="onEditorPaneResize"
-        >
+        <div class="editor-pane">
           <v-sheet outlined class="flex-grow-0">
             <v-btn icon tile v-on:click="insertText('## ')">
               <v-icon>mdi-format-header-2</v-icon>
@@ -129,9 +127,7 @@
             ></Editor>
           </template>
         </div>
-        <div class="viewer-pane"
-          v-on:transitionend="onViewerPaneResize"
-        >
+        <div class="viewer-pane">
           <v-snackbar top timeout="1000" v-model="showUpstreamState" v-bind:color="upstreamStateSnackbarColor">
             <template v-if="upstreamState === 'different'">
               Upstream has been modified since it was loaded.
@@ -958,6 +954,11 @@ events:
     }
 
     this.focusOrBlurEditor();
+
+    this.$nextTick(() => {
+      this.onEditorPaneResize();
+      this.onViewerPaneResize();
+    });
   }
 
   toggleViewer() {
@@ -981,6 +982,11 @@ events:
     }
 
     this.focusOrBlurEditor();
+
+    this.$nextTick(() => {
+      this.onEditorPaneResize();
+      this.onViewerPaneResize();
+    });
   }
 
   onEditorPaneResize() {
@@ -992,12 +998,14 @@ events:
   }
 
   focusOrBlurEditor() {
-    if (this.editorIsVisible) {
-      (this.$refs.editor as Editor | HTMLTextAreaElement).focus();
-    }
-    else {
-      (this.$refs.editor as Editor | HTMLTextAreaElement).blur();
-    }
+    this.$nextTick(() => {
+      if (this.editorIsVisible) {
+        (this.$refs.editor as Editor | HTMLTextAreaElement).focus();
+      }
+      else {
+        (this.$refs.editor as Editor | HTMLTextAreaElement).blur();
+      }
+    });
   }
 
   editorHasFocus(): boolean {
@@ -1063,8 +1071,12 @@ events:
       else {
         // Show editor
         this.editorIsVisible = true;
-        // Focus editor
-        (this.$refs.editor as Editor | HTMLTextAreaElement).focus();
+        this.$nextTick(() => {
+          // Focus editor
+          (this.$refs.editor as Editor | HTMLTextAreaElement).focus();
+          // Resize editor
+          (this.$refs.editor as Editor).resize();
+        });
         // Prevent 'e' from being input if editor is already focused
         e.preventDefault();
       }
