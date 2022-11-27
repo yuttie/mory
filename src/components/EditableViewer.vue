@@ -149,7 +149,7 @@
               class="rendered-content"
             ></div>
             <div
-              class="sidebar hidden-xs-only"
+              class="sidebar hidden-sm-and-down"
             >
               <v-expansion-panels
                 accordion
@@ -1343,7 +1343,7 @@ $navbar-width: 56px;
 .rendered-content {
   width: 100%;
 
-  @include media('sm-and-up') {
+  @include media('md-and-up') {
     width: calc(100% - 300px);
   }
 }
