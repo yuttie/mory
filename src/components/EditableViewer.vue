@@ -148,7 +148,9 @@
               ref="renderedContent"
               class="rendered-content"
             ></div>
-            <div class="sidebar">
+            <div
+              class="sidebar hidden-xs-only"
+            >
               <v-expansion-panels
                 accordion
                 multiple
@@ -1329,8 +1331,21 @@ $navbar-width: 56px;
   }
 }
 
+@import '~vuetify/src/styles/settings/_variables';
+
+// https://gist.github.com/saifalbd/51ae5eeb38e14326ef29c930e1c52bcc?permalink_comment_id=4091174#gistcomment-4091174
+@mixin media($breakpoint) {
+  @media #{map-get($display-breakpoints, $breakpoint)} {
+    @content;
+  }
+}
+
 .rendered-content {
-  width: calc(100% - 300px);
+  width: 100%;
+
+  @include media('sm-and-up') {
+    width: calc(100% - 300px);
+  }
 }
 
 .sidebar {
