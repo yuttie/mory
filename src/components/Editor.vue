@@ -22,6 +22,25 @@ export default class Editor extends Vue {
       const cursor = this.editor!.getCursorPosition();  // eslint-disable-line @typescript-eslint/no-non-null-assertion
       this.editor!.setValue(value, -1);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
       this.editor!.moveCursorToPosition(cursor);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+
+      // Fold metadata
+      const MARKER = '---';
+      if (value.startsWith(MARKER + '\n')) {
+        const lines = value.split('\n');
+        let endLine = null;
+        for (let i = 1; i < lines.length; ++i) {
+          if (lines[i] === MARKER) {
+            endLine = i;
+            break;
+          }
+        }
+        if (endLine !== null) {
+          this.editor!.getSession().addFold(
+            MARKER,
+            new ace.Range(0, MARKER.length, endLine, Infinity),
+          );
+        }
+      }
     }
   }
 
