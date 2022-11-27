@@ -1246,6 +1246,8 @@ events:
 </script>
 
 <style scoped lang="scss">
+$app-bar-height: 48px;
+$navigation-drawer-width: 256px;
 
 #editable-viewer {
   position: relative;
@@ -1261,7 +1263,6 @@ events:
 }
 
 .panes {
-  transform: translate(0);
   width: 100%;
   overflow: hidden;
 }
@@ -1297,7 +1298,7 @@ events:
 
 .editor-pane {
   position: fixed;
-  top: 0;
+  top: $app-bar-height;
   left: 0;
   bottom: 0;
   width: 300px;
@@ -1308,7 +1309,7 @@ events:
 
 .sidebar {
   position: fixed;
-  top: 0;
+  top: $app-bar-height;
   right: 0;
   bottom: 0;
   width: 300px;
@@ -1327,6 +1328,7 @@ events:
   .editor-pane {
     width: 100%;
     @include media('md-and-up') { width: calc(100% - 300px); }
+    @include media('lg-and-up') { width: calc(100% - 256px - 300px); left: $navigation-drawer-width; }
   }
 
   .viewer-pane {
@@ -1349,6 +1351,7 @@ events:
   .editor-pane {
     width: 50%;
     @include media('md-and-up') { width: calc((100% - 300px) / 2); }
+    @include media('lg-and-up') { width: calc((100% - 256px - 300px) / 2); left: $navigation-drawer-width; }
   }
 
   .viewer-pane {
