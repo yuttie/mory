@@ -1,7 +1,5 @@
 <template>
-  <div>
-    <img v-if="email" class="gravatar" v-bind:src="url">
-  </div>
+  <img v-if="email" class="gravatar" v-bind:src="url">
 </template>
 
 <script lang="ts">
