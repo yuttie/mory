@@ -21,7 +21,7 @@ export default class Gravatar extends Vue {
   }
 
   private get url() {
-    return `https://www.gravatar.com/avatar/${this.emailHash}?size=32&default=identicon`;
+    return `https://www.gravatar.com/avatar/${this.emailHash}?size=24&default=identicon`;
   }
 }
 </script>

@@ -2,41 +2,58 @@
   <v-app id="app" ref="app">
     <v-navigation-drawer
       app
-      permanent
-      mini-variant
-      width="56"
+      clipped
+      style="z-index: 4"
+      v-model="leftDrawer"
       v-if="!$vuetify.breakpoint.xs"
+      v-bind:style="{ top: $vuetify.application.top + 'px', zIndex: 4 }"
     >
-      <v-list-item class="px-2">
-        <v-list-item-avatar>
-          <v-img contain v-bind:src="require('@/assets/logo.svg')"></v-img>
-        </v-list-item-avatar>
-        <v-list-item-title>Mory</v-list-item-title>
-      </v-list-item>
-      <v-divider></v-divider>
-      <v-list-item link to="/"><v-list-item-icon><v-icon>mdi-home-outline</v-icon></v-list-item-icon><v-list-item-title>Home</v-list-item-title></v-list-item>
-      <v-list-item link to="/calendar"><v-list-item-icon><v-icon>mdi-calendar-outline</v-icon></v-list-item-icon><v-list-item-title>Calendar</v-list-item-title></v-list-item>
-      <v-list-item link to="/tasks"><v-list-item-icon><v-icon>mdi-ballot-outline</v-icon></v-list-item-icon><v-list-item-title>Tasks</v-list-item-title></v-list-item>
-      <v-list-item link to="/find"><v-list-item-icon><v-icon>mdi-magnify</v-icon></v-list-item-icon><v-list-item-title>Find</v-list-item-title></v-list-item>
-      <v-list-item link to="/config"><v-list-item-icon><v-icon>mdi-cog-outline</v-icon></v-list-item-icon><v-list-item-title>Config</v-list-item-title></v-list-item>
-      <v-list-item link to="/about"><v-list-item-icon><v-icon>mdi-information-outline</v-icon></v-list-item-icon><v-list-item-title>About</v-list-item-title></v-list-item>
-      <v-divider></v-divider>
+      <v-list
+        dense
+        nav
+      >
+        <v-list-item color="primary" link to="/"><v-list-item-icon><v-icon>mdi-home-outline</v-icon></v-list-item-icon><v-list-item-title>Home</v-list-item-title></v-list-item>
+        <v-list-item color="primary" link to="/calendar"><v-list-item-icon><v-icon>mdi-calendar-outline</v-icon></v-list-item-icon><v-list-item-title>Calendar</v-list-item-title></v-list-item>
+        <v-list-item color="primary" link to="/tasks"><v-list-item-icon><v-icon>mdi-ballot-outline</v-icon></v-list-item-icon><v-list-item-title>Tasks</v-list-item-title></v-list-item>
+        <v-list-item color="primary" link to="/find"><v-list-item-icon><v-icon>mdi-magnify</v-icon></v-list-item-icon><v-list-item-title>Find</v-list-item-title></v-list-item>
+        <v-list-item color="primary" link to="/config"><v-list-item-icon><v-icon>mdi-cog-outline</v-icon></v-list-item-icon><v-list-item-title>Config</v-list-item-title></v-list-item>
+        <v-list-item color="primary" link to="/about"><v-list-item-icon><v-icon>mdi-information-outline</v-icon></v-list-item-icon><v-list-item-title>About</v-list-item-title></v-list-item>
+      </v-list>
+    </v-navigation-drawer>
+
+    <v-app-bar
+      app
+      dense
+      clipped-left
+      color="white"
+      elevation="0"
+    >
+      <v-btn
+        text
+        class="mr-2"
+        style="padding: 0; min-width: 36px"
+        v-if="!$vuetify.breakpoint.xs"
+        v-on:click="leftDrawer = true"
+      >
+        <v-icon>mdi-menu</v-icon>
+      </v-btn>
+      <v-toolbar-title>mory</v-toolbar-title>
+      <v-spacer></v-spacer>
       <input type="file" multiple class="d-none" ref="fileInput">
       <v-menu
-        offset-x
+        offset-y
       >
         <template v-slot:activator="{ on, attrs }">
-          <v-list-item
+          <v-btn
+            text
+            title="Add note"
+            class="mr-2"
+            style="padding: 0; min-width: 36px"
             v-bind="attrs"
             v-on="on"
           >
-            <v-list-item-icon>
-              <v-icon>mdi-plus-box-outline</v-icon>
-            </v-list-item-icon>
-            <v-list-item-title>
-              Add note
-            </v-list-item-title>
-          </v-list-item>
+            <v-icon>mdi-plus-box-outline</v-icon>
+          </v-btn>
         </template>
         <v-list>
           <v-subheader>Create</v-subheader>
@@ -92,30 +109,29 @@
       <v-menu
         v-bind:close-on-content-click="false"
         v-model="uploadMenuIsVisible"
-        offset-x
+        offset-y
       >
         <template v-slot:activator="{ attrs, on }">
-          <v-list-item
+          <v-btn
+            text
+            title="Upload file"
+            class="mr-2"
+            style="padding: 0; min-width: 36px"
             v-bind="attrs"
             v-on="on"
           >
-            <v-list-item-icon>
-              <v-badge
-                v-bind:color="uploadListBadgeColor"
-                v-bind:icon="uploadListBadgeIcon"
-                v-bind:value="uploadList.length > 0"
-                overlap
-                offset-x="20"
-                offset-y="20"
-                bordered
-              >
-                <v-icon>mdi-cloud-upload-outline</v-icon>
-              </v-badge>
-            </v-list-item-icon>
-            <v-list-item-title>
-              Upload file
-            </v-list-item-title>
-          </v-list-item>
+            <v-badge
+              v-bind:color="uploadListBadgeColor"
+              v-bind:icon="uploadListBadgeIcon"
+              v-bind:value="uploadList.length > 0"
+              overlap
+              offset-x="20"
+              offset-y="20"
+              bordered
+            >
+              <v-icon>mdi-cloud-upload-outline</v-icon>
+            </v-badge>
+          </v-btn>
         </template>
         <v-card>
           <v-card-actions>
@@ -169,15 +185,18 @@
         </v-card>
       </v-menu>
       <v-menu
-        offset-x
+        offset-y
       >
         <template v-slot:activator="{ attrs, on }">
-          <v-list-item
+          <v-btn
+            text
+            class="mr-2"
+            style="padding: 0; min-width: 36px"
             v-bind="attrs"
             v-on="on"
           >
             <Gravatar v-bind:email="email" v-bind:title="`Logged in as ${username}`"></Gravatar>
-          </v-list-item>
+          </v-btn>
         </template>
         <v-card>
           <v-list>
@@ -203,15 +222,18 @@
           </v-list>
         </v-card>
       </v-menu>
-    </v-navigation-drawer>
+    </v-app-bar>
+
     <v-main v-if="serviceWorkerReady">
       <v-container fluid pa-0 style="height: 100%;">
         <router-view v-if="!(!hasToken && !$refs.routerView)" v-bind:key="$route.path" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerView"/>
       </v-container>
     </v-main>
+
     <v-app-bar
       app
       bottom
+      dense
       color="white"
       elevation="0"
       v-if="$vuetify.breakpoint.xs"
@@ -221,7 +243,7 @@
         color="primary"
         group
         tile
-        class="flex-grow-1 d-flex"
+        class="flex-grow-1 d-flex pa-0"
       >
         <v-btn text to="/"         class="flex-grow-1"><v-icon>mdi-home-outline</v-icon>       </v-btn>
         <v-btn text to="/calendar" class="flex-grow-1"><v-icon>mdi-calendar-outline</v-icon>   </v-btn>
@@ -231,6 +253,7 @@
         <v-btn text to="/about"    class="flex-grow-1"><v-icon>mdi-information-outline</v-icon></v-btn>
       </v-btn-toggle>
     </v-app-bar>
+
     <div v-if="!hasToken" class="login-overlay">
       <div class="form">
         <v-alert type="error" v-show="loginError">
@@ -269,6 +292,7 @@
         </form>
       </div>
     </div>
+
     <v-overlay v-bind:value="isLoggingIn" z-index="20" opacity="0">
       <v-progress-circular indeterminate color="blue-grey lighten-3" size="64"></v-progress-circular>
     </v-overlay>
@@ -300,6 +324,7 @@ export default class App extends Vue {
   loginError = null as null | string;
   serviceWorker = null as null | ServiceWorker;
   serviceWorkerReady = false;
+  leftDrawer = false;
   templates = [] as string[];
   uploadList = [] as UploadEntry[];
   uploadMenuIsVisible = false;
