@@ -746,13 +746,13 @@ export default class App extends Vue {
     const entries = await api.listNotes().then(res => res.data);
     console.log(entries);
 
-    const tags: Set<string> = new Set();
+    const tags: Map<string, number> = new Map();
     for (const entry of entries) {
       if ('metadata' in entry && entry.metadata !== null) {
         if ('tags' in entry.metadata && entry.metadata.tags !== null) {
           if (item.context.every((t) => entry.metadata.tags.includes(t))) {
             for (const tag of entry.metadata.tags) {
-              tags.add(tag);
+              tags.set(tag, (tags.get(tag) || 0) + 1);
             }
           }
         }
@@ -761,7 +761,7 @@ export default class App extends Vue {
     for (const tag of item.context) {
       tags.delete(tag);
     }
-    for (const tag of tags) {
+    for (const tag of [...tags.entries()].sort((a, b) => b[1] - a[1]).map((x) => x[0])) {
       const context = item.context.concat([tag]);
       item.children.push({
         name: tag,
