@@ -32,9 +32,12 @@
         transition
         dense
       >
-        <template v-slot:prepend="{ item }">
-          <v-icon v-if="!item.children">
-            mdi-account
+        <template v-slot:prepend="{ item, open }">
+          <v-icon v-if="item.children">
+            {{ open ? 'mdi-folder-open' : 'mdi-folder' }}
+          </v-icon>
+          <v-icon v-else>
+            mdi-file-document-outline
           </v-icon>
         </template>
       </v-treeview>
