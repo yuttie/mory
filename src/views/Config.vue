@@ -83,6 +83,20 @@ import { Component, Vue } from 'vue-property-decorator';
 import * as api from '@/api';
 import YAML from 'yaml';
 
+function loadConfigValue(key: string, default_: any): any {
+  const value = localStorage.getItem(key);
+  if (value === null) {
+    return default_;
+  }
+  else {
+    return JSON.parse(value);
+  }
+}
+
+function saveConfigValue(key: string, value: any) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
 @Component
 export default class Config extends Vue {
   editorThemes = [
@@ -164,44 +178,44 @@ export default class Config extends Vue {
     { name: 'Vsc Dark Plus',                    value: 'vsc-dark-plus'                    },
     { name: 'Xonokai',                          value: 'xonokai'                          },
   ];
-  currentUseSimpleEditor = localStorage.getItem('use-simple-editor') === "true";
-  currentLockScroll = localStorage.getItem('lock-scroll') === "true";
-  currentEditorFontFamily = localStorage.getItem('editor-font-family') || 'Menlo, monospace';
-  currentEditorFontSize = parseInt(localStorage.getItem('editor-font-size') || '13');
-  currentEditorTheme = localStorage.getItem('editor-theme') || 'default';
-  currentEditorKeybinding = localStorage.getItem('editor-keybinding') || 'default';
-  currentPrismTheme = localStorage.getItem('prism-theme') || null;
+  currentUseSimpleEditor = loadConfigValue('use-simple-editor', false);
+  currentLockScroll = loadConfigValue('lock-scroll', false);
+  currentEditorFontFamily = loadConfigValue('editor-font-family', 'Menlo, monospace');
+  currentEditorFontSize = loadConfigValue('editor-font-size', 14);
+  currentEditorTheme = loadConfigValue('editor-theme', 'default');
+  currentEditorKeybinding = loadConfigValue('editor-keybinding', 'default');
+  currentPrismTheme = loadConfigValue('prism-theme', null);
 
   mounted() {
     document.title = `Config | ${process.env.VUE_APP_NAME}`;
   }
 
   updateUseSimpleEditor(newUseSimpleEditor: boolean) {
-    localStorage.setItem('use-simple-editor', newUseSimpleEditor.toString());
+    saveConfigValue('use-simple-editor', newUseSimpleEditor);
   }
 
   updateLockScroll(newLockScroll: boolean) {
-    localStorage.setItem('lock-scroll', newLockScroll.toString());
+    saveConfigValue('lock-scroll', newLockScroll);
   }
 
   updateEditorFontFamily(newEditorFontFamily: string) {
-    localStorage.setItem('editor-font-family', newEditorFontFamily);
+    saveConfigValue('editor-font-family', newEditorFontFamily);
   }
 
   updateEditorFontSize(newEditorFontSize: number) {
-    localStorage.setItem('editor-font-size', newEditorFontSize.toString());
+    saveConfigValue('editor-font-size', newEditorFontSize);
   }
 
   updateEditorTheme(newEditorTheme: string) {
-    localStorage.setItem('editor-theme', newEditorTheme);
+    saveConfigValue('editor-theme', newEditorTheme);
   }
 
   updateEditorKeybinding(newEditorKeybinding: string) {
-    localStorage.setItem('editor-keybinding', newEditorKeybinding);
+    saveConfigValue('editor-keybinding', newEditorKeybinding);
   }
 
   updatePrismTheme(newPrismTheme: string) {
-    localStorage.setItem('prism-theme', newPrismTheme);
+    saveConfigValue('prism-theme', newPrismTheme);
   }
 
   async loadDefault() {
