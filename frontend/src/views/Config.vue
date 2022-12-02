@@ -228,6 +228,14 @@ export default class Config extends Vue {
     this.currentEditorTheme = config.editorTheme;
     this.currentEditorKeybinding = config.editorKeybinding;
     this.currentPrismTheme = config.prismTheme;
+    // Save to local storage
+    this.updateUseSimpleEditor(this.currentUseSimpleEditor);
+    this.updateLockScroll(this.currentLockScroll);
+    this.updateEditorFontFamily(this.currentEditorFontFamily);
+    this.updateEditorFontSize(this.currentEditorFontSize);
+    this.updateEditorTheme(this.currentEditorTheme);
+    this.updateEditorKeybinding(this.currentEditorKeybinding);
+    this.updatePrismTheme(this.currentPrismTheme);
   }
 
   saveAsDefault() {
