@@ -147,7 +147,8 @@
           </div>
         </div>
         <div
-          class="sidebar hidden-sm-and-down"
+          class="sidebar"
+          v-bind:class="rightSidebarState"
         >
           <v-expansion-panels
             accordion
@@ -438,6 +439,14 @@ events:
       onlyEditor: this.editorIsVisible && !this.viewerIsVisible,
       onlyViewer: !this.editorIsVisible && this.viewerIsVisible,
       both: this.editorIsVisible && this.viewerIsVisible,
+      mdAndUp: this.$vuetify.breakpoint.mdAndUp && !this.$vuetify.breakpoint.lgAndUp,
+      lgAndUp: this.$vuetify.breakpoint.lgAndUp,
+    };
+  }
+
+  get rightSidebarState() {
+    return {
+      smAndDown: !this.$vuetify.breakpoint.mdAndUp,
     };
   }
 
@@ -1302,33 +1311,28 @@ $navigation-drawer-width: 256px;
   left: 0;
   bottom: 0;
   width: 300px;
+
+  transition-duration: 0.2s;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-property: left, width;
 }
 
 .viewer-pane {
-}
-
-.sidebar {
-  position: fixed;
-  top: $app-bar-height;
-  right: 0;
-  bottom: 0;
-  width: 300px;
-}
-
-@import '~vuetify/src/styles/settings/_variables';
-
-// https://gist.github.com/saifalbd/51ae5eeb38e14326ef29c930e1c52bcc?permalink_comment_id=4091174#gistcomment-4091174
-@mixin media($breakpoint) {
-  @media #{map-get($display-breakpoints, $breakpoint)} {
-    @content;
-  }
+  transition-duration: 0.2s;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-property: left, width, margin-left;
 }
 
 .panes.onlyEditor {
   .editor-pane {
     width: 100%;
-    @include media('md-and-up') { width: calc(100% - 300px); }
-    @include media('lg-and-up') { width: calc(100% - 300px - $navigation-drawer-width); left: $navigation-drawer-width; }
+  }
+  &.mdAndUp .editor-pane {
+    width: calc(100% - 300px);
+  }
+  &.lgAndUp .editor-pane {
+    width: calc(100% - 300px - $navigation-drawer-width);
+    left: $navigation-drawer-width;
   }
 
   .viewer-pane {
@@ -1343,24 +1347,33 @@ $navigation-drawer-width: 256px;
 
   .viewer-pane {
     width: 100%;
-    @include media('md-and-up') { width: calc(100% - 300px); }
+  }
+  &.mdAndUp .viewer-pane,
+  &.lgAndUp .viewer-pane {
+    width: calc(100% - 300px);
   }
 }
 
 .panes.both {
   .editor-pane {
     width: 50%;
-    @include media('md-and-up') { width: calc((100% - 300px) / 2); }
-    @include media('lg-and-up') { width: calc((100% - 300px - $navigation-drawer-width) / 2); left: $navigation-drawer-width; }
+  }
+  &.mdAndUp .editor-pane {
+    width: calc((100% - 300px) / 2);
+  }
+  &.lgAndUp .editor-pane {
+    width: calc((100% - 300px - $navigation-drawer-width) / 2);
+    left: $navigation-drawer-width;
   }
 
   .viewer-pane {
     margin-left: 50%;
     width: 50%;
-    @include media('md-and-up') {
-      margin-left: calc((100% - 300px) / 2);
-      width: calc((100% - 300px) / 2);
-    }
+  }
+  &.mdAndUp .viewer-pane,
+  &.lgAndUp .viewer-pane {
+    margin-left: calc((100% - 300px) / 2);
+    width: calc((100% - 300px) / 2);
   }
 }
 
@@ -1369,11 +1382,23 @@ $navigation-drawer-width: 256px;
 }
 
 .sidebar {
+  position: fixed;
+  top: $app-bar-height;
+  right: 0;
+  bottom: 0;
+  width: 300px;
+
   border-left: 1px solid #ccc;
   flex: 0 0;
-  right: 0;
   background-color: #ffffff;
   overflow-y: auto;
+
+  transition-duration: 0.2s;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-property: right;
+  &.smAndDown {
+    right: -300px;
+  }
 }
 
 .toc {
