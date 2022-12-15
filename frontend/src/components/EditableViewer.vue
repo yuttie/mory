@@ -82,7 +82,9 @@
         </v-card>
       </v-dialog>
       <div class="panes" v-bind:class="panesState">
-        <div class="editor-pane">
+        <div class="editor-pane"
+          v-on:transitionend="onEditorPaneResize"
+        >
           <v-sheet outlined class="flex-grow-0">
             <v-btn icon tile v-on:click="insertText('## ')">
               <v-icon>mdi-format-header-2</v-icon>
@@ -127,7 +129,9 @@
             ></Editor>
           </template>
         </div>
-        <div class="viewer-pane">
+        <div class="viewer-pane"
+          v-on:transitionend="onViewerPaneResize"
+        >
           <v-snackbar top timeout="1000" v-model="showUpstreamState" v-bind:color="upstreamStateSnackbarColor">
             <template v-if="upstreamState === 'different'">
               Upstream has been modified since it was loaded.
