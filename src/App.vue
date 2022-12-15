@@ -470,6 +470,8 @@ export default class App extends Vue {
   }
 
   mounted() {
+    this.leftDrawer = this.$vuetify.breakpoint.lgAndUp;
+
     this.loadCustomCss();
 
     (this.$refs.fileInput as HTMLInputElement).addEventListener('change', (e: any) => {
