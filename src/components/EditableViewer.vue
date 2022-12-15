@@ -1328,7 +1328,7 @@ $navigation-drawer-width: 256px;
   .editor-pane {
     width: 100%;
     @include media('md-and-up') { width: calc(100% - 300px); }
-    @include media('lg-and-up') { width: calc(100% - 256px - 300px); left: $navigation-drawer-width; }
+    @include media('lg-and-up') { width: calc(100% - 300px - $navigation-drawer-width); left: $navigation-drawer-width; }
   }
 
   .viewer-pane {
@@ -1351,7 +1351,7 @@ $navigation-drawer-width: 256px;
   .editor-pane {
     width: 50%;
     @include media('md-and-up') { width: calc((100% - 300px) / 2); }
-    @include media('lg-and-up') { width: calc((100% - 256px - 300px) / 2); left: $navigation-drawer-width; }
+    @include media('lg-and-up') { width: calc((100% - 300px - $navigation-drawer-width) / 2); left: $navigation-drawer-width; }
   }
 
   .viewer-pane {
