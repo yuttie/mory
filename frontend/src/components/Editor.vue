@@ -7,6 +7,7 @@
 <script lang="ts">
 import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
 
+import { loadConfigValue, saveConfigValue } from '@/config';
 import ace from 'ace-builds';
 
 @Component
@@ -64,8 +65,8 @@ export default class Editor extends Vue {
 
   mounted() {
     this.editor = ace.edit(this.$refs.editor as Element, {
-      fontSize: parseInt(localStorage.getItem('editor-font-size') || '13'),
-      fontFamily: localStorage.getItem('editor-font-family') || 'Menlo, monospace',
+      fontSize: loadConfigValue('editor-font-size', 14),
+      fontFamily: loadConfigValue('editor-font-family', 'Menlo, monospace'),
       useSoftTabs: true,
       navigateWithinSoftTabs: true,
       enableAutoIndent: true,
@@ -95,7 +96,7 @@ export default class Editor extends Vue {
       }
     });
 
-    const theme = localStorage.getItem('editor-theme') || 'default';
+    const theme = loadConfigValue('editor-theme', 'default');
     this.setTheme(theme);
 
     if (this.mode === 'markdown') {
@@ -109,7 +110,7 @@ export default class Editor extends Vue {
       });
     }
 
-    const keybinding = localStorage.getItem('editor-keybinding') || 'default';
+    const keybinding = loadConfigValue('editor-keybinding', 'default');
     this.setKeybinding(keybinding);
   }
 

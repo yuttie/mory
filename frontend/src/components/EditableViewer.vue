@@ -301,6 +301,7 @@ import metadataSchema from '@/metadata-schema.json';
 
 import Ajv, { JSONSchemaType, DefinedError } from 'ajv';
 import * as api from '@/api';
+import { loadConfigValue, saveConfigValue } from '@/config';
 import { CliPrettify } from 'markdown-table-prettify';
 import { mdit, updateMetadataLineCount } from '@/markdown';
 import YAML from 'yaml';
@@ -321,8 +322,8 @@ export default class EditableViewer extends Vue {
   upstreamState = 'same';
   showUpstreamState = false;
   rendered = { metadata: null as null | any, content: '' };
-  useSimpleEditor = localStorage.getItem('use-simple-editor') === "true";
-  lockScroll = localStorage.getItem('lock-scroll') === "true";
+  useSimpleEditor = loadConfigValue('use-simple-editor', false);
+  lockScroll = loadConfigValue('lock-scroll', false);
   ignoreNext = false;
   noteHasUpstream = false;
   editorIsVisible = false;
@@ -342,7 +343,7 @@ export default class EditableViewer extends Vue {
   renderTimeoutId = null as null | number;
 
   mounted() {
-    const prismTheme = localStorage.getItem('prism-theme') || null;
+    const prismTheme = loadConfigValue('prism-theme', null);
     this.loadPrismTheme(prismTheme);
 
     document.title = `${this.title} | ${process.env.VUE_APP_NAME}`;
