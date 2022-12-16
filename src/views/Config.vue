@@ -80,7 +80,7 @@ import YAML from 'yaml';
 @Component
 export default class Config extends Vue {
   editorThemes = [
-    { name: 'Default',                 value: 'default'                },
+    { name: 'Default',                 value: 'default'                 },
     { name: 'Ambiance',                value: 'ambiance'                },
     { name: 'Chaos',                   value: 'chaos'                   },
     { name: 'Chrome',                  value: 'chrome'                  },
