@@ -14,23 +14,19 @@
     </v-alert>
     <v-checkbox
       v-model="currentUseSimpleEditor"
-      v-on:change="updateUseSimpleEditor"
       label="Use Simple Editor"
     ></v-checkbox>
     <v-checkbox
       v-model="currentLockScroll"
-      v-on:change="updateLockScroll"
       label="Lock Scroll by Default"
     ></v-checkbox>
     <v-text-field
       v-model="currentEditorFontFamily"
-      v-on:change="updateEditorFontFamily"
       label="Editor Font Family"
     >
     </v-text-field>
     <v-slider
       v-model="currentEditorFontSize"
-      v-on:change="updateEditorFontSize"
       label="Editor Font Size"
       min="1"
       max="100"
@@ -49,8 +45,7 @@
     </v-slider>
     <v-select
       v-bind:items="editorThemes"
-      v-bind:value="currentEditorTheme"
-      v-on:change="updateEditorTheme"
+      v-model="currentEditorTheme"
       label="Editor Theme"
       item-text="name"
       item-value="value"
@@ -58,8 +53,7 @@
     </v-select>
     <v-select
       v-bind:items="editorKeybindings"
-      v-bind:value="currentEditorKeybinding"
-      v-on:change="updateEditorKeybinding"
+      v-model="currentEditorKeybinding"
       label="Editor Keybinding"
       item-text="name"
       item-value="value"
@@ -67,8 +61,7 @@
     </v-select>
     <v-select
       v-bind:items="prismThemes"
-      v-bind:value="currentPrismTheme"
-      v-on:change="updatePrismTheme"
+      v-model="currentPrismTheme"
       label="Code Block Syntax Highlight Theme"
       item-text="name"
       item-value="value"
@@ -78,7 +71,7 @@
 </template>
 
 <script lang="ts">
-import { Component, Vue } from 'vue-property-decorator';
+import { Component, Vue, Watch } from 'vue-property-decorator';
 
 import * as api from '@/api';
 import { loadConfigValue, saveConfigValue } from '@/config';
@@ -177,30 +170,37 @@ export default class Config extends Vue {
     document.title = `Config | ${process.env.VUE_APP_NAME}`;
   }
 
+  @Watch('currentUseSimpleEditor')
   updateUseSimpleEditor(newUseSimpleEditor: boolean) {
     saveConfigValue('use-simple-editor', newUseSimpleEditor);
   }
 
+  @Watch('currentLockScroll')
   updateLockScroll(newLockScroll: boolean) {
     saveConfigValue('lock-scroll', newLockScroll);
   }
 
+  @Watch('currentEditorFontFamily')
   updateEditorFontFamily(newEditorFontFamily: string) {
     saveConfigValue('editor-font-family', newEditorFontFamily);
   }
 
+  @Watch('currentEditorFontSize')
   updateEditorFontSize(newEditorFontSize: number) {
     saveConfigValue('editor-font-size', newEditorFontSize);
   }
 
+  @Watch('currentEditorTheme')
   updateEditorTheme(newEditorTheme: string) {
     saveConfigValue('editor-theme', newEditorTheme);
   }
 
+  @Watch('currentEditorKeybinding')
   updateEditorKeybinding(newEditorKeybinding: string) {
     saveConfigValue('editor-keybinding', newEditorKeybinding);
   }
 
+  @Watch('currentPrismTheme')
   updatePrismTheme(newPrismTheme: string) {
     saveConfigValue('prism-theme', newPrismTheme);
   }
@@ -215,14 +215,6 @@ export default class Config extends Vue {
     this.currentEditorTheme = config.editorTheme;
     this.currentEditorKeybinding = config.editorKeybinding;
     this.currentPrismTheme = config.prismTheme;
-    // Save to local storage
-    this.updateUseSimpleEditor(this.currentUseSimpleEditor);
-    this.updateLockScroll(this.currentLockScroll);
-    this.updateEditorFontFamily(this.currentEditorFontFamily);
-    this.updateEditorFontSize(this.currentEditorFontSize);
-    this.updateEditorTheme(this.currentEditorTheme);
-    this.updateEditorKeybinding(this.currentEditorKeybinding);
-    this.updatePrismTheme(this.currentPrismTheme);
   }
 
   saveAsDefault() {
