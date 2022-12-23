@@ -739,7 +739,7 @@ dependencies = [
 
 [[package]]
 name = "moried"
-version = "0.4.0"
+version = "1.0.0"
 dependencies = [
  "axum",
  "axum-macros",
