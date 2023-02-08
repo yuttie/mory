@@ -220,8 +220,8 @@ async fn get_notes(
 
                 let time = {
                     let t = commit.time();
-                    let tz = FixedOffset::east(t.offset_minutes() * 60);
-                    tz.timestamp(t.seconds(), 0)
+                    let tz = FixedOffset::east_opt(t.offset_minutes() * 60).unwrap();
+                    tz.timestamp_opt(t.seconds(), 0).unwrap()
                 };
 
                 let tree = commit.tree().unwrap();
@@ -403,8 +403,8 @@ async fn get_notes(
                                     let metadata = extract_metadata(blob.content());
                                     // Time
                                     let t = commit.time();
-                                    let tz = FixedOffset::east(t.offset_minutes() * 60);
-                                    let time = tz.timestamp(t.seconds(), 0);
+                                    let tz = FixedOffset::east_opt(t.offset_minutes() * 60).unwrap();
+                                    let time = tz.timestamp_opt(t.seconds(), 0).unwrap();
                                     // Add an entry
                                     debug!("{:?} {:?} {:?}", time, delta.status(), path);
                                     entries.push(ListEntry {
