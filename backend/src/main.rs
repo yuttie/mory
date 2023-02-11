@@ -443,9 +443,6 @@ async fn get_notes_path(
 ) -> Response {
     debug!("get_notes_path");
 
-    // Remove leading '/'
-    let path = &path[1..];
-
     // Find a file at the given path
     let found = {
         let repo = state.repo.lock().await;
@@ -488,9 +485,6 @@ async fn put_notes_path(
 ) -> Response {
     debug!("put_notes_path");
     debug!("{:?}", note_save);
-
-    // Remove leading '/'
-    let path = &path[1..];
 
     match note_save {
         NoteSave::Save { content, message } => {
@@ -590,9 +584,6 @@ async fn delete_notes_path(
 ) -> Response {
     debug!("delete_notes_path");
 
-    // Remove leading '/'
-    let path = &path[1..];
-
     let found = {
         let repo = state.repo.lock().await;
 
@@ -641,9 +632,6 @@ async fn get_files_path(
     State(state): State<Arc<AppState>>,
 ) -> Response {
     debug!("get_files_path");
-
-    // Remove leading '/'
-    let path = &path[1..];
 
     let found = {
         let repo = state.repo.lock().await;
