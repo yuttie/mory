@@ -16,10 +16,10 @@ use axum::{
     BoxError,
     error_handling::HandleErrorLayer,
     extract::{
-        ContentLengthLimit,
-        Extension,
+        DefaultBodyLimit,
         Multipart,
         Path,
+        State,
     },
     http::{
         header,
@@ -67,7 +67,7 @@ async fn main() {
             Err(e) => panic!("failed to open: {}", e),
         }
     };
-    let state = Arc::new(models::State::new(repo));
+    let state = Arc::new(models::AppState::new(repo));
 
     let addr = {
         let mut addrs_iter = env::var("MORIED_LISTEN").unwrap().to_socket_addrs().unwrap();
@@ -84,9 +84,9 @@ async fn main() {
     let protected_api = Router::new()
         .route("/notes", get(get_notes))
         .route("/notes/*path", get(get_notes_path).put(put_notes_path).delete(delete_notes_path))
-        .route("/files", post(post_files))
+        .route("/files", post(post_files).layer(DefaultBodyLimit::max(8 * 1024 * 1024)))
         .route("/files/*path", get(get_files_path))
-        .layer(Extension(state))
+        .with_state(state)
         .route_layer(middleware::from_fn(auth));
     let login_api = Router::new()
         .route("/login", post(post_login))
@@ -193,7 +193,7 @@ async fn post_login(
 }
 
 async fn get_notes(
-    Extension(state): Extension<Arc<State>>,
+    State(state): State<Arc<AppState>>,
 ) -> Json<Vec<ListEntry>> {
     debug!("get_notes");
 
@@ -439,7 +439,7 @@ async fn get_notes(
 
 async fn get_notes_path(
     Path(path): Path<String>,
-    Extension(state): Extension<Arc<State>>,
+    State(state): State<Arc<AppState>>,
 ) -> Response {
     debug!("get_notes_path");
 
@@ -483,8 +483,8 @@ async fn get_notes_path(
 
 async fn put_notes_path(
     Path(path): Path<String>,
+    State(state): State<Arc<AppState>>,
     Json(note_save): Json<NoteSave>,
-    Extension(state): Extension<Arc<State>>,
 ) -> Response {
     debug!("put_notes_path");
     debug!("{:?}", note_save);
@@ -586,7 +586,7 @@ async fn put_notes_path(
 
 async fn delete_notes_path(
     Path(path): Path<String>,
-    Extension(state): Extension<Arc<State>>,
+    State(state): State<Arc<AppState>>,
 ) -> Response {
     debug!("delete_notes_path");
 
@@ -638,7 +638,7 @@ async fn delete_notes_path(
 
 async fn get_files_path(
     Path(path): Path<String>,
-    Extension(state): Extension<Arc<State>>,
+    State(state): State<Arc<AppState>>,
 ) -> Response {
     debug!("get_files_path");
 
@@ -680,8 +680,8 @@ async fn get_files_path(
 }
 
 async fn post_files(
-    ContentLengthLimit(mut multipart): ContentLengthLimit<Multipart, { 8 * 1024 * 1024 }>,
-    Extension(state): Extension<Arc<State>>,
+    State(state): State<Arc<AppState>>,
+    mut multipart: Multipart,
 ) -> Response {
     debug!("post_files_path");
 
@@ -849,14 +849,14 @@ mod models {
     }
 
     #[derive(Clone)]
-    pub struct State {
+    pub struct AppState {
         pub repo: Arc<Mutex<Repository>>,
         pub cached_entries: Arc<Mutex<Cached<Vec<ListEntry>>>>,
     }
 
-    impl State {
-        pub fn new(repo: Repository) -> State {
-            State {
+    impl AppState {
+        pub fn new(repo: Repository) -> AppState {
+            AppState {
                 repo: Arc::new(Mutex::new(repo)),
                 cached_entries: Arc::new(Mutex::new(Cached::None)),
             }
