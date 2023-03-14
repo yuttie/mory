@@ -349,6 +349,7 @@ export default class EditableViewer extends Vue {
     document.title = `${this.title} | ${process.env.VUE_APP_NAME}`;
 
     window.addEventListener('focus', this.notifyUpstreamState);
+    window.addEventListener('focus', this.focusOrBlurEditor);
 
     window.addEventListener('beforeunload', this.onBeforeunload);
 
@@ -388,6 +389,7 @@ events:
 
   destroyed() {
     window.removeEventListener('focus', this.notifyUpstreamState);
+    window.removeEventListener('focus', this.focusOrBlurEditor);
 
     window.removeEventListener('beforeunload', this.onBeforeunload);
 
