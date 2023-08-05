@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::env;
 use std::ffi::OsStr;
+use std::fs::File;
 use std::io::Write;
 use std::iter::once;
 use std::net::ToSocketAddrs;
@@ -331,6 +332,13 @@ async fn get_notes(
             let head = repo.head().unwrap();
             let head_commit = head.peel_to_commit().unwrap();
 
+            // Save to a cache file
+            let mut cache_file = File::create("cache.msgpack").unwrap();
+            rmp_serde::encode::write(&mut cache_file, &models::EntriesCache {
+                commit_id: head_commit.id().to_string(),
+                entries: entries.clone(),
+            }).unwrap();
+
             // Reply
             let reply = Json(entries.clone());
             *cached_entries = Cached::Computed {
@@ -425,6 +433,13 @@ async fn get_notes(
                     }
                 }
             }
+
+            // Save to a cache file
+            let mut cache_file = File::create("cache.msgpack").unwrap();
+            rmp_serde::encode::write(&mut cache_file, &models::EntriesCache {
+                commit_id: head_commit.id().to_string(),
+                entries: entries.clone(),
+            }).unwrap();
 
             // Reply
             let reply = Json(entries.clone());
@@ -771,6 +786,7 @@ fn extract_metadata(content: &[u8]) -> Option<serde_yaml::Value> {
 }
 
 mod models {
+    use std::fs::File;
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::option::Option;
@@ -836,6 +852,12 @@ mod models {
         }
     }
 
+    #[derive(Deserialize, Serialize)]
+    pub struct EntriesCache {
+        pub commit_id: String,
+        pub entries: Vec<ListEntry>,
+    }
+
     #[derive(Clone)]
     pub struct AppState {
         pub repo: Arc<Mutex<Repository>>,
@@ -844,9 +866,25 @@ mod models {
 
     impl AppState {
         pub fn new(repo: Repository) -> AppState {
+            let cache = match File::open("cache.msgpack") {
+                Ok(file) => {
+                    if let Ok(cache) = rmp_serde::from_read::<_, EntriesCache>(file) {
+                        Cached::Computed {
+                            commit_id: Oid::from_str(&cache.commit_id).unwrap(),
+                            data: cache.entries,
+                        }
+                    }
+                    else {
+                        Cached::None
+                    }
+                },
+                Err(_) => {
+                    Cached::None
+                },
+            };
             AppState {
                 repo: Arc::new(Mutex::new(repo)),
-                cached_entries: Arc::new(Mutex::new(Cached::None)),
+                cached_entries: Arc::new(Mutex::new(cache)),
             }
         }
     }
