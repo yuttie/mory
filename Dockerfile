@@ -6,7 +6,7 @@ RUN yarn install
 COPY . .
 RUN VUE_APP_APPLICATION_ROOT="VUE_APP_APPLICATION_ROOT_VALUE_TO_BE_REPLACED_LATER" \
     VUE_APP_API_URL="VUE_APP_API_URL_VALUE_TO_BE_REPLACED_LATER" \
-    yarn build
+    npx vue-cli-service build
 
 # production stage
 FROM nginx:stable-alpine as production-stage
