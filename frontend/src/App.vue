@@ -3,10 +3,10 @@
     <v-navigation-drawer
       app
       clipped
-      style="z-index: 4"
-      v-model="leftDrawer"
+      mini-variant
+      permanent
+      expand-on-hover
       v-if="!$vuetify.breakpoint.xs"
-      v-bind:style="{ top: $vuetify.application.top + 'px', zIndex: 4 }"
     >
       <v-list
         dense
@@ -50,15 +50,14 @@
       color="white"
       elevation="0"
     >
-      <v-btn
-        text
+      <v-img
+        src="./assets/logo.svg"
+        aspect-ratio="1"
+        contain
+        max-width="24"
+        max-height="24"
         class="mr-2"
-        style="padding: 0; min-width: 36px"
-        v-if="!$vuetify.breakpoint.xs"
-        v-on:click="leftDrawer = !leftDrawer"
-      >
-        <v-icon>mdi-menu</v-icon>
-      </v-btn>
+      ></v-img>
       <v-toolbar-title>mory</v-toolbar-title>
       <v-spacer></v-spacer>
       <input type="file" multiple class="d-none" ref="fileInput">
@@ -353,7 +352,6 @@ export default class App extends Vue {
   loginError = null as null | string;
   serviceWorker = null as null | ServiceWorker;
   serviceWorkerReady = false;
-  leftDrawer = false;
   templates = [] as string[];
   uploadList = [] as UploadEntry[];
   uploadMenuIsVisible = false;
@@ -470,8 +468,6 @@ export default class App extends Vue {
   }
 
   mounted() {
-    this.leftDrawer = this.$vuetify.breakpoint.lgAndUp;
-
     this.loadCustomCss();
 
     (this.$refs.fileInput as HTMLInputElement).addEventListener('change', (e: any) => {
