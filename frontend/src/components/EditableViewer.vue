@@ -446,7 +446,8 @@ events:
       onlyEditor: this.editorIsVisible && !this.viewerIsVisible,
       onlyViewer: !this.editorIsVisible && this.viewerIsVisible,
       both: this.editorIsVisible && this.viewerIsVisible,
-      mdAndUp: this.$vuetify.breakpoint.mdAndUp && !this.$vuetify.breakpoint.lgAndUp,
+      smAndUp: this.$vuetify.breakpoint.smAndUp,
+      mdAndUp: this.$vuetify.breakpoint.mdAndUp,
       lgAndUp: this.$vuetify.breakpoint.lgAndUp,
     };
   }
@@ -1263,7 +1264,7 @@ events:
 
 <style scoped lang="scss">
 $app-bar-height: 48px;
-$navigation-drawer-width: 256px;
+$navigation-drawer-width: 56px;
 
 #editable-viewer {
   position: relative;
@@ -1315,7 +1316,6 @@ $navigation-drawer-width: 256px;
 .editor-pane {
   position: fixed;
   top: $app-bar-height;
-  left: 0;
   bottom: 0;
   width: 300px;
 
@@ -1332,14 +1332,10 @@ $navigation-drawer-width: 256px;
 
 .panes.onlyEditor {
   .editor-pane {
-    width: 100%;
+    width: calc(100% - $navigation-drawer-width);
   }
   &.mdAndUp .editor-pane {
-    width: calc(100% - 300px);
-  }
-  &.lgAndUp .editor-pane {
     width: calc(100% - 300px - $navigation-drawer-width);
-    left: $navigation-drawer-width;
   }
 
   .viewer-pane {
@@ -1365,12 +1361,11 @@ $navigation-drawer-width: 256px;
   .editor-pane {
     width: 50%;
   }
-  &.mdAndUp .editor-pane {
-    width: calc((100% - 300px) / 2);
+  &.smAndUp .editor-pane {
+    width: calc((100% - $navigation-drawer-width) / 2);
   }
-  &.lgAndUp .editor-pane {
+  &.mdAndUp .editor-pane {
     width: calc((100% - 300px - $navigation-drawer-width) / 2);
-    left: $navigation-drawer-width;
   }
 
   .viewer-pane {
