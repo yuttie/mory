@@ -11,7 +11,7 @@ COPY src src
 RUN touch src/main.rs && cargo build --release
 
 # production stage
-FROM debian:buster-slim as production-stage
+FROM debian:bookworm-slim as production-stage
 
 COPY --from=build-stage /usr/src/app/target/release/moried /usr/local/bin/moried
 
