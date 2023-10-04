@@ -96,6 +96,7 @@
       <v-switch
         v-model="hideDone"
         v-bind:label="'Hide done'"
+        hide-details
       ></v-switch>
       <v-progress-linear
         absolute
