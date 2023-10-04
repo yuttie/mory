@@ -675,8 +675,32 @@ events:
         const lineNumber = parseInt(el.dataset['line'] as string);
         const offset = el.offsetTop;
         return [lineNumber, offset];
-      });
+      })
+      .sort((a, b) => {
+        if (a[0] < b[0]) {
+          return -1;
+        }
+        if (a[0] > b[0]) {
+          return 1;
+        }
+        return 0;
+      }) as [number, number][];
 
+    // Remove non-monotonically increasing entries
+    {
+      let i = 0;
+      while (i < scrollMap.length - 1) {
+        if (scrollMap[i][1] > scrollMap[i + 1][1]) {
+          // Delete the (i + 1)-th element
+          scrollMap.splice(i + 1, 1);
+        }
+        else {
+          ++i;
+        }
+      }
+    }
+
+    // Find the interval where the `scrollTop` belongs to
     const scrollTop = document.documentElement.scrollTop;
     let i = 0;
     for (; i < scrollMap.length - 1; ++i) {
@@ -686,6 +710,8 @@ events:
     }
     const [lineNumber1, offset1] = scrollMap[i];
     const [lineNumber2, offset2] = scrollMap[i + 1];
+
+    // Scroll to the line
     const lineNumber = lineNumber1 + (lineNumber2 - lineNumber1) * (scrollTop - offset1) / (offset2 - offset1);
     this.editorScrollTo(lineNumber);
     this.ignoreNext = true;
@@ -810,8 +836,32 @@ events:
         const lineNumber = parseInt(el.dataset['line'] as string);
         const offset = el.offsetTop;
         return [lineNumber, offset];
-      });
+      })
+      .sort((a, b) => {
+        if (a[0] < b[0]) {
+          return -1;
+        }
+        if (a[0] > b[0]) {
+          return 1;
+        }
+        return 0;
+      }) as [number, number][];
 
+    // Remove non-monotonically increasing entries
+    {
+      let i = 0;
+      while (i < scrollMap.length - 1) {
+        if (scrollMap[i][1] > scrollMap[i + 1][1]) {
+          // Delete the (i + 1)-th element
+          scrollMap.splice(i + 1, 1);
+        }
+        else {
+          ++i;
+        }
+      }
+    }
+
+    // Find the interval where the given line number belongs to
     let i = 0;
     for (; i < scrollMap.length - 1; ++i) {
       if (scrollMap[i][0] <= lineNumber && lineNumber < scrollMap[i + 1][0]) {
@@ -820,6 +870,8 @@ events:
     }
     const [lineNumber1, offset1] = scrollMap[i];
     const [lineNumber2, offset2] = scrollMap[i + 1];
+
+    // Scroll by an offset
     const offset = offset1 + (offset2 - offset1) * (lineNumber - lineNumber1) / (lineNumber2 - lineNumber1);
     document.documentElement.scrollTo({ top: offset, left: 0, behavior: 'auto' });
     this.ignoreNext = true;
