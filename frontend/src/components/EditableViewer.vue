@@ -790,6 +790,11 @@ events:
   }
 
   onEditorScroll(lineNumber: number) {
+    if (lineNumber === 0) {
+      // The first scroll invokes this event with line number being 0
+      // Just ignore
+      return;
+    }
     if (!this.lockScroll) {
       return;
     }
