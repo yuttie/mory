@@ -85,7 +85,7 @@ async fn main() {
     let protected_api = Router::new()
         .route("/notes", get(get_notes))
         .route("/notes/*path", get(get_notes_path).put(put_notes_path).delete(delete_notes_path))
-        .route("/files", post(post_files).layer(DefaultBodyLimit::max(8 * 1024 * 1024)))
+        .route("/files", post(post_files).layer(DefaultBodyLimit::max(16 * 1024 * 1024)))
         .route("/files/*path", get(get_files_path))
         .with_state(state)
         .route_layer(middleware::from_fn(auth));
