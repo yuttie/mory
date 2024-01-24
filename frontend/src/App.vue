@@ -495,6 +495,10 @@ export default class App extends Vue {
     this.loadTemplates();
 
     // Handle drag and drop of files
+    // TODO v-onで書き直す
+    // TODO 参考: https://qiita.com/punkshiraishi/items/49b91767b5143bcb1fcc
+    // TODO 参考: https://learnvue.co/articles/vue-drag-and-drop
+    // TODO 参考: https://hackmd.io/@rhHzPg4WS26yfiXdOaOMTg/ryyQFR-K8
     const appEl = (this.$refs.app as Vue).$el;
 
     appEl.addEventListener('dragenter', (e: any) => {
