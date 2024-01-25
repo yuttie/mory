@@ -187,7 +187,7 @@
                 <v-btn
                   text
                   x-small
-                  v-on:click="moveUndoneToFront(date)"
+                  v-on:click="sortDailyTasks(date)"
                 >Sort</v-btn>
                 <v-btn
                   text
@@ -513,19 +513,37 @@ export default class Tasks extends Vue {
     this.closeEditTaskDialog();
   }
 
-  async moveUndoneToFront(date: string) {
-    // Collect undone tasks
-    const done = [];
-    const undone = [];
-    for (const task of this.tasks.scheduled[date]) {
-      if (task.done) {
-        done.push(task);
+  async sortDailyTasks(date: string) {
+    // Sort tasks by completion and then deadline
+    this.tasks.scheduled[date] = this.tasks.scheduled[date].slice().sort((task1, task2) => {
+      if (task1.done && !task2.done) {
+        return +1;
+      }
+      else if (!task1.done && task2.done) {
+        return -1;
       }
       else {
-        undone.push(task);
+        if (!task1.deadline && task2.deadline) {
+          return +1;
+        }
+        else if (task1.deadline && !task2.deadline) {
+          return -1;
+        }
+        else {
+          const deadline1 = dayjs(task1.deadline);
+          const deadline2 = dayjs(task2.deadline);
+          if (deadline1.isAfter(deadline2)) {
+            return +1;
+          }
+          else if (deadline2.isAfter(deadline1)) {
+            return -1;
+          }
+          else {
+            return 0;
+          }
+        }
       }
-    }
-    this.tasks.scheduled[date] = undone.concat(done);
+    });
     // Save
     this.clean();
     await this.save();
