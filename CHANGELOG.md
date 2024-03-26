@@ -1,3 +1,6 @@
+## 0.15.0 (2024-03-27)
+* So many changes!
+
 ## 0.14.0 (2021-04-16)
 * Detect unsafe note overwrite
 * Scroll sync
