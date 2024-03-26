@@ -65,5 +65,8 @@
     "vue-cli-plugin-vuetify": "~2.5.8",
     "vue-template-compiler": "^2.6.12",
     "vuetify-loader": "^1.6.0"
+  },
+  "resolutions": {
+    "@achrinza/node-ipc": "^9.2.7"
   }
 }
