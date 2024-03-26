@@ -80,7 +80,7 @@ export default class Editor extends Vue {
       showInvisibles: false,
       wrap: true,
       indentedSoftWrap: true,
-      scrollPastEnd: true,
+      scrollPastEnd: 1.0,
       animatedScroll: false,
     });
     this.editor!.on('change', () => {  // eslint-disable-line @typescript-eslint/no-non-null-assertion
