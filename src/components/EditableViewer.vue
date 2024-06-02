@@ -294,7 +294,10 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, defineEmits } from 'vue';
+
+import { useRouter, useRoute } from '@/composables/vue-router';
+import { useVuetify } from '@/composables/vuetify';
 
 import Editor from '@/components/Editor.vue';
 import metadataSchema from '@/metadata-schema.json';
@@ -310,6 +313,14 @@ declare const MathJax: any;
 
 const ajv = new Ajv();
 const validateMetadata = ajv.compile(metadataSchema);
+
+// Emits
+const emit = defineEmits(['tokenExpired']);
+
+// Composables
+const router = useRouter();
+const route = useRoute();
+const vuetify = useVuetify();
 
 // Reactive states
 const text = ref('');
@@ -337,9 +348,13 @@ const errorText = ref('');
 const mathjaxTypesetPromise = ref(Promise.resolve());
 const renderTimeoutId = ref(null as null | number);
 
+// Refs
+const editor = ref(null);
+const renderedContent = ref(null);
+
 // Computed properties
 const editorMode = computed(() => {
-  if (/\.less$/i.test(this.$route.params.path)) {
+  if (/\.less$/i.test(route.params.path)) {
     return 'less';
   }
   else {
@@ -352,15 +367,15 @@ const panesState = computed(() => {
     onlyEditor: editorIsVisible.value && !viewerIsVisible.value,
     onlyViewer: !editorIsVisible.value && viewerIsVisible.value,
     both: editorIsVisible.value && viewerIsVisible.value,
-    smAndUp: this.$vuetify.breakpoint.smAndUp,
-    mdAndUp: this.$vuetify.breakpoint.mdAndUp,
-    lgAndUp: this.$vuetify.breakpoint.lgAndUp,
+    smAndUp: vuetify.breakpoint.smAndUp,
+    mdAndUp: vuetify.breakpoint.mdAndUp,
+    lgAndUp: vuetify.breakpoint.lgAndUp,
   };
 });
 
 const rightSidebarState = computed(() => {
   return {
-    smAndDown: !this.$vuetify.breakpoint.mdAndUp,
+    smAndDown: !vuetify.breakpoint.mdAndUp,
   };
 });
 
@@ -372,7 +387,7 @@ const title = computed(() => {
     return h1.textContent;
   }
   else {
-    return this.$route.params.path;
+    return route.params.path;
   }
 });
 
@@ -460,9 +475,9 @@ onMounted(() => {
 
   window.addEventListener('keydown', handleKeydown);
 
-  if (this.$route.query.mode === 'create') {
-    if (this.$route.query.template) {
-      loadTemplate(this.$route.query.template as string);
+  if (route.query.mode === 'create') {
+    if (route.query.template) {
+      loadTemplate(route.query.template as string);
     }
     else {
       text.value = `---
@@ -470,20 +485,20 @@ tags:
 events:
 ---
 
-# ${this.$route.params.path}`;
+# ${route.params.path}`;
       initialText.value = text.value;
       editorIsVisible.value = true;
-      (this.$refs.editor as Editor | HTMLTextAreaElement).focus();
+      (editor.value as Editor | HTMLTextAreaElement).focus();
 
       // Update immediately
       updateRendered();
     }
   }
   else {
-    load(this.$route.params.path);
+    load(route.params.path);
   }
 
-  if (!/\.(md|markdown)$/i.test(this.$route.params.path)) {
+  if (!/\.(md|markdown)$/i.test(route.params.path)) {
     editorIsVisible.value = true;
     viewerIsVisible.value = false;
     focusOrBlurEditor();
@@ -538,27 +553,27 @@ function loadPrismTheme(theme: string | null) {
   else if (theme === 'xonokai')                          { import('prism-themes/themes/prism-xonokai.css');                         }
 }
 
-function insertText(text: string) {
+function insertText(newText: string) {
   if (useSimpleEditor.value) {
-    const editor = this.$refs.editor as HTMLTextAreaElement;
-    editor.value = editor.value.slice(0, editor.selectionStart) + text + editor.value.slice(editor.selectionEnd);
+    const editor = editor.value as HTMLTextAreaElement;
+    editor.value = editor.value.slice(0, editor.selectionStart) + newText + editor.value.slice(editor.selectionEnd);
   }
   else {
-    const editor = (this.$refs.editor as Editor).editor;
+    const editor = (editor.value as Editor).editor;
     editor.session.remove(editor.getSelectionRange());
-    editor.insert(text);
+    editor.insert(newText);
   }
 }
 
 function encloseText(before: string, after: string) {
   if (useSimpleEditor.value) {
-    const editor = this.$refs.editor as HTMLTextAreaElement;
+    const editor = editor.value as HTMLTextAreaElement;
     const selectedText = editor.value.slice(editor.selectionStart, editor.selectionEnd);
     const formattedText = before + selectedText + after;
     editor.value = editor.value.slice(0, editor.selectionStart) + formattedText + editor.value.slice(editor.selectionEnd);
   }
   else {
-    const editor = (this.$refs.editor as Editor).editor;
+    const editor = (editor.value as Editor).editor;
     const selectedText = editor.session.getTextRange(editor.getSelectionRange());
     const formattedText = before + selectedText + after;
     editor.session.remove(editor.getSelectionRange());
@@ -568,13 +583,13 @@ function encloseText(before: string, after: string) {
 
 function formatTable() {
   if (useSimpleEditor.value) {
-    const editor = this.$refs.editor as HTMLTextAreaElement;
+    const editor = editor.value as HTMLTextAreaElement;
     const selectedText = editor.value.slice(editor.selectionStart, editor.selectionEnd);
     const formattedText = CliPrettify.prettify(selectedText);
     editor.value = editor.value.slice(0, editor.selectionStart) + formattedText + editor.value.slice(editor.selectionEnd);
   }
   else {
-    const editor = (this.$refs.editor as Editor).editor;
+    const editor = (editor.value as Editor).editor;
     const selectedText = editor.session.getTextRange(editor.getSelectionRange());
     const formattedText = CliPrettify.prettify(selectedText);
     editor.session.remove(editor.getSelectionRange());
@@ -583,23 +598,23 @@ function formatTable() {
 }
 
 function updateRendered() {
-  const text = text.value;
+  const textValue = text.value;
 
   // Split the note text into a YAML part and a body part
   const [yaml, body] = ((): [null | string, string] => {
-    if (text.startsWith('---\n')) {
-      const endMarkerIndex = text.indexOf('\n---\n', 4);
+    if (textValue.startsWith('---\n')) {
+      const endMarkerIndex = textValue.indexOf('\n---\n', 4);
       if (endMarkerIndex >= 0) {
-        const yaml = text.slice(4, endMarkerIndex);
-        const body = text.slice(endMarkerIndex + '\n---\n'.length);
+        const yaml = textValue.slice(4, endMarkerIndex);
+        const body = textValue.slice(endMarkerIndex + '\n---\n'.length);
         return [yaml, body];
       }
       else {
-        return [null, text];
+        return [null, textValue];
       }
     }
     else {
-      return [null, text];
+      return [null, textValue];
     }
   })();
 
@@ -625,7 +640,7 @@ function updateRendered() {
   }
 
   // Render the body
-  const renderedContent = mdit.render(body);
+  const renderedHtml = mdit.render(body);
   ignoreNext.value = true;
 
   // Parse a YAML part
@@ -681,7 +696,7 @@ function updateRendered() {
         validationErrors: validationErrors,
         value: metadata
       },
-      content: renderedContent,
+      content: renderedHtml,
     };
   }
   else if (parseError !== null) {
@@ -691,25 +706,25 @@ function updateRendered() {
         parseError: parseError,
         value: null,
       },
-      content: renderedContent,
+      content: renderedHtml,
     };
   }
   else {
     // Metadata part does not exist
     rendered.value = {
       metadata: null,
-      content: renderedContent,
+      content: renderedHtml,
     };
   }
 
   // We have to update the innerHTML immediately here instead of letting Vue
   // update it reactively, otherwise MathJax will not be able to see the new
   // content.
-  (this.$refs.renderedContent as Element).innerHTML = rendered.value.content;
+  (renderedContent.value as Element).innerHTML = rendered.value.content;
 
   // Schedule math rendering
   mathjaxTypesetPromise.value = mathjaxTypesetPromise.value.then(() => {
-    return MathJax.typesetPromise([this.$refs.renderedContent]);
+    return MathJax.typesetPromise([renderedContent.value]);
   });
 
   // Update the page title
@@ -728,13 +743,13 @@ function updateRenderedLazy() {
 
 function editorScrollTo(lineNumber: number) {
   if (useSimpleEditor.value) {
-    const editor = this.$refs.editor as HTMLTextAreaElement;
+    const editor = editor.value as HTMLTextAreaElement;
     const style = window.getComputedStyle(editor);
     const lineHeight = parseFloat(style.getPropertyValue('line-height'));
     editor.scrollTo({ top: lineNumber * lineHeight });
   }
   else {
-    const editor = this.$refs.editor as Editor;
+    const editor = editor.value as Editor;
     editor.scrollTo(lineNumber);
   }
 }
@@ -749,7 +764,7 @@ function handleDocumentScroll() {
   }
 
   // Build scroll map
-  const renderedContent = this.$refs.renderedContent as Element;
+  const renderedContent = renderedContent.value as Element;
   const scrollMap: [number, number][] = [...renderedContent.querySelectorAll<HTMLElement>('[data-line]')]
     .map((el) => {
       const lineNumber = parseInt(el.dataset['line'] as string);
@@ -797,8 +812,8 @@ function handleDocumentScroll() {
   ignoreNext.value = true;
 }
 
-function onEditorChange(text: string) {
-  text.value = text;
+function onEditorChange(newText: string) {
+  text.value = newText;
   if (viewerIsVisible.value) {
     // Update lazily
     updateRenderedLazy();
@@ -820,7 +835,7 @@ function onEditorScroll(lineNumber: number) {
   }
 
   // Build scroll map
-  const renderedContent = this.$refs.renderedContent as Element;
+  const renderedContent = renderedContent.value as Element;
   const scrollMap: [number, number][] = [...renderedContent.querySelectorAll<HTMLElement>('[data-line]')]
     .map((el) => {
       const lineNumber = parseInt(el.dataset['line'] as string);
@@ -868,7 +883,7 @@ function onEditorScroll(lineNumber: number) {
 }
 
 function checkUpstreamState() {
-  const path = this.$route.params.path;
+  const path = route.params.path;
   return api.getNote(path)
     .then(res => {
       if (res.data === initialText.value) {
@@ -907,9 +922,9 @@ function load(path: string) {
       updateRendered();
 
       // Jump to a header if specified
-      if (this.$route.hash) {
-        const anchorSelector = decodeURIComponent(this.$route.hash);
-        this.$nextTick(() => {
+      if (route.hash) {
+        const anchorSelector = decodeURIComponent(route.hash);
+        nextTick(() => {
           const anchor = document.querySelector(anchorSelector);
           if (anchor) {
             anchor.scrollIntoView();
@@ -923,7 +938,7 @@ function load(path: string) {
       if (error.response) {
         if (error.response.status === 401) {
           // Unauthorized
-          this.$emit('tokenExpired', () => {
+          emit('tokenExpired', () => {
             load(path);
             focusOrBlurEditor();
           });
@@ -956,7 +971,7 @@ function loadTemplate(path: string) {
       text.value = res.data;
       initialText.value = text.value;
       editorIsVisible.value = true;
-      (this.$refs.editor as Editor | HTMLTextAreaElement).focus();
+      (editor.value as Editor | HTMLTextAreaElement).focus();
 
       // Update immediately
       updateRendered();
@@ -967,7 +982,7 @@ function loadTemplate(path: string) {
       if (error.response) {
         if (error.response.status === 401) {
           // Unauthorized
-          this.$emit('tokenExpired', () => {
+          emit('tokenExpired', () => {
             load(path);
             focusOrBlurEditor();
           });
@@ -994,7 +1009,7 @@ function loadTemplate(path: string) {
 }
 
 function reload() {
-  load(this.$route.params.path);
+  load(route.params.path);
 }
 
 function toggleEditor() {
@@ -1019,7 +1034,7 @@ function toggleEditor() {
 
   focusOrBlurEditor();
 
-  this.$nextTick(() => {
+  nextTick(() => {
     onEditorPaneResize();
     onViewerPaneResize();
   });
@@ -1047,14 +1062,14 @@ function toggleViewer() {
 
   focusOrBlurEditor();
 
-  this.$nextTick(() => {
+  nextTick(() => {
     onEditorPaneResize();
     onViewerPaneResize();
   });
 }
 
 function onEditorPaneResize() {
-  (this.$refs.editor as Editor).resize();
+  (editor.value as Editor).resize();
 }
 
 function onViewerPaneResize() {
@@ -1062,23 +1077,23 @@ function onViewerPaneResize() {
 }
 
 function focusOrBlurEditor() {
-  this.$nextTick(() => {
+  nextTick(() => {
     if (editorIsVisible.value) {
-      (this.$refs.editor as Editor | HTMLTextAreaElement).focus();
+      (editor.value as Editor | HTMLTextAreaElement).focus();
     }
     else {
-      (this.$refs.editor as Editor | HTMLTextAreaElement).blur();
+      (editor.value as Editor | HTMLTextAreaElement).blur();
     }
   });
 }
 
 function editorHasFocus(): boolean {
   if (useSimpleEditor.value) {
-    const textarea = this.$refs.editor;
+    const textarea = editor.value;
     return document.activeElement === textarea;
   }
   else {
-    const textarea = (this.$refs.editor as Editor).$el.querySelector('textarea');
+    const textarea = (editor.value as Editor).$el.querySelector('textarea');
     return document.activeElement === textarea;
   }
 }
@@ -1095,7 +1110,7 @@ function notifyUpstreamState(e: FocusEvent) {
       if (error.response) {
         if (error.response.status === 401) {
           // Unauthorized
-          this.$emit('tokenExpired', () => {
+          emit('tokenExpired', () => {
             notifyUpstreamState(e);
           });
         }
@@ -1135,11 +1150,11 @@ function handleKeydown(e: KeyboardEvent) {
     else {
       // Show editor
       editorIsVisible.value = true;
-      this.$nextTick(() => {
+      nextTick(() => {
         // Focus editor
-        (this.$refs.editor as Editor | HTMLTextAreaElement).focus();
+        (editor.value as Editor | HTMLTextAreaElement).focus();
         // Resize editor
-        (this.$refs.editor as Editor).resize();
+        (editor.value as Editor).resize();
       });
       // Prevent 'e' from being input if editor is already focused
       e.preventDefault();
@@ -1184,7 +1199,7 @@ function saveIfNeeded() {
         if (error.response) {
           if (error.response.status === 401) {
             // Unauthorized
-            this.$emit('tokenExpired', () => {
+            emit('tokenExpired', () => {
               saveIfNeeded();
             });
           }
@@ -1205,7 +1220,7 @@ function saveIfNeeded() {
 
 function save() {
   isSaving.value = true;
-  const path = this.$route.params.path;
+  const path = route.params.path;
   const content = text.value;
   api.addNote(
     path,
@@ -1215,14 +1230,14 @@ function save() {
     noteHasUpstream.value = true;
     isSaving.value = false;
     // Remove 'mode' query parameter
-    const newQuery = { ...this.$route.query };
+    const newQuery = { ...route.query };
     delete newQuery.mode;
-    this.$router.replace({ query: newQuery });
+    router.replace({ query: newQuery });
   }).catch(error => {
     if (error.response) {
       if (error.response.status === 401) {
         // Unauthorized
-        this.$emit('tokenExpired', () => {
+        emit('tokenExpired', () => {
           save();
           focusOrBlurEditor();
         });
@@ -1259,7 +1274,7 @@ function onNewPathInput(path: string) {
 }
 
 function rename() {
-  const oldPath = this.$route.params.path;
+  const oldPath = route.params.path;
   const newPath = newPath.value;
 
   if (newPath !== null && newPath !== oldPath) {
@@ -1268,7 +1283,7 @@ function rename() {
       oldPath,
       newPath
     ).then(res => {
-      this.$router.replace({
+      router.replace({
         path: `/note/${newPath}`,
       });
       isRenaming.value = false;
@@ -1276,7 +1291,7 @@ function rename() {
       if (error.response) {
         if (error.response.status === 401) {
           // Unauthorized
-          this.$emit('tokenExpired', () => {
+          emit('tokenExpired', () => {
             rename();
             focusOrBlurEditor();
           });
@@ -1307,7 +1322,7 @@ watch(viewerIsVisible, (newValue: boolean, oldValue: boolean) => {
 
 watch(renameMenuIsVisible, (isVisible: boolean) => {
   if (isVisible) {
-    newPath.value = this.$route.params.path;
+    newPath.value = route.params.path;
     newPathConflicting.value = true;
   }
 });
