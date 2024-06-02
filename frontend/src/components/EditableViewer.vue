@@ -293,8 +293,8 @@
   </div>
 </template>
 
-<script lang="ts">
-import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
+<script lang="ts" setup>
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 
 import Editor from '@/components/Editor.vue';
 import metadataSchema from '@/metadata-schema.json';
@@ -311,929 +311,975 @@ declare const MathJax: any;
 const ajv = new Ajv();
 const validateMetadata = ajv.compile(metadataSchema);
 
-@Component({
-  components: {
-    Editor,
-  },
-})
-export default class EditableViewer extends Vue {
-  text = '';
-  initialText = '';
-  upstreamState = 'same';
-  showUpstreamState = false;
-  rendered = { metadata: null as null | any, content: '' };
-  useSimpleEditor = loadConfigValue('use-simple-editor', false);
-  lockScroll = loadConfigValue('lock-scroll', false);
-  ignoreNext = false;
-  noteHasUpstream = false;
-  editorIsVisible = false;
-  viewerIsVisible = true;
-  sidebarPanelState = [0];
-  renameMenuIsVisible = false;
-  newPath = null as null | string;
-  newPathConflicting = true;
-  isLoading = false;
-  isSaving = false;
-  isRenaming = false;
-  notFound = false;
-  showConfirmationDialog = false;
-  error = false;
-  errorText = '';
-  mathjaxTypesetPromise = Promise.resolve();
-  renderTimeoutId = null as null | number;
+// Reactive states
+const text = ref('');
+const initialText = ref('');
+const upstreamState = ref('same');
+const showUpstreamState = ref(false);
+const rendered = ref({ metadata: null as null | any, content: '' });
+const useSimpleEditor = ref(loadConfigValue('use-simple-editor', false));
+const lockScroll = ref(loadConfigValue('lock-scroll', false));
+const ignoreNext = ref(false);
+const noteHasUpstream = ref(false);
+const editorIsVisible = ref(false);
+const viewerIsVisible = ref(true);
+const sidebarPanelState = ref([0]);
+const renameMenuIsVisible = ref(false);
+const newPath = ref(null as null | string);
+const newPathConflicting = ref(true);
+const isLoading = ref(false);
+const isSaving = ref(false);
+const isRenaming = ref(false);
+const notFound = ref(false);
+const showConfirmationDialog = ref(false);
+const error = ref(false);
+const errorText = ref('');
+const mathjaxTypesetPromise = ref(Promise.resolve());
+const renderTimeoutId = ref(null as null | number);
 
-  mounted() {
-    const prismTheme = loadConfigValue('prism-theme', null);
-    this.loadPrismTheme(prismTheme);
+// Computed properties
+const editorMode = computed(() => {
+  if (/\.less$/i.test(this.$route.params.path)) {
+    return 'less';
+  }
+  else {
+    return 'markdown';
+  }
+});
 
-    document.title = `${this.title} | ${process.env.VUE_APP_NAME}`;
+const panesState = computed(() => {
+  return {
+    onlyEditor: this.editorIsVisible && !this.viewerIsVisible,
+    onlyViewer: !this.editorIsVisible && this.viewerIsVisible,
+    both: this.editorIsVisible && this.viewerIsVisible,
+    smAndUp: this.$vuetify.breakpoint.smAndUp,
+    mdAndUp: this.$vuetify.breakpoint.mdAndUp,
+    lgAndUp: this.$vuetify.breakpoint.lgAndUp,
+  };
+});
 
-    window.addEventListener('focus', this.notifyUpstreamState);
-    window.addEventListener('focus', this.focusOrBlurEditor);
+const rightSidebarState = computed(() => {
+  return {
+    smAndDown: !this.$vuetify.breakpoint.mdAndUp,
+  };
+});
 
-    window.addEventListener('beforeunload', this.onBeforeunload);
+const title = computed(() => {
+  const rendered = this.rendered;
+  const root = document.createElement('div');
+  root.innerHTML = rendered.content;
+  const h1 = root.querySelector('h1');
+  if (h1) {
+    return h1.textContent;
+  }
+  else {
+    return this.$route.params.path;
+  }
+});
 
-    window.addEventListener('keydown', this.handleKeydown);
+const toc = computed(() => {
+  const rendered = this.rendered;
+  const root = document.createElement('div');
+  root.innerHTML = rendered.content;
 
-    if (this.$route.query.mode === 'create') {
-      if (this.$route.query.template) {
-        this.loadTemplate(this.$route.query.template as string);
-      }
-      else {
-        this.text = `---
+  const toc: any = [];
+  const stack = [{ level: 0, title: '/', children: toc }];
+  for (const hx of [...root.children].filter(el => /^H\d+$/.test(el.tagName))) {
+    const level = parseInt(hx.tagName.slice(1));
+
+    // Find the parent of the header
+    while (level <= stack[stack.length - 1].level) {
+      stack.pop();
+    }
+
+    const parent = stack[stack.length - 1];
+    const child = {
+      level: level,
+      title: (hx as HTMLElement).innerText,
+      href: hx.querySelector('a.header-anchor')?.getAttribute('href'),
+      children: [],
+    };
+    parent.children.push(child);
+    stack.push(child);
+  }
+
+  return toc;
+});
+
+const isModified = computed((): boolean => {
+  return this.text !== this.initialText;
+});
+
+const upstreamStateSnackbarColor = computed((): string => {
+  if (this.upstreamState === 'different') {
+    return 'error';
+  }
+  else if (this.upstreamState === 'deleted') {
+    return 'warning';
+  }
+  else if (this.upstreamState === 'same') {
+    return 'success';
+  }
+  else {
+    throw 'Invalid upstream state!';
+  }
+});
+
+const needSave = computed((): boolean => {
+  if (this.noteHasUpstream) {
+    if (this.isModified) {
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
+  else {
+    return true;
+  }
+});
+
+const newPathValidationResult = computed((): boolean | string => {
+  if (this.newPathConflicting) {
+    return 'Conflicting with existing path';
+  }
+  else {
+    return true;
+  }
+});
+
+// Lifecycle hooks
+onMounted(() => {
+  const prismTheme = loadConfigValue('prism-theme', null);
+  this.loadPrismTheme(prismTheme);
+
+  document.title = `${this.title} | ${process.env.VUE_APP_NAME}`;
+
+  window.addEventListener('focus', this.notifyUpstreamState);
+  window.addEventListener('focus', this.focusOrBlurEditor);
+
+  window.addEventListener('beforeunload', this.onBeforeunload);
+
+  window.addEventListener('keydown', this.handleKeydown);
+
+  if (this.$route.query.mode === 'create') {
+    if (this.$route.query.template) {
+      this.loadTemplate(this.$route.query.template as string);
+    }
+    else {
+      this.text = `---
 tags:
 events:
 ---
 
 # ${this.$route.params.path}`;
-        this.initialText = this.text;
-        this.editorIsVisible = true;
-        (this.$refs.editor as Editor | HTMLTextAreaElement).focus();
-
-        // Update immediately
-        this.updateRendered();
-      }
-    }
-    else {
-      this.load(this.$route.params.path);
-    }
-
-    if (!/\.(md|markdown)$/i.test(this.$route.params.path)) {
+      this.initialText = this.text;
       this.editorIsVisible = true;
-      this.viewerIsVisible = false;
-      this.focusOrBlurEditor();
-    }
+      (this.$refs.editor as Editor | HTMLTextAreaElement).focus();
 
-    document.addEventListener('scroll', this.handleDocumentScroll);
-  }
-
-  destroyed() {
-    window.removeEventListener('focus', this.notifyUpstreamState);
-    window.removeEventListener('focus', this.focusOrBlurEditor);
-
-    window.removeEventListener('beforeunload', this.onBeforeunload);
-
-    window.removeEventListener('keydown', this.handleKeydown);
-    if (this.renderTimeoutId) {
-      window.clearTimeout(this.renderTimeoutId);
-      this.renderTimeoutId = null;
-    }
-
-    document.removeEventListener('scroll', this.handleDocumentScroll);
-  }
-
-  loadPrismTheme(theme: string | null) {
-    if      (theme === 'a11y-dark')                        { import('prism-themes/themes/prism-a11y-dark.css');                       }
-    else if (theme === 'atom-dark')                        { import('prism-themes/themes/prism-atom-dark.css');                       }
-    else if (theme === 'base16-atelier-sulphurpool-light') { import('prism-themes/themes/prism-base16-ateliersulphurpool.light.css'); }
-    else if (theme === 'cb')                               { import('prism-themes/themes/prism-cb.css');                              }
-    else if (theme === 'coldark-cold')                     { import('prism-themes/themes/prism-coldark-cold.css');                    }
-    else if (theme === 'coldark-dark')                     { import('prism-themes/themes/prism-coldark-dark.css');                    }
-    else if (theme === 'coy-without-shadows')              { import('prism-themes/themes/prism-coy-without-shadows.css');             }
-    else if (theme === 'darcula')                          { import('prism-themes/themes/prism-darcula.css');                         }
-    else if (theme === 'dracula')                          { import('prism-themes/themes/prism-dracula.css');                         }
-    else if (theme === 'duotone-dark')                     { import('prism-themes/themes/prism-duotone-dark.css');                    }
-    else if (theme === 'duotone-earth')                    { import('prism-themes/themes/prism-duotone-earth.css');                   }
-    else if (theme === 'duotone-forest')                   { import('prism-themes/themes/prism-duotone-forest.css');                  }
-    else if (theme === 'duotone-light')                    { import('prism-themes/themes/prism-duotone-light.css');                   }
-    else if (theme === 'duotone-sea')                      { import('prism-themes/themes/prism-duotone-sea.css');                     }
-    else if (theme === 'duotone-space')                    { import('prism-themes/themes/prism-duotone-space.css');                   }
-    else if (theme === 'ghcolors')                         { import('prism-themes/themes/prism-ghcolors.css');                        }
-    else if (theme === 'hopscotch')                        { import('prism-themes/themes/prism-hopscotch.css');                       }
-    else if (theme === 'material-dark')                    { import('prism-themes/themes/prism-material-dark.css');                   }
-    else if (theme === 'material-light')                   { import('prism-themes/themes/prism-material-light.css');                  }
-    else if (theme === 'material-oceanic')                 { import('prism-themes/themes/prism-material-oceanic.css');                }
-    else if (theme === 'nord')                             { import('prism-themes/themes/prism-nord.css');                            }
-    else if (theme === 'pojoaque')                         { import('prism-themes/themes/prism-pojoaque.css');                        }
-    else if (theme === 'shades-of-purple')                 { import('prism-themes/themes/prism-shades-of-purple.css');                }
-    else if (theme === 'synthwave84')                      { import('prism-themes/themes/prism-synthwave84.css');                     }
-    else if (theme === 'vs')                               { import('prism-themes/themes/prism-vs.css');                              }
-    else if (theme === 'vsc-dark-plus')                    { import('prism-themes/themes/prism-vsc-dark-plus.css');                   }
-    else if (theme === 'xonokai')                          { import('prism-themes/themes/prism-xonokai.css');                         }
-  }
-
-  get editorMode() {
-    if (/\.less$/i.test(this.$route.params.path)) {
-      return 'less';
-    }
-    else {
-      return 'markdown';
+      // Update immediately
+      this.updateRendered();
     }
   }
-
-  get panesState() {
-    return {
-      onlyEditor: this.editorIsVisible && !this.viewerIsVisible,
-      onlyViewer: !this.editorIsVisible && this.viewerIsVisible,
-      both: this.editorIsVisible && this.viewerIsVisible,
-      smAndUp: this.$vuetify.breakpoint.smAndUp,
-      mdAndUp: this.$vuetify.breakpoint.mdAndUp,
-      lgAndUp: this.$vuetify.breakpoint.lgAndUp,
-    };
+  else {
+    this.load(this.$route.params.path);
   }
 
-  get rightSidebarState() {
-    return {
-      smAndDown: !this.$vuetify.breakpoint.mdAndUp,
-    };
+  if (!/\.(md|markdown)$/i.test(this.$route.params.path)) {
+    this.editorIsVisible = true;
+    this.viewerIsVisible = false;
+    this.focusOrBlurEditor();
   }
 
-  insertText(text: string) {
-    if (this.useSimpleEditor) {
-      const editor = this.$refs.editor as HTMLTextAreaElement;
-      editor.value = editor.value.slice(0, editor.selectionStart) + text + editor.value.slice(editor.selectionEnd);
-    }
-    else {
-      const editor = (this.$refs.editor as Editor).editor;
-      editor.session.remove(editor.getSelectionRange());
-      editor.insert(text);
-    }
+  document.addEventListener('scroll', this.handleDocumentScroll);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('focus', this.notifyUpstreamState);
+  window.removeEventListener('focus', this.focusOrBlurEditor);
+
+  window.removeEventListener('beforeunload', this.onBeforeunload);
+
+  window.removeEventListener('keydown', this.handleKeydown);
+  if (this.renderTimeoutId) {
+    window.clearTimeout(this.renderTimeoutId);
+    this.renderTimeoutId = null;
   }
 
-  encloseText(before: string, after: string) {
-    if (this.useSimpleEditor) {
-      const editor = this.$refs.editor as HTMLTextAreaElement;
-      const selectedText = editor.value.slice(editor.selectionStart, editor.selectionEnd);
-      const formattedText = before + selectedText + after;
-      editor.value = editor.value.slice(0, editor.selectionStart) + formattedText + editor.value.slice(editor.selectionEnd);
-    }
-    else {
-      const editor = (this.$refs.editor as Editor).editor;
-      const selectedText = editor.session.getTextRange(editor.getSelectionRange());
-      const formattedText = before + selectedText + after;
-      editor.session.remove(editor.getSelectionRange());
-      editor.insert(formattedText);
-    }
+  document.removeEventListener('scroll', this.handleDocumentScroll);
+});
+
+// Methods
+function loadPrismTheme(theme: string | null) {
+  if      (theme === 'a11y-dark')                        { import('prism-themes/themes/prism-a11y-dark.css');                       }
+  else if (theme === 'atom-dark')                        { import('prism-themes/themes/prism-atom-dark.css');                       }
+  else if (theme === 'base16-atelier-sulphurpool-light') { import('prism-themes/themes/prism-base16-ateliersulphurpool.light.css'); }
+  else if (theme === 'cb')                               { import('prism-themes/themes/prism-cb.css');                              }
+  else if (theme === 'coldark-cold')                     { import('prism-themes/themes/prism-coldark-cold.css');                    }
+  else if (theme === 'coldark-dark')                     { import('prism-themes/themes/prism-coldark-dark.css');                    }
+  else if (theme === 'coy-without-shadows')              { import('prism-themes/themes/prism-coy-without-shadows.css');             }
+  else if (theme === 'darcula')                          { import('prism-themes/themes/prism-darcula.css');                         }
+  else if (theme === 'dracula')                          { import('prism-themes/themes/prism-dracula.css');                         }
+  else if (theme === 'duotone-dark')                     { import('prism-themes/themes/prism-duotone-dark.css');                    }
+  else if (theme === 'duotone-earth')                    { import('prism-themes/themes/prism-duotone-earth.css');                   }
+  else if (theme === 'duotone-forest')                   { import('prism-themes/themes/prism-duotone-forest.css');                  }
+  else if (theme === 'duotone-light')                    { import('prism-themes/themes/prism-duotone-light.css');                   }
+  else if (theme === 'duotone-sea')                      { import('prism-themes/themes/prism-duotone-sea.css');                     }
+  else if (theme === 'duotone-space')                    { import('prism-themes/themes/prism-duotone-space.css');                   }
+  else if (theme === 'ghcolors')                         { import('prism-themes/themes/prism-ghcolors.css');                        }
+  else if (theme === 'hopscotch')                        { import('prism-themes/themes/prism-hopscotch.css');                       }
+  else if (theme === 'material-dark')                    { import('prism-themes/themes/prism-material-dark.css');                   }
+  else if (theme === 'material-light')                   { import('prism-themes/themes/prism-material-light.css');                  }
+  else if (theme === 'material-oceanic')                 { import('prism-themes/themes/prism-material-oceanic.css');                }
+  else if (theme === 'nord')                             { import('prism-themes/themes/prism-nord.css');                            }
+  else if (theme === 'pojoaque')                         { import('prism-themes/themes/prism-pojoaque.css');                        }
+  else if (theme === 'shades-of-purple')                 { import('prism-themes/themes/prism-shades-of-purple.css');                }
+  else if (theme === 'synthwave84')                      { import('prism-themes/themes/prism-synthwave84.css');                     }
+  else if (theme === 'vs')                               { import('prism-themes/themes/prism-vs.css');                              }
+  else if (theme === 'vsc-dark-plus')                    { import('prism-themes/themes/prism-vsc-dark-plus.css');                   }
+  else if (theme === 'xonokai')                          { import('prism-themes/themes/prism-xonokai.css');                         }
+}
+
+function insertText(text: string) {
+  if (this.useSimpleEditor) {
+    const editor = this.$refs.editor as HTMLTextAreaElement;
+    editor.value = editor.value.slice(0, editor.selectionStart) + text + editor.value.slice(editor.selectionEnd);
   }
-
-  formatTable() {
-    if (this.useSimpleEditor) {
-      const editor = this.$refs.editor as HTMLTextAreaElement;
-      const selectedText = editor.value.slice(editor.selectionStart, editor.selectionEnd);
-      const formattedText = CliPrettify.prettify(selectedText);
-      editor.value = editor.value.slice(0, editor.selectionStart) + formattedText + editor.value.slice(editor.selectionEnd);
-    }
-    else {
-      const editor = (this.$refs.editor as Editor).editor;
-      const selectedText = editor.session.getTextRange(editor.getSelectionRange());
-      const formattedText = CliPrettify.prettify(selectedText);
-      editor.session.remove(editor.getSelectionRange());
-      editor.insert(formattedText);
-    }
+  else {
+    const editor = (this.$refs.editor as Editor).editor;
+    editor.session.remove(editor.getSelectionRange());
+    editor.insert(text);
   }
+}
 
-  updateRendered() {
-    const text = this.text;
+function encloseText(before: string, after: string) {
+  if (this.useSimpleEditor) {
+    const editor = this.$refs.editor as HTMLTextAreaElement;
+    const selectedText = editor.value.slice(editor.selectionStart, editor.selectionEnd);
+    const formattedText = before + selectedText + after;
+    editor.value = editor.value.slice(0, editor.selectionStart) + formattedText + editor.value.slice(editor.selectionEnd);
+  }
+  else {
+    const editor = (this.$refs.editor as Editor).editor;
+    const selectedText = editor.session.getTextRange(editor.getSelectionRange());
+    const formattedText = before + selectedText + after;
+    editor.session.remove(editor.getSelectionRange());
+    editor.insert(formattedText);
+  }
+}
 
-    // Split the note text into a YAML part and a body part
-    const [yaml, body] = ((): [null | string, string] => {
-      if (text.startsWith('---\n')) {
-        const endMarkerIndex = text.indexOf('\n---\n', 4);
-        if (endMarkerIndex >= 0) {
-          const yaml = text.slice(4, endMarkerIndex);
-          const body = text.slice(endMarkerIndex + '\n---\n'.length);
-          return [yaml, body];
-        }
-        else {
-          return [null, text];
-        }
+function formatTable() {
+  if (this.useSimpleEditor) {
+    const editor = this.$refs.editor as HTMLTextAreaElement;
+    const selectedText = editor.value.slice(editor.selectionStart, editor.selectionEnd);
+    const formattedText = CliPrettify.prettify(selectedText);
+    editor.value = editor.value.slice(0, editor.selectionStart) + formattedText + editor.value.slice(editor.selectionEnd);
+  }
+  else {
+    const editor = (this.$refs.editor as Editor).editor;
+    const selectedText = editor.session.getTextRange(editor.getSelectionRange());
+    const formattedText = CliPrettify.prettify(selectedText);
+    editor.session.remove(editor.getSelectionRange());
+    editor.insert(formattedText);
+  }
+}
+
+function updateRendered() {
+  const text = this.text;
+
+  // Split the note text into a YAML part and a body part
+  const [yaml, body] = ((): [null | string, string] => {
+    if (text.startsWith('---\n')) {
+      const endMarkerIndex = text.indexOf('\n---\n', 4);
+      if (endMarkerIndex >= 0) {
+        const yaml = text.slice(4, endMarkerIndex);
+        const body = text.slice(endMarkerIndex + '\n---\n'.length);
+        return [yaml, body];
       }
       else {
         return [null, text];
       }
-    })();
-
-    // Memorize the number of lines of metadata block
-    if (yaml !== null) {
-      // Count the lines including '---'
-      let count = 2;  // Opening '---' and its next line
-      let start = 0;
-      let i = 0;
-      while (true) {  // eslint-disable-line no-constant-condition
-        const i = yaml.indexOf('\n', start);
-        if (i === -1) {
-          break;
-        }
-        else {
-          count += 1;
-          start = i + 1;
-        }
-      }
-      count += 1;  // Closing '---'
-      // Memorize it
-      updateMetadataLineCount(count);
     }
+    else {
+      return [null, text];
+    }
+  })();
 
-    // Render the body
-    const renderedContent = mdit.render(body);
-    this.ignoreNext = true;
-
-    // Parse a YAML part
-    const [parseError, metadata] = (() => {
-      if (yaml !== null) {
-        try {
-          return [null, YAML.parse(yaml)];
-        }
-        catch (err) {
-          return [err, null];
-        }
+  // Memorize the number of lines of metadata block
+  if (yaml !== null) {
+    // Count the lines including '---'
+    let count = 2;  // Opening '---' and its next line
+    let start = 0;
+    let i = 0;
+    while (true) {  // eslint-disable-line no-constant-condition
+      const i = yaml.indexOf('\n', start);
+      if (i === -1) {
+        break;
       }
       else {
-        return [null, null];
+        count += 1;
+        start = i + 1;
       }
-    })();
+    }
+    count += 1;  // Closing '---'
+    // Memorize it
+    updateMetadataLineCount(count);
+  }
 
-    // Validate metadata
-    const validationErrors = (() => {
-      if (metadata !== null) {
-        if (validateMetadata(metadata)) {
-          return null;
-        }
-        else {
-          const errors = [];
-          for (const err of validateMetadata.errors as DefinedError[]) {
-            errors.push(err);
-          }
-          errors.sort((a, b) => {
-            if (a.instancePath < b.instancePath) {
-              return -1;
-            }
-            else if (a.instancePath > b.instancePath) {
-              return 1;
-            }
-            else {
-              return 0;
-            }
-          });
-          return errors;
-        }
+  // Render the body
+  const renderedContent = mdit.render(body);
+  this.ignoreNext = true;
+
+  // Parse a YAML part
+  const [parseError, metadata] = (() => {
+    if (yaml !== null) {
+      try {
+        return [null, YAML.parse(yaml)];
       }
-      else {
+      catch (err) {
+        return [err, null];
+      }
+    }
+    else {
+      return [null, null];
+    }
+  })();
+
+  // Validate metadata
+  const validationErrors = (() => {
+    if (metadata !== null) {
+      if (validateMetadata(metadata)) {
         return null;
       }
-    })();
-
-    // Set this.rendered
-    if (metadata !== null) {
-      // Metadata could be parsed correctly
-      this.rendered = {
-        metadata: {
-          validationErrors: validationErrors,
-          value: metadata
-        },
-        content: renderedContent,
-      };
-    }
-    else if (parseError !== null) {
-      // YAML parse error
-      this.rendered = {
-        metadata: {
-          parseError: parseError,
-          value: null,
-        },
-        content: renderedContent,
-      };
-    }
-    else {
-      // Metadata part does not exist
-      this.rendered = {
-        metadata: null,
-        content: renderedContent,
-      };
-    }
-
-    // We have to update the innerHTML immediately here instead of letting Vue
-    // update it reactively, otherwise MathJax will not be able to see the new
-    // content.
-    (this.$refs.renderedContent as Element).innerHTML = this.rendered.content;
-
-    // Schedule math rendering
-    this.mathjaxTypesetPromise = this.mathjaxTypesetPromise.then(() => {
-      return MathJax.typesetPromise([this.$refs.renderedContent]);
-    });
-
-    // Update the page title
-    document.title = `${this.title} | ${process.env.VUE_APP_NAME}`;
-  }
-
-  updateRenderedLazy() {
-    if (this.renderTimeoutId) {
-      window.clearTimeout(this.renderTimeoutId);
-      this.renderTimeoutId = null;
-    }
-    this.renderTimeoutId = window.setTimeout(() => {
-      this.updateRendered();
-    }, 500);
-  }
-
-  editorScrollTo(lineNumber: number) {
-    if (this.useSimpleEditor) {
-      const editor = this.$refs.editor as HTMLTextAreaElement;
-      const style = window.getComputedStyle(editor);
-      const lineHeight = parseFloat(style.getPropertyValue('line-height'));
-      editor.scrollTo({ top: lineNumber * lineHeight });
-    }
-    else {
-      const editor = this.$refs.editor as Editor;
-      editor.scrollTo(lineNumber);
-    }
-  }
-
-  handleDocumentScroll() {
-    if (!this.lockScroll) {
-      return;
-    }
-    if (this.ignoreNext) {
-      this.ignoreNext = false;
-      return;
-    }
-
-    // Build scroll map
-    const renderedContent = this.$refs.renderedContent as Element;
-    const scrollMap: [number, number][] = [...renderedContent.querySelectorAll<HTMLElement>('[data-line]')]
-      .map((el) => {
-        const lineNumber = parseInt(el.dataset['line'] as string);
-        const offset = el.offsetTop;
-        return [lineNumber, offset];
-      })
-      .sort((a, b) => {
-        if (a[0] < b[0]) {
-          return -1;
-        }
-        if (a[0] > b[0]) {
-          return 1;
-        }
-        return 0;
-      }) as [number, number][];
-
-    // Remove non-monotonically increasing entries
-    {
-      let i = 0;
-      while (i < scrollMap.length - 1) {
-        if (scrollMap[i][1] > scrollMap[i + 1][1]) {
-          // Delete the (i + 1)-th element
-          scrollMap.splice(i + 1, 1);
-        }
-        else {
-          ++i;
-        }
-      }
-    }
-
-    // Find the interval where the `scrollTop` belongs to
-    const scrollTop = document.documentElement.scrollTop;
-    let i = 0;
-    for (; i < scrollMap.length - 1; ++i) {
-      if (scrollMap[i][1] <= scrollTop && scrollTop < scrollMap[i + 1][1]) {
-        break;
-      }
-    }
-    const [lineNumber1, offset1] = scrollMap[i];
-    const [lineNumber2, offset2] = scrollMap[i + 1];
-
-    // Scroll to the line
-    const lineNumber = lineNumber1 + (lineNumber2 - lineNumber1) * (scrollTop - offset1) / (offset2 - offset1);
-    this.editorScrollTo(lineNumber);
-    this.ignoreNext = true;
-  }
-
-  get title() {
-    const rendered = this.rendered;
-    const root = document.createElement('div');
-    root.innerHTML = rendered.content;
-    const h1 = root.querySelector('h1');
-    if (h1) {
-      return h1.textContent;
-    }
-    else {
-      return this.$route.params.path;
-    }
-  }
-
-  get toc() {
-    const rendered = this.rendered;
-    const root = document.createElement('div');
-    root.innerHTML = rendered.content;
-
-    const toc: any = [];
-    const stack = [{ level: 0, title: '/', children: toc }];
-    for (const hx of [...root.children].filter(el => /^H\d+$/.test(el.tagName))) {
-      const level = parseInt(hx.tagName.slice(1));
-
-      // Find the parent of the header
-      while (level <= stack[stack.length - 1].level) {
-        stack.pop();
-      }
-
-      const parent = stack[stack.length - 1];
-      const child = {
-        level: level,
-        title: (hx as HTMLElement).innerText,
-        href: hx.querySelector('a.header-anchor')?.getAttribute('href'),
-        children: [],
-      };
-      parent.children.push(child);
-      stack.push(child);
-    }
-
-    return toc;
-  }
-
-  get isModified(): boolean {
-    return this.text !== this.initialText;
-  }
-
-  get upstreamStateSnackbarColor(): string {
-    if (this.upstreamState === 'different') {
-      return 'error';
-    }
-    else if (this.upstreamState === 'deleted') {
-      return 'warning';
-    }
-    else if (this.upstreamState === 'same') {
-      return 'success';
-    }
-    else {
-      throw 'Invalid upstream state!';
-    }
-  }
-
-  get needSave(): boolean {
-    if (this.noteHasUpstream) {
-      if (this.isModified) {
-        return true;
-      }
       else {
-        return false;
-      }
-    }
-    else {
-      return true;
-    }
-  }
-
-  @Watch('viewerIsVisible')
-  onViewerIsVisibleChanged(newValue: boolean, oldValue: boolean) {
-    if (!oldValue && newValue) {
-      this.updateRendered();
-    }
-  }
-
-  @Watch('renameMenuIsVisible')
-  onRenameMenuIsVisibleChanged(isVisible: boolean) {
-    if (isVisible) {
-      this.newPath = this.$route.params.path;
-      this.newPathConflicting = true;
-    }
-  }
-
-  onEditorChange(text: string) {
-    this.text = text;
-    if (this.viewerIsVisible) {
-      // Update lazily
-      this.updateRenderedLazy();
-    }
-  }
-
-  onEditorScroll(lineNumber: number) {
-    if (lineNumber === 0) {
-      // The first scroll invokes this event with line number being 0
-      // Just ignore
-      return;
-    }
-    if (!this.lockScroll) {
-      return;
-    }
-    if (this.ignoreNext) {
-      this.ignoreNext = false;
-      return;
-    }
-
-    // Build scroll map
-    const renderedContent = this.$refs.renderedContent as Element;
-    const scrollMap: [number, number][] = [...renderedContent.querySelectorAll<HTMLElement>('[data-line]')]
-      .map((el) => {
-        const lineNumber = parseInt(el.dataset['line'] as string);
-        const offset = el.offsetTop;
-        return [lineNumber, offset];
-      })
-      .sort((a, b) => {
-        if (a[0] < b[0]) {
-          return -1;
+        const errors = [];
+        for (const err of validateMetadata.errors as DefinedError[]) {
+          errors.push(err);
         }
-        if (a[0] > b[0]) {
-          return 1;
-        }
-        return 0;
-      }) as [number, number][];
-
-    // Remove non-monotonically increasing entries
-    {
-      let i = 0;
-      while (i < scrollMap.length - 1) {
-        if (scrollMap[i][1] > scrollMap[i + 1][1]) {
-          // Delete the (i + 1)-th element
-          scrollMap.splice(i + 1, 1);
-        }
-        else {
-          ++i;
-        }
-      }
-    }
-
-    // Find the interval where the given line number belongs to
-    let i = 0;
-    for (; i < scrollMap.length - 1; ++i) {
-      if (scrollMap[i][0] <= lineNumber && lineNumber < scrollMap[i + 1][0]) {
-        break;
-      }
-    }
-    const [lineNumber1, offset1] = scrollMap[i];
-    const [lineNumber2, offset2] = scrollMap[i + 1];
-
-    // Scroll by an offset
-    const offset = offset1 + (offset2 - offset1) * (lineNumber - lineNumber1) / (lineNumber2 - lineNumber1);
-    document.documentElement.scrollTo({ top: offset, left: 0, behavior: 'auto' });
-    this.ignoreNext = true;
-  }
-
-  checkUpstreamState() {
-    const path = this.$route.params.path;
-    return api.getNote(path)
-      .then(res => {
-        if (res.data === this.initialText) {
-          return 'same';
-        }
-        else {
-          return 'different';
-        }
-      })
-      .catch(error => {
-        if (error.response) {
-          if (error.response.status === 404) {
-            // Not Found
-            return 'deleted';
+        errors.sort((a, b) => {
+          if (a.instancePath < b.instancePath) {
+            return -1;
+          }
+          else if (a.instancePath > b.instancePath) {
+            return 1;
           }
           else {
-            throw error;
+            return 0;
           }
+        });
+        return errors;
+      }
+    }
+    else {
+      return null;
+    }
+  })();
+
+  // Set this.rendered
+  if (metadata !== null) {
+    // Metadata could be parsed correctly
+    this.rendered = {
+      metadata: {
+        validationErrors: validationErrors,
+        value: metadata
+      },
+      content: renderedContent,
+    };
+  }
+  else if (parseError !== null) {
+    // YAML parse error
+    this.rendered = {
+      metadata: {
+        parseError: parseError,
+        value: null,
+      },
+      content: renderedContent,
+    };
+  }
+  else {
+    // Metadata part does not exist
+    this.rendered = {
+      metadata: null,
+      content: renderedContent,
+    };
+  }
+
+  // We have to update the innerHTML immediately here instead of letting Vue
+  // update it reactively, otherwise MathJax will not be able to see the new
+  // content.
+  (this.$refs.renderedContent as Element).innerHTML = this.rendered.content;
+
+  // Schedule math rendering
+  this.mathjaxTypesetPromise = this.mathjaxTypesetPromise.then(() => {
+    return MathJax.typesetPromise([this.$refs.renderedContent]);
+  });
+
+  // Update the page title
+  document.title = `${this.title} | ${process.env.VUE_APP_NAME}`;
+}
+
+function updateRenderedLazy() {
+  if (this.renderTimeoutId) {
+    window.clearTimeout(this.renderTimeoutId);
+    this.renderTimeoutId = null;
+  }
+  this.renderTimeoutId = window.setTimeout(() => {
+    this.updateRendered();
+  }, 500);
+}
+
+function editorScrollTo(lineNumber: number) {
+  if (this.useSimpleEditor) {
+    const editor = this.$refs.editor as HTMLTextAreaElement;
+    const style = window.getComputedStyle(editor);
+    const lineHeight = parseFloat(style.getPropertyValue('line-height'));
+    editor.scrollTo({ top: lineNumber * lineHeight });
+  }
+  else {
+    const editor = this.$refs.editor as Editor;
+    editor.scrollTo(lineNumber);
+  }
+}
+
+function handleDocumentScroll() {
+  if (!this.lockScroll) {
+    return;
+  }
+  if (this.ignoreNext) {
+    this.ignoreNext = false;
+    return;
+  }
+
+  // Build scroll map
+  const renderedContent = this.$refs.renderedContent as Element;
+  const scrollMap: [number, number][] = [...renderedContent.querySelectorAll<HTMLElement>('[data-line]')]
+    .map((el) => {
+      const lineNumber = parseInt(el.dataset['line'] as string);
+      const offset = el.offsetTop;
+      return [lineNumber, offset];
+    })
+    .sort((a, b) => {
+      if (a[0] < b[0]) {
+        return -1;
+      }
+      if (a[0] > b[0]) {
+        return 1;
+      }
+      return 0;
+    }) as [number, number][];
+
+  // Remove non-monotonically increasing entries
+  {
+    let i = 0;
+    while (i < scrollMap.length - 1) {
+      if (scrollMap[i][1] > scrollMap[i + 1][1]) {
+        // Delete the (i + 1)-th element
+        scrollMap.splice(i + 1, 1);
+      }
+      else {
+        ++i;
+      }
+    }
+  }
+
+  // Find the interval where the `scrollTop` belongs to
+  const scrollTop = document.documentElement.scrollTop;
+  let i = 0;
+  for (; i < scrollMap.length - 1; ++i) {
+    if (scrollMap[i][1] <= scrollTop && scrollTop < scrollMap[i + 1][1]) {
+      break;
+    }
+  }
+  const [lineNumber1, offset1] = scrollMap[i];
+  const [lineNumber2, offset2] = scrollMap[i + 1];
+
+  // Scroll to the line
+  const lineNumber = lineNumber1 + (lineNumber2 - lineNumber1) * (scrollTop - offset1) / (offset2 - offset1);
+  this.editorScrollTo(lineNumber);
+  this.ignoreNext = true;
+}
+
+function onEditorChange(text: string) {
+  this.text = text;
+  if (this.viewerIsVisible) {
+    // Update lazily
+    this.updateRenderedLazy();
+  }
+}
+
+function onEditorScroll(lineNumber: number) {
+  if (lineNumber === 0) {
+    // The first scroll invokes this event with line number being 0
+    // Just ignore
+    return;
+  }
+  if (!this.lockScroll) {
+    return;
+  }
+  if (this.ignoreNext) {
+    this.ignoreNext = false;
+    return;
+  }
+
+  // Build scroll map
+  const renderedContent = this.$refs.renderedContent as Element;
+  const scrollMap: [number, number][] = [...renderedContent.querySelectorAll<HTMLElement>('[data-line]')]
+    .map((el) => {
+      const lineNumber = parseInt(el.dataset['line'] as string);
+      const offset = el.offsetTop;
+      return [lineNumber, offset];
+    })
+    .sort((a, b) => {
+      if (a[0] < b[0]) {
+        return -1;
+      }
+      if (a[0] > b[0]) {
+        return 1;
+      }
+      return 0;
+    }) as [number, number][];
+
+  // Remove non-monotonically increasing entries
+  {
+    let i = 0;
+    while (i < scrollMap.length - 1) {
+      if (scrollMap[i][1] > scrollMap[i + 1][1]) {
+        // Delete the (i + 1)-th element
+        scrollMap.splice(i + 1, 1);
+      }
+      else {
+        ++i;
+      }
+    }
+  }
+
+  // Find the interval where the given line number belongs to
+  let i = 0;
+  for (; i < scrollMap.length - 1; ++i) {
+    if (scrollMap[i][0] <= lineNumber && lineNumber < scrollMap[i + 1][0]) {
+      break;
+    }
+  }
+  const [lineNumber1, offset1] = scrollMap[i];
+  const [lineNumber2, offset2] = scrollMap[i + 1];
+
+  // Scroll by an offset
+  const offset = offset1 + (offset2 - offset1) * (lineNumber - lineNumber1) / (lineNumber2 - lineNumber1);
+  document.documentElement.scrollTo({ top: offset, left: 0, behavior: 'auto' });
+  this.ignoreNext = true;
+}
+
+function checkUpstreamState() {
+  const path = this.$route.params.path;
+  return api.getNote(path)
+    .then(res => {
+      if (res.data === this.initialText) {
+        return 'same';
+      }
+      else {
+        return 'different';
+      }
+    })
+    .catch(error => {
+      if (error.response) {
+        if (error.response.status === 404) {
+          // Not Found
+          return 'deleted';
         }
         else {
           throw error;
         }
-      });
-  }
-
-  load(path: string) {
-    this.isLoading = true;
-    api.getNote(path)
-      .then(res => {
-        this.text = res.data;
-        this.initialText = this.text;
-        this.upstreamState = 'same';
-        this.noteHasUpstream = true;
-
-        // Update immediately
-        this.updateRendered();
-
-        // Jump to a header if specified
-        if (this.$route.hash) {
-          const anchorSelector = decodeURIComponent(this.$route.hash);
-          this.$nextTick(() => {
-            const anchor = document.querySelector(anchorSelector);
-            if (anchor) {
-              anchor.scrollIntoView();
-            }
-          });
-        }
-
-        this.isLoading = false;
-        this.notFound = false;
-      }).catch(error => {
-        if (error.response) {
-          if (error.response.status === 401) {
-            // Unauthorized
-            this.$emit('tokenExpired', () => {
-              this.load(path);
-              this.focusOrBlurEditor();
-            });
-          }
-          else if (error.response.status === 404) {
-            // Not Found
-            this.isLoading = false;
-            this.notFound = true;
-          }
-          else {
-            this.error = true;
-            this.errorText = error.response;
-            console.log('Unhandled error: {}', error.response);
-            this.isLoading = false;
-          }
-        }
-        else {
-          this.error = true;
-          this.errorText = error.toString();
-          console.log('Unhandled error: {}', error);
-          this.isLoading = false;
-        }
-      });
-  }
-
-  loadTemplate(path: string) {
-    this.isLoading = true;
-    api.getNote(path)
-      .then(res => {
-        this.text = res.data;
-        this.initialText = this.text;
-        this.editorIsVisible = true;
-        (this.$refs.editor as Editor | HTMLTextAreaElement).focus();
-
-        // Update immediately
-        this.updateRendered();
-
-        this.isLoading = false;
-        this.notFound = false;
-      }).catch(error => {
-        if (error.response) {
-          if (error.response.status === 401) {
-            // Unauthorized
-            this.$emit('tokenExpired', () => {
-              this.load(path);
-              this.focusOrBlurEditor();
-            });
-          }
-          else if (error.response.status === 404) {
-            // Not Found
-            this.isLoading = false;
-            this.notFound = true;
-          }
-          else {
-            this.error = true;
-            this.errorText = error.response;
-            console.log('Unhandled error: {}', error.response);
-            this.isLoading = false;
-          }
-        }
-        else {
-          this.error = true;
-          this.errorText = error.toString();
-          console.log('Unhandled error: {}', error);
-          this.isLoading = false;
-        }
-      });
-  }
-
-  reload() {
-    this.load(this.$route.params.path);
-  }
-
-  toggleEditor() {
-    if (this.viewerIsVisible) {
-      if (this.editorIsVisible) {
-        this.editorIsVisible = false;
       }
       else {
-        this.editorIsVisible = true;
-      }
-    }
-    else {
-      if (this.editorIsVisible) {
-        this.editorIsVisible = false;
-        this.viewerIsVisible = true;
-      }
-      else {
-        // Though this case shouldn't happen...
-        this.editorIsVisible = true;
-      }
-    }
-
-    this.focusOrBlurEditor();
-
-    this.$nextTick(() => {
-      this.onEditorPaneResize();
-      this.onViewerPaneResize();
-    });
-  }
-
-  toggleViewer() {
-    if (this.editorIsVisible) {
-      if (this.viewerIsVisible) {
-        this.viewerIsVisible = false;
-      }
-      else {
-        this.viewerIsVisible = true;
-      }
-    }
-    else {
-      if (this.viewerIsVisible) {
-        this.viewerIsVisible = false;
-        this.editorIsVisible = true;
-      }
-      else {
-        // Though this case shouldn't happen...
-        this.viewerIsVisible = true;
-      }
-    }
-
-    this.focusOrBlurEditor();
-
-    this.$nextTick(() => {
-      this.onEditorPaneResize();
-      this.onViewerPaneResize();
-    });
-  }
-
-  onEditorPaneResize() {
-    (this.$refs.editor as Editor).resize();
-  }
-
-  onViewerPaneResize() {
-    // Nothing to do here as of now
-  }
-
-  focusOrBlurEditor() {
-    this.$nextTick(() => {
-      if (this.editorIsVisible) {
-        (this.$refs.editor as Editor | HTMLTextAreaElement).focus();
-      }
-      else {
-        (this.$refs.editor as Editor | HTMLTextAreaElement).blur();
+        throw error;
       }
     });
-  }
+}
 
-  editorHasFocus(): boolean {
-    if (this.useSimpleEditor) {
-      const textarea = this.$refs.editor;
-      return document.activeElement === textarea;
-    }
-    else {
-      const textarea = (this.$refs.editor as Editor).$el.querySelector('textarea');
-      return document.activeElement === textarea;
-    }
-  }
-
-  notifyUpstreamState(e: FocusEvent) {
-    this.checkUpstreamState()
-      .then(state => {
-        if (this.noteHasUpstream || state === 'different') {
-          this.upstreamState = state;
-          this.showUpstreamState = true;
-        }
-      })
-      .catch(error => {
-        if (error.response) {
-          if (error.response.status === 401) {
-            // Unauthorized
-            this.$emit('tokenExpired', () => {
-              this.notifyUpstreamState(e);
-            });
-          }
-          else {
-            this.error = true;
-            this.errorText = error.response;
-            console.log('Unhandled error: {}', error.response);
-          }
-        }
-        else {
-          this.error = true;
-          this.errorText = error.toString();
-          console.log('Unhandled error: {}', error);
-        }
-      });
-  }
-
-  onBeforeunload(e: any) {
-    if (this.isModified) {
-      // Cancel the event
-      e.preventDefault();
-      e.returnValue = '';  // Chrome requires returnValue to be set
-    }
-    else {
-      delete e['returnValue'];  // This guarantees the browser unload happens
-    }
-  }
-
-  handleKeydown(e: KeyboardEvent) {
-    if (this.renameMenuIsVisible) {
-      return;
-    }
-    if (e.key === 'e') {
-      if (this.editorIsVisible) {
-        // Do nothing
-      }
-      else {
-        // Show editor
-        this.editorIsVisible = true;
-        this.$nextTick(() => {
-          // Focus editor
-          (this.$refs.editor as Editor | HTMLTextAreaElement).focus();
-          // Resize editor
-          (this.$refs.editor as Editor).resize();
-        });
-        // Prevent 'e' from being input if editor is already focused
-        e.preventDefault();
-      }
-    }
-    else if (e.ctrlKey && e.key === 'Enter') {
-      this.toggleEditor();
-    }
-    else if (e.shiftKey && e.key === 'Enter') {
-      this.toggleViewer();
-    }
-    else if (e.ctrlKey && e.key === 's') {
-      this.saveIfNeeded();
-      e.preventDefault();
-    }
-  }
-
-  saveIfNeeded() {
-    if (this.needSave) {
-      this.checkUpstreamState()
-        .then(state => {
-          if (this.noteHasUpstream) {
-            if (state === 'same') {
-              this.save();
-            }
-            else {
-              this.upstreamState = state;
-              this.showConfirmationDialog = true;
-            }
-          }
-          else {
-            if (state === 'same' || state === 'deleted') {
-              this.save();
-            }
-            else {
-              this.upstreamState = state;
-              this.showConfirmationDialog = true;
-            }
-          }
-        })
-        .catch(error => {
-          if (error.response) {
-            if (error.response.status === 401) {
-              // Unauthorized
-              this.$emit('tokenExpired', () => {
-                this.saveIfNeeded();
-              });
-            }
-            else {
-              this.error = true;
-              this.errorText = error.response;
-              console.log('Unhandled error: {}', error.response);
-            }
-          }
-          else {
-            this.error = true;
-            this.errorText = error.toString();
-            console.log('Unhandled error: {}', error);
-          }
-        });
-    }
-  }
-
-  save() {
-    this.isSaving = true;
-    const path = this.$route.params.path;
-    const content = this.text;
-    api.addNote(
-      path,
-      content
-    ).then(res => {
-      this.initialText = content;
+function load(path: string) {
+  this.isLoading = true;
+  api.getNote(path)
+    .then(res => {
+      this.text = res.data;
+      this.initialText = this.text;
+      this.upstreamState = 'same';
       this.noteHasUpstream = true;
-      this.isSaving = false;
-      // Remove 'mode' query parameter
-      const newQuery = { ...this.$route.query };
-      delete newQuery.mode;
-      this.$router.replace({ query: newQuery });
+
+      // Update immediately
+      this.updateRendered();
+
+      // Jump to a header if specified
+      if (this.$route.hash) {
+        const anchorSelector = decodeURIComponent(this.$route.hash);
+        this.$nextTick(() => {
+          const anchor = document.querySelector(anchorSelector);
+          if (anchor) {
+            anchor.scrollIntoView();
+          }
+        });
+      }
+
+      this.isLoading = false;
+      this.notFound = false;
     }).catch(error => {
       if (error.response) {
         if (error.response.status === 401) {
           // Unauthorized
           this.$emit('tokenExpired', () => {
+            this.load(path);
+            this.focusOrBlurEditor();
+          });
+        }
+        else if (error.response.status === 404) {
+          // Not Found
+          this.isLoading = false;
+          this.notFound = true;
+        }
+        else {
+          this.error = true;
+          this.errorText = error.response;
+          console.log('Unhandled error: {}', error.response);
+          this.isLoading = false;
+        }
+      }
+      else {
+        this.error = true;
+        this.errorText = error.toString();
+        console.log('Unhandled error: {}', error);
+        this.isLoading = false;
+      }
+    });
+}
+
+function loadTemplate(path: string) {
+  this.isLoading = true;
+  api.getNote(path)
+    .then(res => {
+      this.text = res.data;
+      this.initialText = this.text;
+      this.editorIsVisible = true;
+      (this.$refs.editor as Editor | HTMLTextAreaElement).focus();
+
+      // Update immediately
+      this.updateRendered();
+
+      this.isLoading = false;
+      this.notFound = false;
+    }).catch(error => {
+      if (error.response) {
+        if (error.response.status === 401) {
+          // Unauthorized
+          this.$emit('tokenExpired', () => {
+            this.load(path);
+            this.focusOrBlurEditor();
+          });
+        }
+        else if (error.response.status === 404) {
+          // Not Found
+          this.isLoading = false;
+          this.notFound = true;
+        }
+        else {
+          this.error = true;
+          this.errorText = error.response;
+          console.log('Unhandled error: {}', error.response);
+          this.isLoading = false;
+        }
+      }
+      else {
+        this.error = true;
+        this.errorText = error.toString();
+        console.log('Unhandled error: {}', error);
+        this.isLoading = false;
+      }
+    });
+}
+
+function reload() {
+  this.load(this.$route.params.path);
+}
+
+function toggleEditor() {
+  if (this.viewerIsVisible) {
+    if (this.editorIsVisible) {
+      this.editorIsVisible = false;
+    }
+    else {
+      this.editorIsVisible = true;
+    }
+  }
+  else {
+    if (this.editorIsVisible) {
+      this.editorIsVisible = false;
+      this.viewerIsVisible = true;
+    }
+    else {
+      // Though this case shouldn't happen...
+      this.editorIsVisible = true;
+    }
+  }
+
+  this.focusOrBlurEditor();
+
+  this.$nextTick(() => {
+    this.onEditorPaneResize();
+    this.onViewerPaneResize();
+  });
+}
+
+function toggleViewer() {
+  if (this.editorIsVisible) {
+    if (this.viewerIsVisible) {
+      this.viewerIsVisible = false;
+    }
+    else {
+      this.viewerIsVisible = true;
+    }
+  }
+  else {
+    if (this.viewerIsVisible) {
+      this.viewerIsVisible = false;
+      this.editorIsVisible = true;
+    }
+    else {
+      // Though this case shouldn't happen...
+      this.viewerIsVisible = true;
+    }
+  }
+
+  this.focusOrBlurEditor();
+
+  this.$nextTick(() => {
+    this.onEditorPaneResize();
+    this.onViewerPaneResize();
+  });
+}
+
+function onEditorPaneResize() {
+  (this.$refs.editor as Editor).resize();
+}
+
+function onViewerPaneResize() {
+  // Nothing to do here as of now
+}
+
+function focusOrBlurEditor() {
+  this.$nextTick(() => {
+    if (this.editorIsVisible) {
+      (this.$refs.editor as Editor | HTMLTextAreaElement).focus();
+    }
+    else {
+      (this.$refs.editor as Editor | HTMLTextAreaElement).blur();
+    }
+  });
+}
+
+function editorHasFocus(): boolean {
+  if (this.useSimpleEditor) {
+    const textarea = this.$refs.editor;
+    return document.activeElement === textarea;
+  }
+  else {
+    const textarea = (this.$refs.editor as Editor).$el.querySelector('textarea');
+    return document.activeElement === textarea;
+  }
+}
+
+function notifyUpstreamState(e: FocusEvent) {
+  this.checkUpstreamState()
+    .then(state => {
+      if (this.noteHasUpstream || state === 'different') {
+        this.upstreamState = state;
+        this.showUpstreamState = true;
+      }
+    })
+    .catch(error => {
+      if (error.response) {
+        if (error.response.status === 401) {
+          // Unauthorized
+          this.$emit('tokenExpired', () => {
+            this.notifyUpstreamState(e);
+          });
+        }
+        else {
+          this.error = true;
+          this.errorText = error.response;
+          console.log('Unhandled error: {}', error.response);
+        }
+      }
+      else {
+        this.error = true;
+        this.errorText = error.toString();
+        console.log('Unhandled error: {}', error);
+      }
+    });
+}
+
+function onBeforeunload(e: any) {
+  if (this.isModified) {
+    // Cancel the event
+    e.preventDefault();
+    e.returnValue = '';  // Chrome requires returnValue to be set
+  }
+  else {
+    delete e['returnValue'];  // This guarantees the browser unload happens
+  }
+}
+
+function handleKeydown(e: KeyboardEvent) {
+  if (this.renameMenuIsVisible) {
+    return;
+  }
+  if (e.key === 'e') {
+    if (this.editorIsVisible) {
+      // Do nothing
+    }
+    else {
+      // Show editor
+      this.editorIsVisible = true;
+      this.$nextTick(() => {
+        // Focus editor
+        (this.$refs.editor as Editor | HTMLTextAreaElement).focus();
+        // Resize editor
+        (this.$refs.editor as Editor).resize();
+      });
+      // Prevent 'e' from being input if editor is already focused
+      e.preventDefault();
+    }
+  }
+  else if (e.ctrlKey && e.key === 'Enter') {
+    this.toggleEditor();
+  }
+  else if (e.shiftKey && e.key === 'Enter') {
+    this.toggleViewer();
+  }
+  else if (e.ctrlKey && e.key === 's') {
+    this.saveIfNeeded();
+    e.preventDefault();
+  }
+}
+
+function saveIfNeeded() {
+  if (this.needSave) {
+    this.checkUpstreamState()
+      .then(state => {
+        if (this.noteHasUpstream) {
+          if (state === 'same') {
             this.save();
+          }
+          else {
+            this.upstreamState = state;
+            this.showConfirmationDialog = true;
+          }
+        }
+        else {
+          if (state === 'same' || state === 'deleted') {
+            this.save();
+          }
+          else {
+            this.upstreamState = state;
+            this.showConfirmationDialog = true;
+          }
+        }
+      })
+      .catch(error => {
+        if (error.response) {
+          if (error.response.status === 401) {
+            // Unauthorized
+            this.$emit('tokenExpired', () => {
+              this.saveIfNeeded();
+            });
+          }
+          else {
+            this.error = true;
+            this.errorText = error.response;
+            console.log('Unhandled error: {}', error.response);
+          }
+        }
+        else {
+          this.error = true;
+          this.errorText = error.toString();
+          console.log('Unhandled error: {}', error);
+        }
+      });
+  }
+}
+
+function save() {
+  this.isSaving = true;
+  const path = this.$route.params.path;
+  const content = this.text;
+  api.addNote(
+    path,
+    content
+  ).then(res => {
+    this.initialText = content;
+    this.noteHasUpstream = true;
+    this.isSaving = false;
+    // Remove 'mode' query parameter
+    const newQuery = { ...this.$route.query };
+    delete newQuery.mode;
+    this.$router.replace({ query: newQuery });
+  }).catch(error => {
+    if (error.response) {
+      if (error.response.status === 401) {
+        // Unauthorized
+        this.$emit('tokenExpired', () => {
+          this.save();
+          this.focusOrBlurEditor();
+        });
+      }
+      else {
+        this.error = true;
+        this.errorText = error.response;
+        console.log('Unhandled error: {}', error.response);
+        this.isSaving = false;
+      }
+    }
+    else {
+      this.error = true;
+      this.errorText = error.toString();
+      console.log('Unhandled error: {}', error);
+      this.isSaving = false;
+    }
+  });
+}
+
+function onNewPathKeydown(e: KeyboardEvent) {
+  if (e.key === 'Enter') {
+    this.rename();
+  }
+}
+
+function onNewPathInput(path: string) {
+  api.getNote(path).then(() => {
+    this.newPathConflicting = true;
+  }).catch(() => {
+    // FIXME Status code should be checked.
+    this.newPathConflicting = false;
+  });
+}
+
+function rename() {
+  const oldPath = this.$route.params.path;
+  const newPath = this.newPath;
+
+  if (newPath !== null && newPath !== oldPath) {
+    this.isRenaming = true;
+    api.renameNote(
+      oldPath,
+      newPath
+    ).then(res => {
+      this.$router.replace({
+        path: `/note/${newPath}`,
+      });
+      this.isRenaming = false;
+    }).catch(error => {
+      if (error.response) {
+        if (error.response.status === 401) {
+          // Unauthorized
+          this.$emit('tokenExpired', () => {
+            this.rename();
             this.focusOrBlurEditor();
           });
         }
@@ -1241,82 +1287,32 @@ events:
           this.error = true;
           this.errorText = error.response;
           console.log('Unhandled error: {}', error.response);
-          this.isSaving = false;
+          this.isRenaming = false;
         }
       }
       else {
         this.error = true;
         this.errorText = error.toString();
         console.log('Unhandled error: {}', error);
-        this.isSaving = false;
+        this.isRenaming = false;
       }
     });
   }
-
-  onNewPathKeydown(e: KeyboardEvent) {
-    if (e.key === 'Enter') {
-      this.rename();
-    }
-  }
-
-  onNewPathInput(path: string) {
-    api.getNote(path).then(() => {
-      this.newPathConflicting = true;
-    }).catch(() => {
-      // FIXME Status code should be checked.
-      this.newPathConflicting = false;
-    });
-  }
-
-  get newPathValidationResult(): boolean | string {
-    if (this.newPathConflicting) {
-      return 'Conflicting with existing path';
-    }
-    else {
-      return true;
-    }
-  }
-
-  rename() {
-    const oldPath = this.$route.params.path;
-    const newPath = this.newPath;
-
-    if (newPath !== null && newPath !== oldPath) {
-      this.isRenaming = true;
-      api.renameNote(
-        oldPath,
-        newPath
-      ).then(res => {
-        this.$router.replace({
-          path: `/note/${newPath}`,
-        });
-        this.isRenaming = false;
-      }).catch(error => {
-        if (error.response) {
-          if (error.response.status === 401) {
-            // Unauthorized
-            this.$emit('tokenExpired', () => {
-              this.rename();
-              this.focusOrBlurEditor();
-            });
-          }
-          else {
-            this.error = true;
-            this.errorText = error.response;
-            console.log('Unhandled error: {}', error.response);
-            this.isRenaming = false;
-          }
-        }
-        else {
-          this.error = true;
-          this.errorText = error.toString();
-          console.log('Unhandled error: {}', error);
-          this.isRenaming = false;
-        }
-      });
-    }
-  }
 }
+
+// Watchers
+watch(viewerIsVisible, (newValue: boolean, oldValue: boolean) => {
+  if (!oldValue && newValue) {
+    this.updateRendered();
+  }
+});
+
+watch(renameMenuIsVisible, (isVisible: boolean) => {
+  if (isVisible) {
+    this.newPath = this.$route.params.path;
+    this.newPathConflicting = true;
+  }
+});
 </script>
 
 <style scoped lang="scss">
