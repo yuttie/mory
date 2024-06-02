@@ -349,9 +349,9 @@ const editorMode = computed(() => {
 
 const panesState = computed(() => {
   return {
-    onlyEditor: this.editorIsVisible && !this.viewerIsVisible,
-    onlyViewer: !this.editorIsVisible && this.viewerIsVisible,
-    both: this.editorIsVisible && this.viewerIsVisible,
+    onlyEditor: editorIsVisible.value && !viewerIsVisible.value,
+    onlyViewer: !editorIsVisible.value && viewerIsVisible.value,
+    both: editorIsVisible.value && viewerIsVisible.value,
     smAndUp: this.$vuetify.breakpoint.smAndUp,
     mdAndUp: this.$vuetify.breakpoint.mdAndUp,
     lgAndUp: this.$vuetify.breakpoint.lgAndUp,
@@ -365,9 +365,8 @@ const rightSidebarState = computed(() => {
 });
 
 const title = computed(() => {
-  const rendered = this.rendered;
   const root = document.createElement('div');
-  root.innerHTML = rendered.content;
+  root.innerHTML = rendered.value.content;
   const h1 = root.querySelector('h1');
   if (h1) {
     return h1.textContent;
@@ -378,9 +377,8 @@ const title = computed(() => {
 });
 
 const toc = computed(() => {
-  const rendered = this.rendered;
   const root = document.createElement('div');
-  root.innerHTML = rendered.content;
+  root.innerHTML = rendered.value.content;
 
   const toc: any = [];
   const stack = [{ level: 0, title: '/', children: toc }];
@@ -407,17 +405,17 @@ const toc = computed(() => {
 });
 
 const isModified = computed((): boolean => {
-  return this.text !== this.initialText;
+  return text.value !== initialText.value;
 });
 
 const upstreamStateSnackbarColor = computed((): string => {
-  if (this.upstreamState === 'different') {
+  if (upstreamState.value === 'different') {
     return 'error';
   }
-  else if (this.upstreamState === 'deleted') {
+  else if (upstreamState.value === 'deleted') {
     return 'warning';
   }
-  else if (this.upstreamState === 'same') {
+  else if (upstreamState.value === 'same') {
     return 'success';
   }
   else {
@@ -426,8 +424,8 @@ const upstreamStateSnackbarColor = computed((): string => {
 });
 
 const needSave = computed((): boolean => {
-  if (this.noteHasUpstream) {
-    if (this.isModified) {
+  if (noteHasUpstream.value) {
+    if (isModified.value) {
       return true;
     }
     else {
@@ -440,7 +438,7 @@ const needSave = computed((): boolean => {
 });
 
 const newPathValidationResult = computed((): boolean | string => {
-  if (this.newPathConflicting) {
+  if (newPathConflicting.value) {
     return 'Conflicting with existing path';
   }
   else {
@@ -451,62 +449,62 @@ const newPathValidationResult = computed((): boolean | string => {
 // Lifecycle hooks
 onMounted(() => {
   const prismTheme = loadConfigValue('prism-theme', null);
-  this.loadPrismTheme(prismTheme);
+  loadPrismTheme(prismTheme);
 
-  document.title = `${this.title} | ${process.env.VUE_APP_NAME}`;
+  document.title = `${title.value} | ${process.env.VUE_APP_NAME}`;
 
-  window.addEventListener('focus', this.notifyUpstreamState);
-  window.addEventListener('focus', this.focusOrBlurEditor);
+  window.addEventListener('focus', notifyUpstreamState);
+  window.addEventListener('focus', focusOrBlurEditor);
 
-  window.addEventListener('beforeunload', this.onBeforeunload);
+  window.addEventListener('beforeunload', onBeforeunload);
 
-  window.addEventListener('keydown', this.handleKeydown);
+  window.addEventListener('keydown', handleKeydown);
 
   if (this.$route.query.mode === 'create') {
     if (this.$route.query.template) {
-      this.loadTemplate(this.$route.query.template as string);
+      loadTemplate(this.$route.query.template as string);
     }
     else {
-      this.text = `---
+      text.value = `---
 tags:
 events:
 ---
 
 # ${this.$route.params.path}`;
-      this.initialText = this.text;
-      this.editorIsVisible = true;
+      initialText.value = text.value;
+      editorIsVisible.value = true;
       (this.$refs.editor as Editor | HTMLTextAreaElement).focus();
 
       // Update immediately
-      this.updateRendered();
+      updateRendered();
     }
   }
   else {
-    this.load(this.$route.params.path);
+    load(this.$route.params.path);
   }
 
   if (!/\.(md|markdown)$/i.test(this.$route.params.path)) {
-    this.editorIsVisible = true;
-    this.viewerIsVisible = false;
-    this.focusOrBlurEditor();
+    editorIsVisible.value = true;
+    viewerIsVisible.value = false;
+    focusOrBlurEditor();
   }
 
-  document.addEventListener('scroll', this.handleDocumentScroll);
+  document.addEventListener('scroll', handleDocumentScroll);
 });
 
 onUnmounted(() => {
-  window.removeEventListener('focus', this.notifyUpstreamState);
-  window.removeEventListener('focus', this.focusOrBlurEditor);
+  window.removeEventListener('focus', notifyUpstreamState);
+  window.removeEventListener('focus', focusOrBlurEditor);
 
-  window.removeEventListener('beforeunload', this.onBeforeunload);
+  window.removeEventListener('beforeunload', onBeforeunload);
 
-  window.removeEventListener('keydown', this.handleKeydown);
-  if (this.renderTimeoutId) {
-    window.clearTimeout(this.renderTimeoutId);
-    this.renderTimeoutId = null;
+  window.removeEventListener('keydown', handleKeydown);
+  if (renderTimeoutId.value) {
+    window.clearTimeout(renderTimeoutId.value);
+    renderTimeoutId.value = null;
   }
 
-  document.removeEventListener('scroll', this.handleDocumentScroll);
+  document.removeEventListener('scroll', handleDocumentScroll);
 });
 
 // Methods
@@ -541,7 +539,7 @@ function loadPrismTheme(theme: string | null) {
 }
 
 function insertText(text: string) {
-  if (this.useSimpleEditor) {
+  if (useSimpleEditor.value) {
     const editor = this.$refs.editor as HTMLTextAreaElement;
     editor.value = editor.value.slice(0, editor.selectionStart) + text + editor.value.slice(editor.selectionEnd);
   }
@@ -553,7 +551,7 @@ function insertText(text: string) {
 }
 
 function encloseText(before: string, after: string) {
-  if (this.useSimpleEditor) {
+  if (useSimpleEditor.value) {
     const editor = this.$refs.editor as HTMLTextAreaElement;
     const selectedText = editor.value.slice(editor.selectionStart, editor.selectionEnd);
     const formattedText = before + selectedText + after;
@@ -569,7 +567,7 @@ function encloseText(before: string, after: string) {
 }
 
 function formatTable() {
-  if (this.useSimpleEditor) {
+  if (useSimpleEditor.value) {
     const editor = this.$refs.editor as HTMLTextAreaElement;
     const selectedText = editor.value.slice(editor.selectionStart, editor.selectionEnd);
     const formattedText = CliPrettify.prettify(selectedText);
@@ -585,7 +583,7 @@ function formatTable() {
 }
 
 function updateRendered() {
-  const text = this.text;
+  const text = text.value;
 
   // Split the note text into a YAML part and a body part
   const [yaml, body] = ((): [null | string, string] => {
@@ -628,7 +626,7 @@ function updateRendered() {
 
   // Render the body
   const renderedContent = mdit.render(body);
-  this.ignoreNext = true;
+  ignoreNext.value = true;
 
   // Parse a YAML part
   const [parseError, metadata] = (() => {
@@ -678,7 +676,7 @@ function updateRendered() {
   // Set this.rendered
   if (metadata !== null) {
     // Metadata could be parsed correctly
-    this.rendered = {
+    rendered.value = {
       metadata: {
         validationErrors: validationErrors,
         value: metadata
@@ -688,7 +686,7 @@ function updateRendered() {
   }
   else if (parseError !== null) {
     // YAML parse error
-    this.rendered = {
+    rendered.value = {
       metadata: {
         parseError: parseError,
         value: null,
@@ -698,7 +696,7 @@ function updateRendered() {
   }
   else {
     // Metadata part does not exist
-    this.rendered = {
+    rendered.value = {
       metadata: null,
       content: renderedContent,
     };
@@ -707,29 +705,29 @@ function updateRendered() {
   // We have to update the innerHTML immediately here instead of letting Vue
   // update it reactively, otherwise MathJax will not be able to see the new
   // content.
-  (this.$refs.renderedContent as Element).innerHTML = this.rendered.content;
+  (this.$refs.renderedContent as Element).innerHTML = rendered.value.content;
 
   // Schedule math rendering
-  this.mathjaxTypesetPromise = this.mathjaxTypesetPromise.then(() => {
+  mathjaxTypesetPromise.value = mathjaxTypesetPromise.value.then(() => {
     return MathJax.typesetPromise([this.$refs.renderedContent]);
   });
 
   // Update the page title
-  document.title = `${this.title} | ${process.env.VUE_APP_NAME}`;
+  document.title = `${title.value} | ${process.env.VUE_APP_NAME}`;
 }
 
 function updateRenderedLazy() {
-  if (this.renderTimeoutId) {
-    window.clearTimeout(this.renderTimeoutId);
-    this.renderTimeoutId = null;
+  if (renderTimeoutId.value) {
+    window.clearTimeout(renderTimeoutId.value);
+    renderTimeoutId.value = null;
   }
-  this.renderTimeoutId = window.setTimeout(() => {
-    this.updateRendered();
+  renderTimeoutId.value = window.setTimeout(() => {
+    updateRendered();
   }, 500);
 }
 
 function editorScrollTo(lineNumber: number) {
-  if (this.useSimpleEditor) {
+  if (useSimpleEditor.value) {
     const editor = this.$refs.editor as HTMLTextAreaElement;
     const style = window.getComputedStyle(editor);
     const lineHeight = parseFloat(style.getPropertyValue('line-height'));
@@ -742,11 +740,11 @@ function editorScrollTo(lineNumber: number) {
 }
 
 function handleDocumentScroll() {
-  if (!this.lockScroll) {
+  if (!lockScroll.value) {
     return;
   }
-  if (this.ignoreNext) {
-    this.ignoreNext = false;
+  if (ignoreNext.value) {
+    ignoreNext.value = false;
     return;
   }
 
@@ -795,15 +793,15 @@ function handleDocumentScroll() {
 
   // Scroll to the line
   const lineNumber = lineNumber1 + (lineNumber2 - lineNumber1) * (scrollTop - offset1) / (offset2 - offset1);
-  this.editorScrollTo(lineNumber);
-  this.ignoreNext = true;
+  editorScrollTo(lineNumber);
+  ignoreNext.value = true;
 }
 
 function onEditorChange(text: string) {
-  this.text = text;
-  if (this.viewerIsVisible) {
+  text.value = text;
+  if (viewerIsVisible.value) {
     // Update lazily
-    this.updateRenderedLazy();
+    updateRenderedLazy();
   }
 }
 
@@ -813,11 +811,11 @@ function onEditorScroll(lineNumber: number) {
     // Just ignore
     return;
   }
-  if (!this.lockScroll) {
+  if (!lockScroll.value) {
     return;
   }
-  if (this.ignoreNext) {
-    this.ignoreNext = false;
+  if (ignoreNext.value) {
+    ignoreNext.value = false;
     return;
   }
 
@@ -866,14 +864,14 @@ function onEditorScroll(lineNumber: number) {
   // Scroll by an offset
   const offset = offset1 + (offset2 - offset1) * (lineNumber - lineNumber1) / (lineNumber2 - lineNumber1);
   document.documentElement.scrollTo({ top: offset, left: 0, behavior: 'auto' });
-  this.ignoreNext = true;
+  ignoreNext.value = true;
 }
 
 function checkUpstreamState() {
   const path = this.$route.params.path;
   return api.getNote(path)
     .then(res => {
-      if (res.data === this.initialText) {
+      if (res.data === initialText.value) {
         return 'same';
       }
       else {
@@ -897,16 +895,16 @@ function checkUpstreamState() {
 }
 
 function load(path: string) {
-  this.isLoading = true;
+  isLoading.value = true;
   api.getNote(path)
     .then(res => {
-      this.text = res.data;
-      this.initialText = this.text;
-      this.upstreamState = 'same';
-      this.noteHasUpstream = true;
+      text.value = res.data;
+      initialText.value = text.value;
+      upstreamState.value = 'same';
+      noteHasUpstream.value = true;
 
       // Update immediately
-      this.updateRendered();
+      updateRendered();
 
       // Jump to a header if specified
       if (this.$route.hash) {
@@ -919,139 +917,139 @@ function load(path: string) {
         });
       }
 
-      this.isLoading = false;
-      this.notFound = false;
+      isLoading.value = false;
+      notFound.value = false;
     }).catch(error => {
       if (error.response) {
         if (error.response.status === 401) {
           // Unauthorized
           this.$emit('tokenExpired', () => {
-            this.load(path);
-            this.focusOrBlurEditor();
+            load(path);
+            focusOrBlurEditor();
           });
         }
         else if (error.response.status === 404) {
           // Not Found
-          this.isLoading = false;
-          this.notFound = true;
+          isLoading.value = false;
+          notFound.value = true;
         }
         else {
-          this.error = true;
-          this.errorText = error.response;
+          error.value = true;
+          errorText.value = error.response;
           console.log('Unhandled error: {}', error.response);
-          this.isLoading = false;
+          isLoading.value = false;
         }
       }
       else {
-        this.error = true;
-        this.errorText = error.toString();
+        error.value = true;
+        errorText.value = error.toString();
         console.log('Unhandled error: {}', error);
-        this.isLoading = false;
+        isLoading.value = false;
       }
     });
 }
 
 function loadTemplate(path: string) {
-  this.isLoading = true;
+  isLoading.value = true;
   api.getNote(path)
     .then(res => {
-      this.text = res.data;
-      this.initialText = this.text;
-      this.editorIsVisible = true;
+      text.value = res.data;
+      initialText.value = text.value;
+      editorIsVisible.value = true;
       (this.$refs.editor as Editor | HTMLTextAreaElement).focus();
 
       // Update immediately
-      this.updateRendered();
+      updateRendered();
 
-      this.isLoading = false;
-      this.notFound = false;
+      isLoading.value = false;
+      notFound.value = false;
     }).catch(error => {
       if (error.response) {
         if (error.response.status === 401) {
           // Unauthorized
           this.$emit('tokenExpired', () => {
-            this.load(path);
-            this.focusOrBlurEditor();
+            load(path);
+            focusOrBlurEditor();
           });
         }
         else if (error.response.status === 404) {
           // Not Found
-          this.isLoading = false;
-          this.notFound = true;
+          isLoading.value = false;
+          notFound.value = true;
         }
         else {
-          this.error = true;
-          this.errorText = error.response;
+          error.value = true;
+          errorText.value = error.response;
           console.log('Unhandled error: {}', error.response);
-          this.isLoading = false;
+          isLoading.value = false;
         }
       }
       else {
-        this.error = true;
-        this.errorText = error.toString();
+        error.value = true;
+        errorText.value = error.toString();
         console.log('Unhandled error: {}', error);
-        this.isLoading = false;
+        isLoading.value = false;
       }
     });
 }
 
 function reload() {
-  this.load(this.$route.params.path);
+  load(this.$route.params.path);
 }
 
 function toggleEditor() {
-  if (this.viewerIsVisible) {
-    if (this.editorIsVisible) {
-      this.editorIsVisible = false;
+  if (viewerIsVisible.value) {
+    if (editorIsVisible.value) {
+      editorIsVisible.value = false;
     }
     else {
-      this.editorIsVisible = true;
+      editorIsVisible.value = true;
     }
   }
   else {
-    if (this.editorIsVisible) {
-      this.editorIsVisible = false;
-      this.viewerIsVisible = true;
+    if (editorIsVisible.value) {
+      editorIsVisible.value = false;
+      viewerIsVisible.value = true;
     }
     else {
       // Though this case shouldn't happen...
-      this.editorIsVisible = true;
+      editorIsVisible.value = true;
     }
   }
 
-  this.focusOrBlurEditor();
+  focusOrBlurEditor();
 
   this.$nextTick(() => {
-    this.onEditorPaneResize();
-    this.onViewerPaneResize();
+    onEditorPaneResize();
+    onViewerPaneResize();
   });
 }
 
 function toggleViewer() {
-  if (this.editorIsVisible) {
-    if (this.viewerIsVisible) {
-      this.viewerIsVisible = false;
+  if (editorIsVisible.value) {
+    if (viewerIsVisible.value) {
+      viewerIsVisible.value = false;
     }
     else {
-      this.viewerIsVisible = true;
+      viewerIsVisible.value = true;
     }
   }
   else {
-    if (this.viewerIsVisible) {
-      this.viewerIsVisible = false;
-      this.editorIsVisible = true;
+    if (viewerIsVisible.value) {
+      viewerIsVisible.value = false;
+      editorIsVisible.value = true;
     }
     else {
       // Though this case shouldn't happen...
-      this.viewerIsVisible = true;
+      viewerIsVisible.value = true;
     }
   }
 
-  this.focusOrBlurEditor();
+  focusOrBlurEditor();
 
   this.$nextTick(() => {
-    this.onEditorPaneResize();
-    this.onViewerPaneResize();
+    onEditorPaneResize();
+    onViewerPaneResize();
   });
 }
 
@@ -1065,7 +1063,7 @@ function onViewerPaneResize() {
 
 function focusOrBlurEditor() {
   this.$nextTick(() => {
-    if (this.editorIsVisible) {
+    if (editorIsVisible.value) {
       (this.$refs.editor as Editor | HTMLTextAreaElement).focus();
     }
     else {
@@ -1075,7 +1073,7 @@ function focusOrBlurEditor() {
 }
 
 function editorHasFocus(): boolean {
-  if (this.useSimpleEditor) {
+  if (useSimpleEditor.value) {
     const textarea = this.$refs.editor;
     return document.activeElement === textarea;
   }
@@ -1086,11 +1084,11 @@ function editorHasFocus(): boolean {
 }
 
 function notifyUpstreamState(e: FocusEvent) {
-  this.checkUpstreamState()
+  checkUpstreamState()
     .then(state => {
-      if (this.noteHasUpstream || state === 'different') {
-        this.upstreamState = state;
-        this.showUpstreamState = true;
+      if (noteHasUpstream.value || state === 'different') {
+        upstreamState.value = state;
+        showUpstreamState.value = true;
       }
     })
     .catch(error => {
@@ -1098,25 +1096,25 @@ function notifyUpstreamState(e: FocusEvent) {
         if (error.response.status === 401) {
           // Unauthorized
           this.$emit('tokenExpired', () => {
-            this.notifyUpstreamState(e);
+            notifyUpstreamState(e);
           });
         }
         else {
-          this.error = true;
-          this.errorText = error.response;
+          error.value = true;
+          errorText.value = error.response;
           console.log('Unhandled error: {}', error.response);
         }
       }
       else {
-        this.error = true;
-        this.errorText = error.toString();
+        error.value = true;
+        errorText.value = error.toString();
         console.log('Unhandled error: {}', error);
       }
     });
 }
 
 function onBeforeunload(e: any) {
-  if (this.isModified) {
+  if (isModified.value) {
     // Cancel the event
     e.preventDefault();
     e.returnValue = '';  // Chrome requires returnValue to be set
@@ -1127,16 +1125,16 @@ function onBeforeunload(e: any) {
 }
 
 function handleKeydown(e: KeyboardEvent) {
-  if (this.renameMenuIsVisible) {
+  if (renameMenuIsVisible.value) {
     return;
   }
   if (e.key === 'e') {
-    if (this.editorIsVisible) {
+    if (editorIsVisible.value) {
       // Do nothing
     }
     else {
       // Show editor
-      this.editorIsVisible = true;
+      editorIsVisible.value = true;
       this.$nextTick(() => {
         // Focus editor
         (this.$refs.editor as Editor | HTMLTextAreaElement).focus();
@@ -1148,37 +1146,37 @@ function handleKeydown(e: KeyboardEvent) {
     }
   }
   else if (e.ctrlKey && e.key === 'Enter') {
-    this.toggleEditor();
+    toggleEditor();
   }
   else if (e.shiftKey && e.key === 'Enter') {
-    this.toggleViewer();
+    toggleViewer();
   }
   else if (e.ctrlKey && e.key === 's') {
-    this.saveIfNeeded();
+    saveIfNeeded();
     e.preventDefault();
   }
 }
 
 function saveIfNeeded() {
-  if (this.needSave) {
-    this.checkUpstreamState()
+  if (needSave.value) {
+    checkUpstreamState()
       .then(state => {
-        if (this.noteHasUpstream) {
+        if (noteHasUpstream.value) {
           if (state === 'same') {
-            this.save();
+            save();
           }
           else {
-            this.upstreamState = state;
-            this.showConfirmationDialog = true;
+            upstreamState.value = state;
+            showConfirmationDialog.value = true;
           }
         }
         else {
           if (state === 'same' || state === 'deleted') {
-            this.save();
+            save();
           }
           else {
-            this.upstreamState = state;
-            this.showConfirmationDialog = true;
+            upstreamState.value = state;
+            showConfirmationDialog.value = true;
           }
         }
       })
@@ -1187,18 +1185,18 @@ function saveIfNeeded() {
           if (error.response.status === 401) {
             // Unauthorized
             this.$emit('tokenExpired', () => {
-              this.saveIfNeeded();
+              saveIfNeeded();
             });
           }
           else {
-            this.error = true;
-            this.errorText = error.response;
+            error.value = true;
+            errorText.value = error.response;
             console.log('Unhandled error: {}', error.response);
           }
         }
         else {
-          this.error = true;
-          this.errorText = error.toString();
+          error.value = true;
+          errorText.value = error.toString();
           console.log('Unhandled error: {}', error);
         }
       });
@@ -1206,16 +1204,16 @@ function saveIfNeeded() {
 }
 
 function save() {
-  this.isSaving = true;
+  isSaving.value = true;
   const path = this.$route.params.path;
-  const content = this.text;
+  const content = text.value;
   api.addNote(
     path,
     content
   ).then(res => {
-    this.initialText = content;
-    this.noteHasUpstream = true;
-    this.isSaving = false;
+    initialText.value = content;
+    noteHasUpstream.value = true;
+    isSaving.value = false;
     // Remove 'mode' query parameter
     const newQuery = { ...this.$route.query };
     delete newQuery.mode;
@@ -1225,47 +1223,47 @@ function save() {
       if (error.response.status === 401) {
         // Unauthorized
         this.$emit('tokenExpired', () => {
-          this.save();
-          this.focusOrBlurEditor();
+          save();
+          focusOrBlurEditor();
         });
       }
       else {
-        this.error = true;
-        this.errorText = error.response;
+        error.value = true;
+        errorText.value = error.response;
         console.log('Unhandled error: {}', error.response);
-        this.isSaving = false;
+        isSaving.value = false;
       }
     }
     else {
-      this.error = true;
-      this.errorText = error.toString();
+      error.value = true;
+      errorText.value = error.toString();
       console.log('Unhandled error: {}', error);
-      this.isSaving = false;
+      isSaving.value = false;
     }
   });
 }
 
 function onNewPathKeydown(e: KeyboardEvent) {
   if (e.key === 'Enter') {
-    this.rename();
+    rename();
   }
 }
 
 function onNewPathInput(path: string) {
   api.getNote(path).then(() => {
-    this.newPathConflicting = true;
+    newPathConflicting.value = true;
   }).catch(() => {
     // FIXME Status code should be checked.
-    this.newPathConflicting = false;
+    newPathConflicting.value = false;
   });
 }
 
 function rename() {
   const oldPath = this.$route.params.path;
-  const newPath = this.newPath;
+  const newPath = newPath.value;
 
   if (newPath !== null && newPath !== oldPath) {
-    this.isRenaming = true;
+    isRenaming.value = true;
     api.renameNote(
       oldPath,
       newPath
@@ -1273,28 +1271,28 @@ function rename() {
       this.$router.replace({
         path: `/note/${newPath}`,
       });
-      this.isRenaming = false;
+      isRenaming.value = false;
     }).catch(error => {
       if (error.response) {
         if (error.response.status === 401) {
           // Unauthorized
           this.$emit('tokenExpired', () => {
-            this.rename();
-            this.focusOrBlurEditor();
+            rename();
+            focusOrBlurEditor();
           });
         }
         else {
-          this.error = true;
-          this.errorText = error.response;
+          error.value = true;
+          errorText.value = error.response;
           console.log('Unhandled error: {}', error.response);
-          this.isRenaming = false;
+          isRenaming.value = false;
         }
       }
       else {
-        this.error = true;
-        this.errorText = error.toString();
+        error.value = true;
+        errorText.value = error.toString();
         console.log('Unhandled error: {}', error);
-        this.isRenaming = false;
+        isRenaming.value = false;
       }
     });
   }
@@ -1303,14 +1301,14 @@ function rename() {
 // Watchers
 watch(viewerIsVisible, (newValue: boolean, oldValue: boolean) => {
   if (!oldValue && newValue) {
-    this.updateRendered();
+    updateRendered();
   }
 });
 
 watch(renameMenuIsVisible, (isVisible: boolean) => {
   if (isVisible) {
-    this.newPath = this.$route.params.path;
-    this.newPathConflicting = true;
+    newPath.value = this.$route.params.path;
+    newPathConflicting.value = true;
   }
 });
 </script>
