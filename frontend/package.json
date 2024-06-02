@@ -11,7 +11,6 @@
   "dependencies": {
     "@liradb2000/markdown-it-mermaid": "^0.4.4",
     "@mdi/font": "^7.1.96",
-    "@vue/composition-api": "^1.4.9",
     "ace-builds": "^1.14.0",
     "ajv": "^8.9.0",
     "axios": "^1.2.1",
@@ -30,12 +29,12 @@
     "prism-themes": "^1.5.0",
     "prismjs": "^1.26.0",
     "uuid": "^9.0.0",
-    "vue": "^2.6.12",
+    "vue": "^2.7.16",
     "vue-class-component": "^7.2.6",
     "vue-property-decorator": "^9.1.2",
     "vue-router": "^3.6.5",
     "vuedraggable": "^2.24.3",
-    "vuetify": "^2.6.13",
+    "vuetify": "^2.7.2",
     "xxhashjs": "^0.2.2",
     "yaml": "^1.10.0"
   },
@@ -63,7 +62,6 @@
     "sass-loader": "^10",
     "typescript": "~4.9.4",
     "vue-cli-plugin-vuetify": "~2.5.8",
-    "vue-template-compiler": "^2.6.12",
     "vuetify-loader": "^1.6.0"
   },
   "resolutions": {
