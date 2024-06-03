@@ -5,7 +5,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick, defineProps, defineEmits } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, defineProps, defineEmits, defineExpose } from 'vue';
 import type { Ref } from 'vue';
 
 import { loadConfigValue, saveConfigValue } from '@/config';
@@ -335,6 +335,17 @@ watch(() => props.mode, (mode: string) => {
       editor.value!.getSession().setMode(`ace/mode/${mode}`);
     });
   }
+});
+
+// Expose properties
+defineExpose({
+  focus,
+  blur,
+  resize,
+  scrollTo,
+  setTheme,
+  setKeybinding,
+  adjustKeybindings,
 });
 </script>
 
