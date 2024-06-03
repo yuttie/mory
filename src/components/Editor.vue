@@ -72,14 +72,14 @@ onMounted(() => {
   const theme = loadConfigValue('editor-theme', 'default');
   setTheme(theme);
 
-  if (this.mode === 'markdown') {
+  if (props.mode === 'markdown') {
     import('ace-builds/src-noconflict/mode-markdown').then(() => {
-      editor.value!.getSession().setMode(`ace/mode/${this.mode}`);
+      editor.value!.getSession().setMode(`ace/mode/${props.mode}`);
     });
   }
-  else if (this.mode === 'less') {
+  else if (props.mode === 'less') {
     import('ace-builds/src-noconflict/mode-less').then(() => {
-      editor.value!.getSession().setMode(`ace/mode/${this.mode}`);
+      editor.value!.getSession().setMode(`ace/mode/${props.mode}`);
     });
   }
 
