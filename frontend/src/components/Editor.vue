@@ -293,7 +293,7 @@ function adjustKeybindings(editor: any) {
 }
 
 // Watchers
-watch(props.value, (value: string) => {
+watch(() => props.value, (value: string) => {
   if (editor.value === null) {
     throw new Error('Editor has not been created yet.');
   }
@@ -324,7 +324,7 @@ watch(props.value, (value: string) => {
   }
 });
 
-watch(props.mode, (mode: string) => {
+watch(() => props.mode, (mode: string) => {
   if (mode === 'markdown') {
     import('ace-builds/src-noconflict/mode-markdown').then(() => {
       editor.value!.getSession().setMode(`ace/mode/${mode}`);
