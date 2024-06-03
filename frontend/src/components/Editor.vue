@@ -37,7 +37,7 @@ const editorEl = ref(null);
 
 // Lifecycle hooks
 onMounted(() => {
-  this.editor = ace.edit(this.$refs.editor as Element, {
+  editor.value = ace.edit(this.$refs.editor as Element, {
     fontSize: loadConfigValue('editor-font-size', 14),
     fontFamily: loadConfigValue('editor-font-family', 'Menlo, monospace'),
     useSoftTabs: true,
@@ -56,16 +56,16 @@ onMounted(() => {
     scrollPastEnd: 1.0,
     animatedScroll: false,
   });
-  this.editor!.on('change', () => {  // eslint-disable-line @typescript-eslint/no-non-null-assertion
-    this.$emit('change', this.editor!.getValue());  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+  editor.value!.on('change', () => {  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+    this.$emit('change', editor.value!.getValue());  // eslint-disable-line @typescript-eslint/no-non-null-assertion
   });
-  this.editor!.getSession().on('changeScrollTop', (e: any) => {  // eslint-disable-line @typescript-eslint/no-non-null-assertion
-    if (!this.ignoreNextChangeScrollTopEvent) {
-      const lineNumber = this.editor!.renderer.getFirstFullyVisibleRow();
+  editor.value!.getSession().on('changeScrollTop', (e: any) => {  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+    if (!ignoreNextChangeScrollTopEvent.value) {
+      const lineNumber = editor.value!.renderer.getFirstFullyVisibleRow();
       this.$emit('scroll', lineNumber);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
     }
     else {
-      this.ignoreNextChangeScrollTopEvent = false;
+      ignoreNextChangeScrollTopEvent.value = false;
     }
   });
 
@@ -74,12 +74,12 @@ onMounted(() => {
 
   if (this.mode === 'markdown') {
     import('ace-builds/src-noconflict/mode-markdown').then(() => {
-      this.editor!.getSession().setMode(`ace/mode/${this.mode}`);
+      editor.value!.getSession().setMode(`ace/mode/${this.mode}`);
     });
   }
   else if (this.mode === 'less') {
     import('ace-builds/src-noconflict/mode-less').then(() => {
-      this.editor!.getSession().setMode(`ace/mode/${this.mode}`);
+      editor.value!.getSession().setMode(`ace/mode/${this.mode}`);
     });
   }
 
@@ -89,20 +89,20 @@ onMounted(() => {
 
 // Methods
 function focus() {
-  this.editor!.focus();  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+  editor.value!.focus();  // eslint-disable-line @typescript-eslint/no-non-null-assertion
 }
 
 function blur() {
-  this.editor!.blur();  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+  editor.value!.blur();  // eslint-disable-line @typescript-eslint/no-non-null-assertion
 }
 
 function resize() {
-  this.editor!.resize();  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+  editor.value!.resize();  // eslint-disable-line @typescript-eslint/no-non-null-assertion
 }
 
 function scrollTo(lineNumber: number) {
-  this.editor!.scrollToLine(lineNumber, false, false, null);
-  this.ignoreNextChangeScrollTopEvent = true;
+  editor.value!.scrollToLine(lineNumber, false, false, null);
+  ignoreNextChangeScrollTopEvent.value = true;
 }
 
 function setTheme(theme: string) {
@@ -149,24 +149,24 @@ function setTheme(theme: string) {
 
   if (loading) {
     loading.then(() => {
-      this.editor!.setTheme(`ace/theme/${theme}`);
+      editor.value!.setTheme(`ace/theme/${theme}`);
     });
   }
   else {
-    this.editor!.setTheme(null);
+    editor.value!.setTheme(null);
   }
 }
 
 function setKeybinding(keybinding: string) {
   if (keybinding === 'default') {
-    this.editor!.setKeyboardHandler(null);
+    editor.value!.setKeyboardHandler(null);
   }
   else if (keybinding === 'emacs') {
     import('ace-builds/src-noconflict/keybinding-emacs').then(() => {
       ace.config.loadModule("ace/keyboard/emacs", function() {
         // Do nothing
       });
-      this.editor!.setKeyboardHandler('ace/keyboard/emacs');
+      editor.value!.setKeyboardHandler('ace/keyboard/emacs');
     });
   }
   else if (keybinding === 'sublime') {
@@ -174,7 +174,7 @@ function setKeybinding(keybinding: string) {
       ace.config.loadModule("ace/keyboard/sublime", function() {
         // Do nothing
       });
-      this.editor!.setKeyboardHandler('ace/keyboard/sublime');
+      editor.value!.setKeyboardHandler('ace/keyboard/sublime');
     });
   }
   else if (keybinding === 'vim') {
@@ -182,7 +182,7 @@ function setKeybinding(keybinding: string) {
       ace.config.loadModule("ace/keyboard/vim", function() {
         // Do nothing
       });
-      this.editor!.setKeyboardHandler('ace/keyboard/vim');
+      editor.value!.setKeyboardHandler('ace/keyboard/vim');
     });
   }
   else if (keybinding === 'vim-modified') {
@@ -192,9 +192,9 @@ function setKeybinding(keybinding: string) {
         const i = m.handler.defaultKeymap.findIndex((entry: any) => entry.keys === '<C-d>' && entry.context === 'insert');
         m.handler.defaultKeymap.splice(i, 1);
       });
-      this.editor!.setKeyboardHandler('ace/keyboard/vim');
+      editor.value!.setKeyboardHandler('ace/keyboard/vim');
       // Adjust keybindings
-      this.adjustKeybindings(this.editor);
+      this.adjustKeybindings(editor.value);
     });
   }
   else if (keybinding === 'vscode') {
@@ -202,7 +202,7 @@ function setKeybinding(keybinding: string) {
       ace.config.loadModule("ace/keyboard/vscode", function() {
         // Do nothing
       });
-      this.editor!.setKeyboardHandler('ace/keyboard/vscode');
+      editor.value!.setKeyboardHandler('ace/keyboard/vscode');
     });
   }
 }
@@ -299,14 +299,14 @@ function adjustKeybindings(editor: any) {
 
 // Watchers
 watch(value, (value: string) => {
-  if (this.editor === null) {
+  if (editor.value === null) {
     throw new Error('Editor has not been created yet.');
   }
 
-  if (value !== this.editor.getValue()) {  // eslint-disable-line @typescript-eslint/no-non-null-assertion
-    const cursor = this.editor.getCursorPosition();  // eslint-disable-line @typescript-eslint/no-non-null-assertion
-    this.editor.setValue(value, -1);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
-    this.editor.moveCursorToPosition(cursor);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+  if (value !== editor.value.getValue()) {  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+    const cursor = editor.value.getCursorPosition();  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+    editor.value.setValue(value, -1);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+    editor.value.moveCursorToPosition(cursor);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
 
     // Fold metadata
     const MARKER = '---';
@@ -320,7 +320,7 @@ watch(value, (value: string) => {
         }
       }
       if (endLine !== null) {
-        this.editor.getSession().addFold(
+        editor.value.getSession().addFold(
           MARKER,
           new ace.Range(0, MARKER.length, endLine, Infinity),
         );
@@ -332,12 +332,12 @@ watch(value, (value: string) => {
 watch(mode, (mode: string) => {
   if (mode === 'markdown') {
     import('ace-builds/src-noconflict/mode-markdown').then(() => {
-      this.editor!.getSession().setMode(`ace/mode/${mode}`);
+      editor.value!.getSession().setMode(`ace/mode/${mode}`);
     });
   }
   else if (mode === 'less') {
     import('ace-builds/src-noconflict/mode-less').then(() => {
-      this.editor!.getSession().setMode(`ace/mode/${mode}`);
+      editor.value!.getSession().setMode(`ace/mode/${mode}`);
     });
   }
 });
