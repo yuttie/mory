@@ -32,7 +32,7 @@ const editorEl = ref(null);
 
 // Lifecycle hooks
 onMounted(() => {
-  editor.value = ace.edit(editorEl as Element, {
+  editor.value = ace.edit(editorEl.value as Element, {
     fontSize: loadConfigValue('editor-font-size', 14),
     fontFamily: loadConfigValue('editor-font-family', 'Menlo, monospace'),
     useSoftTabs: true,
