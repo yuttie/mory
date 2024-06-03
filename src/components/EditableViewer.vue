@@ -315,7 +315,9 @@ const ajv = new Ajv();
 const validateMetadata = ajv.compile(metadataSchema);
 
 // Emits
-const emit = defineEmits(['tokenExpired']);
+const emit = defineEmits<{
+  (e: 'tokenExpired', callback: () => void): void;
+}>();
 
 // Composables
 const router = useRouter();
