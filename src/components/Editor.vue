@@ -70,7 +70,7 @@ onMounted(() => {
   });
 
   const theme = loadConfigValue('editor-theme', 'default');
-  this.setTheme(theme);
+  setTheme(theme);
 
   if (this.mode === 'markdown') {
     import('ace-builds/src-noconflict/mode-markdown').then(() => {
@@ -84,7 +84,7 @@ onMounted(() => {
   }
 
   const keybinding = loadConfigValue('editor-keybinding', 'default');
-  this.setKeybinding(keybinding);
+  setKeybinding(keybinding);
 });
 
 // Methods
@@ -194,7 +194,7 @@ function setKeybinding(keybinding: string) {
       });
       editor.value!.setKeyboardHandler('ace/keyboard/vim');
       // Adjust keybindings
-      this.adjustKeybindings(editor.value);
+      adjustKeybindings(editor.value);
     });
   }
   else if (keybinding === 'vscode') {
