@@ -1,6 +1,6 @@
 <template>
   <div id="note">
-    <EditableViewer></EditableViewer>
+    <EditableViewer v-on:tokenExpired="$emit('tokenExpired')"></EditableViewer>
   </div>
 </template>
 
