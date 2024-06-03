@@ -555,45 +555,45 @@ function loadPrismTheme(theme: string | null) {
 
 function insertText(newText: string) {
   if (useSimpleEditor.value) {
-    const editor = editor.value as HTMLTextAreaElement;
-    editor.value = editor.value.slice(0, editor.selectionStart) + newText + editor.value.slice(editor.selectionEnd);
+    const textArea = editor.value as HTMLTextAreaElement;
+    textArea.value = textArea.value.slice(0, textArea.selectionStart) + newText + textArea.value.slice(textArea.selectionEnd);
   }
   else {
-    const editor = (editor.value as Editor).editor;
-    editor.session.remove(editor.getSelectionRange());
-    editor.insert(newText);
+    const aceEditor = (editor.value as Editor).editor;
+    aceEditor.session.remove(aceEditor.getSelectionRange());
+    aceEditor.insert(newText);
   }
 }
 
 function encloseText(before: string, after: string) {
   if (useSimpleEditor.value) {
-    const editor = editor.value as HTMLTextAreaElement;
-    const selectedText = editor.value.slice(editor.selectionStart, editor.selectionEnd);
+    const textArea = editor.value as HTMLTextAreaElement;
+    const selectedText = textArea.value.slice(textArea.selectionStart, textArea.selectionEnd);
     const formattedText = before + selectedText + after;
-    editor.value = editor.value.slice(0, editor.selectionStart) + formattedText + editor.value.slice(editor.selectionEnd);
+    textArea.value = textArea.value.slice(0, textArea.selectionStart) + formattedText + textArea.value.slice(textArea.selectionEnd);
   }
   else {
-    const editor = (editor.value as Editor).editor;
-    const selectedText = editor.session.getTextRange(editor.getSelectionRange());
+    const aceEditor = (editor.value as Editor).editor;
+    const selectedText = aceEditor.session.getTextRange(aceEditor.getSelectionRange());
     const formattedText = before + selectedText + after;
-    editor.session.remove(editor.getSelectionRange());
-    editor.insert(formattedText);
+    aceEditor.session.remove(aceEditor.getSelectionRange());
+    aceEditor.insert(formattedText);
   }
 }
 
 function formatTable() {
   if (useSimpleEditor.value) {
-    const editor = editor.value as HTMLTextAreaElement;
-    const selectedText = editor.value.slice(editor.selectionStart, editor.selectionEnd);
+    const textArea = editor.value as HTMLTextAreaElement;
+    const selectedText = textArea.value.slice(textArea.selectionStart, textArea.selectionEnd);
     const formattedText = CliPrettify.prettify(selectedText);
-    editor.value = editor.value.slice(0, editor.selectionStart) + formattedText + editor.value.slice(editor.selectionEnd);
+    textArea.value = textArea.value.slice(0, textArea.selectionStart) + formattedText + textArea.value.slice(textArea.selectionEnd);
   }
   else {
-    const editor = (editor.value as Editor).editor;
-    const selectedText = editor.session.getTextRange(editor.getSelectionRange());
+    const aceEditor = (editor.value as Editor).editor;
+    const selectedText = aceEditor.session.getTextRange(aceEditor.getSelectionRange());
     const formattedText = CliPrettify.prettify(selectedText);
-    editor.session.remove(editor.getSelectionRange());
-    editor.insert(formattedText);
+    aceEditor.session.remove(aceEditor.getSelectionRange());
+    aceEditor.insert(formattedText);
   }
 }
 
@@ -743,14 +743,14 @@ function updateRenderedLazy() {
 
 function editorScrollTo(lineNumber: number) {
   if (useSimpleEditor.value) {
-    const editor = editor.value as HTMLTextAreaElement;
-    const style = window.getComputedStyle(editor);
+    const textArea = editor.value as HTMLTextAreaElement;
+    const style = window.getComputedStyle(textArea);
     const lineHeight = parseFloat(style.getPropertyValue('line-height'));
-    editor.scrollTo({ top: lineNumber * lineHeight });
+    textArea.scrollTo({ top: lineNumber * lineHeight });
   }
   else {
-    const editor = editor.value as Editor;
-    editor.scrollTo(lineNumber);
+    const aceEditor = editor.value as Editor;
+    aceEditor.scrollTo(lineNumber);
   }
 }
 
@@ -764,8 +764,7 @@ function handleDocumentScroll() {
   }
 
   // Build scroll map
-  const renderedContent = renderedContent.value as Element;
-  const scrollMap: [number, number][] = [...renderedContent.querySelectorAll<HTMLElement>('[data-line]')]
+  const scrollMap: [number, number][] = [...renderedContent.value.querySelectorAll<HTMLElement>('[data-line]')]
     .map((el) => {
       const lineNumber = parseInt(el.dataset['line'] as string);
       const offset = el.offsetTop;
@@ -835,8 +834,7 @@ function onEditorScroll(lineNumber: number) {
   }
 
   // Build scroll map
-  const renderedContent = renderedContent.value as Element;
-  const scrollMap: [number, number][] = [...renderedContent.querySelectorAll<HTMLElement>('[data-line]')]
+  const scrollMap: [number, number][] = [...renderedContent.value.querySelectorAll<HTMLElement>('[data-line]')]
     .map((el) => {
       const lineNumber = parseInt(el.dataset['line'] as string);
       const offset = el.offsetTop;
@@ -1275,16 +1273,15 @@ function onNewPathInput(path: string) {
 
 function rename() {
   const oldPath = route.params.path;
-  const newPath = newPath.value;
 
-  if (newPath !== null && newPath !== oldPath) {
+  if (newPath.value !== null && newPath.value !== oldPath) {
     isRenaming.value = true;
     api.renameNote(
       oldPath,
-      newPath
+      newPath.value,
     ).then(res => {
       router.replace({
-        path: `/note/${newPath}`,
+        path: `/note/${newPath.value}`,
       });
       isRenaming.value = false;
     }).catch(error => {
