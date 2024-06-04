@@ -2,28 +2,30 @@
   <img v-if="email" class="gravatar" v-bind:src="url">
 </template>
 
-<script lang="ts">
-import { Component, Prop, Vue } from 'vue-property-decorator';
+<script lang="ts" setup>
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, defineProps, defineEmits, defineExpose } from 'vue';
+import type { Ref } from 'vue';
 
 import md5 from 'md5';
 
-@Component
-export default class Gravatar extends Vue {
-  @Prop(String) private email!: string | null;
+// Props
+const props = defineProps<{
+  email?: string | null;
+}>();
 
-  private get emailHash() {
-    if (this.email) {
-      return md5(this.email);
-    }
-    else {
-      return null;
-    }
+// Computed properties
+const emailHash = computed(() => {
+  if (this.email) {
+    return md5(this.email);
   }
+  else {
+    return null;
+  }
+});
 
-  private get url() {
-    return `https://www.gravatar.com/avatar/${this.emailHash}?size=24&default=identicon`;
-  }
-}
+const url = (() => {
+  return `https://www.gravatar.com/avatar/${this.emailHash}?size=24&default=identicon`;
+});
 </script>
 
 <style scoped lang="scss">
