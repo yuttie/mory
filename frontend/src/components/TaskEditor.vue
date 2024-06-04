@@ -129,39 +129,57 @@
   </div>
 </template>
 
-<script lang="ts">
-import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
+<script lang="ts" setup>
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, defineProps, defineEmits, defineExpose } from 'vue';
+import type { Ref } from 'vue';
+
+import { useRouter, useRoute } from '@/composables/vue-router';
+import { useVuetify } from '@/composables/vuetify';
 
 import * as api from '@/api';
 import { Task } from '@/api';
 
 import dayjs from 'dayjs';
 
-@Component
-export default class TaskEditor extends Vue {
-  @Prop() readonly value!: Task;
-  @Prop(Array) readonly knownTags!: [string, number][];
+// Props
+const props = defineProps<{
+  value?: Task;
+  knownTags?: [string, number][];
+}>();
 
-  deadlineMenu = false;
-  scheduleMenu = false;
+// Emits
+const emit = defineEmits<{
+  (e: 'input', task: Task): void;
+}>();
 
-  get tagItems(): { text: string; value: string; }[] {
-    return this.knownTags.map(([tag, count]) => {
-      return {
-        text: `${tag} (${count})`,
-        value: tag,
-      };
-    });
-  }
+// Reactive states
+const deadlineMenu = ref(false);
+const scheduleMenu = ref(false);
 
-  setScheduleToday() {
-    this.value.schedule = dayjs().format('YYYY-MM-DD');
-  }
+// Computed properties
+const tagItems = computed((): { text: string; value: string; }[] => {
+  return this.knownTags.map(([tag, count]) => {
+    return {
+      text: `${tag} (${count})`,
+      value: tag,
+    };
+  });
+});
 
-  removeTag(tag: string) {
-    this.value.tags.splice(this.value.tags.indexOf(tag), 1);
-  }
+// Methods
+function setScheduleToday() {
+  this.value.schedule = dayjs().format('YYYY-MM-DD');
 }
+
+function removeTag(tag: string) {
+  this.value.tags.splice(this.value.tags.indexOf(tag), 1);
+}
+
+// Expose properties
+defineExpose({
+  setScheduleToday,
+  removeTag,
+});
 </script>
 
 <style scoped lang="scss">
