@@ -7,21 +7,24 @@
   </div>
 </template>
 
-<script lang="ts">
-import { Component, Vue } from 'vue-property-decorator';
+<script lang="ts" setup>
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, defineProps, defineEmits, defineExpose } from 'vue';
+import type { Ref } from 'vue';
 
-@Component
-export default class About extends Vue {
-  name: string = process.env.VUE_APP_NAME!;  // eslint-disable-line @typescript-eslint/no-non-null-assertion
-  version: string = process.env.VUE_APP_VERSION!;  // eslint-disable-line @typescript-eslint/no-non-null-assertion
-  author: string = process.env.VUE_APP_AUTHOR!;  // eslint-disable-line @typescript-eslint/no-non-null-assertion
-  fromYear = 2020;
-  buildYear: number = parseInt(process.env.VUE_APP_BUILD_YEAR!);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+import { useRouter, useRoute } from '@/composables/vue-router';
+import { useVuetify } from '@/composables/vuetify';
 
-  mounted() {
-    document.title = `About | ${process.env.VUE_APP_NAME}`;
-  }
-}
+// Reactive states
+const name: string = ref(process.env.VUE_APP_NAME!);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+const version: string = ref(process.env.VUE_APP_VERSION!);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+const author: string = ref(process.env.VUE_APP_AUTHOR!);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+const fromYear = ref(2020);
+const buildYear: number = ref(parseInt(process.env.VUE_APP_BUILD_YEAR!));  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+
+// Lifecycle hooks
+onMounted(() => {
+  document.title = `About | ${process.env.VUE_APP_NAME}`;
+});
 </script>
 
 <style scoped lang="scss">
