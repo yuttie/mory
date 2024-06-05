@@ -15,16 +15,16 @@ const props = defineProps<{
 
 // Computed properties
 const emailHash = computed(() => {
-  if (this.email) {
-    return md5(this.email);
+  if (props.email) {
+    return md5(props.email);
   }
   else {
     return null;
   }
 });
 
-const url = (() => {
-  return `https://www.gravatar.com/avatar/${this.emailHash}?size=24&default=identicon`;
+const url = computed(() => {
+  return `https://www.gravatar.com/avatar/${emailHash.value}?size=24&default=identicon`;
 });
 </script>
 
