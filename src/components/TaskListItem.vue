@@ -83,8 +83,8 @@ const emit = defineEmits<{
 
 // Computed properties
 const deadlineText = ((): string => {
-  if (typeof this.value.deadline === 'string') {
-    return dayjs(this.value.deadline).endOf('day').fromNow();
+  if (typeof props.value.deadline === 'string') {
+    return dayjs(props.value.deadline).endOf('day').fromNow();
   }
   else {
     return '';
@@ -92,9 +92,9 @@ const deadlineText = ((): string => {
 });
 
 const deadlineStyle = ((): Record<string, string> => {
-  if (!this.value.done && this.value.deadline) {
+  if (!props.value.done && props.value.deadline) {
     const now = dayjs();
-    const daysLeft = dayjs(this.value.deadline).diff(now, 'day');
+    const daysLeft = dayjs(props.value.deadline).diff(now, 'day');
     const r = daysLeft < 7 ? 255 : 0;
     const color = `rgb(${r}, 0, 0)`;
     return {
