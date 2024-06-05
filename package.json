@@ -26,6 +26,7 @@
     "markdown-it-task-lists": "^2.1.1",
     "markdown-table-prettify": "^3.4.0",
     "md5": "^2.3.0",
+    "pinia": "^2.1.7",
     "prism-themes": "^1.5.0",
     "prismjs": "^1.26.0",
     "uuid": "^9.0.0",
