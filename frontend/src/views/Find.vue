@@ -20,7 +20,7 @@
           label="Search"
           autocomplete="off"
           hide-details="auto"
-          ref="query"
+          ref="queryEl"
           class="mx-3 mt-3 flex-grow-0"
         >
         </v-text-field>
@@ -107,336 +107,366 @@
   </div>
 </template>
 
-<script lang="ts">
-import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
+<script lang="ts" setup>
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, defineProps, defineEmits, defineExpose } from 'vue';
+import type { Ref } from 'vue';
+
+import { useRouter, useRoute } from '@/composables/vue-router';
+import { useVuetify } from '@/composables/vuetify';
 
 import * as api from '@/api';
 import { Query, ListEntry2, compareTags } from '@/api';
 
 import dayjs from 'dayjs';
 
-@Component
-export default class Find extends Vue {
-  entries: ListEntry2[] = [];
-  queryText = '';
-  isLoading = false;
-  error = false;
-  errorText = '';
-  selected = [] as any[];
-  showingTagList = false;
+// Emits
+const emit = defineEmits<{
+  (e: 'tokenExpired', callback: () => void): void;
+}>();
 
-  get headers() {
-    return [
-      { text: 'Path', value: 'path' },
-      { text: 'Modified', value: 'time', sort: (a: any, b: any) => a - b },
-      { text: 'Size', value: 'size' },
-      { text: 'Type', value: 'mimeType' },
-      { text: 'Tags', value: 'tags', sortable: false },
-    ];
-  }
+// Composables
+const router = useRouter();
+const route = useRoute();
 
-  get tags() {
-    const tags = new Set();
-    for (const entry of this.entries) {
-      if (entry.metadata !== null) {
-        if (Object.prototype.hasOwnProperty.call(entry.metadata, 'tags') && Array.isArray(entry.metadata.tags)) {
-          for (const tag of entry.metadata.tags.map(String)) {
-            tags.add(tag);
-          }
+// Reactive states
+const entries: ListEntry2[] = ref([]);
+const queryText = ref('');
+const isLoading = ref(false);
+const error = ref(false);
+const errorText = ref('');
+const selected = ref([] as any[]);
+const showingTagList = ref(false);
+
+// Refs
+const queryEl = ref(null);
+
+// Computed properties
+const headers = computed(() => {
+  return [
+    { text: 'Path', value: 'path' },
+    { text: 'Modified', value: 'time', sort: (a: any, b: any) => a - b },
+    { text: 'Size', value: 'size' },
+    { text: 'Type', value: 'mimeType' },
+    { text: 'Tags', value: 'tags', sortable: false },
+  ];
+});
+
+const tags = computed(() => {
+  const tags = new Set();
+  for (const entry of entries.value) {
+    if (entry.metadata !== null) {
+      if (Object.prototype.hasOwnProperty.call(entry.metadata, 'tags') && Array.isArray(entry.metadata.tags)) {
+        for (const tag of entry.metadata.tags.map(String)) {
+          tags.add(tag);
         }
       }
     }
-    return Array.from(tags).sort(compareTags as (a: any, b: any) => number) as string[];
+  }
+  return Array.from(tags).sort(compareTags as (a: any, b: any) => number) as string[];
+});
+
+const query = computed(() => {
+  const queryPaths = new Set();
+  const queryTags = new Set();
+  const queryAny = new Set();
+  for (const match of queryText.value.matchAll(/"([^"]+)"|([^\s]+)/g)) {
+    const text = match[1] || match[2];
+    if (text.startsWith('#')) {
+      queryTags.add(text.slice(1));
+    }
+    else if (text.startsWith('/')) {
+      queryPaths.add(text.slice(1));
+    }
+    else {
+      queryAny.add(text);
+    }
   }
 
-  get query() {
-    const queryPaths = new Set();
-    const queryTags = new Set();
-    const queryAny = new Set();
-    for (const match of this.queryText.matchAll(/"([^"]+)"|([^\s]+)/g)) {
-      const text = match[1] || match[2];
-      if (text.startsWith('#')) {
-        queryTags.add(text.slice(1));
+  return {
+    paths: queryPaths,
+    tags: queryTags,
+    any: queryAny,
+  };
+});
+
+const matchedEntries = computed(() => {
+  const matched = [];
+
+  const queryPaths: string[] = [...query.value.paths].map(x => x.toLowerCase());
+  const queryTags: string[] = [...query.value.tags].map(x => x.toLowerCase());
+  const queryAny: string[] = [...query.value.any].map(x => x.toLowerCase());
+
+  for (const entry of entries.value) {
+    const entryPath = entry.path.toLowerCase();
+    const entryTags = (() => {
+      if (entry.metadata === null) {
+        return [];
       }
-      else if (text.startsWith('/')) {
-        queryPaths.add(text.slice(1));
+      else if (!Object.prototype.hasOwnProperty.call(entry.metadata, 'tags')) {
+        return [];
+      }
+      else if (!Array.isArray(entry.metadata.tags)) {
+        return [];
       }
       else {
-        queryAny.add(text);
+        return entry.metadata.tags.map((tag: any) => String(tag).toLowerCase());
       }
+    })();
+    // Check if all conditions are met or notl
+    if (queryPaths.some(kw => !entryPath.includes(kw))) {
+      continue;
     }
-
-    return {
-      paths: queryPaths,
-      tags: queryTags,
-      any: queryAny,
-    };
+    if (queryTags.some(tag => !entryTags.some(entryTag => entryTag.includes(tag)))) {
+      continue;
+    }
+    if (queryAny.some(kw => !entryPath.includes(kw) && !entryTags.some(entryTag => entryTag.includes(kw)))) {
+      continue;
+    }
+    // OK, this entry matches all the queries
+    matched.push({
+      path: entry.path,
+      size: entry.size,
+      mimeType: entry.mime_type,
+      tags: ((entry.metadata || {}).tags || []).map(String).sort(compareTags),
+      time: dayjs(entry.time),
+    });
   }
 
-  get matchedEntries() {
-    const matched = [];
+  return matched;
+});
 
-    const query: Query = this.query;
-    const queryPaths: string[] = [...query.paths].map(x => x.toLowerCase());
-    const queryTags: string[] = [...query.tags].map(x => x.toLowerCase());
-    const queryAny: string[] = [...query.any].map(x => x.toLowerCase());
+// Lifecycle hooks
+onMounted(() => {
+  document.title = `Find | ${process.env.VUE_APP_NAME}`;
 
-    for (const entry of this.entries) {
-      const entryPath = entry.path.toLowerCase();
-      const entryTags = (() => {
-        if (entry.metadata === null) {
-          return [];
+  window.addEventListener('keydown', handleKeydown);
+
+  load();
+
+  if (route.query.q) {
+    queryText.value = route.query.q as string;
+  }
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown);
+});
+
+// Methods
+function load() {
+  isLoading.value = true;
+  api.listNotes()
+    .then(res => {
+      entries.value = res.data;
+      isLoading.value = false;
+
+      // Check if metadata parse errors exist
+      for (const entry of entries.value) {
+        if (entry.metadata !== null && Object.prototype.hasOwnProperty.call(entry.metadata, 'error')) {
+          console.log(`Failed to parse metadata of ${entry.path}!`);
+          console.log(entry);
         }
-        else if (!Object.prototype.hasOwnProperty.call(entry.metadata, 'tags')) {
-          return [];
-        }
-        else if (!Array.isArray(entry.metadata.tags)) {
-          return [];
+      }
+    }).catch(error => {
+      if (error.response) {
+        if (error.response.status === 401) {
+          // Unauthorized
+          emit('tokenExpired', () => load());
         }
         else {
-          return entry.metadata.tags.map((tag: any) => String(tag).toLowerCase());
+          error.value = true;
+          errorText.value = error.response;
+          console.log('Unhandled error: {}', error.response);
+          isLoading.value = false;
         }
-      })();
-      // Check if all conditions are met or notl
-      if (queryPaths.some(kw => !entryPath.includes(kw))) {
-        continue;
       }
-      if (queryTags.some(tag => !entryTags.some(entryTag => entryTag.includes(tag)))) {
-        continue;
+      else {
+        error.value = true;
+        errorText.value = error.toString();
+        console.log('Unhandled error: {}', error);
+        isLoading.value = false;
       }
-      if (queryAny.some(kw => !entryPath.includes(kw) && !entryTags.some(entryTag => entryTag.includes(kw)))) {
-        continue;
-      }
-      // OK, this entry matches all the queries
-      matched.push({
-        path: entry.path,
-        size: entry.size,
-        mimeType: entry.mime_type,
-        tags: ((entry.metadata || {}).tags || []).map(String).sort(compareTags),
-        time: dayjs(entry.time),
-      });
-    }
+    });
+}
 
-    return matched;
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key === '/') {
+    (queryEl as HTMLInputElement).focus();
+    e.preventDefault();
   }
+}
 
-  @Watch('queryText')
-  onQueryTextChanged(q: string | null) {
-    if (q === null) {
-      q = '';
-      // Workaround: 'clearable' <v-text-field> sets its model to null
-      this.queryText = '';
+function clearQuery(e: MouseEvent) {
+  queryText.value = '';
+}
+
+function handleTagClick(tag: string, e: MouseEvent) {
+  if (e.ctrlKey) {
+    toggleTag(tag);
+  }
+  else {
+    if (query.value.tags.size === 1 && query.value.tags.has(tag)) {
+      removeTag(tag);
     }
-    if (q !== this.$route.query.q) {
-      this.$router.replace({
-        query: {
-          ...this.$route.query,
-          q: q,
-        },
-      });
+    else {
+      selectSingleTag(tag);
     }
   }
+}
 
-  mounted() {
-    document.title = `Find | ${process.env.VUE_APP_NAME}`;
-
-    window.addEventListener('keydown', this.handleKeydown);
-
-    this.load();
-
-    if (this.$route.query.q) {
-      this.queryText = this.$route.query.q as string;
-    }
+function selectSingleTag(tag: string) {
+  let hashtag = '#' + tag;
+  if (/\s/.test(hashtag)) {
+    hashtag = `"${hashtag}"`;
   }
 
-  destroyed() {
-    window.removeEventListener('keydown', this.handleKeydown);
+  let queryElems = [...queryText.value.matchAll(/("[^"]+")|([^\s]+)/g)].map(x => x[1] || x[2]);
+  queryElems = queryElems.filter(x => x === hashtag || !(x.startsWith('#') || x.startsWith('"#')));
+  if (!query.value.tags.has(tag)) {
+    queryElems.push(hashtag);
+  }
+  queryText.value = queryElems.join(' ');
+}
+
+function addTag(tag: string) {
+  let hashtag = '#' + tag;
+  if (/\s/.test(hashtag)) {
+    hashtag = `"${hashtag}"`;
   }
 
-  load() {
-    this.isLoading = true;
-    api.listNotes()
+  const queryElems = [...queryText.value.matchAll(/("[^"]+")|([^\s]+)/g)].map(x => x[1] || x[2]);
+  if (!query.value.tags.has(tag)) {
+    queryElems.push(hashtag);
+  }
+
+  queryText.value = queryElems.join(' ');
+}
+
+function removeTag(tag: string) {
+  let hashtag = '#' + tag;
+  if (/\s/.test(hashtag)) {
+    hashtag = `"${hashtag}"`;
+  }
+
+  let queryElems = [...queryText.value.matchAll(/("[^"]+")|([^\s]+)/g)].map(x => x[1] || x[2]);
+  queryElems = queryElems.filter(x => x !== hashtag);
+
+  queryText.value = queryElems.join(' ');
+}
+
+function toggleTag(tag: string) {
+  if (query.value.tags.has(tag)) {
+    removeTag(tag);
+  }
+  else {
+    addTag(tag);
+  }
+}
+
+function tagOutlined(tag: string) {
+  const queryTags: string[] = [...query.value.tags].map(x => x.toLowerCase());
+  const queryAny: string[] = [...query.value.any].map(x => x.toLowerCase());
+  if (queryTags.some(x => tag.toLowerCase().includes(x)) || queryAny.some(x => tag.toLowerCase().includes(x))) {
+    return false;
+  }
+  else {
+    return true;
+  }
+}
+
+function tagColor(tag: string) {
+  const queryTags: string[] = [...query.value.tags].map(x => x.toLowerCase());
+  const queryAny: string[] = [...query.value.any].map(x => x.toLowerCase());
+  if (queryTags.some(x => tag.toLowerCase().includes(x)) || queryAny.some(x => tag.toLowerCase().includes(x))) {
+    return 'primary';
+  }
+  else {
+    return 'normal';
+  }
+}
+
+function formatFileSize(size: number) {
+  const units = ['B', 'KiB', 'MiB', 'GiB'];
+  let i = 0;
+  while (size >= 0.9 * 1024 && i < units.length - 1) {
+    size /= 1024;
+    i += 1;
+  }
+  if (i === 0) {
+    return `${size.toFixed(0)} ${units[i]}`;
+  }
+  else {
+    return `${size.toFixed(1)} ${units[i]}`;
+  }
+}
+
+function deleteSelected() {
+  for (const item of selected.value) {
+    api.deleteNote(item.path)
       .then(res => {
-        this.entries = res.data;
-        this.isLoading = false;
-
-        // Check if metadata parse errors exist
-        for (const entry of this.entries) {
-          if (entry.metadata !== null && Object.prototype.hasOwnProperty.call(entry.metadata, 'error')) {
-            console.log(`Failed to parse metadata of ${entry.path}!`);
-            console.log(entry);
-          }
+        if (res.data === true) {
+          const i = entries.value.findIndex(e => e.path === item.path);
+          entries.value.splice(i, 1);
+        }
+        else {
+          error.value = true;
+          errorText.value = `Something wrong happened when deleting ${item.path}`;
         }
       }).catch(error => {
         if (error.response) {
           if (error.response.status === 401) {
             // Unauthorized
-            this.$emit('tokenExpired', () => this.load());
+            emit('tokenExpired', () => deleteSelected());
           }
           else {
-            this.error = true;
-            this.errorText = error.response;
+            error.value = true;
+            errorText.value = error.response;
             console.log('Unhandled error: {}', error.response);
-            this.isLoading = false;
+            isLoading.value = false;
           }
         }
         else {
-          this.error = true;
-          this.errorText = error.toString();
+          error.value = true;
+          errorText.value = error.toString();
           console.log('Unhandled error: {}', error);
-          this.isLoading = false;
+          isLoading.value = false;
         }
       });
   }
-
-  handleKeydown(e: KeyboardEvent) {
-    if (e.key === '/') {
-      (this.$refs.query as HTMLInputElement).focus();
-      e.preventDefault();
-    }
-  }
-
-  clearQuery(e: MouseEvent) {
-    this.queryText = '';
-  }
-
-  handleTagClick(tag: string, e: MouseEvent) {
-    if (e.ctrlKey) {
-      this.toggleTag(tag);
-    }
-    else {
-      if (this.query.tags.size === 1 && this.query.tags.has(tag)) {
-        this.removeTag(tag);
-      }
-      else {
-        this.selectSingleTag(tag);
-      }
-    }
-  }
-
-  selectSingleTag(tag: string) {
-    let hashtag = '#' + tag;
-    if (/\s/.test(hashtag)) {
-      hashtag = `"${hashtag}"`;
-    }
-
-    let queryElems = [...this.queryText.matchAll(/("[^"]+")|([^\s]+)/g)].map(x => x[1] || x[2]);
-    queryElems = queryElems.filter(x => x === hashtag || !(x.startsWith('#') || x.startsWith('"#')));
-    if (!this.query.tags.has(tag)) {
-      queryElems.push(hashtag);
-    }
-    this.queryText = queryElems.join(' ');
-  }
-
-  addTag(tag: string) {
-    let hashtag = '#' + tag;
-    if (/\s/.test(hashtag)) {
-      hashtag = `"${hashtag}"`;
-    }
-
-    const queryElems = [...this.queryText.matchAll(/("[^"]+")|([^\s]+)/g)].map(x => x[1] || x[2]);
-    if (!this.query.tags.has(tag)) {
-      queryElems.push(hashtag);
-    }
-
-    this.queryText = queryElems.join(' ');
-  }
-
-  removeTag(tag: string) {
-    let hashtag = '#' + tag;
-    if (/\s/.test(hashtag)) {
-      hashtag = `"${hashtag}"`;
-    }
-
-    let queryElems = [...this.queryText.matchAll(/("[^"]+")|([^\s]+)/g)].map(x => x[1] || x[2]);
-    queryElems = queryElems.filter(x => x !== hashtag);
-
-    this.queryText = queryElems.join(' ');
-  }
-
-  toggleTag(tag: string) {
-    if (this.query.tags.has(tag)) {
-      this.removeTag(tag);
-    }
-    else {
-      this.addTag(tag);
-    }
-  }
-
-  tagOutlined(tag: string) {
-    const query: Query = this.query;
-    const queryTags: string[] = [...query.tags].map(x => x.toLowerCase());
-    const queryAny: string[] = [...query.any].map(x => x.toLowerCase());
-    if (queryTags.some(x => tag.toLowerCase().includes(x)) || queryAny.some(x => tag.toLowerCase().includes(x))) {
-      return false;
-    }
-    else {
-      return true;
-    }
-  }
-
-  tagColor(tag: string) {
-    const query: Query = this.query;
-    const queryTags: string[] = [...query.tags].map(x => x.toLowerCase());
-    const queryAny: string[] = [...query.any].map(x => x.toLowerCase());
-    if (queryTags.some(x => tag.toLowerCase().includes(x)) || queryAny.some(x => tag.toLowerCase().includes(x))) {
-      return 'primary';
-    }
-    else {
-      return 'normal';
-    }
-  }
-
-  formatFileSize(size: number) {
-    const units = ['B', 'KiB', 'MiB', 'GiB'];
-    let i = 0;
-    while (size >= 0.9 * 1024 && i < units.length - 1) {
-      size /= 1024;
-      i += 1;
-    }
-    if (i === 0) {
-      return `${size.toFixed(0)} ${units[i]}`;
-    }
-    else {
-      return `${size.toFixed(1)} ${units[i]}`;
-    }
-  }
-
-  deleteSelected() {
-    for (const item of this.selected) {
-      api.deleteNote(item.path)
-        .then(res => {
-          if (res.data === true) {
-            const i = this.entries.findIndex(e => e.path === item.path);
-            this.entries.splice(i, 1);
-          }
-          else {
-            this.error = true;
-            this.errorText = `Something wrong happened when deleting ${item.path}`;
-          }
-        }).catch(error => {
-          if (error.response) {
-            if (error.response.status === 401) {
-              // Unauthorized
-              this.$emit('tokenExpired', () => this.deleteSelected());
-            }
-            else {
-              this.error = true;
-              this.errorText = error.response;
-              console.log('Unhandled error: {}', error.response);
-              this.isLoading = false;
-            }
-          }
-          else {
-            this.error = true;
-            this.errorText = error.toString();
-            console.log('Unhandled error: {}', error);
-            this.isLoading = false;
-          }
-        });
-    }
-  }
 }
+
+// Watchers
+watch(queryText, (q: string | null) => {
+  if (q === null) {
+    q = '';
+    // Workaround: 'clearable' <v-text-field> sets its model to null
+    queryText.value = '';
+  }
+  if (q !== route.query.q) {
+    router.replace({
+      query: {
+        ...route.query,
+        q: q,
+      },
+    });
+  }
+});
+
+// Expose properties
+defineExpose({
+  load,
+  handleKeydown,
+  clearQuery,
+  handleTagClick,
+  selectSingleTag,
+  addTag,
+  removeTag,
+  toggleTag,
+  tagOutlined,
+  tagColor,
+  formatFileSize,
+  deleteSelected,
+});
 </script>
 
 <style scoped lang="scss">
