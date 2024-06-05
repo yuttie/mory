@@ -82,7 +82,7 @@ const emit = defineEmits<{
 }>();
 
 // Computed properties
-const deadlineText = ((): string => {
+const deadlineText = computed((): string => {
   if (typeof props.value.deadline === 'string') {
     return dayjs(props.value.deadline).endOf('day').fromNow();
   }
@@ -91,7 +91,7 @@ const deadlineText = ((): string => {
   }
 });
 
-const deadlineStyle = ((): Record<string, string> => {
+const deadlineStyle = computed((): Record<string, string> => {
   if (!props.value.done && props.value.deadline) {
     const now = dayjs();
     const daysLeft = dayjs(props.value.deadline).diff(now, 'day');
