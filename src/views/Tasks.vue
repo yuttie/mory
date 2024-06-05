@@ -244,8 +244,12 @@
   </div>
 </template>
 
-<script lang="ts">
-import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
+<script lang="ts" setup>
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, defineProps, defineEmits, defineExpose, Vue } from 'vue';
+import type { Ref } from 'vue';
+
+import { useRouter, useRoute } from '@/composables/vue-router';
+import { useVuetify } from '@/composables/vuetify';
 
 import TaskEditor from '@/components/TaskEditor.vue';
 import TaskListItem from '@/components/TaskListItem.vue';
@@ -263,21 +267,226 @@ import YAML from 'yaml';
 
 dayjs.extend(isSameOrAfter);
 
-@Component({
-  components: {
-    TaskEditor,
-    TaskListItem,
-    draggable,
-  },
-})
-export default class Tasks extends Vue {
-  tasks = {
-    backlog: [] as Task[],
-    scheduled: {} as { [key: string]: Task[] }
+// Emits
+const emit = defineEmits<{
+  (e: 'tokenExpired', callback: () => void): void;
+}>();
+
+// Reactive states
+const tasks = ref({
+  backlog: [] as Task[],
+  scheduled: {} as { [key: string]: Task[] }
+});
+const groups: Ref<{ name: string, filter: string }[]> = ref([]);
+// Task
+const newTask: Ref<Task> = ref({
+  name: '',
+  deadline: null,
+  schedule: null,
+  done: false,
+  tags: [],
+  note: '',
+});
+const newTaskDialog = ref(false);
+const selectedTaskIndex: Ref<null | number> = ref(null);
+const selectedTask: Ref<null | Task> = ref(null);
+const editTarget: Ref<null | Task> = ref(null);
+const editTaskDialog = ref(false);
+const editTaskDialogActivator: Ref<any> = ref(null);
+// Group
+const newGroupDialog = ref(false);
+const newGroupName = ref('');
+const newGroupFilter = ref('');
+// Others
+const isLoading = ref(false);
+const hideDone = ref(true);
+const error = ref(false);
+const errorText = ref('');
+
+// Computed properties
+const knownTags = computed((): [string, number][] => {
+  // Collect tags
+  const tagCounts = new Map();
+  for (const task of tasks.value.backlog as Task[]) {
+    for (const tag of task.tags || []) {
+      tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+    }
+  }
+  for (const [date, dayTasks] of Object.entries(tasks.value.scheduled)) {
+    for (const task of dayTasks as Task[]) {
+      for (const tag of task.tags || []) {
+        tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+      }
+    }
+  }
+  return [...tagCounts]
+    .sort(([_tag1, count1], [_tag2, count2]) => count2 - count1);
+});
+
+const scheduledDates = computed(() => {
+  let dates = Object.keys(tasks.value.scheduled);
+  dates.sort((a, b) => a < b ? 1 : a > b ? -1 : 0);
+  if (hideDone.value) {
+    // Keep today or dates that have some undone tasks
+    const today = dayjs().format('YYYY-MM-DD');
+    dates = dates.filter(date => {
+      return date === today || tasks.value.scheduled[date].some(task => !task.done);
+    });
+  }
+  return dates;
+});
+
+const tasksWithDeadline = computed(() => {
+  const result: [string | null, number, Task][] = [];
+  // Backlog
+  for (const [i, task] of tasks.value.backlog.entries()) {
+    if (task.deadline) {
+      result.push([null, i, task]);
+    }
+  }
+  // Scheduled
+  for (const [date, dayTasks] of Object.entries(tasks.value.scheduled)) {
+    for (const [i, task] of dayTasks.entries()) {
+      if (task.deadline) {
+        result.push([date, i, task]);
+      }
+    }
+  }
+  if (hideDone.value) {
+    // Remove scheduled tasks which are done
+    let i = 0;
+    while (i < result.length) {
+      let [_date, _i, task] = result[i];
+      if (task.done) {
+        result.splice(i, 1);
+      }
+      else {
+        i += 1;
+      }
+    }
+  }
+  // Sort
+  result.sort(([date1, i1, task1], [date2, i2, task2]) => {
+    if (task1.done && !task2.done) {
+      return +1;
+    }
+    else if (!task1.done && task2.done) {
+      return -1;
+    }
+    else {
+      const deadline1 = dayjs(task1.deadline);
+      const deadline2 = dayjs(task2.deadline);
+      if (deadline1.isAfter(deadline2)) {
+        return -1;
+      }
+      else if (deadline2.isAfter(deadline1)) {
+        return +1;
+      }
+      else {
+        return 0;
+      }
+    }
+  });
+  return result;
+});
+
+const groupedTasks = computed(() => {
+  type Grouped = {
+    backlog: [number, Task][];
+    scheduled: { [key: string]: [number, Task][] };
   };
-  groups: { name: string, filter: string }[] = [];
-  // Task
-  newTask: Task = {
+  const result: { [key: string]: Grouped } = {};
+  for (const group of groups.value) {
+    const grouped: Grouped = {
+      backlog: [],
+      scheduled: {},
+    };
+    // Backlog
+    for (const [i, task] of tasks.value.backlog.entries()) {
+      if ((task.tags || []).includes(group.filter)) {
+        grouped.backlog.push([i, task]);
+      }
+    }
+    // Scheduled
+    for (const [date, dayTasks] of Object.entries(tasks.value.scheduled)) {
+      grouped.scheduled[date] = [];
+      for (const [i, task] of dayTasks.entries()) {
+        if ((task.tags || []).includes(group.filter)) {
+          grouped.scheduled[date].push([i, task]);
+        }
+      }
+      // Remove if empty or all tasks are done
+      const empty = grouped.scheduled[date].length === 0;
+      const allDone = grouped.scheduled[date].every(([_, task]) => task.done);
+      if (empty || hideDone.value && allDone) {
+        delete grouped.scheduled[date];
+      }
+    }
+    // Add
+    result[group.name] = grouped;
+  }
+  return result;
+});
+
+// Lifecycle hooks
+onMounted(() => {
+  document.title = `Tasks | ${process.env.VUE_APP_NAME}`;
+  load();
+  window.addEventListener('focus', loadIfNotEditing);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('focus', loadIfNotEditing);
+});
+
+// Methods
+function isToday(date: string) {
+  return date === dayjs().format('YYYY-MM-DD');
+}
+
+function select(date: string | null, index: number | null, task: Task | null) {
+  selectedTaskIndex.value = index;
+  if (task !== null) {
+    task.schedule = date;
+  }
+  selectedTask.value = task;
+  if (task !== null) {
+    editTarget.value = JSON.parse(JSON.stringify(task));
+    editTarget.value!.name     ||= '';
+    editTarget.value!.deadline ||= null;
+    editTarget.value!.schedule ||= null;
+    editTarget.value!.done     ||= false;
+    editTarget.value!.tags     ||= [];
+    editTarget.value!.note     ||= '';
+  }
+  else {
+    editTarget.value = null;
+  }
+}
+
+function showEditTaskDialog(date: string | null, index: number, task: Task, event: MouseEvent) {
+  const open = () => {
+    select(date, index, task);
+    editTaskDialogActivator.value = (event.target as Element).parentElement!;
+    setTimeout(() => {
+      editTaskDialog.value = true;
+    }, 0);
+  };
+
+  if (editTaskDialog.value) {
+    editTaskDialog.value = false;
+    setTimeout(open, 0);
+  }
+  else {
+    open();
+  }
+}
+
+function closeNewTaskDialog() {
+  // Close the dialog
+  newTaskDialog.value = false;
+  // Reset
+  newTask.value = {
     name: '',
     deadline: null,
     schedule: null,
@@ -285,569 +494,386 @@ export default class Tasks extends Vue {
     tags: [],
     note: '',
   };
-  newTaskDialog = false;
-  selectedTaskIndex: null | number = null;
-  selectedTask: null | Task = null;
-  editTarget: null | Task = null;
-  editTaskDialog = false;
-  editTaskDialogActivator: any = null;
-  // Group
-  newGroupDialog = false;
-  newGroupName = '';
-  newGroupFilter = '';
-  // Others
-  isLoading = false;
-  hideDone = true;
-  error = false;
-  errorText = '';
+}
 
-  mounted() {
-    document.title = `Tasks | ${process.env.VUE_APP_NAME}`;
-    this.load();
-    window.addEventListener('focus', this.loadIfNotEditing);
-  }
+function closeNewGroupDialog() {
+  // Close the dialog
+  newGroupDialog.value = false;
+  // Reset
+  newGroupName.value = '';
+  newGroupFilter.value = '';
+}
 
-  destroyed() {
-    window.removeEventListener('focus', this.loadIfNotEditing);
-  }
+function closeEditTaskDialog() {
+  // Close the dialog
+  editTaskDialog.value = false;
+  // Reset
+  select(null, null, null);
+}
 
-  get knownTags(): [string, number][] {
-    // Collect tags
-    const tagCounts = new Map();
-    for (const task of this.tasks.backlog as Task[]) {
-      for (const tag of task.tags || []) {
-        tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
-      }
-    }
-    for (const [date, tasks] of Object.entries(this.tasks.scheduled)) {
-      for (const task of tasks as Task[]) {
-        for (const tag of task.tags || []) {
-          tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
-        }
-      }
-    }
-    return [...tagCounts]
-      .sort(([_tag1, count1], [_tag2, count2]) => count2 - count1);
-  }
+function openNewTaskDialogWithSelection() {
+  newTask.value = JSON.parse(JSON.stringify(editTarget.value));
+  newTask.value.name += ' (copy)';
+  newTaskDialog.value = true;
+  closeEditTaskDialog();
+}
 
-  get scheduledDates() {
-    let dates = Object.keys(this.tasks.scheduled);
-    dates.sort((a, b) => a < b ? 1 : a > b ? -1 : 0);
-    if (this.hideDone) {
-      // Keep today or dates that have some undone tasks
-      const today = dayjs().format('YYYY-MM-DD');
-      dates = dates.filter(date => {
-        return date === today || this.tasks.scheduled[date].some(task => !task.done);
-      });
+async function sortDailyTasks(date: string) {
+  // Sort tasks by completion and then deadline
+  tasks.value.scheduled[date] = tasks.value.scheduled[date].slice().sort((task1, task2) => {
+    if (task1.done && !task2.done) {
+      return +1;
     }
-    return dates;
-  }
-
-  get tasksWithDeadline() {
-    const result: [string | null, number, Task][] = [];
-    // Backlog
-    for (const [i, task] of this.tasks.backlog.entries()) {
-      if (task.deadline) {
-        result.push([null, i, task]);
-      }
+    else if (!task1.done && task2.done) {
+      return -1;
     }
-    // Scheduled
-    for (const [date, tasks] of Object.entries(this.tasks.scheduled)) {
-      for (const [i, task] of tasks.entries()) {
-        if (task.deadline) {
-          result.push([date, i, task]);
-        }
-      }
-    }
-    if (this.hideDone) {
-      // Remove scheduled tasks which are done
-      let i = 0;
-      while (i < result.length) {
-        let [_date, _i, task] = result[i];
-        if (task.done) {
-          result.splice(i, 1);
-        }
-        else {
-          i += 1;
-        }
-      }
-    }
-    // Sort
-    result.sort(([date1, i1, task1], [date2, i2, task2]) => {
-      if (task1.done && !task2.done) {
+    else {
+      if (!task1.deadline && task2.deadline) {
         return +1;
       }
-      else if (!task1.done && task2.done) {
+      else if (task1.deadline && !task2.deadline) {
         return -1;
       }
       else {
         const deadline1 = dayjs(task1.deadline);
         const deadline2 = dayjs(task2.deadline);
         if (deadline1.isAfter(deadline2)) {
-          return -1;
+          return +1;
         }
         else if (deadline2.isAfter(deadline1)) {
-          return +1;
+          return -1;
         }
         else {
           return 0;
         }
       }
-    });
-    return result;
-  }
-
-  get groupedTasks() {
-    type Grouped = {
-      backlog: [number, Task][];
-      scheduled: { [key: string]: [number, Task][] };
-    };
-    const result: { [key: string]: Grouped } = {};
-    for (const group of this.groups) {
-      const grouped: Grouped = {
-        backlog: [],
-        scheduled: {},
-      };
-      // Backlog
-      for (const [i, task] of this.tasks.backlog.entries()) {
-        if ((task.tags || []).includes(group.filter)) {
-          grouped.backlog.push([i, task]);
-        }
-      }
-      // Scheduled
-      for (const [date, tasks] of Object.entries(this.tasks.scheduled)) {
-        grouped.scheduled[date] = [];
-        for (const [i, task] of tasks.entries()) {
-          if ((task.tags || []).includes(group.filter)) {
-            grouped.scheduled[date].push([i, task]);
-          }
-        }
-        // Remove if empty or all tasks are done
-        const empty = grouped.scheduled[date].length === 0;
-        const allDone = grouped.scheduled[date].every(([_, task]) => task.done);
-        if (empty || this.hideDone && allDone) {
-          delete grouped.scheduled[date];
-        }
-      }
-      // Add
-      result[group.name] = grouped;
     }
-    return result;
-  }
+  });
+  // Save
+  clean();
+  await save();
+}
 
-  isToday(date: string) {
-    return date === dayjs().format('YYYY-MM-DD');
-  }
-
-  select(date: string | null, index: number | null, task: Task | null) {
-    this.selectedTaskIndex = index;
-    if (task !== null) {
-      task.schedule = date;
-    }
-    this.selectedTask = task;
-    if (task !== null) {
-      this.editTarget = JSON.parse(JSON.stringify(task));
-      this.editTarget!.name     ||= '';
-      this.editTarget!.deadline ||= null;
-      this.editTarget!.schedule ||= null;
-      this.editTarget!.done     ||= false;
-      this.editTarget!.tags     ||= [];
-      this.editTarget!.note     ||= '';
+async function moveUndoneToToday(date: string) {
+  const dayTasks = tasks.value.scheduled[date];
+  // Collect undone tasks
+  const undone = [];
+  let i = 0;
+  while (i < dayTasks.length) {
+    const task = dayTasks[i];
+    if (task.done) {
+      i += 1;
     }
     else {
-      this.editTarget = null;
+      dayTasks.splice(i, 1);
+      undone.push(task);
     }
   }
+  // Schedule them today
+  const today = dayjs().startOf('day');
+  const todayDate = today.format('YYYY-MM-DD');
+  if (!Object.prototype.hasOwnProperty.call(tasks.value.scheduled, todayDate)) {
+    tasks.value.scheduled[todayDate] = [];
+  }
+  tasks.value.scheduled[todayDate].unshift(...undone);
+  // Save
+  clean();
+  await save();
+}
 
-  showEditTaskDialog(date: string | null, index: number, task: Task, event: MouseEvent) {
-    const open = () => {
-      this.select(date, index, task);
-      this.editTaskDialogActivator = (event.target as Element).parentElement!;
-      setTimeout(() => {
-        this.editTaskDialog = true;
-      }, 0);
-    };
-
-    if (this.editTaskDialog) {
-      this.editTaskDialog = false;
-      setTimeout(open, 0);
+async function collectUndone() {
+  const today = dayjs().startOf('day');
+  // Collect undone tasks
+  const undone = [];
+  const dates = Object.keys(tasks.value.scheduled).sort();
+  for (const date of dates) {
+    if (dayjs(date).isSameOrAfter(today)) {
+      break;
     }
-    else {
-      open();
-    }
-  }
-
-  closeNewTaskDialog() {
-    // Close the dialog
-    this.newTaskDialog = false;
-    // Reset
-    this.newTask = {
-      name: '',
-      deadline: null,
-      schedule: null,
-      done: false,
-      tags: [],
-      note: '',
-    };
-  }
-
-  closeNewGroupDialog() {
-    // Close the dialog
-    this.newGroupDialog = false;
-    // Reset
-    this.newGroupName = '';
-    this.newGroupFilter = '';
-  }
-
-  closeEditTaskDialog() {
-    // Close the dialog
-    this.editTaskDialog = false;
-    // Reset
-    this.select(null, null, null);
-  }
-
-  openNewTaskDialogWithSelection() {
-    this.newTask = JSON.parse(JSON.stringify(this.editTarget));
-    this.newTask.name += ' (copy)';
-    this.newTaskDialog = true;
-    this.closeEditTaskDialog();
-  }
-
-  async sortDailyTasks(date: string) {
-    // Sort tasks by completion and then deadline
-    this.tasks.scheduled[date] = this.tasks.scheduled[date].slice().sort((task1, task2) => {
-      if (task1.done && !task2.done) {
-        return +1;
-      }
-      else if (!task1.done && task2.done) {
-        return -1;
+    const dayTasks: Task[] = tasks.value.scheduled[date];
+    for (let i = 0; i < dayTasks.length;) {
+      const task = dayTasks[i];
+      if (task.done) {
+        ++i;
       }
       else {
-        if (!task1.deadline && task2.deadline) {
-          return +1;
+        undone.push(task)
+        dayTasks.splice(i, 1);
+      }
+    }
+  }
+  // Schedule them today
+  const todayDate = today.format('YYYY-MM-DD');
+  if (!Object.prototype.hasOwnProperty.call(tasks.value.scheduled, todayDate)) {
+    tasks.value.scheduled[todayDate] = [];
+  }
+  tasks.value.scheduled[todayDate].unshift(...undone);
+  // Save
+  clean();
+  await save();
+}
+
+async function loadIfNotEditing() {
+  if (editTarget.value === null) {
+    await load();
+  }
+}
+
+async function load() {
+  isLoading.value = true;
+  try {
+    const res = await api.getNote('.mory/tasks.yaml');
+    const data = YAML.parse(res.data);
+    tasks.value = data.tasks;
+    groups.value = data.groups;
+    isLoading.value = false;
+  }
+  catch (error) {
+    if (axios.isAxiosError(error)) {
+      if (error.response) {
+        if (error.response.status === 401) {
+          // Unauthorized
+          emit('tokenExpired', () => load());
         }
-        else if (task1.deadline && !task2.deadline) {
+        else if (error.response.status === 404) {
+          // Create a new one
+          await api.addNote('.mory/tasks.yaml', YAML.stringify({
+            tasks: {
+              backlog: [],
+              scheduled: {},
+            },
+            groups: [],
+          }));
+          load();
+        }
+        else {
+          error.value = true;
+          errorText.value = error.toString();
+          console.log('Unhandled error: {}', error.response);
+          isLoading.value = false;
+        }
+      }
+      else {
+        error.value = true;
+        errorText.value = error.toString();
+        console.log('Unhandled error: {}', error);
+        isLoading.value = false;
+      }
+    }
+  }
+}
+
+function save() {
+  const datePattern = /\d{4}-\d{2}-\d{2}/;
+  const taskPropertyOrder: { [key: string]: number } = {
+    name: 0,
+    deadline: 1,
+    schedule: 2,
+    done: 3,
+    tags: 4,
+    note: 5,
+  };
+  const groupPropertyOrder: { [key: string]: number } = {
+    name: 0,
+    filter: 1,
+  };
+  const yaml = YAML.stringify({
+    tasks: tasks.value,
+    groups: groups.value,
+  }, {
+    sortMapEntries: (a, b) => {
+      if (datePattern.test(a.key.value) && datePattern.test(b.key.value)) {
+        if (a.key.value < b.key.value) {
+          return 1;
+        }
+        else if (a.key.value > b.key.value) {
           return -1;
         }
         else {
-          const deadline1 = dayjs(task1.deadline);
-          const deadline2 = dayjs(task2.deadline);
-          if (deadline1.isAfter(deadline2)) {
-            return +1;
-          }
-          else if (deadline2.isAfter(deadline1)) {
-            return -1;
-          }
-          else {
-            return 0;
-          }
+          return 0;
         }
       }
-    });
-    // Save
-    this.clean();
-    await this.save();
-  }
-
-  async moveUndoneToToday(date: string) {
-    const tasks = this.tasks.scheduled[date];
-    // Collect undone tasks
-    const undone = [];
-    let i = 0;
-    while (i < tasks.length) {
-      const task = tasks[i];
-      if (task.done) {
-        i += 1;
+      else if (a.key.value in taskPropertyOrder && b.key.value in taskPropertyOrder) {
+        if (taskPropertyOrder[a.key.value] < taskPropertyOrder[b.key.value]) {
+          return -1;
+        }
+        else if (taskPropertyOrder[a.key.value] > taskPropertyOrder[b.key.value]) {
+          return 1;
+        }
+        else {
+          return 0;
+        }
+      }
+      else if (a.key.value in groupPropertyOrder && b.key.value in groupPropertyOrder) {
+        if (groupPropertyOrder[a.key.value] < groupPropertyOrder[b.key.value]) {
+          return -1;
+        }
+        else if (groupPropertyOrder[a.key.value] > groupPropertyOrder[b.key.value]) {
+          return 1;
+        }
+        else {
+          return 0;
+        }
       }
       else {
-        tasks.splice(i, 1);
-        undone.push(task);
-      }
-    }
-    // Schedule them today
-    const today = dayjs().startOf('day');
-    const todayDate = today.format('YYYY-MM-DD');
-    if (!Object.prototype.hasOwnProperty.call(this.tasks.scheduled, todayDate)) {
-      this.tasks.scheduled[todayDate] = [];
-    }
-    this.tasks.scheduled[todayDate].unshift(...undone);
-    // Save
-    this.clean();
-    await this.save();
-  }
-
-  async collectUndone() {
-    const today = dayjs().startOf('day');
-    // Collect undone tasks
-    const undone = [];
-    const dates = Object.keys(this.tasks.scheduled).sort();
-    for (const date of dates) {
-      if (dayjs(date).isSameOrAfter(today)) {
-        break;
-      }
-      const tasks: Task[] = this.tasks.scheduled[date];
-      for (let i = 0; i < tasks.length;) {
-        const task = tasks[i];
-        if (task.done) {
-          ++i;
+        if (a.key.value < b.key.value) {
+          return -1;
+        }
+        else if (a.key.value > b.key.value) {
+          return 1;
         }
         else {
-          undone.push(task)
-          tasks.splice(i, 1);
+          return 0;
         }
       }
-    }
-    // Schedule them today
-    const todayDate = today.format('YYYY-MM-DD');
-    if (!Object.prototype.hasOwnProperty.call(this.tasks.scheduled, todayDate)) {
-      this.tasks.scheduled[todayDate] = [];
-    }
-    this.tasks.scheduled[todayDate].unshift(...undone);
-    // Save
-    this.clean();
-    await this.save();
-  }
+    },
+  });
+  return api.addNote('.mory/tasks.yaml', yaml);
+}
 
-  async loadIfNotEditing() {
-    if (this.editTarget === null) {
-      await this.load();
-    }
-  }
-
-  async load() {
-    this.isLoading = true;
-    try {
-      const res = await api.getNote('.mory/tasks.yaml');
-      const data = YAML.parse(res.data);
-      this.tasks = data.tasks;
-      this.groups = data.groups;
-      this.isLoading = false;
-    }
-    catch (error) {
-      if (axios.isAxiosError(error)) {
-        if (error.response) {
-          if (error.response.status === 401) {
-            // Unauthorized
-            this.$emit('tokenExpired', () => this.load());
-          }
-          else if (error.response.status === 404) {
-            // Create a new one
-            await api.addNote('.mory/tasks.yaml', YAML.stringify({
-              tasks: {
-                backlog: [],
-                scheduled: {},
-              },
-              groups: [],
-            }));
-            this.load();
-          }
-          else {
-            this.error = true;
-            this.errorText = error.toString();
-            console.log('Unhandled error: {}', error.response);
-            this.isLoading = false;
-          }
-        }
-        else {
-          this.error = true;
-          this.errorText = error.toString();
-          console.log('Unhandled error: {}', error);
-          this.isLoading = false;
-        }
+function clean() {
+  for (const task of tasks.value.backlog) {
+    for (const [prop, value] of Object.entries(task)) {
+      if (value === null) {
+        Vue.delete(task, prop);
       }
     }
   }
-
-  save() {
-    const datePattern = /\d{4}-\d{2}-\d{2}/;
-    const taskPropertyOrder: { [key: string]: number } = {
-      name: 0,
-      deadline: 1,
-      schedule: 2,
-      done: 3,
-      tags: 4,
-      note: 5,
-    };
-    const groupPropertyOrder: { [key: string]: number } = {
-      name: 0,
-      filter: 1,
-    };
-    const yaml = YAML.stringify({
-      tasks: this.tasks,
-      groups: this.groups,
-    }, {
-      sortMapEntries: (a, b) => {
-        if (datePattern.test(a.key.value) && datePattern.test(b.key.value)) {
-          if (a.key.value < b.key.value) {
-            return 1;
-          }
-          else if (a.key.value > b.key.value) {
-            return -1;
-          }
-          else {
-            return 0;
-          }
-        }
-        else if (a.key.value in taskPropertyOrder && b.key.value in taskPropertyOrder) {
-          if (taskPropertyOrder[a.key.value] < taskPropertyOrder[b.key.value]) {
-            return -1;
-          }
-          else if (taskPropertyOrder[a.key.value] > taskPropertyOrder[b.key.value]) {
-            return 1;
-          }
-          else {
-            return 0;
-          }
-        }
-        else if (a.key.value in groupPropertyOrder && b.key.value in groupPropertyOrder) {
-          if (groupPropertyOrder[a.key.value] < groupPropertyOrder[b.key.value]) {
-            return -1;
-          }
-          else if (groupPropertyOrder[a.key.value] > groupPropertyOrder[b.key.value]) {
-            return 1;
-          }
-          else {
-            return 0;
-          }
-        }
-        else {
-          if (a.key.value < b.key.value) {
-            return -1;
-          }
-          else if (a.key.value > b.key.value) {
-            return 1;
-          }
-          else {
-            return 0;
-          }
-        }
-      },
-    });
-    return api.addNote('.mory/tasks.yaml', yaml);
-  }
-
-  clean() {
-    for (const task of this.tasks.backlog) {
+  for (const [date, dailyTasks] of Object.entries(tasks.value.scheduled)) {
+    if ((dailyTasks as Task[]).length === 0) {
+      Vue.delete(tasks.value.scheduled, date);
+    }
+    for (const task of dailyTasks) {
       for (const [prop, value] of Object.entries(task)) {
         if (value === null) {
-          this.$delete(task, prop);
+          Vue.delete(task, prop);
         }
       }
     }
-    for (const [date, dailyTasks] of Object.entries(this.tasks.scheduled)) {
-      if ((dailyTasks as Task[]).length === 0) {
-        this.$delete(this.tasks.scheduled, date);
-      }
-      for (const task of dailyTasks) {
-        for (const [prop, value] of Object.entries(task)) {
-          if (value === null) {
-            this.$delete(task, prop);
-          }
-        }
-      }
-    }
-  }
-
-  async add(closeDialog = true) {
-    // Create a new entry
-    const task: any = {
-      name: this.newTask.name,
-    };
-    if (this.newTask.deadline) { task.deadline = this.newTask.deadline; }
-    if (this.newTask.done) { task.done = this.newTask.done; }
-    if (this.newTask.tags.length > 0) { task.tags = this.newTask.tags; }
-    if (this.newTask.note.length > 0) { task.note = this.newTask.note; }
-    if (this.newTask.schedule !== null) {
-      if (!Object.prototype.hasOwnProperty.call(this.tasks.scheduled, this.newTask.schedule)) {
-        this.tasks.scheduled[this.newTask.schedule] = [];
-      }
-      this.tasks.scheduled[this.newTask.schedule].unshift(task);
-    }
-    else {
-      this.tasks.backlog.unshift(task);
-    }
-    // Save
-    await this.save();
-    if (closeDialog) {
-      this.closeNewTaskDialog();
-    }
-    else {
-      // Reset partially
-      this.newTask = {
-        ...this.newTask,
-        name: '',
-        tags: [...this.newTask.tags],
-      };
-    }
-  }
-
-  async updateSelected() {
-    if (this.selectedTask === null) {
-      throw new Error('selectedTask is null');
-    }
-    if (this.editTarget === null) {
-      throw new Error('editTarget is null');
-    }
-    // Copy back
-    this.selectedTask.name = this.editTarget.name;
-    this.selectedTask.deadline = this.editTarget.deadline;
-    this.selectedTask.done = this.editTarget.done;
-    this.selectedTask.tags = this.editTarget.tags;
-    this.selectedTask.note = this.editTarget.note;
-    // Move to other list
-    const oldDate = this.selectedTask.schedule;
-    const newDate = this.editTarget.schedule;
-    if (newDate !== oldDate) {
-      // Remove it from the original list
-      const list = oldDate === null ? this.tasks.backlog : this.tasks.scheduled[oldDate];
-      list.splice(this.selectedTaskIndex!, 1);
-      // Put into a new list
-      if (newDate === null) {
-        this.tasks.backlog.unshift(this.selectedTask);
-      }
-      else {
-        if (!Object.prototype.hasOwnProperty.call(this.tasks.scheduled, newDate)) {
-          this.tasks.scheduled[newDate] = [];
-        }
-        this.tasks.scheduled[newDate].unshift(this.selectedTask);
-      }
-    }
-    // Save
-    this.clean();
-    await this.save();
-    // Close
-    this.closeEditTaskDialog();
-  }
-
-  async removeSelected() {
-    if (this.selectedTask === null) {
-      throw new Error('selectedTask is null');
-    }
-    const list = this.selectedTask.schedule === null ? this.tasks.backlog : this.tasks.scheduled[this.selectedTask.schedule];
-    list.splice(this.selectedTaskIndex!, 1);
-    // Save
-    this.clean();
-    await this.save();
-    // Close
-    this.closeEditTaskDialog();
-  }
-
-  async addGroup() {
-    // Create a new group
-    const group: any = {
-      name: this.newGroupName,
-      filter: this.newGroupFilter,
-    };
-    this.groups.unshift(group);
-    // Save
-    await this.save();
-    // Hide the dialog
-    this.newGroupDialog = false;
-    // Reset
-    this.newGroupName = '';
-    this.newGroupFilter = '';
   }
 }
+
+async function add(closeDialog = true) {
+  // Create a new entry
+  const task: any = {
+    name: newTask.value.name,
+  };
+  if (newTask.value.deadline) { task.deadline = newTask.value.deadline; }
+  if (newTask.value.done) { task.done = newTask.value.done; }
+  if (newTask.value.tags.length > 0) { task.tags = newTask.value.tags; }
+  if (newTask.value.note.length > 0) { task.note = newTask.value.note; }
+  if (newTask.value.schedule !== null) {
+    if (!Object.prototype.hasOwnProperty.call(tasks.value.scheduled, newTask.value.schedule)) {
+      tasks.value.scheduled[newTask.value.schedule] = [];
+    }
+    tasks.value.scheduled[newTask.value.schedule].unshift(task);
+  }
+  else {
+    tasks.value.backlog.unshift(task);
+  }
+  // Save
+  await save();
+  if (closeDialog) {
+    closeNewTaskDialog();
+  }
+  else {
+    // Reset partially
+    newTask.value = {
+      ...newTask.value,
+      name: '',
+      tags: [...newTask.value.tags],
+    };
+  }
+}
+
+async function updateSelected() {
+  if (selectedTask.value === null) {
+    throw new Error('selectedTask is null');
+  }
+  if (editTarget.value === null) {
+    throw new Error('editTarget is null');
+  }
+  // Copy back
+  selectedTask.value.name = editTarget.value.name;
+  selectedTask.value.deadline = editTarget.value.deadline;
+  selectedTask.value.done = editTarget.value.done;
+  selectedTask.value.tags = editTarget.value.tags;
+  selectedTask.value.note = editTarget.value.note;
+  // Move to other list
+  const oldDate = selectedTask.value.schedule;
+  const newDate = editTarget.value.schedule;
+  if (newDate !== oldDate) {
+    // Remove it from the original list
+    const list = oldDate === null ? tasks.value.backlog : tasks.value.scheduled[oldDate];
+    list.splice(selectedTaskIndex.value!, 1);
+    // Put into a new list
+    if (newDate === null) {
+      tasks.value.backlog.unshift(selectedTask.value);
+    }
+    else {
+      if (!Object.prototype.hasOwnProperty.call(tasks.value.scheduled, newDate)) {
+        tasks.value.scheduled[newDate] = [];
+      }
+      tasks.value.scheduled[newDate].unshift(selectedTask.value);
+    }
+  }
+  // Save
+  clean();
+  await save();
+  // Close
+  closeEditTaskDialog();
+}
+
+async function removeSelected() {
+  if (selectedTask.value === null) {
+    throw new Error('selectedTask is null');
+  }
+  const list = selectedTask.value.schedule === null ? tasks.value.backlog : tasks.value.scheduled[selectedTask.value.schedule];
+  list.splice(selectedTaskIndex.value!, 1);
+  // Save
+  clean();
+  await save();
+  // Close
+  closeEditTaskDialog();
+}
+
+async function addGroup() {
+  // Create a new group
+  const group: any = {
+    name: newGroupName.value,
+    filter: newGroupFilter.value,
+  };
+  groups.value.unshift(group);
+  // Save
+  await save();
+  // Hide the dialog
+  newGroupDialog.value = false;
+  // Reset
+  newGroupName.value = '';
+  newGroupFilter.value = '';
+}
+
+// Expose properties
+defineExpose({
+  isToday,
+  select,
+  showEditTaskDialog,
+  closeNewTaskDialog,
+  closeNewGroupDialog,
+  closeEditTaskDialog,
+  openNewTaskDialogWithSelection,
+  sortDailyTasks,
+  moveUndoneToToday,
+  collectUndone,
+  loadIfNotEditing,
+  load,
+  save,
+  clean,
+  add,
+  updateSelected,
+  removeSelected,
+  addGroup,
+});
 </script>
 
 <style scoped lang="scss">
