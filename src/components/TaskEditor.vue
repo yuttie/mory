@@ -158,7 +158,7 @@ const scheduleMenu = ref(false);
 
 // Computed properties
 const tagItems = computed((): { text: string; value: string; }[] => {
-  return this.knownTags.map(([tag, count]) => {
+  return props.knownTags.map(([tag, count]) => {
     return {
       text: `${tag} (${count})`,
       value: tag,
@@ -168,11 +168,13 @@ const tagItems = computed((): { text: string; value: string; }[] => {
 
 // Methods
 function setScheduleToday() {
-  this.value.schedule = dayjs().format('YYYY-MM-DD');
+  // FIXME We should emit an event instead like we do in template for bidirectional binding
+  props.value.schedule = dayjs().format('YYYY-MM-DD');  // eslint-disable-line vue/no-mutating-props
 }
 
 function removeTag(tag: string) {
-  this.value.tags.splice(this.value.tags.indexOf(tag), 1);
+  // FIXME We should emit an event instead like we do in template for bidirectional binding
+  props.value.tags.splice(props.value.tags.indexOf(tag), 1);  // eslint-disable-line vue/no-mutating-props
 }
 
 // Expose properties
