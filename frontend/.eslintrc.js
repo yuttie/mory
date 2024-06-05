@@ -16,6 +16,6 @@ module.exports = {
     'no-debugger': process.env.NODE_ENV === 'production' ? 'warn' : 'off',
     '@typescript-eslint/no-unused-vars': ['warn', { 'argsIgnorePattern': '^_' }],
     'vue/valid-v-slot': ['error', { 'allowModifiers': true }],
-    'vue/multi-word-component-names': ['error', { 'ignores': ['Editor', 'Gravatar']}],
+    'vue/multi-word-component-names': ['error', { 'ignores': ['About', 'Editor', 'Gravatar']}],
   }
 }
