@@ -93,8 +93,12 @@
   </div>
 </template>
 
-<script lang="ts">
-import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
+<script lang="ts" setup>
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, defineProps, defineEmits, defineExpose } from 'vue';
+import type { Ref } from 'vue';
+
+import { useRouter, useRoute } from '@/composables/vue-router';
+import { useVuetify } from '@/composables/vuetify';
 
 import * as api from '@/api';
 import { isMetadataEventMultiple, ListEntry, validateEvent } from '@/api';
@@ -109,71 +113,67 @@ const mdit = new MarkdownIt('default', {
   linkify: true,
 });
 
-@Component
-export default class Calendar extends Vue {
-  entries: ListEntry[] = [];
-  isLoading = false;
-  error = false;
-  errorText = '';
-  calendarType = 'month';
-  calendarCursor = dayjs().format('YYYY-MM-DD');
-  selectedEvent = {};
-  selectedElement = null;
-  selectedOpen = false;
+// Emits
+const emit = defineEmits<{
+  (e: 'tokenExpired', callback: () => void): void;
+}>();
 
-  get events() {
-    function normalizeEndTime(end: any, start: any): any {
-      const durationShortRegexp =
-        /^\+([\d.]+) *(y|M|w|d|h|m|s|ms)$/;
-      const durationLongRegexp =
-        /^\+([\d.]+) *(years?|months?|weeks?|days?|hours?|minutes?|seconds?|milliseconds?)$/i;
-      const match = durationShortRegexp.exec(end || '') || durationLongRegexp.exec(end || '');
-      if (match === null) {
-        return end;
-      }
-      else {
-        const amount = parseFloat(match[1]);
-        const unit = match[2] as dayjs.ManipulateType;
-        return dayjs(start)
-          .add(amount, unit)
-          .format('YYYY-MM-DD HH:mm:ss');
-      }
+// Composables
+const router = useRouter();
+const route = useRoute();
+
+// Reactive states
+const entries: ListEntry[] = ref([]);
+const isLoading = ref(false);
+const error = ref(false);
+const errorText = ref('');
+const calendarType = ref('month');
+const calendarCursor = ref(dayjs().format('YYYY-MM-DD'));
+const selectedEvent = ref({});
+const selectedElement = ref(null);
+const selectedOpen = ref(false);
+
+// Refs
+const calendar = ref(null);
+
+// Computed properties
+const events = computed(() => {
+  function normalizeEndTime(end: any, start: any): any {
+    const durationShortRegexp =
+      /^\+([\d.]+) *(y|M|w|d|h|m|s|ms)$/;
+    const durationLongRegexp =
+      /^\+([\d.]+) *(years?|months?|weeks?|days?|hours?|minutes?|seconds?|milliseconds?)$/i;
+    const match = durationShortRegexp.exec(end || '') || durationLongRegexp.exec(end || '');
+    if (match === null) {
+      return end;
     }
-    const events = [];
-    for (const entry of this.entries) {
-      if (entry.metadata !== null) {
-        // Choose a default color for the note based on its path
-        let defaultColor = "#666666";
-        if (Object.prototype.hasOwnProperty.call(entry.metadata, 'events') && typeof entry.metadata.events === 'object' && entry.metadata.events !== null) {
-          for (const [eventName, eventDetail] of Object.entries(entry.metadata.events)) {
-            if (typeof eventDetail === 'object' && eventDetail !== null) {
-              // If eventDetail has the 'times' property and it is an array
-              if (isMetadataEventMultiple(eventDetail)) {
-                for (const time of eventDetail.times) {
-                  time.end = normalizeEndTime(time.end || eventDetail.end, time.start);
-                  const event = {
-                    name: eventName,
-                    start: time.start,
-                    end: time.end,
-                    finished: time.finished,
-                    color: time.color || eventDetail.color || defaultColor,
-                    note: time.note || eventDetail.note,
-                    notePath: entry.path,
-                  };
-                  if (validateEvent(event)) {
-                    events.push(event);
-                  }
-                }
-              }
-              else {
-                eventDetail.end = normalizeEndTime(eventDetail.end, eventDetail.start);
+    else {
+      const amount = parseFloat(match[1]);
+      const unit = match[2] as dayjs.ManipulateType;
+      return dayjs(start)
+        .add(amount, unit)
+        .format('YYYY-MM-DD HH:mm:ss');
+    }
+  }
+  const events = [];
+  for (const entry of entries.value) {
+    if (entry.metadata !== null) {
+      // Choose a default color for the note based on its path
+      let defaultColor = "#666666";
+      if (Object.prototype.hasOwnProperty.call(entry.metadata, 'events') && typeof entry.metadata.events === 'object' && entry.metadata.events !== null) {
+        for (const [eventName, eventDetail] of Object.entries(entry.metadata.events)) {
+          if (typeof eventDetail === 'object' && eventDetail !== null) {
+            // If eventDetail has the 'times' property and it is an array
+            if (isMetadataEventMultiple(eventDetail)) {
+              for (const time of eventDetail.times) {
+                time.end = normalizeEndTime(time.end || eventDetail.end, time.start);
                 const event = {
                   name: eventName,
-                  start: eventDetail.start,
-                  end: eventDetail.end,
-                  finished: eventDetail.finished,
-                  color: eventDetail.color || defaultColor,
-                  note: eventDetail.note,
+                  start: time.start,
+                  end: time.end,
+                  finished: time.finished,
+                  color: time.color || eventDetail.color || defaultColor,
+                  note: time.note || eventDetail.note,
                   notePath: entry.path,
                 };
                 if (validateEvent(event)) {
@@ -181,171 +181,203 @@ export default class Calendar extends Vue {
                 }
               }
             }
+            else {
+              eventDetail.end = normalizeEndTime(eventDetail.end, eventDetail.start);
+              const event = {
+                name: eventName,
+                start: eventDetail.start,
+                end: eventDetail.end,
+                finished: eventDetail.finished,
+                color: eventDetail.color || defaultColor,
+                note: eventDetail.note,
+                notePath: entry.path,
+              };
+              if (validateEvent(event)) {
+                events.push(event);
+              }
+            }
           }
         }
       }
     }
-    return events;
+  }
+  return events;
+});
+
+// Lifecycle hooks
+onMounted(() => {
+  document.title = `Calendar | ${process.env.VUE_APP_NAME}`;
+
+  if (route.name === 'CalendarWithDate') {
+    calendarType.value = route.params.type;
+    calendarCursor.value = dayjs(route.params.date, 'YYYY/MM/DD').format('YYYY-MM-DD');
   }
 
-  onCalendarInput(date: string) {
-    this.$router.push({
-      path: `/calendar/${this.calendarType}/${dayjs(date, 'YYYY-MM-DD').format('YYYY/MM/DD')}`,
-    });
+  window.addEventListener('keydown', onKeydown);
+  window.addEventListener('wheel', onWheel);
+  window.addEventListener('focus', load);
+
+  load();
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeydown);
+  window.removeEventListener('wheel', onWheel);
+  window.removeEventListener('focus', load);
+});
+
+// Methods
+function onCalendarInput(date: string) {
+  router.push({
+    path: `/calendar/${calendarType.value}/${dayjs(date, 'YYYY-MM-DD').format('YYYY/MM/DD')}`,
+  });
+}
+
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'ArrowLeft') {
+    (calendar.value as any).prev();
   }
-
-  mounted() {
-    document.title = `Calendar | ${process.env.VUE_APP_NAME}`;
-
-    if (this.$route.name === 'CalendarWithDate') {
-      this.calendarType = this.$route.params.type;
-      this.calendarCursor = dayjs(this.$route.params.date, 'YYYY/MM/DD').format('YYYY-MM-DD');
-    }
-
-    window.addEventListener('keydown', this.onKeydown);
-    window.addEventListener('wheel', this.onWheel);
-    window.addEventListener('focus', this.load);
-
-    this.load();
-  }
-
-  destroyed() {
-    window.removeEventListener('keydown', this.onKeydown);
-    window.removeEventListener('wheel', this.onWheel);
-    window.removeEventListener('focus', this.load);
-  }
-
-  onKeydown(e: KeyboardEvent) {
-    if (e.key === 'ArrowLeft') {
-      (this.$refs.calendar as any).prev();
-    }
-    else if (e.key === 'ArrowRight') {
-      (this.$refs.calendar as any).next();
-    }
-  }
-
-  onWheel(e: WheelEvent) {
-    if (e.deltaY < 0) {
-      (this.$refs.calendar as any).prev();
-    }
-    else if (e.deltaY > 0) {
-      (this.$refs.calendar as any).next();
-    }
-  }
-
-  load() {
-    this.isLoading = true;
-    api.listNotes()
-      .then(res => {
-        this.entries = res.data;
-        this.isLoading = false;
-      }).catch(error => {
-        if (error.response) {
-          if (error.response.status === 401) {
-            // Unauthorized
-            this.$emit('tokenExpired', () => this.load());
-          }
-          else {
-            this.error = true;
-            this.errorText = error.response;
-            console.log('Unhandled error: {}', error.response);
-            this.isLoading = false;
-          }
-        }
-        else {
-          this.error = true;
-          this.errorText = error.toString();
-          console.log('Unhandled error: {}', error);
-          this.isLoading = false;
-        }
-      });
-  }
-
-  setToday() {
-    this.$router.push({
-      name: 'Calendar',
-    });
-  }
-
-  viewDay({ date }: { date: string }) {
-    this.$router.push({
-      path: `/calendar/day/${dayjs(date, 'YYYY-MM-DD').format('YYYY/MM/DD')}`,
-    });
-  }
-
-  showEvent ({ nativeEvent, event }: { nativeEvent: any, event: any }) {
-    const open = () => {
-      this.selectedEvent = event;
-      this.selectedElement = nativeEvent.target;
-      setTimeout(() => {
-        this.selectedOpen = true;
-      }, 10);
-    };
-
-    if (this.selectedOpen) {
-      this.selectedOpen = false;
-      setTimeout(open, 10);
-    } else {
-      open();
-    }
-
-    nativeEvent.stopPropagation();
-  }
-
-  getEventEndTime(event: any): dayjs.Dayjs {
-    if (typeof event.end !== 'undefined') {
-      return dayjs(event.end);
-    }
-    else {
-      return dayjs(event.start).endOf('day');
-    }
-  }
-
-  getEventColor(event: any): string {
-    const toPropName = (s: string) => s.replace(/-./g, (match: string) => match[1].toUpperCase());
-    const color = Object.prototype.hasOwnProperty.call(materialColors, toPropName(event.color))
-                ? Color((materialColors as any)[toPropName(event.color)].base)
-                : Color(event.color);
-
-    const now = dayjs();
-    const time = this.getEventEndTime(event);
-    if (time < now || event.finished) {
-      return color.fade(0.75).string();
-    }
-    else {
-      return color.string();
-    }
-  }
-
-  getEventTextColor(event: any): string {
-    const now = dayjs();
-    const time = this.getEventEndTime(event);
-    if (time < now || event.finished) {
-      return Color('#000000').fade(0.7).string();
-    }
-    else {
-      const bg = Color(this.getEventColor(event));
-      const white = Color('#ffffff');
-      const black = Color('#000000');
-      if (bg.contrast(white) >= 4.5) {  // Prefer white over black
-        return white.string();
-      }
-      else if (bg.contrast(black) >= 4.5) {
-        return black.string();
-      }
-      else if (bg.contrast(white) >= bg.contrast(black)) {
-        return white.string();
-      }
-      else {
-        return black.string();
-      }
-    }
-  }
-
-  renderEventNote(text: string): string {
-    return mdit.render(text);
+  else if (e.key === 'ArrowRight') {
+    (calendar.value as any).next();
   }
 }
+
+function onWheel(e: WheelEvent) {
+  if (e.deltaY < 0) {
+    (calendar.value as any).prev();
+  }
+  else if (e.deltaY > 0) {
+    (calendar.value as any).next();
+  }
+}
+
+function load() {
+  isLoading.value = true;
+  api.listNotes()
+    .then(res => {
+      entries.value = res.data;
+      isLoading.value = false;
+    }).catch(error => {
+      if (error.response) {
+        if (error.response.status === 401) {
+          // Unauthorized
+          emit('tokenExpired', () => load());
+        }
+        else {
+          error.value = true;
+          errorText.value = error.response;
+          console.log('Unhandled error: {}', error.response);
+          isLoading.value = false;
+        }
+      }
+      else {
+        error.value = true;
+        errorText.value = error.toString();
+        console.log('Unhandled error: {}', error);
+        isLoading.value = false;
+      }
+    });
+}
+
+function setToday() {
+  router.push({
+    name: 'Calendar',
+  });
+}
+
+function viewDay({ date }: { date: string }) {
+  router.push({
+    path: `/calendar/day/${dayjs(date, 'YYYY-MM-DD').format('YYYY/MM/DD')}`,
+  });
+}
+
+function showEvent ({ nativeEvent, event }: { nativeEvent: any, event: any }) {
+  const open = () => {
+    selectedEvent.value = event;
+    selectedElement.value = nativeEvent.target;
+    setTimeout(() => {
+      selectedOpen.value = true;
+    }, 10);
+  };
+
+  if (selectedOpen.value) {
+    selectedOpen.value = false;
+    setTimeout(open, 10);
+  } else {
+    open();
+  }
+
+  nativeEvent.stopPropagation();
+}
+
+function getEventEndTime(event: any): dayjs.Dayjs {
+  if (typeof event.end !== 'undefined') {
+    return dayjs(event.end);
+  }
+  else {
+    return dayjs(event.start).endOf('day');
+  }
+}
+
+function getEventColor(event: any): string {
+  const toPropName = (s: string) => s.replace(/-./g, (match: string) => match[1].toUpperCase());
+  const color = Object.prototype.hasOwnProperty.call(materialColors, toPropName(event.color))
+              ? Color((materialColors as any)[toPropName(event.color)].base)
+              : Color(event.color);
+
+  const now = dayjs();
+  const time = getEventEndTime(event);
+  if (time < now || event.finished) {
+    return color.fade(0.75).string();
+  }
+  else {
+    return color.string();
+  }
+}
+
+function getEventTextColor(event: any): string {
+  const now = dayjs();
+  const time = getEventEndTime(event);
+  if (time < now || event.finished) {
+    return Color('#000000').fade(0.7).string();
+  }
+  else {
+    const bg = Color(getEventColor(event));
+    const white = Color('#ffffff');
+    const black = Color('#000000');
+    if (bg.contrast(white) >= 4.5) {  // Prefer white over black
+      return white.string();
+    }
+    else if (bg.contrast(black) >= 4.5) {
+      return black.string();
+    }
+    else if (bg.contrast(white) >= bg.contrast(black)) {
+      return white.string();
+    }
+    else {
+      return black.string();
+    }
+  }
+}
+
+function renderEventNote(text: string): string {
+  return mdit.render(text);
+}
+
+// Expose properties
+defineExpose({
+  onCalendarInput,
+  onKeydown,
+  onWheel,
+  load,
+  setToday,
+  viewDay,
+  showEvent,
+  getEventEndTime,
+  getEventColor,
+  getEventTextColor,
+  renderEventNote,
+});
 </script>
 
 <style scoped lang="scss">
