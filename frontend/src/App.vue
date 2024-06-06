@@ -60,7 +60,7 @@
       ></v-img>
       <v-toolbar-title>mory</v-toolbar-title>
       <v-spacer></v-spacer>
-      <input type="file" multiple class="d-none" ref="fileInput">
+      <input type="file" multiple class="d-none" ref="fileInputEl">
       <v-menu
         offset-y
       >
@@ -247,7 +247,7 @@
 
     <v-main v-if="serviceWorkerReady">
       <v-container fluid pa-0 style="height: 100%;">
-        <router-view v-if="!(!hasToken && !$refs.routerView)" v-bind:key="$route.path" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerView"/>
+        <router-view v-if="!(!hasToken && !routerView)" v-bind:key="$route.path" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerViewEl"/>
       </v-container>
     </v-main>
 
@@ -320,8 +320,12 @@
   </v-app>
 </template>
 
-<script lang="ts">
-import { Component, Watch, Vue } from 'vue-property-decorator';
+<script lang="ts" setup>
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, defineProps, defineEmits, defineExpose } from 'vue';
+import type { Ref } from 'vue';
+
+import { useRouter, useRoute } from '@/composables/vue-router';
+import { useVuetify } from '@/composables/vuetify';
 
 import Gravatar from '@/components/Gravatar.vue';
 
@@ -338,444 +342,467 @@ interface TreeNode {
   children: TreeNode[];
 }
 
-@Component({
-  components: {
-    Gravatar,
-  },
-})
-export default class App extends Vue {
-  hasToken = !!localStorage.getItem('token');
-  loginUsername = "";
-  loginPassword = "";
-  isLoggingIn = false;
-  loginCallbacks = [] as (() => void)[];
-  loginError = null as null | string;
-  serviceWorker = null as null | ServiceWorker;
-  serviceWorkerReady = false;
-  templates = [] as string[];
-  uploadList = [] as UploadEntry[];
-  uploadMenuIsVisible = false;
-  noteTree = [] as TreeNode[];
-  noteTreeOpen = [];
-  noteTreeActive = [];
+// Composables
+const router = useRouter();
+const route = useRoute();
+const vuetify = useVuetify();
 
-  get token() {
-    return localStorage.getItem('token');
+// Reactive states
+const hasToken = ref(!!localStorage.getItem('token'));
+const loginUsername = ref("");
+const loginPassword = ref("");
+const isLoggingIn = ref(false);
+const loginCallbacks = ref([] as (() => void)[]);
+const loginError = ref(null as null | string);
+const serviceWorker = ref(null as null | ServiceWorker);
+const serviceWorkerReady = ref(false);
+const templates = ref([] as string[]);
+const uploadList = ref([] as UploadEntry[]);
+const uploadMenuIsVisible = ref(false);
+const noteTree = ref([] as TreeNode[]);
+const noteTreeOpen = ref([]);
+const noteTreeActive = ref([]);
+
+// Refs
+const app = ref(null);
+const fileInputEl = ref(null);
+const routerViewEl = ref(null);
+
+// Computed properties
+const token = computed(() => {
+  return localStorage.getItem('token');
+});
+
+const decodedToken = computed(() => {
+  if (token.value) {
+    return jwt_decode<Claim>(token.value);
   }
-
-  get decodedToken() {
-    if (this.token) {
-      return jwt_decode<Claim>(this.token);
-    }
-    else {
-      return null;
-    }
+  else {
+    return null;
   }
+});
 
-  get username() {
-    if (this.decodedToken) {
-      return this.decodedToken.sub;
-    }
-    else {
-      return null;
-    }
+const username = computed(() => {
+  if (decodedToken.value) {
+    return decodedToken.value.sub;
   }
-
-  get email() {
-    if (this.decodedToken) {
-      return this.decodedToken.email;
-    }
-    else {
-      return null;
-    }
+  else {
+    return null;
   }
+});
 
-  get uploadListBadgeColor() {
-    const [status, _] = this.uploadListStatus;
-
-    if      (status === 'in-progress') { return 'blue';  }
-    else if (status === 'error')       { return 'red';   }
-    else if (status === 'success')     { return 'green'; }
-    else {
-      return 'gray';
-    }
+const email = computed(() => {
+  if (decodedToken.value) {
+    return decodedToken.value.email;
   }
-
-  get uploadListBadgeIcon() {
-    const [status, num] = this.uploadListStatus;
-
-    if      (status === 'in-progress') { return 'mdi-autorenew';         }
-    else if (status === 'error')       { return 'mdi-exclamation-thick'; }
-    else if (status === 'success')     { return 'mdi-check';             }
-    else {
-      return 'mdi-help';
-    }
+  else {
+    return null;
   }
+});
 
-  get uploadListStatus() {
-    let numInProgresses = 0;
-    let numErrors = 0;
-    let numSuccesses = 0;
-    for (const e of this.uploadList) {
-      if (e.status === 'in-progress') {
-        numInProgresses += 1;
-      }
-      else if (e.status === 'error') {
-        numErrors += 1;
-      }
-      else if (e.status === 'success') {
-        numSuccesses += 1;
-      }
-    }
+const uploadListBadgeColor = computed(() => {
+  const [status, _] = uploadListStatus.value;
 
-    if      (numInProgresses > 0)                     { return ['in-progress', numInProgresses]; }
-    else if (numErrors > 0)                           { return ['error',       numErrors      ]; }
-    else if (numSuccesses === this.uploadList.length) { return ['success',     numSuccesses   ]; }
-    else {
-      return ['unknown', -1];
-    }
+  if      (status === 'in-progress') { return 'blue';  }
+  else if (status === 'error')       { return 'red';   }
+  else if (status === 'success')     { return 'green'; }
+  else {
+    return 'gray';
   }
+});
 
-  created() {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register(`${process.env.BASE_URL}service-worker.js`).then((registration) => {
-        console.log('Service worker registration succeeded:', registration);
-      }).catch((error) => {
-        console.error(`Service worker registration failed: ${error}`);
-      });
+const uploadListBadgeIcon = computed(() => {
+  const [status, num] = uploadListStatus.value;
 
-      navigator.serviceWorker.ready
-        .then((registration) => {
-          console.log(`A service worker is active: ${registration.active}`);
-          this.serviceWorker = registration.active!;
-          this.serviceWorker.postMessage({
-            type: 'configure',
-            value: {
-              apiUrl: new URL(process.env.VUE_APP_API_URL!, window.location.href).href,
-              apiToken: this.token,
-            },
-          });
-        });
+  if      (status === 'in-progress') { return 'mdi-autorenew';         }
+  else if (status === 'error')       { return 'mdi-exclamation-thick'; }
+  else if (status === 'success')     { return 'mdi-check';             }
+  else {
+    return 'mdi-help';
+  }
+});
 
-      navigator.serviceWorker.addEventListener('message', (event) => {
-        if (event.data === 'configured') {
-          this.serviceWorkerReady = true;
-        }
-      });
-    } else {
-      console.error('Service workers are not supported.');
+const uploadListStatus = computed(() => {
+  let numInProgresses = 0;
+  let numErrors = 0;
+  let numSuccesses = 0;
+  for (const e of uploadList.value) {
+    if (e.status === 'in-progress') {
+      numInProgresses += 1;
+    }
+    else if (e.status === 'error') {
+      numErrors += 1;
+    }
+    else if (e.status === 'success') {
+      numSuccesses += 1;
     }
   }
 
-  mounted() {
-    this.loadCustomCss();
+  if      (numInProgresses > 0)                      { return ['in-progress', numInProgresses]; }
+  else if (numErrors > 0)                            { return ['error',       numErrors      ]; }
+  else if (numSuccesses === uploadList.value.length) { return ['success',     numSuccesses   ]; }
+  else {
+    return ['unknown', -1];
+  }
+});
 
-    (this.$refs.fileInput as HTMLInputElement).addEventListener('change', (e: any) => {
-      if (e.target.files.length > 0) {
-        // Start to upload the selected files
-        this.uploadFiles(e.target.files);
-        // Clear the selection
-        e.target.value = '';
-      }
-    });
+const noteTreeRoot = computed(() => {
+  return [
+    {
+      name: 'Tags',
+      id: '',
+      context: [],
+      children: noteTree.value,
+    },
+  ];
+});
 
-    // Function to determine if files are dragged or not
-    function containsFiles(event: any) {
-      if (event.dataTransfer.types) {
-        for (const typ of event.dataTransfer.types) {
-          if (typ == "Files") {
-            return true;
-          }
+// Lifecycle hooks
+onMounted(() => {
+  loadCustomCss();
+
+  (fileInputEl.value as HTMLInputElement).addEventListener('change', (e: any) => {
+    if (e.target.files.length > 0) {
+      // Start to upload the selected files
+      uploadFiles(e.target.files);
+      // Clear the selection
+      e.target.value = '';
+    }
+  });
+
+  // Function to determine if files are dragged or not
+  function containsFiles(event: any) {
+    if (event.dataTransfer.types) {
+      for (const typ of event.dataTransfer.types) {
+        if (typ == "Files") {
+          return true;
         }
       }
-
-      return false;
     }
 
-    this.loadTemplates();
+    return false;
+  }
 
-    // Handle drag and drop of files
-    // TODO v-onで書き直す
-    // TODO 参考: https://qiita.com/punkshiraishi/items/49b91767b5143bcb1fcc
-    // TODO 参考: https://learnvue.co/articles/vue-drag-and-drop
-    // TODO 参考: https://hackmd.io/@rhHzPg4WS26yfiXdOaOMTg/ryyQFR-K8
-    const appEl = (this.$refs.app as Vue).$el;
+  loadTemplates();
 
-    appEl.addEventListener('dragenter', (e: any) => {
+  // Handle drag and drop of files
+  // TODO v-onで書き直す
+  // TODO 参考: https://qiita.com/punkshiraishi/items/49b91767b5143bcb1fcc
+  // TODO 参考: https://learnvue.co/articles/vue-drag-and-drop
+  // TODO 参考: https://hackmd.io/@rhHzPg4WS26yfiXdOaOMTg/ryyQFR-K8
+  const appEl = app.value.$el;
+  appEl.addEventListener('dragenter', (e: any) => {
+    if (containsFiles(e)) {
+      // Show the drop area
+      appEl.classList.add('drop-target');
+    }
+  });
+
+  appEl.addEventListener('dragleave', (e: any) => {
+    // Ignore if it's still inside appEl
+    if (!e.currentTarget.contains(e.relatedTarget)) {
       if (containsFiles(e)) {
-        // Show the drop area
-        appEl.classList.add('drop-target');
-      }
-    });
-
-    appEl.addEventListener('dragleave', (e: any) => {
-      // Ignore if it's still inside appEl
-      if (!e.currentTarget.contains(e.relatedTarget)) {
-        if (containsFiles(e)) {
-          // Hide the drop area
-          appEl.classList.remove('drop-target');
-        }
-      }
-    });
-
-    appEl.addEventListener('dragover', (e: any) => {
-      e.preventDefault();
-    });
-
-    appEl.addEventListener('drop', (e: any) => {
-      e.preventDefault();
-
-      if (containsFiles(e)) {
-        // Start to upload the dropped files
-        this.uploadFiles(e.dataTransfer.files);
-
         // Hide the drop area
         appEl.classList.remove('drop-target');
       }
-    });
+    }
+  });
 
-    this.initNotification();
-  }
+  appEl.addEventListener('dragover', (e: any) => {
+    e.preventDefault();
+  });
 
-  destroyed() {
-    this.unloadCustomCss();
-  }
+  appEl.addEventListener('drop', (e: any) => {
+    e.preventDefault();
 
-  initNotification() {
-    Notification.requestPermission().then((result) => {
-      if (result === 'granted') {
-        //
+    if (containsFiles(e)) {
+      // Start to upload the dropped files
+      uploadFiles(e.dataTransfer.files);
+
+      // Hide the drop area
+      appEl.classList.remove('drop-target');
+    }
+  });
+
+  initNotification();
+});
+
+onUnmounted(() => {
+  unloadCustomCss();
+});
+
+// Methods
+function initNotification() {
+  Notification.requestPermission().then((result) => {
+    if (result === 'granted') {
+      //
+    }
+  });
+}
+
+function login() {
+  isLoggingIn.value = true;
+
+  api.login(
+    loginUsername.value,
+    loginPassword.value,
+  ).then(res => {
+    localStorage.setItem('token', res.data);
+    hasToken.value = true;
+
+    loginUsername.value = '';
+    loginPassword.value = '';
+    isLoggingIn.value = false;
+    loginError.value = null;
+
+    nextTick(() => {
+      for (const callback of loginCallbacks.value) {
+        callback();
       }
+      loginCallbacks.value = [];
     });
-  }
 
-  login() {
-    this.isLoggingIn = true;
-
-    api.login(
-      this.loginUsername,
-      this.loginPassword,
-    ).then(res => {
-      localStorage.setItem('token', res.data);
-      this.hasToken = true;
-
-      this.loginUsername = '';
-      this.loginPassword = '';
-      this.isLoggingIn = false;
-      this.loginError = null;
-
-      this.$nextTick(() => {
-        for (const callback of this.loginCallbacks) {
-          callback();
-        }
-        this.loginCallbacks = [];
-      });
-
-      if (this.serviceWorker) {
-        this.serviceWorker.postMessage({
-          type: 'api-token',
-          value: this.token,
-        });
-      }
-    }).catch(error => {
-      this.loginError = "Incorrect username or password";
-
-      this.loginPassword = '';
-      this.isLoggingIn = false;
-    });
-  }
-
-  logout() {
-    // Delete the current token
-    localStorage.removeItem('token');
-    this.hasToken = false;
-  }
-
-  tokenExpired(callback: () => void) {
-    this.loginCallbacks.push(callback);
-
-    // Delete the token and let a user to login again
-    this.logout();
-    if (this.serviceWorker) {
-      this.serviceWorker.postMessage({
+    if (serviceWorker.value) {
+      serviceWorker.value.postMessage({
         type: 'api-token',
-        value: this.token,
+        value: token.value,
       });
     }
+  }).catch(error => {
+    loginError.value = "Incorrect username or password";
+
+    loginPassword.value = '';
+    isLoggingIn.value = false;
+  });
+}
+
+function logout() {
+  // Delete the current token
+  localStorage.removeItem('token');
+  hasToken.value = false;
+}
+
+function tokenExpired(callback: () => void) {
+  loginCallbacks.value.push(callback);
+
+  // Delete the token and let a user to login again
+  logout();
+  if (serviceWorker.value) {
+    serviceWorker.value.postMessage({
+      type: 'api-token',
+      value: token.value,
+    });
   }
+}
 
-  loadTemplates() {
-    api.listNotes()
-      .then(res => {
-        this.templates = res.data
-          .map((entry: ListEntry2) => entry.path)
-          .filter((path: string) => path.match(/\.template$/i));
-      }).catch(error => {
-        if (error.response) {
-          if (error.response.status === 401) {
-            // Unauthorized
-            this.tokenExpired(() => this.loadTemplates());
-          }
-          else {
-            console.log('Unhandled error: {}', error.response);
-          }
-        }
-        else {
-          console.log('Unhandled error: {}', error);
-        }
-      });
-  }
-
-  loadCustomCss() {
-    api.getNote('.mory/custom.less')
-      .then(res => {
-        less.render(res.data, {
-          globalVars: {
-            'nav-height': '64px',
-          },
-        }).then(output => {
-          const style = document.createElement('style');
-          style.setAttribute('type', 'text/css');
-          style.setAttribute('id', 'custom-css');
-          style.innerText = output.css;
-          document.head.appendChild(style);
-        }, error => {
-          // FIXME
-          console.log(error);
-        });
-      }).catch(error => {
-        if (error.response) {
-          if (error.response.status === 401) {
-            // Unauthorized
-            this.tokenExpired(() => this.loadCustomCss());
-          }
-          else if (error.response.status === 404) {
-            // We can simply ignore the error
-          }
-          else {
-            console.log('Unhandled error: {}', error.response);
-          }
-        }
-        else {
-          console.log('Unhandled error: {}', error);
-        }
-      });
-  }
-
-  unloadCustomCss() {
-    for (const style of document.head.querySelectorAll('#custom-css')) {
-      style.remove();
-    }
-  }
-
-  cleanUploadList() {
-    this.uploadList = this.uploadList.filter(e => e.status === 'in-progress');
-    this.uploadMenuIsVisible = false;
-  }
-
-  uploadStatusColor(status: string) {
-    if      (status === 'in-progress') { return 'blue';  }
-    else if (status === 'error')       { return 'red';   }
-    else if (status === 'success')     { return 'green'; }
-    else {
-      return 'gray';
-    }
-  }
-
-  uploadStatusIcon(status: string) {
-    if      (status === 'in-progress') { return 'mdi-autorenew';         }
-    else if (status === 'error')       { return 'mdi-exclamation-thick'; }
-    else if (status === 'success')     { return 'mdi-check';             }
-    else {
-      return 'mdi-help';
-    }
-  }
-
-  chooseFile() {
-    (this.$refs.fileInput as HTMLInputElement).click();
-    this.uploadMenuIsVisible = false;
-  }
-
-  uploadFiles(files: File[]) {
-    // Add the files to a FormData and uploadList
-    const fd = new FormData();
-    for (const file of files) {
-      const uuid = uuidv4();
-
-      fd.append(uuid, file);
-
-      this.uploadList.push({
-        uuid: uuid,
-        filename: file.name,
-        status: 'in-progress',
-        statusMessage: 'Being uploaded...',
-      });
-    }
-
-    // POST the FormData
-    api.uploadFiles(fd).then(res => {
-      for (const [uuid, result] of res.data) {
-        const entry = this.uploadList.find(e => e.uuid === uuid);
-        if (entry) {
-          entry.status = result;
-          entry.statusMessage = 'Successfully uploaded';
-        }
-      }
+function loadTemplates() {
+  api.listNotes()
+    .then(res => {
+      templates.value = res.data
+        .map((entry: ListEntry2) => entry.path)
+        .filter((path: string) => path.match(/\.template$/i));
     }).catch(error => {
-      for (const uuid of fd.keys()) {
-        const entry = this.uploadList.find(e => e.uuid === uuid);
-        if (entry) {
-          entry.status = 'error';
-          entry.statusMessage = error.message;
+      if (error.response) {
+        if (error.response.status === 401) {
+          // Unauthorized
+          tokenExpired(() => loadTemplates());
+        }
+        else {
+          console.log('Unhandled error: {}', error.response);
         }
       }
+      else {
+        console.log('Unhandled error: {}', error);
+      }
+    });
+}
+
+function loadCustomCss() {
+  api.getNote('.mory/custom.less')
+    .then(res => {
+      less.render(res.data, {
+        globalVars: {
+          'nav-height': '64px',
+        },
+      }).then(output => {
+        const style = document.createElement('style');
+        style.setAttribute('type', 'text/css');
+        style.setAttribute('id', 'custom-css');
+        style.innerText = output.css;
+        document.head.appendChild(style);
+      }, error => {
+        // FIXME
+        console.log(error);
+      });
+    }).catch(error => {
+      if (error.response) {
+        if (error.response.status === 401) {
+          // Unauthorized
+          tokenExpired(() => loadCustomCss());
+        }
+        else if (error.response.status === 404) {
+          // We can simply ignore the error
+        }
+        else {
+          console.log('Unhandled error: {}', error.response);
+        }
+      }
+      else {
+        console.log('Unhandled error: {}', error);
+      }
+    });
+}
+
+function unloadCustomCss() {
+  for (const style of document.head.querySelectorAll('#custom-css')) {
+    style.remove();
+  }
+}
+
+function cleanUploadList() {
+  uploadList.value = uploadList.value.filter(e => e.status === 'in-progress');
+  uploadMenuIsVisible.value = false;
+}
+
+function uploadStatusColor(status: string) {
+  if      (status === 'in-progress') { return 'blue';  }
+  else if (status === 'error')       { return 'red';   }
+  else if (status === 'success')     { return 'green'; }
+  else {
+    return 'gray';
+  }
+}
+
+function uploadStatusIcon(status: string) {
+  if      (status === 'in-progress') { return 'mdi-autorenew';         }
+  else if (status === 'error')       { return 'mdi-exclamation-thick'; }
+  else if (status === 'success')     { return 'mdi-check';             }
+  else {
+    return 'mdi-help';
+  }
+}
+
+function chooseFile() {
+  (fileInputEl.value as HTMLInputElement).click();
+  uploadMenuIsVisible.value = false;
+}
+
+function uploadFiles(files: File[]) {
+  // Add the files to a FormData and uploadList
+  const fd = new FormData();
+  for (const file of files) {
+    const uuid = uuidv4();
+
+    fd.append(uuid, file);
+
+    uploadList.value.push({
+      uuid: uuid,
+      filename: file.name,
+      status: 'in-progress',
+      statusMessage: 'Being uploaded...',
     });
   }
 
-  copyToClipboard(text: string) {
-    navigator.clipboard.writeText(text);
-  }
+  // POST the FormData
+  api.uploadFiles(fd).then(res => {
+    for (const [uuid, result] of res.data) {
+      const entry = uploadList.value.find(e => e.uuid === uuid);
+      if (entry) {
+        entry.status = result;
+        entry.statusMessage = 'Successfully uploaded';
+      }
+    }
+  }).catch(error => {
+    for (const uuid of fd.keys()) {
+      const entry = uploadList.value.find(e => e.uuid === uuid);
+      if (entry) {
+        entry.status = 'error';
+        entry.statusMessage = error.message;
+      }
+    }
+  });
+}
 
-  get noteTreeRoot() {
-    return [
-      {
-        name: 'Tags',
-        id: '',
-        context: [],
-        children: this.noteTree,
-      },
-    ];
-  }
+function copyToClipboard(text: string) {
+  navigator.clipboard.writeText(text);
+}
 
-  async populateTagChildren(item: TreeNode) {
-    const entries = await api.listNotes().then(res => res.data);
-    console.log(entries);
+async function populateTagChildren(item: TreeNode) {
+  const entries = await api.listNotes().then(res => res.data);
+  console.log(entries);
 
-    const tags: Map<string, number> = new Map();
-    for (const entry of entries) {
-      if ('metadata' in entry && entry.metadata !== null) {
-        if ('tags' in entry.metadata && entry.metadata.tags !== null) {
-          if (item.context.every((t) => entry.metadata.tags.includes(t))) {
-            for (const tag of entry.metadata.tags) {
-              tags.set(tag, (tags.get(tag) || 0) + 1);
-            }
+  const tags: Map<string, number> = new Map();
+  for (const entry of entries) {
+    if ('metadata' in entry && entry.metadata !== null) {
+      if ('tags' in entry.metadata && entry.metadata.tags !== null) {
+        if (item.context.every((t) => entry.metadata.tags.includes(t))) {
+          for (const tag of entry.metadata.tags) {
+            tags.set(tag, (tags.get(tag) || 0) + 1);
           }
         }
       }
     }
-    for (const tag of item.context) {
-      tags.delete(tag);
-    }
-    for (const tag of [...tags.entries()].sort((a, b) => b[1] - a[1]).map((x) => x[0])) {
-      const context = item.context.concat([tag]);
-      item.children.push({
-        name: tag,
-        id: context.join('/'),
-        context: context,
-        children: [],
-      });
-    }
   }
+  for (const tag of item.context) {
+    tags.delete(tag);
+  }
+  for (const tag of [...tags.entries()].sort((a, b) => b[1] - a[1]).map((x) => x[0])) {
+    const context = item.context.concat([tag]);
+    item.children.push({
+      name: tag,
+      id: context.join('/'),
+      context: context,
+      children: [],
+    });
+  }
+}
+
+// Expose properties
+defineExpose({
+  initNotification,
+  login,
+  logout,
+  tokenExpired,
+  loadTemplates,
+  loadCustomCss,
+  unloadCustomCss,
+  cleanUploadList,
+  uploadStatusColor,
+  uploadStatusIcon,
+  chooseFile,
+  uploadFiles,
+  copyToClipboard,
+  populateTagChildren,
+});
+
+// Initialize
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register(`${process.env.BASE_URL}service-worker.js`).then((registration) => {
+    console.log('Service worker registration succeeded:', registration);
+  }).catch((error) => {
+    console.error(`Service worker registration failed: ${error}`);
+  });
+
+  navigator.serviceWorker.ready
+    .then((registration) => {
+      console.log(`A service worker is active: ${registration.active}`);
+      serviceWorker.value = registration.active!;
+      serviceWorker.value.postMessage({
+        type: 'configure',
+        value: {
+          apiUrl: new URL(process.env.VUE_APP_API_URL!, window.location.href).href,
+          apiToken: token.value,
+        },
+      });
+    });
+
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data === 'configured') {
+      serviceWorkerReady.value = true;
+    }
+  });
+} else {
+  console.error('Service workers are not supported.');
 }
 </script>
 

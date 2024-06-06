@@ -43,8 +43,12 @@
   </div>
 </template>
 
-<script lang="ts">
-import { Component, Prop, Vue } from 'vue-property-decorator';
+<script lang="ts" setup>
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, defineProps, defineEmits, defineExpose } from 'vue';
+import type { Ref } from 'vue';
+
+import { useRouter, useRoute } from '@/composables/vue-router';
+import { useVuetify } from '@/composables/vuetify';
 
 import { Task } from '@/api';
 
@@ -66,34 +70,41 @@ dayjs.extend(relativeTime, {
   ],
 });
 
-@Component
-export default class TaskListItem extends Vue {
-  @Prop() readonly value!: Task;
+// Props
+const props = defineProps<{
+  value?: Task;
+}>();
 
-  get deadlineText(): string {
-    if (typeof this.value.deadline === 'string') {
-      return dayjs(this.value.deadline).endOf('day').fromNow();
-    }
-    else {
-      return '';
-    }
-  }
+// Emits
+const emit = defineEmits<{
+  (e: 'click', event: Event): void;
+  (e: 'done-toggle', event: Event): void;
+}>();
 
-  get deadlineStyle(): Record<string, string> {
-    if (!this.value.done && this.value.deadline) {
-      const now = dayjs();
-      const daysLeft = dayjs(this.value.deadline).diff(now, 'day');
-      const r = daysLeft < 7 ? 255 : 0;
-      const color = `rgb(${r}, 0, 0)`;
-      return {
-        color: color,
-      };
-    }
-    else {
-      return {};
-    }
+// Computed properties
+const deadlineText = computed((): string => {
+  if (typeof props.value.deadline === 'string') {
+    return dayjs(props.value.deadline).endOf('day').fromNow();
   }
-}
+  else {
+    return '';
+  }
+});
+
+const deadlineStyle = computed((): Record<string, string> => {
+  if (!props.value.done && props.value.deadline) {
+    const now = dayjs();
+    const daysLeft = dayjs(props.value.deadline).diff(now, 'day');
+    const r = daysLeft < 7 ? 255 : 0;
+    const color = `rgb(${r}, 0, 0)`;
+    return {
+      color: color,
+    };
+  }
+  else {
+    return {};
+  }
+});
 </script>
 
 <style scoped lang="scss">

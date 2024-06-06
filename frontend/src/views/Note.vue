@@ -1,21 +1,22 @@
 <template>
   <div id="note">
-    <EditableViewer></EditableViewer>
+    <EditableViewer v-on:tokenExpired="$emit('tokenExpired')"></EditableViewer>
   </div>
 </template>
 
-<script lang="ts">
-import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
+<script lang="ts" setup>
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, defineProps, defineEmits, defineExpose } from 'vue';
+import type { Ref } from 'vue';
+
+import { useRouter, useRoute } from '@/composables/vue-router';
+import { useVuetify } from '@/composables/vuetify';
 
 import EditableViewer from '@/components/EditableViewer.vue';
 
-@Component({
-  components: {
-    EditableViewer,
-  },
-})
-export default class Note extends Vue {
-}
+// Emits
+const emit = defineEmits<{
+  (e: 'tokenExpired', callback: () => void): void;
+}>();
 </script>
 
 <style scoped lang="scss">
