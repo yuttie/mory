@@ -23,8 +23,12 @@
   </div>
 </template>
 
-<script lang="ts">
-import { Component, Prop, Watch, Vue } from 'vue-property-decorator';
+<script lang="ts" setup>
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, defineProps, defineEmits, defineExpose } from 'vue';
+import type { Ref } from 'vue';
+
+import { useRouter, useRoute } from '@/composables/vue-router';
+import { useVuetify } from '@/composables/vuetify';
 
 import * as api from '@/api';
 import { ListEntry } from '@/api';
@@ -32,68 +36,79 @@ import Color from 'color';
 import materialColors from 'vuetify/lib/util/colors';
 import XXH from 'xxhashjs';
 
-@Component
-export default class Home extends Vue {
-  entries: ListEntry[] = [];
-  isLoading = false;
-  error = false;
-  errorText = '';
+// Emits
+const emit = defineEmits<{
+  (e: 'tokenExpired', callback: () => void): void;
+}>();
 
-  get categorizedEntries() {
-    const categorized: Map<string, ListEntry[]> = new Map();
-    for (const entry of this.entries) {
-      if (entry.metadata !== null) {
-        if (Object.prototype.hasOwnProperty.call(entry.metadata, 'tags') && Array.isArray(entry.metadata.tags)) {
-          for (const tag of entry.metadata.tags.map(String)) {
-            const match = tag.match(/^home:(.+)$/);
-            if (match) {
-              const category = match[1];
-              if (!categorized.has(category)) {
-                categorized.set(category, []);
-              }
-              categorized.get(category)!.push(entry);
+// Reactive states
+const entries: ListEntry[] = ref([]);
+const isLoading = ref(false);
+const error = ref(false);
+const errorText = ref('');
+
+// Computed properties
+const categorizedEntries = computed(() => {
+  const categorized: Map<string, ListEntry[]> = new Map();
+  for (const entry of entries.value) {
+    if (entry.metadata !== null) {
+      if (Object.prototype.hasOwnProperty.call(entry.metadata, 'tags') && Array.isArray(entry.metadata.tags)) {
+        for (const tag of entry.metadata.tags.map(String)) {
+          const match = tag.match(/^home:(.+)$/);
+          if (match) {
+            const category = match[1];
+            if (!categorized.has(category)) {
+              categorized.set(category, []);
             }
+            categorized.get(category)!.push(entry);
           }
         }
       }
     }
-    return categorized;
   }
+  return categorized;
+});
 
-  mounted() {
-    document.title = `Home | ${process.env.VUE_APP_NAME}`;
+// Lifecycle hooks
+onMounted(() => {
+  document.title = `Home | ${process.env.VUE_APP_NAME}`;
 
-    this.load();
-  }
+  load();
+});
 
-  load() {
-    this.isLoading = true;
-    api.listNotes()
-      .then(res => {
-        this.entries = res.data;
-        this.isLoading = false;
-      }).catch(error => {
-        if (error.response) {
-          if (error.response.status === 401) {
-            // Unauthorized
-            this.$emit('tokenExpired', () => this.load());
-          }
-          else {
-            this.error = true;
-            this.errorText = error.response;
-            console.log('Unhandled error: {}', error.response);
-            this.isLoading = false;
-          }
+// Methods
+function load() {
+  isLoading.value = true;
+  api.listNotes()
+    .then(res => {
+      entries.value = res.data;
+      isLoading.value = false;
+    }).catch(error => {
+      if (error.response) {
+        if (error.response.status === 401) {
+          // Unauthorized
+          emit('tokenExpired', () => load());
         }
         else {
-          this.error = true;
-          this.errorText = error.toString();
-          console.log('Unhandled error: {}', error);
-          this.isLoading = false;
+          error.value = true;
+          errorText.value = error.response;
+          console.log('Unhandled error: {}', error.response);
+          isLoading.value = false;
         }
-      });
-  }
+      }
+      else {
+        error.value = true;
+        errorText.value = error.toString();
+        console.log('Unhandled error: {}', error);
+        isLoading.value = false;
+      }
+    });
 }
+
+// Expose properties
+defineExpose({
+  load,
+});
 </script>
 
 <style scoped lang="scss">
