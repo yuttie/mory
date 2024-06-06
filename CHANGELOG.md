@@ -1,3 +1,6 @@
+## 0.16.0 (2024-06-06)
+* Migrate to Composition API toward future upgrade to Vue 3
+
 ## 0.15.0 (2024-03-27)
 * So many changes!
 
