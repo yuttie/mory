@@ -92,6 +92,19 @@ self.addEventListener('message', event => {
       }
     }
   }
+  else if (event.data.type === 'update-api-token') {
+    self.apiToken = event.data.value;
+
+    if (event.data.value !== null) {
+      self.clients.matchAll({
+        includeUncontrolled: true
+      }).then((allClients) => {
+        for (const client of allClients) {
+          client.postMessage('api-token-updated');
+        }
+      });
+    }
+  }
 });
 
 self.addEventListener('fetch', event => {
