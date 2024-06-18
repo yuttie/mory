@@ -5,7 +5,7 @@ const customAxios = axios.create({
 });
 
 export function getAxios() {
-  const token = localStorage.getItem('token');
+  const token = JSON.parse(localStorage.getItem('token') || 'null');
   if (token === null) {
     delete axios.defaults.headers.common['Authorization'];
   }
