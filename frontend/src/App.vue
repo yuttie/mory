@@ -245,7 +245,7 @@
       </v-menu>
     </v-app-bar>
 
-    <v-main v-if="appStore.serviceWorkerReady">
+    <v-main v-if="appStore.serviceWorkerConfigured && appStore.serviceWorkerHasToken">
       <v-container fluid pa-0 style="height: 100%;">
         <router-view v-if="!(!appStore.hasToken && !routerView)" v-bind:key="$route.path" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerViewEl"/>
       </v-container>
