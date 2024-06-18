@@ -1,3 +1,6 @@
+## 0.17.1 (2024-06-18)
+* Fix: Show <v-main> properly after successful login
+
 ## 0.17.0 (2024-06-18)
 * Introduce Pinia for global state management
 
