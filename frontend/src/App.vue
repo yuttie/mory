@@ -233,7 +233,7 @@
             <v-divider></v-divider>
             <v-list-item
               dense
-              v-on:click="logout"
+              v-on:click="appStore.logout()"
             >
               <v-list-item-icon>
                 <v-icon>mdi-logout</v-icon>
@@ -245,9 +245,9 @@
       </v-menu>
     </v-app-bar>
 
-    <v-main v-if="serviceWorkerReady">
+    <v-main v-if="appStore.serviceWorkerReady">
       <v-container fluid pa-0 style="height: 100%;">
-        <router-view v-if="!(!hasToken && !routerView)" v-bind:key="$route.path" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerViewEl"/>
+        <router-view v-if="!(!appStore.hasToken && !routerView)" v-bind:key="$route.path" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerViewEl"/>
       </v-container>
     </v-main>
 
@@ -275,16 +275,16 @@
       </v-btn-toggle>
     </v-app-bar>
 
-    <div v-if="!hasToken" class="login-overlay">
+    <div v-if="!appStore.hasToken" class="login-overlay">
       <div class="form">
-        <v-alert type="error" v-show="loginError">
-          {{ loginError }}
+        <v-alert type="error" v-show="appStore.loginError">
+          {{ appStore.loginError }}
         </v-alert>
         <v-icon x-large>mdi-lock</v-icon>
         <h2>Login</h2>
         <form>
           <v-text-field
-            v-on:keydown.enter="login"
+            v-on:keydown.enter="appStore.login(loginUsername, loginPassword)"
             v-model="loginUsername"
             label="Username"
             name="username"
@@ -294,7 +294,7 @@
             outlined
           ></v-text-field>
           <v-text-field
-            v-on:keydown.enter="login"
+            v-on:keydown.enter="appStore.login(loginUsername, loginPassword)"
             v-model="loginPassword"
             label="Password"
             name="password"
@@ -303,8 +303,8 @@
             outlined
           ></v-text-field>
           <v-btn
-            v-bind:loading="isLoggingIn"
-            v-on:click="login"
+            v-bind:loading="appStore.isLoggingIn"
+            v-on:click="appStore.login(loginUsername, loginPassword)"
             color="primary"
             block
             text
@@ -314,7 +314,7 @@
       </div>
     </div>
 
-    <v-overlay v-bind:value="isLoggingIn" z-index="20" opacity="0">
+    <v-overlay v-bind:value="appStore.isLoggingIn" z-index="20" opacity="0">
       <v-progress-circular indeterminate color="blue-grey lighten-3" size="64"></v-progress-circular>
     </v-overlay>
   </v-app>
@@ -326,6 +326,8 @@ import type { Ref } from 'vue';
 
 import { useRouter, useRoute } from '@/composables/vue-router';
 import { useVuetify } from '@/composables/vuetify';
+
+import { useAppStore } from '@/stores/app';
 
 import Gravatar from '@/components/Gravatar.vue';
 
@@ -346,16 +348,11 @@ interface TreeNode {
 const router = useRouter();
 const route = useRoute();
 const vuetify = useVuetify();
+const appStore = useAppStore();
 
 // Reactive states
-const hasToken = ref(!!localStorage.getItem('token'));
 const loginUsername = ref("");
 const loginPassword = ref("");
-const isLoggingIn = ref(false);
-const loginCallbacks = ref([] as (() => void)[]);
-const loginError = ref(null as null | string);
-const serviceWorker = ref(null as null | ServiceWorker);
-const serviceWorkerReady = ref(false);
 const templates = ref([] as string[]);
 const uploadList = ref([] as UploadEntry[]);
 const uploadMenuIsVisible = ref(false);
@@ -369,13 +366,9 @@ const fileInputEl = ref(null);
 const routerViewEl = ref(null);
 
 // Computed properties
-const token = computed(() => {
-  return localStorage.getItem('token');
-});
-
 const decodedToken = computed(() => {
-  if (token.value) {
-    return jwt_decode<Claim>(token.value);
+  if (appStore.token) {
+    return jwt_decode<Claim>(appStore.token);
   }
   else {
     return null;
@@ -540,59 +533,8 @@ function initNotification() {
   });
 }
 
-function login() {
-  isLoggingIn.value = true;
-
-  api.login(
-    loginUsername.value,
-    loginPassword.value,
-  ).then(res => {
-    localStorage.setItem('token', res.data);
-    hasToken.value = true;
-
-    loginUsername.value = '';
-    loginPassword.value = '';
-    isLoggingIn.value = false;
-    loginError.value = null;
-
-    nextTick(() => {
-      for (const callback of loginCallbacks.value) {
-        callback();
-      }
-      loginCallbacks.value = [];
-    });
-
-    if (serviceWorker.value) {
-      serviceWorker.value.postMessage({
-        type: 'api-token',
-        value: token.value,
-      });
-    }
-  }).catch(error => {
-    loginError.value = "Incorrect username or password";
-
-    loginPassword.value = '';
-    isLoggingIn.value = false;
-  });
-}
-
-function logout() {
-  // Delete the current token
-  localStorage.removeItem('token');
-  hasToken.value = false;
-}
-
 function tokenExpired(callback: () => void) {
-  loginCallbacks.value.push(callback);
-
-  // Delete the token and let a user to login again
-  logout();
-  if (serviceWorker.value) {
-    serviceWorker.value.postMessage({
-      type: 'api-token',
-      value: token.value,
-    });
-  }
+  appStore.invalidateToken(callback);
 }
 
 function loadTemplates() {
@@ -760,8 +702,6 @@ async function populateTagChildren(item: TreeNode) {
 // Expose properties
 defineExpose({
   initNotification,
-  login,
-  logout,
   tokenExpired,
   loadTemplates,
   loadCustomCss,
@@ -774,36 +714,6 @@ defineExpose({
   copyToClipboard,
   populateTagChildren,
 });
-
-// Initialize
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register(`${process.env.BASE_URL}service-worker.js`).then((registration) => {
-    console.log('Service worker registration succeeded:', registration);
-  }).catch((error) => {
-    console.error(`Service worker registration failed: ${error}`);
-  });
-
-  navigator.serviceWorker.ready
-    .then((registration) => {
-      console.log(`A service worker is active: ${registration.active}`);
-      serviceWorker.value = registration.active!;
-      serviceWorker.value.postMessage({
-        type: 'configure',
-        value: {
-          apiUrl: new URL(process.env.VUE_APP_API_URL!, window.location.href).href,
-          apiToken: token.value,
-        },
-      });
-    });
-
-  navigator.serviceWorker.addEventListener('message', (event) => {
-    if (event.data === 'configured') {
-      serviceWorkerReady.value = true;
-    }
-  });
-} else {
-  console.error('Service workers are not supported.');
-}
 </script>
 
 <style scoped lang="scss">
