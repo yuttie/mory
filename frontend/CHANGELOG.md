@@ -1,3 +1,6 @@
+## 0.17.0 (2024-06-18)
+* Introduce Pinia for global state management
+
 ## 0.16.0 (2024-06-06)
 * Migrate to Composition API toward future upgrade to Vue 3
 
