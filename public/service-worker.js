@@ -62,34 +62,30 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('message', event => {
   if (event.data.type === 'configure') {
     const config = event.data.value;
-    if (config.apiUrl) {
-      self.apiUrl = config.apiUrl;
-      self.filesUrl = new URL('files/', self.apiUrl).href;
-    }
-    if (config.apiToken) {
-      self.apiToken = config.apiToken;
-    }
-    if (self.apiUrl && self.apiToken) {
-      event.waitUntil((async () => {
-        const allClients = await self.clients.matchAll({
-          includeUncontrolled: true
-        });
 
-        for (const client of allClients) {
-          client.postMessage('configured');
-        }
-      })());
+    self.apiUrl = config.apiUrl;
+    self.filesUrl = new URL('files/', self.apiUrl).href;
+    self.apiToken = config.apiToken;
 
-      // Start event watching
-      if (!self.events) {
-        self.events = [];
+    event.waitUntil((async () => {
+      const allClients = await self.clients.matchAll({
+        includeUncontrolled: true
+      });
+
+      for (const client of allClients) {
+        client.postMessage('configured');
       }
-      if (!self.updateEventsThread) {
-        self.updateEventsThread = setTimeout(updateEvents, 0);
-      }
-      if (!self.checkEventsThread) {
-        self.checkEventsThread = setTimeout(checkEvents, 0);
-      }
+    })());
+
+    // Start event watching
+    if (!self.events) {
+      self.events = [];
+    }
+    if (!self.updateEventsThread) {
+      self.updateEventsThread = setTimeout(updateEvents, 0);
+    }
+    if (!self.checkEventsThread) {
+      self.checkEventsThread = setTimeout(checkEvents, 0);
     }
   }
   else if (event.data.type === 'update-api-token') {

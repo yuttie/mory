@@ -13,7 +13,8 @@ export const useAppStore = defineStore('app', () => {
   const isLoggingIn = ref(false);
   const loginError: Ref<null | string> = ref(null);
   const serviceWorker: Ref<null | ServiceWorker> = ref(null);
-  const serviceWorkerReady = ref(false);
+  const serviceWorkerConfigured = ref(false);
+  const serviceWorkerHasToken = ref(false);
 
   // Getters
   const hasToken = computed(() => !!token.value);
@@ -86,13 +87,18 @@ export const useAppStore = defineStore('app', () => {
 
     navigator.serviceWorker.addEventListener('message', (event) => {
       if (event.data === 'configured') {
-        serviceWorkerReady.value = true;
+        serviceWorkerConfigured.value = true;
+        serviceWorkerHasToken.value = token.value !== null;
       }
       else if (event.data === 'api-token-updated') {
-        for (const callback of loginCallbacks.value) {
-          callback();
+        serviceWorkerHasToken.value = token.value !== null;
+
+        if (serviceWorkerHasToken.value) {
+          for (const callback of loginCallbacks.value) {
+            callback();
+          }
+          loginCallbacks.value.length = 0;
         }
-        loginCallbacks.value.length = 0;
       }
     });
   } else {
@@ -106,7 +112,8 @@ export const useAppStore = defineStore('app', () => {
     isLoggingIn,
     loginError,
     serviceWorker,
-    serviceWorkerReady,
+    serviceWorkerConfigured,
+    serviceWorkerHasToken,
     // Getters
     hasToken,
     // Actions
