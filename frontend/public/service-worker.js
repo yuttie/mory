@@ -95,7 +95,7 @@ self.addEventListener('message', event => {
   else if (event.data.type === 'update-api-token') {
     self.apiToken = event.data.value;
 
-    if (event.data.value !== null) {
+    if (self.apiToken !== null) {
       self.clients.matchAll({
         includeUncontrolled: true
       }).then((allClients) => {
