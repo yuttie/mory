@@ -245,7 +245,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick, defineProps, defineEmits, defineExpose, Vue } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, defineProps, defineEmits, defineExpose, del } from 'vue';
 import type { Ref } from 'vue';
 
 import { useRouter, useRoute } from '@/composables/vue-router';
@@ -735,18 +735,18 @@ function clean() {
   for (const task of tasks.value.backlog) {
     for (const [prop, value] of Object.entries(task)) {
       if (value === null) {
-        Vue.delete(task, prop);
+        del(task, prop);
       }
     }
   }
   for (const [date, dailyTasks] of Object.entries(tasks.value.scheduled)) {
     if ((dailyTasks as Task[]).length === 0) {
-      Vue.delete(tasks.value.scheduled, date);
+      del(tasks.value.scheduled, date);
     }
     for (const task of dailyTasks) {
       for (const [prop, value] of Object.entries(task)) {
         if (value === null) {
-          Vue.delete(task, prop);
+          del(task, prop);
         }
       }
     }
