@@ -1,3 +1,6 @@
+## 0.17.3 (2024-06-20)
+* Update @vue/cli-* packages with `vue upgrade`
+
 ## 0.17.2 (2024-06-20)
 * Fix: Use `del` insetad of `Vue.delete`
 
