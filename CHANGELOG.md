@@ -1,3 +1,6 @@
+## 0.17.2 (2024-06-20)
+* Fix: Use `del` insetad of `Vue.delete`
+
 ## 0.17.1 (2024-06-18)
 * Fix: Show <v-main> properly after successful login
 
