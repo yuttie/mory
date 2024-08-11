@@ -1,6 +1,7 @@
 import { unified } from 'unified';
 import remarkParse from 'remark-parse';
 import remarkGfm from 'remark-gfm';
+import { remarkDefinitionList, defListHastHandlers } from 'remark-definition-list';
 import remarkMath from 'remark-math';
 import remarkRehype from 'remark-rehype';
 import rehypeSlug from 'rehype-slug';
@@ -22,8 +23,13 @@ import Prism from 'prismjs';
 const processor = unified()
   .use(remarkParse)
   .use(remarkGfm)
+  .use(remarkDefinitionList)
   .use(remarkMath)
-  .use(remarkRehype)
+  .use(remarkRehype, {
+    handlers: {
+      ...defListHastHandlers,
+    },
+  })
   .use(rehypeSlug)
   .use(rehypeAutolinkHeadings, {
     properties: {
