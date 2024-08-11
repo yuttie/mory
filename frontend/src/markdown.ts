@@ -8,6 +8,7 @@ import rehypeSlug from 'rehype-slug';
 import rehypeAutolinkHeadings from 'rehype-autolink-headings';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeMathjaxChtml from 'rehype-mathjax/chtml';
+import rehypeMermaid from 'rehype-mermaid';
 import rehypeStringify from 'rehype-stringify';
 import { all } from 'lowlight';
 
@@ -46,10 +47,13 @@ const processor = unified()
       fontURL: 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/output/chtml/fonts/woff-v2',
     },
   })
+  .use(rehypeMermaid, {
+    strategy: 'inline-svg',
+  })
   .use(rehypeStringify);
 
-function renderMarkdown(markdown: string): string {
-  const file = processor.processSync(markdown);
+async function renderMarkdown(markdown: string): Promise<string> {
+  const file = await processor.process(markdown);
   const html = String(file);
   return html;
 }

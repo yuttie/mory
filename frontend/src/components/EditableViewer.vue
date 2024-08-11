@@ -461,7 +461,7 @@ const newPathValidationResult = computed((): boolean | string => {
 });
 
 // Lifecycle hooks
-onMounted(() => {
+onMounted(async () => {
   const highlightjsTheme = loadConfigValue('highlightjs-theme', 'default');
   loadHighlightjsTheme(highlightjsTheme);
 
@@ -479,7 +479,7 @@ onMounted(() => {
 
   if (route.query.mode === 'create') {
     if (route.query.template) {
-      loadTemplate(route.query.template as string);
+      await loadTemplate(route.query.template as string);
     }
     else {
       text.value = `---
@@ -497,7 +497,7 @@ events:
     }
   }
   else {
-    load(route.params.path);
+    await load(route.params.path);
   }
 
   if (!/\.(md|markdown)$/i.test(route.params.path)) {
@@ -702,7 +702,7 @@ function formatTable() {
   }
 }
 
-function updateRendered() {
+async function updateRendered() {
   const textValue = text.value;
 
   // Split the note text into a YAML part and a body part
@@ -745,7 +745,7 @@ function updateRendered() {
   }
 
   // Render the body
-  const renderedHtml = renderMarkdown(body);
+  const renderedHtml = await renderMarkdown(body);
   ignoreNext.value = true;
 
   // Parse a YAML part
@@ -836,8 +836,8 @@ function updateRenderedLazy() {
     window.clearTimeout(renderTimeoutId.value);
     renderTimeoutId.value = null;
   }
-  renderTimeoutId.value = window.setTimeout(() => {
-    updateRendered();
+  renderTimeoutId.value = window.setTimeout(async () => {
+    await updateRendered();
   }, 500);
 }
 
@@ -1007,17 +1007,17 @@ function checkUpstreamState() {
     });
 }
 
-function load(path: string) {
+async function load(path: string) {
   isLoading.value = true;
-  api.getNote(path)
-    .then(res => {
+  await api.getNote(path)
+    .then(async res => {
       text.value = res.data;
       initialText.value = text.value;
       upstreamState.value = 'same';
       noteHasUpstream.value = true;
 
       // Update immediately
-      updateRendered();
+      await updateRendered();
 
       // Jump to a header if specified
       if (route.hash) {
@@ -1036,8 +1036,8 @@ function load(path: string) {
       if (error.response) {
         if (error.response.status === 401) {
           // Unauthorized
-          emit('tokenExpired', () => {
-            load(path);
+          emit('tokenExpired', async () => {
+            await load(path);
             focusOrBlurEditor();
           });
         }
@@ -1062,17 +1062,17 @@ function load(path: string) {
     });
 }
 
-function loadTemplate(path: string) {
+async function loadTemplate(path: string) {
   isLoading.value = true;
-  api.getNote(path)
-    .then(res => {
+  await api.getNote(path)
+    .then(async res => {
       text.value = res.data;
       initialText.value = text.value;
       editorIsVisible.value = true;
       (editor.value as Editor | HTMLTextAreaElement).focus();
 
       // Update immediately
-      updateRendered();
+      await updateRendered();
 
       isLoading.value = false;
       notFound.value = false;
@@ -1080,8 +1080,8 @@ function loadTemplate(path: string) {
       if (error.response) {
         if (error.response.status === 401) {
           // Unauthorized
-          emit('tokenExpired', () => {
-            load(path);
+          emit('tokenExpired', async () => {
+            await load(path);
             focusOrBlurEditor();
           });
         }
@@ -1106,8 +1106,8 @@ function loadTemplate(path: string) {
     });
 }
 
-function reload() {
-  load(route.params.path);
+async function reload() {
+  await load(route.params.path);
 }
 
 function toggleEditor() {
@@ -1411,9 +1411,9 @@ function rename() {
 }
 
 // Watchers
-watch(viewerIsVisible, (newValue: boolean, oldValue: boolean) => {
+watch(viewerIsVisible, async (newValue: boolean, oldValue: boolean) => {
   if (!oldValue && newValue) {
-    updateRendered();
+    await updateRendered();
   }
 });
 
