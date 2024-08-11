@@ -1,3 +1,9 @@
+import { unified } from 'unified';
+import remarkParse from 'remark-parse';
+import remarkGfm from 'remark-gfm';
+import remarkRehype from 'remark-rehype';
+import rehypeStringify from 'rehype-stringify';
+
 import MarkdownIt from 'markdown-it';
 import mdit_anchor from 'markdown-it-anchor';
 import mdit_container from 'markdown-it-container';
@@ -6,6 +12,18 @@ const mdit_task_lists = require('markdown-it-task-lists');  // eslint-disable-li
 import markdownItMermaid from '@liradb2000/markdown-it-mermaid';
 import Prism from 'prismjs';
 
+
+const processor = unified()
+  .use(remarkParse)
+  .use(remarkGfm)
+  .use(remarkRehype)
+  .use(rehypeStringify);
+
+function renderMarkdown(markdown: string): string {
+  const file = processor.processSync(markdown);
+  const html = String(file);
+  return html;
+}
 
 const mdit = new MarkdownIt('default', {
   html: true,
@@ -265,4 +283,4 @@ mdit.use(mdit_deflist);
 mdit.use(mdit_task_lists);
 mdit.use(markdownItMermaid);
 
-export { mdit, updateMetadataLineCount };
+export { mdit, updateMetadataLineCount, renderMarkdown };
