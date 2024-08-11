@@ -2,7 +2,9 @@ import { unified } from 'unified';
 import remarkParse from 'remark-parse';
 import remarkGfm from 'remark-gfm';
 import remarkRehype from 'remark-rehype';
+import rehypeHighlight from 'rehype-highlight';
 import rehypeStringify from 'rehype-stringify';
+import { all } from 'lowlight';
 
 import MarkdownIt from 'markdown-it';
 import mdit_anchor from 'markdown-it-anchor';
@@ -17,6 +19,9 @@ const processor = unified()
   .use(remarkParse)
   .use(remarkGfm)
   .use(remarkRehype)
+  .use(rehypeHighlight, {
+    languages: all,
+  })
   .use(rehypeStringify);
 
 function renderMarkdown(markdown: string): string {
