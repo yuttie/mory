@@ -306,7 +306,7 @@ import Ajv, { JSONSchemaType, DefinedError } from 'ajv';
 import * as api from '@/api';
 import { loadConfigValue, saveConfigValue } from '@/config';
 import { CliPrettify } from 'markdown-table-prettify';
-import { mdit, updateMetadataLineCount } from '@/markdown';
+import { mdit, updateMetadataLineCount, renderMarkdown } from '@/markdown';
 import YAML from 'yaml';
 
 declare const MathJax: any;
@@ -642,7 +642,7 @@ function updateRendered() {
   }
 
   // Render the body
-  const renderedHtml = mdit.render(body);
+  const renderedHtml = renderMarkdown(body);
   ignoreNext.value = true;
 
   // Parse a YAML part
