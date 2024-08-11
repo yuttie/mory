@@ -3,6 +3,8 @@ import remarkParse from 'remark-parse';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import remarkRehype from 'remark-rehype';
+import rehypeSlug from 'rehype-slug';
+import rehypeAutolinkHeadings from 'rehype-autolink-headings';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeMathjaxChtml from 'rehype-mathjax/chtml';
 import rehypeStringify from 'rehype-stringify';
@@ -22,6 +24,14 @@ const processor = unified()
   .use(remarkGfm)
   .use(remarkMath)
   .use(remarkRehype)
+  .use(rehypeSlug)
+  .use(rehypeAutolinkHeadings, {
+    properties: {
+      ariaHidden: true,
+      tabIndex: -1,
+      class: 'header-anchor mdi mdi-link-variant',
+    },
+  })
   .use(rehypeHighlight, {
     languages: all,
   })
