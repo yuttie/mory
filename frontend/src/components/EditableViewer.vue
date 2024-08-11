@@ -309,8 +309,6 @@ import { CliPrettify } from 'markdown-table-prettify';
 import { mdit, updateMetadataLineCount, renderMarkdown } from '@/markdown';
 import YAML from 'yaml';
 
-declare const MathJax: any;
-
 const ajv = new Ajv();
 const validateMetadata = ajv.compile(metadataSchema);
 
@@ -347,7 +345,6 @@ const notFound = ref(false);
 const showConfirmationDialog = ref(false);
 const error = ref(false);
 const errorText = ref('');
-const mathjaxTypesetPromise = ref(Promise.resolve());
 const renderTimeoutId = ref(null as null | number);
 
 // Refs
@@ -829,11 +826,6 @@ function updateRendered() {
   // update it reactively, otherwise MathJax will not be able to see the new
   // content.
   (renderedContent.value as Element).innerHTML = rendered.value.content;
-
-  // Schedule math rendering
-  mathjaxTypesetPromise.value = mathjaxTypesetPromise.value.then(() => {
-    return MathJax.typesetPromise([renderedContent.value]);
-  });
 
   // Update the page title
   document.title = `${title.value} | ${process.env.VUE_APP_NAME}`;

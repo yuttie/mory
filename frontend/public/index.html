@@ -7,18 +7,6 @@
     <link rel="icon" type="image/png" href="<%= BASE_URL %>favicon.png" sizes="512x512">
     <link rel="apple-touch-icon" href="<%= BASE_URL %>img/icons/apple-touch-icon-180x180.png">
     <link rel="manifest" href="<%= BASE_URL %>manifest.json">
-    <script>
-      'use strict';
-      window.MathJax = {
-        tex: {
-          inlineMath: [['$', '$'], ['\\(', '\\)']],
-          processEscapes: true,
-        },
-        options: {
-        },
-      };
-    </script>
-    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js"></script>
     <title><%= htmlWebpackPlugin.options.title %></title>
     <style>
       /* Disable Vuetify's styles for rendered note content.

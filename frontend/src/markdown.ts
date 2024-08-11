@@ -1,8 +1,10 @@
 import { unified } from 'unified';
 import remarkParse from 'remark-parse';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
 import remarkRehype from 'remark-rehype';
 import rehypeHighlight from 'rehype-highlight';
+import rehypeMathjaxChtml from 'rehype-mathjax/chtml';
 import rehypeStringify from 'rehype-stringify';
 import { all } from 'lowlight';
 
@@ -18,9 +20,15 @@ import Prism from 'prismjs';
 const processor = unified()
   .use(remarkParse)
   .use(remarkGfm)
+  .use(remarkMath)
   .use(remarkRehype)
   .use(rehypeHighlight, {
     languages: all,
+  })
+  .use(rehypeMathjaxChtml, {
+    chtml: {
+      fontURL: 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/output/chtml/fonts/woff-v2',
+    },
   })
   .use(rehypeStringify);
 
