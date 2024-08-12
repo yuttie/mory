@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm';
 import { remarkDefinitionList, defListHastHandlers } from 'remark-definition-list';
 import remarkMath from 'remark-math';
 import remarkRehype from 'remark-rehype';
+import myRehypeEmbedLineNumbers from '@/rehype-embed-line-numbers';
 import rehypeUrlInspector from '@jsdevtools/rehype-url-inspector';
 import rehypeSlug from 'rehype-slug';
 import rehypeAutolinkHeadings from 'rehype-autolink-headings';
@@ -39,6 +40,7 @@ const processor = unified()
       ...defListHastHandlers,
     },
   })
+  .use(myRehypeEmbedLineNumbers)
   .use(rehypeUrlInspector, {
     inspectEach: ({ url, propertyName, node }) => {
       if (node.tagName === 'img' && propertyName === 'src' && node.properties) {
