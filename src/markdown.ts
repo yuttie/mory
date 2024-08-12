@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { remarkDefinitionList, defListHastHandlers } from 'remark-definition-list';
 import remarkMath from 'remark-math';
 import remarkRehype from 'remark-rehype';
+import rehypeUrlInspector from '@jsdevtools/rehype-url-inspector';
 import rehypeSlug from 'rehype-slug';
 import rehypeAutolinkHeadings from 'rehype-autolink-headings';
 import rehypeHighlight from 'rehype-highlight';
@@ -21,6 +22,8 @@ import markdownItMermaid from '@liradb2000/markdown-it-mermaid';
 import Prism from 'prismjs';
 
 
+const apiFilesUrl = new URL('files/', new URL(process.env.VUE_APP_API_URL!, window.location.href)).href;
+
 const processor = unified()
   .use(remarkParse)
   .use(remarkGfm)
@@ -29,6 +32,15 @@ const processor = unified()
   .use(remarkRehype, {
     handlers: {
       ...defListHastHandlers,
+    },
+  })
+  .use(rehypeUrlInspector, {
+    inspectEach: ({ url, propertyName, node }) => {
+      if (node.tagName === 'img' && propertyName === 'src' && node.properties) {
+        if (!/^(\/|https?:\/\/)/.test(url)) {
+          node.properties[propertyName] = apiFilesUrl + url;
+        }
+      }
     },
   })
   .use(rehypeSlug)
