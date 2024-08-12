@@ -307,7 +307,6 @@ import * as api from '@/api';
 import { loadConfigValue, saveConfigValue } from '@/config';
 import { CliPrettify } from 'markdown-table-prettify';
 import { mdit, updateMetadataLineCount, renderMarkdown } from '@/markdown';
-import YAML from 'yaml';
 
 const ajv = new Ajv();
 const validateMetadata = ajv.compile(metadataSchema);
@@ -703,65 +702,12 @@ function formatTable() {
 }
 
 async function updateRendered() {
-  const textValue = text.value;
-
-  // Split the note text into a YAML part and a body part
-  const [yaml, body] = ((): [null | string, string] => {
-    if (textValue.startsWith('---\n')) {
-      const endMarkerIndex = textValue.indexOf('\n---\n', 4);
-      if (endMarkerIndex >= 0) {
-        const yaml = textValue.slice(4, endMarkerIndex);
-        const body = textValue.slice(endMarkerIndex + '\n---\n'.length);
-        return [yaml, body];
-      }
-      else {
-        return [null, textValue];
-      }
-    }
-    else {
-      return [null, textValue];
-    }
-  })();
-
-  // Memorize the number of lines of metadata block
-  if (yaml !== null) {
-    // Count the lines including '---'
-    let count = 2;  // Opening '---' and its next line
-    let start = 0;
-    let i = 0;
-    while (true) {  // eslint-disable-line no-constant-condition
-      const i = yaml.indexOf('\n', start);
-      if (i === -1) {
-        break;
-      }
-      else {
-        count += 1;
-        start = i + 1;
-      }
-    }
-    count += 1;  // Closing '---'
-    // Memorize it
-    updateMetadataLineCount(count);
-  }
-
   // Render the body
-  const renderedHtml = await renderMarkdown(body);
+  const renderedFile = await renderMarkdown(text.value);
+  const renderedHtml = String(renderedFile);
+  const metadata = renderedFile.data.matter;
+  const parseError = renderedFile.data.matterParseError;
   ignoreNext.value = true;
-
-  // Parse a YAML part
-  const [parseError, metadata] = (() => {
-    if (yaml !== null) {
-      try {
-        return [null, YAML.parse(yaml)];
-      }
-      catch (err) {
-        return [err, null];
-      }
-    }
-    else {
-      return [null, null];
-    }
-  })();
 
   // Validate metadata
   const validationErrors = (() => {

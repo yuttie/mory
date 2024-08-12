@@ -1,5 +1,7 @@
 import { unified } from 'unified';
 import remarkParse from 'remark-parse';
+import remarkFrontmatter from 'remark-frontmatter';
+import myRemarkYamlFrontmatter from '@/remark-yaml-frontmatter';
 import remarkGfm from 'remark-gfm';
 import { remarkDefinitionList, defListHastHandlers } from 'remark-definition-list';
 import remarkMath from 'remark-math';
@@ -12,6 +14,7 @@ import rehypeMathjaxChtml from 'rehype-mathjax/chtml';
 import rehypeMermaid from 'rehype-mermaid';
 import rehypeStringify from 'rehype-stringify';
 import { all } from 'lowlight';
+import type { VFile } from 'vfile';
 
 import MarkdownIt from 'markdown-it';
 import mdit_anchor from 'markdown-it-anchor';
@@ -26,6 +29,8 @@ const apiFilesUrl = new URL('files/', new URL(process.env.VUE_APP_API_URL!, wind
 
 const processor = unified()
   .use(remarkParse)
+  .use(remarkFrontmatter)
+  .use(myRemarkYamlFrontmatter)
   .use(remarkGfm)
   .use(remarkDefinitionList)
   .use(remarkMath)
@@ -64,10 +69,9 @@ const processor = unified()
   })
   .use(rehypeStringify);
 
-async function renderMarkdown(markdown: string): Promise<string> {
+async function renderMarkdown(markdown: string): Promise<VFile> {
   const file = await processor.process(markdown);
-  const html = String(file);
-  return html;
+  return file;
 }
 
 const mdit = new MarkdownIt('default', {
