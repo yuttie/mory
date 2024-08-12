@@ -464,9 +464,6 @@ onMounted(async () => {
   const highlightjsTheme = loadConfigValue('highlightjs-theme', 'default');
   loadHighlightjsTheme(highlightjsTheme);
 
-  const prismTheme = loadConfigValue('prism-theme', null);
-  loadPrismTheme(prismTheme);
-
   document.title = `${title.value} | ${process.env.VUE_APP_NAME}`;
 
   window.addEventListener('focus', notifyUpstreamState);
@@ -625,36 +622,6 @@ function loadHighlightjsTheme(themeName: string) {
     'zenburn': () => { import('highlight.js/styles/zenburn.css'); },
   };
   loaders[themeName]();
-}
-
-function loadPrismTheme(theme: string | null) {
-  if      (theme === 'a11y-dark')                        { import('prism-themes/themes/prism-a11y-dark.css');                       }
-  else if (theme === 'atom-dark')                        { import('prism-themes/themes/prism-atom-dark.css');                       }
-  else if (theme === 'base16-atelier-sulphurpool-light') { import('prism-themes/themes/prism-base16-ateliersulphurpool.light.css'); }
-  else if (theme === 'cb')                               { import('prism-themes/themes/prism-cb.css');                              }
-  else if (theme === 'coldark-cold')                     { import('prism-themes/themes/prism-coldark-cold.css');                    }
-  else if (theme === 'coldark-dark')                     { import('prism-themes/themes/prism-coldark-dark.css');                    }
-  else if (theme === 'coy-without-shadows')              { import('prism-themes/themes/prism-coy-without-shadows.css');             }
-  else if (theme === 'darcula')                          { import('prism-themes/themes/prism-darcula.css');                         }
-  else if (theme === 'dracula')                          { import('prism-themes/themes/prism-dracula.css');                         }
-  else if (theme === 'duotone-dark')                     { import('prism-themes/themes/prism-duotone-dark.css');                    }
-  else if (theme === 'duotone-earth')                    { import('prism-themes/themes/prism-duotone-earth.css');                   }
-  else if (theme === 'duotone-forest')                   { import('prism-themes/themes/prism-duotone-forest.css');                  }
-  else if (theme === 'duotone-light')                    { import('prism-themes/themes/prism-duotone-light.css');                   }
-  else if (theme === 'duotone-sea')                      { import('prism-themes/themes/prism-duotone-sea.css');                     }
-  else if (theme === 'duotone-space')                    { import('prism-themes/themes/prism-duotone-space.css');                   }
-  else if (theme === 'ghcolors')                         { import('prism-themes/themes/prism-ghcolors.css');                        }
-  else if (theme === 'hopscotch')                        { import('prism-themes/themes/prism-hopscotch.css');                       }
-  else if (theme === 'material-dark')                    { import('prism-themes/themes/prism-material-dark.css');                   }
-  else if (theme === 'material-light')                   { import('prism-themes/themes/prism-material-light.css');                  }
-  else if (theme === 'material-oceanic')                 { import('prism-themes/themes/prism-material-oceanic.css');                }
-  else if (theme === 'nord')                             { import('prism-themes/themes/prism-nord.css');                            }
-  else if (theme === 'pojoaque')                         { import('prism-themes/themes/prism-pojoaque.css');                        }
-  else if (theme === 'shades-of-purple')                 { import('prism-themes/themes/prism-shades-of-purple.css');                }
-  else if (theme === 'synthwave84')                      { import('prism-themes/themes/prism-synthwave84.css');                     }
-  else if (theme === 'vs')                               { import('prism-themes/themes/prism-vs.css');                              }
-  else if (theme === 'vsc-dark-plus')                    { import('prism-themes/themes/prism-vsc-dark-plus.css');                   }
-  else if (theme === 'xonokai')                          { import('prism-themes/themes/prism-xonokai.css');                         }
 }
 
 function insertText(newText: string) {
