@@ -306,7 +306,7 @@ import Ajv, { JSONSchemaType, DefinedError } from 'ajv';
 import * as api from '@/api';
 import { loadConfigValue, saveConfigValue } from '@/config';
 import { CliPrettify } from 'markdown-table-prettify';
-import { mdit, updateMetadataLineCount, renderMarkdown } from '@/markdown';
+import { renderMarkdown } from '@/markdown';
 
 const ajv = new Ajv();
 const validateMetadata = ajv.compile(metadataSchema);
