@@ -842,19 +842,22 @@ function handleDocumentScroll() {
 
   // Find the interval where the `scrollTop` belongs to
   const scrollTop = document.documentElement.scrollTop;
-  let i = 0;
-  for (; i < scrollMap.length - 1; ++i) {
+  let intervalIndex = null;
+  for (let i = 0; i < scrollMap.length - 1; ++i) {
     if (scrollMap[i][1] <= scrollTop && scrollTop < scrollMap[i + 1][1]) {
+      intervalIndex = i;
       break;
     }
   }
-  const [lineNumber1, offset1] = scrollMap[i];
-  const [lineNumber2, offset2] = scrollMap[i + 1];
+  if (intervalIndex !== null) {
+    const [lineNumber1, offset1] = scrollMap[intervalIndex];
+    const [lineNumber2, offset2] = scrollMap[intervalIndex + 1];
 
-  // Scroll to the line
-  const lineNumber = lineNumber1 + (lineNumber2 - lineNumber1) * (scrollTop - offset1) / (offset2 - offset1);
-  editorScrollTo(lineNumber);
-  ignoreNext.value = true;
+    // Scroll to the line
+    const lineNumber = lineNumber1 + (lineNumber2 - lineNumber1) * (scrollTop - offset1) / (offset2 - offset1);
+    editorScrollTo(lineNumber);
+    ignoreNext.value = true;
+  }
 }
 
 function onEditorChange(newText: string) {
@@ -911,19 +914,22 @@ function onEditorScroll(lineNumber: number) {
   }
 
   // Find the interval where the given line number belongs to
-  let i = 0;
-  for (; i < scrollMap.length - 1; ++i) {
+  let intervalIndex = null;
+  for (let i = 0; i < scrollMap.length - 1; ++i) {
     if (scrollMap[i][0] <= lineNumber && lineNumber < scrollMap[i + 1][0]) {
+      intervalIndex = i;
       break;
     }
   }
-  const [lineNumber1, offset1] = scrollMap[i];
-  const [lineNumber2, offset2] = scrollMap[i + 1];
+  if (intervalIndex !== null) {
+    const [lineNumber1, offset1] = scrollMap[intervalIndex];
+    const [lineNumber2, offset2] = scrollMap[intervalIndex + 1];
 
-  // Scroll by an offset
-  const offset = offset1 + (offset2 - offset1) * (lineNumber - lineNumber1) / (lineNumber2 - lineNumber1);
-  document.documentElement.scrollTo({ top: offset, left: 0, behavior: 'auto' });
-  ignoreNext.value = true;
+    // Scroll by an offset
+    const offset = offset1 + (offset2 - offset1) * (lineNumber - lineNumber1) / (lineNumber2 - lineNumber1);
+    document.documentElement.scrollTo({ top: offset, left: 0, behavior: 'auto' });
+    ignoreNext.value = true;
+  }
 }
 
 function checkUpstreamState() {
