@@ -1462,10 +1462,10 @@ $navigation-drawer-width: 56px;
 
 .panes.onlyEditor {
   .editor-pane {
-    width: calc(100% - $navigation-drawer-width);
+    width: calc(100% - #{$navigation-drawer-width});
   }
   &.mdAndUp .editor-pane {
-    width: calc(100% - 300px - $navigation-drawer-width);
+    width: calc(100% - 300px - #{$navigation-drawer-width});
   }
 
   .viewer-pane {
@@ -1492,10 +1492,10 @@ $navigation-drawer-width: 56px;
     width: 50%;
   }
   &.smAndUp .editor-pane {
-    width: calc((100% - $navigation-drawer-width) / 2);
+    width: calc((100% - #{$navigation-drawer-width}) / 2);
   }
   &.mdAndUp .editor-pane {
-    width: calc((100% - 300px - $navigation-drawer-width) / 2);
+    width: calc((100% - 300px - #{$navigation-drawer-width}) / 2);
   }
 
   .viewer-pane {
