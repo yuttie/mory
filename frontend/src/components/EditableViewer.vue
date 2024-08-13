@@ -463,7 +463,31 @@ const newPathValidationResult = computed((): boolean | string => {
 
 // Lifecycle hooks
 onMounted(async () => {
+  // Attach a shadow DOM
   shadowRoot.value = shadowDomRootElement.value.attachShadow({ mode: 'open' });
+
+  // Load CSSs that are used within the shadow DOM
+  const highlightjsTheme = loadConfigValue('highlightjs-theme', 'default');
+  await loadHighlightjsTheme(highlightjsTheme)
+    .then((themeCss) => {
+      const styleElement = document.createElement('style');
+      styleElement.textContent = themeCss;
+      shadowRoot.value.appendChild(styleElement);
+    })
+    .catch((err) => {
+      console.error(err);
+    });
+  await loadCustomNoteCss()
+    .then((customNoteCss) => {
+      const styleElement = document.createElement('style');
+      styleElement.textContent = customNoteCss;
+      shadowRoot.value.appendChild(styleElement);
+    })
+    .catch((err) => {
+      console.error(err);
+    });
+
+  // Setup <div> that displays a rendered notes
   renderedContentDiv.value = document.createElement('div');
   renderedContentDiv.value.setAttribute('class', 'rendered-content flex-grow-1');
   shadowRoot.value.appendChild(renderedContentDiv.value);
@@ -749,25 +773,6 @@ async function updateRendered() {
   // update it reactively, otherwise MathJax will not be able to see the new
   // content.
   renderedContentDiv.value.innerHTML = rendered.value.content;
-  const highlightjsTheme = loadConfigValue('highlightjs-theme', 'default');
-  await loadHighlightjsTheme(highlightjsTheme)
-    .then((themeCss) => {
-      const styleElement = document.createElement('style');
-      styleElement.textContent = themeCss;
-      renderedContentDiv.value.appendChild(styleElement);
-    })
-    .catch((err) => {
-      console.error(err);
-    });
-  await loadCustomNoteCss()
-    .then((customNoteCss) => {
-      const styleElement = document.createElement('style');
-      styleElement.textContent = customNoteCss;
-      renderedContentDiv.value.appendChild(styleElement);
-    })
-    .catch((err) => {
-      console.error(err);
-    });
 
   // Update the page title
   document.title = `${title.value} | ${process.env.VUE_APP_NAME}`;
