@@ -307,6 +307,7 @@ import * as api from '@/api';
 import { loadConfigValue, saveConfigValue } from '@/config';
 import { CliPrettify } from 'markdown-table-prettify';
 import { renderMarkdown } from '@/markdown';
+import less from 'less';
 
 const ajv = new Ajv();
 const validateMetadata = ajv.compile(metadataSchema);
@@ -349,6 +350,7 @@ const renderTimeoutId = ref(null as null | number);
 // Refs
 const editor = ref(null);
 const renderedContent = ref(null);
+const shadowRoot = ref(null);
 
 // Computed properties
 const editorMode = computed(() => {
@@ -461,8 +463,7 @@ const newPathValidationResult = computed((): boolean | string => {
 
 // Lifecycle hooks
 onMounted(async () => {
-  const highlightjsTheme = loadConfigValue('highlightjs-theme', 'default');
-  loadHighlightjsTheme(highlightjsTheme);
+  shadowRoot.value = renderedContent.value.attachShadow({ mode: 'open' });
 
   document.title = `${title.value} | ${process.env.VUE_APP_NAME}`;
 
@@ -521,107 +522,113 @@ onUnmounted(() => {
 });
 
 // Methods
-function loadHighlightjsTheme(themeName: string) {
+async function loadHighlightjsTheme(themeName: string): Promise<string> {
   const loaders = {
-    'a11y-dark': () => { import('highlight.js/styles/a11y-dark.css'); },
-    'a11y-light': () => { import('highlight.js/styles/a11y-light.css'); },
-    'agate': () => { import('highlight.js/styles/agate.css'); },
-    'an-old-hope': () => { import('highlight.js/styles/an-old-hope.css'); },
-    'androidstudio': () => { import('highlight.js/styles/androidstudio.css'); },
-    'arduino-light': () => { import('highlight.js/styles/arduino-light.css'); },
-    'arta': () => { import('highlight.js/styles/arta.css'); },
-    'ascetic': () => { import('highlight.js/styles/ascetic.css'); },
-    'atelier-cave-dark': () => { import('highlight.js/styles/atelier-cave-dark.css'); },
-    'atelier-cave-light': () => { import('highlight.js/styles/atelier-cave-light.css'); },
-    'atelier-dune-dark': () => { import('highlight.js/styles/atelier-dune-dark.css'); },
-    'atelier-dune-light': () => { import('highlight.js/styles/atelier-dune-light.css'); },
-    'atelier-estuary-dark': () => { import('highlight.js/styles/atelier-estuary-dark.css'); },
-    'atelier-estuary-light': () => { import('highlight.js/styles/atelier-estuary-light.css'); },
-    'atelier-forest-dark': () => { import('highlight.js/styles/atelier-forest-dark.css'); },
-    'atelier-forest-light': () => { import('highlight.js/styles/atelier-forest-light.css'); },
-    'atelier-heath-dark': () => { import('highlight.js/styles/atelier-heath-dark.css'); },
-    'atelier-heath-light': () => { import('highlight.js/styles/atelier-heath-light.css'); },
-    'atelier-lakeside-dark': () => { import('highlight.js/styles/atelier-lakeside-dark.css'); },
-    'atelier-lakeside-light': () => { import('highlight.js/styles/atelier-lakeside-light.css'); },
-    'atelier-plateau-dark': () => { import('highlight.js/styles/atelier-plateau-dark.css'); },
-    'atelier-plateau-light': () => { import('highlight.js/styles/atelier-plateau-light.css'); },
-    'atelier-savanna-dark': () => { import('highlight.js/styles/atelier-savanna-dark.css'); },
-    'atelier-savanna-light': () => { import('highlight.js/styles/atelier-savanna-light.css'); },
-    'atelier-seaside-dark': () => { import('highlight.js/styles/atelier-seaside-dark.css'); },
-    'atelier-seaside-light': () => { import('highlight.js/styles/atelier-seaside-light.css'); },
-    'atelier-sulphurpool-dark': () => { import('highlight.js/styles/atelier-sulphurpool-dark.css'); },
-    'atelier-sulphurpool-light': () => { import('highlight.js/styles/atelier-sulphurpool-light.css'); },
-    'atom-one-dark-reasonable': () => { import('highlight.js/styles/atom-one-dark-reasonable.css'); },
-    'atom-one-dark': () => { import('highlight.js/styles/atom-one-dark.css'); },
-    'atom-one-light': () => { import('highlight.js/styles/atom-one-light.css'); },
-    'brown-paper': () => { import('highlight.js/styles/brown-paper.css'); },
-    'codepen-embed': () => { import('highlight.js/styles/codepen-embed.css'); },
-    'color-brewer': () => { import('highlight.js/styles/color-brewer.css'); },
-    'darcula': () => { import('highlight.js/styles/darcula.css'); },
-    'dark': () => { import('highlight.js/styles/dark.css'); },
-    'default': () => { import('highlight.js/styles/default.css'); },
-    'docco': () => { import('highlight.js/styles/docco.css'); },
-    'dracula': () => { import('highlight.js/styles/dracula.css'); },
-    'far': () => { import('highlight.js/styles/far.css'); },
-    'foundation': () => { import('highlight.js/styles/foundation.css'); },
-    'github-gist': () => { import('highlight.js/styles/github-gist.css'); },
-    'github': () => { import('highlight.js/styles/github.css'); },
-    'gml': () => { import('highlight.js/styles/gml.css'); },
-    'googlecode': () => { import('highlight.js/styles/googlecode.css'); },
-    'gradient-dark': () => { import('highlight.js/styles/gradient-dark.css'); },
-    'gradient-light': () => { import('highlight.js/styles/gradient-light.css'); },
-    'grayscale': () => { import('highlight.js/styles/grayscale.css'); },
-    'gruvbox-dark': () => { import('highlight.js/styles/gruvbox-dark.css'); },
-    'gruvbox-light': () => { import('highlight.js/styles/gruvbox-light.css'); },
-    'hopscotch': () => { import('highlight.js/styles/hopscotch.css'); },
-    'hybrid': () => { import('highlight.js/styles/hybrid.css'); },
-    'idea': () => { import('highlight.js/styles/idea.css'); },
-    'ir-black': () => { import('highlight.js/styles/ir-black.css'); },
-    'isbl-editor-dark': () => { import('highlight.js/styles/isbl-editor-dark.css'); },
-    'isbl-editor-light': () => { import('highlight.js/styles/isbl-editor-light.css'); },
-    'kimbie.dark': () => { import('highlight.js/styles/kimbie.dark.css'); },
-    'kimbie.light': () => { import('highlight.js/styles/kimbie.light.css'); },
-    'lightfair': () => { import('highlight.js/styles/lightfair.css'); },
-    'lioshi': () => { import('highlight.js/styles/lioshi.css'); },
-    'magula': () => { import('highlight.js/styles/magula.css'); },
-    'mono-blue': () => { import('highlight.js/styles/mono-blue.css'); },
-    'monokai-sublime': () => { import('highlight.js/styles/monokai-sublime.css'); },
-    'monokai': () => { import('highlight.js/styles/monokai.css'); },
-    'night-owl': () => { import('highlight.js/styles/night-owl.css'); },
-    'nnfx-dark': () => { import('highlight.js/styles/nnfx-dark.css'); },
-    'nnfx': () => { import('highlight.js/styles/nnfx.css'); },
-    'nord': () => { import('highlight.js/styles/nord.css'); },
-    'obsidian': () => { import('highlight.js/styles/obsidian.css'); },
-    'ocean': () => { import('highlight.js/styles/ocean.css'); },
-    'paraiso-dark': () => { import('highlight.js/styles/paraiso-dark.css'); },
-    'paraiso-light': () => { import('highlight.js/styles/paraiso-light.css'); },
-    'pojoaque': () => { import('highlight.js/styles/pojoaque.css'); },
-    'purebasic': () => { import('highlight.js/styles/purebasic.css'); },
-    'qtcreator_dark': () => { import('highlight.js/styles/qtcreator_dark.css'); },
-    'qtcreator_light': () => { import('highlight.js/styles/qtcreator_light.css'); },
-    'railscasts': () => { import('highlight.js/styles/railscasts.css'); },
-    'rainbow': () => { import('highlight.js/styles/rainbow.css'); },
-    'routeros': () => { import('highlight.js/styles/routeros.css'); },
-    'school-book': () => { import('highlight.js/styles/school-book.css'); },
-    'shades-of-purple': () => { import('highlight.js/styles/shades-of-purple.css'); },
-    'solarized-dark': () => { import('highlight.js/styles/solarized-dark.css'); },
-    'solarized-light': () => { import('highlight.js/styles/solarized-light.css'); },
-    'srcery': () => { import('highlight.js/styles/srcery.css'); },
-    'stackoverflow-dark': () => { import('highlight.js/styles/stackoverflow-dark.css'); },
-    'stackoverflow-light': () => { import('highlight.js/styles/stackoverflow-light.css'); },
-    'sunburst': () => { import('highlight.js/styles/sunburst.css'); },
-    'tomorrow-night-blue': () => { import('highlight.js/styles/tomorrow-night-blue.css'); },
-    'tomorrow-night-bright': () => { import('highlight.js/styles/tomorrow-night-bright.css'); },
-    'tomorrow-night-eighties': () => { import('highlight.js/styles/tomorrow-night-eighties.css'); },
-    'tomorrow-night': () => { import('highlight.js/styles/tomorrow-night.css'); },
-    'tomorrow': () => { import('highlight.js/styles/tomorrow.css'); },
-    'vs': () => { import('highlight.js/styles/vs.css'); },
-    'vs2015': () => { import('highlight.js/styles/vs2015.css'); },
-    'xcode': () => { import('highlight.js/styles/xcode.css'); },
-    'xt256': () => { import('highlight.js/styles/xt256.css'); },
-    'zenburn': () => { import('highlight.js/styles/zenburn.css'); },
+    'a11y-dark': () => { return import('!!raw-loader!highlight.js/styles/a11y-dark.css'); },
+    'a11y-light': () => { return import('!!raw-loader!highlight.js/styles/a11y-light.css'); },
+    'agate': () => { return import('!!raw-loader!highlight.js/styles/agate.css'); },
+    'an-old-hope': () => { return import('!!raw-loader!highlight.js/styles/an-old-hope.css'); },
+    'androidstudio': () => { return import('!!raw-loader!highlight.js/styles/androidstudio.css'); },
+    'arduino-light': () => { return import('!!raw-loader!highlight.js/styles/arduino-light.css'); },
+    'arta': () => { return import('!!raw-loader!highlight.js/styles/arta.css'); },
+    'ascetic': () => { return import('!!raw-loader!highlight.js/styles/ascetic.css'); },
+    'atelier-cave-dark': () => { return import('!!raw-loader!highlight.js/styles/atelier-cave-dark.css'); },
+    'atelier-cave-light': () => { return import('!!raw-loader!highlight.js/styles/atelier-cave-light.css'); },
+    'atelier-dune-dark': () => { return import('!!raw-loader!highlight.js/styles/atelier-dune-dark.css'); },
+    'atelier-dune-light': () => { return import('!!raw-loader!highlight.js/styles/atelier-dune-light.css'); },
+    'atelier-estuary-dark': () => { return import('!!raw-loader!highlight.js/styles/atelier-estuary-dark.css'); },
+    'atelier-estuary-light': () => { return import('!!raw-loader!highlight.js/styles/atelier-estuary-light.css'); },
+    'atelier-forest-dark': () => { return import('!!raw-loader!highlight.js/styles/atelier-forest-dark.css'); },
+    'atelier-forest-light': () => { return import('!!raw-loader!highlight.js/styles/atelier-forest-light.css'); },
+    'atelier-heath-dark': () => { return import('!!raw-loader!highlight.js/styles/atelier-heath-dark.css'); },
+    'atelier-heath-light': () => { return import('!!raw-loader!highlight.js/styles/atelier-heath-light.css'); },
+    'atelier-lakeside-dark': () => { return import('!!raw-loader!highlight.js/styles/atelier-lakeside-dark.css'); },
+    'atelier-lakeside-light': () => { return import('!!raw-loader!highlight.js/styles/atelier-lakeside-light.css'); },
+    'atelier-plateau-dark': () => { return import('!!raw-loader!highlight.js/styles/atelier-plateau-dark.css'); },
+    'atelier-plateau-light': () => { return import('!!raw-loader!highlight.js/styles/atelier-plateau-light.css'); },
+    'atelier-savanna-dark': () => { return import('!!raw-loader!highlight.js/styles/atelier-savanna-dark.css'); },
+    'atelier-savanna-light': () => { return import('!!raw-loader!highlight.js/styles/atelier-savanna-light.css'); },
+    'atelier-seaside-dark': () => { return import('!!raw-loader!highlight.js/styles/atelier-seaside-dark.css'); },
+    'atelier-seaside-light': () => { return import('!!raw-loader!highlight.js/styles/atelier-seaside-light.css'); },
+    'atelier-sulphurpool-dark': () => { return import('!!raw-loader!highlight.js/styles/atelier-sulphurpool-dark.css'); },
+    'atelier-sulphurpool-light': () => { return import('!!raw-loader!highlight.js/styles/atelier-sulphurpool-light.css'); },
+    'atom-one-dark-reasonable': () => { return import('!!raw-loader!highlight.js/styles/atom-one-dark-reasonable.css'); },
+    'atom-one-dark': () => { return import('!!raw-loader!highlight.js/styles/atom-one-dark.css'); },
+    'atom-one-light': () => { return import('!!raw-loader!highlight.js/styles/atom-one-light.css'); },
+    'brown-paper': () => { return import('!!raw-loader!highlight.js/styles/brown-paper.css'); },
+    'codepen-embed': () => { return import('!!raw-loader!highlight.js/styles/codepen-embed.css'); },
+    'color-brewer': () => { return import('!!raw-loader!highlight.js/styles/color-brewer.css'); },
+    'darcula': () => { return import('!!raw-loader!highlight.js/styles/darcula.css'); },
+    'dark': () => { return import('!!raw-loader!highlight.js/styles/dark.css'); },
+    'default': () => { return import('!!raw-loader!highlight.js/styles/default.css'); },
+    'docco': () => { return import('!!raw-loader!highlight.js/styles/docco.css'); },
+    'dracula': () => { return import('!!raw-loader!highlight.js/styles/dracula.css'); },
+    'far': () => { return import('!!raw-loader!highlight.js/styles/far.css'); },
+    'foundation': () => { return import('!!raw-loader!highlight.js/styles/foundation.css'); },
+    'github-gist': () => { return import('!!raw-loader!highlight.js/styles/github-gist.css'); },
+    'github': () => { return import('!!raw-loader!highlight.js/styles/github.css'); },
+    'gml': () => { return import('!!raw-loader!highlight.js/styles/gml.css'); },
+    'googlecode': () => { return import('!!raw-loader!highlight.js/styles/googlecode.css'); },
+    'gradient-dark': () => { return import('!!raw-loader!highlight.js/styles/gradient-dark.css'); },
+    'gradient-light': () => { return import('!!raw-loader!highlight.js/styles/gradient-light.css'); },
+    'grayscale': () => { return import('!!raw-loader!highlight.js/styles/grayscale.css'); },
+    'gruvbox-dark': () => { return import('!!raw-loader!highlight.js/styles/gruvbox-dark.css'); },
+    'gruvbox-light': () => { return import('!!raw-loader!highlight.js/styles/gruvbox-light.css'); },
+    'hopscotch': () => { return import('!!raw-loader!highlight.js/styles/hopscotch.css'); },
+    'hybrid': () => { return import('!!raw-loader!highlight.js/styles/hybrid.css'); },
+    'idea': () => { return import('!!raw-loader!highlight.js/styles/idea.css'); },
+    'ir-black': () => { return import('!!raw-loader!highlight.js/styles/ir-black.css'); },
+    'isbl-editor-dark': () => { return import('!!raw-loader!highlight.js/styles/isbl-editor-dark.css'); },
+    'isbl-editor-light': () => { return import('!!raw-loader!highlight.js/styles/isbl-editor-light.css'); },
+    'kimbie.dark': () => { return import('!!raw-loader!highlight.js/styles/kimbie.dark.css'); },
+    'kimbie.light': () => { return import('!!raw-loader!highlight.js/styles/kimbie.light.css'); },
+    'lightfair': () => { return import('!!raw-loader!highlight.js/styles/lightfair.css'); },
+    'lioshi': () => { return import('!!raw-loader!highlight.js/styles/lioshi.css'); },
+    'magula': () => { return import('!!raw-loader!highlight.js/styles/magula.css'); },
+    'mono-blue': () => { return import('!!raw-loader!highlight.js/styles/mono-blue.css'); },
+    'monokai-sublime': () => { return import('!!raw-loader!highlight.js/styles/monokai-sublime.css'); },
+    'monokai': () => { return import('!!raw-loader!highlight.js/styles/monokai.css'); },
+    'night-owl': () => { return import('!!raw-loader!highlight.js/styles/night-owl.css'); },
+    'nnfx-dark': () => { return import('!!raw-loader!highlight.js/styles/nnfx-dark.css'); },
+    'nnfx': () => { return import('!!raw-loader!highlight.js/styles/nnfx.css'); },
+    'nord': () => { return import('!!raw-loader!highlight.js/styles/nord.css'); },
+    'obsidian': () => { return import('!!raw-loader!highlight.js/styles/obsidian.css'); },
+    'ocean': () => { return import('!!raw-loader!highlight.js/styles/ocean.css'); },
+    'paraiso-dark': () => { return import('!!raw-loader!highlight.js/styles/paraiso-dark.css'); },
+    'paraiso-light': () => { return import('!!raw-loader!highlight.js/styles/paraiso-light.css'); },
+    'pojoaque': () => { return import('!!raw-loader!highlight.js/styles/pojoaque.css'); },
+    'purebasic': () => { return import('!!raw-loader!highlight.js/styles/purebasic.css'); },
+    'qtcreator_dark': () => { return import('!!raw-loader!highlight.js/styles/qtcreator_dark.css'); },
+    'qtcreator_light': () => { return import('!!raw-loader!highlight.js/styles/qtcreator_light.css'); },
+    'railscasts': () => { return import('!!raw-loader!highlight.js/styles/railscasts.css'); },
+    'rainbow': () => { return import('!!raw-loader!highlight.js/styles/rainbow.css'); },
+    'routeros': () => { return import('!!raw-loader!highlight.js/styles/routeros.css'); },
+    'school-book': () => { return import('!!raw-loader!highlight.js/styles/school-book.css'); },
+    'shades-of-purple': () => { return import('!!raw-loader!highlight.js/styles/shades-of-purple.css'); },
+    'solarized-dark': () => { return import('!!raw-loader!highlight.js/styles/solarized-dark.css'); },
+    'solarized-light': () => { return import('!!raw-loader!highlight.js/styles/solarized-light.css'); },
+    'srcery': () => { return import('!!raw-loader!highlight.js/styles/srcery.css'); },
+    'stackoverflow-dark': () => { return import('!!raw-loader!highlight.js/styles/stackoverflow-dark.css'); },
+    'stackoverflow-light': () => { return import('!!raw-loader!highlight.js/styles/stackoverflow-light.css'); },
+    'sunburst': () => { return import('!!raw-loader!highlight.js/styles/sunburst.css'); },
+    'tomorrow-night-blue': () => { return import('!!raw-loader!highlight.js/styles/tomorrow-night-blue.css'); },
+    'tomorrow-night-bright': () => { return import('!!raw-loader!highlight.js/styles/tomorrow-night-bright.css'); },
+    'tomorrow-night-eighties': () => { return import('!!raw-loader!highlight.js/styles/tomorrow-night-eighties.css'); },
+    'tomorrow-night': () => { return import('!!raw-loader!highlight.js/styles/tomorrow-night.css'); },
+    'tomorrow': () => { return import('!!raw-loader!highlight.js/styles/tomorrow.css'); },
+    'vs': () => { return import('!!raw-loader!highlight.js/styles/vs.css'); },
+    'vs2015': () => { return import('!!raw-loader!highlight.js/styles/vs2015.css'); },
+    'xcode': () => { return import('!!raw-loader!highlight.js/styles/xcode.css'); },
+    'xt256': () => { return import('!!raw-loader!highlight.js/styles/xt256.css'); },
+    'zenburn': () => { return import('!!raw-loader!highlight.js/styles/zenburn.css'); },
   };
-  loaders[themeName]();
+  return loaders[themeName]()
+    .then((module) => {
+      return module.default;
+    })
+    .catch((err) => {
+      throw new Error(`Failed to load Highlight.js theme CSS: ${err}`);
+    });
 }
 
 function insertText(newText: string) {
@@ -738,10 +745,43 @@ async function updateRendered() {
   // We have to update the innerHTML immediately here instead of letting Vue
   // update it reactively, otherwise MathJax will not be able to see the new
   // content.
-  (renderedContent.value as Element).innerHTML = rendered.value.content;
+  shadowRoot.value.innerHTML = rendered.value.content;
+  const highlightjsTheme = loadConfigValue('highlightjs-theme', 'default');
+  await loadHighlightjsTheme(highlightjsTheme)
+    .then((themeCss) => {
+      const styleElement = document.createElement('style');
+      styleElement.textContent = themeCss;
+      shadowRoot.value.appendChild(styleElement);
+    })
+    .catch((err) => {
+      console.error(err);
+    });
+  await loadCustomNoteCss()
+    .then((customNoteCss) => {
+      const styleElement = document.createElement('style');
+      styleElement.textContent = customNoteCss;
+      shadowRoot.value.appendChild(styleElement);
+    })
+    .catch((err) => {
+      console.error(err);
+    });
 
   // Update the page title
   document.title = `${title.value} | ${process.env.VUE_APP_NAME}`;
+}
+
+function loadCustomNoteCss(): Promise<string> {
+  return api.getNote('.mory/custom-note.less')
+    .then(res => {
+      return less.render(res.data, {
+        globalVars: {
+          'nav-height': '64px',
+        },
+      });
+    })
+    .then(output => {
+      return output.css;
+    });
 }
 
 function updateRenderedLazy() {
@@ -777,7 +817,7 @@ function handleDocumentScroll() {
   }
 
   // Build scroll map
-  const scrollMap: [number, number][] = [...renderedContent.value.querySelectorAll<HTMLElement>('[data-line]')]
+  const scrollMap: [number, number][] = [...shadowRoot.value.querySelectorAll<HTMLElement>('[data-line]')]
     .map((el) => {
       const lineNumber = parseInt(el.dataset['line'] as string);
       const offset = el.offsetTop;
@@ -850,7 +890,7 @@ function onEditorScroll(lineNumber: number) {
   }
 
   // Build scroll map
-  const scrollMap: [number, number][] = [...renderedContent.value.querySelectorAll<HTMLElement>('[data-line]')]
+  const scrollMap: [number, number][] = [...shadowRoot.value.querySelectorAll<HTMLElement>('[data-line]')]
     .map((el) => {
       const lineNumber = parseInt(el.dataset['line'] as string);
       const offset = el.offsetTop;
