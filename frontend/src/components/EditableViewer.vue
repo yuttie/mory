@@ -143,11 +143,10 @@
               This is the latest version.
             </template>
           </v-snackbar>
-          <div class="d-flex flex-row">
-            <div
-              ref="renderedContent"
-              class="rendered-content"
-            ></div>
+          <div
+            ref="shadowDomRootElement"
+            class="d-flex flex-row"
+          >
           </div>
         </div>
         <div
@@ -349,8 +348,9 @@ const renderTimeoutId = ref(null as null | number);
 
 // Refs
 const editor = ref(null);
-const renderedContent = ref(null);
+const shadowDomRootElement = ref(null);
 const shadowRoot = ref(null);
+const renderedContentDiv = ref(null);
 
 // Computed properties
 const editorMode = computed(() => {
@@ -463,7 +463,10 @@ const newPathValidationResult = computed((): boolean | string => {
 
 // Lifecycle hooks
 onMounted(async () => {
-  shadowRoot.value = renderedContent.value.attachShadow({ mode: 'open' });
+  shadowRoot.value = shadowDomRootElement.value.attachShadow({ mode: 'open' });
+  renderedContentDiv.value = document.createElement('div');
+  renderedContentDiv.value.setAttribute('class', 'rendered-content flex-grow-1');
+  shadowRoot.value.appendChild(renderedContentDiv.value);
 
   document.title = `${title.value} | ${process.env.VUE_APP_NAME}`;
 
@@ -745,13 +748,13 @@ async function updateRendered() {
   // We have to update the innerHTML immediately here instead of letting Vue
   // update it reactively, otherwise MathJax will not be able to see the new
   // content.
-  shadowRoot.value.innerHTML = rendered.value.content;
+  renderedContentDiv.value.innerHTML = rendered.value.content;
   const highlightjsTheme = loadConfigValue('highlightjs-theme', 'default');
   await loadHighlightjsTheme(highlightjsTheme)
     .then((themeCss) => {
       const styleElement = document.createElement('style');
       styleElement.textContent = themeCss;
-      shadowRoot.value.appendChild(styleElement);
+      renderedContentDiv.value.appendChild(styleElement);
     })
     .catch((err) => {
       console.error(err);
@@ -760,7 +763,7 @@ async function updateRendered() {
     .then((customNoteCss) => {
       const styleElement = document.createElement('style');
       styleElement.textContent = customNoteCss;
-      shadowRoot.value.appendChild(styleElement);
+      renderedContentDiv.value.appendChild(styleElement);
     })
     .catch((err) => {
       console.error(err);
@@ -817,7 +820,7 @@ function handleDocumentScroll() {
   }
 
   // Build scroll map
-  const scrollMap: [number, number][] = [...shadowRoot.value.querySelectorAll<HTMLElement>('[data-line]')]
+  const scrollMap: [number, number][] = [...renderedContentDiv.value.querySelectorAll<HTMLElement>('[data-line]')]
     .map((el) => {
       const lineNumber = parseInt(el.dataset['line'] as string);
       const offset = el.offsetTop;
@@ -890,7 +893,7 @@ function onEditorScroll(lineNumber: number) {
   }
 
   // Build scroll map
-  const scrollMap: [number, number][] = [...shadowRoot.value.querySelectorAll<HTMLElement>('[data-line]')]
+  const scrollMap: [number, number][] = [...renderedContentDiv.value.querySelectorAll<HTMLElement>('[data-line]')]
     .map((el) => {
       const lineNumber = parseInt(el.dataset['line'] as string);
       const offset = el.offsetTop;
