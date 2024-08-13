@@ -1,3 +1,10 @@
+## 0.18.0 (2024-08-14)
+* Display rendered notes within a shadow DOM
+* Replace markdown-it with remark
+* Update dependencies
+* Downgrade sass to ~1.32 to suppress warnings
+* Remove NODE_OPTIONS='--openssl-legacy-provider'
+
 ## 0.17.3 (2024-06-20)
 * Update @vue/cli-* packages with `vue upgrade`
 
