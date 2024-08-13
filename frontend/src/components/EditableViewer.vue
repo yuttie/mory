@@ -143,10 +143,7 @@
               This is the latest version.
             </template>
           </v-snackbar>
-          <div
-            ref="shadowDomRootElement"
-            class="d-flex flex-row"
-          >
+          <div ref="shadowDomRootElement">
           </div>
         </div>
         <div
