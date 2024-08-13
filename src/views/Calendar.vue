@@ -45,7 +45,7 @@
       offset-y
       max-width="30em"
     >
-      <v-card flat class="event-card">
+      <v-card v-if="selectedEvent" flat class="event-card">
         <v-toolbar
           v-bind:color="selectedEvent.color"
           dark
@@ -84,7 +84,7 @@
           </v-list>
           <template v-if="selectedEvent.note">
             <v-divider></v-divider>
-            <div class="mt-3" v-html="renderEventNote(selectedEvent.note)"></div>
+            <div class="mt-3" v-html="selectedEventRenderedNote"></div>
           </template>
         </v-card-text>
       </v-card>
@@ -105,13 +105,8 @@ import { isMetadataEventMultiple, ListEntry, validateEvent } from '@/api';
 import Color from 'color';
 import materialColors from 'vuetify/lib/util/colors';
 import dayjs from 'dayjs';
-import MarkdownIt from 'markdown-it';
+import { renderMarkdown } from '@/markdown';
 import XXH from 'xxhashjs';
-
-const mdit = new MarkdownIt('default', {
-  html: true,
-  linkify: true,
-});
 
 // Emits
 const emit = defineEmits<{
@@ -129,7 +124,8 @@ const error = ref(false);
 const errorText = ref('');
 const calendarType = ref('month');
 const calendarCursor = ref(dayjs().format('YYYY-MM-DD'));
-const selectedEvent = ref({});
+const selectedEvent = ref(null);
+const selectedEventRenderedNote = ref(null);
 const selectedElement = ref(null);
 const selectedOpen = ref(false);
 
@@ -360,9 +356,17 @@ function getEventTextColor(event: any): string {
   }
 }
 
-function renderEventNote(text: string): string {
-  return mdit.render(text);
-}
+// Watchers
+watch(selectedEvent, async (newValue) => {
+  if (newValue === null) {
+    selectedEventRenderedNote.value = null;
+  }
+  else {
+    const renderedFile = await renderMarkdown(selectedEvent.value.note);
+    const renderedHtml = String(renderedFile);
+    selectedEventRenderedNote.value = renderedHtml;
+  }
+});
 
 // Expose properties
 defineExpose({
@@ -376,7 +380,6 @@ defineExpose({
   getEventEndTime,
   getEventColor,
   getEventTextColor,
-  renderEventNote,
 });
 </script>
 

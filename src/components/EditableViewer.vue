@@ -306,10 +306,7 @@ import Ajv, { JSONSchemaType, DefinedError } from 'ajv';
 import * as api from '@/api';
 import { loadConfigValue, saveConfigValue } from '@/config';
 import { CliPrettify } from 'markdown-table-prettify';
-import { mdit, updateMetadataLineCount } from '@/markdown';
-import YAML from 'yaml';
-
-declare const MathJax: any;
+import { renderMarkdown } from '@/markdown';
 
 const ajv = new Ajv();
 const validateMetadata = ajv.compile(metadataSchema);
@@ -347,7 +344,6 @@ const notFound = ref(false);
 const showConfirmationDialog = ref(false);
 const error = ref(false);
 const errorText = ref('');
-const mathjaxTypesetPromise = ref(Promise.resolve());
 const renderTimeoutId = ref(null as null | number);
 
 // Refs
@@ -464,9 +460,9 @@ const newPathValidationResult = computed((): boolean | string => {
 });
 
 // Lifecycle hooks
-onMounted(() => {
-  const prismTheme = loadConfigValue('prism-theme', null);
-  loadPrismTheme(prismTheme);
+onMounted(async () => {
+  const highlightjsTheme = loadConfigValue('highlightjs-theme', 'default');
+  loadHighlightjsTheme(highlightjsTheme);
 
   document.title = `${title.value} | ${process.env.VUE_APP_NAME}`;
 
@@ -479,7 +475,7 @@ onMounted(() => {
 
   if (route.query.mode === 'create') {
     if (route.query.template) {
-      loadTemplate(route.query.template as string);
+      await loadTemplate(route.query.template as string);
     }
     else {
       text.value = `---
@@ -497,7 +493,7 @@ events:
     }
   }
   else {
-    load(route.params.path);
+    await load(route.params.path);
   }
 
   if (!/\.(md|markdown)$/i.test(route.params.path)) {
@@ -525,34 +521,107 @@ onUnmounted(() => {
 });
 
 // Methods
-function loadPrismTheme(theme: string | null) {
-  if      (theme === 'a11y-dark')                        { import('prism-themes/themes/prism-a11y-dark.css');                       }
-  else if (theme === 'atom-dark')                        { import('prism-themes/themes/prism-atom-dark.css');                       }
-  else if (theme === 'base16-atelier-sulphurpool-light') { import('prism-themes/themes/prism-base16-ateliersulphurpool.light.css'); }
-  else if (theme === 'cb')                               { import('prism-themes/themes/prism-cb.css');                              }
-  else if (theme === 'coldark-cold')                     { import('prism-themes/themes/prism-coldark-cold.css');                    }
-  else if (theme === 'coldark-dark')                     { import('prism-themes/themes/prism-coldark-dark.css');                    }
-  else if (theme === 'coy-without-shadows')              { import('prism-themes/themes/prism-coy-without-shadows.css');             }
-  else if (theme === 'darcula')                          { import('prism-themes/themes/prism-darcula.css');                         }
-  else if (theme === 'dracula')                          { import('prism-themes/themes/prism-dracula.css');                         }
-  else if (theme === 'duotone-dark')                     { import('prism-themes/themes/prism-duotone-dark.css');                    }
-  else if (theme === 'duotone-earth')                    { import('prism-themes/themes/prism-duotone-earth.css');                   }
-  else if (theme === 'duotone-forest')                   { import('prism-themes/themes/prism-duotone-forest.css');                  }
-  else if (theme === 'duotone-light')                    { import('prism-themes/themes/prism-duotone-light.css');                   }
-  else if (theme === 'duotone-sea')                      { import('prism-themes/themes/prism-duotone-sea.css');                     }
-  else if (theme === 'duotone-space')                    { import('prism-themes/themes/prism-duotone-space.css');                   }
-  else if (theme === 'ghcolors')                         { import('prism-themes/themes/prism-ghcolors.css');                        }
-  else if (theme === 'hopscotch')                        { import('prism-themes/themes/prism-hopscotch.css');                       }
-  else if (theme === 'material-dark')                    { import('prism-themes/themes/prism-material-dark.css');                   }
-  else if (theme === 'material-light')                   { import('prism-themes/themes/prism-material-light.css');                  }
-  else if (theme === 'material-oceanic')                 { import('prism-themes/themes/prism-material-oceanic.css');                }
-  else if (theme === 'nord')                             { import('prism-themes/themes/prism-nord.css');                            }
-  else if (theme === 'pojoaque')                         { import('prism-themes/themes/prism-pojoaque.css');                        }
-  else if (theme === 'shades-of-purple')                 { import('prism-themes/themes/prism-shades-of-purple.css');                }
-  else if (theme === 'synthwave84')                      { import('prism-themes/themes/prism-synthwave84.css');                     }
-  else if (theme === 'vs')                               { import('prism-themes/themes/prism-vs.css');                              }
-  else if (theme === 'vsc-dark-plus')                    { import('prism-themes/themes/prism-vsc-dark-plus.css');                   }
-  else if (theme === 'xonokai')                          { import('prism-themes/themes/prism-xonokai.css');                         }
+function loadHighlightjsTheme(themeName: string) {
+  const loaders = {
+    'a11y-dark': () => { import('highlight.js/styles/a11y-dark.css'); },
+    'a11y-light': () => { import('highlight.js/styles/a11y-light.css'); },
+    'agate': () => { import('highlight.js/styles/agate.css'); },
+    'an-old-hope': () => { import('highlight.js/styles/an-old-hope.css'); },
+    'androidstudio': () => { import('highlight.js/styles/androidstudio.css'); },
+    'arduino-light': () => { import('highlight.js/styles/arduino-light.css'); },
+    'arta': () => { import('highlight.js/styles/arta.css'); },
+    'ascetic': () => { import('highlight.js/styles/ascetic.css'); },
+    'atelier-cave-dark': () => { import('highlight.js/styles/atelier-cave-dark.css'); },
+    'atelier-cave-light': () => { import('highlight.js/styles/atelier-cave-light.css'); },
+    'atelier-dune-dark': () => { import('highlight.js/styles/atelier-dune-dark.css'); },
+    'atelier-dune-light': () => { import('highlight.js/styles/atelier-dune-light.css'); },
+    'atelier-estuary-dark': () => { import('highlight.js/styles/atelier-estuary-dark.css'); },
+    'atelier-estuary-light': () => { import('highlight.js/styles/atelier-estuary-light.css'); },
+    'atelier-forest-dark': () => { import('highlight.js/styles/atelier-forest-dark.css'); },
+    'atelier-forest-light': () => { import('highlight.js/styles/atelier-forest-light.css'); },
+    'atelier-heath-dark': () => { import('highlight.js/styles/atelier-heath-dark.css'); },
+    'atelier-heath-light': () => { import('highlight.js/styles/atelier-heath-light.css'); },
+    'atelier-lakeside-dark': () => { import('highlight.js/styles/atelier-lakeside-dark.css'); },
+    'atelier-lakeside-light': () => { import('highlight.js/styles/atelier-lakeside-light.css'); },
+    'atelier-plateau-dark': () => { import('highlight.js/styles/atelier-plateau-dark.css'); },
+    'atelier-plateau-light': () => { import('highlight.js/styles/atelier-plateau-light.css'); },
+    'atelier-savanna-dark': () => { import('highlight.js/styles/atelier-savanna-dark.css'); },
+    'atelier-savanna-light': () => { import('highlight.js/styles/atelier-savanna-light.css'); },
+    'atelier-seaside-dark': () => { import('highlight.js/styles/atelier-seaside-dark.css'); },
+    'atelier-seaside-light': () => { import('highlight.js/styles/atelier-seaside-light.css'); },
+    'atelier-sulphurpool-dark': () => { import('highlight.js/styles/atelier-sulphurpool-dark.css'); },
+    'atelier-sulphurpool-light': () => { import('highlight.js/styles/atelier-sulphurpool-light.css'); },
+    'atom-one-dark-reasonable': () => { import('highlight.js/styles/atom-one-dark-reasonable.css'); },
+    'atom-one-dark': () => { import('highlight.js/styles/atom-one-dark.css'); },
+    'atom-one-light': () => { import('highlight.js/styles/atom-one-light.css'); },
+    'brown-paper': () => { import('highlight.js/styles/brown-paper.css'); },
+    'codepen-embed': () => { import('highlight.js/styles/codepen-embed.css'); },
+    'color-brewer': () => { import('highlight.js/styles/color-brewer.css'); },
+    'darcula': () => { import('highlight.js/styles/darcula.css'); },
+    'dark': () => { import('highlight.js/styles/dark.css'); },
+    'default': () => { import('highlight.js/styles/default.css'); },
+    'docco': () => { import('highlight.js/styles/docco.css'); },
+    'dracula': () => { import('highlight.js/styles/dracula.css'); },
+    'far': () => { import('highlight.js/styles/far.css'); },
+    'foundation': () => { import('highlight.js/styles/foundation.css'); },
+    'github-gist': () => { import('highlight.js/styles/github-gist.css'); },
+    'github': () => { import('highlight.js/styles/github.css'); },
+    'gml': () => { import('highlight.js/styles/gml.css'); },
+    'googlecode': () => { import('highlight.js/styles/googlecode.css'); },
+    'gradient-dark': () => { import('highlight.js/styles/gradient-dark.css'); },
+    'gradient-light': () => { import('highlight.js/styles/gradient-light.css'); },
+    'grayscale': () => { import('highlight.js/styles/grayscale.css'); },
+    'gruvbox-dark': () => { import('highlight.js/styles/gruvbox-dark.css'); },
+    'gruvbox-light': () => { import('highlight.js/styles/gruvbox-light.css'); },
+    'hopscotch': () => { import('highlight.js/styles/hopscotch.css'); },
+    'hybrid': () => { import('highlight.js/styles/hybrid.css'); },
+    'idea': () => { import('highlight.js/styles/idea.css'); },
+    'ir-black': () => { import('highlight.js/styles/ir-black.css'); },
+    'isbl-editor-dark': () => { import('highlight.js/styles/isbl-editor-dark.css'); },
+    'isbl-editor-light': () => { import('highlight.js/styles/isbl-editor-light.css'); },
+    'kimbie.dark': () => { import('highlight.js/styles/kimbie.dark.css'); },
+    'kimbie.light': () => { import('highlight.js/styles/kimbie.light.css'); },
+    'lightfair': () => { import('highlight.js/styles/lightfair.css'); },
+    'lioshi': () => { import('highlight.js/styles/lioshi.css'); },
+    'magula': () => { import('highlight.js/styles/magula.css'); },
+    'mono-blue': () => { import('highlight.js/styles/mono-blue.css'); },
+    'monokai-sublime': () => { import('highlight.js/styles/monokai-sublime.css'); },
+    'monokai': () => { import('highlight.js/styles/monokai.css'); },
+    'night-owl': () => { import('highlight.js/styles/night-owl.css'); },
+    'nnfx-dark': () => { import('highlight.js/styles/nnfx-dark.css'); },
+    'nnfx': () => { import('highlight.js/styles/nnfx.css'); },
+    'nord': () => { import('highlight.js/styles/nord.css'); },
+    'obsidian': () => { import('highlight.js/styles/obsidian.css'); },
+    'ocean': () => { import('highlight.js/styles/ocean.css'); },
+    'paraiso-dark': () => { import('highlight.js/styles/paraiso-dark.css'); },
+    'paraiso-light': () => { import('highlight.js/styles/paraiso-light.css'); },
+    'pojoaque': () => { import('highlight.js/styles/pojoaque.css'); },
+    'purebasic': () => { import('highlight.js/styles/purebasic.css'); },
+    'qtcreator_dark': () => { import('highlight.js/styles/qtcreator_dark.css'); },
+    'qtcreator_light': () => { import('highlight.js/styles/qtcreator_light.css'); },
+    'railscasts': () => { import('highlight.js/styles/railscasts.css'); },
+    'rainbow': () => { import('highlight.js/styles/rainbow.css'); },
+    'routeros': () => { import('highlight.js/styles/routeros.css'); },
+    'school-book': () => { import('highlight.js/styles/school-book.css'); },
+    'shades-of-purple': () => { import('highlight.js/styles/shades-of-purple.css'); },
+    'solarized-dark': () => { import('highlight.js/styles/solarized-dark.css'); },
+    'solarized-light': () => { import('highlight.js/styles/solarized-light.css'); },
+    'srcery': () => { import('highlight.js/styles/srcery.css'); },
+    'stackoverflow-dark': () => { import('highlight.js/styles/stackoverflow-dark.css'); },
+    'stackoverflow-light': () => { import('highlight.js/styles/stackoverflow-light.css'); },
+    'sunburst': () => { import('highlight.js/styles/sunburst.css'); },
+    'tomorrow-night-blue': () => { import('highlight.js/styles/tomorrow-night-blue.css'); },
+    'tomorrow-night-bright': () => { import('highlight.js/styles/tomorrow-night-bright.css'); },
+    'tomorrow-night-eighties': () => { import('highlight.js/styles/tomorrow-night-eighties.css'); },
+    'tomorrow-night': () => { import('highlight.js/styles/tomorrow-night.css'); },
+    'tomorrow': () => { import('highlight.js/styles/tomorrow.css'); },
+    'vs': () => { import('highlight.js/styles/vs.css'); },
+    'vs2015': () => { import('highlight.js/styles/vs2015.css'); },
+    'xcode': () => { import('highlight.js/styles/xcode.css'); },
+    'xt256': () => { import('highlight.js/styles/xt256.css'); },
+    'zenburn': () => { import('highlight.js/styles/zenburn.css'); },
+  };
+  loaders[themeName]();
 }
 
 function insertText(newText: string) {
@@ -599,66 +668,13 @@ function formatTable() {
   }
 }
 
-function updateRendered() {
-  const textValue = text.value;
-
-  // Split the note text into a YAML part and a body part
-  const [yaml, body] = ((): [null | string, string] => {
-    if (textValue.startsWith('---\n')) {
-      const endMarkerIndex = textValue.indexOf('\n---\n', 4);
-      if (endMarkerIndex >= 0) {
-        const yaml = textValue.slice(4, endMarkerIndex);
-        const body = textValue.slice(endMarkerIndex + '\n---\n'.length);
-        return [yaml, body];
-      }
-      else {
-        return [null, textValue];
-      }
-    }
-    else {
-      return [null, textValue];
-    }
-  })();
-
-  // Memorize the number of lines of metadata block
-  if (yaml !== null) {
-    // Count the lines including '---'
-    let count = 2;  // Opening '---' and its next line
-    let start = 0;
-    let i = 0;
-    while (true) {  // eslint-disable-line no-constant-condition
-      const i = yaml.indexOf('\n', start);
-      if (i === -1) {
-        break;
-      }
-      else {
-        count += 1;
-        start = i + 1;
-      }
-    }
-    count += 1;  // Closing '---'
-    // Memorize it
-    updateMetadataLineCount(count);
-  }
-
+async function updateRendered() {
   // Render the body
-  const renderedHtml = mdit.render(body);
+  const renderedFile = await renderMarkdown(text.value);
+  const renderedHtml = String(renderedFile);
+  const metadata = renderedFile.data.matter;
+  const parseError = renderedFile.data.matterParseError;
   ignoreNext.value = true;
-
-  // Parse a YAML part
-  const [parseError, metadata] = (() => {
-    if (yaml !== null) {
-      try {
-        return [null, YAML.parse(yaml)];
-      }
-      catch (err) {
-        return [err, null];
-      }
-    }
-    else {
-      return [null, null];
-    }
-  })();
 
   // Validate metadata
   const validationErrors = (() => {
@@ -724,11 +740,6 @@ function updateRendered() {
   // content.
   (renderedContent.value as Element).innerHTML = rendered.value.content;
 
-  // Schedule math rendering
-  mathjaxTypesetPromise.value = mathjaxTypesetPromise.value.then(() => {
-    return MathJax.typesetPromise([renderedContent.value]);
-  });
-
   // Update the page title
   document.title = `${title.value} | ${process.env.VUE_APP_NAME}`;
 }
@@ -738,8 +749,8 @@ function updateRenderedLazy() {
     window.clearTimeout(renderTimeoutId.value);
     renderTimeoutId.value = null;
   }
-  renderTimeoutId.value = window.setTimeout(() => {
-    updateRendered();
+  renderTimeoutId.value = window.setTimeout(async () => {
+    await updateRendered();
   }, 500);
 }
 
@@ -798,19 +809,22 @@ function handleDocumentScroll() {
 
   // Find the interval where the `scrollTop` belongs to
   const scrollTop = document.documentElement.scrollTop;
-  let i = 0;
-  for (; i < scrollMap.length - 1; ++i) {
+  let intervalIndex = null;
+  for (let i = 0; i < scrollMap.length - 1; ++i) {
     if (scrollMap[i][1] <= scrollTop && scrollTop < scrollMap[i + 1][1]) {
+      intervalIndex = i;
       break;
     }
   }
-  const [lineNumber1, offset1] = scrollMap[i];
-  const [lineNumber2, offset2] = scrollMap[i + 1];
+  if (intervalIndex !== null) {
+    const [lineNumber1, offset1] = scrollMap[intervalIndex];
+    const [lineNumber2, offset2] = scrollMap[intervalIndex + 1];
 
-  // Scroll to the line
-  const lineNumber = lineNumber1 + (lineNumber2 - lineNumber1) * (scrollTop - offset1) / (offset2 - offset1);
-  editorScrollTo(lineNumber);
-  ignoreNext.value = true;
+    // Scroll to the line
+    const lineNumber = lineNumber1 + (lineNumber2 - lineNumber1) * (scrollTop - offset1) / (offset2 - offset1);
+    editorScrollTo(lineNumber);
+    ignoreNext.value = true;
+  }
 }
 
 function onEditorChange(newText: string) {
@@ -867,19 +881,22 @@ function onEditorScroll(lineNumber: number) {
   }
 
   // Find the interval where the given line number belongs to
-  let i = 0;
-  for (; i < scrollMap.length - 1; ++i) {
+  let intervalIndex = null;
+  for (let i = 0; i < scrollMap.length - 1; ++i) {
     if (scrollMap[i][0] <= lineNumber && lineNumber < scrollMap[i + 1][0]) {
+      intervalIndex = i;
       break;
     }
   }
-  const [lineNumber1, offset1] = scrollMap[i];
-  const [lineNumber2, offset2] = scrollMap[i + 1];
+  if (intervalIndex !== null) {
+    const [lineNumber1, offset1] = scrollMap[intervalIndex];
+    const [lineNumber2, offset2] = scrollMap[intervalIndex + 1];
 
-  // Scroll by an offset
-  const offset = offset1 + (offset2 - offset1) * (lineNumber - lineNumber1) / (lineNumber2 - lineNumber1);
-  document.documentElement.scrollTo({ top: offset, left: 0, behavior: 'auto' });
-  ignoreNext.value = true;
+    // Scroll by an offset
+    const offset = offset1 + (offset2 - offset1) * (lineNumber - lineNumber1) / (lineNumber2 - lineNumber1);
+    document.documentElement.scrollTo({ top: offset, left: 0, behavior: 'auto' });
+    ignoreNext.value = true;
+  }
 }
 
 function checkUpstreamState() {
@@ -909,17 +926,17 @@ function checkUpstreamState() {
     });
 }
 
-function load(path: string) {
+async function load(path: string) {
   isLoading.value = true;
-  api.getNote(path)
-    .then(res => {
+  await api.getNote(path)
+    .then(async res => {
       text.value = res.data;
       initialText.value = text.value;
       upstreamState.value = 'same';
       noteHasUpstream.value = true;
 
       // Update immediately
-      updateRendered();
+      await updateRendered();
 
       // Jump to a header if specified
       if (route.hash) {
@@ -938,8 +955,8 @@ function load(path: string) {
       if (error.response) {
         if (error.response.status === 401) {
           // Unauthorized
-          emit('tokenExpired', () => {
-            load(path);
+          emit('tokenExpired', async () => {
+            await load(path);
             focusOrBlurEditor();
           });
         }
@@ -964,17 +981,17 @@ function load(path: string) {
     });
 }
 
-function loadTemplate(path: string) {
+async function loadTemplate(path: string) {
   isLoading.value = true;
-  api.getNote(path)
-    .then(res => {
+  await api.getNote(path)
+    .then(async res => {
       text.value = res.data;
       initialText.value = text.value;
       editorIsVisible.value = true;
       (editor.value as Editor | HTMLTextAreaElement).focus();
 
       // Update immediately
-      updateRendered();
+      await updateRendered();
 
       isLoading.value = false;
       notFound.value = false;
@@ -982,8 +999,8 @@ function loadTemplate(path: string) {
       if (error.response) {
         if (error.response.status === 401) {
           // Unauthorized
-          emit('tokenExpired', () => {
-            load(path);
+          emit('tokenExpired', async () => {
+            await load(path);
             focusOrBlurEditor();
           });
         }
@@ -1008,8 +1025,8 @@ function loadTemplate(path: string) {
     });
 }
 
-function reload() {
-  load(route.params.path);
+async function reload() {
+  await load(route.params.path);
 }
 
 function toggleEditor() {
@@ -1313,9 +1330,9 @@ function rename() {
 }
 
 // Watchers
-watch(viewerIsVisible, (newValue: boolean, oldValue: boolean) => {
+watch(viewerIsVisible, async (newValue: boolean, oldValue: boolean) => {
   if (!oldValue && newValue) {
-    updateRendered();
+    await updateRendered();
   }
 });
 
