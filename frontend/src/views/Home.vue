@@ -71,7 +71,7 @@ const categorizedEntries = computed(() => {
 
 // Lifecycle hooks
 onMounted(() => {
-  document.title = `Home | ${process.env.VUE_APP_NAME}`;
+  document.title = `Home | ${import.meta.env.VITE_APP_NAME}`;
 
   load();
 });

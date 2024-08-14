@@ -18,7 +18,7 @@ import { all } from 'lowlight';
 import type { VFile } from 'vfile';
 
 
-const apiFilesUrl = new URL('files/', new URL(process.env.VUE_APP_API_URL!, window.location.href)).href;
+const apiFilesUrl = new URL('files/', new URL(import.meta.env.VITE_APP_API_URL!, window.location.href)).href;
 
 const processor = unified()
   .use(remarkParse)

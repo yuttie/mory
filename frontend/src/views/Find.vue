@@ -237,7 +237,7 @@ const matchedEntries = computed(() => {
 
 // Lifecycle hooks
 onMounted(() => {
-  document.title = `Find | ${process.env.VUE_APP_NAME}`;
+  document.title = `Find | ${import.meta.env.VITE_APP_NAME}`;
 
   window.addEventListener('keydown', handleKeydown);
 

@@ -202,7 +202,7 @@ const events = computed(() => {
 
 // Lifecycle hooks
 onMounted(() => {
-  document.title = `Calendar | ${process.env.VUE_APP_NAME}`;
+  document.title = `Calendar | ${import.meta.env.VITE_APP_NAME}`;
 
   if (route.name === 'CalendarWithDate') {
     calendarType.value = route.params.type;
