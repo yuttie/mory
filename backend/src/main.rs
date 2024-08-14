@@ -4,7 +4,6 @@ use std::ffi::OsStr;
 use std::fs::File;
 use std::io::Write;
 use std::iter::once;
-use std::net::ToSocketAddrs;
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 use std::vec::Vec;
@@ -15,6 +14,7 @@ use std::time;
 use argon2;
 use axum::{
     BoxError,
+    body::Body,
     error_handling::HandleErrorLayer,
     extract::{
         DefaultBodyLimit,
@@ -70,10 +70,7 @@ async fn main() {
     };
     let state = Arc::new(models::AppState::new(repo));
 
-    let addr = {
-        let mut addrs_iter = env::var("MORIED_LISTEN").unwrap().to_socket_addrs().unwrap();
-        addrs_iter.next().unwrap()
-    };
+    let addr = env::var("MORIED_LISTEN").unwrap();
     debug!("{:?}", addr);
 
     let cors = CorsLayer::new()
@@ -124,13 +121,13 @@ async fn main() {
         }
     };
 
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    axum::serve(listener, app.into_make_service())
         .await
         .unwrap();
 }
 
-async fn auth<B>(req: Request<B>, next: Next<B>) -> Result<Response, StatusCode> {
+async fn auth(req: Request<Body>, next: Next) -> Result<Response, StatusCode> {
     let auth_header = req
         .headers()
         .get(header::AUTHORIZATION)

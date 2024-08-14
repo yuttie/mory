@@ -19,12 +19,12 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9.17"
 urlencoding = "2.1.2"
-axum = { version = "0.6.4", features = ["macros", "multipart"] }
-axum-macros = "0.3.2"
-hyper = { version = "0.14.19", features = ["full"] }
+axum = { version = "0.7.5", features = ["macros", "multipart"] }
+axum-macros = "0.4.1"
+hyper = { version = "1.4.1", features = ["full"] }
 rmp-serde = "1.1.2"
-tokio = { version = "1.19.2", features = ["full"] }
-tower = { version = "0.4.13", features = ["buffer", "limit", "load-shed"] }
-tower-http = { version = "0.3.4", features = ["compression-gzip", "cors", "sensitive-headers", "trace"] }
+tokio = { version = "1.39.2", features = ["full"] }
+tower = { version = "0.5.0", features = ["buffer", "limit", "load-shed"] }
+tower-http = { version = "0.5.2", features = ["compression-gzip", "cors", "sensitive-headers", "trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
