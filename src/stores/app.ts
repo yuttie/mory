@@ -66,7 +66,7 @@ export const useAppStore = defineStore('app', () => {
 
   // Service worker
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register(`${process.env.BASE_URL}service-worker.js`).then((registration) => {
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}service-worker.js`).then((registration) => {
       console.log('Service worker registration succeeded:', registration);
     }).catch((error) => {
       console.error(`Service worker registration failed: ${error}`);
@@ -79,7 +79,7 @@ export const useAppStore = defineStore('app', () => {
         serviceWorker.value.postMessage({
           type: 'configure',
           value: {
-            apiUrl: new URL(process.env.VUE_APP_API_URL!, window.location.href).href,
+            apiUrl: new URL(import.meta.env.VITE_APP_API_URL!, window.location.href).href,
             apiToken: token.value,
           },
         });
