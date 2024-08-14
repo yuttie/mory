@@ -1,3 +1,6 @@
+## 0.19.0 (2024-08-15)
+* Migrate from Vue CLI to Vite
+
 ## 0.18.0 (2024-08-14)
 * Display rendered notes within a shadow DOM
 * Replace markdown-it with remark
