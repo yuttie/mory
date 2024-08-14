@@ -1,6 +1,6 @@
 [package]
 name = "moried"
-version = "1.0.0"
+version = "1.1.0"
 authors = ["Yuta Taniguchi <yuta.taniguchi.y.t@gmail.com>"]
 edition = "2021"
 

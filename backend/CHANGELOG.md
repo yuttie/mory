@@ -1,3 +1,9 @@
+## 1.1.0 (2024-08-14)
+* Upgrade dependencies to their latest versions
+* Relax size limit of file upload (from 8 MiB to 16 MiB)
+* Fix Docker container build problem
+* Save cached entries to a cache file
+
 ## 1.0.0 (2022-12-23)
 * Remove openssl from dependencies
 * Upgrade rust-argon2 to v1.0.0
