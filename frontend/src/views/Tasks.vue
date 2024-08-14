@@ -430,7 +430,7 @@ const groupedTasks = computed(() => {
 
 // Lifecycle hooks
 onMounted(() => {
-  document.title = `Tasks | ${process.env.VUE_APP_NAME}`;
+  document.title = `Tasks | ${import.meta.env.VITE_APP_NAME}`;
   load();
   window.addEventListener('focus', loadIfNotEditing);
 });

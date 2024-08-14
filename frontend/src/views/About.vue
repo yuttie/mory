@@ -15,15 +15,15 @@ import { useRouter, useRoute } from '@/composables/vue-router';
 import { useVuetify } from '@/composables/vuetify';
 
 // Reactive states
-const name: string = ref(process.env.VUE_APP_NAME!);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
-const version: string = ref(process.env.VUE_APP_VERSION!);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
-const author: string = ref(process.env.VUE_APP_AUTHOR!);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+const name: string = ref(import.meta.env.VITE_APP_NAME!);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+const version: string = ref(import.meta.env.VITE_APP_VERSION!);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+const author: string = ref(import.meta.env.VITE_APP_AUTHOR!);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
 const fromYear = ref(2020);
-const buildYear: number = ref(parseInt(process.env.VUE_APP_BUILD_YEAR!));  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+const buildYear: number = ref(parseInt(import.meta.env.VITE_APP_BUILD_YEAR!));  // eslint-disable-line @typescript-eslint/no-non-null-assertion
 
 // Lifecycle hooks
 onMounted(() => {
-  document.title = `About | ${process.env.VUE_APP_NAME}`;
+  document.title = `About | ${import.meta.env.VITE_APP_NAME}`;
 });
 </script>
 
@@ -50,7 +50,7 @@ onMounted(() => {
   background-size: contain;
   background-position: center;
   background-repeat: no-repeat;
-  background-image: url("../assets/logo.svg");
+  background-image: url("/img/logo.svg");
 
   margin-bottom: 0.2em;
 }
