@@ -51,7 +51,7 @@
       elevation="0"
     >
       <v-img
-        src="./assets/logo.svg"
+        src="/img/logo.svg"
         aspect-ratio="1"
         contain
         max-width="24"
@@ -754,7 +754,7 @@ defineExpose({
   background-size: contain;
   background-position: center;
   background-repeat: no-repeat;
-  background-image: url("assets/logo.svg");
+  background-image: url("/img/logo.svg");
 }
 
 .login-overlay {
