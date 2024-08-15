@@ -245,11 +245,10 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick, defineProps, defineEmits, defineExpose, del } from 'vue';
+import { ref, computed, onMounted, onUnmounted, defineEmits, defineExpose, del } from 'vue';
 import type { Ref } from 'vue';
 
 import { useRouter, useRoute } from '@/composables/vue-router';
-import { useVuetify } from '@/composables/vuetify';
 
 import TaskEditor from '@/components/TaskEditor.vue';
 import TaskListItem from '@/components/TaskListItem.vue';
@@ -258,9 +257,6 @@ import * as api from '@/api';
 import axios from 'axios';
 import type { Task } from '@/api';
 import { isMetadataEventMultiple, validateEvent } from '@/api';
-import type { ListEntry } from '@/api';
-import Color from 'color';
-import materialColors from 'vuetify/lib/util/colors';
 import draggable from 'vuedraggable';
 import dayjs from 'dayjs';
 import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
