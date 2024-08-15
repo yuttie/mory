@@ -7,8 +7,6 @@
 <script lang="ts" setup>
 import { defineEmits } from 'vue';
 
-import { useRouter, useRoute } from '@/composables/vue-router';
-
 import EditableViewer from '@/components/EditableViewer.vue';
 
 // Emits

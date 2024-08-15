@@ -46,8 +46,6 @@
 <script lang="ts" setup>
 import { computed, defineProps, defineEmits } from 'vue';
 
-import { useRouter, useRoute } from '@/composables/vue-router';
-
 import type { Task } from '@/api';
 
 import dayjs from 'dayjs';
