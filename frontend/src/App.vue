@@ -399,7 +399,7 @@ const uploadListBadgeColor = computed(() => {
 });
 
 const uploadListBadgeIcon = computed(() => {
-  const [status, num] = uploadListStatus.value;
+  const [status, _num] = uploadListStatus.value;
 
   if      (status === 'in-progress') { return 'mdi-autorenew';         }
   else if (status === 'error')       { return 'mdi-exclamation-thick'; }
