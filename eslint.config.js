@@ -24,7 +24,19 @@ export default ts.config(
     rules: {
       'no-console': process.env.NODE_ENV === 'production' ? 'warn' : 'off',
       'no-debugger': process.env.NODE_ENV === 'production' ? 'warn' : 'off',
-      '@typescript-eslint/no-unused-vars': ['warn', { 'argsIgnorePattern': '^_' }],
+      // Emulate TypeScript style of exempting names starting with _
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          'args': 'all',
+          'argsIgnorePattern': '^_',
+          'caughtErrors': 'all',
+          'caughtErrorsIgnorePattern': '^_',
+          'destructuredArrayIgnorePattern': '^_',
+          'varsIgnorePattern': '^_',
+          'ignoreRestSiblings': true,
+        },
+      ],
       'vue/valid-v-slot': ['error', { 'allowModifiers': true }],
       'vue/multi-word-component-names': ['error', { 'ignores': ['About', 'Calendar', 'Config', 'Editor', 'Find', 'Gravatar', 'Home', 'Note', 'Tasks']}],
     },
