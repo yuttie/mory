@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm';
 import { remarkDefinitionList, defListHastHandlers } from 'remark-definition-list';
 import remarkMath from 'remark-math';
 import remarkRehype from 'remark-rehype';
+import rehypeRaw from 'rehype-raw';
 import myRehypeEmbedLineNumbers from '@/rehype-embed-line-numbers';
 import rehypeUrlInspector from '@jsdevtools/rehype-url-inspector';
 import rehypeSlug from 'rehype-slug';
@@ -33,6 +34,7 @@ const processor = unified()
     },
     allowDangerousHtml: true,
   })
+  .use(rehypeRaw)
   .use(myRehypeEmbedLineNumbers)
   .use(rehypeUrlInspector, {
     inspectEach: ({ url, propertyName, node }) => {
