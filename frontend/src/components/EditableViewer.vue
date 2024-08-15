@@ -166,11 +166,11 @@
               </v-expansion-panel-header>
               <v-expansion-panel-content>
                 <ol class="tree">
-                  <li v-for="h1 of toc" v-bind:key="h1.title"><a v-bind:href="h1.href">{{ h1.title }}</a>
+                  <li v-for="h1 of toc" v-bind:key="h1.title"><a v-bind:href="h1.href" v-on:click="jumpTo(h1.href)">{{ h1.title }}</a>
                     <ol>
-                      <li v-for="h2 of h1.children" v-bind:key="h2.title"><a v-bind:href="h2.href">{{ h2.title }}</a>
+                      <li v-for="h2 of h1.children" v-bind:key="h2.title"><a v-bind:href="h2.href" v-on:click="jumpTo(h2.href)">{{ h2.title }}</a>
                         <ol>
-                          <li v-for="h3 of h2.children" v-bind:key="h3.title"><a v-bind:href="h3.href">{{ h3.title }}</a>
+                          <li v-for="h3 of h2.children" v-bind:key="h3.title"><a v-bind:href="h3.href" v-on:click="jumpTo(h3.href)">{{ h3.title }}</a>
                           </li>
                         </ol>
                       </li>
@@ -547,6 +547,10 @@ onUnmounted(() => {
 });
 
 // Methods
+function jumpTo(id: string) {
+  shadowRoot.value.querySelector(`[id="${id.slice(1)}"]`).scrollIntoView();
+}
+
 async function loadHighlightjsTheme(themeName: string): Promise<string> {
   const loaders = {
     'a11y-dark': () => { return import('highlight.js/styles/a11y-dark.min.css?raw'); },
