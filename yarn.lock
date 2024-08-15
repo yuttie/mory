@@ -471,14 +471,14 @@
   integrity sha512-nG96G3Wp6acyAgJqGasjODb+acrI7KltPiRxzHPXnP3NgI28bpQDRv53olbqGXbfcgF5aiiHmO3xpwEpS5Ld9g==
 
 "@types/unist@*", "@types/unist@^3.0.0", "@types/unist@^3.0.2":
-  version "3.0.2"
-  resolved "https://registry.yarnpkg.com/@types/unist/-/unist-3.0.2.tgz#6dd61e43ef60b34086287f83683a5c1b2dc53d20"
-  integrity sha512-dqId9J8K/vGi5Zr7oo212BGii5m3q5Hxlkwy3WpYuKPklmBEvsbMYYyLxAQpSffdLl/gdW0XUpKWFvYmyoWCoQ==
+  version "3.0.3"
+  resolved "https://registry.yarnpkg.com/@types/unist/-/unist-3.0.3.tgz#acaab0f919ce69cce629c2d4ed2eb4adc1b6c20c"
+  integrity sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q==
 
 "@types/unist@^2", "@types/unist@^2.0.0", "@types/unist@^2.0.2":
-  version "2.0.10"
-  resolved "https://registry.yarnpkg.com/@types/unist/-/unist-2.0.10.tgz#04ffa7f406ab628f7f7e97ca23e290cd8ab15efc"
-  integrity sha512-IfYcSBWE3hLpBg8+X2SEa8LVkJdJEkT2Ese2aaLs3ptGdVtABxndrMaxuFlQ1qdFf9Q5rDvDpxI3WwgvKFAsQA==
+  version "2.0.11"
+  resolved "https://registry.yarnpkg.com/@types/unist/-/unist-2.0.11.tgz#11af57b127e32487774841f7a4e54eab166d03c4"
+  integrity sha512-CmBKiL6NNo/OqgmMn95Fk9Whlp2mtvIv+KNpQKN2F4SjvrEesubTRWGYSg+BnWZOnlCaSTU1sMpsBOzgbYhnsA==
 
 "@types/uuid@^9.0.0":
   version "9.0.8"
@@ -597,24 +597,24 @@
     path-browserify "^1.0.1"
     vscode-uri "^3.0.8"
 
-"@vue/compiler-core@3.4.37":
-  version "3.4.37"
-  resolved "https://registry.yarnpkg.com/@vue/compiler-core/-/compiler-core-3.4.37.tgz#55db3900e09424c65c39111a05a3c6e698f371e3"
-  integrity sha512-ZDDT/KiLKuCRXyzWecNzC5vTcubGz4LECAtfGPENpo0nrmqJHwuWtRLxk/Sb9RAKtR9iFflFycbkjkY+W/PZUQ==
+"@vue/compiler-core@3.4.38":
+  version "3.4.38"
+  resolved "https://registry.yarnpkg.com/@vue/compiler-core/-/compiler-core-3.4.38.tgz#326dfe3c92fa2b0f1dc9b39a948a231980253496"
+  integrity sha512-8IQOTCWnLFqfHzOGm9+P8OPSEDukgg3Huc92qSG49if/xI2SAwLHQO2qaPQbjCWPBcQoO1WYfXfTACUrWV3c5A==
   dependencies:
     "@babel/parser" "^7.24.7"
-    "@vue/shared" "3.4.37"
-    entities "^5.0.0"
+    "@vue/shared" "3.4.38"
+    entities "^4.5.0"
     estree-walker "^2.0.2"
     source-map-js "^1.2.0"
 
 "@vue/compiler-dom@^3.4.0":
-  version "3.4.37"
-  resolved "https://registry.yarnpkg.com/@vue/compiler-dom/-/compiler-dom-3.4.37.tgz#a1fcf79e287cb828545082ff1afa8630480a3044"
-  integrity sha512-rIiSmL3YrntvgYV84rekAtU/xfogMUJIclUMeIKEtVBFngOL3IeZHhsH3UaFEgB5iFGpj6IW+8YuM/2Up+vVag==
+  version "3.4.38"
+  resolved "https://registry.yarnpkg.com/@vue/compiler-dom/-/compiler-dom-3.4.38.tgz#90348fac1130e0bbd408b650635cb626b3b9df06"
+  integrity sha512-Osc/c7ABsHXTsETLgykcOwIxFktHfGSUDkb05V61rocEfsFDcjDLH/IHJSNJP+/Sv9KeN2Lx1V6McZzlSb9EhQ==
   dependencies:
-    "@vue/compiler-core" "3.4.37"
-    "@vue/shared" "3.4.37"
+    "@vue/compiler-core" "3.4.38"
+    "@vue/shared" "3.4.38"
 
 "@vue/compiler-sfc@2.7.16":
   version "2.7.16"
@@ -654,10 +654,10 @@
     muggle-string "^0.4.1"
     path-browserify "^1.0.1"
 
-"@vue/shared@3.4.37", "@vue/shared@^3.4.0":
-  version "3.4.37"
-  resolved "https://registry.yarnpkg.com/@vue/shared/-/shared-3.4.37.tgz#4f4c08a2e73da512a77b47165cf59ffbc1b5ade8"
-  integrity sha512-nIh8P2fc3DflG8+5Uw8PT/1i17ccFn0xxN/5oE9RfV5SVnd7G0XEFRwakrnNFE/jlS95fpGXDVG5zDETS26nmg==
+"@vue/shared@3.4.38", "@vue/shared@^3.4.0":
+  version "3.4.38"
+  resolved "https://registry.yarnpkg.com/@vue/shared/-/shared-3.4.38.tgz#552a6770098bfd556fa3e2c686c9d3b4f4cd94c2"
+  integrity sha512-q0xCiLkuWWQLzVrecPb0RMsNWyxICOjPrcrwxTUEHb1fsnvni4dcuyG7RT/Ie7VPTvnjzIaWzRMUBsrqNj/hhw==
 
 ace-builds@^1.14.0:
   version "1.35.4"
@@ -755,9 +755,9 @@ available-typed-arrays@^1.0.7:
     possible-typed-array-names "^1.0.0"
 
 axios@^1.2.1:
-  version "1.7.3"
-  resolved "https://registry.yarnpkg.com/axios/-/axios-1.7.3.tgz#a1125f2faf702bc8e8f2104ec3a76fab40257d85"
-  integrity sha512-Ar7ND9pU99eJ9GpoGQKhKf58GpUOgnzuaB7ueNQ5BMi0p+LZ5oaEnfF999fAArcTIBwXTCHAmGcHOZJaWPq9Nw==
+  version "1.7.4"
+  resolved "https://registry.yarnpkg.com/axios/-/axios-1.7.4.tgz#4c8ded1b43683c8dd362973c393f3ede24052aa2"
+  integrity sha512-DukmaFRnY6AzAALSH4J2M3k6PkaC+MfaAGdEERRWcC9q3/TWQwLpHR8ZRLKTdQ3aBDL64EdluRDjJqKw+BPZEw==
   dependencies:
     follow-redirects "^1.15.6"
     form-data "^4.0.0"
@@ -1396,15 +1396,10 @@ elkjs@^0.9.0:
   resolved "https://registry.yarnpkg.com/elkjs/-/elkjs-0.9.3.tgz#16711f8ceb09f1b12b99e971b138a8384a529161"
   integrity sha512-f/ZeWvW/BCXbhGEf1Ujp29EASo/lk1FDnETgNKwJrsVvGZhUWCZyg3xLJjAsxfOmt8KjswHmI5EwCQcPMpOYhQ==
 
-entities@^4.4.0:
+entities@^4.4.0, entities@^4.5.0:
   version "4.5.0"
   resolved "https://registry.yarnpkg.com/entities/-/entities-4.5.0.tgz#5d268ea5e7113ec74c4d033b79ea5a35a488fb48"
   integrity sha512-V0hjH4dGPh9Ao5p0MoRY6BVqtwCjhz6vI5LT8AJ55H+4g9/4vbHx1I54fS0XuclLhDHArPQCiMjDxjaL8fPxhw==
-
-entities@^5.0.0:
-  version "5.0.0"
-  resolved "https://registry.yarnpkg.com/entities/-/entities-5.0.0.tgz#b2ab51fe40d995817979ec79dd621154c3c0f62b"
-  integrity sha512-BeJFvFRJddxobhvEdm5GqHzRV/X+ACeuw0/BuuxsCh1EUZcAIz8+kYmBp/LrQuloy6K1f3a0M7+IhmZ7QnkISA==
 
 errno@^0.1.1:
   version "0.1.8"
@@ -3424,7 +3419,7 @@ postcss-selector-parser@^6.0.15:
     cssesc "^3.0.0"
     util-deprecate "^1.0.2"
 
-postcss@^8.4.14, postcss@^8.4.40:
+postcss@^8.4.14, postcss@^8.4.41:
   version "8.4.41"
   resolved "https://registry.yarnpkg.com/postcss/-/postcss-8.4.41.tgz#d6104d3ba272d882fe18fc07d15dc2da62fa2681"
   integrity sha512-TesUflQ0WKZqAvg52PWL6kHgLKP6xB6heTOdoYM0Wt2UHyxNa4K25EZZMgKns3BH1RLVbZCREPpLY0rhnNoHVQ==
@@ -4321,12 +4316,12 @@ vfile@^6.0.0:
     vfile-message "^4.0.0"
 
 vite@^5.4.0:
-  version "5.4.0"
-  resolved "https://registry.yarnpkg.com/vite/-/vite-5.4.0.tgz#11dca8a961369ba8b5cae42d068c7ad684d5370f"
-  integrity sha512-5xokfMX0PIiwCMCMb9ZJcMyh5wbBun0zUzKib+L65vAZ8GY9ePZMXxFrHbr/Kyll2+LSCY7xtERPpxkBDKngwg==
+  version "5.4.1"
+  resolved "https://registry.yarnpkg.com/vite/-/vite-5.4.1.tgz#2aa72370de824d23f53658affd807e4c9905b058"
+  integrity sha512-1oE6yuNXssjrZdblI9AfBbHCC41nnyoVoEZxQnID6yvQZAFBzxxkqoFLtHUMkYunL8hwOLEjgTuxpkRxvba3kA==
   dependencies:
     esbuild "^0.21.3"
-    postcss "^8.4.40"
+    postcss "^8.4.41"
     rollup "^4.13.0"
   optionalDependencies:
     fsevents "~2.3.3"
