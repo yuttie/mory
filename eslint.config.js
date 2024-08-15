@@ -2,6 +2,11 @@ import js from '@eslint/js';
 import ts from 'typescript-eslint';
 import eslintPluginVue from 'eslint-plugin-vue';
 export default ts.config(
+  {
+    ignores: [
+      'dist',
+    ],
+  },
   js.configs.recommended,
   ...ts.configs.recommended,
   ...eslintPluginVue.configs['flat/vue2-recommended'],
