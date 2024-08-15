@@ -2,6 +2,7 @@ import js from '@eslint/js';
 import ts from 'typescript-eslint';
 import eslintPluginVue from 'eslint-plugin-vue';
 export default ts.config(
+  // Globally ignore some files
   {
     ignores: [
       'dist',
@@ -10,6 +11,7 @@ export default ts.config(
   js.configs.recommended,
   ...ts.configs.recommended,
   ...eslintPluginVue.configs['flat/vue2-recommended'],
+  // Enable TypeScript parser in *.vue files
   {
     files: ['*.vue', '**/*.vue'],
     languageOptions: {
@@ -17,6 +19,8 @@ export default ts.config(
         parser: '@typescript-eslint/parser',
       },
     },
+  },
+  {
     rules: {
       'no-console': process.env.NODE_ENV === 'production' ? 'warn' : 'off',
       'no-debugger': process.env.NODE_ENV === 'production' ? 'warn' : 'off',
