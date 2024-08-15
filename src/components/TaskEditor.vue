@@ -130,13 +130,10 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick, defineProps, defineEmits, defineExpose } from 'vue';
-import type { Ref } from 'vue';
+import { ref, computed, defineProps, defineEmits, defineExpose } from 'vue';
 
 import { useRouter, useRoute } from '@/composables/vue-router';
-import { useVuetify } from '@/composables/vuetify';
 
-import * as api from '@/api';
 import type { Task } from '@/api';
 
 import dayjs from 'dayjs';
