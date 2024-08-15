@@ -299,7 +299,7 @@ import Editor from '@/components/Editor.vue';
 import metadataSchema from '@/metadata-schema.json';
 
 import Ajv from 'ajv';
-import type { JSONSchemaType, DefinedError } from 'ajv';
+import type { DefinedError } from 'ajv';
 import * as api from '@/api';
 import { loadConfigValue } from '@/config';
 import { CliPrettify } from 'markdown-table-prettify';
