@@ -296,7 +296,7 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
-function clearQuery(e: MouseEvent) {
+function clearQuery(_e: MouseEvent) {
   queryText.value = '';
 }
 
