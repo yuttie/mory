@@ -31,6 +31,7 @@ const processor = unified()
     handlers: {
       ...defListHastHandlers,
     },
+    allowDangerousHtml: true,
   })
   .use(myRehypeEmbedLineNumbers)
   .use(rehypeUrlInspector, {
@@ -61,7 +62,9 @@ const processor = unified()
   .use(rehypeMermaid, {
     strategy: 'inline-svg',
   })
-  .use(rehypeStringify);
+  .use(rehypeStringify, {
+    allowDangerousHtml: true,
+  });
 
 async function renderMarkdown(markdown: string): Promise<VFile> {
   const file = await processor.process(markdown);
