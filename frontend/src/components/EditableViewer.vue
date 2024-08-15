@@ -143,7 +143,7 @@
               This is the latest version.
             </template>
           </v-snackbar>
-          <div ref="shadowDomRootElement">
+          <div ref="shadowDomRootElement" style="user-select: text">
           </div>
         </div>
         <div
