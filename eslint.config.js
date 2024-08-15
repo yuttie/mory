@@ -22,8 +22,6 @@ export default ts.config(
   },
   {
     rules: {
-      'no-console': process.env.NODE_ENV === 'production' ? 'warn' : 'off',
-      'no-debugger': process.env.NODE_ENV === 'production' ? 'warn' : 'off',
       // Emulate TypeScript style of exempting names starting with _
       '@typescript-eslint/no-unused-vars': [
         'error',
