@@ -10,8 +10,6 @@
 <script lang="ts" setup>
 import { ref, onMounted } from 'vue';
 
-import { useRouter, useRoute } from '@/composables/vue-router';
-
 // Reactive states
 const name: string = ref(import.meta.env.VITE_APP_NAME!);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
 const version: string = ref(import.meta.env.VITE_APP_VERSION!);  // eslint-disable-line @typescript-eslint/no-non-null-assertion

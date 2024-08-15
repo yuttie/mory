@@ -132,8 +132,6 @@
 <script lang="ts" setup>
 import { ref, computed, defineProps, defineEmits, defineExpose } from 'vue';
 
-import { useRouter, useRoute } from '@/composables/vue-router';
-
 import type { Task } from '@/api';
 
 import dayjs from 'dayjs';

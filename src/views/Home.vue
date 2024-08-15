@@ -26,8 +26,6 @@
 <script lang="ts" setup>
 import { ref, computed, onMounted, defineEmits, defineExpose } from 'vue';
 
-import { useRouter, useRoute } from '@/composables/vue-router';
-
 import * as api from '@/api';
 import type { ListEntry } from '@/api';
 

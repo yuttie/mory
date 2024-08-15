@@ -73,8 +73,6 @@
 <script lang="ts" setup>
 import { ref, watch, onMounted, defineExpose } from 'vue';
 
-import { useRouter, useRoute } from '@/composables/vue-router';
-
 import * as api from '@/api';
 import { loadConfigValue, saveConfigValue } from '@/config';
 import YAML from 'yaml';
