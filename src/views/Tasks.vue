@@ -306,7 +306,7 @@ const knownTags = computed((): [string, number][] => {
       tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
     }
   }
-  for (const [date, dayTasks] of Object.entries(tasks.value.scheduled)) {
+  for (const [_date, dayTasks] of Object.entries(tasks.value.scheduled)) {
     for (const task of dayTasks as Task[]) {
       for (const tag of task.tags || []) {
         tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
