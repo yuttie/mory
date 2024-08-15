@@ -551,7 +551,9 @@ function jumpTo(id: string) {
   const element = shadowRoot.value.querySelector(`[id="${id.slice(1)}"]`);
   if (element !== null) {
     element.scrollIntoView();
-    window.scrollBy(0, -48);  // Compensate for the app bar height
+    // Compensate for the app bar height
+    const appBarHeight = document.querySelector('#app-bar')?.clientHeight || 0;
+    window.scrollBy(0, -appBarHeight);
   }
 }
 
