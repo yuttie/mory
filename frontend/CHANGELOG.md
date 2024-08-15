@@ -1,3 +1,9 @@
+## 0.19.3 (2024-08-16)
+* fix(markdown): Re-enable the support for HTML in Markdown
+* fix(EditableViewer): Allow users to select rendered note text
+* feat(EditableViewer): Make "Metadata" panel more accessible
+* feat(EditableViewer): Improve usability of Table of Contents navigation
+
 ## 0.19.2 (2024-08-15)
 * fix(EditableViewer): Repair broken ToC link navigation
 
