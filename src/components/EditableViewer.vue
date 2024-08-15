@@ -548,7 +548,10 @@ onUnmounted(() => {
 
 // Methods
 function jumpTo(id: string) {
-  shadowRoot.value.querySelector(`[id="${id.slice(1)}"]`).scrollIntoView();
+  const element = shadowRoot.value.querySelector(`[id="${id.slice(1)}"]`);
+  if (element !== null) {
+    element.scrollIntoView();
+  }
 }
 
 async function loadHighlightjsTheme(themeName: string): Promise<string> {
