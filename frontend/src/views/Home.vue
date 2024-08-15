@@ -34,7 +34,6 @@ import * as api from '@/api';
 import type { ListEntry } from '@/api';
 import Color from 'color';
 import materialColors from 'vuetify/lib/util/colors';
-import XXH from 'xxhashjs';
 
 // Emits
 const emit = defineEmits<{
