@@ -137,7 +137,7 @@ import { useRouter, useRoute } from '@/composables/vue-router';
 import { useVuetify } from '@/composables/vuetify';
 
 import * as api from '@/api';
-import { Task } from '@/api';
+import type { Task } from '@/api';
 
 import dayjs from 'dayjs';
 

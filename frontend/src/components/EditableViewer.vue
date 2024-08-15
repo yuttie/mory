@@ -298,7 +298,8 @@ import { useVuetify } from '@/composables/vuetify';
 import Editor from '@/components/Editor.vue';
 import metadataSchema from '@/metadata-schema.json';
 
-import Ajv, { JSONSchemaType, DefinedError } from 'ajv';
+import Ajv from 'ajv';
+import type { JSONSchemaType, DefinedError } from 'ajv';
 import * as api from '@/api';
 import { loadConfigValue, saveConfigValue } from '@/config';
 import { CliPrettify } from 'markdown-table-prettify';
