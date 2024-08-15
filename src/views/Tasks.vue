@@ -240,7 +240,7 @@
         </draggable>
       </div>
     </div>
-    <v-snackbar v-model="error" color="error" top timeout="5000">{{ errorText }}</v-snackbar>
+    <v-snackbar v-model="errorNotification" color="error" top timeout="5000">{{ errorNotificationText }}</v-snackbar>
   </div>
 </template>
 
@@ -294,8 +294,8 @@ const newGroupFilter = ref('');
 // Others
 const isLoading = ref(false);
 const hideDone = ref(true);
-const error = ref(false);
-const errorText = ref('');
+const errorNotification = ref(false);
+const errorNotificationText = ref('');
 
 // Computed properties
 const knownTags = computed((): [string, number][] => {
@@ -641,15 +641,15 @@ async function load() {
           load();
         }
         else {
-          error.value = true;
-          errorText.value = error.toString();
+          errorNotification.value = true;
+          errorNotificationText.value = error.toString();
           console.log('Unhandled error: {}', error.response);
           isLoading.value = false;
         }
       }
       else {
-        error.value = true;
-        errorText.value = error.toString();
+        errorNotification.value = true;
+        errorNotificationText.value = error.toString();
         console.log('Unhandled error: {}', error);
         isLoading.value = false;
       }
