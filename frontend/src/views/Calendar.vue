@@ -95,6 +95,7 @@
 
 <script lang="ts" setup>
 import { ref, computed, watch, onMounted, onUnmounted, defineEmits, defineExpose } from 'vue';
+import type { Ref } from 'vue';
 
 import { useRouter, useRoute } from '@/composables/vue-router';
 
@@ -116,7 +117,7 @@ const router = useRouter();
 const route = useRoute();
 
 // Reactive states
-const entries: ListEntry[] = ref([]);
+const entries: Ref<ListEntry[]> = ref([]);
 const isLoading = ref(false);
 const error = ref(false);
 const errorText = ref('');
