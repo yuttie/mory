@@ -159,27 +159,6 @@
             v-model="sidebarPanelState"
           >
             <v-expansion-panel
-              class="toc"
-            >
-              <v-expansion-panel-header>
-                Table of Contents
-              </v-expansion-panel-header>
-              <v-expansion-panel-content>
-                <ol class="tree">
-                  <li v-for="h1 of toc" v-bind:key="h1.title"><a v-bind:href="h1.href" v-on:click="jumpTo(h1.href)">{{ h1.title }}</a>
-                    <ol>
-                      <li v-for="h2 of h1.children" v-bind:key="h2.title"><a v-bind:href="h2.href" v-on:click="jumpTo(h2.href)">{{ h2.title }}</a>
-                        <ol>
-                          <li v-for="h3 of h2.children" v-bind:key="h3.title"><a v-bind:href="h3.href" v-on:click="jumpTo(h3.href)">{{ h3.title }}</a>
-                          </li>
-                        </ol>
-                      </li>
-                    </ol>
-                  </li>
-                </ol>
-              </v-expansion-panel-content>
-            </v-expansion-panel>
-            <v-expansion-panel
               class="metadata"
               v-if="rendered.metadata"
             >
@@ -242,6 +221,27 @@
                 <template v-else>
                   <span class="error--text font-weight-bold">{{ rendered.metadata.parseError.toString() }}</span>
                 </template>
+              </v-expansion-panel-content>
+            </v-expansion-panel>
+            <v-expansion-panel
+              class="toc"
+            >
+              <v-expansion-panel-header>
+                Table of Contents
+              </v-expansion-panel-header>
+              <v-expansion-panel-content>
+                <ol class="tree">
+                  <li v-for="h1 of toc" v-bind:key="h1.title"><a v-bind:href="h1.href" v-on:click="jumpTo(h1.href)">{{ h1.title }}</a>
+                    <ol>
+                      <li v-for="h2 of h1.children" v-bind:key="h2.title"><a v-bind:href="h2.href" v-on:click="jumpTo(h2.href)">{{ h2.title }}</a>
+                        <ol>
+                          <li v-for="h3 of h2.children" v-bind:key="h3.title"><a v-bind:href="h3.href" v-on:click="jumpTo(h3.href)">{{ h3.title }}</a>
+                          </li>
+                        </ol>
+                      </li>
+                    </ol>
+                  </li>
+                </ol>
               </v-expansion-panel-content>
             </v-expansion-panel>
           </v-expansion-panels>
