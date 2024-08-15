@@ -1143,10 +1143,7 @@ async function load(path: string) {
       if (route.hash) {
         const anchorSelector = decodeURIComponent(route.hash);
         nextTick(() => {
-          const anchor = document.querySelector(anchorSelector);
-          if (anchor) {
-            anchor.scrollIntoView();
-          }
+          jumpTo(anchorSelector);
         });
       }
 
