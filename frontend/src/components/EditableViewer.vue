@@ -301,7 +301,7 @@ import metadataSchema from '@/metadata-schema.json';
 import Ajv from 'ajv';
 import type { JSONSchemaType, DefinedError } from 'ajv';
 import * as api from '@/api';
-import { loadConfigValue, saveConfigValue } from '@/config';
+import { loadConfigValue } from '@/config';
 import { CliPrettify } from 'markdown-table-prettify';
 import { renderMarkdown } from '@/markdown';
 import less from 'less';
