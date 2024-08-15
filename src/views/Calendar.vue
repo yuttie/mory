@@ -107,7 +107,6 @@ import Color from 'color';
 import materialColors from 'vuetify/lib/util/colors';
 import dayjs from 'dayjs';
 import { renderMarkdown } from '@/markdown';
-import XXH from 'xxhashjs';
 
 // Emits
 const emit = defineEmits<{
