@@ -1301,17 +1301,6 @@ function focusOrBlurEditor() {
   });
 }
 
-function editorHasFocus(): boolean {
-  if (useSimpleEditor.value) {
-    const textarea = editor.value;
-    return document.activeElement === textarea;
-  }
-  else {
-    const textarea = (editor.value as Editor).$el.querySelector('textarea');
-    return document.activeElement === textarea;
-  }
-}
-
 function notifyUpstreamState(e: FocusEvent) {
   checkUpstreamState()
     .then(state => {
