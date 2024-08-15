@@ -1,3 +1,6 @@
+## 0.19.2 (2024-08-15)
+* fix(EditableViewer): Repair broken ToC link navigation
+
 ## 0.19.1 (2024-08-15)
 * fix(service-worker): Fix typo
 * fix(Tasks): Rename error-related ref variables that are conflicting with catched 'error'
