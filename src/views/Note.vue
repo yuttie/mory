@@ -5,11 +5,9 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick, defineProps, defineEmits, defineExpose } from 'vue';
-import type { Ref } from 'vue';
+import { defineEmits } from 'vue';
 
 import { useRouter, useRoute } from '@/composables/vue-router';
-import { useVuetify } from '@/composables/vuetify';
 
 import EditableViewer from '@/components/EditableViewer.vue';
 
