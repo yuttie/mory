@@ -24,16 +24,12 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick, defineProps, defineEmits, defineExpose } from 'vue';
-import type { Ref } from 'vue';
+import { ref, computed, onMounted, defineEmits, defineExpose } from 'vue';
 
 import { useRouter, useRoute } from '@/composables/vue-router';
-import { useVuetify } from '@/composables/vuetify';
 
 import * as api from '@/api';
 import type { ListEntry } from '@/api';
-import Color from 'color';
-import materialColors from 'vuetify/lib/util/colors';
 
 // Emits
 const emit = defineEmits<{
