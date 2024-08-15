@@ -1,3 +1,9 @@
+## 0.19.1 (2024-08-15)
+* fix(service-worker): Fix typo
+* fix(Tasks): Rename error-related ref variables that are conflicting with catched 'error'
+* Refactoring and cleanup of the codebase
+* Improve development settings
+
 ## 0.19.0 (2024-08-15)
 * Migrate from Vue CLI to Vite
 
