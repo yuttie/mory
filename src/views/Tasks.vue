@@ -366,7 +366,7 @@ const tasksWithDeadline = computed(() => {
     }
   }
   // Sort
-  result.sort(([date1, i1, task1], [date2, i2, task2]) => {
+  result.sort(([_date1, _i1, task1], [_date2, _i2, task2]) => {
     if (task1.done && !task2.done) {
       return +1;
     }

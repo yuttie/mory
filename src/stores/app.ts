@@ -45,7 +45,7 @@ export const useAppStore = defineStore('app', () => {
           value: token.value,
         });
       }
-    }).catch(error => {
+    }).catch(_error => {
       isLoggingIn.value = false;
       loginError.value = "Incorrect username or password";
     });

@@ -1438,7 +1438,7 @@ function save() {
   api.addNote(
     path,
     content
-  ).then(res => {
+  ).then(_res => {
     initialText.value = content;
     noteHasUpstream.value = true;
     isSaving.value = false;
@@ -1494,7 +1494,7 @@ function rename() {
     api.renameNote(
       oldPath,
       newPath.value,
-    ).then(res => {
+    ).then(_res => {
       router.replace({
         path: `/note/${newPath.value}`,
       });

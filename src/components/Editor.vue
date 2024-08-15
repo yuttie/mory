@@ -54,7 +54,7 @@ onMounted(() => {
   editor.value!.on('change', () => {  // eslint-disable-line @typescript-eslint/no-non-null-assertion
     emit('change', editor.value!.getValue());  // eslint-disable-line @typescript-eslint/no-non-null-assertion
   });
-  editor.value!.getSession().on('changeScrollTop', (e: any) => {  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+  editor.value!.getSession().on('changeScrollTop', (_e: any) => {  // eslint-disable-line @typescript-eslint/no-non-null-assertion
     if (!ignoreNextChangeScrollTopEvent.value) {
       const lineNumber = editor.value!.renderer.getFirstFullyVisibleRow();
       emit('scroll', lineNumber);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
