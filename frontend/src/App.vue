@@ -323,8 +323,6 @@
 <script lang="ts" setup>
 import { ref, computed, onMounted, onUnmounted, defineExpose } from 'vue';
 
-import { useRouter, useRoute } from '@/composables/vue-router';
-import { useVuetify } from '@/composables/vuetify';
 
 import { useAppStore } from '@/stores/app';
 
@@ -344,9 +342,6 @@ interface TreeNode {
 }
 
 // Composables
-const router = useRouter();
-const route = useRoute();
-const vuetify = useVuetify();
 const appStore = useAppStore();
 
 // Reactive states
