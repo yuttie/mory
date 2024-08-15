@@ -44,6 +44,7 @@
     </v-navigation-drawer>
 
     <v-app-bar
+      id="app-bar"
       app
       dense
       clipped-left
