@@ -1,3 +1,7 @@
+## 0.19.4 (2024-08-16)
+* chore(deps): Update dependencies
+* fix(markdown): Rewrite URLs found inside embedded HTML
+
 ## 0.19.3 (2024-08-16)
 * fix(markdown): Re-enable the support for HTML in Markdown
 * fix(EditableViewer): Allow users to select rendered note text
