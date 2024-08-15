@@ -1,5 +1,6 @@
 import Vue from 'vue';
-import VueRouter, { RouteConfig } from 'vue-router';
+import VueRouter from 'vue-router';
+import type { RouteConfig } from 'vue-router';
 
 const Home     = () => import('../views/Home.vue');
 const Calendar = () => import('../views/Calendar.vue');

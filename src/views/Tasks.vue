@@ -256,8 +256,9 @@ import TaskListItem from '@/components/TaskListItem.vue';
 
 import * as api from '@/api';
 import axios from 'axios';
-import { Task } from '@/api';
-import { isMetadataEventMultiple, ListEntry, validateEvent } from '@/api';
+import type { Task } from '@/api';
+import { isMetadataEventMultiple, validateEvent } from '@/api';
+import type { ListEntry } from '@/api';
 import Color from 'color';
 import materialColors from 'vuetify/lib/util/colors';
 import draggable from 'vuedraggable';

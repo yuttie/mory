@@ -1,5 +1,6 @@
 // Utilities
-import { Ref, ref, computed, watch, onMounted, onUnmounted, nextTick, defineProps, defineEmits, defineExpose } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, defineProps, defineEmits, defineExpose } from 'vue';
+import type { Ref } from 'vue';
 import { defineStore } from 'pinia'
 
 import { useLocalStorage } from '@/composables/localStorage';

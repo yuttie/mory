@@ -115,7 +115,8 @@ import { useRouter, useRoute } from '@/composables/vue-router';
 import { useVuetify } from '@/composables/vuetify';
 
 import * as api from '@/api';
-import { Query, ListEntry2, compareTags } from '@/api';
+import { compareTags } from '@/api';
+import type { Query, ListEntry2 } from '@/api';
 
 import dayjs from 'dayjs';
 

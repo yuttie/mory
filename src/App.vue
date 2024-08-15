@@ -332,7 +332,7 @@ import { useAppStore } from '@/stores/app';
 import Gravatar from '@/components/Gravatar.vue';
 
 import * as api from '@/api';
-import { Claim, ListEntry2, UploadEntry } from '@/api';
+import type { Claim, ListEntry2, UploadEntry } from '@/api';
 import jwt_decode from 'jwt-decode';
 import less from 'less';
 import { v4 as uuidv4 } from 'uuid';

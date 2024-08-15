@@ -31,7 +31,7 @@ import { useRouter, useRoute } from '@/composables/vue-router';
 import { useVuetify } from '@/composables/vuetify';
 
 import * as api from '@/api';
-import { ListEntry } from '@/api';
+import type { ListEntry } from '@/api';
 import Color from 'color';
 import materialColors from 'vuetify/lib/util/colors';
 import XXH from 'xxhashjs';
