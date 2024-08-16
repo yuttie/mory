@@ -231,11 +231,14 @@
               </v-expansion-panel-header>
               <v-expansion-panel-content>
                 <ol class="tree">
-                  <li v-for="h1 of toc" v-bind:key="h1.title"><a v-bind:href="h1.href" v-on:click="jumpTo(h1.href)">{{ h1.title }}</a>
+                  <li v-for="h1 of toc" v-bind:key="h1.title" class="level1">
+                    <a v-bind:href="h1.href" v-on:click="jumpTo(h1.href)">{{ h1.title }}</a>
                     <ol>
-                      <li v-for="h2 of h1.children" v-bind:key="h2.title"><a v-bind:href="h2.href" v-on:click="jumpTo(h2.href)">{{ h2.title }}</a>
+                      <li v-for="h2 of h1.children" v-bind:key="h2.title" class="level2">
+                        <a v-bind:href="h2.href" v-on:click="jumpTo(h2.href)">{{ h2.title }}</a>
                         <ol>
-                          <li v-for="h3 of h2.children" v-bind:key="h3.title"><a v-bind:href="h3.href" v-on:click="jumpTo(h3.href)">{{ h3.title }}</a>
+                          <li v-for="h3 of h2.children" v-bind:key="h3.title" class="level3">
+                            <a v-bind:href="h3.href" v-on:click="jumpTo(h3.href)">{{ h3.title }}</a>
                           </li>
                         </ol>
                       </li>
@@ -974,7 +977,87 @@ function editorScrollTo(lineNumber: number) {
   }
 }
 
+function nextSiblingHeadingOfSameOrHigherLevel(element: HTMLElement, level: number): { same: HTMLElement | null, higher: HTMLElement | null } {
+  let next = element.nextElementSibling;
+  while (next) {
+    const match = /H([1-6])/.exec(next.tagName);
+    if (match) {
+      const nextLevel = parseInt(match[1]);
+      if (nextLevel === level) {
+        return { same: next as HTMLElement, higher: null };
+      }
+      else if (nextLevel < level) {
+        return { same: null, higher: next as HTMLElement };
+      }
+    }
+    next = next.nextElementSibling;
+  }
+  return { same: null, higher: null };
+}
+
+function findHeadingElement(level: number, href: string): HTMLElement {
+  const hx = renderedContentDiv.value.querySelector(`h${level}:has(> a[href="${href}"])`);
+  return hx;
+}
+
+function computeOffset(element: HTMLElement): number {
+  let offsetTop = element.offsetTop;
+  let parent = element.offsetParent;
+  while (parent) {
+    offsetTop += (parent as HTMLElement).offsetTop;
+    parent = parent.offsetParent;
+  }
+
+  return offsetTop;
+}
+
+function computeRangeBetween(element1: HTMLElement, element2: HTMLElement | null): [number, number | null] {
+  const range: [number, number | null] = [
+    computeOffset(element1),
+    element2 ? computeOffset(element2) : null,
+  ];
+  return range;
+}
+
+function computeRangeOf(heading: { level: number, href: string }): [number, number | null] {
+  const hx = findHeadingElement(heading.level, heading.href);
+  let next = nextSiblingHeadingOfSameOrHigherLevel(hx, heading.level);
+  const range = computeRangeBetween(hx, next.same || next.higher);
+  return range;
+}
+
+function highlightVisibleTOCItems() {
+  // Heading coverages
+  const ranges = [];
+  for (const l1Heading of toc.value) {
+    ranges.push({ href: l1Heading.href, range: computeRangeOf(l1Heading) })
+    for (const l2Heading of l1Heading.children) {
+      ranges.push({ href: l2Heading.href, range: computeRangeOf(l2Heading) })
+      for (const l3Heading of l2Heading.children) {
+        ranges.push({ href: l3Heading.href, range: computeRangeOf(l3Heading) })
+      }
+    }
+  }
+
+  // Highlight visible ranges
+  const scrollTop = document.documentElement.scrollTop;
+  const clientHeight = document.documentElement.clientHeight;
+  const scrollHeight = document.documentElement.scrollHeight;
+  const viewportRange = [scrollTop, scrollTop + clientHeight];
+  for (const { href, range } of ranges) {
+    const target = document.querySelector(`.toc li:has(> a[href="${href}"])`);
+    if (range[0] < viewportRange[1] && (range[1] || scrollHeight) > viewportRange[0]) {
+      target?.classList.add('visible');
+    }
+    else {
+      target?.classList.remove('visible');
+    }
+  }
+}
+
 function handleDocumentScroll() {
+  highlightVisibleTOCItems();
+
   if (!lockScroll.value) {
     return;
   }
@@ -1534,6 +1617,10 @@ watch(renameMenuIsVisible, (isVisible: boolean) => {
     newPath.value = route.params.path;
     newPathConflicting.value = true;
   }
+});
+
+watch(toc, () => {
+  highlightVisibleTOCItems();
 });
 </script>
 
