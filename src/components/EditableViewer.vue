@@ -1039,7 +1039,8 @@ function highlightVisibleTOCItems() {
   const scrollTop = document.documentElement.scrollTop;
   const clientHeight = document.documentElement.clientHeight;
   const scrollHeight = document.documentElement.scrollHeight;
-  const viewportRange = [scrollTop, scrollTop + clientHeight];
+  const appBarHeight = document.querySelector('#app-bar')?.clientHeight || 0;
+  const viewportRange = [scrollTop + appBarHeight, scrollTop + clientHeight];
   for (const { href, range } of ranges) {
     const target = document.querySelector(`.toc li:has(> a[href="${href}"])`);
     if (range[0] < viewportRange[1] && (range[1] || scrollHeight) > viewportRange[0]) {
