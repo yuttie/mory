@@ -1,3 +1,10 @@
+## 0.19.5 (2024-08-17)
+* feat(EditableViewer): Tag visible TOC items with "visible" class
+* feat(EditableViewer): Tag level X TOC items with `level${X}` class
+* fix(EditableViewer): Compute offsetTop of elements more accurately for scroll map
+* feat(EditableViewer): Compute section range more precisely
+* feat(EditableViewer): Consider the app bar height when checking the visibility of a section
+
 ## 0.19.4 (2024-08-16)
 * chore(deps): Update dependencies
 * fix(markdown): Rewrite URLs found inside embedded HTML
