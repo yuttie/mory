@@ -977,22 +977,20 @@ function editorScrollTo(lineNumber: number) {
   }
 }
 
-function nextSiblingHeadingOfSameOrHigherLevel(element: HTMLElement, level: number): { same: HTMLElement | null, higher: HTMLElement | null } {
-  let next = element.nextElementSibling;
-  while (next) {
+function findLastElementOfSection(headingElement: HTMLElement, level: number): HTMLElement {
+  let current: HTMLElement = headingElement;
+  while (current.nextElementSibling) {
+    let next = current.nextElementSibling;
     const match = /H([1-6])/.exec(next.tagName);
     if (match) {
       const nextLevel = parseInt(match[1]);
-      if (nextLevel === level) {
-        return { same: next as HTMLElement, higher: null };
-      }
-      else if (nextLevel < level) {
-        return { same: null, higher: next as HTMLElement };
+      if (nextLevel <= level) {
+        return current;
       }
     }
-    next = next.nextElementSibling;
+    current = next as HTMLElement;
   }
-  return { same: null, higher: null };
+  return current;
 }
 
 function findHeadingElement(level: number, href: string): HTMLElement {
@@ -1011,30 +1009,28 @@ function computeOffset(element: HTMLElement): number {
   return offsetTop;
 }
 
-function computeRangeBetween(element1: HTMLElement, element2: HTMLElement | null): [number, number | null] {
-  const range: [number, number | null] = [
+function computeRangeOf(element1: HTMLElement, element2: HTMLElement): [number, number] {
+  return [
     computeOffset(element1),
-    element2 ? computeOffset(element2) : null,
+    computeOffset(element2) + element2.scrollHeight,
   ];
-  return range;
 }
 
-function computeRangeOf(heading: { level: number, href: string }): [number, number | null] {
+function computeSectionRange(heading: { level: number, href: string }): [number, number] {
   const hx = findHeadingElement(heading.level, heading.href);
-  let next = nextSiblingHeadingOfSameOrHigherLevel(hx, heading.level);
-  const range = computeRangeBetween(hx, next.same || next.higher);
-  return range;
+  let last = findLastElementOfSection(hx, heading.level);
+  return computeRangeOf(hx, last);
 }
 
 function highlightVisibleTOCItems() {
   // Heading coverages
   const ranges = [];
   for (const l1Heading of toc.value) {
-    ranges.push({ href: l1Heading.href, range: computeRangeOf(l1Heading) })
+    ranges.push({ href: l1Heading.href, range: computeSectionRange(l1Heading) })
     for (const l2Heading of l1Heading.children) {
-      ranges.push({ href: l2Heading.href, range: computeRangeOf(l2Heading) })
+      ranges.push({ href: l2Heading.href, range: computeSectionRange(l2Heading) })
       for (const l3Heading of l2Heading.children) {
-        ranges.push({ href: l3Heading.href, range: computeRangeOf(l3Heading) })
+        ranges.push({ href: l3Heading.href, range: computeSectionRange(l3Heading) })
       }
     }
   }
