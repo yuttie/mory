@@ -1070,7 +1070,7 @@ function handleDocumentScroll() {
   const scrollMap: [number, number][] = [...renderedContentDiv.value.querySelectorAll<HTMLElement>('[data-line]')]
     .map((el) => {
       const lineNumber = parseInt(el.dataset['line'] as string);
-      const offset = el.offsetTop;
+      const offset = computeOffset(el);
       return [lineNumber, offset];
     })
     .sort((a, b) => {
@@ -1143,7 +1143,7 @@ function onEditorScroll(lineNumber: number) {
   const scrollMap: [number, number][] = [...renderedContentDiv.value.querySelectorAll<HTMLElement>('[data-line]')]
     .map((el) => {
       const lineNumber = parseInt(el.dataset['line'] as string);
-      const offset = el.offsetTop;
+      const offset = computeOffset(el);
       return [lineNumber, offset];
     })
     .sort((a, b) => {
