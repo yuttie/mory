@@ -46,6 +46,7 @@
     <v-select
       v-bind:items="editorThemes"
       v-model="currentEditorTheme"
+      menu-props="auto"
       label="Editor Theme"
       item-text="name"
       item-value="value"
@@ -54,6 +55,7 @@
     <v-select
       v-bind:items="editorKeybindings"
       v-model="currentEditorKeybinding"
+      menu-props="auto"
       label="Editor Keybinding"
       item-text="name"
       item-value="value"
@@ -62,6 +64,7 @@
     <v-select
       v-bind:items="highlightjsThemes"
       v-model="currentHighlightjsTheme"
+      menu-props="auto"
       label="Code Block Syntax Highlight Theme"
       item-text="name"
       item-value="value"
