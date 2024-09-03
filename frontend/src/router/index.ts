@@ -11,8 +11,6 @@ const Config   = () => import('../views/Config.vue');
 const About    = () => import('../views/About.vue');
 
 
-import { v4 as uuidv4 } from 'uuid';
-
 Vue.use(VueRouter);
 
 const routes: Array<RouteConfig> = [
@@ -42,7 +40,7 @@ const routes: Array<RouteConfig> = [
     redirect: to => {
       return {
         name: 'Note',
-        params: { path: uuidv4().replaceAll('-', '') + '.md' },
+        params: { path: crypto.randomUUID().replaceAll('-', '') + '.md' },
         query: { mode: 'create', template: to.query.from },
       };
     },

@@ -333,7 +333,6 @@ import * as api from '@/api';
 import type { Claim, ListEntry2, UploadEntry } from '@/api';
 import jwt_decode from 'jwt-decode';
 import less from 'less';
-import { v4 as uuidv4 } from 'uuid';
 
 interface TreeNode {
   name: string;
@@ -628,7 +627,7 @@ function uploadFiles(files: File[]) {
   // Add the files to a FormData and uploadList
   const fd = new FormData();
   for (const file of files) {
-    const uuid = uuidv4();
+    const uuid = crypto.randomUUID();
 
     fd.append(uuid, file);
 
