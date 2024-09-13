@@ -97,6 +97,7 @@ export interface ListEntry2 {
   size: number;
   mime_type: string;
   metadata: { tags: string[] } | null;
+  title: string | null;
   time: string;
 }
 
