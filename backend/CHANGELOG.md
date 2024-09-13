@@ -1,3 +1,8 @@
+## 1.2.0 (2024-09-13)
+* Disable trace and debug level logs in release builds for performance
+* Extract titles as well as metadata
+* Upgrade dependencies to their latest versions
+
 ## 1.1.0 (2024-08-14)
 * Upgrade dependencies to their latest versions
 * Relax size limit of file upload (from 8 MiB to 16 MiB)
