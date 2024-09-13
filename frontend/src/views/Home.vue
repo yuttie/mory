@@ -12,7 +12,7 @@
           <li
             v-for="entry of category[1]"
             v-bind:key="entry.path"
-            ><router-link v-bind:to="{ name: 'Note', params: { path: entry.path } }">{{ entry.path }}</router-link></li>
+            ><router-link v-bind:to="{ name: 'Note', params: { path: entry.path } }">{{ entry.title || entry.path }}</router-link></li>
         </ul>
       </v-card-text>
     </v-card>
@@ -28,7 +28,7 @@ import { ref, computed, onMounted, defineEmits, defineExpose } from 'vue';
 import type { Ref } from 'vue';
 
 import * as api from '@/api';
-import type { ListEntry } from '@/api';
+import type { ListEntry2 } from '@/api';
 
 // Emits
 const emit = defineEmits<{
@@ -36,14 +36,14 @@ const emit = defineEmits<{
 }>();
 
 // Reactive states
-const entries: Ref<ListEntry[]> = ref([]);
+const entries: Ref<ListEntry2[]> = ref([]);
 const isLoading = ref(false);
 const error = ref(false);
 const errorText = ref('');
 
 // Computed properties
 const categorizedEntries = computed(() => {
-  const categorized: Map<string, ListEntry[]> = new Map();
+  const categorized: Map<string, ListEntry2[]> = new Map();
   for (const entry of entries.value) {
     if (entry.metadata !== null) {
       if (Object.prototype.hasOwnProperty.call(entry.metadata, 'tags') && Array.isArray(entry.metadata.tags)) {
