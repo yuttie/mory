@@ -270,13 +270,14 @@ async fn get_notes(
                                 let blob = repo.find_blob(blob_id).unwrap();
                                 let size = blob.size();
                                 // Extract metadata
-                                let metadata = extract_metadata(blob.content());
+                                let (metadata, title) = extract_metadata(blob.content());
                                 // Add an entry
                                 entries.push(ListEntry {
                                     path: entry.path.to_owned(),
                                     size: size,
                                     mime_type: entry.mime_type.to_owned(),
                                     metadata: metadata,
+                                    title: title,
                                     time: time,
                                 });
                             },
@@ -308,13 +309,14 @@ async fn get_notes(
                         let blob = repo.find_blob(blob_id).unwrap();
                         let size = blob.size();
                         // Extract metadata
-                        let metadata = extract_metadata(blob.content());
+                        let (metadata, title) = extract_metadata(blob.content());
                         // Add an entry
                         entries.push(ListEntry {
                             path: path,
                             size: size,
                             mime_type: mime_type,
                             metadata: metadata,
+                            title: title,
                             time: time,
                         });
                     },
@@ -405,7 +407,7 @@ async fn get_notes(
                                     let blob = repo.find_blob(file.id()).unwrap();
                                     let size = blob.size();
                                     // Extract metadata
-                                    let metadata = extract_metadata(blob.content());
+                                    let (metadata, title) = extract_metadata(blob.content());
                                     // Time
                                     let t = commit.time();
                                     let tz = FixedOffset::east_opt(t.offset_minutes() * 60).unwrap();
@@ -417,6 +419,7 @@ async fn get_notes(
                                         size: size,
                                         mime_type: mime_type,
                                         metadata: metadata,
+                                        title: title,
                                         time: time,
                                     });
                                     // Finish if all of the entries have been processed
@@ -752,11 +755,44 @@ async fn post_files(
     Json(result).into_response()
 }
 
-fn extract_metadata(content: &[u8]) -> Option<serde_yaml::Value> {
-    if content.starts_with(b"---\n") {
-        if let Some(j) = content.windows(5).position(|window| window == b"\n---\n") {
-            if let Ok(yaml) = std::str::from_utf8(&content[4..j]) {
-                match serde_yaml::from_str::<serde_yaml::Value>(yaml) {
+fn get_frontmatter_node(node: &markdown::mdast::Node) -> Option<&markdown::mdast::Node> {
+    use markdown::mdast::Node;
+    node.children().and_then(|children| children.get(0)).and_then(|first_child_node| {
+        match first_child_node {
+            Node::Yaml(_) | Node::Toml(_) => {
+                Some(first_child_node)
+            },
+            _ => {
+                None
+            },
+        }
+    })
+}
+
+fn get_first_toplevel_rank1_heading(node: &markdown::mdast::Node) -> Option<&markdown::mdast::Node> {
+    use markdown::mdast::Node;
+    if let Node::Root(root) = node {
+        for child in root.children.iter() {
+            if let Node::Heading(heading) = child {
+                if heading.depth == 1 {
+                    return Some(child);
+                }
+            }
+        }
+        None
+    }
+    else {
+        None
+    }
+}
+
+fn extract_metadata(blob: &[u8]) -> (Option<serde_yaml::Value>, Option<String>) {
+    if let Ok(text) = std::str::from_utf8(blob) {
+        let mut opts = markdown::ParseOptions::gfm();
+        opts.constructs.frontmatter = true;
+        if let Ok(node) = markdown::to_mdast(text, &opts) {
+            let metadata = if let Some(markdown::mdast::Node::Yaml(yaml_node)) = get_frontmatter_node(&node) {
+                match serde_yaml::from_str::<serde_yaml::Value>(&yaml_node.value) {
                     Ok(doc) => {
                         debug!("parsed YAML metadata: {:?}", &doc);
                         Some(doc)
@@ -771,14 +807,16 @@ fn extract_metadata(content: &[u8]) -> Option<serde_yaml::Value> {
             }
             else {
                 None
-            }
+            };
+            let title = get_first_toplevel_rank1_heading(&node).map(|heading_node| heading_node.to_string());
+            (metadata, title)
         }
         else {
-            None
+            (None, None)
         }
     }
     else {
-        None
+        (None, None)
     }
 }
 
@@ -801,6 +839,7 @@ mod models {
         pub size: usize,
         pub mime_type: String,
         pub metadata: Option<Metadata>,
+        pub title: Option<String>,
         pub time: DateTime<FixedOffset>,
     }
 
