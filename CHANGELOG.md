@@ -1,3 +1,8 @@
+## 0.19.6 (2024-09-13)
+* feat(Home): Show title instead of path if available
+* Use randomUUID() from Web Crypto API instead of uuid package
+* feat(Conifg): Make <v-select> centers menu list on selected item
+
 ## 0.19.5 (2024-08-17)
 * feat(EditableViewer): Tag visible TOC items with "visible" class
 * feat(EditableViewer): Tag level X TOC items with `level${X}` class
