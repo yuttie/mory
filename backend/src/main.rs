@@ -752,11 +752,27 @@ async fn post_files(
     Json(result).into_response()
 }
 
-fn extract_metadata(content: &[u8]) -> Option<serde_yaml::Value> {
-    if content.starts_with(b"---\n") {
-        if let Some(j) = content.windows(5).position(|window| window == b"\n---\n") {
-            if let Ok(yaml) = std::str::from_utf8(&content[4..j]) {
-                match serde_yaml::from_str::<serde_yaml::Value>(yaml) {
+fn get_frontmatter_node(node: &markdown::mdast::Node) -> Option<&markdown::mdast::Node> {
+    use markdown::mdast::Node;
+    node.children().and_then(|children| children.get(0)).and_then(|first_child_node| {
+        match first_child_node {
+            Node::Yaml(_) | Node::Toml(_) => {
+                Some(first_child_node)
+            },
+            _ => {
+                None
+            },
+        }
+    })
+}
+
+fn extract_metadata(blob: &[u8]) -> Option<serde_yaml::Value> {
+    if let Ok(text) = std::str::from_utf8(blob) {
+        let mut opts = markdown::ParseOptions::gfm();
+        opts.constructs.frontmatter = true;
+        if let Ok(node) = markdown::to_mdast(text, &opts) {
+            if let Some(markdown::mdast::Node::Yaml(yaml_node)) = get_frontmatter_node(&node) {
+                match serde_yaml::from_str::<serde_yaml::Value>(&yaml_node.value) {
                     Ok(doc) => {
                         debug!("parsed YAML metadata: {:?}", &doc);
                         Some(doc)
