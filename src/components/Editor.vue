@@ -100,6 +100,17 @@ function scrollTo(lineNumber: number) {
   ignoreNextChangeScrollTopEvent.value = true;
 }
 
+function getSelection(): string {
+  const range = editor.value!.getSelectionRange();
+  return editor.value!.session.getTextRange(range);
+}
+
+function replaceSelection(newText: string) {
+  const range = editor.value!.getSelectionRange();
+  editor.value!.session.remove(range);
+  editor.value!.insert(newText);
+}
+
 function setTheme(theme: string) {
   let loading = null;
 

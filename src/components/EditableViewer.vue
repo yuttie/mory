@@ -826,9 +826,8 @@ function insertText(newText: string) {
     textArea.value = textArea.value.slice(0, textArea.selectionStart) + newText + textArea.value.slice(textArea.selectionEnd);
   }
   else {
-    const aceEditor = (editor.value as Editor).editor;
-    aceEditor.session.remove(aceEditor.getSelectionRange());
-    aceEditor.insert(newText);
+    const editorComponent = editor.value as Editor;
+    editorComponent.replaceSelection(newText);
   }
 }
 
@@ -840,11 +839,10 @@ function encloseText(before: string, after: string) {
     textArea.value = textArea.value.slice(0, textArea.selectionStart) + formattedText + textArea.value.slice(textArea.selectionEnd);
   }
   else {
-    const aceEditor = (editor.value as Editor).editor;
-    const selectedText = aceEditor.session.getTextRange(aceEditor.getSelectionRange());
+    const editorComponent = editor.value as Editor;
+    const selectedText = editorComponent.getSelection();
     const formattedText = before + selectedText + after;
-    aceEditor.session.remove(aceEditor.getSelectionRange());
-    aceEditor.insert(formattedText);
+    editorComponent.replaceSelection(formattedText);
   }
 }
 
@@ -856,11 +854,10 @@ function formatTable() {
     textArea.value = textArea.value.slice(0, textArea.selectionStart) + formattedText + textArea.value.slice(textArea.selectionEnd);
   }
   else {
-    const aceEditor = (editor.value as Editor).editor;
-    const selectedText = aceEditor.session.getTextRange(aceEditor.getSelectionRange());
+    const editorComponent = editor.value as Editor;
+    const selectedText = editorComponent.getSelection();
     const formattedText = CliPrettify.prettify(selectedText);
-    aceEditor.session.remove(aceEditor.getSelectionRange());
-    aceEditor.insert(formattedText);
+    editorComponent.replaceSelection(formattedText);
   }
 }
 
@@ -972,8 +969,8 @@ function editorScrollTo(lineNumber: number) {
     textArea.scrollTo({ top: lineNumber * lineHeight });
   }
   else {
-    const aceEditor = editor.value as Editor;
-    aceEditor.scrollTo(lineNumber);
+    const editorComponent = editor.value as Editor;
+    editorComponent.scrollTo(lineNumber);
   }
 }
 
