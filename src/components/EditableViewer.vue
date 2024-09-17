@@ -132,17 +132,6 @@
         <div class="viewer-pane"
           v-on:transitionend="onViewerPaneResize"
         >
-          <v-snackbar top timeout="1000" v-model="showUpstreamState" v-bind:color="upstreamStateSnackbarColor">
-            <template v-if="upstreamState === 'different'">
-              Upstream has been modified since it was loaded.
-            </template>
-            <template v-else-if="upstreamState === 'deleted'">
-              Upstream has been deleted.
-            </template>
-            <template v-else>
-              This is the latest version.
-            </template>
-          </v-snackbar>
           <div ref="shadowDomRootElement" style="user-select: text">
           </div>
         </div>
@@ -288,6 +277,17 @@
         <v-progress-circular indeterminate color="blue-grey lighten-3" size="64"></v-progress-circular>
       </v-overlay>
     </template>
+    <v-snackbar top timeout="1000" v-model="showUpstreamState" v-bind:color="upstreamStateSnackbarColor">
+      <template v-if="upstreamState === 'different'">
+        Upstream has been modified since it was loaded.
+      </template>
+      <template v-else-if="upstreamState === 'deleted'">
+        Upstream has been deleted.
+      </template>
+      <template v-else>
+        This is the latest version.
+      </template>
+    </v-snackbar>
     <v-snackbar v-model="error" color="error" top timeout="5000">{{ errorText }}</v-snackbar>
   </div>
 </template>
