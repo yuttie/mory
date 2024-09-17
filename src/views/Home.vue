@@ -29,6 +29,9 @@ import type { Ref } from 'vue';
 
 import * as api from '@/api';
 import type { ListEntry2 } from '@/api';
+import { by } from '@/utils';
+
+import { parseISO } from 'date-fns';
 
 // Emits
 const emit = defineEmits<{
@@ -43,6 +46,7 @@ const errorText = ref('');
 
 // Computed properties
 const categorizedEntries = computed(() => {
+  // Categorize entries
   const categorized: Map<string, ListEntry2[]> = new Map();
   for (const entry of entries.value) {
     if (entry.metadata !== null) {
@@ -60,6 +64,12 @@ const categorizedEntries = computed(() => {
       }
     }
   }
+
+  // Sort entries within each category
+  for (const [_category, entries] of categorized) {
+    sortByTitle(entries);
+  }
+
   return categorized;
 });
 
@@ -97,6 +107,24 @@ function load() {
         isLoading.value = false;
       }
     });
+}
+
+function sortByTitle(entries: ListEntry2[], reverse: boolean = false) {
+  if (reverse) {
+    entries.sort((a, b) => -by((entry) => entry.title)(a, b));
+  }
+  else {
+    entries.sort(by((entry) => entry.title));
+  }
+}
+
+function sortByTime(entries: ListEntry2[], reverse: boolean = false) {
+  if (reverse) {
+    entries.sort((a, b) => -by((entry) => parseISO(entry.time))(a, b));
+  }
+  else {
+    entries.sort(by((entry) => parseISO(entry.time)));
+  }
 }
 
 // Expose properties
