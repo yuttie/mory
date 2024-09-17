@@ -14,8 +14,9 @@
           single-line
           clearable
           prepend-inner-icon="mdi-magnify"
-          v-on:focus="on.click"
+          append-icon="mdi-tag"
           v-on:click:clear="clearQuery"
+          v-on:click:append="on.click"
           type="text"
           label="Search"
           autocomplete="off"
