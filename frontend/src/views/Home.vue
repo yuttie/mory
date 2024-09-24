@@ -13,12 +13,12 @@
             text
             x-small
             v-on:click="changeSortOrder(category[0], 'title')"
-          >sort by title</v-btn>
+          ><v-icon x-small v-if="sortOrders.get(category[0])[0] === 'title'">{{ sortOrders.get(category[0])[1] ? 'mdi-sort-descending' : 'mdi-sort-ascending' }}</v-icon>sort by title</v-btn>
           <v-btn
             text
             x-small
             v-on:click="changeSortOrder(category[0], 'time')"
-          >sort by time</v-btn>
+          ><v-icon x-small v-if="sortOrders.get(category[0])[0] === 'time'">{{ sortOrders.get(category[0])[1] ? 'mdi-sort-descending' : 'mdi-sort-ascending' }}</v-icon>sort by time</v-btn>
         </div>
         <ul>
           <li
