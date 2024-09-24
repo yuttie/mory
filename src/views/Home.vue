@@ -1,13 +1,25 @@
 <template>
   <div id="home">
     <v-card
-      v-for="category of categorizedEntries.entries()"
+      v-for="category of sortedCategorizedEntries.entries()"
       v-bind:key="category[0]"
       class="ma-5"
       outlined
     >
       <v-card-title>{{ category[0] }}</v-card-title>
       <v-card-text>
+        <div class="text-center mb-3">
+          <v-btn
+            text
+            x-small
+            v-on:click="changeSortOrder(category[0], 'title')"
+          >sort by title</v-btn>
+          <v-btn
+            text
+            x-small
+            v-on:click="changeSortOrder(category[0], 'time')"
+          >sort by time</v-btn>
+        </div>
         <ul>
           <li
             v-for="entry of category[1]"
@@ -46,8 +58,32 @@ const entries: Ref<ListEntry2[]> = ref([]);
 const isLoading = ref(false);
 const error = ref(false);
 const errorText = ref('');
+const sortOrders: Ref<Map<string, [string, boolean]>> = ref(new Map());
 
 // Computed properties
+const sortedCategorizedEntries = computed(() => {
+  // Copy the unsorted map
+  const categorized: Map<string, ListEntry2[]> = new Map(
+    Array.from(categorizedEntries.value, ([cat, entries]) => [cat, [...entries]])
+  );
+
+  for (const [category, entries] of categorized) {
+    // Default value
+    if (!sortOrders.value.has(category)) {
+      sortOrders.value.set(category, ['title', false]);
+    }
+
+    const [kind, descending] = sortOrders.value.get(category);
+    if (kind === 'title') {
+      sortByTitle(entries, descending);
+    }
+    else if (kind === 'time') {
+      sortByTime(entries, descending);
+    }
+  }
+
+  return categorized;
+});
 const categorizedEntries = computed(() => {
   // Categorize entries
   const categorized: Map<string, ListEntry2[]> = new Map();
@@ -66,11 +102,6 @@ const categorizedEntries = computed(() => {
         }
       }
     }
-  }
-
-  // Sort entries within each category
-  for (const [_category, entries] of categorized) {
-    sortByTitle(entries);
   }
 
   return categorized;
@@ -112,8 +143,8 @@ function load() {
     });
 }
 
-function sortByTitle(entries: ListEntry2[], reverse: boolean = false) {
-  if (reverse) {
+function sortByTitle(entries: ListEntry2[], descending: boolean = false) {
+  if (descending) {
     entries.sort((a, b) => -by((entry) => entry.title)(a, b));
   }
   else {
@@ -121,13 +152,28 @@ function sortByTitle(entries: ListEntry2[], reverse: boolean = false) {
   }
 }
 
-function sortByTime(entries: ListEntry2[], reverse: boolean = false) {
-  if (reverse) {
+function sortByTime(entries: ListEntry2[], descending: boolean = false) {
+  if (descending) {
     entries.sort((a, b) => -by((entry) => parseISO(entry.time))(a, b));
   }
   else {
     entries.sort(by((entry) => parseISO(entry.time)));
   }
+}
+
+function changeSortOrder(category: string, kind: strig) {
+  // Copy the map
+  const newSortOrders = new Map(sortOrders.value);
+
+  const [curKind, curDescending] = newSortOrders.get(category);
+  if (kind === curKind) {
+    newSortOrders.set(category, [kind, !curDescending]);
+  }
+  else {
+    newSortOrders.set(category, [kind, curDescending]);
+  }
+
+  sortOrders.value = newSortOrders;
 }
 
 // Expose properties
