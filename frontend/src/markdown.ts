@@ -12,7 +12,7 @@ import rehypeUrlInspector from '@jsdevtools/rehype-url-inspector';
 import rehypeSlug from 'rehype-slug';
 import rehypeAutolinkHeadings from 'rehype-autolink-headings';
 import rehypeHighlight from 'rehype-highlight';
-import rehypeMathjax from 'rehype-mathjax';
+import rehypeKatex from 'rehype-katex';
 import rehypeMermaid from 'rehype-mermaid';
 import rehypeStringify from 'rehype-stringify';
 import { all } from 'lowlight';
@@ -56,7 +56,9 @@ const processor = unified()
   .use(rehypeHighlight, {
     languages: all,
   })
-  .use(rehypeMathjax)
+  .use(rehypeKatex, {
+    macros: {},
+  })
   .use(rehypeMermaid, {
     strategy: 'inline-svg',
   })
