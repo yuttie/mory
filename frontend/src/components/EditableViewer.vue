@@ -488,6 +488,11 @@ onMounted(async () => {
       console.error(err);
     });
 
+  const linkElement = document.createElement('link');
+  linkElement.rel = 'stylesheet';
+  linkElement.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css';
+  shadowRoot.value.appendChild(linkElement);
+
   // Setup <div> that displays a rendered notes
   renderedContentDiv.value = document.createElement('div');
   renderedContentDiv.value.setAttribute('class', 'rendered-content flex-grow-1');
@@ -928,9 +933,7 @@ async function updateRendered() {
     };
   }
 
-  // We have to update the innerHTML immediately here instead of letting Vue
-  // update it reactively, otherwise MathJax will not be able to see the new
-  // content.
+  // Update HTML
   renderedContentDiv.value.innerHTML = rendered.value.content;
 
   // Update the page title
