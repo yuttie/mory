@@ -933,9 +933,7 @@ async function updateRendered() {
     };
   }
 
-  // We have to update the innerHTML immediately here instead of letting Vue
-  // update it reactively, otherwise MathJax will not be able to see the new
-  // content.
+  // Update HTML
   renderedContentDiv.value.innerHTML = rendered.value.content;
 
   // Update the page title
