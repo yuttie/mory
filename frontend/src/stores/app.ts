@@ -16,6 +16,7 @@ export const useAppStore = defineStore('app', () => {
   const serviceWorker: Ref<null | ServiceWorker> = ref(null);
   const serviceWorkerConfigured = ref(false);
   const serviceWorkerHasToken = ref(false);
+  const draggingViewerContent = ref(false);
 
   // Getters
   const hasToken = computed(() => !!token.value);
@@ -115,6 +116,7 @@ export const useAppStore = defineStore('app', () => {
     serviceWorker,
     serviceWorkerConfigured,
     serviceWorkerHasToken,
+    draggingViewerContent,
     // Getters
     hasToken,
     // Actions

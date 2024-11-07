@@ -297,6 +297,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick, defineEmits } f
 
 import { useRouter, useRoute } from '@/composables/vue-router';
 import { useVuetify } from '@/composables/vuetify';
+import { useAppStore } from '@/stores/app';
 
 import Editor from '@/components/Editor.vue';
 import metadataSchema from '@/metadata-schema.json';
@@ -321,6 +322,7 @@ const emit = defineEmits<{
 const router = useRouter();
 const route = useRoute();
 const vuetify = useVuetify();
+const appStore = useAppStore();
 
 // Reactive states
 const text = ref('');
@@ -935,6 +937,17 @@ async function updateRendered() {
 
   // Update HTML
   renderedContentDiv.value.innerHTML = rendered.value.content;
+
+  // Prevent images on the page from being dragged and dropped within it
+  const images = renderedContentDiv.value.querySelectorAll('img');
+  for (const img of images) {
+    img.addEventListener('dragstart', (event) => {
+      appStore.draggingViewerContent = true;
+    });
+    img.addEventListener('dragend', (event) => {
+      appStore.draggingViewerContent = false;
+    });
+  }
 
   // Update the page title
   document.title = `${title.value} | ${import.meta.env.VITE_APP_NAME}`;
