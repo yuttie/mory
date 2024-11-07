@@ -500,14 +500,14 @@ onMounted(() => {
   });
 
   appEl.addEventListener('drop', (e: any) => {
-    e.preventDefault();
-
     if (containsFiles(e) && !appStore.draggingViewerContent) {
       // Start to upload the dropped files
       uploadFiles(e.dataTransfer.files);
 
       // Hide the drop area
       appEl.classList.remove('drop-target');
+
+      e.preventDefault();
     }
   });
 
