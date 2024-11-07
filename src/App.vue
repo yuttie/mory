@@ -479,7 +479,7 @@ onMounted(() => {
   // TODO 参考: https://hackmd.io/@rhHzPg4WS26yfiXdOaOMTg/ryyQFR-K8
   const appEl = app.value.$el;
   appEl.addEventListener('dragenter', (e: any) => {
-    if (containsFiles(e)) {
+    if (containsFiles(e) && !appStore.draggingViewerContent) {
       // Show the drop area
       appEl.classList.add('drop-target');
     }
@@ -488,7 +488,7 @@ onMounted(() => {
   appEl.addEventListener('dragleave', (e: any) => {
     // Ignore if it's still inside appEl
     if (!e.currentTarget.contains(e.relatedTarget)) {
-      if (containsFiles(e)) {
+      if (containsFiles(e) && !appStore.draggingViewerContent) {
         // Hide the drop area
         appEl.classList.remove('drop-target');
       }
@@ -502,7 +502,7 @@ onMounted(() => {
   appEl.addEventListener('drop', (e: any) => {
     e.preventDefault();
 
-    if (containsFiles(e)) {
+    if (containsFiles(e) && !appStore.draggingViewerContent) {
       // Start to upload the dropped files
       uploadFiles(e.dataTransfer.files);
 
