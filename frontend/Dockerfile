@@ -1,12 +1,12 @@
 # build stage
 FROM node:20-alpine as build-stage
 WORKDIR /app
-COPY package.json yarn.lock ./
-RUN yarn install
+COPY package.json package-lock.json ./
+RUN npm install
 COPY . .
 RUN VITE_APP_APPLICATION_ROOT="VITE_APP_APPLICATION_ROOT_VALUE_TO_BE_REPLACED_LATER" \
     VITE_APP_API_URL="VITE_APP_API_URL_VALUE_TO_BE_REPLACED_LATER" \
-    yarn build
+    npm run build
 
 # production stage
 FROM nginx:stable-alpine as production-stage
