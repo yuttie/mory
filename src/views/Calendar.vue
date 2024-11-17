@@ -155,7 +155,7 @@ const events = computed(() => {
     if (entry.metadata !== null) {
       // Choose a default color for the note based on its path
       let defaultColor = "#666666";
-      if (Object.prototype.hasOwnProperty.call(entry.metadata, 'events') && typeof entry.metadata.events === 'object' && entry.metadata.events !== null) {
+      if (Object.hasOwn(entry.metadata, 'events') && typeof entry.metadata.events === 'object' && entry.metadata.events !== null) {
         for (const [eventName, eventDetail] of Object.entries(entry.metadata.events)) {
           if (typeof eventDetail === 'object' && eventDetail !== null) {
             // If eventDetail has the 'times' property and it is an array
@@ -316,7 +316,7 @@ function getEventEndTime(event: any): dayjs.Dayjs {
 
 function getEventColor(event: any): string {
   const toPropName = (s: string) => s.replace(/-./g, (match: string) => match[1].toUpperCase());
-  const color = Object.prototype.hasOwnProperty.call(materialColors, toPropName(event.color))
+  const color = Object.hasOwn(materialColors, toPropName(event.color))
               ? Color((materialColors as any)[toPropName(event.color)].base)
               : Color(event.color);
 

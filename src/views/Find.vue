@@ -156,7 +156,7 @@ const tags = computed(() => {
   const tags = new Set();
   for (const entry of entries.value) {
     if (entry.metadata !== null) {
-      if (Object.prototype.hasOwnProperty.call(entry.metadata, 'tags') && Array.isArray(entry.metadata.tags)) {
+      if (Object.hasOwn(entry.metadata, 'tags') && Array.isArray(entry.metadata.tags)) {
         for (const tag of entry.metadata.tags.map(String)) {
           tags.add(tag);
         }
@@ -203,7 +203,7 @@ const matchedEntries = computed(() => {
       if (entry.metadata === null) {
         return [];
       }
-      else if (!Object.prototype.hasOwnProperty.call(entry.metadata, 'tags')) {
+      else if (!Object.hasOwn(entry.metadata, 'tags')) {
         return [];
       }
       else if (!Array.isArray(entry.metadata.tags)) {
@@ -263,7 +263,7 @@ function load() {
 
       // Check if metadata parse errors exist
       for (const entry of entries.value) {
-        if (entry.metadata !== null && Object.prototype.hasOwnProperty.call(entry.metadata, 'error')) {
+        if (entry.metadata !== null && Object.hasOwn(entry.metadata, 'error')) {
           console.log(`Failed to parse metadata of ${entry.path}!`);
           console.log(entry);
         }

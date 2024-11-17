@@ -154,7 +154,7 @@
               <v-expansion-panel-header>
                 <span>
                   Metadata
-                  <template v-if="rendered.metadata.hasOwnProperty('validationErrors')">
+                  <template v-if="Object.hasOwn(rendered.metadata, 'validationErrors')">
                     <v-tooltip bottom color="success">
                       <template v-slot:activator="{ on, attrs }">
                         <v-icon color="success" v-bind="attrs" v-on="on">
@@ -197,7 +197,7 @@
                 </span>
               </v-expansion-panel-header>
               <v-expansion-panel-content>
-                <template v-if="rendered.metadata.hasOwnProperty('validationErrors')">
+                <template v-if="Object.hasOwn(rendered.metadata, 'validationErrors')">
                   <template v-if="rendered.metadata.validationErrors !== null">
                     <ul>
                       <li v-for="error of rendered.metadata.validationErrors" v-bind:key="error.dataPath + error.schemaPath">
