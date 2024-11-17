@@ -89,7 +89,7 @@ const categorizedEntries = computed(() => {
   const categorized: Map<string, ListEntry2[]> = new Map();
   for (const entry of entries.value) {
     if (entry.metadata !== null) {
-      if (Object.prototype.hasOwnProperty.call(entry.metadata, 'tags') && Array.isArray(entry.metadata.tags)) {
+      if (Object.hasOwn(entry.metadata, 'tags') && Array.isArray(entry.metadata.tags)) {
         for (const tag of entry.metadata.tags.map(String)) {
           const match = tag.match(/^home:(.+)$/);
           if (match) {

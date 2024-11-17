@@ -566,7 +566,7 @@ async function moveUndoneToToday(date: string) {
   // Schedule them today
   const today = dayjs().startOf('day');
   const todayDate = today.format('YYYY-MM-DD');
-  if (!Object.prototype.hasOwnProperty.call(tasks.value.scheduled, todayDate)) {
+  if (!Object.hasOwn(tasks.value.scheduled, todayDate)) {
     tasks.value.scheduled[todayDate] = [];
   }
   tasks.value.scheduled[todayDate].unshift(...undone);
@@ -598,7 +598,7 @@ async function collectUndone() {
   }
   // Schedule them today
   const todayDate = today.format('YYYY-MM-DD');
-  if (!Object.prototype.hasOwnProperty.call(tasks.value.scheduled, todayDate)) {
+  if (!Object.hasOwn(tasks.value.scheduled, todayDate)) {
     tasks.value.scheduled[todayDate] = [];
   }
   tasks.value.scheduled[todayDate].unshift(...undone);
@@ -757,7 +757,7 @@ async function add(closeDialog = true) {
   if (newTask.value.tags.length > 0) { task.tags = newTask.value.tags; }
   if (newTask.value.note.length > 0) { task.note = newTask.value.note; }
   if (newTask.value.schedule !== null) {
-    if (!Object.prototype.hasOwnProperty.call(tasks.value.scheduled, newTask.value.schedule)) {
+    if (!Object.hasOwn(tasks.value.scheduled, newTask.value.schedule)) {
       tasks.value.scheduled[newTask.value.schedule] = [];
     }
     tasks.value.scheduled[newTask.value.schedule].unshift(task);
@@ -805,7 +805,7 @@ async function updateSelected() {
       tasks.value.backlog.unshift(selectedTask.value);
     }
     else {
-      if (!Object.prototype.hasOwnProperty.call(tasks.value.scheduled, newDate)) {
+      if (!Object.hasOwn(tasks.value.scheduled, newDate)) {
         tasks.value.scheduled[newDate] = [];
       }
       tasks.value.scheduled[newDate].unshift(selectedTask.value);
