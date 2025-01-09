@@ -1533,9 +1533,11 @@ function save() {
     noteHasUpstream.value = true;
     isSaving.value = false;
     // Remove 'mode' query parameter
-    const newQuery = { ...route.query };
-    delete newQuery.mode;
-    router.replace({ query: newQuery });
+    if (Object.hasOwn(route.query, 'mode')) {
+      const newQuery = { ...route.query };
+      delete newQuery.mode;
+      router.replace({ query: newQuery });
+    }
   }).catch(error => {
     if (error.response) {
       if (error.response.status === 401) {
