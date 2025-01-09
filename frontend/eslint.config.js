@@ -39,6 +39,7 @@ export default ts.config(
       'vue/v-on-style': ['error', 'longform'],
       'vue/valid-v-slot': ['error', { 'allowModifiers': true }],
       'vue/multi-word-component-names': ['error', { 'ignores': ['About', 'Calendar', 'Config', 'Editor', 'Find', 'Gravatar', 'Home', 'Note', 'Tasks']}],
+      'vue/html-indent': ['warn', 4, {}],
     },
   },
 );
