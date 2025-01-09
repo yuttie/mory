@@ -330,7 +330,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onMounted, onUnmounted, defineExpose } from 'vue';
+import { ref, computed, onErrorCaptured, onMounted, onUnmounted, defineExpose } from 'vue';
 
 
 import { useAppStore } from '@/stores/app';
@@ -454,6 +454,14 @@ const noteTreeRoot = computed(() => {
 });
 
 // Lifecycle hooks
+onErrorCaptured((error: unknown, _instance: ComponentPublicInstance | null, _info: string): boolean | void => {
+    console.log('-----------------');
+    errors.value.push({
+        id: crypto.randomUUID(),
+        message: String(error),
+    });
+    return false;
+});
 onMounted(() => {
     // Capture uncaught errors
     window.addEventListener("error", (event: ErrorEvent) => {
