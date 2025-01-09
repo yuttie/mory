@@ -248,6 +248,13 @@
 
         <v-main v-if="appStore.serviceWorkerConfigured && appStore.serviceWorkerHasToken">
             <v-container fluid pa-0 style="height: 100%;">
+                <v-alert
+                    v-for="error of errors"
+                    v-bind:key="error.id"
+                    type="error"
+                    dense
+                    dismissible
+                >{{ error.message }}</v-alert>
                 <router-view v-if="!(!appStore.hasToken && !routerView)" v-bind:key="$route.path" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerViewEl"/>
             </v-container>
         </v-main>
@@ -353,6 +360,7 @@ const uploadMenuIsVisible = ref(false);
 const noteTree = ref([] as TreeNode[]);
 const noteTreeOpen = ref([]);
 const noteTreeActive = ref([]);
+const errors = ref([]);
 
 // Refs
 const app = ref(null);
@@ -446,6 +454,22 @@ const noteTreeRoot = computed(() => {
 
 // Lifecycle hooks
 onMounted(() => {
+    // Capture uncaught errors
+    window.addEventListener("error", (event: ErrorEvent) => {
+        errors.value.push({
+            id: crypto.randomUUID(),
+            message: event.error ? event.error.toString() : event.message,
+        });
+    });
+
+    // Capture unhandled promise rejections
+    window.addEventListener("unhandledrejection", (event: PromiseRejectionEvent) => {
+        errors.value.push({
+            id: crypto.randomUUID(),
+            message: String(event.reason),
+        });
+    });
+
     loadCustomCss();
 
     (fileInputEl.value as HTMLInputElement).addEventListener('change', (e: any) => {
@@ -544,11 +568,11 @@ function loadTemplates() {
                     tokenExpired(() => loadTemplates());
                 }
                 else {
-                    console.log('Unhandled error: {}', error.response);
+                    throw error;
                 }
             }
             else {
-                console.log('Unhandled error: {}', error);
+                throw error;
             }
         });
 }
@@ -580,11 +604,11 @@ function loadCustomCss() {
                     // We can simply ignore the error
                 }
                 else {
-                    console.log('Unhandled error: {}', error.response);
+                    throw error;
                 }
             }
             else {
-                console.log('Unhandled error: {}', error);
+                throw error;
             }
         });
 }

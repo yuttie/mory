@@ -643,15 +643,15 @@ async function load() {
         else {
           errorNotification.value = true;
           errorNotificationText.value = error.toString();
-          console.log('Unhandled error: {}', error.response);
           isLoading.value = false;
+          throw error;
         }
       }
       else {
         errorNotification.value = true;
         errorNotificationText.value = error.toString();
-        console.log('Unhandled error: {}', error);
         isLoading.value = false;
+        throw error;
       }
     }
   }

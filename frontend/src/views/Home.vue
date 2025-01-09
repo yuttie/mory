@@ -130,15 +130,15 @@ function load() {
         else {
           error.value = true;
           errorText.value = error.response;
-          console.log('Unhandled error: {}', error.response);
           isLoading.value = false;
+          throw error;
         }
       }
       else {
         error.value = true;
         errorText.value = error.toString();
-        console.log('Unhandled error: {}', error);
         isLoading.value = false;
+        throw error;
       }
     });
 }
