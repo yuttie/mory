@@ -196,7 +196,7 @@ function setKeybinding(keybinding: string) {
       ace.config.loadModule("ace/keyboard/vim", function(m) {
         // Remove <C-d> for the insert mode from the default keymap
         const i = m.handler.defaultKeymap.findIndex((entry: any) => entry.keys === '<C-d>' && entry.context === 'insert');
-        m.handler.defaultKeymap.splice(i, 1);
+        m.handler.defaultKeymap[i].keys = '';
       });
       editor.value!.setKeyboardHandler('ace/keyboard/vim');
       // Adjust keybindings
