@@ -3,14 +3,16 @@
         <v-container>
             <v-row>
                 <v-col>
-                    <v-text-field
+                    <v-textarea
                         label="Name"
                         autofocus
                         hide-details="auto"
                         prepend-icon="mdi-pencil"
                         v-bind:value="value.name"
                         v-on:input="$emit('input', { ...value, name: $event })"
-                    ></v-text-field>
+                        auto-grow
+                        rows="1"
+                    ></v-textarea>
                 </v-col>
             </v-row>
             <v-row>
