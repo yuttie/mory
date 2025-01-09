@@ -1265,15 +1265,15 @@ async function load(path: string) {
         else {
           error.value = true;
           errorText.value = error.response;
-          console.log('Unhandled error: {}', error.response);
           isLoading.value = false;
+          throw error;
         }
       }
       else {
         error.value = true;
         errorText.value = error.toString();
-        console.log('Unhandled error: {}', error);
         isLoading.value = false;
+        throw error;
       }
     });
 }
@@ -1309,15 +1309,15 @@ async function loadTemplate(path: string) {
         else {
           error.value = true;
           errorText.value = error.response;
-          console.log('Unhandled error: {}', error.response);
           isLoading.value = false;
+          throw error;
         }
       }
       else {
         error.value = true;
         errorText.value = error.toString();
-        console.log('Unhandled error: {}', error);
         isLoading.value = false;
+        throw error;
       }
     });
 }
@@ -1420,13 +1420,13 @@ function notifyUpstreamState(e: FocusEvent) {
         else {
           error.value = true;
           errorText.value = error.response;
-          console.log('Unhandled error: {}', error.response);
+          throw error;
         }
       }
       else {
         error.value = true;
         errorText.value = error.toString();
-        console.log('Unhandled error: {}', error);
+        throw error;
       }
     });
 }
@@ -1509,13 +1509,13 @@ function saveIfNeeded() {
           else {
             error.value = true;
             errorText.value = error.response;
-            console.log('Unhandled error: {}', error.response);
+            throw error;
           }
         }
         else {
           error.value = true;
           errorText.value = error.toString();
-          console.log('Unhandled error: {}', error);
+          throw error;
         }
       });
   }
@@ -1548,15 +1548,15 @@ function save() {
       else {
         error.value = true;
         errorText.value = error.response;
-        console.log('Unhandled error: {}', error.response);
         isSaving.value = false;
+        throw error;
       }
     }
     else {
       error.value = true;
       errorText.value = error.toString();
-      console.log('Unhandled error: {}', error);
       isSaving.value = false;
+      throw error;
     }
   });
 }
@@ -1601,15 +1601,15 @@ function rename() {
         else {
           error.value = true;
           errorText.value = error.response;
-          console.log('Unhandled error: {}', error.response);
           isRenaming.value = false;
+          throw error;
         }
       }
       else {
         error.value = true;
         errorText.value = error.toString();
-        console.log('Unhandled error: {}', error);
         isRenaming.value = false;
+        throw error;
       }
     });
   }
