@@ -134,6 +134,14 @@ const calendar = ref(null);
 // Computed properties
 const events = computed(() => {
     function normalizeEndTime(end: any, start: any): any {
+        const formatDateTime = (datetime) => {
+            if (datetime.second() === 0) {
+                return datetime.format('YYYY-MM-DD HH:mm');
+            }
+            else {
+                return datetime.format('YYYY-MM-DD HH:mm:ss');
+            }
+        };
         const durationShortRegexp =
             /^\+([\d.]+) *(y|M|w|d|h|m|s|ms)$/;
         const durationLongRegexp =
@@ -151,7 +159,7 @@ const events = computed(() => {
                         return prefixedEnd;
                     }
                     else {
-                        return parsedEnd.add(1, 'day').format('YYYY-MM-DD HH:mm:ss');
+                        return formatDateTime(parsedEnd.add(1, 'day'));
                     }
                 }
                 else {
@@ -163,9 +171,7 @@ const events = computed(() => {
             // The end time is calculated based on the duration from the start time
             const amount = parseFloat(match[1]);
             const unit = match[2] as dayjs.ManipulateType;
-            return dayjs(start)
-                .add(amount, unit)
-                .format('YYYY-MM-DD HH:mm:ss');
+            return formatDateTime(dayjs(start).add(amount, unit));
         }
     }
     const events = [];
