@@ -1,5 +1,13 @@
 <template>
     <v-app id="app" ref="app">
+        <v-alert
+            v-for="error of errors"
+            v-bind:key="error.id"
+            type="error"
+            dense
+            dismissible
+            style="z-index: 100; margin-bottom: 2px;"
+        >{{ error.message }}</v-alert>
         <v-navigation-drawer
             app
             clipped
@@ -248,13 +256,6 @@
 
         <v-main v-if="appStore.serviceWorkerConfigured && appStore.serviceWorkerHasToken">
             <v-container fluid pa-0 style="height: 100%;">
-                <v-alert
-                    v-for="error of errors"
-                    v-bind:key="error.id"
-                    type="error"
-                    dense
-                    dismissible
-                >{{ error.message }}</v-alert>
                 <router-view v-if="!(!appStore.hasToken && !routerView)" v-bind:key="$route.path" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerViewEl"/>
             </v-container>
         </v-main>
