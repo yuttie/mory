@@ -140,9 +140,27 @@ const events = computed(() => {
             /^\+([\d.]+) *(years?|months?|weeks?|days?|hours?|minutes?|seconds?|milliseconds?)$/i;
         const match = durationShortRegexp.exec(end || '') || durationLongRegexp.exec(end || '');
         if (match === null) {
-            return end;
+            if (dayjs(end).isValid()) {
+                return end;
+            }
+            else {
+                const prefixedEnd = dayjs(start).format('YYYY-MM-DD') + ' ' + end;
+                const parsedEnd = dayjs(prefixedEnd);
+                if (parsedEnd.isValid()) {
+                    if (parsedEnd.isAfter(start)) {
+                        return prefixedEnd;
+                    }
+                    else {
+                        return parsedEnd.add(1, 'day').format('YYYY-MM-DD HH:mm:ss');
+                    }
+                }
+                else {
+                    throw new Error(`Event end value is invalid: ${end}`);
+                }
+            }
         }
         else {
+            // The end time is calculated based on the duration from the start time
             const amount = parseFloat(match[1]);
             const unit = match[2] as dayjs.ManipulateType;
             return dayjs(start)
