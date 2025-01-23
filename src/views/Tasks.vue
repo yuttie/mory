@@ -245,7 +245,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onMounted, onUnmounted, defineEmits, defineExpose, del } from 'vue';
+import { ref, computed, onMounted, onUnmounted, del } from 'vue';
 import type { Ref } from 'vue';
 
 import TaskEditor from '@/components/TaskEditor.vue';
