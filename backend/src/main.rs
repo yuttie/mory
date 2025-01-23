@@ -683,9 +683,16 @@ async fn get_files_path(
                             stdin.write_all(&content).unwrap();
                         }
                         let output = child.wait_with_output().unwrap();
-                        let mut res = output.stdout.into_response();
-                        res.headers_mut().insert(header::CONTENT_TYPE, "image/webp".parse().unwrap()).unwrap();
-                        res
+                        if output.status.success() {
+                            let mut res = output.stdout.into_response();
+                            res.headers_mut().insert(header::CONTENT_TYPE, "image/webp".parse().unwrap()).unwrap();
+                            res
+                        }
+                        else {
+                            let mut res = content.into_response();
+                            res.headers_mut().insert(header::CONTENT_TYPE, mime.as_ref().parse().unwrap()).unwrap();
+                            res
+                        }
                     }
                     else {
                         let mut res = content.into_response();
