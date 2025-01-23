@@ -6,7 +6,7 @@ use std::io::Write;
 use std::iter::once;
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::vec::Vec;
 use std::string::String;
 use std::sync::Arc;
@@ -42,6 +42,7 @@ use dotenv::dotenv;
 use git2::{Index, IndexEntry, IndexTime, Repository, Oid};
 use jsonwebtoken as jwt;
 use mime_guess;
+use tokio::{io::AsyncWriteExt, process::Command};
 use tower::ServiceBuilder;
 use tower_http::{
     cors::CorsLayer,
@@ -680,9 +681,9 @@ async fn get_files_path(
                             .spawn()
                             .unwrap();
                         if let Some(mut stdin) = child.stdin.take() {
-                            stdin.write_all(&content).unwrap();
+                            stdin.write_all(&content).await.unwrap();
                         }
-                        let output = child.wait_with_output().unwrap();
+                        let output = child.wait_with_output().await.unwrap();
                         if output.status.success() {
                             let mut res = output.stdout.into_response();
                             res.headers_mut().insert(header::CONTENT_TYPE, "image/webp".parse().unwrap()).unwrap();
