@@ -44,7 +44,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, defineProps, defineEmits } from 'vue';
+import { computed } from 'vue';
 
 import type { Task } from '@/api';
 

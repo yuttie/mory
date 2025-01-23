@@ -94,7 +94,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, watch, onMounted, onUnmounted, defineEmits, defineExpose } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import type { Ref } from 'vue';
 
 import { useRouter, useRoute } from '@/composables/vue-router';

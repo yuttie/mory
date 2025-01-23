@@ -74,7 +74,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, watch, onMounted, defineExpose } from 'vue';
+import { ref, watch, onMounted } from 'vue';
 
 import * as api from '@/api';
 import { loadConfigValue, saveConfigValue } from '@/config';

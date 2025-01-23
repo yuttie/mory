@@ -330,7 +330,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onErrorCaptured, onMounted, onUnmounted, defineExpose } from 'vue';
+import { ref, computed, onErrorCaptured, onMounted, onUnmounted } from 'vue';
 
 
 import { useAppStore } from '@/stores/app';

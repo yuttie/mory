@@ -5,8 +5,6 @@
 </template>
 
 <script lang="ts" setup>
-import { defineEmits } from 'vue';
-
 import EditableViewer from '@/components/EditableViewer.vue';
 
 // Emits

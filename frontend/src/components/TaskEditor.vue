@@ -132,7 +132,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, defineProps, defineEmits, defineExpose } from 'vue';
+import { ref, computed } from 'vue';
 
 import type { Task } from '@/api';
 

@@ -39,7 +39,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onMounted, defineEmits, defineExpose } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import type { Ref } from 'vue';
 
 import * as api from '@/api';
