@@ -6,6 +6,7 @@ use std::io::Write;
 use std::iter::once;
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
+use std::process::{Command, Stdio};
 use std::vec::Vec;
 use std::string::String;
 use std::sync::Arc;
@@ -665,13 +666,36 @@ async fn get_files_path(
         };
         match found {
             Ok(content) => {
-                let mut res = content.into_response();
                 // Guess the mime type
                 let guess = mime_guess::from_path(std::str::from_utf8(&entry.path).unwrap());
                 if let Some(mime) = guess.first() {
-                    res.headers_mut().insert(header::CONTENT_TYPE, mime.as_ref().parse().unwrap()).unwrap();
+                    if mime.type_() == "image" {
+                        let mut child = Command::new("magick")
+                            .arg("-")
+                            .arg("-quality")
+                            .arg("1")
+                            .arg("webp:-")
+                            .stdin(Stdio::piped())
+                            .stdout(Stdio::piped())
+                            .spawn()
+                            .unwrap();
+                        if let Some(mut stdin) = child.stdin.take() {
+                            stdin.write_all(&content).unwrap();
+                        }
+                        let output = child.wait_with_output().unwrap();
+                        let mut res = output.stdout.into_response();
+                        res.headers_mut().insert(header::CONTENT_TYPE, "image/webp".parse().unwrap()).unwrap();
+                        res
+                    }
+                    else {
+                        let mut res = content.into_response();
+                        res.headers_mut().insert(header::CONTENT_TYPE, mime.as_ref().parse().unwrap()).unwrap();
+                        res
+                    }
                 }
-                res
+                else {
+                    content.into_response()
+                }
             },
             Err(_) => StatusCode::NOT_FOUND.into_response()
         }
