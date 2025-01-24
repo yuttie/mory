@@ -16,11 +16,13 @@ FROM debian:bookworm-slim as production-stage
 COPY --from=build-stage /usr/src/app/target/release/moried /usr/local/bin/moried
 
 ENV MORIED_GIT_DIR /repo
+ENV MORIED_IMAGE_CACHE_DIR /cache
 ENV MORIED_LISTEN 0.0.0.0:3030
 
 RUN mkdir $MORIED_GIT_DIR
+RUN mkdir $MORIED_IMAGE_CACHE_DIR
 
-VOLUME $MORIED_GIT_DIR /home
+VOLUME $MORIED_GIT_DIR $MORIED_IMAGE_CACHE_DIR /home
 EXPOSE 3030
 
 WORKDIR /home

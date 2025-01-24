@@ -42,8 +42,9 @@ use dotenv::dotenv;
 use git2::{Index, IndexEntry, IndexTime, Repository, Oid};
 use jsonwebtoken as jwt;
 use mime_guess;
+use sha1::{Digest, Sha1};
 use tempfile::tempdir;
-use tokio::{io::AsyncWriteExt, process::Command};
+use tokio::{io::{AsyncReadExt, AsyncWriteExt}, process::Command};
 use tower::ServiceBuilder;
 use tower_http::{
     cors::CorsLayer,
@@ -673,28 +674,50 @@ async fn get_files_path(
                 let guess = mime_guess::from_path(&entry_path);
                 if let Some(mime) = guess.first() {
                     if mime.type_() == "image" {
-                        let tmp_dir = tempdir().unwrap();
-                        let tmp_file_path = tmp_dir.path().join(entry_path.file_name().unwrap());
-                        let mut tmp_file = tokio::fs::File::create(&tmp_file_path).await.unwrap();
-                        tmp_file.write_all(&content).await.unwrap();
-                        let mut child = Command::new("magick")
-                            .arg(&tmp_file_path)
-                            .arg("-quality")
-                            .arg("1")
-                            .arg("webp:-")
-                            .stdout(Stdio::piped())
-                            .spawn()
-                            .unwrap();
-                        let output = child.wait_with_output().await.unwrap();
-                        if output.status.success() {
-                            let mut res = output.stdout.into_response();
+                        let mut cache_path = PathBuf::from(env::var("MORIED_IMAGE_CACHE_DIR").unwrap());
+                        {
+                            let input_hash = Sha1::digest(&content);
+                            let mut buf = [0u8; 40];
+                            let input_hash_hex = base16ct::lower::encode_str(&input_hash, &mut buf).unwrap();
+                            cache_path.push(input_hash_hex);
+                        }
+                        if cache_path.is_file() {
+                            let mut buf = Vec::new();
+                            let mut cache_file = tokio::fs::File::open(&cache_path).await.unwrap();
+                            cache_file.read_to_end(&mut buf).await.unwrap();
+
+                            let mut res = buf.into_response();
                             res.headers_mut().insert(header::CONTENT_TYPE, "image/webp".parse().unwrap()).unwrap();
                             res
                         }
                         else {
-                            let mut res = content.into_response();
-                            res.headers_mut().insert(header::CONTENT_TYPE, mime.as_ref().parse().unwrap()).unwrap();
-                            res
+                            let tmp_dir = tempdir().unwrap();
+                            let tmp_file_path = tmp_dir.path().join(entry_path.file_name().unwrap());
+                            let mut tmp_file = tokio::fs::File::create(&tmp_file_path).await.unwrap();
+                            tmp_file.write_all(&content).await.unwrap();
+                            let mut child = Command::new("magick")
+                                .arg(&tmp_file_path)
+                                .arg("-quality")
+                                .arg("1")
+                                .arg("webp:-")
+                                .stdout(Stdio::piped())
+                                .spawn()
+                                .unwrap();
+                            let output = child.wait_with_output().await.unwrap();
+                            if output.status.success() {
+                                tokio::fs::create_dir_all(cache_path.parent().unwrap()).await.unwrap();
+                                let mut cache_file = tokio::fs::File::create(&cache_path).await.unwrap();
+                                cache_file.write_all(&output.stdout).await.unwrap();
+
+                                let mut res = output.stdout.into_response();
+                                res.headers_mut().insert(header::CONTENT_TYPE, "image/webp".parse().unwrap()).unwrap();
+                                res
+                            }
+                            else {
+                                let mut res = content.into_response();
+                                res.headers_mut().insert(header::CONTENT_TYPE, mime.as_ref().parse().unwrap()).unwrap();
+                                res
+                            }
                         }
                     }
                     else {
