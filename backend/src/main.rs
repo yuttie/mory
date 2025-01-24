@@ -42,6 +42,7 @@ use dotenv::dotenv;
 use git2::{Index, IndexEntry, IndexTime, Repository, Oid};
 use jsonwebtoken as jwt;
 use mime_guess;
+use tempfile::tempdir;
 use tokio::{io::AsyncWriteExt, process::Command};
 use tower::ServiceBuilder;
 use tower_http::{
@@ -668,21 +669,22 @@ async fn get_files_path(
         match found {
             Ok(content) => {
                 // Guess the mime type
-                let guess = mime_guess::from_path(std::str::from_utf8(&entry.path).unwrap());
+                let entry_path = PathBuf::from(std::str::from_utf8(&entry.path).unwrap());
+                let guess = mime_guess::from_path(&entry_path);
                 if let Some(mime) = guess.first() {
                     if mime.type_() == "image" {
+                        let tmp_dir = tempdir().unwrap();
+                        let tmp_file_path = tmp_dir.path().join(entry_path.file_name().unwrap());
+                        let mut tmp_file = tokio::fs::File::create(&tmp_file_path).await.unwrap();
+                        tmp_file.write_all(&content).await.unwrap();
                         let mut child = Command::new("magick")
-                            .arg("-")
+                            .arg(&tmp_file_path)
                             .arg("-quality")
                             .arg("1")
                             .arg("webp:-")
-                            .stdin(Stdio::piped())
                             .stdout(Stdio::piped())
                             .spawn()
                             .unwrap();
-                        if let Some(mut stdin) = child.stdin.take() {
-                            stdin.write_all(&content).await.unwrap();
-                        }
                         let output = child.wait_with_output().await.unwrap();
                         if output.status.success() {
                             let mut res = output.stdout.into_response();
