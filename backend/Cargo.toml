@@ -29,3 +29,6 @@ tower-http = { version = "0.5.2", features = ["compression-gzip", "cors", "sensi
 tracing = { version = "0.1", features = ["release_max_level_info"] }
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 markdown = "=1.0.0-alpha.20"
+tempfile = "3.15.0"
+sha1 = "0.10.6"
+base16ct = "0.2.0"
