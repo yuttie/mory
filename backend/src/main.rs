@@ -695,7 +695,7 @@ async fn get_files_path(
                             let tmp_file_path = tmp_dir.path().join(entry_path.file_name().unwrap());
                             let mut tmp_file = tokio::fs::File::create(&tmp_file_path).await.unwrap();
                             tmp_file.write_all(&content).await.unwrap();
-                            let mut child = Command::new("magick")
+                            let mut child = Command::new("convert")
                                 .arg(&tmp_file_path)
                                 .arg("-quality")
                                 .arg("1")
