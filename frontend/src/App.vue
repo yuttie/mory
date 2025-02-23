@@ -460,7 +460,6 @@ const noteTreeRoot = computed(() => {
 
 // Lifecycle hooks
 onErrorCaptured((error: unknown, _instance: ComponentPublicInstance | null, _info: string): boolean | void => {
-    console.log('-----------------');
     errors.value.push({
         id: crypto.randomUUID(),
         message: String(error),
@@ -703,7 +702,6 @@ function copyToClipboard(text: string) {
 
 async function populateTagChildren(item: TreeNode) {
     const entries = await api.listNotes().then(res => res.data);
-    console.log(entries);
 
     const tags: Map<string, number> = new Map();
     for (const entry of entries) {
