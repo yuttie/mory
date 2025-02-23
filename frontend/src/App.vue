@@ -1,6 +1,7 @@
 <template>
     <v-app id="app" ref="app">
         <v-alert
+            v-if="isDev"
             v-for="error of errors"
             v-bind:key="error.id"
             type="error"
@@ -369,6 +370,10 @@ const fileInputEl = ref(null);
 const routerViewEl = ref(null);
 
 // Computed properties
+const isDev = computed(() => {
+    return import.meta.env.DEV;
+});
+
 const decodedToken = computed(() => {
     if (appStore.token) {
         return jwt_decode<Claim>(appStore.token);
