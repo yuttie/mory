@@ -84,6 +84,7 @@ async fn main() {
         .allow_credentials(true);
 
     let protected_api = Router::new()
+        .route("/commit_id", get(get_commit_id))
         .route("/notes", get(get_notes))
         .route("/notes/*path", get(get_notes_path).put(put_notes_path).delete(delete_notes_path))
         .route("/files", post(post_files).layer(DefaultBodyLimit::max(16 * 1024 * 1024)))
@@ -191,6 +192,16 @@ async fn post_login(
     else {
         StatusCode::UNAUTHORIZED.into_response()
     }
+}
+
+async fn get_commit_id(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<String>, AppError> {
+    let repo = state.repo.lock().await;
+    let head = repo.head()?;
+    let commit = head.peel_to_commit()?;
+    let commit_id = commit.id();
+    Ok(Json(commit_id.to_string()))
 }
 
 async fn get_notes(
@@ -882,6 +893,10 @@ mod models {
     use std::sync::Arc;
     use std::option::Option;
 
+    use axum::{
+        http::StatusCode,
+        response::{IntoResponse, Response},
+    };
     use chrono::{DateTime, FixedOffset};
     use git2::{Repository, Oid};
     use serde::{Deserialize, Serialize};
@@ -948,6 +963,27 @@ mod models {
     pub struct EntriesCache {
         pub commit_id: String,
         pub entries: Vec<ListEntry>,
+    }
+
+    pub struct AppError(anyhow::Error);
+
+    impl IntoResponse for AppError {
+        fn into_response(self) -> Response {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Something went wrong: {}", self.0),
+            )
+                .into_response()
+        }
+    }
+
+    impl<E> From<E> for AppError
+    where
+        E: Into<anyhow::Error>,
+    {
+        fn from(err: E) -> Self {
+            Self(err.into())
+        }
     }
 
     #[derive(Clone)]
