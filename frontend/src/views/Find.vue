@@ -76,7 +76,7 @@
                 </v-toolbar>
             </template>
             <template v-slot:item.path="{ item }">
-                <span class="path"><v-icon class="mr-1">mdi-file-document-outline</v-icon><router-link v-bind:to="{ path: `/note/${item.path}` }">{{ item.path }}</router-link></span>
+                <span class="path"><v-icon class="mr-1">mdi-file-document-outline</v-icon><router-link v-bind:to="{ path: `/note/${item.path}` }">{{ item.title ?? item.path }}</router-link></span>
             </template>
             <template v-slot:item.time="{ item }">
                 <div class="modified text-no-wrap">{{ item.time.format('YYYY-MM-DD HH:mm:ss') }}</div>
@@ -144,7 +144,7 @@ const queryEl = ref(null);
 // Computed properties
 const headers = computed(() => {
     return [
-        { text: 'Path', value: 'path' },
+        { text: 'Title or Path', value: 'path' },
         { text: 'Modified', value: 'time', sort: (a: any, b: any) => a - b },
         { text: 'Size', value: 'size' },
         { text: 'Type', value: 'mimeType' },
@@ -229,6 +229,7 @@ const matchedEntries = computed(() => {
             size: entry.size,
             mimeType: entry.mime_type,
             tags: ((entry.metadata || {}).tags || []).map(String).sort(compareTags),
+            title: entry.title,
             time: dayjs(entry.time),
         });
     }
