@@ -76,7 +76,7 @@
                 </v-toolbar>
             </template>
             <template v-slot:item.path="{ item }">
-                <span class="path"><v-icon class="mr-1">mdi-file-document-outline</v-icon><router-link v-bind:to="{ path: `/note/${item.path}` }">{{ item.title ?? item.path }}</router-link></span>
+                <div class="path truncate" style="max-width: 20em;" v-bind:title="item.title ?? item.path"><v-icon class="mr-1">mdi-file-document-outline</v-icon><router-link v-bind:to="{ path: `/note/${item.path}` }">{{ item.title ?? item.path }}</router-link></div>
             </template>
             <template v-slot:item.time="{ item }">
                 <div class="modified text-no-wrap">{{ item.time.format('YYYY-MM-DD HH:mm:ss') }}</div>
@@ -504,5 +504,11 @@ defineExpose({
 
 .tags {
     white-space: nowrap;
+}
+
+.truncate {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 </style>
