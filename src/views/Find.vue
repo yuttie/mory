@@ -76,7 +76,7 @@
                 </v-toolbar>
             </template>
             <template v-slot:item.path="{ item }">
-                <div class="path truncate" style="max-width: 20em;" v-bind:title="item.title ?? item.path"><v-icon class="mr-1">{{ item.icon }}</v-icon><router-link v-bind:to="{ path: `/note/${item.path}` }">{{ item.title ?? item.path }}</router-link></div>
+                <div class="path truncate" style="max-width: 20em;" v-bind:title="item.title ?? item.path"><v-icon class="mr-1" v-bind:color="item.iconColor">{{ item.icon }}</v-icon><router-link v-bind:to="{ path: `/note/${item.path}` }">{{ item.title ?? item.path }}</router-link></div>
             </template>
             <template v-slot:item.time="{ item }">
                 <div class="modified text-no-wrap">{{ item.time.format('YYYY-MM-DD HH:mm:ss') }}</div>
@@ -231,15 +231,15 @@ const matchedEntries = computed(() => {
             tags: ((entry.metadata || {}).tags || []).map(String).sort(compareTags),
             title: entry.title,
             time: dayjs(entry.time),
-            icon: (() => {
+            ...(() => {
                 if (entry.mime_type.startsWith("image/")) {
-                    return "mdi-image-outline";
+                    return { icon: "mdi-image-outline", iconColor: "#62b950" };
                 }
                 else if (entry.mime_type.startsWith("text/")) {
-                    return "mdi-file-document-outline";
+                    return { icon: "mdi-file-document-outline", iconColor: "#5fa3c4" };
                 }
                 else {
-                    return "mdi-file-outline";
+                    return { icon: "mdi-file-outline", iconColor: null };
                 }
             })(),
         });
