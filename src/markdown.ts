@@ -8,6 +8,7 @@ import remarkMath from 'remark-math';
 import remarkRehype from 'remark-rehype';
 import rehypeRaw from 'rehype-raw';
 import myRehypeEmbedLineNumbers from '@/rehype-embed-line-numbers';
+import myRehypeLazyLoadImages from '@/rehype-lazy-load-images';
 import rehypeUrlInspector from '@jsdevtools/rehype-url-inspector';
 import rehypeSlug from 'rehype-slug';
 import rehypeAutolinkHeadings from 'rehype-autolink-headings';
@@ -36,6 +37,7 @@ const processor = unified()
   })
   .use(rehypeRaw)
   .use(myRehypeEmbedLineNumbers)
+  .use(myRehypeLazyLoadImages)
   .use(rehypeUrlInspector, {
     inspectEach: ({ url, propertyName, node }) => {
       if (node.tagName === 'img' && propertyName === 'src' && node.properties) {
