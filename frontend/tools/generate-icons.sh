@@ -10,6 +10,3 @@ inkscape --export-type=png --export-area-page -w 180 -h 180 -o public/img/icons/
 inkscape --export-type=png --export-area-page -w 144 -h 144 -o public/img/icons/msapplication-icon-144x144.png logo.svg
 inkscape --export-type=png --export-area-page -w 192 -h 192 -o public/img/icons/android-chrome-192x192.png logo.svg
 inkscape --export-type=png --export-area-page -w 512 -h 512 -o public/img/icons/android-chrome-512x512.png logo.svg
-
-# For About.vue
-inkscape --export-type=png --export-area-page -w 192 -h 192 -o src/assets/logo.png logo.svg
