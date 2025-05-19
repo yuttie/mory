@@ -37,6 +37,7 @@
     "remark-gfm": "^4.0.0",
     "remark-math": "^6.0.0",
     "remark-rehype": "^11.1.0",
+    "uuid": "^11.1.0",
     "vue": "^2.7.16",
     "vue-router": "^3.6.5",
     "vuedraggable": "^2.24.3",
