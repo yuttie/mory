@@ -706,7 +706,7 @@ async fn get_files_path(
                             let tmp_file_path = tmp_dir.path().join(entry_path.file_name().unwrap());
                             let mut tmp_file = tokio::fs::File::create(&tmp_file_path).await.unwrap();
                             tmp_file.write_all(&content).await.unwrap();
-                            let mut child = Command::new("convert")
+                            let child = Command::new("convert")
                                 .arg(&tmp_file_path)
                                 .arg("-quality")
                                 .arg("1")
@@ -913,12 +913,6 @@ mod models {
         pub title: Option<String>,
         pub time: DateTime<FixedOffset>,
     }
-
-    #[derive(Debug)]
-    pub struct Unauthorized;
-
-    #[derive(Debug)]
-    pub struct NotFound;
 
     #[derive(Debug, Serialize, Deserialize)]
     pub struct Claims {
