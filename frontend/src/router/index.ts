@@ -1,6 +1,7 @@
 import Vue from 'vue';
 import VueRouter from 'vue-router';
 import type { RouteConfig } from 'vue-router';
+import { v7 as uuidv7 } from 'uuid';
 
 const Home     = () => import('../views/Home.vue');
 const Calendar = () => import('../views/Calendar.vue');
@@ -40,7 +41,7 @@ const routes: Array<RouteConfig> = [
     redirect: to => {
       return {
         name: 'Note',
-        params: { path: crypto.randomUUID().replaceAll('-', '') + '.md' },
+        params: { path: uuidv7() + '.md' },
         query: { mode: 'create', template: to.query.from },
       };
     },
