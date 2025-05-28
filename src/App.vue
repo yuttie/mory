@@ -12,11 +12,46 @@
         <v-navigation-drawer
             app
             clipped
-            mini-variant
+            v-bind:mini-variant="miniSidebar"
+            v-bind:expand-on-hover="miniSidebar"
             permanent
-            expand-on-hover
             v-if="!$vuetify.breakpoint.xs"
         >
+            <v-list dense nav>
+                <v-list-item
+                    v-if="miniSidebar"
+                    v-on:click="miniSidebar = false"
+                >
+                    <v-list-item-icon>
+                        <v-icon>mdi-chevron-double-right</v-icon>
+                    </v-list-item-icon>
+                    <v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content>
+                </v-list-item>
+                <v-list-item>
+                    <v-img
+                        src="/img/logo.svg"
+                        aspect-ratio="1"
+                        contain
+                        max-width="24"
+                        max-height="24"
+                        class="mr-2"
+                    ></v-img>
+                    <v-list-item-content>
+                        <v-list-item-title class="text-h5">
+                            mory
+                        </v-list-item-title>
+                    </v-list-item-content>
+                    <v-spacer></v-spacer>
+                    <template v-if="!miniSidebar">
+                        <v-btn
+                            icon
+                            tile
+                            v-on:click="miniSidebar = true"
+                        ><v-icon>mdi-chevron-double-left</v-icon></v-btn>
+                    </template>
+                </v-list-item>
+            </v-list>
+
             <v-list
                 dense
                 nav
@@ -331,7 +366,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onErrorCaptured, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onErrorCaptured, onMounted, onUnmounted } from 'vue';
 
 
 import { useAppStore } from '@/stores/app';
@@ -339,6 +374,7 @@ import { useAppStore } from '@/stores/app';
 import Gravatar from '@/components/Gravatar.vue';
 
 import * as api from '@/api';
+import { loadConfigValue, saveConfigValue } from '@/config';
 import type { Claim, ListEntry2, UploadEntry } from '@/api';
 import jwt_decode from 'jwt-decode';
 import less from 'less';
@@ -354,6 +390,7 @@ interface TreeNode {
 const appStore = useAppStore();
 
 // Reactive states
+const miniSidebar = ref(loadConfigValue("mini-sidebar", false));
 const loginUsername = ref("");
 const loginPassword = ref("");
 const templates = ref([] as string[]);
@@ -728,6 +765,11 @@ async function populateTagChildren(item: TreeNode) {
         });
     }
 }
+
+// Watchers
+watch(miniSidebar, (newMiniSidebar: boolean) => {
+  saveConfigValue("mini-sidebar", newMiniSidebar);
+});
 
 // Expose properties
 defineExpose({
