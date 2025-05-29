@@ -1692,18 +1692,24 @@ $navigation-drawer-width: 56px;
 
 #editable-viewer {
     position: relative;
+    height: 100vh;
+    display: flex;
 }
 
 .panes {
-    width: 100%;
+    flex: 1 1 0;
     overflow: hidden;
+
+    display: flex;
+    flex-direction: row;
 }
 
 .editor-pane {
+    flex: 1 1 0;
+    overflow: hidden;
+
     display: flex;
     flex-direction: column;
-
-    border-right: thin solid rgba(0, 0, 0, 0.12);
 
     .editor {
         flex: 1 1 0;
@@ -1722,75 +1728,30 @@ $navigation-drawer-width: 56px;
 }
 
 .viewer-pane {
+    flex: 1 1 0;
+    overflow: auto;
+
     .metadata-content,
     .rendered-content {
         user-select: text;
     }
 }
 
-.editor-pane {
-    position: fixed;
-    top: 0;
-    bottom: 0;
-    width: 300px;
-
-    transition-duration: 0.2s;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-property: left, width;
-}
-
-.viewer-pane {
-    transition-duration: 0.2s;
-    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    transition-property: left, width, margin-left;
-}
-
 .panes.onlyEditor {
-    .editor-pane {
-        width: calc(100% - #{$navigation-drawer-width});
-    }
-    &.mdAndUp .editor-pane {
-        width: calc(100% - 300px - #{$navigation-drawer-width});
-    }
-
     .viewer-pane {
-        visibility: hidden;
+        display: none;
     }
 }
 
 .panes.onlyViewer {
     .editor-pane {
-        visibility: hidden;
-    }
-
-    .viewer-pane {
-        width: 100%;
-    }
-    &.mdAndUp .viewer-pane,
-    &.lgAndUp .viewer-pane {
-        width: calc(100% - 300px);
+        display: none;
     }
 }
 
 .panes.both {
     .editor-pane {
-        width: 50%;
-    }
-    &.smAndUp .editor-pane {
-        width: calc((100% - #{$navigation-drawer-width}) / 2);
-    }
-    &.mdAndUp .editor-pane {
-        width: calc((100% - 300px - #{$navigation-drawer-width}) / 2);
-    }
-
-    .viewer-pane {
-        margin-left: 50%;
-        width: 50%;
-    }
-    &.mdAndUp .viewer-pane,
-    &.lgAndUp .viewer-pane {
-        margin-left: calc((100% - 300px) / 2);
-        width: calc((100% - 300px) / 2);
+        border-right: thin solid #ccc;
     }
 }
 
