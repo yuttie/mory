@@ -89,7 +89,7 @@
 
         <v-row
             style="position: fixed; top: 0; right: 0; z-index: 10;"
-            class="ma-2"
+            class="mr-2 mt-2"
         >
             <input type="file" multiple class="d-none" ref="fileInputEl">
             <v-menu
@@ -99,7 +99,7 @@
                     <v-btn
                         text
                         title="Add note"
-                        class="mr-2"
+                        class="ml-2"
                         style="padding: 0; min-width: 36px"
                         v-bind="attrs"
                         v-on="on"
@@ -167,7 +167,7 @@
                     <v-btn
                         text
                         title="Upload file"
-                        class="mr-2"
+                        class="ml-2"
                         style="padding: 0; min-width: 36px"
                         v-bind="attrs"
                         v-on="on"
@@ -242,7 +242,7 @@
                 <template v-slot:activator="{ attrs, on }">
                     <v-btn
                         text
-                        class="mr-2"
+                        class="ml-2"
                         style="padding: 0; min-width: 36px"
                         v-bind="attrs"
                         v-on="on"
