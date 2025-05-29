@@ -1,5 +1,11 @@
 <template>
     <v-app id="app" ref="app">
+        <v-main v-if="appStore.serviceWorkerConfigured && appStore.serviceWorkerHasToken">
+            <v-container fluid pa-0 style="height: 100%;">
+                <router-view v-if="!(!appStore.hasToken && !routerView)" v-bind:key="$route.path" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerViewEl"/>
+            </v-container>
+        </v-main>
+
         <v-alert
             v-if="isDev"
             v-for="error of errors"
@@ -275,12 +281,6 @@
                 </v-card>
             </v-menu>
         </v-row>
-
-        <v-main v-if="appStore.serviceWorkerConfigured && appStore.serviceWorkerHasToken">
-            <v-container fluid pa-0 style="height: 100%;">
-                <router-view v-if="!(!appStore.hasToken && !routerView)" v-bind:key="$route.path" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerViewEl"/>
-            </v-container>
-        </v-main>
 
         <v-app-bar
             app
