@@ -1701,7 +1701,10 @@ $navigation-drawer-width: 56px;
     overflow: hidden;
 
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
+    &.mdAndUp {
+        flex-direction: row;
+    }
 }
 
 .editor-pane {
