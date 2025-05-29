@@ -121,7 +121,14 @@
                     class="sidebar"
                 >
                     <v-list dense nav>
-                        <v-list-item></v-list-item>
+                        <v-list-item>
+                            <v-btn
+                                v-if="!miniSubSidebar"
+                                icon
+                                tile
+                                v-on:click.stop="miniSubSidebar = true"
+                            ><v-icon>mdi-chevron-double-right</v-icon></v-btn>
+                        </v-list-item>
                         <v-list-item
                             v-if="miniSubSidebar"
                             v-on:click="miniSubSidebar = false"
@@ -130,15 +137,6 @@
                                 <v-icon>mdi-chevron-double-left</v-icon>
                             </v-list-item-icon>
                             <v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content>
-                        </v-list-item>
-                        <v-list-item
-                            v-if="!miniSubSidebar"
-                        >
-                            <v-btn
-                                icon
-                                tile
-                                v-on:click.stop="miniSubSidebar = true"
-                            ><v-icon>mdi-chevron-double-right</v-icon></v-btn>
                         </v-list-item>
                     </v-list>
                     <v-row
