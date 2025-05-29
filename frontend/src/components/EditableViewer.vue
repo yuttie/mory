@@ -1760,9 +1760,6 @@ $navigation-drawer-width: 56px;
 }
 
 .sidebar {
-    border-left: 1px solid #ccc;
-    flex: 0 0;
-    overflow-y: auto;
 }
 
 .sidebar-contents {
