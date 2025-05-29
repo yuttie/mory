@@ -12,15 +12,15 @@
         <v-navigation-drawer
             app
             clipped
-            v-bind:mini-variant="miniSidebar"
-            v-bind:expand-on-hover="miniSidebar"
+            v-bind:mini-variant="miniMainSidebar"
+            v-bind:expand-on-hover="miniMainSidebar"
             permanent
             v-if="!$vuetify.breakpoint.xs"
         >
             <v-list dense nav>
                 <v-list-item
-                    v-if="miniSidebar"
-                    v-on:click="miniSidebar = false"
+                    v-if="miniMainSidebar"
+                    v-on:click="miniMainSidebar = false"
                 >
                     <v-list-item-icon>
                         <v-icon>mdi-chevron-double-right</v-icon>
@@ -42,11 +42,11 @@
                         </v-list-item-title>
                     </v-list-item-content>
                     <v-spacer></v-spacer>
-                    <template v-if="!miniSidebar">
+                    <template v-if="!miniMainSidebar">
                         <v-btn
                             icon
                             tile
-                            v-on:click="miniSidebar = true"
+                            v-on:click="miniMainSidebar = true"
                         ><v-icon>mdi-chevron-double-left</v-icon></v-btn>
                     </template>
                 </v-list-item>
@@ -376,7 +376,7 @@ interface TreeNode {
 const appStore = useAppStore();
 
 // Reactive states
-const miniSidebar = ref(loadConfigValue("mini-sidebar", false));
+const miniMainSidebar = ref(loadConfigValue("mini-main-sidebar", false));
 const loginUsername = ref("");
 const loginPassword = ref("");
 const templates = ref([] as string[]);
@@ -753,8 +753,8 @@ async function populateTagChildren(item: TreeNode) {
 }
 
 // Watchers
-watch(miniSidebar, (newMiniSidebar: boolean) => {
-  saveConfigValue("mini-sidebar", newMiniSidebar);
+watch(miniMainSidebar, (newMiniMainSidebar: boolean) => {
+  saveConfigValue("mini-main-sidebar", newMiniMainSidebar);
 });
 
 // Expose properties
