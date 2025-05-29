@@ -1764,6 +1764,10 @@ $navigation-drawer-width: 56px;
 
 .sidebar-contents {
     width: 256px;  /* Keep this in sync with the width of v-navigation-drawer */
+
+    /* Correct z-order of right sidebar's border and v-expansion-panels inside this element */
+    position: relative;
+    z-index: 0;
 }
 
 .toc {
