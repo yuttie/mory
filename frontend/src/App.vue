@@ -87,24 +87,10 @@
             </v-treeview>
         </v-navigation-drawer>
 
-        <v-app-bar
-            id="app-bar"
-            app
-            dense
-            clipped-left
-            color="white"
-            elevation="0"
+        <v-row
+            style="position: fixed; top: 0; right: 0; z-index: 1000;"
+            class="ma-2"
         >
-            <v-img
-                src="/img/logo.svg"
-                aspect-ratio="1"
-                contain
-                max-width="24"
-                max-height="24"
-                class="mr-2"
-            ></v-img>
-            <v-toolbar-title>mory</v-toolbar-title>
-            <v-spacer></v-spacer>
             <input type="file" multiple class="d-none" ref="fileInputEl">
             <v-menu
                 offset-y
@@ -288,7 +274,7 @@
                     </v-list>
                 </v-card>
             </v-menu>
-        </v-app-bar>
+        </v-row>
 
         <v-main v-if="appStore.serviceWorkerConfigured && appStore.serviceWorkerHasToken">
             <v-container fluid pa-0 style="height: 100%;">
