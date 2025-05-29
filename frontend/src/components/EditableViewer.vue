@@ -561,9 +561,6 @@ function jumpTo(id: string) {
   const element = shadowRoot.value.querySelector(`[id="${id.slice(1)}"]`);
   if (element !== null) {
     element.scrollIntoView();
-    // Compensate for the app bar height
-    const appBarHeight = document.querySelector('#app-bar')?.clientHeight || 0;
-    window.scrollBy(0, -appBarHeight);
   }
 }
 
@@ -1052,8 +1049,7 @@ function highlightVisibleTOCItems() {
   const scrollTop = document.documentElement.scrollTop;
   const clientHeight = document.documentElement.clientHeight;
   const scrollHeight = document.documentElement.scrollHeight;
-  const appBarHeight = document.querySelector('#app-bar')?.clientHeight || 0;
-  const viewportRange = [scrollTop + appBarHeight, scrollTop + clientHeight];
+  const viewportRange = [scrollTop, scrollTop + clientHeight];
   for (const { href, range } of ranges) {
     const target = document.querySelector(`.toc li:has(> a[href="${href}"])`);
     if (range[0] < viewportRange[1] && (range[1] || scrollHeight) > viewportRange[0]) {
@@ -1637,7 +1633,6 @@ watch(toc, () => {
 </script>
 
 <style scoped lang="scss">
-$app-bar-height: 48px;
 $navigation-drawer-width: 56px;
 
 #editable-viewer {
@@ -1689,7 +1684,7 @@ $navigation-drawer-width: 56px;
 
 .editor-pane {
   position: fixed;
-  top: $app-bar-height;
+  top: 0;
   bottom: 0;
   width: 300px;
 
@@ -1759,7 +1754,7 @@ $navigation-drawer-width: 56px;
 
 .sidebar {
   position: fixed;
-  top: $app-bar-height;
+  top: 0;
   right: 0;
   bottom: 0;
   width: 300px;
