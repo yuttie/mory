@@ -140,12 +140,114 @@
                         </v-list-item>
                     </v-list>
                     <v-row
-                        class="fill-height"
                         no-gutters
                     >
+                        <v-col style="overflow: hidden;">
+                            <div class="sidebar-contents">
+                                <v-expansion-panels
+                                    accordion
+                                    multiple
+                                    flat
+                                    tile
+                                    hover
+                                    v-model="sidebarPanelState"
+                                >
+                                    <v-expansion-panel
+                                        class="metadata"
+                                        v-if="rendered.metadata"
+                                    >
+                                        <v-expansion-panel-header>
+                                            <span>
+                                                Metadata
+                                                <template v-if="Object.hasOwn(rendered.metadata, 'validationErrors')">
+                                                    <v-tooltip bottom color="success">
+                                                        <template v-slot:activator="{ on, attrs }">
+                                                            <v-icon color="success" v-bind="attrs" v-on="on">
+                                                                mdi-check
+                                                            </v-icon>
+                                                        </template>
+                                                        <span>YAML parse succeeded</span>
+                                                    </v-tooltip>
+                                                    <template v-if="rendered.metadata.validationErrors === null">
+                                                        <v-tooltip bottom color="success">
+                                                            <template v-slot:activator="{ on, attrs }">
+                                                                <v-icon color="success" v-bind="attrs" v-on="on">
+                                                                    mdi-check
+                                                                </v-icon>
+                                                            </template>
+                                                            <span>Schema validation succeeded</span>
+                                                        </v-tooltip>
+                                                    </template>
+                                                    <template v-else>
+                                                        <v-tooltip bottom color="error">
+                                                            <template v-slot:activator="{ on, attrs }">
+                                                                <v-icon color="error" v-bind="attrs" v-on="on">
+                                                                    mdi-alert
+                                                                </v-icon>
+                                                            </template>
+                                                            <span>Schema validation failed</span>
+                                                        </v-tooltip>
+                                                    </template>
+                                                </template>
+                                                <template v-else>
+                                                    <v-tooltip bottom color="error">
+                                                        <template v-slot:activator="{ on, attrs }">
+                                                            <v-icon color="error" v-bind="attrs" v-on="on">
+                                                                mdi-alert
+                                                            </v-icon>
+                                                        </template>
+                                                        <span>YAML parse failed</span>
+                                                    </v-tooltip>
+                                                </template>
+                                            </span>
+                                        </v-expansion-panel-header>
+                                        <v-expansion-panel-content>
+                                            <template v-if="Object.hasOwn(rendered.metadata, 'validationErrors')">
+                                                <template v-if="rendered.metadata.validationErrors !== null">
+                                                    <ul>
+                                                        <li v-for="error of rendered.metadata.validationErrors" v-bind:key="error.dataPath + error.schemaPath">
+                                                            <span class="font-weight-bold">{{error.dataPath}}: <span class="error--text">error:</span> {{error.message}}</span> (schema path: {{error.schemaPath}})
+                                                        </li>
+                                                    </ul>
+                                                </template>
+                                                <pre class="metadata-content">{{ JSON.stringify(rendered.metadata.value, null, 2) }}</pre>
+                                            </template>
+                                            <template v-else>
+                                                <span class="error--text font-weight-bold">{{ rendered.metadata.parseError.toString() }}</span>
+                                            </template>
+                                        </v-expansion-panel-content>
+                                    </v-expansion-panel>
+                                    <v-expansion-panel
+                                        class="toc"
+                                    >
+                                        <v-expansion-panel-header>
+                                            Table of Contents
+                                        </v-expansion-panel-header>
+                                        <v-expansion-panel-content>
+                                            <ol class="tree">
+                                                <li v-for="h1 of toc" v-bind:key="h1.title" class="level1">
+                                                    <a v-bind:href="h1.href" v-on:click="jumpTo(h1.href)">{{ h1.title }}</a>
+                                                    <ol>
+                                                        <li v-for="h2 of h1.children" v-bind:key="h2.title" class="level2">
+                                                            <a v-bind:href="h2.href" v-on:click="jumpTo(h2.href)">{{ h2.title }}</a>
+                                                            <ol>
+                                                                <li v-for="h3 of h2.children" v-bind:key="h3.title" class="level3">
+                                                                    <a v-bind:href="h3.href" v-on:click="jumpTo(h3.href)">{{ h3.title }}</a>
+                                                                </li>
+                                                            </ol>
+                                                        </li>
+                                                    </ol>
+                                                </li>
+                                            </ol>
+                                        </v-expansion-panel-content>
+                                    </v-expansion-panel>
+                                </v-expansion-panels>
+                            </div>
+                        </v-col>
                         <v-navigation-drawer
                             mini-variant
                             permanent
+                            right
                         >
                             <v-list dense nav>
                                 <v-list-item-group
@@ -182,108 +284,6 @@
                                 <v-list-item link         id="rename-toggle"            v-bind:disabled="!noteHasUpstream" v-bind:style="!noteHasUpstream ? { opacity: '0.3' } : {}" v-bind:loading="isRenaming"                      ><v-list-item-icon><v-icon>mdi-rename-box  </v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
                             </v-list>
                         </v-navigation-drawer>
-                        <v-col
-                            class="sidebar-contents"
-                        >
-                            <v-expansion-panels
-                                accordion
-                                multiple
-                                flat
-                                tile
-                                hover
-                                v-model="sidebarPanelState"
-                            >
-                                <v-expansion-panel
-                                    class="metadata"
-                                    v-if="rendered.metadata"
-                                >
-                                    <v-expansion-panel-header>
-                                        <span>
-                                            Metadata
-                                            <template v-if="Object.hasOwn(rendered.metadata, 'validationErrors')">
-                                                <v-tooltip bottom color="success">
-                                                    <template v-slot:activator="{ on, attrs }">
-                                                        <v-icon color="success" v-bind="attrs" v-on="on">
-                                                            mdi-check
-                                                        </v-icon>
-                                                    </template>
-                                                    <span>YAML parse succeeded</span>
-                                                </v-tooltip>
-                                                <template v-if="rendered.metadata.validationErrors === null">
-                                                    <v-tooltip bottom color="success">
-                                                        <template v-slot:activator="{ on, attrs }">
-                                                            <v-icon color="success" v-bind="attrs" v-on="on">
-                                                                mdi-check
-                                                            </v-icon>
-                                                        </template>
-                                                        <span>Schema validation succeeded</span>
-                                                    </v-tooltip>
-                                                </template>
-                                                <template v-else>
-                                                    <v-tooltip bottom color="error">
-                                                        <template v-slot:activator="{ on, attrs }">
-                                                            <v-icon color="error" v-bind="attrs" v-on="on">
-                                                                mdi-alert
-                                                            </v-icon>
-                                                        </template>
-                                                        <span>Schema validation failed</span>
-                                                    </v-tooltip>
-                                                </template>
-                                            </template>
-                                            <template v-else>
-                                                <v-tooltip bottom color="error">
-                                                    <template v-slot:activator="{ on, attrs }">
-                                                        <v-icon color="error" v-bind="attrs" v-on="on">
-                                                            mdi-alert
-                                                        </v-icon>
-                                                    </template>
-                                                    <span>YAML parse failed</span>
-                                                </v-tooltip>
-                                            </template>
-                                        </span>
-                                    </v-expansion-panel-header>
-                                    <v-expansion-panel-content>
-                                        <template v-if="Object.hasOwn(rendered.metadata, 'validationErrors')">
-                                            <template v-if="rendered.metadata.validationErrors !== null">
-                                                <ul>
-                                                    <li v-for="error of rendered.metadata.validationErrors" v-bind:key="error.dataPath + error.schemaPath">
-                                                        <span class="font-weight-bold">{{error.dataPath}}: <span class="error--text">error:</span> {{error.message}}</span> (schema path: {{error.schemaPath}})
-                                                    </li>
-                                                </ul>
-                                            </template>
-                                            <pre class="metadata-content">{{ JSON.stringify(rendered.metadata.value, null, 2) }}</pre>
-                                        </template>
-                                        <template v-else>
-                                            <span class="error--text font-weight-bold">{{ rendered.metadata.parseError.toString() }}</span>
-                                        </template>
-                                    </v-expansion-panel-content>
-                                </v-expansion-panel>
-                                <v-expansion-panel
-                                    class="toc"
-                                >
-                                    <v-expansion-panel-header>
-                                        Table of Contents
-                                    </v-expansion-panel-header>
-                                    <v-expansion-panel-content>
-                                        <ol class="tree">
-                                            <li v-for="h1 of toc" v-bind:key="h1.title" class="level1">
-                                                <a v-bind:href="h1.href" v-on:click="jumpTo(h1.href)">{{ h1.title }}</a>
-                                                <ol>
-                                                    <li v-for="h2 of h1.children" v-bind:key="h2.title" class="level2">
-                                                        <a v-bind:href="h2.href" v-on:click="jumpTo(h2.href)">{{ h2.title }}</a>
-                                                        <ol>
-                                                            <li v-for="h3 of h2.children" v-bind:key="h3.title" class="level3">
-                                                                <a v-bind:href="h3.href" v-on:click="jumpTo(h3.href)">{{ h3.title }}</a>
-                                                            </li>
-                                                        </ol>
-                                                    </li>
-                                                </ol>
-                                            </li>
-                                        </ol>
-                                    </v-expansion-panel-content>
-                                </v-expansion-panel>
-                            </v-expansion-panels>
-                        </v-col>
                     </v-row>
                 </v-navigation-drawer>
             </div>
