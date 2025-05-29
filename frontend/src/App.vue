@@ -88,7 +88,7 @@
         </v-navigation-drawer>
 
         <v-row
-            style="position: fixed; top: 0; right: 0; z-index: 1000;"
+            style="position: fixed; top: 0; right: 0; z-index: 10;"
             class="ma-2"
         >
             <input type="file" multiple class="d-none" ref="fileInputEl">
@@ -345,7 +345,7 @@
             </div>
         </div>
 
-        <v-overlay v-bind:value="appStore.isLoggingIn" z-index="20" opacity="0">
+        <v-overlay v-bind:value="appStore.isLoggingIn" z-index="100" opacity="0">
             <v-progress-circular indeterminate color="blue-grey lighten-3" size="64"></v-progress-circular>
         </v-overlay>
     </v-app>
@@ -821,7 +821,7 @@ defineExpose({
     left: 0;
     width: 100%;
     height: 100%;
-    z-index: 500;
+    z-index: 100;
 
     backdrop-filter: blur(16px);
 
