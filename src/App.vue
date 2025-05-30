@@ -267,7 +267,9 @@
                                 <v-list-item-subtitle>{{ email }}</v-list-item-subtitle>
                             </v-list-item-content>
                         </v-list-item>
-                        <v-divider></v-divider>
+                    </v-list>
+                    <v-divider></v-divider>
+                    <v-list>
                         <v-list-item
                             dense
                             v-on:click="appStore.logout()"
