@@ -1,5 +1,11 @@
 <template>
     <v-app id="app" ref="app">
+        <v-main v-if="appStore.serviceWorkerConfigured && appStore.serviceWorkerHasToken">
+            <v-container fluid pa-0 style="height: 100%;">
+                <router-view v-if="!(!appStore.hasToken && !routerView)" v-bind:key="$route.path" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerViewEl"/>
+            </v-container>
+        </v-main>
+
         <v-alert
             v-if="isDev"
             v-for="error of errors"
@@ -12,11 +18,46 @@
         <v-navigation-drawer
             app
             clipped
-            mini-variant
+            v-bind:mini-variant="miniMainSidebar"
+            v-bind:expand-on-hover="miniMainSidebar"
             permanent
-            expand-on-hover
             v-if="!$vuetify.breakpoint.xs"
         >
+            <v-list dense nav>
+                <v-list-item
+                    v-if="miniMainSidebar"
+                    v-on:click="miniMainSidebar = false"
+                >
+                    <v-list-item-icon>
+                        <v-icon>mdi-chevron-double-right</v-icon>
+                    </v-list-item-icon>
+                    <v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content>
+                </v-list-item>
+                <v-list-item>
+                    <v-img
+                        src="/img/logo.svg"
+                        aspect-ratio="1"
+                        contain
+                        max-width="24"
+                        max-height="24"
+                        class="mr-2"
+                    ></v-img>
+                    <v-list-item-content>
+                        <v-list-item-title class="text-h5">
+                            mory
+                        </v-list-item-title>
+                    </v-list-item-content>
+                    <v-spacer></v-spacer>
+                    <template v-if="!miniMainSidebar">
+                        <v-btn
+                            icon
+                            tile
+                            v-on:click="miniMainSidebar = true"
+                        ><v-icon>mdi-chevron-double-left</v-icon></v-btn>
+                    </template>
+                </v-list-item>
+            </v-list>
+
             <v-list
                 dense
                 nav
@@ -52,24 +93,10 @@
             </v-treeview>
         </v-navigation-drawer>
 
-        <v-app-bar
-            id="app-bar"
-            app
-            dense
-            clipped-left
-            color="white"
-            elevation="0"
+        <v-row
+            style="position: fixed; top: 0; right: 0; z-index: 10;"
+            class="mr-2 mt-2"
         >
-            <v-img
-                src="/img/logo.svg"
-                aspect-ratio="1"
-                contain
-                max-width="24"
-                max-height="24"
-                class="mr-2"
-            ></v-img>
-            <v-toolbar-title>mory</v-toolbar-title>
-            <v-spacer></v-spacer>
             <input type="file" multiple class="d-none" ref="fileInputEl">
             <v-menu
                 offset-y
@@ -78,7 +105,7 @@
                     <v-btn
                         text
                         title="Add note"
-                        class="mr-2"
+                        class="ml-2"
                         style="padding: 0; min-width: 36px"
                         v-bind="attrs"
                         v-on="on"
@@ -146,7 +173,7 @@
                     <v-btn
                         text
                         title="Upload file"
-                        class="mr-2"
+                        class="ml-2"
                         style="padding: 0; min-width: 36px"
                         v-bind="attrs"
                         v-on="on"
@@ -221,7 +248,7 @@
                 <template v-slot:activator="{ attrs, on }">
                     <v-btn
                         text
-                        class="mr-2"
+                        class="ml-2"
                         style="padding: 0; min-width: 36px"
                         v-bind="attrs"
                         v-on="on"
@@ -253,13 +280,7 @@
                     </v-list>
                 </v-card>
             </v-menu>
-        </v-app-bar>
-
-        <v-main v-if="appStore.serviceWorkerConfigured && appStore.serviceWorkerHasToken">
-            <v-container fluid pa-0 style="height: 100%;">
-                <router-view v-if="!(!appStore.hasToken && !routerView)" v-bind:key="$route.path" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerViewEl"/>
-            </v-container>
-        </v-main>
+        </v-row>
 
         <v-app-bar
             app
@@ -324,14 +345,14 @@
             </div>
         </div>
 
-        <v-overlay v-bind:value="appStore.isLoggingIn" z-index="20" opacity="0">
+        <v-overlay v-bind:value="appStore.isLoggingIn" z-index="100" opacity="0">
             <v-progress-circular indeterminate color="blue-grey lighten-3" size="64"></v-progress-circular>
         </v-overlay>
     </v-app>
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onErrorCaptured, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onErrorCaptured, onMounted, onUnmounted } from 'vue';
 
 
 import { useAppStore } from '@/stores/app';
@@ -339,6 +360,7 @@ import { useAppStore } from '@/stores/app';
 import Gravatar from '@/components/Gravatar.vue';
 
 import * as api from '@/api';
+import { loadConfigValue, saveConfigValue } from '@/config';
 import type { Claim, ListEntry2, UploadEntry } from '@/api';
 import jwt_decode from 'jwt-decode';
 import less from 'less';
@@ -354,6 +376,7 @@ interface TreeNode {
 const appStore = useAppStore();
 
 // Reactive states
+const miniMainSidebar = ref(loadConfigValue("mini-main-sidebar", false));
 const loginUsername = ref("");
 const loginPassword = ref("");
 const templates = ref([] as string[]);
@@ -729,6 +752,11 @@ async function populateTagChildren(item: TreeNode) {
     }
 }
 
+// Watchers
+watch(miniMainSidebar, (newMiniMainSidebar: boolean) => {
+  saveConfigValue("mini-main-sidebar", newMiniMainSidebar);
+});
+
 // Expose properties
 defineExpose({
     initNotification,
@@ -793,7 +821,7 @@ defineExpose({
     left: 0;
     width: 100%;
     height: 100%;
-    z-index: 500;
+    z-index: 100;
 
     backdrop-filter: blur(16px);
 
