@@ -251,6 +251,7 @@
                         >
                             <v-list dense nav>
                                 <v-list-item-group
+                                    mandatory
                                     color="primary"
                                     v-bind:value="selectedMode"
                                 >
