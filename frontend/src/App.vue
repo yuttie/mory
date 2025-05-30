@@ -62,35 +62,37 @@
                 dense
                 nav
             >
-                <v-list-item color="primary" link to="/"><v-list-item-icon><v-icon>mdi-home-outline</v-icon></v-list-item-icon><v-list-item-title>Home</v-list-item-title></v-list-item>
-                <v-list-item color="primary" link to="/calendar"><v-list-item-icon><v-icon>mdi-calendar-outline</v-icon></v-list-item-icon><v-list-item-title>Calendar</v-list-item-title></v-list-item>
-                <v-list-item color="primary" link to="/tasks"><v-list-item-icon><v-icon>mdi-ballot-outline</v-icon></v-list-item-icon><v-list-item-title>Tasks</v-list-item-title></v-list-item>
-                <v-list-item color="primary" link to="/find"><v-list-item-icon><v-icon>mdi-magnify</v-icon></v-list-item-icon><v-list-item-title>Find</v-list-item-title></v-list-item>
-                <v-list-item color="primary" link to="/config"><v-list-item-icon><v-icon>mdi-cog-outline</v-icon></v-list-item-icon><v-list-item-title>Config</v-list-item-title></v-list-item>
-                <v-list-item color="primary" link to="/about"><v-list-item-icon><v-icon>mdi-information-outline</v-icon></v-list-item-icon><v-list-item-title>About</v-list-item-title></v-list-item>
+                <v-list-item color="primary" link to="/"><v-list-item-icon><v-icon dense>mdi-home-outline</v-icon></v-list-item-icon><v-list-item-title>Home</v-list-item-title></v-list-item>
+                <v-list-item color="primary" link to="/calendar"><v-list-item-icon><v-icon dense>mdi-calendar-outline</v-icon></v-list-item-icon><v-list-item-title>Calendar</v-list-item-title></v-list-item>
+                <v-list-item color="primary" link to="/tasks"><v-list-item-icon><v-icon dense>mdi-ballot-outline</v-icon></v-list-item-icon><v-list-item-title>Tasks</v-list-item-title></v-list-item>
+                <v-list-item color="primary" link to="/find"><v-list-item-icon><v-icon dense>mdi-magnify</v-icon></v-list-item-icon><v-list-item-title>Find</v-list-item-title></v-list-item>
+                <v-list-item color="primary" link to="/config"><v-list-item-icon><v-icon dense>mdi-cog-outline</v-icon></v-list-item-icon><v-list-item-title>Config</v-list-item-title></v-list-item>
+                <v-list-item color="primary" link to="/about"><v-list-item-icon><v-icon dense>mdi-information-outline</v-icon></v-list-item-icon><v-list-item-title>About</v-list-item-title></v-list-item>
             </v-list>
 
             <v-divider></v-divider>
 
-            <v-treeview
-                v-bind:active.sync="noteTreeActive"
-                v-bind:items="noteTreeRoot"
-                v-bind:load-children="populateTagChildren"
-                v-bind:open.sync="noteTreeOpen"
-                activatable
-                open-on-click
-                transition
-                dense
-            >
-                <template v-slot:prepend="{ item, open }">
-                    <v-icon v-if="item.children">
-                        {{ open ? 'mdi-folder-open' : 'mdi-folder' }}
-                    </v-icon>
-                    <v-icon v-else>
-                        mdi-file-document-outline
-                    </v-icon>
-                </template>
-            </v-treeview>
+            <v-list>
+                <v-treeview
+                    v-bind:active.sync="noteTreeActive"
+                    v-bind:items="noteTreeRoot"
+                    v-bind:load-children="populateTagChildren"
+                    v-bind:open.sync="noteTreeOpen"
+                    activatable
+                    open-on-click
+                    transition
+                    dense
+                >
+                    <template v-slot:prepend="{ item, open }">
+                        <v-icon v-if="item.children" dense>
+                            {{ open ? 'mdi-folder-open' : 'mdi-folder' }}
+                        </v-icon>
+                        <v-icon v-else dense>
+                            mdi-file-document-outline
+                        </v-icon>
+                    </template>
+                </v-treeview>
+            </v-list>
         </v-navigation-drawer>
 
         <v-row
@@ -110,14 +112,14 @@
                         v-bind="attrs"
                         v-on="on"
                     >
-                        <v-icon>mdi-plus-box-outline</v-icon>
+                        <v-icon>mdi-pencil-box-outline</v-icon>
                     </v-btn>
                 </template>
-                <v-list>
+                <v-list dense>
                     <v-subheader>Create</v-subheader>
                     <v-list-item to="/create">
                         <v-list-item-icon>
-                            <v-icon>mdi-file-outline</v-icon>
+                            <v-icon dense>mdi-file-outline</v-icon>
                         </v-list-item-icon>
                         <v-list-item-content>
                             <v-list-item-title>New note</v-list-item-title>
@@ -128,7 +130,7 @@
                         v-bind:to="{ name: 'Create', query: { from: $route.params.path } }"
                     >
                         <v-list-item-icon>
-                            <v-icon>mdi-file-multiple-outline</v-icon>
+                            <v-icon dense>mdi-file-multiple-outline</v-icon>
                         </v-list-item-icon>
                         <v-list-item-content>
                             <v-list-item-title>Copy of this note</v-list-item-title>
@@ -141,26 +143,25 @@
                         v-bind:to="{ name: 'Create', query: { from: path } }"
                     >
                         <v-list-item-icon>
-                            <v-icon>mdi-file-document-outline</v-icon>
+                            <v-icon dense>mdi-file-document-outline</v-icon>
                         </v-list-item-icon>
                         <v-list-item-content>
                             <v-list-item-title>{{ path.replace(/\.template$/i, '') }}</v-list-item-title>
                         </v-list-item-content>
-                        <v-list-item-action>
-                            <v-tooltip top>
-                                <template v-slot:activator="{ on, attrs }">
-                                    <v-btn
-                                        icon
-                                        v-bind="attrs"
-                                        v-on="on"
-                                        v-bind:to="{ name: 'Note', params: { path: path } }"
-                                    >
-                                        <v-icon>mdi-pencil</v-icon>
-                                    </v-btn>
-                                </template>
-                                <span>Edit template</span>
-                            </v-tooltip>
-                        </v-list-item-action>
+                        <v-tooltip top>
+                            <template v-slot:activator="{ on, attrs }">
+                                <v-btn
+                                    icon
+                                    x-small
+                                    v-bind="attrs"
+                                    v-on="on"
+                                    v-bind:to="{ name: 'Note', params: { path: path } }"
+                                >
+                                    <v-icon>mdi-pencil</v-icon>
+                                </v-btn>
+                            </template>
+                            <span>Edit template</span>
+                        </v-tooltip>
                     </v-list-item>
                 </v-list>
             </v-menu>
@@ -183,63 +184,53 @@
                             v-bind:icon="uploadListBadgeIcon"
                             v-bind:value="uploadList.length > 0"
                             overlap
-                            offset-x="20"
-                            offset-y="20"
-                            bordered
+                            dot
+                            small
                         >
                             <v-icon>mdi-cloud-upload-outline</v-icon>
                         </v-badge>
                     </v-btn>
                 </template>
                 <v-card>
-                    <v-card-actions>
-                        <v-btn
-                            text
-                            block
-                            color="primary"
+                    <v-list dense>
+                        <v-list-item
                             v-on:click="chooseFile"
-                        >Upload</v-btn>
-                    </v-card-actions>
+                        >
+                            <v-list-item-icon><v-icon dense>mdi-upload</v-icon></v-list-item-icon>
+                            <v-list-item-title>Upload</v-list-item-title>
+                        </v-list-item>
+                    </v-list>
                     <v-divider v-if="uploadList.length > 0"></v-divider>
                     <v-list
                         v-if="uploadList.length > 0"
                         dense
                     >
+                        <v-subheader>Uploaded files</v-subheader>
                         <v-list-item
                             v-for="entry of uploadList"
                             v-bind:key="entry.uuid"
                             v-on:click="copyToClipboard(entry.filename)"
                             style="white-space: nowrap;"
                         >
+                            <v-list-item-icon>
+                                <v-icon
+                                    dense
+                                    v-bind:color="uploadStatusColor(entry.status)"
+                                >{{ uploadStatusIcon(entry.status) }}</v-icon>
+                            </v-list-item-icon>
                             <v-list-item-content>
                                 <v-list-item-title>
-                                    <v-tooltip top>
-                                        <template v-slot:activator="{ on, attrs }">
-                                            <v-icon
-                                                v-bind:color="uploadStatusColor(entry.status)"
-                                                v-bind="attrs"
-                                                v-on="on"
-                                                small
-                                                class="mr-1"
-                                            >{{ uploadStatusIcon(entry.status) }}</v-icon>
-                                        </template>
-                                        <span>{{ entry.statusMessage }}</span>
-                                    </v-tooltip>
                                     <span>{{ entry.filename }}</span>
                                 </v-list-item-title>
                             </v-list-item-content>
                         </v-list-item>
-                    </v-list>
-                    <v-card-actions
-                        v-if="uploadList.length > 0"
-                    >
-                        <v-btn
+                        <v-list-item
                             v-on:click="cleanUploadList"
-                            text
-                            block
-                            color="error"
-                        >Clean</v-btn>
-                    </v-card-actions>
+                        >
+                            <v-list-item-icon><v-icon dense>mdi-broom</v-icon></v-list-item-icon>
+                            <v-list-item-title>Clear all</v-list-item-title>
+                        </v-list-item>
+                    </v-list>
                 </v-card>
             </v-menu>
             <v-menu
@@ -257,7 +248,7 @@
                     </v-btn>
                 </template>
                 <v-card>
-                    <v-list>
+                    <v-list dense>
                         <v-list-item>
                             <v-list-item-avatar>
                                 <Gravatar v-bind:email="email" v-bind:title="`Logged in as ${username}`"></Gravatar>
@@ -269,13 +260,12 @@
                         </v-list-item>
                     </v-list>
                     <v-divider></v-divider>
-                    <v-list>
+                    <v-list dense>
                         <v-list-item
-                            dense
                             v-on:click="appStore.logout()"
                         >
                             <v-list-item-icon>
-                                <v-icon>mdi-logout</v-icon>
+                                <v-icon dense>mdi-logout</v-icon>
                             </v-list-item-icon>
                             <v-list-item-title>Logout</v-list-item-title>
                         </v-list-item>
