@@ -1733,7 +1733,7 @@ $navigation-drawer-width: 56px;
 
 .viewer-pane {
     flex: 1 1 0;
-    overflow: auto;
+    overflow: hidden auto;
 
     .metadata-content,
     .rendered-content {
