@@ -248,7 +248,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onMounted, onUnmounted, del } from 'vue';
+import { ref, computed, onMounted, onUnmounted, set, del } from 'vue';
 import type { Ref } from 'vue';
 
 import TaskEditor from '@/components/TaskEditor.vue';
@@ -620,8 +620,15 @@ async function load() {
     isLoading.value = true;
     try {
         const data = await api.getTaskData();
-        tasks.value = data.tasks;
-        groups.value = data.groups;
+
+        // Replace with the data
+        tasks.value.backlog.splice(0, tasks.value.backlog.length, ...data.tasks.backlog);
+        Object.keys(tasks.value.scheduled).forEach(key => del(tasks.value.scheduled, key));
+        Object.entries(data.tasks.scheduled).forEach(([key, value]) => {
+            set(tasks.value.scheduled, key, value);
+        });
+        groups.value.splice(0, groups.value.length, ...data.groups);
+
         isLoading.value = false;
     }
     catch (error) {
