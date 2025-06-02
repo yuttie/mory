@@ -143,37 +143,6 @@
         </v-dialog>
         <div class="groups-container flex-grow-1">
             <div class="groups">
-                <v-card dense class="group">
-                    <v-card-title>Backlog</v-card-title>
-                    <draggable
-                        class="task-list"
-                        group="tasks"
-                        v-model="tasks.backlog"
-                        v-bind:delay="500"
-                        v-bind:delay-on-touch-only="true"
-                        v-on:end="clean(); save();"
-                    >
-                        <TaskListItem
-                            v-for="(task, index) of tasks.backlog"
-                            v-bind:key="`backlog/${task.name}`"
-                            v-bind:value="task"
-                            v-on:click="showEditTaskDialog(null, index, task, $event);"
-                            v-on:done-toggle="$set(task, 'done', $event); clean(); save();"
-                        ></TaskListItem>
-                    </draggable>
-                </v-card>
-                <v-card dense class="group">
-                    <v-card-title>With Deadline</v-card-title>
-                    <div class="task-list">
-                        <TaskListItem
-                            v-for="[date, index, task] of tasksWithDeadline"
-                            v-bind:key="task.name"
-                            v-bind:value="task"
-                            v-on:click="showEditTaskDialog(date, index, task, $event);"
-                            v-on:done-toggle="$set(task, 'done', $event); clean(); save();"
-                        ></TaskListItem>
-                    </div>
-                </v-card>
                 <v-card class="group">
                     <v-card-title>Scheduled</v-card-title>
                     <div class="task-list">
@@ -207,6 +176,40 @@
                         </div>
                     </div>
                 </v-card>
+                <v-card dense class="group">
+                    <v-card-title>With Deadline</v-card-title>
+                    <div class="task-list">
+                        <TaskListItem
+                            v-for="[date, index, task] of tasksWithDeadline"
+                            v-bind:key="task.name"
+                            v-bind:value="task"
+                            v-on:click="showEditTaskDialog(date, index, task, $event);"
+                            v-on:done-toggle="$set(task, 'done', $event); clean(); save();"
+                        ></TaskListItem>
+                    </div>
+                </v-card>
+                <v-card dense class="group">
+                    <v-card-title>Backlog</v-card-title>
+                    <draggable
+                        class="task-list"
+                        group="tasks"
+                        v-model="tasks.backlog"
+                        v-bind:delay="500"
+                        v-bind:delay-on-touch-only="true"
+                        v-on:end="clean(); save();"
+                    >
+                        <TaskListItem
+                            v-for="(task, index) of tasks.backlog"
+                            v-bind:key="`backlog/${task.name}`"
+                            v-bind:value="task"
+                            v-on:click="showEditTaskDialog(null, index, task, $event);"
+                            v-on:done-toggle="$set(task, 'done', $event); clean(); save();"
+                        ></TaskListItem>
+                    </draggable>
+                </v-card>
+
+                <div style="width: 2em;"><!-- Horizontal margin --></div>
+
                 <draggable class="custom-groups" v-model="groups" group="groups" v-bind:delay="500" v-bind:delay-on-touch-only="true" handle=".handle" v-on:end="clean(); save();">
                     <v-card v-for="group of groups" v-bind:key="group.name" class="group">
                         <v-card-title class="handle">
