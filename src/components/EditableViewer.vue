@@ -255,9 +255,9 @@
                                     color="primary"
                                     v-bind:value="selectedMode"
                                 >
-                                    <v-list-item v-on:click="editorIsVisible = false; viewerIsVisible = true; "><v-list-item-icon><v-icon>mdi-file-document     </v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
-                                    <v-list-item v-on:click="editorIsVisible = true;  viewerIsVisible = true; "><v-list-item-icon><v-icon>mdi-file-document-edit</v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
-                                    <v-list-item v-on:click="editorIsVisible = true;  viewerIsVisible = false;"><v-list-item-icon><v-icon>mdi-pencil            </v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
+                                    <v-list-item v-on:click="editorIsVisible = false; viewerIsVisible = true; "><v-list-item-icon><v-icon dense>mdi-file-document     </v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
+                                    <v-list-item v-on:click="editorIsVisible = true;  viewerIsVisible = true; "><v-list-item-icon><v-icon dense>mdi-file-document-edit</v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
+                                    <v-list-item v-on:click="editorIsVisible = true;  viewerIsVisible = false;"><v-list-item-icon><v-icon dense>mdi-pencil            </v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
                                 </v-list-item-group>
                             </v-list>
 
@@ -267,22 +267,22 @@
                                 <v-list-item v-on:click="lockScroll = !lockScroll;">
                                     <v-list-item-icon>
                                         <template v-if="lockScroll">
-                                            <v-icon>mdi-lock</v-icon>
+                                            <v-icon dense>mdi-lock</v-icon>
                                         </template>
                                         <template v-else>
-                                            <v-icon>mdi-lock-open</v-icon>
+                                            <v-icon dense>mdi-lock-open</v-icon>
                                         </template>
                                     </v-list-item-icon>
                                     <v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content>
                                 </v-list-item>
 
                                 <v-list-item v-on:click="notifyUpstreamState">
-                                    <v-list-item-icon><v-icon>mdi-compare-vertical</v-icon></v-list-item-icon>
+                                    <v-list-item-icon><v-icon dense>mdi-compare-vertical</v-icon></v-list-item-icon>
                                     <v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content>
                                 </v-list-item>
-                                <v-list-item                                            v-bind:disabled="needSave"         v-bind:style="needSave ? { opacity: '0.3' } : {}" v-on:click="reload"                                      ><v-list-item-icon><v-icon>mdi-reload      </v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
-                                <v-list-item color="pink" v-bind:input-value="needSave" v-bind:disabled="!needSave"        v-bind:style="!needSave ? { opacity: '0.3' } : {}" v-bind:loading="isSaving" v-on:click.stop="saveIfNeeded"><v-list-item-icon><v-icon>mdi-content-save</v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
-                                <v-list-item link         id="rename-toggle"            v-bind:disabled="!noteHasUpstream" v-bind:style="!noteHasUpstream ? { opacity: '0.3' } : {}" v-bind:loading="isRenaming"                      ><v-list-item-icon><v-icon>mdi-rename-box  </v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
+                                <v-list-item                                            v-bind:disabled="needSave"         v-bind:style="needSave ? { opacity: '0.3' } : {}" v-on:click="reload"                                      ><v-list-item-icon><v-icon dense>mdi-reload      </v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
+                                <v-list-item color="pink" v-bind:input-value="needSave" v-bind:disabled="!needSave"        v-bind:style="!needSave ? { opacity: '0.3' } : {}" v-bind:loading="isSaving" v-on:click.stop="saveIfNeeded"><v-list-item-icon><v-icon dense>mdi-content-save</v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
+                                <v-list-item link         id="rename-toggle"            v-bind:disabled="!noteHasUpstream" v-bind:style="!noteHasUpstream ? { opacity: '0.3' } : {}" v-bind:loading="isRenaming"                      ><v-list-item-icon><v-icon dense>mdi-rename-box  </v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
                             </v-list>
                         </v-navigation-drawer>
                     </v-row>
