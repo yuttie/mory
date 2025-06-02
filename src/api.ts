@@ -161,10 +161,10 @@ export async function getTaskData() {
     const res = await getNote(".mory/tasks.yaml");
     const data = YAML.parse(res.data);
 
-    // Give a unique ID to each task
-    data.tasks.backlog.forEach((task) => task.id = crypto.randomUUID());
+    // Give a unique ID to each task if missing
+    data.tasks.backlog.forEach((task) => task.id = task.id ?? crypto.randomUUID());
     for (const tasks of Object.values(data.tasks.scheduled)) {
-        tasks.forEach((task) => task.id = crypto.randomUUID());
+        tasks.forEach((task) => task.id = task.id ?? crypto.randomUUID());
     }
 
     return data;
