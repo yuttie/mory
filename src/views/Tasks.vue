@@ -208,7 +208,7 @@
                     </draggable>
                 </v-card>
 
-                <div style="width: 2em;"><!-- Horizontal margin --></div>
+                <div class="separator"><!-- Horizontal margin --></div>
 
                 <draggable class="custom-groups" v-model="groups" group="groups" v-bind:delay="500" v-bind:delay-on-touch-only="true" handle=".handle" v-on:end="clean(); save();">
                     <v-card v-for="group of groups" v-bind:key="group.name" class="group">
@@ -936,5 +936,8 @@ $space: 12px;
     div + div > .date-header {
         margin-top: 12px;
     }
+}
+.separator {
+    margin: 0 1em;
 }
 </style>
