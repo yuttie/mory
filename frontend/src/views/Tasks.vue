@@ -167,7 +167,7 @@
                             <draggable v-model="tasks.scheduled[date]" group="tasks" v-bind:delay="500" v-bind:delay-on-touch-only="true" v-on:end="clean(); save();">
                                 <TaskListItem
                                     v-for="(task, index) of tasks.scheduled[date]"
-                                    v-bind:key="`${date}/${task.name}`"
+                                    v-bind:key="task.id"
                                     v-bind:value="task"
                                     v-on:click="showEditTaskDialog(date, index, task, $event);"
                                     v-on:done-toggle="$set(task, 'done', $event); clean(); save();"
@@ -181,7 +181,7 @@
                     <div class="task-list">
                         <TaskListItem
                             v-for="[date, index, task] of tasksWithDeadline"
-                            v-bind:key="task.name"
+                            v-bind:key="task.id"
                             v-bind:value="task"
                             v-on:click="showEditTaskDialog(date, index, task, $event);"
                             v-on:done-toggle="$set(task, 'done', $event); clean(); save();"
@@ -200,7 +200,7 @@
                     >
                         <TaskListItem
                             v-for="(task, index) of tasks.backlog"
-                            v-bind:key="`backlog/${task.name}`"
+                            v-bind:key="task.id"
                             v-bind:value="task"
                             v-on:click="showEditTaskDialog(null, index, task, $event);"
                             v-on:done-toggle="$set(task, 'done', $event); clean(); save();"
@@ -220,7 +220,7 @@
                                 <div class="date-header">{{ date }}</div>
                                 <template v-for="[index, task] of groupedTasks[group.name].scheduled[date]">
                                     <TaskListItem
-                                        v-bind:key="`${date}/${task.name}`"
+                                        v-bind:key="task.id"
                                         v-bind:value="task"
                                         v-on:click="showEditTaskDialog(date, index, task, $event);"
                                         v-on:done-toggle="$set(task, 'done', $event); clean(); save();"
@@ -231,7 +231,7 @@
                                 <div class="date-header">Backlog</div>
                                 <template v-for="[index, task] of groupedTasks[group.name].backlog">
                                     <TaskListItem
-                                        v-bind:key="`backlog/${task.name}`"
+                                        v-bind:key="task.id"
                                         v-bind:value="task"
                                         v-on:click="showEditTaskDialog(null, index, task, $event);"
                                         v-on:done-toggle="$set(task, 'done', $event); clean(); save();"
@@ -619,8 +619,7 @@ async function loadIfNotEditing() {
 async function load() {
     isLoading.value = true;
     try {
-        const res = await api.getNote('.mory/tasks.yaml');
-        const data = YAML.parse(res.data);
+        const data = await api.getTaskData();
         tasks.value = data.tasks;
         groups.value = data.groups;
         isLoading.value = false;
