@@ -669,12 +669,13 @@ async function load() {
 function save() {
     const datePattern = /\d{4}-\d{2}-\d{2}/;
     const taskPropertyOrder: { [key: string]: number } = {
-        name: 0,
-        deadline: 1,
-        schedule: 2,
-        done: 3,
-        tags: 4,
-        note: 5,
+        id: 0,
+        name: 1,
+        deadline: 2,
+        schedule: 3,
+        done: 4,
+        tags: 5,
+        note: 6,
     };
     const groupPropertyOrder: { [key: string]: number } = {
         name: 0,
