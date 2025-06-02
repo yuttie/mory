@@ -1,4 +1,5 @@
 import { getAxios } from '@/axios';
+import YAML from 'yaml';
 
 // App
 export interface Claim {
@@ -68,6 +69,7 @@ export function validateEvent(event: any): boolean {
 
 // Tasks
 export interface Task {
+  id: string;
   name: string;
   deadline: null | string;
   schedule: null | string;
@@ -77,7 +79,8 @@ export interface Task {
 }
 
 export function isTask(task: any): task is Task {
-  return 'name' in task
+  return 'id' in task
+    && 'name' in task
     && 'deadline' in task
     && 'schedule' in task
     && 'done' in task
@@ -154,3 +157,15 @@ export function uploadFiles(fd: FormData) {
   return getAxios().post(`/files`, fd);
 }
 
+export async function getTaskData() {
+    const res = await getNote(".mory/tasks.yaml");
+    const data = YAML.parse(res.data);
+
+    // Give a unique ID to each task
+    data.tasks.backlog.forEach((task) => task.id = crypto.randomUUID());
+    for (const tasks of Object.values(data.tasks.scheduled)) {
+        tasks.forEach((task) => task.id = crypto.randomUUID());
+    }
+
+    return data;
+}
