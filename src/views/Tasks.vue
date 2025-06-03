@@ -448,7 +448,7 @@ function select(date: string | null, index: number | null, task: Task | null) {
     }
     selectedTask.value = task;
     if (task !== null) {
-        editTarget.value = JSON.parse(JSON.stringify(task));
+        editTarget.value = structuredClone(task);
         editTarget.value!.name     ||= '';
         editTarget.value!.deadline ||= null;
         editTarget.value!.schedule ||= null;
@@ -509,7 +509,7 @@ function closeEditTaskDialog() {
 }
 
 function openNewTaskDialogWithSelection() {
-    newTask.value = JSON.parse(JSON.stringify(editTarget.value));
+    newTask.value = structuredClone(editTarget.value);
     newTask.value.name += ' (copy)';
     newTaskDialog.value = true;
     closeEditTaskDialog();
