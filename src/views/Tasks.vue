@@ -445,11 +445,6 @@ const groupedTasks = computed(() => {
 onMounted(() => {
     document.title = `Tasks | ${import.meta.env.VITE_APP_NAME}`;
     load();
-    window.addEventListener('focus', loadIfNotEditing);
-});
-
-onUnmounted(() => {
-    window.removeEventListener('focus', loadIfNotEditing);
 });
 
 // Methods
