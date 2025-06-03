@@ -676,35 +676,29 @@ async function save() {
 }
 
 async function add(closeDialog = true) {
-    // Create a new entry
-    const task: any = {
-        name: newTask.value.name,
-    };
-    if (newTask.value.deadline) { task.deadline = newTask.value.deadline; }
-    if (newTask.value.done) { task.done = newTask.value.done; }
-    if (newTask.value.tags.length > 0) { task.tags = newTask.value.tags; }
-    if (newTask.value.note.length > 0) { task.note = newTask.value.note; }
-    if (newTask.value.schedule !== null) {
-        if (!Object.hasOwn(tasks.value.scheduled, newTask.value.schedule)) {
-            tasks.value.scheduled[newTask.value.schedule] = [];
-        }
-        tasks.value.scheduled[newTask.value.schedule].unshift(task);
+    // Insert a new task
+    const task: Task = structuredClone(newTask.value);
+    if (task.schedule !== null) {
+        tasks.value.scheduled[task.schedule] ??= [];
+        tasks.value.scheduled[task.schedule].unshift(task);
     }
     else {
         tasks.value.backlog.unshift(task);
     }
+
     // Save
     await save();
+
+    // Close the dialog or keep it open to continue creating another similar tasks
     if (closeDialog) {
         closeNewTaskDialog();
     }
     else {
-        // Reset partially
-        newTask.value = {
-            ...newTask.value,
-            name: '',
-            tags: [...newTask.value.tags],
-        };
+        // Inherit values from the previous task except for id, name, and tags
+        newTask.value = structuredClone(newTask.value);
+        newTask.value.id = crypto.randomUUID();
+        newTask.value.name = '';
+        newTask.value.tags = [...newTask.value.tags];
     }
 }
 
