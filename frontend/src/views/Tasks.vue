@@ -164,13 +164,13 @@
                                     v-on:click="moveUndoneToToday(date)"
                                 >Move to today</v-btn>
                             </div>
-                            <draggable v-model="tasks.scheduled[date]" group="tasks" v-bind:delay="500" v-bind:delay-on-touch-only="true" v-on:end="clean(); save();">
+                            <draggable v-model="tasks.scheduled[date]" group="tasks" v-bind:delay="500" v-bind:delay-on-touch-only="true" v-on:end="save">
                                 <TaskListItem
                                     v-for="(task, index) of tasks.scheduled[date]"
                                     v-bind:key="task.id"
                                     v-bind:value="task"
                                     v-on:click="showEditTaskDialog(date, index, task, $event);"
-                                    v-on:done-toggle="$set(task, 'done', $event); clean(); save();"
+                                    v-on:done-toggle="$set(task, 'done', $event); save();"
                                 ></TaskListItem>
                             </draggable>
                         </div>
@@ -184,7 +184,7 @@
                             v-bind:key="task.id"
                             v-bind:value="task"
                             v-on:click="showEditTaskDialog(date, index, task, $event);"
-                            v-on:done-toggle="$set(task, 'done', $event); clean(); save();"
+                            v-on:done-toggle="$set(task, 'done', $event); save();"
                         ></TaskListItem>
                     </div>
                 </v-card>
@@ -196,21 +196,21 @@
                         v-model="tasks.backlog"
                         v-bind:delay="500"
                         v-bind:delay-on-touch-only="true"
-                        v-on:end="clean(); save();"
+                        v-on:end="save"
                     >
                         <TaskListItem
                             v-for="(task, index) of tasks.backlog"
                             v-bind:key="task.id"
                             v-bind:value="task"
                             v-on:click="showEditTaskDialog(null, index, task, $event);"
-                            v-on:done-toggle="$set(task, 'done', $event); clean(); save();"
+                            v-on:done-toggle="$set(task, 'done', $event); save();"
                         ></TaskListItem>
                     </draggable>
                 </v-card>
 
                 <div class="separator"><!-- Horizontal margin --></div>
 
-                <draggable class="custom-groups" v-model="groups" group="groups" v-bind:delay="500" v-bind:delay-on-touch-only="true" handle=".handle" v-on:end="clean(); save();">
+                <draggable class="custom-groups" v-model="groups" group="groups" v-bind:delay="500" v-bind:delay-on-touch-only="true" handle=".handle" v-on:end="save">
                     <v-card v-for="group of groups" v-bind:key="group.name" class="group">
                         <v-card-title class="handle">
                             <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ group.name }}</span>
@@ -223,7 +223,7 @@
                                         v-bind:key="task.id"
                                         v-bind:value="task"
                                         v-on:click="showEditTaskDialog(date, index, task, $event);"
-                                        v-on:done-toggle="$set(task, 'done', $event); clean(); save();"
+                                        v-on:done-toggle="$set(task, 'done', $event); save();"
                                     ></TaskListItem>
                                 </template>
                             </div>
@@ -234,7 +234,7 @@
                                         v-bind:key="task.id"
                                         v-bind:value="task"
                                         v-on:click="showEditTaskDialog(null, index, task, $event);"
-                                        v-on:done-toggle="$set(task, 'done', $event); clean(); save();"
+                                        v-on:done-toggle="$set(task, 'done', $event); save();"
                                     ></TaskListItem>
                                 </template>
                             </div>
@@ -547,7 +547,6 @@ async function sortDailyTasks(date: string) {
         }
     });
     // Save
-    clean();
     await save();
 }
 
@@ -574,7 +573,6 @@ async function moveUndoneToToday(date: string) {
     }
     tasks.value.scheduled[todayDate].unshift(...undone);
     // Save
-    clean();
     await save();
 }
 
@@ -606,7 +604,6 @@ async function collectUndone() {
     }
     tasks.value.scheduled[todayDate].unshift(...undone);
     // Save
-    clean();
     await save();
 }
 
@@ -666,95 +663,8 @@ async function load() {
     }
 }
 
-function save() {
-    const datePattern = /\d{4}-\d{2}-\d{2}/;
-    const taskPropertyOrder: { [key: string]: number } = {
-        id: 0,
-        name: 1,
-        deadline: 2,
-        schedule: 3,
-        done: 4,
-        tags: 5,
-        note: 6,
-    };
-    const groupPropertyOrder: { [key: string]: number } = {
-        name: 0,
-        filter: 1,
-    };
-    const yaml = YAML.stringify({
-        tasks: tasks.value,
-        groups: groups.value,
-    }, {
-        sortMapEntries: (a, b) => {
-            if (datePattern.test(a.key.value) && datePattern.test(b.key.value)) {
-                if (a.key.value < b.key.value) {
-                    return 1;
-                }
-                else if (a.key.value > b.key.value) {
-                    return -1;
-                }
-                else {
-                    return 0;
-                }
-            }
-            else if (a.key.value in taskPropertyOrder && b.key.value in taskPropertyOrder) {
-                if (taskPropertyOrder[a.key.value] < taskPropertyOrder[b.key.value]) {
-                    return -1;
-                }
-                else if (taskPropertyOrder[a.key.value] > taskPropertyOrder[b.key.value]) {
-                    return 1;
-                }
-                else {
-                    return 0;
-                }
-            }
-            else if (a.key.value in groupPropertyOrder && b.key.value in groupPropertyOrder) {
-                if (groupPropertyOrder[a.key.value] < groupPropertyOrder[b.key.value]) {
-                    return -1;
-                }
-                else if (groupPropertyOrder[a.key.value] > groupPropertyOrder[b.key.value]) {
-                    return 1;
-                }
-                else {
-                    return 0;
-                }
-            }
-            else {
-                if (a.key.value < b.key.value) {
-                    return -1;
-                }
-                else if (a.key.value > b.key.value) {
-                    return 1;
-                }
-                else {
-                    return 0;
-                }
-            }
-        },
-    });
-    return api.addNote('.mory/tasks.yaml', yaml);
-}
-
-function clean() {
-    for (const task of tasks.value.backlog) {
-        for (const [prop, value] of Object.entries(task)) {
-            if (value === null) {
-                del(task, prop);
-            }
-        }
-    }
-    for (const [date, dailyTasks] of Object.entries(tasks.value.scheduled)) {
-        if ((dailyTasks as Task[]).length === 0) {
-            del(tasks.value.scheduled, date);
-        }
-        for (const task of dailyTasks) {
-            for (const [prop, value] of Object.entries(task)) {
-                if (value === null) {
-                    del(task, prop);
-                }
-            }
-        }
-    }
+async function save() {
+    return await api.putTaskData({ tasks: tasks.value, groups: groups.value });
 }
 
 async function add(closeDialog = true) {
@@ -822,7 +732,6 @@ async function updateSelected() {
         }
     }
     // Save
-    clean();
     await save();
     // Close
     closeEditTaskDialog();
@@ -835,7 +744,6 @@ async function removeSelected() {
     const list = selectedTask.value.schedule === null ? tasks.value.backlog : tasks.value.scheduled[selectedTask.value.schedule];
     list.splice(selectedTaskIndex.value!, 1);
     // Save
-    clean();
     await save();
     // Close
     closeEditTaskDialog();
@@ -872,7 +780,6 @@ defineExpose({
     loadIfNotEditing,
     load,
     save,
-    clean,
     add,
     updateSelected,
     removeSelected,
