@@ -469,12 +469,12 @@ function select(date: string | null, index: number | null, task: Task | null) {
     selectedTask.value = task;
     if (task !== null) {
         editTarget.value = structuredClone(task);
-        editTarget.value!.name     ||= '';
-        editTarget.value!.deadline ||= null;
-        editTarget.value!.schedule ||= null;
-        editTarget.value!.done     ||= false;
-        editTarget.value!.tags     ||= [];
-        editTarget.value!.note     ||= '';
+        editTarget.value.name     ??= '';
+        editTarget.value.deadline ??= null;
+        editTarget.value.schedule ??= null;
+        editTarget.value.done     ??= false;
+        editTarget.value.tags     ??= [];
+        editTarget.value.note     ??= '';
     }
     else {
         editTarget.value = null;
