@@ -105,6 +105,16 @@
                 v-bind:label="'Hide done'"
                 hide-details
             ></v-switch>
+
+            <!-- Reload button -->
+            <v-btn
+                text
+                v-on:click="loadIfNotEditing"
+            >
+                <v-icon class="mr-1">mdi-reload</v-icon>
+                Reload
+            </v-btn>
+
             <!-- Progress bar for loading data -->
             <v-progress-linear
                 absolute
