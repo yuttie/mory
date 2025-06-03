@@ -285,6 +285,7 @@ const tasks = ref({
 const groups: Ref<{ name: string, filter: string }[]> = ref([]);
 // Task
 const newTask: Ref<Task> = ref({
+    id: crypto.randomUUID(),
     name: '',
     deadline: null,
     schedule: null,
@@ -492,6 +493,7 @@ function closeNewTaskDialog() {
     newTaskDialog.value = false;
     // Reset
     newTask.value = {
+        id: crypto.randomUUID(),
         name: '',
         deadline: null,
         schedule: null,
@@ -518,6 +520,7 @@ function closeEditTaskDialog() {
 
 function openNewTaskDialogWithSelection() {
     newTask.value = structuredClone(editTarget.value);
+    newTask.id = crypto.randomUUID();
     newTask.value.name += ' (copy)';
     newTaskDialog.value = true;
     closeEditTaskDialog();
