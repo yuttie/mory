@@ -115,6 +115,15 @@
                 Reload
             </v-btn>
 
+            <!-- Search text box -->
+            <v-text-field
+                dense
+                label="Search"
+                clearable
+                v-model="searchQuery"
+                hide-details
+            ></v-text-field>
+
             <!-- Progress bar for loading data -->
             <v-progress-linear
                 absolute
@@ -218,13 +227,13 @@
                     <draggable
                         class="task-list"
                         group="tasks"
-                        v-model="tasks.backlog"
+                        v-model="filteredTasks.backlog"
                         v-bind:delay="500"
                         v-bind:delay-on-touch-only="true"
                         v-on:end="save"
                     >
                         <TaskListItem
-                            v-for="(task, index) of tasks.backlog"
+                            v-for="(task, index) of filteredTasks.backlog"
                             v-bind:key="task.id"
                             v-bind:value="task"
                             v-on:click="showEditTaskDialog(null, index, task, $event);"
@@ -300,6 +309,7 @@ const tasks = ref({
     scheduled: {} as { [key: string]: Task[] }
 });
 const groups: Ref<{ name: string, filter: string }[]> = ref([]);
+const searchQuery = ref("");
 // Task
 const newTask: Ref<Task> = ref({
     id: crypto.randomUUID(),
@@ -346,29 +356,40 @@ const knownTags = computed((): [string, number][] => {
         .sort(([_tag1, count1], [_tag2, count2]) => count2 - count1);
 });
 
+const filteredTasks = computed(() => {
+    const re = new RegExp(searchQuery.value, "i");
+    const processedTasks = {};
+    processedTasks.backlog = tasks.value.backlog.filter((task) => re.test(task.name) || task.tags?.some((tag) => re.test(tag)));
+    processedTasks.scheduled = {};
+    for (const [date, dayTasks] of Object.entries(tasks.value.scheduled)) {
+        processedTasks.scheduled[date] = dayTasks.filter((task) => re.test(task.name) || task.tags?.some((tag) => re.test(tag)));
+    }
+    return processedTasks;
+});
+
 const scheduledTasks = computed(() => {
-    let dates = Object.keys(tasks.value.scheduled);
+    let dates = Object.keys(filteredTasks.value.scheduled);
     dates.sort((a, b) => a < b ? 1 : a > b ? -1 : 0);
     if (hideDone.value) {
         // Keep today or dates that have some undone tasks
         const today = dayjs().format('YYYY-MM-DD');
         dates = dates.filter(date => {
-            return date === today || tasks.value.scheduled[date].some(task => !task.done);
+            return date === today || filteredTasks.value.scheduled[date].some(task => !task.done);
         });
     }
-    return dates.map((date) => [date, tasks.value.scheduled[date]]);
+    return dates.map((date) => [date, filteredTasks.value.scheduled[date]]);
 });
 
 const tasksWithDeadline = computed(() => {
     const result: [string | null, number, Task][] = [];
     // Backlog
-    for (const [i, task] of tasks.value.backlog.entries()) {
+    for (const [i, task] of filteredTasks.value.backlog.entries()) {
         if (task.deadline) {
             result.push([null, i, task]);
         }
     }
     // Scheduled
-    for (const [date, dayTasks] of Object.entries(tasks.value.scheduled)) {
+    for (const [date, dayTasks] of Object.entries(filteredTasks.value.scheduled)) {
         for (const [i, task] of dayTasks.entries()) {
             if (task.deadline) {
                 result.push([date, i, task]);
@@ -425,13 +446,13 @@ const groupedTasks = computed(() => {
             scheduled: {},
         };
         // Backlog
-        for (const [i, task] of tasks.value.backlog.entries()) {
+        for (const [i, task] of filteredTasks.value.backlog.entries()) {
             if ((task.tags || []).includes(group.filter)) {
                 grouped.backlog.push([i, task]);
             }
         }
         // Scheduled
-        for (const [date, dayTasks] of Object.entries(tasks.value.scheduled)) {
+        for (const [date, dayTasks] of Object.entries(filteredTasks.value.scheduled)) {
             grouped.scheduled[date] = [];
             for (const [i, task] of dayTasks.entries()) {
                 if ((task.tags || []).includes(group.filter)) {
