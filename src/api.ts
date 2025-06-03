@@ -157,9 +157,14 @@ export function uploadFiles(fd: FormData) {
   return getAxios().post(`/files`, fd);
 }
 
-export async function getTaskData() {
+export interface TaskData {
+    tasks: { backlog: Task[], scheduled: { [key: string]: Task[] } };
+    groups: { name: string, filter: string }[];
+}
+
+export async function getTaskData(): Promise<TaskData> {
     const res = await getNote(".mory/tasks.yaml");
-    const data = YAML.parse(res.data);
+    const data = YAML.parse(res.data) as TaskData;
 
     // Give a unique ID to each task if missing
     data.tasks.backlog.forEach((task) => task.id = task.id ?? crypto.randomUUID());
