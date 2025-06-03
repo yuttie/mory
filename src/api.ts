@@ -1,4 +1,5 @@
 import { getAxios } from '@/axios';
+import YAML from 'yaml';
 
 // App
 export interface Claim {
@@ -68,6 +69,7 @@ export function validateEvent(event: any): boolean {
 
 // Tasks
 export interface Task {
+  id: string;
   name: string;
   deadline: null | string;
   schedule: null | string;
@@ -77,7 +79,8 @@ export interface Task {
 }
 
 export function isTask(task: any): task is Task {
-  return 'name' in task
+  return 'id' in task
+    && 'name' in task
     && 'deadline' in task
     && 'schedule' in task
     && 'done' in task
@@ -154,3 +157,111 @@ export function uploadFiles(fd: FormData) {
   return getAxios().post(`/files`, fd);
 }
 
+export interface TaskData {
+    tasks: { backlog: Task[], scheduled: { [key: string]: Task[] } };
+    groups: { name: string, filter: string }[];
+}
+
+export async function getTaskData(): Promise<TaskData> {
+    const res = await getNote(".mory/tasks.yaml");
+    const data = YAML.parse(res.data) as TaskData;
+
+    // Give a unique ID to each task if missing
+    data.tasks.backlog.forEach((task) => task.id = task.id ?? crypto.randomUUID());
+    for (const tasks of Object.values(data.tasks.scheduled)) {
+        tasks.forEach((task) => task.id = task.id ?? crypto.randomUUID());
+    }
+
+    return data;
+}
+
+export async function putTaskData(data: TaskData) {
+    // Clean up
+    data = structuredClone(data);
+    for (const task of data.tasks.backlog) {
+        for (const [prop, value] of Object.entries(task)) {
+            if (value === null) {
+                delete task[prop];
+            }
+        }
+    }
+    for (const [date, dailyTasks] of Object.entries(data.tasks.scheduled)) {
+        if ((dailyTasks as Task[]).length === 0) {
+            delete data.tasks.scheduled[date];
+        }
+        for (const task of dailyTasks) {
+            for (const [prop, value] of Object.entries(task)) {
+                if (value === null) {
+                    delete task[prop];
+                }
+            }
+        }
+    }
+
+    // Serialize
+    const datePattern = /\d{4}-\d{2}-\d{2}/;
+    const taskPropertyOrder: { [key: string]: number } = {
+        id: 0,
+        name: 1,
+        deadline: 2,
+        schedule: 3,
+        done: 4,
+        tags: 5,
+        note: 6,
+    };
+    const groupPropertyOrder: { [key: string]: number } = {
+        name: 0,
+        filter: 1,
+    };
+    const yaml = YAML.stringify(data, {
+        sortMapEntries: (a, b) => {
+            if (datePattern.test(a.key.value) && datePattern.test(b.key.value)) {
+                if (a.key.value < b.key.value) {
+                    return 1;
+                }
+                else if (a.key.value > b.key.value) {
+                    return -1;
+                }
+                else {
+                    return 0;
+                }
+            }
+            else if (a.key.value in taskPropertyOrder && b.key.value in taskPropertyOrder) {
+                if (taskPropertyOrder[a.key.value] < taskPropertyOrder[b.key.value]) {
+                    return -1;
+                }
+                else if (taskPropertyOrder[a.key.value] > taskPropertyOrder[b.key.value]) {
+                    return 1;
+                }
+                else {
+                    return 0;
+                }
+            }
+            else if (a.key.value in groupPropertyOrder && b.key.value in groupPropertyOrder) {
+                if (groupPropertyOrder[a.key.value] < groupPropertyOrder[b.key.value]) {
+                    return -1;
+                }
+                else if (groupPropertyOrder[a.key.value] > groupPropertyOrder[b.key.value]) {
+                    return 1;
+                }
+                else {
+                    return 0;
+                }
+            }
+            else {
+                if (a.key.value < b.key.value) {
+                    return -1;
+                }
+                else if (a.key.value > b.key.value) {
+                    return 1;
+                }
+                else {
+                    return 0;
+                }
+            }
+        },
+    });
+
+    // Send
+    return await addNote('.mory/tasks.yaml', yaml);
+}

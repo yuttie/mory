@@ -1,6 +1,7 @@
 <template>
     <div id="tasks" class="d-flex flex-column">
         <v-toolbar flat outlined dense class="flex-grow-0">
+            <!-- New task button -->
             <v-dialog
                 max-width="600px"
                 persistent
@@ -42,6 +43,8 @@
                     </v-card-text>
                 </v-card>
             </v-dialog>
+
+            <!-- New group button -->
             <v-dialog
                 max-width="600px"
                 persistent
@@ -86,6 +89,8 @@
                     </v-card-text>
                 </v-card>
             </v-dialog>
+
+            <!-- Collect undone button -->
             <v-btn
                 text
                 v-on:click="collectUndone"
@@ -93,11 +98,33 @@
                 <v-icon class="mr-1">mdi-checkbox-multiple-blank-outline</v-icon>
                 Collect Undone
             </v-btn>
+
+            <!-- Hide done toggle -->
             <v-switch
                 v-model="hideDone"
                 v-bind:label="'Hide done'"
                 hide-details
             ></v-switch>
+
+            <!-- Reload button -->
+            <v-btn
+                text
+                v-on:click="loadIfNotEditing"
+            >
+                <v-icon class="mr-1">mdi-reload</v-icon>
+                Reload
+            </v-btn>
+
+            <!-- Search text box -->
+            <v-text-field
+                dense
+                label="Search"
+                clearable
+                v-model="searchQuery"
+                hide-details
+            ></v-text-field>
+
+            <!-- Progress bar for loading data -->
             <v-progress-linear
                 absolute
                 bottom
@@ -143,42 +170,11 @@
         </v-dialog>
         <div class="groups-container flex-grow-1">
             <div class="groups">
-                <v-card dense class="group">
-                    <v-card-title>Backlog</v-card-title>
-                    <draggable
-                        class="task-list"
-                        group="tasks"
-                        v-model="tasks.backlog"
-                        v-bind:delay="500"
-                        v-bind:delay-on-touch-only="true"
-                        v-on:end="clean(); save();"
-                    >
-                        <TaskListItem
-                            v-for="(task, index) of tasks.backlog"
-                            v-bind:key="`backlog/${task.name}`"
-                            v-bind:value="task"
-                            v-on:click="showEditTaskDialog(null, index, task, $event);"
-                            v-on:done-toggle="$set(task, 'done', $event); clean(); save();"
-                        ></TaskListItem>
-                    </draggable>
-                </v-card>
-                <v-card dense class="group">
-                    <v-card-title>With Deadline</v-card-title>
-                    <div class="task-list">
-                        <TaskListItem
-                            v-for="[date, index, task] of tasksWithDeadline"
-                            v-bind:key="task.name"
-                            v-bind:value="task"
-                            v-on:click="showEditTaskDialog(date, index, task, $event);"
-                            v-on:done-toggle="$set(task, 'done', $event); clean(); save();"
-                        ></TaskListItem>
-                    </div>
-                </v-card>
                 <v-card class="group">
                     <v-card-title>Scheduled</v-card-title>
                     <div class="task-list">
                         <div
-                            v-for="date of scheduledDates"
+                            v-for="[date, dayTasks] of scheduledTasks"
                             v-bind:key="date"
                             v-bind:class="{ today: isToday(date) }"
                         >
@@ -195,19 +191,60 @@
                                     v-on:click="moveUndoneToToday(date)"
                                 >Move to today</v-btn>
                             </div>
-                            <draggable v-model="tasks.scheduled[date]" group="tasks" v-bind:delay="500" v-bind:delay-on-touch-only="true" v-on:end="clean(); save();">
+                            <draggable
+                                group="tasks"
+                                v-bind:value="dayTasks"
+                                v-on:input="onDraggableInput(date, $event)"
+                                v-bind:delay="500"
+                                v-bind:delay-on-touch-only="true"
+                                v-on:end="save"
+                            >
                                 <TaskListItem
-                                    v-for="(task, index) of tasks.scheduled[date]"
-                                    v-bind:key="`${date}/${task.name}`"
+                                    v-for="(task, index) of dayTasks"
+                                    v-bind:key="task.id"
                                     v-bind:value="task"
                                     v-on:click="showEditTaskDialog(date, index, task, $event);"
-                                    v-on:done-toggle="$set(task, 'done', $event); clean(); save();"
+                                    v-on:done-toggle="$set(task, 'done', $event); save();"
                                 ></TaskListItem>
                             </draggable>
                         </div>
                     </div>
                 </v-card>
-                <draggable class="custom-groups" v-model="groups" group="groups" v-bind:delay="500" v-bind:delay-on-touch-only="true" handle=".handle" v-on:end="clean(); save();">
+                <v-card dense class="group">
+                    <v-card-title>With Deadline</v-card-title>
+                    <div class="task-list">
+                        <TaskListItem
+                            v-for="[date, index, task] of tasksWithDeadline"
+                            v-bind:key="task.id"
+                            v-bind:value="task"
+                            v-on:click="showEditTaskDialog(date, index, task, $event);"
+                            v-on:done-toggle="$set(task, 'done', $event); save();"
+                        ></TaskListItem>
+                    </div>
+                </v-card>
+                <v-card dense class="group">
+                    <v-card-title>Backlog</v-card-title>
+                    <draggable
+                        class="task-list"
+                        group="tasks"
+                        v-model="filteredTasks.backlog"
+                        v-bind:delay="500"
+                        v-bind:delay-on-touch-only="true"
+                        v-on:end="save"
+                    >
+                        <TaskListItem
+                            v-for="(task, index) of filteredTasks.backlog"
+                            v-bind:key="task.id"
+                            v-bind:value="task"
+                            v-on:click="showEditTaskDialog(null, index, task, $event);"
+                            v-on:done-toggle="$set(task, 'done', $event); save();"
+                        ></TaskListItem>
+                    </draggable>
+                </v-card>
+
+                <div class="separator"><!-- Horizontal margin --></div>
+
+                <draggable class="custom-groups" v-model="groups" group="groups" v-bind:delay="500" v-bind:delay-on-touch-only="true" handle=".handle" v-on:end="save">
                     <v-card v-for="group of groups" v-bind:key="group.name" class="group">
                         <v-card-title class="handle">
                             <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ group.name }}</span>
@@ -217,10 +254,10 @@
                                 <div class="date-header">{{ date }}</div>
                                 <template v-for="[index, task] of groupedTasks[group.name].scheduled[date]">
                                     <TaskListItem
-                                        v-bind:key="`${date}/${task.name}`"
+                                        v-bind:key="task.id"
                                         v-bind:value="task"
                                         v-on:click="showEditTaskDialog(date, index, task, $event);"
-                                        v-on:done-toggle="$set(task, 'done', $event); clean(); save();"
+                                        v-on:done-toggle="$set(task, 'done', $event); save();"
                                     ></TaskListItem>
                                 </template>
                             </div>
@@ -228,10 +265,10 @@
                                 <div class="date-header">Backlog</div>
                                 <template v-for="[index, task] of groupedTasks[group.name].backlog">
                                     <TaskListItem
-                                        v-bind:key="`backlog/${task.name}`"
+                                        v-bind:key="task.id"
                                         v-bind:value="task"
                                         v-on:click="showEditTaskDialog(null, index, task, $event);"
-                                        v-on:done-toggle="$set(task, 'done', $event); clean(); save();"
+                                        v-on:done-toggle="$set(task, 'done', $event); save();"
                                     ></TaskListItem>
                                 </template>
                             </div>
@@ -245,7 +282,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onMounted, onUnmounted, del } from 'vue';
+import { ref, computed, onMounted, onUnmounted, set, del } from 'vue';
 import type { Ref } from 'vue';
 
 import TaskEditor from '@/components/TaskEditor.vue';
@@ -272,8 +309,10 @@ const tasks = ref({
     scheduled: {} as { [key: string]: Task[] }
 });
 const groups: Ref<{ name: string, filter: string }[]> = ref([]);
+const searchQuery = ref("");
 // Task
 const newTask: Ref<Task> = ref({
+    id: crypto.randomUUID(),
     name: '',
     deadline: null,
     schedule: null,
@@ -317,29 +356,40 @@ const knownTags = computed((): [string, number][] => {
         .sort(([_tag1, count1], [_tag2, count2]) => count2 - count1);
 });
 
-const scheduledDates = computed(() => {
-    let dates = Object.keys(tasks.value.scheduled);
+const filteredTasks = computed(() => {
+    const re = new RegExp(searchQuery.value, "i");
+    const processedTasks = {};
+    processedTasks.backlog = tasks.value.backlog.filter((task) => re.test(task.name) || task.tags?.some((tag) => re.test(tag)));
+    processedTasks.scheduled = {};
+    for (const [date, dayTasks] of Object.entries(tasks.value.scheduled)) {
+        processedTasks.scheduled[date] = dayTasks.filter((task) => re.test(task.name) || task.tags?.some((tag) => re.test(tag)));
+    }
+    return processedTasks;
+});
+
+const scheduledTasks = computed(() => {
+    let dates = Object.keys(filteredTasks.value.scheduled);
     dates.sort((a, b) => a < b ? 1 : a > b ? -1 : 0);
     if (hideDone.value) {
         // Keep today or dates that have some undone tasks
         const today = dayjs().format('YYYY-MM-DD');
         dates = dates.filter(date => {
-            return date === today || tasks.value.scheduled[date].some(task => !task.done);
+            return date === today || filteredTasks.value.scheduled[date].some(task => !task.done);
         });
     }
-    return dates;
+    return dates.map((date) => [date, filteredTasks.value.scheduled[date]]);
 });
 
 const tasksWithDeadline = computed(() => {
     const result: [string | null, number, Task][] = [];
     // Backlog
-    for (const [i, task] of tasks.value.backlog.entries()) {
+    for (const [i, task] of filteredTasks.value.backlog.entries()) {
         if (task.deadline) {
             result.push([null, i, task]);
         }
     }
     // Scheduled
-    for (const [date, dayTasks] of Object.entries(tasks.value.scheduled)) {
+    for (const [date, dayTasks] of Object.entries(filteredTasks.value.scheduled)) {
         for (const [i, task] of dayTasks.entries()) {
             if (task.deadline) {
                 result.push([date, i, task]);
@@ -396,13 +446,13 @@ const groupedTasks = computed(() => {
             scheduled: {},
         };
         // Backlog
-        for (const [i, task] of tasks.value.backlog.entries()) {
+        for (const [i, task] of filteredTasks.value.backlog.entries()) {
             if ((task.tags || []).includes(group.filter)) {
                 grouped.backlog.push([i, task]);
             }
         }
         // Scheduled
-        for (const [date, dayTasks] of Object.entries(tasks.value.scheduled)) {
+        for (const [date, dayTasks] of Object.entries(filteredTasks.value.scheduled)) {
             grouped.scheduled[date] = [];
             for (const [i, task] of dayTasks.entries()) {
                 if ((task.tags || []).includes(group.filter)) {
@@ -426,14 +476,13 @@ const groupedTasks = computed(() => {
 onMounted(() => {
     document.title = `Tasks | ${import.meta.env.VITE_APP_NAME}`;
     load();
-    window.addEventListener('focus', loadIfNotEditing);
-});
-
-onUnmounted(() => {
-    window.removeEventListener('focus', loadIfNotEditing);
 });
 
 // Methods
+function onDraggableInput(date: string, newTasks: Task[]) {
+    set(tasks.value.scheduled, date, newTasks);
+}
+
 function isToday(date: string) {
     return date === dayjs().format('YYYY-MM-DD');
 }
@@ -445,13 +494,13 @@ function select(date: string | null, index: number | null, task: Task | null) {
     }
     selectedTask.value = task;
     if (task !== null) {
-        editTarget.value = JSON.parse(JSON.stringify(task));
-        editTarget.value!.name     ||= '';
-        editTarget.value!.deadline ||= null;
-        editTarget.value!.schedule ||= null;
-        editTarget.value!.done     ||= false;
-        editTarget.value!.tags     ||= [];
-        editTarget.value!.note     ||= '';
+        editTarget.value = structuredClone(task);
+        editTarget.value.name     ??= '';
+        editTarget.value.deadline ??= null;
+        editTarget.value.schedule ??= null;
+        editTarget.value.done     ??= false;
+        editTarget.value.tags     ??= [];
+        editTarget.value.note     ??= '';
     }
     else {
         editTarget.value = null;
@@ -481,6 +530,7 @@ function closeNewTaskDialog() {
     newTaskDialog.value = false;
     // Reset
     newTask.value = {
+        id: crypto.randomUUID(),
         name: '',
         deadline: null,
         schedule: null,
@@ -506,7 +556,8 @@ function closeEditTaskDialog() {
 }
 
 function openNewTaskDialogWithSelection() {
-    newTask.value = JSON.parse(JSON.stringify(editTarget.value));
+    newTask.value = structuredClone(editTarget.value);
+    newTask.id = crypto.randomUUID();
     newTask.value.name += ' (copy)';
     newTaskDialog.value = true;
     closeEditTaskDialog();
@@ -544,7 +595,6 @@ async function sortDailyTasks(date: string) {
         }
     });
     // Save
-    clean();
     await save();
 }
 
@@ -571,7 +621,6 @@ async function moveUndoneToToday(date: string) {
     }
     tasks.value.scheduled[todayDate].unshift(...undone);
     // Save
-    clean();
     await save();
 }
 
@@ -603,7 +652,6 @@ async function collectUndone() {
     }
     tasks.value.scheduled[todayDate].unshift(...undone);
     // Save
-    clean();
     await save();
 }
 
@@ -616,10 +664,19 @@ async function loadIfNotEditing() {
 async function load() {
     isLoading.value = true;
     try {
-        const res = await api.getNote('.mory/tasks.yaml');
-        const data = YAML.parse(res.data);
-        tasks.value = data.tasks;
-        groups.value = data.groups;
+        const data = await api.getTaskData();
+
+        const today = dayjs().format('YYYY-MM-DD');
+        data.tasks.scheduled[today] = data.tasks.scheduled[today] ?? [];
+
+        // Replace with the data
+        tasks.value.backlog.splice(0, tasks.value.backlog.length, ...data.tasks.backlog);
+        Object.keys(tasks.value.scheduled).forEach(key => del(tasks.value.scheduled, key));
+        Object.entries(data.tasks.scheduled).forEach(([key, value]) => {
+            set(tasks.value.scheduled, key, value);
+        });
+        groups.value.splice(0, groups.value.length, ...data.groups);
+
         isLoading.value = false;
     }
     catch (error) {
@@ -657,126 +714,34 @@ async function load() {
     }
 }
 
-function save() {
-    const datePattern = /\d{4}-\d{2}-\d{2}/;
-    const taskPropertyOrder: { [key: string]: number } = {
-        name: 0,
-        deadline: 1,
-        schedule: 2,
-        done: 3,
-        tags: 4,
-        note: 5,
-    };
-    const groupPropertyOrder: { [key: string]: number } = {
-        name: 0,
-        filter: 1,
-    };
-    const yaml = YAML.stringify({
-        tasks: tasks.value,
-        groups: groups.value,
-    }, {
-        sortMapEntries: (a, b) => {
-            if (datePattern.test(a.key.value) && datePattern.test(b.key.value)) {
-                if (a.key.value < b.key.value) {
-                    return 1;
-                }
-                else if (a.key.value > b.key.value) {
-                    return -1;
-                }
-                else {
-                    return 0;
-                }
-            }
-            else if (a.key.value in taskPropertyOrder && b.key.value in taskPropertyOrder) {
-                if (taskPropertyOrder[a.key.value] < taskPropertyOrder[b.key.value]) {
-                    return -1;
-                }
-                else if (taskPropertyOrder[a.key.value] > taskPropertyOrder[b.key.value]) {
-                    return 1;
-                }
-                else {
-                    return 0;
-                }
-            }
-            else if (a.key.value in groupPropertyOrder && b.key.value in groupPropertyOrder) {
-                if (groupPropertyOrder[a.key.value] < groupPropertyOrder[b.key.value]) {
-                    return -1;
-                }
-                else if (groupPropertyOrder[a.key.value] > groupPropertyOrder[b.key.value]) {
-                    return 1;
-                }
-                else {
-                    return 0;
-                }
-            }
-            else {
-                if (a.key.value < b.key.value) {
-                    return -1;
-                }
-                else if (a.key.value > b.key.value) {
-                    return 1;
-                }
-                else {
-                    return 0;
-                }
-            }
-        },
-    });
-    return api.addNote('.mory/tasks.yaml', yaml);
-}
-
-function clean() {
-    for (const task of tasks.value.backlog) {
-        for (const [prop, value] of Object.entries(task)) {
-            if (value === null) {
-                del(task, prop);
-            }
-        }
-    }
-    for (const [date, dailyTasks] of Object.entries(tasks.value.scheduled)) {
-        if ((dailyTasks as Task[]).length === 0) {
-            del(tasks.value.scheduled, date);
-        }
-        for (const task of dailyTasks) {
-            for (const [prop, value] of Object.entries(task)) {
-                if (value === null) {
-                    del(task, prop);
-                }
-            }
-        }
-    }
+async function save() {
+    return await api.putTaskData({ tasks: tasks.value, groups: groups.value });
 }
 
 async function add(closeDialog = true) {
-    // Create a new entry
-    const task: any = {
-        name: newTask.value.name,
-    };
-    if (newTask.value.deadline) { task.deadline = newTask.value.deadline; }
-    if (newTask.value.done) { task.done = newTask.value.done; }
-    if (newTask.value.tags.length > 0) { task.tags = newTask.value.tags; }
-    if (newTask.value.note.length > 0) { task.note = newTask.value.note; }
-    if (newTask.value.schedule !== null) {
-        if (!Object.hasOwn(tasks.value.scheduled, newTask.value.schedule)) {
-            tasks.value.scheduled[newTask.value.schedule] = [];
-        }
-        tasks.value.scheduled[newTask.value.schedule].unshift(task);
+    // Insert a new task
+    const task: Task = structuredClone(newTask.value);
+    if (task.schedule !== null) {
+        tasks.value.scheduled[task.schedule] ??= [];
+        tasks.value.scheduled[task.schedule].unshift(task);
     }
     else {
         tasks.value.backlog.unshift(task);
     }
+
     // Save
     await save();
+
+    // Close the dialog or keep it open to continue creating another similar tasks
     if (closeDialog) {
         closeNewTaskDialog();
     }
     else {
-        // Reset partially
-        newTask.value = {
-            ...newTask.value,
-            name: '',
-            tags: [...newTask.value.tags],
-        };
+        // Inherit values from the previous task except for id, name, and tags
+        newTask.value = structuredClone(newTask.value);
+        newTask.value.id = crypto.randomUUID();
+        newTask.value.name = '';
+        newTask.value.tags = [...newTask.value.tags];
     }
 }
 
@@ -812,7 +777,6 @@ async function updateSelected() {
         }
     }
     // Save
-    clean();
     await save();
     // Close
     closeEditTaskDialog();
@@ -825,7 +789,6 @@ async function removeSelected() {
     const list = selectedTask.value.schedule === null ? tasks.value.backlog : tasks.value.scheduled[selectedTask.value.schedule];
     list.splice(selectedTaskIndex.value!, 1);
     // Save
-    clean();
     await save();
     // Close
     closeEditTaskDialog();
@@ -849,6 +812,7 @@ async function addGroup() {
 
 // Expose properties
 defineExpose({
+    onDraggableInput,
     isToday,
     select,
     showEditTaskDialog,
@@ -862,7 +826,6 @@ defineExpose({
     loadIfNotEditing,
     load,
     save,
-    clean,
     add,
     updateSelected,
     removeSelected,
@@ -927,5 +890,8 @@ $space: 12px;
     div + div > .date-header {
         margin-top: 12px;
     }
+}
+.separator {
+    margin: 0 1em;
 }
 </style>
