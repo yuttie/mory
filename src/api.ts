@@ -174,3 +174,94 @@ export async function getTaskData(): Promise<TaskData> {
 
     return data;
 }
+
+export async function putTaskData(data: TaskData) {
+    // Clean up
+    data = structuredClone(data);
+    for (const task of data.tasks.backlog) {
+        for (const [prop, value] of Object.entries(task)) {
+            if (value === null) {
+                delete task[prop];
+            }
+        }
+    }
+    for (const [date, dailyTasks] of Object.entries(data.tasks.scheduled)) {
+        if ((dailyTasks as Task[]).length === 0) {
+            delete data.tasks.scheduled[date];
+        }
+        for (const task of dailyTasks) {
+            for (const [prop, value] of Object.entries(task)) {
+                if (value === null) {
+                    delete task[prop];
+                }
+            }
+        }
+    }
+
+    // Serialize
+    const datePattern = /\d{4}-\d{2}-\d{2}/;
+    const taskPropertyOrder: { [key: string]: number } = {
+        id: 0,
+        name: 1,
+        deadline: 2,
+        schedule: 3,
+        done: 4,
+        tags: 5,
+        note: 6,
+    };
+    const groupPropertyOrder: { [key: string]: number } = {
+        name: 0,
+        filter: 1,
+    };
+    const yaml = YAML.stringify(data, {
+        sortMapEntries: (a, b) => {
+            if (datePattern.test(a.key.value) && datePattern.test(b.key.value)) {
+                if (a.key.value < b.key.value) {
+                    return 1;
+                }
+                else if (a.key.value > b.key.value) {
+                    return -1;
+                }
+                else {
+                    return 0;
+                }
+            }
+            else if (a.key.value in taskPropertyOrder && b.key.value in taskPropertyOrder) {
+                if (taskPropertyOrder[a.key.value] < taskPropertyOrder[b.key.value]) {
+                    return -1;
+                }
+                else if (taskPropertyOrder[a.key.value] > taskPropertyOrder[b.key.value]) {
+                    return 1;
+                }
+                else {
+                    return 0;
+                }
+            }
+            else if (a.key.value in groupPropertyOrder && b.key.value in groupPropertyOrder) {
+                if (groupPropertyOrder[a.key.value] < groupPropertyOrder[b.key.value]) {
+                    return -1;
+                }
+                else if (groupPropertyOrder[a.key.value] > groupPropertyOrder[b.key.value]) {
+                    return 1;
+                }
+                else {
+                    return 0;
+                }
+            }
+            else {
+                if (a.key.value < b.key.value) {
+                    return -1;
+                }
+                else if (a.key.value > b.key.value) {
+                    return 1;
+                }
+                else {
+                    return 0;
+                }
+            }
+        },
+    });
+
+    // Send
+    return await addNote('.mory/tasks.yaml', yaml);
+}
