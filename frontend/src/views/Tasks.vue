@@ -1,6 +1,7 @@
 <template>
     <div id="tasks" class="d-flex flex-column">
         <v-toolbar flat outlined dense class="flex-grow-0">
+            <!-- New task button -->
             <v-dialog
                 max-width="600px"
                 persistent
@@ -42,6 +43,8 @@
                     </v-card-text>
                 </v-card>
             </v-dialog>
+
+            <!-- New group button -->
             <v-dialog
                 max-width="600px"
                 persistent
@@ -86,6 +89,8 @@
                     </v-card-text>
                 </v-card>
             </v-dialog>
+
+            <!-- Collect undone button -->
             <v-btn
                 text
                 v-on:click="collectUndone"
@@ -93,11 +98,14 @@
                 <v-icon class="mr-1">mdi-checkbox-multiple-blank-outline</v-icon>
                 Collect Undone
             </v-btn>
+
+            <!-- Hide done toggle -->
             <v-switch
                 v-model="hideDone"
                 v-bind:label="'Hide done'"
                 hide-details
             ></v-switch>
+            <!-- Progress bar for loading data -->
             <v-progress-linear
                 absolute
                 bottom
