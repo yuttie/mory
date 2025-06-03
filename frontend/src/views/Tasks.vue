@@ -640,6 +640,9 @@ async function load() {
     try {
         const data = await api.getTaskData();
 
+        const today = dayjs().format('YYYY-MM-DD');
+        data.tasks.scheduled[today] = data.tasks.scheduled[today] ?? [];
+
         // Replace with the data
         tasks.value.backlog.splice(0, tasks.value.backlog.length, ...data.tasks.backlog);
         Object.keys(tasks.value.scheduled).forEach(key => del(tasks.value.scheduled, key));
