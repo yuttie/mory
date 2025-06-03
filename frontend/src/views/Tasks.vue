@@ -155,7 +155,7 @@
                     <v-card-title>Scheduled</v-card-title>
                     <div class="task-list">
                         <div
-                            v-for="date of scheduledDates"
+                            v-for="[date, dayTasks] of scheduledTasks"
                             v-bind:key="date"
                             v-bind:class="{ today: isToday(date) }"
                         >
@@ -172,9 +172,16 @@
                                     v-on:click="moveUndoneToToday(date)"
                                 >Move to today</v-btn>
                             </div>
-                            <draggable v-model="tasks.scheduled[date]" group="tasks" v-bind:delay="500" v-bind:delay-on-touch-only="true" v-on:end="save">
+                            <draggable
+                                group="tasks"
+                                v-bind:value="dayTasks"
+                                v-on:input="onDraggableInput(date, $event)"
+                                v-bind:delay="500"
+                                v-bind:delay-on-touch-only="true"
+                                v-on:end="save"
+                            >
                                 <TaskListItem
-                                    v-for="(task, index) of tasks.scheduled[date]"
+                                    v-for="(task, index) of dayTasks"
                                     v-bind:key="task.id"
                                     v-bind:value="task"
                                     v-on:click="showEditTaskDialog(date, index, task, $event);"
@@ -329,7 +336,7 @@ const knownTags = computed((): [string, number][] => {
         .sort(([_tag1, count1], [_tag2, count2]) => count2 - count1);
 });
 
-const scheduledDates = computed(() => {
+const scheduledTasks = computed(() => {
     let dates = Object.keys(tasks.value.scheduled);
     dates.sort((a, b) => a < b ? 1 : a > b ? -1 : 0);
     if (hideDone.value) {
@@ -339,7 +346,7 @@ const scheduledDates = computed(() => {
             return date === today || tasks.value.scheduled[date].some(task => !task.done);
         });
     }
-    return dates;
+    return dates.map((date) => [date, tasks.value.scheduled[date]]);
 });
 
 const tasksWithDeadline = computed(() => {
@@ -446,6 +453,10 @@ onUnmounted(() => {
 });
 
 // Methods
+function onDraggableInput(date: string, newTasks: Task[]) {
+    set(tasks.value.scheduled, date, newTasks);
+}
+
 function isToday(date: string) {
     return date === dayjs().format('YYYY-MM-DD');
 }
@@ -772,6 +783,7 @@ async function addGroup() {
 
 // Expose properties
 defineExpose({
+    onDraggableInput,
     isToday,
     select,
     showEditTaskDialog,
