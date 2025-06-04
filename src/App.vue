@@ -107,8 +107,8 @@
                     <v-btn
                         text
                         title="Add note"
-                        class="ml-2"
-                        style="padding: 0; min-width: 36px"
+                        class="pa-0 ml-2"
+                        style="min-width: 36px"
                         v-bind="attrs"
                         v-on="on"
                     >
@@ -174,8 +174,8 @@
                     <v-btn
                         text
                         title="Upload file"
-                        class="ml-2"
-                        style="padding: 0; min-width: 36px"
+                        class="pa-0 ml-2"
+                        style="min-width: 36px"
                         v-bind="attrs"
                         v-on="on"
                     >
@@ -239,8 +239,8 @@
                 <template v-slot:activator="{ attrs, on }">
                     <v-btn
                         text
-                        class="ml-2"
-                        style="padding: 0; min-width: 36px"
+                        class="pa-0 ml-2"
+                        style="min-width: 36px"
                         v-bind="attrs"
                         v-on="on"
                     >
