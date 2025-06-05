@@ -202,7 +202,7 @@
                             v-bind:class="{ today: isToday(date) }"
                         >
                             <div class="date-header d-flex flex-row">
-                                <span>{{ isToday(date) ? `Today (${date})` : date }}</span>
+                                <span>{{ isToday(date) ? `Today (${date})` : isTomorrow(date) ? `Tomorrow (${date})` : date }}</span>
                                 <v-spacer></v-spacer>
                                 <v-btn
                                     text
@@ -405,10 +405,11 @@ const scheduledTasks = computed(() => {
     let dates = Object.keys(filteredTasks.value.scheduled);
     dates.sort((a, b) => a < b ? 1 : a > b ? -1 : 0);
     if (hideDone.value) {
-        // Keep today or dates that have some undone tasks
+        // Keep today, tomorrow, or other dates that have some undone tasks
         const today = dayjs().format('YYYY-MM-DD');
+        const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
         dates = dates.filter(date => {
-            return date === today || filteredTasks.value.scheduled[date].some(task => !task.done);
+            return date === today || date === tomorrow || filteredTasks.value.scheduled[date].some(task => !task.done);
         });
     }
     return dates.map((date) => [date, filteredTasks.value.scheduled[date]]);
@@ -519,6 +520,10 @@ function onDraggableInput(date: string, newTasks: Task[]) {
 
 function isToday(date: string) {
     return date === dayjs().format('YYYY-MM-DD');
+}
+
+function isTomorrow(date: string) {
+    return date === dayjs().add(1, 'day').format('YYYY-MM-DD');
 }
 
 function select(date: string | null, index: number | null, task: Task | null) {
@@ -700,9 +705,11 @@ async function load() {
     try {
         const data = await api.getTaskData();
 
-        // Always show slot for today
+        // Always show slots for today and tomorrow
         const today = dayjs().format('YYYY-MM-DD');
+        const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
         data.tasks.scheduled[today] = data.tasks.scheduled[today] ?? [];
+        data.tasks.scheduled[tomorrow] = data.tasks.scheduled[tomorrow] ?? [];
 
         // Replace with the data
         tasks.value.backlog.splice(0, tasks.value.backlog.length, ...data.tasks.backlog);
