@@ -700,6 +700,7 @@ async function load() {
     try {
         const data = await api.getTaskData();
 
+        // Always show slot for today
         const today = dayjs().format('YYYY-MM-DD');
         data.tasks.scheduled[today] = data.tasks.scheduled[today] ?? [];
 
