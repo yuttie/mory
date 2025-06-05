@@ -100,6 +100,17 @@
             class="mr-2 mt-2"
         >
             <input type="file" multiple class="d-none" ref="fileInputEl">
+            <v-btn
+                text
+                title="Enable notification"
+                color="error"
+                class="pa-0 ml-2"
+                style="min-width: 36px"
+                v-if="needRequestForNotificationPermission"
+                v-on:click="requestNotificationPermission"
+            >
+                <v-icon>mdi-bell</v-icon>
+            </v-btn>
             <v-menu
                 offset-y
             >
@@ -368,6 +379,7 @@ interface TreeNode {
 const appStore = useAppStore();
 
 // Reactive states
+const notificationPermission = ref(Notification.permission);
 const miniMainSidebar = ref(loadConfigValue("mini-main-sidebar", false));
 const loginUsername = ref("");
 const loginPassword = ref("");
@@ -387,6 +399,10 @@ const routerViewEl = ref(null);
 // Computed properties
 const isDev = computed(() => {
     return import.meta.env.DEV;
+});
+
+const needRequestForNotificationPermission = computed(() => {
+    return notificationPermission.value === "default";
 });
 
 const decodedToken = computed(() => {
@@ -562,8 +578,6 @@ onMounted(() => {
             e.preventDefault();
         }
     });
-
-    initNotification();
 });
 
 onUnmounted(() => {
@@ -571,12 +585,16 @@ onUnmounted(() => {
 });
 
 // Methods
-function initNotification() {
-    Notification.requestPermission().then((result) => {
-        if (result === 'granted') {
-            //
-        }
-    });
+async function requestNotificationPermission() {
+    const result = await Notification.requestPermission();
+    notificationPermission.value = result;
+
+    // Show an example notification if allowed
+    if (result === "granted") {
+        const n = new Notification("Example notification from mory", {
+            icon: import.meta.env.VITE_APP_APPLICATION_ROOT + 'favicon.png',
+        });
+    }
 }
 
 function tokenExpired(callback: () => void) {
@@ -751,7 +769,7 @@ watch(miniMainSidebar, (newMiniMainSidebar: boolean) => {
 
 // Expose properties
 defineExpose({
-    initNotification,
+    requestNotificationPermission,
     tokenExpired,
     loadTemplates,
     loadCustomCss,
