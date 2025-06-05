@@ -10,12 +10,13 @@
                 <template v-slot:activator="{ on, attrs }">
                     <v-btn
                         text
-                        v-bind="attrs"
+                        title="Add task"
+                        style="min-width: 36px"
+                        v-bind="{ ...attrs, class: { 'pa-0': !$vuetify.breakpoint.mdAndUp } }"
                         v-on="on"
-                        class="mr-2"
                     >
-                        <v-icon class="mr-1">mdi-plus-box-outline</v-icon>
-                        Task
+                        <v-icon>mdi-checkbox-marked-circle-plus-outline</v-icon>
+                        <span v-if="$vuetify.breakpoint.mdAndUp">Task</span>
                     </v-btn>
                 </template>
                 <v-card>
@@ -53,11 +54,13 @@
                 <template v-slot:activator="{ on, attrs }">
                     <v-btn
                         text
-                        v-bind="attrs"
+                        title="Add group"
+                        style="min-width: 36px"
+                        v-bind="{ ...attrs, class: { 'pa-0': !$vuetify.breakpoint.mdAndUp } }"
                         v-on="on"
                     >
-                        <v-icon class="mr-1">mdi-plus-box-outline</v-icon>
-                        Group
+                        <v-icon>mdi-format-list-group-plus</v-icon>
+                        <span v-if="$vuetify.breakpoint.mdAndUp">Group</span>
                     </v-btn>
                 </template>
                 <v-card>
@@ -93,26 +96,32 @@
             <!-- Collect undone button -->
             <v-btn
                 text
+                title="Collect undone"
+                style="min-width: 36px"
+                v-bind:class="{ 'pa-0': !$vuetify.breakpoint.mdAndUp }"
                 v-on:click="collectUndone"
             >
-                <v-icon class="mr-1">mdi-checkbox-multiple-blank-outline</v-icon>
-                Collect Undone
+                <v-icon>mdi-checkbox-multiple-blank-outline</v-icon>
+                <span v-if="$vuetify.breakpoint.mdAndUp">Collect Undone</span>
             </v-btn>
 
             <!-- Hide done toggle -->
             <v-switch
                 v-model="hideDone"
-                v-bind:label="'Hide done'"
+                v-bind:label="$vuetify.breakpoint.mdAndUp ? 'Hide done' : null"
                 hide-details
             ></v-switch>
 
             <!-- Reload button -->
             <v-btn
                 text
+                title="Reload"
+                style="min-width: 36px"
+                v-bind:class="{ 'pa-0': !$vuetify.breakpoint.mdAndUp }"
                 v-on:click="loadIfNotEditing"
             >
-                <v-icon class="mr-1">mdi-reload</v-icon>
-                Reload
+                <v-icon>mdi-reload</v-icon>
+                <span v-if="$vuetify.breakpoint.mdAndUp">Reload</span>
             </v-btn>
 
             <!-- Search text box -->
