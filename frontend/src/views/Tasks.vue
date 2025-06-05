@@ -26,13 +26,19 @@
                             color="primary"
                             v-on:click="add(false)"
                             v-bind:disabled="newTask.name.length === 0"
-                        >Add (continuously)</v-btn>
+                        >
+                            <v-icon>mdi-plus-box-multiple-outline</v-icon>
+                            <span v-if="$vuetify.breakpoint.smAndUp">Add & New</span>
+                        </v-btn>
                         <v-btn
                             text
                             color="primary"
                             v-on:click="add"
                             v-bind:disabled="newTask.name.length === 0"
-                        >Add</v-btn>
+                        >
+                            <v-icon>mdi-plus-box-outline</v-icon>
+                            <span v-if="$vuetify.breakpoint.smAndUp">Add</span>
+                        </v-btn>
                         <v-btn
                             icon
                             v-on:click="closeNewTaskDialog"
@@ -69,7 +75,10 @@
                             color="primary"
                             v-on:click="addGroup"
                             v-bind:disabled="newGroupName.length === 0 || newGroupFilter.length === 0"
-                        >Add</v-btn>
+                        >
+                            <v-icon>mdi-plus-box-outline</v-icon>
+                            <span v-if="$vuetify.breakpoint.smAndUp">Add</span>
+                        </v-btn>
                         <v-btn
                             icon
                             v-on:click="closeNewGroupDialog"
@@ -151,18 +160,27 @@
                     <v-btn
                         text
                         v-on:click="openNewTaskDialogWithSelection"
-                    >Add similar...</v-btn>
+                    >
+                        <v-icon>mdi-plus-box-outline</v-icon>
+                        <span v-if="$vuetify.breakpoint.smAndUp">Add similar...</span>
+                    </v-btn>
                     <v-btn
                         text
                         color="error"
                         v-on:click="removeSelected"
-                    >Delete</v-btn>
+                    >
+                        <v-icon>mdi-delete</v-icon>
+                        <span v-if="$vuetify.breakpoint.smAndUp">Delete</span>
+                    </v-btn>
                     <v-btn
                         text
                         color="primary"
                         v-on:click="updateSelected"
                         v-bind:disabled="editTarget.name.length === 0"
-                    >Save</v-btn>
+                    >
+                        <v-icon>mdi-content-save</v-icon>
+                        <span v-if="$vuetify.breakpoint.smAndUp">Save</span>
+                    </v-btn>
                     <v-btn
                         icon
                         v-on:click="closeEditTaskDialog"
