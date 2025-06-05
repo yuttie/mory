@@ -11,7 +11,6 @@
                     <v-btn
                         text
                         title="Add task"
-                        style="min-width: 36px"
                         v-bind="{ ...attrs, class: { 'pa-0': !$vuetify.breakpoint.mdAndUp } }"
                         v-on="on"
                     >
@@ -55,7 +54,6 @@
                     <v-btn
                         text
                         title="Add group"
-                        style="min-width: 36px"
                         v-bind="{ ...attrs, class: { 'pa-0': !$vuetify.breakpoint.mdAndUp } }"
                         v-on="on"
                     >
@@ -97,7 +95,6 @@
             <v-btn
                 text
                 title="Collect undone"
-                style="min-width: 36px"
                 v-bind:class="{ 'pa-0': !$vuetify.breakpoint.mdAndUp }"
                 v-on:click="collectUndone"
             >
@@ -116,7 +113,6 @@
             <v-btn
                 text
                 title="Reload"
-                style="min-width: 36px"
                 v-bind:class="{ 'pa-0': !$vuetify.breakpoint.mdAndUp }"
                 v-on:click="loadIfNotEditing"
             >
