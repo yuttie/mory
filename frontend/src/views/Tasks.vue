@@ -10,12 +10,12 @@
                 <template v-slot:activator="{ on, attrs }">
                     <v-btn
                         text
-                        v-bind="attrs"
+                        title="Add task"
+                        v-bind="{ ...attrs, class: { 'pa-0': !$vuetify.breakpoint.mdAndUp } }"
                         v-on="on"
-                        class="mr-2"
                     >
-                        <v-icon class="mr-1">mdi-plus-box-outline</v-icon>
-                        Task
+                        <v-icon>mdi-checkbox-marked-circle-plus-outline</v-icon>
+                        <span v-if="$vuetify.breakpoint.mdAndUp">Task</span>
                     </v-btn>
                 </template>
                 <v-card>
@@ -26,13 +26,19 @@
                             color="primary"
                             v-on:click="add(false)"
                             v-bind:disabled="newTask.name.length === 0"
-                        >Add (continuously)</v-btn>
+                        >
+                            <v-icon>mdi-plus-box-multiple-outline</v-icon>
+                            <span v-if="$vuetify.breakpoint.smAndUp">Add & New</span>
+                        </v-btn>
                         <v-btn
                             text
                             color="primary"
                             v-on:click="add"
                             v-bind:disabled="newTask.name.length === 0"
-                        >Add</v-btn>
+                        >
+                            <v-icon>mdi-plus-box-outline</v-icon>
+                            <span v-if="$vuetify.breakpoint.smAndUp">Add</span>
+                        </v-btn>
                         <v-btn
                             icon
                             v-on:click="closeNewTaskDialog"
@@ -53,11 +59,12 @@
                 <template v-slot:activator="{ on, attrs }">
                     <v-btn
                         text
-                        v-bind="attrs"
+                        title="Add group"
+                        v-bind="{ ...attrs, class: { 'pa-0': !$vuetify.breakpoint.mdAndUp } }"
                         v-on="on"
                     >
-                        <v-icon class="mr-1">mdi-plus-box-outline</v-icon>
-                        Group
+                        <v-icon>mdi-format-list-group-plus</v-icon>
+                        <span v-if="$vuetify.breakpoint.mdAndUp">Group</span>
                     </v-btn>
                 </template>
                 <v-card>
@@ -68,7 +75,10 @@
                             color="primary"
                             v-on:click="addGroup"
                             v-bind:disabled="newGroupName.length === 0 || newGroupFilter.length === 0"
-                        >Add</v-btn>
+                        >
+                            <v-icon>mdi-plus-box-outline</v-icon>
+                            <span v-if="$vuetify.breakpoint.smAndUp">Add</span>
+                        </v-btn>
                         <v-btn
                             icon
                             v-on:click="closeNewGroupDialog"
@@ -93,26 +103,30 @@
             <!-- Collect undone button -->
             <v-btn
                 text
+                title="Collect undone"
+                v-bind:class="{ 'pa-0': !$vuetify.breakpoint.mdAndUp }"
                 v-on:click="collectUndone"
             >
-                <v-icon class="mr-1">mdi-checkbox-multiple-blank-outline</v-icon>
-                Collect Undone
+                <v-icon>mdi-checkbox-multiple-blank-outline</v-icon>
+                <span v-if="$vuetify.breakpoint.mdAndUp">Collect Undone</span>
             </v-btn>
 
             <!-- Hide done toggle -->
             <v-switch
                 v-model="hideDone"
-                v-bind:label="'Hide done'"
+                v-bind:label="$vuetify.breakpoint.mdAndUp ? 'Hide done' : null"
                 hide-details
             ></v-switch>
 
             <!-- Reload button -->
             <v-btn
                 text
+                title="Reload"
+                v-bind:class="{ 'pa-0': !$vuetify.breakpoint.mdAndUp }"
                 v-on:click="loadIfNotEditing"
             >
-                <v-icon class="mr-1">mdi-reload</v-icon>
-                Reload
+                <v-icon>mdi-reload</v-icon>
+                <span v-if="$vuetify.breakpoint.mdAndUp">Reload</span>
             </v-btn>
 
             <!-- Search text box -->
@@ -146,18 +160,27 @@
                     <v-btn
                         text
                         v-on:click="openNewTaskDialogWithSelection"
-                    >Add similar...</v-btn>
+                    >
+                        <v-icon>mdi-plus-box-outline</v-icon>
+                        <span v-if="$vuetify.breakpoint.smAndUp">Add similar...</span>
+                    </v-btn>
                     <v-btn
                         text
                         color="error"
                         v-on:click="removeSelected"
-                    >Delete</v-btn>
+                    >
+                        <v-icon>mdi-delete</v-icon>
+                        <span v-if="$vuetify.breakpoint.smAndUp">Delete</span>
+                    </v-btn>
                     <v-btn
                         text
                         color="primary"
                         v-on:click="updateSelected"
                         v-bind:disabled="editTarget.name.length === 0"
-                    >Save</v-btn>
+                    >
+                        <v-icon>mdi-content-save</v-icon>
+                        <span v-if="$vuetify.breakpoint.smAndUp">Save</span>
+                    </v-btn>
                     <v-btn
                         icon
                         v-on:click="closeEditTaskDialog"
@@ -178,18 +201,29 @@
                             v-bind:key="date"
                             v-bind:class="{ today: isToday(date) }"
                         >
-                            <div class="date-header">
+                            <div class="date-header d-flex flex-row">
                                 <span>{{ isToday(date) ? `Today (${date})` : date }}</span>
+                                <v-spacer></v-spacer>
                                 <v-btn
                                     text
-                                    x-small
+                                    small
+                                    title="Sort"
+                                    style="min-width: unset;"
+                                    class="px-2"
                                     v-on:click="sortDailyTasks(date)"
-                                >Sort</v-btn>
+                                >
+                                    <v-icon small>mdi-sort-bool-ascending-variant</v-icon>
+                                </v-btn>
                                 <v-btn
                                     text
-                                    x-small
+                                    small
+                                    title="Move to today"
+                                    style="min-width: unset;"
+                                    class="px-2"
                                     v-on:click="moveUndoneToToday(date)"
-                                >Move to today</v-btn>
+                                >
+                                    <v-icon small>mdi-inbox-arrow-down</v-icon>
+                                </v-btn>
                             </div>
                             <draggable
                                 group="tasks"
