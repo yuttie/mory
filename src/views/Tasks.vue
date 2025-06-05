@@ -201,18 +201,29 @@
                             v-bind:key="date"
                             v-bind:class="{ today: isToday(date) }"
                         >
-                            <div class="date-header">
+                            <div class="date-header d-flex flex-row">
                                 <span>{{ isToday(date) ? `Today (${date})` : date }}</span>
+                                <v-spacer></v-spacer>
                                 <v-btn
                                     text
-                                    x-small
+                                    small
+                                    title="Sort"
+                                    style="min-width: unset;"
+                                    class="px-2"
                                     v-on:click="sortDailyTasks(date)"
-                                >Sort</v-btn>
+                                >
+                                    <v-icon small>mdi-sort-bool-ascending-variant</v-icon>
+                                </v-btn>
                                 <v-btn
                                     text
-                                    x-small
+                                    small
+                                    title="Move to today"
+                                    style="min-width: unset;"
+                                    class="px-2"
                                     v-on:click="moveUndoneToToday(date)"
-                                >Move to today</v-btn>
+                                >
+                                    <v-icon small>mdi-inbox-arrow-down</v-icon>
+                                </v-btn>
                             </div>
                             <draggable
                                 group="tasks"
