@@ -3,6 +3,7 @@ import Vuetify from 'vuetify/lib';
 import { Touch } from 'vuetify/lib/directives';
 
 Vue.use(Vuetify, {
+  // We need this because unplugin-vue-components's "auto import for directives" feature requires Babel for Vue 2, and we don't want to install Babel.
   directives: {
     Touch,
   },
