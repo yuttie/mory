@@ -392,7 +392,7 @@ import Gravatar from '@/components/Gravatar.vue';
 import * as api from '@/api';
 import { loadConfigValue, saveConfigValue } from '@/config';
 import type { Claim, ListEntry2, UploadEntry } from '@/api';
-import jwt_decode from 'jwt-decode';
+import { jwtDecode } from 'jwt-decode';
 import less from 'less';
 
 interface TreeNode {
@@ -434,7 +434,7 @@ const needRequestForNotificationPermission = computed(() => {
 
 const decodedToken = computed(() => {
     if (appStore.token) {
-        return jwt_decode<Claim>(appStore.token);
+        return jwtDecode<Claim>(appStore.token);
     }
     else {
         return null;
