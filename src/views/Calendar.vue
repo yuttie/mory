@@ -3,10 +3,10 @@
         <v-toolbar flat outlined dense class="flex-grow-0">
             <v-btn outlined v-on:click="setToday" class="mr-3">Today</v-btn>
             <v-btn icon small v-on:click="$refs.calendar.prev()">
-                <v-icon>mdi-chevron-left</v-icon>
+                <v-icon>{{ mdiChevronLeft }}</v-icon>
             </v-btn>
             <v-btn icon small v-on:click="$refs.calendar.next()" class="mr-3">
-                <v-icon>mdi-chevron-right</v-icon>
+                <v-icon>{{ mdiChevronRight }}</v-icon>
             </v-btn>
             <v-toolbar-title v-if="$refs.calendar" class="mr-3">
                 {{ $refs.calendar.title }}
@@ -53,13 +53,13 @@
                 >
                     <v-toolbar-title>{{ selectedEvent.name }}</v-toolbar-title>
                     <v-spacer></v-spacer>
-                    <v-icon v-if="selectedEvent.finished">mdi-check</v-icon>
+                    <v-icon v-if="selectedEvent.finished">{{ mdiCheck }}</v-icon>
                 </v-toolbar>
                 <v-card-text>
                     <v-list dense>
                         <v-list-item>
                             <v-list-item-icon>
-                                <v-icon>mdi-clock-start</v-icon>
+                                <v-icon>{{ mdiClockStart }}</v-icon>
                             </v-list-item-icon>
                             <v-list-item-content>
                                 {{ selectedEvent.start }}
@@ -67,7 +67,7 @@
                         </v-list-item>
                         <v-list-item v-if="selectedEvent.end">
                             <v-list-item-icon>
-                                <v-icon>mdi-clock-end</v-icon>
+                                <v-icon>{{ mdiClockEnd }}</v-icon>
                             </v-list-item-icon>
                             <v-list-item-content>
                                 {{ selectedEvent.end }}
@@ -75,7 +75,7 @@
                         </v-list-item>
                         <v-list-item>
                             <v-list-item-icon>
-                                <v-icon>mdi-file-document-outline</v-icon>
+                                <v-icon>{{ mdiFileDocumentOutline }}</v-icon>
                             </v-list-item-icon>
                             <v-list-item-content>
                                 <router-link v-bind:to="{ name: 'Note', params: { path: selectedEvent.notePath } }">{{ selectedEvent.notePath }}</router-link>
@@ -98,6 +98,15 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import type { Ref } from 'vue';
 
 import { useRouter, useRoute } from '@/composables/vue-router';
+
+import {
+    mdiCheck,
+    mdiChevronLeft,
+    mdiChevronRight,
+    mdiClockEnd,
+    mdiClockStart,
+    mdiFileDocumentOutline,
+} from '@mdi/js';
 
 import * as api from '@/api';
 import { isMetadataEventMultiple, validateEvent } from '@/api';

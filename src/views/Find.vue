@@ -62,7 +62,7 @@
                         icon
                         color="pink"
                     >
-                        <v-icon>mdi-delete</v-icon>
+                        <v-icon>{{ mdiDelete }}</v-icon>
                     </v-btn>
                     <v-spacer></v-spacer>
                     <v-data-footer
@@ -113,6 +113,13 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import type { Ref } from 'vue';
 
 import { useRouter, useRoute } from '@/composables/vue-router';
+
+import {
+    mdiDelete,
+    mdiFileDocumentOutline,
+    mdiFileOutline,
+    mdiImageOutline,
+} from '@mdi/js';
 
 import * as api from '@/api';
 import { compareTags } from '@/api';
@@ -233,13 +240,13 @@ const matchedEntries = computed(() => {
             time: dayjs(entry.time),
             ...(() => {
                 if (entry.mime_type.startsWith("image/")) {
-                    return { icon: "mdi-image-outline", iconColor: "#62b950" };
+                    return { icon: mdiImageOutline, iconColor: "#62b950" };
                 }
                 else if (entry.mime_type.startsWith("text/")) {
-                    return { icon: "mdi-file-document-outline", iconColor: "#5fa3c4" };
+                    return { icon: mdiFileDocumentOutline, iconColor: "#5fa3c4" };
                 }
                 else {
-                    return { icon: "mdi-file-outline", iconColor: null };
+                    return { icon: mdiFileOutline, iconColor: null };
                 }
             })(),
         });

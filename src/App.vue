@@ -29,7 +29,7 @@
                     v-on:click="miniMainSidebar = false"
                 >
                     <v-list-item-icon>
-                        <v-icon>mdi-chevron-double-right</v-icon>
+                        <v-icon>{{ mdiChevronDoubleRight }}</v-icon>
                     </v-list-item-icon>
                     <v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content>
                 </v-list-item>
@@ -53,7 +53,7 @@
                             icon
                             tile
                             v-on:click="miniMainSidebar = true"
-                        ><v-icon>mdi-chevron-double-left</v-icon></v-btn>
+                        ><v-icon>{{ mdiChevronDoubleLeft }}</v-icon></v-btn>
                     </template>
                 </v-list-item>
             </v-list>
@@ -62,12 +62,12 @@
                 dense
                 nav
             >
-                <v-list-item color="primary" link to="/"><v-list-item-icon><v-icon dense>mdi-home-outline</v-icon></v-list-item-icon><v-list-item-title>Home</v-list-item-title></v-list-item>
-                <v-list-item color="primary" link to="/calendar"><v-list-item-icon><v-icon dense>mdi-calendar-outline</v-icon></v-list-item-icon><v-list-item-title>Calendar</v-list-item-title></v-list-item>
-                <v-list-item color="primary" link to="/tasks"><v-list-item-icon><v-icon dense>mdi-ballot-outline</v-icon></v-list-item-icon><v-list-item-title>Tasks</v-list-item-title></v-list-item>
-                <v-list-item color="primary" link to="/find"><v-list-item-icon><v-icon dense>mdi-magnify</v-icon></v-list-item-icon><v-list-item-title>Find</v-list-item-title></v-list-item>
-                <v-list-item color="primary" link to="/config"><v-list-item-icon><v-icon dense>mdi-cog-outline</v-icon></v-list-item-icon><v-list-item-title>Config</v-list-item-title></v-list-item>
-                <v-list-item color="primary" link to="/about"><v-list-item-icon><v-icon dense>mdi-information-outline</v-icon></v-list-item-icon><v-list-item-title>About</v-list-item-title></v-list-item>
+                <v-list-item color="primary" link to="/"><v-list-item-icon><v-icon dense>{{ mdiHomeOutline }}</v-icon></v-list-item-icon><v-list-item-title>Home</v-list-item-title></v-list-item>
+                <v-list-item color="primary" link to="/calendar"><v-list-item-icon><v-icon dense>{{ mdiCalendarOutline }}</v-icon></v-list-item-icon><v-list-item-title>Calendar</v-list-item-title></v-list-item>
+                <v-list-item color="primary" link to="/tasks"><v-list-item-icon><v-icon dense>{{ mdiBallotOutline }}</v-icon></v-list-item-icon><v-list-item-title>Tasks</v-list-item-title></v-list-item>
+                <v-list-item color="primary" link to="/find"><v-list-item-icon><v-icon dense>{{ mdiMagnify }}</v-icon></v-list-item-icon><v-list-item-title>Find</v-list-item-title></v-list-item>
+                <v-list-item color="primary" link to="/config"><v-list-item-icon><v-icon dense>{{ mdiCogOutline }}</v-icon></v-list-item-icon><v-list-item-title>Config</v-list-item-title></v-list-item>
+                <v-list-item color="primary" link to="/about"><v-list-item-icon><v-icon dense>{{ mdiInformationOutline }}</v-icon></v-list-item-icon><v-list-item-title>About</v-list-item-title></v-list-item>
             </v-list>
 
             <v-divider></v-divider>
@@ -85,10 +85,10 @@
                 >
                     <template v-slot:prepend="{ item, open }">
                         <v-icon v-if="item.children" dense>
-                            {{ open ? 'mdi-folder-open' : 'mdi-folder' }}
+                            {{ open ? mdiFolderOpen : mdiFolder }}
                         </v-icon>
                         <v-icon v-else dense>
-                            mdi-file-document-outline
+                            {{ mdiFileDocumentOutline }}
                         </v-icon>
                     </template>
                 </v-treeview>
@@ -109,7 +109,7 @@
                 v-if="needRequestForNotificationPermission"
                 v-on:click="requestNotificationPermission"
             >
-                <v-icon>mdi-bell</v-icon>
+                <v-icon>{{ mdiBell }}</v-icon>
             </v-btn>
             <v-menu
                 offset-y
@@ -123,14 +123,14 @@
                         v-bind="attrs"
                         v-on="on"
                     >
-                        <v-icon>mdi-pencil-box-outline</v-icon>
+                        <v-icon>{{ mdiPencilBoxOutline }}</v-icon>
                     </v-btn>
                 </template>
                 <v-list dense>
                     <v-subheader>Create</v-subheader>
                     <v-list-item to="/create">
                         <v-list-item-icon>
-                            <v-icon dense>mdi-file-outline</v-icon>
+                            <v-icon dense>{{ mdiFileOutline }}</v-icon>
                         </v-list-item-icon>
                         <v-list-item-content>
                             <v-list-item-title>New note</v-list-item-title>
@@ -141,7 +141,7 @@
                         v-bind:to="{ name: 'Create', query: { from: $route.params.path } }"
                     >
                         <v-list-item-icon>
-                            <v-icon dense>mdi-file-multiple-outline</v-icon>
+                            <v-icon dense>{{ mdiFileMultipleOutline }}</v-icon>
                         </v-list-item-icon>
                         <v-list-item-content>
                             <v-list-item-title>Copy of this note</v-list-item-title>
@@ -154,7 +154,7 @@
                         v-bind:to="{ name: 'Create', query: { from: path } }"
                     >
                         <v-list-item-icon>
-                            <v-icon dense>mdi-file-document-outline</v-icon>
+                            <v-icon dense>{{ mdiFileDocumentOutline }}</v-icon>
                         </v-list-item-icon>
                         <v-list-item-content>
                             <v-list-item-title>{{ path.replace(/\.template$/i, '') }}</v-list-item-title>
@@ -168,7 +168,7 @@
                                     v-on="on"
                                     v-bind:to="{ name: 'Note', params: { path: path } }"
                                 >
-                                    <v-icon>mdi-pencil</v-icon>
+                                    <v-icon>{{ mdiPencil }}</v-icon>
                                 </v-btn>
                             </template>
                             <span>Edit template</span>
@@ -198,7 +198,7 @@
                             dot
                             small
                         >
-                            <v-icon>mdi-cloud-upload-outline</v-icon>
+                            <v-icon>{{ mdiCloudUploadOutline }}</v-icon>
                         </v-badge>
                     </v-btn>
                 </template>
@@ -207,7 +207,7 @@
                         <v-list-item
                             v-on:click="chooseFile"
                         >
-                            <v-list-item-icon><v-icon dense>mdi-upload</v-icon></v-list-item-icon>
+                            <v-list-item-icon><v-icon dense>{{ mdiUpload }}</v-icon></v-list-item-icon>
                             <v-list-item-title>Upload</v-list-item-title>
                         </v-list-item>
                     </v-list>
@@ -238,7 +238,7 @@
                         <v-list-item
                             v-on:click="cleanUploadList"
                         >
-                            <v-list-item-icon><v-icon dense>mdi-broom</v-icon></v-list-item-icon>
+                            <v-list-item-icon><v-icon dense>{{ mdiBroom }}</v-icon></v-list-item-icon>
                             <v-list-item-title>Clear all</v-list-item-title>
                         </v-list-item>
                     </v-list>
@@ -276,7 +276,7 @@
                             v-on:click="appStore.logout()"
                         >
                             <v-list-item-icon>
-                                <v-icon dense>mdi-logout</v-icon>
+                                <v-icon dense>{{ mdiLogout }}</v-icon>
                             </v-list-item-icon>
                             <v-list-item-title>Logout</v-list-item-title>
                         </v-list-item>
@@ -300,12 +300,12 @@
                 tile
                 class="flex-grow-1 d-flex pa-0"
             >
-                <v-btn text to="/"         class="flex-grow-1"><v-icon>mdi-home-outline</v-icon>       </v-btn>
-                <v-btn text to="/calendar" class="flex-grow-1"><v-icon>mdi-calendar-outline</v-icon>   </v-btn>
-                <v-btn text to="/tasks"    class="flex-grow-1"><v-icon>mdi-ballot-outline</v-icon>     </v-btn>
-                <v-btn text to="/find"     class="flex-grow-1"><v-icon>mdi-magnify</v-icon>    </v-btn>
-                <v-btn text to="/config"   class="flex-grow-1"><v-icon>mdi-cog-outline</v-icon>        </v-btn>
-                <v-btn text to="/about"    class="flex-grow-1"><v-icon>mdi-information-outline</v-icon></v-btn>
+                <v-btn text to="/"         class="flex-grow-1"><v-icon>{{ mdiHomeOutline        }}</v-icon></v-btn>
+                <v-btn text to="/calendar" class="flex-grow-1"><v-icon>{{ mdiCalendarOutline    }}</v-icon></v-btn>
+                <v-btn text to="/tasks"    class="flex-grow-1"><v-icon>{{ mdiBallotOutline      }}</v-icon></v-btn>
+                <v-btn text to="/find"     class="flex-grow-1"><v-icon>{{ mdiMagnify            }}</v-icon></v-btn>
+                <v-btn text to="/config"   class="flex-grow-1"><v-icon>{{ mdiCogOutline         }}</v-icon></v-btn>
+                <v-btn text to="/about"    class="flex-grow-1"><v-icon>{{ mdiInformationOutline }}</v-icon></v-btn>
             </v-btn-toggle>
         </v-app-bar>
 
@@ -314,7 +314,7 @@
                 <v-alert type="error" v-show="appStore.loginError">
                     {{ appStore.loginError }}
                 </v-alert>
-                <v-icon x-large>mdi-lock</v-icon>
+                <v-icon x-large>{{ mdiLock }}</v-icon>
                 <h2>Login</h2>
                 <form>
                     <v-text-field
@@ -357,6 +357,33 @@
 <script lang="ts" setup>
 import { ref, computed, watch, onErrorCaptured, onMounted, onUnmounted } from 'vue';
 
+import {
+    mdiAutorenew,
+    mdiBallotOutline,
+    mdiBell,
+    mdiBroom,
+    mdiCalendarOutline,
+    mdiCheck,
+    mdiChevronDoubleLeft,
+    mdiChevronDoubleRight,
+    mdiCloudUploadOutline,
+    mdiCogOutline,
+    mdiExclamationThick,
+    mdiFileDocumentOutline,
+    mdiFileMultipleOutline,
+    mdiFileOutline,
+    mdiFolder,
+    mdiFolderOpen,
+    mdiHelp,
+    mdiHomeOutline,
+    mdiInformationOutline,
+    mdiLock,
+    mdiLogout,
+    mdiMagnify,
+    mdiPencil,
+    mdiPencilBoxOutline,
+    mdiUpload,
+} from '@mdi/js';
 
 import { useAppStore } from '@/stores/app';
 
@@ -680,11 +707,11 @@ function uploadStatusColor(status: string) {
 }
 
 function uploadStatusIcon(status: string) {
-    if      (status === 'in-progress') { return 'mdi-autorenew';         }
-    else if (status === 'error')       { return 'mdi-exclamation-thick'; }
-    else if (status === 'success')     { return 'mdi-check';             }
+    if      (status === 'in-progress') { return mdiAutorenew;        }
+    else if (status === 'error')       { return mdiExclamationThick; }
+    else if (status === 'success')     { return mdiCheck;            }
     else {
-        return 'mdi-help';
+        return mdiHelp;
     }
 }
 
