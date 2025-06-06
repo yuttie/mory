@@ -262,10 +262,10 @@ function onKeydown(e: KeyboardEvent) {
 }
 
 function onWheel(e: WheelEvent) {
-    if (e.deltaY < 0) {
+    if (e.deltaX < 0) {
         (calendar.value as any).prev();
     }
-    else if (e.deltaY > 0) {
+    else if (e.deltaX > 0) {
         (calendar.value as any).next();
     }
 }
