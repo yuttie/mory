@@ -265,6 +265,9 @@ function onKeydown(e: KeyboardEvent) {
     else if (e.key === 'PageUp') {
         (calendar.value as any).next(12);
     }
+    else if (e.key === 'Home') {
+        setToday();
+    }
 }
 
 function onWheel(e: WheelEvent) {
