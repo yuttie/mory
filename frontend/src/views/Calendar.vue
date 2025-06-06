@@ -259,6 +259,12 @@ function onKeydown(e: KeyboardEvent) {
     else if (e.key === 'ArrowRight') {
         (calendar.value as any).next();
     }
+    else if (e.key === 'PageDown') {
+        (calendar.value as any).prev(12);
+    }
+    else if (e.key === 'PageUp') {
+        (calendar.value as any).next(12);
+    }
 }
 
 function onWheel(e: WheelEvent) {
