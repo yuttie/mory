@@ -62,28 +62,28 @@
                 >
                     <v-sheet outlined class="flex-grow-0">
                         <v-btn icon tile v-on:click="insertText('## ')">
-                            <v-icon>mdi-format-header-2</v-icon>
+                            <v-icon>{{ mdiFormatHeader2 }}</v-icon>
                         </v-btn>
                         <v-btn icon tile v-on:click="insertText('* ')">
-                            <v-icon>mdi-format-list-bulleted</v-icon>
+                            <v-icon>{{ mdiFormatListBulleted }}</v-icon>
                         </v-btn>
                         <v-btn icon tile v-on:click="encloseText('*', '*')">
-                            <v-icon>mdi-format-italic</v-icon>
+                            <v-icon>{{ mdiFormatItalic }}</v-icon>
                         </v-btn>
                         <v-btn icon tile v-on:click="encloseText('**', '**')">
-                            <v-icon>mdi-format-bold</v-icon>
+                            <v-icon>{{ mdiFormatBold }}</v-icon>
                         </v-btn>
                         <v-btn icon tile v-on:click="encloseText('`', '`')">
-                            <v-icon>mdi-xml</v-icon>
+                            <v-icon>{{ mdiXml }}</v-icon>
                         </v-btn>
                         <v-btn icon tile v-on:click="encloseText('> ', '')">
-                            <v-icon>mdi-format-quote-close</v-icon>
+                            <v-icon>{{ mdiFormatQuoteClose }}</v-icon>
                         </v-btn>
                         <v-btn icon tile v-on:click="encloseText('[', ']()')">
-                            <v-icon>mdi-link-variant</v-icon>
+                            <v-icon>{{ mdiLinkVariant }}</v-icon>
                         </v-btn>
                         <v-btn icon tile v-on:click="formatTable">
-                            <v-icon>mdi-table-check</v-icon>
+                            <v-icon>{{ mdiTableCheck }}</v-icon>
                         </v-btn>
                     </v-sheet>
                     <template v-if="useSimpleEditor">
@@ -127,14 +127,14 @@
                                 icon
                                 tile
                                 v-on:click.stop="miniSubSidebar = true"
-                            ><v-icon>mdi-chevron-double-right</v-icon></v-btn>
+                            ><v-icon>{{ mdiChevronDoubleRight }}</v-icon></v-btn>
                         </v-list-item>
                         <v-list-item
                             v-if="miniSubSidebar"
                             v-on:click="miniSubSidebar = false"
                         >
                             <v-list-item-icon>
-                                <v-icon>mdi-chevron-double-left</v-icon>
+                                <v-icon>{{ mdiChevronDoubleLeft }}</v-icon>
                             </v-list-item-icon>
                             <v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content>
                         </v-list-item>
@@ -163,7 +163,7 @@
                                                     <v-tooltip bottom color="success">
                                                         <template v-slot:activator="{ on, attrs }">
                                                             <v-icon color="success" v-bind="attrs" v-on="on">
-                                                                mdi-check
+                                                                {{ mdiCheck }}
                                                             </v-icon>
                                                         </template>
                                                         <span>YAML parse succeeded</span>
@@ -172,7 +172,7 @@
                                                         <v-tooltip bottom color="success">
                                                             <template v-slot:activator="{ on, attrs }">
                                                                 <v-icon color="success" v-bind="attrs" v-on="on">
-                                                                    mdi-check
+                                                                    {{ mdiCheck }}
                                                                 </v-icon>
                                                             </template>
                                                             <span>Schema validation succeeded</span>
@@ -182,7 +182,7 @@
                                                         <v-tooltip bottom color="error">
                                                             <template v-slot:activator="{ on, attrs }">
                                                                 <v-icon color="error" v-bind="attrs" v-on="on">
-                                                                    mdi-alert
+                                                                    {{ mdiAlert }}
                                                                 </v-icon>
                                                             </template>
                                                             <span>Schema validation failed</span>
@@ -193,7 +193,7 @@
                                                     <v-tooltip bottom color="error">
                                                         <template v-slot:activator="{ on, attrs }">
                                                             <v-icon color="error" v-bind="attrs" v-on="on">
-                                                                mdi-alert
+                                                                {{ mdiAlert }}
                                                             </v-icon>
                                                         </template>
                                                         <span>YAML parse failed</span>
@@ -255,9 +255,9 @@
                                     color="primary"
                                     v-bind:value="selectedMode"
                                 >
-                                    <v-list-item v-on:click="editorIsVisible = false; viewerIsVisible = true; "><v-list-item-icon><v-icon dense>mdi-file-document     </v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
-                                    <v-list-item v-on:click="editorIsVisible = true;  viewerIsVisible = true; "><v-list-item-icon><v-icon dense>mdi-file-document-edit</v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
-                                    <v-list-item v-on:click="editorIsVisible = true;  viewerIsVisible = false;"><v-list-item-icon><v-icon dense>mdi-pencil            </v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
+                                    <v-list-item v-on:click="editorIsVisible = false; viewerIsVisible = true; "><v-list-item-icon><v-icon dense>{{ mdiFileDocument     }}</v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
+                                    <v-list-item v-on:click="editorIsVisible = true;  viewerIsVisible = true; "><v-list-item-icon><v-icon dense>{{ mdiFileDocumentEdit }}</v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
+                                    <v-list-item v-on:click="editorIsVisible = true;  viewerIsVisible = false;"><v-list-item-icon><v-icon dense>{{ mdiPencil           }}</v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
                                 </v-list-item-group>
                             </v-list>
 
@@ -267,22 +267,22 @@
                                 <v-list-item v-on:click="lockScroll = !lockScroll;">
                                     <v-list-item-icon>
                                         <template v-if="lockScroll">
-                                            <v-icon dense>mdi-lock</v-icon>
+                                            <v-icon dense>{{ mdiLock }}</v-icon>
                                         </template>
                                         <template v-else>
-                                            <v-icon dense>mdi-lock-open</v-icon>
+                                            <v-icon dense>{{ mdiLockOpen }}</v-icon>
                                         </template>
                                     </v-list-item-icon>
                                     <v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content>
                                 </v-list-item>
 
                                 <v-list-item v-on:click="notifyUpstreamState">
-                                    <v-list-item-icon><v-icon dense>mdi-compare-vertical</v-icon></v-list-item-icon>
+                                    <v-list-item-icon><v-icon dense>{{ mdiCompareVertical }}</v-icon></v-list-item-icon>
                                     <v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content>
                                 </v-list-item>
-                                <v-list-item                                            v-bind:disabled="needSave"         v-bind:style="needSave ? { opacity: '0.3' } : {}" v-on:click="reload"                                      ><v-list-item-icon><v-icon dense>mdi-reload      </v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
-                                <v-list-item color="pink" v-bind:input-value="needSave" v-bind:disabled="!needSave"        v-bind:style="!needSave ? { opacity: '0.3' } : {}" v-bind:loading="isSaving" v-on:click.stop="saveIfNeeded"><v-list-item-icon><v-icon dense>mdi-content-save</v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
-                                <v-list-item link         id="rename-toggle"            v-bind:disabled="!noteHasUpstream" v-bind:style="!noteHasUpstream ? { opacity: '0.3' } : {}" v-bind:loading="isRenaming"                      ><v-list-item-icon><v-icon dense>mdi-rename-box  </v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
+                                <v-list-item                                            v-bind:disabled="needSave"         v-bind:style="needSave ? { opacity: '0.3' } : {}" v-on:click="reload"                                      ><v-list-item-icon><v-icon dense>{{ mdiReload      }}</v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
+                                <v-list-item color="pink" v-bind:input-value="needSave" v-bind:disabled="!needSave"        v-bind:style="!needSave ? { opacity: '0.3' } : {}" v-bind:loading="isSaving" v-on:click.stop="saveIfNeeded"><v-list-item-icon><v-icon dense>{{ mdiContentSave }}</v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
+                                <v-list-item link         id="rename-toggle"            v-bind:disabled="!noteHasUpstream" v-bind:style="!noteHasUpstream ? { opacity: '0.3' } : {}" v-bind:loading="isRenaming"                      ><v-list-item-icon><v-icon dense>{{ mdiRenameBox   }}</v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
                             </v-list>
                         </v-navigation-drawer>
                     </v-row>
@@ -343,6 +343,30 @@
 
 <script lang="ts" setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
+
+import {
+    mdiAlert,
+    mdiCheck,
+    mdiChevronDoubleLeft,
+    mdiChevronDoubleRight,
+    mdiCompareVertical,
+    mdiContentSave,
+    mdiFileDocument,
+    mdiFileDocumentEdit,
+    mdiFormatBold,
+    mdiFormatHeader2,
+    mdiFormatItalic,
+    mdiFormatListBulleted,
+    mdiFormatQuoteClose,
+    mdiLinkVariant,
+    mdiLock,
+    mdiLockOpen,
+    mdiPencil,
+    mdiReload,
+    mdiRenameBox,
+    mdiTableCheck,
+    mdiXml,
+} from '@mdi/js';
 
 import { useRouter, useRoute } from '@/composables/vue-router';
 import { useVuetify } from '@/composables/vuetify';

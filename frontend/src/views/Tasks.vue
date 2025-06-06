@@ -14,7 +14,7 @@
                         v-bind="{ ...attrs, class: { 'pa-0': !$vuetify.breakpoint.mdAndUp } }"
                         v-on="on"
                     >
-                        <v-icon>mdi-checkbox-marked-circle-plus-outline</v-icon>
+                        <v-icon>{{ mdiCheckboxMarkedCirclePlusOutline }}</v-icon>
                         <span v-if="$vuetify.breakpoint.mdAndUp">Task</span>
                     </v-btn>
                 </template>
@@ -27,7 +27,7 @@
                             v-on:click="add(false)"
                             v-bind:disabled="newTask.name.length === 0"
                         >
-                            <v-icon>mdi-plus-box-multiple-outline</v-icon>
+                            <v-icon>{{ mdiPlusBoxMultipleOutline }}</v-icon>
                             <span v-if="$vuetify.breakpoint.smAndUp">Add & New</span>
                         </v-btn>
                         <v-btn
@@ -36,13 +36,13 @@
                             v-on:click="add"
                             v-bind:disabled="newTask.name.length === 0"
                         >
-                            <v-icon>mdi-plus-box-outline</v-icon>
+                            <v-icon>{{ mdiPlusBoxOutline }}</v-icon>
                             <span v-if="$vuetify.breakpoint.smAndUp">Add</span>
                         </v-btn>
                         <v-btn
                             icon
                             v-on:click="closeNewTaskDialog"
-                        ><v-icon>mdi-close</v-icon></v-btn>
+                        ><v-icon>{{ mdiClose }}</v-icon></v-btn>
                     </v-card-actions>
                     <v-card-text>
                         <TaskEditor v-model="newTask" v-bind:knownTags="knownTags"></TaskEditor>
@@ -63,7 +63,7 @@
                         v-bind="{ ...attrs, class: { 'pa-0': !$vuetify.breakpoint.mdAndUp } }"
                         v-on="on"
                     >
-                        <v-icon>mdi-format-list-group-plus</v-icon>
+                        <v-icon>{{ mdiFormatListGroupPlus }}</v-icon>
                         <span v-if="$vuetify.breakpoint.mdAndUp">Group</span>
                     </v-btn>
                 </template>
@@ -76,13 +76,13 @@
                             v-on:click="addGroup"
                             v-bind:disabled="newGroupName.length === 0 || newGroupFilter.length === 0"
                         >
-                            <v-icon>mdi-plus-box-outline</v-icon>
+                            <v-icon>{{ mdiPlusBoxOutline }}</v-icon>
                             <span v-if="$vuetify.breakpoint.smAndUp">Add</span>
                         </v-btn>
                         <v-btn
                             icon
                             v-on:click="closeNewGroupDialog"
-                        ><v-icon>mdi-close</v-icon></v-btn>
+                        ><v-icon>{{ mdiClose }}</v-icon></v-btn>
                     </v-card-actions>
                     <v-card-text>
                         <v-text-field
@@ -107,7 +107,7 @@
                 v-bind:class="{ 'pa-0': !$vuetify.breakpoint.mdAndUp }"
                 v-on:click="collectUndone"
             >
-                <v-icon>mdi-checkbox-multiple-blank-outline</v-icon>
+                <v-icon>{{ mdiCheckboxMultipleBlankOutline }}</v-icon>
                 <span v-if="$vuetify.breakpoint.mdAndUp">Collect Undone</span>
             </v-btn>
 
@@ -125,7 +125,7 @@
                 v-bind:class="{ 'pa-0': !$vuetify.breakpoint.mdAndUp }"
                 v-on:click="loadIfNotEditing"
             >
-                <v-icon>mdi-reload</v-icon>
+                <v-icon>{{ mdiReload }}</v-icon>
                 <span v-if="$vuetify.breakpoint.mdAndUp">Reload</span>
             </v-btn>
 
@@ -161,7 +161,7 @@
                         text
                         v-on:click="openNewTaskDialogWithSelection"
                     >
-                        <v-icon>mdi-plus-box-outline</v-icon>
+                        <v-icon>{{ mdiPlusBoxOutline }}</v-icon>
                         <span v-if="$vuetify.breakpoint.smAndUp">Add similar...</span>
                     </v-btn>
                     <v-btn
@@ -169,7 +169,7 @@
                         color="error"
                         v-on:click="removeSelected"
                     >
-                        <v-icon>mdi-delete</v-icon>
+                        <v-icon>{{ mdiDelete }}</v-icon>
                         <span v-if="$vuetify.breakpoint.smAndUp">Delete</span>
                     </v-btn>
                     <v-btn
@@ -178,13 +178,13 @@
                         v-on:click="updateSelected"
                         v-bind:disabled="editTarget.name.length === 0"
                     >
-                        <v-icon>mdi-content-save</v-icon>
+                        <v-icon>{{ mdiContentSave }}</v-icon>
                         <span v-if="$vuetify.breakpoint.smAndUp">Save</span>
                     </v-btn>
                     <v-btn
                         icon
                         v-on:click="closeEditTaskDialog"
-                    ><v-icon>mdi-close</v-icon></v-btn>
+                    ><v-icon>{{ mdiClose }}</v-icon></v-btn>
                 </v-card-actions>
                 <v-card-text>
                     <TaskEditor v-model="editTarget" v-bind:knownTags="knownTags"></TaskEditor>
@@ -212,7 +212,7 @@
                                     class="px-2"
                                     v-on:click="sortDailyTasks(date)"
                                 >
-                                    <v-icon small>mdi-sort-bool-ascending-variant</v-icon>
+                                    <v-icon small>{{ mdiSortBoolAscendingVariant }}</v-icon>
                                 </v-btn>
                                 <v-btn
                                     text
@@ -222,7 +222,7 @@
                                     class="px-2"
                                     v-on:click="moveUndoneToToday(date)"
                                 >
-                                    <v-icon small>mdi-inbox-arrow-down</v-icon>
+                                    <v-icon small>{{ mdiInboxArrowDown }}</v-icon>
                                 </v-btn>
                             </div>
                             <draggable
@@ -318,6 +318,20 @@
 <script lang="ts" setup>
 import { ref, computed, onMounted, onUnmounted, set, del } from 'vue';
 import type { Ref } from 'vue';
+
+import {
+    mdiCheckboxMarkedCirclePlusOutline,
+    mdiCheckboxMultipleBlankOutline,
+    mdiClose,
+    mdiContentSave,
+    mdiDelete,
+    mdiFormatListGroupPlus,
+    mdiInboxArrowDown,
+    mdiPlusBoxMultipleOutline,
+    mdiPlusBoxOutline,
+    mdiReload,
+    mdiSortBoolAscendingVariant,
+} from '@mdi/js';
 
 import TaskEditor from '@/components/TaskEditor.vue';
 import TaskListItem from '@/components/TaskListItem.vue';
