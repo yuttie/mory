@@ -1778,8 +1778,15 @@ $navigation-drawer-width: 56px;
 }
 
 .panes.both {
-    .editor-pane {
-        border-right: thin solid #ccc;
+    &:not(.mdAndUp) {
+        .editor-pane {
+            border-bottom: thin solid #ccc;
+        }
+    }
+    &.mdAndUp {
+        .editor-pane {
+            border-right: thin solid #ccc;
+        }
     }
 }
 
