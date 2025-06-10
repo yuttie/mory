@@ -140,8 +140,8 @@ import dayjs from 'dayjs';
 
 // Props
 const props = defineProps<{
-    value?: Task;
-    knownTags?: [string, number][];
+    value: Task;
+    knownTags: [string, number][];
 }>();
 
 // Emits
