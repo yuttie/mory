@@ -1,5 +1,5 @@
 <template>
-  <img v-if="email" class="gravatar" v-bind:src="url">
+  <img class="gravatar" v-bind:src="url">
 </template>
 
 <script lang="ts" setup>
@@ -9,16 +9,16 @@ import md5 from 'md5';
 
 // Props
 const props = defineProps<{
-  email?: string | null;
+  email?: string;
 }>();
 
 // Computed properties
 const emailHash = computed(() => {
-  if (props.email) {
+  if (props.email !== undefined) {
     return md5(props.email);
   }
   else {
-    return null;
+    return "";
   }
 });
 
