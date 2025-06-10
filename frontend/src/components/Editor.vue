@@ -13,8 +13,8 @@ import ace from 'ace-builds';
 
 // Props
 const props = defineProps<{
-  value?: string;
-  mode?: string;
+  value: string;
+  mode: string;
 }>();
 
 // Emits

@@ -68,7 +68,7 @@ dayjs.extend(relativeTime, {
 
 // Props
 const props = defineProps<{
-  value?: Task;
+  value: Task;
 }>();
 
 // Emits
