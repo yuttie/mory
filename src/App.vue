@@ -355,7 +355,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, watch, onErrorCaptured, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 
 import {
     mdiAutorenew,
@@ -517,30 +517,7 @@ const noteTreeRoot = computed(() => {
 });
 
 // Lifecycle hooks
-onErrorCaptured((error: unknown, _instance: ComponentPublicInstance | null, _info: string): boolean | void => {
-    errors.value.push({
-        id: crypto.randomUUID(),
-        message: String(error),
-    });
-    return false;
-});
 onMounted(() => {
-    // Capture uncaught errors
-    window.addEventListener("error", (event: ErrorEvent) => {
-        errors.value.push({
-            id: crypto.randomUUID(),
-            message: event.error ? event.error.toString() : event.message,
-        });
-    });
-
-    // Capture unhandled promise rejections
-    window.addEventListener("unhandledrejection", (event: PromiseRejectionEvent) => {
-        errors.value.push({
-            id: crypto.randomUUID(),
-            message: String(event.reason),
-        });
-    });
-
     loadCustomCss();
 
     (fileInputEl.value as HTMLInputElement).addEventListener('change', (e: any) => {
