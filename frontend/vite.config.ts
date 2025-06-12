@@ -45,5 +45,8 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 8080,
     },
+    build: {
+      sourcemap: true,
+    },
   };
 });
