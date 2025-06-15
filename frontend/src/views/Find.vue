@@ -145,7 +145,7 @@ const errorText = ref('');
 const selected = ref([] as any[]);
 const showingTagList = ref(false);
 
-// Refs
+// Template Refs
 const queryEl = ref(null);
 
 // Computed properties

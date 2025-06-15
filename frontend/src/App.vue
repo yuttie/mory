@@ -418,7 +418,7 @@ const noteTreeOpen = ref([]);
 const noteTreeActive = ref([]);
 const errors = ref([]);
 
-// Refs
+// Template Refs
 const app = ref(null);
 const fileInputEl = ref(null);
 const routerViewEl = ref(null);

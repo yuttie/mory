@@ -423,7 +423,7 @@ const error = ref(false);
 const errorText = ref('');
 const renderTimeoutId = ref(null as null | number);
 
-// Refs
+// Template Refs
 const editor = ref(null);
 const shadowDomRootElement = ref(null);
 const shadowRoot = ref(null);
