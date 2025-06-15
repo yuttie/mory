@@ -137,7 +137,7 @@ const selectedEventRenderedNote = ref(null);
 const selectedElement = ref(null);
 const selectedOpen = ref(false);
 
-// Refs
+// Template Refs
 const calendar = ref(null);
 
 // Computed properties

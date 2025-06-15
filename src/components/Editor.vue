@@ -27,7 +27,7 @@ const emit = defineEmits<{
 const editor: Ref<any> = ref(null);  // eslint-disable-line @typescript-eslint/no-explicit-any
 const ignoreNextChangeScrollTopEvent = ref(false);
 
-// Refs
+// Template Refs
 const editorEl = ref(null);
 
 // Lifecycle hooks
