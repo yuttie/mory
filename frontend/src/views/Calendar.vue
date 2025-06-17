@@ -97,7 +97,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import type { Ref } from 'vue';
 
-import { useRouter, useRoute } from '@/composables/vue-router';
+import { useRoute, useRouter } from 'vue-router/composables';
 
 import {
     mdiCheck,
