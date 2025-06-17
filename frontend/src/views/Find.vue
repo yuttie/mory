@@ -471,22 +471,6 @@ watch(queryText, (q: string | null) => {
         });
     }
 });
-
-// Expose properties
-defineExpose({
-    load,
-    handleKeydown,
-    clearQuery,
-    handleTagClick,
-    selectSingleTag,
-    addTag,
-    removeTag,
-    toggleTag,
-    tagOutlined,
-    tagColor,
-    formatFileSize,
-    deleteSelected,
-});
 </script>
 
 <style scoped lang="scss">

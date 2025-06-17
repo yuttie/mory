@@ -175,11 +175,6 @@ function changeSortOrder(category: string, kind: strig) {
 
   sortOrders.value = newSortOrders;
 }
-
-// Expose properties
-defineExpose({
-  load,
-});
 </script>
 
 <style scoped lang="scss">

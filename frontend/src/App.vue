@@ -770,22 +770,6 @@ async function populateTagChildren(item: TreeNode) {
 watch(miniMainSidebar, (newMiniMainSidebar: boolean) => {
   saveConfigValue("mini-main-sidebar", newMiniMainSidebar);
 });
-
-// Expose properties
-defineExpose({
-    requestNotificationPermission,
-    tokenExpired,
-    loadTemplates,
-    loadCustomCss,
-    unloadCustomCss,
-    cleanUploadList,
-    uploadStatusColor,
-    uploadStatusIcon,
-    chooseFile,
-    uploadFiles,
-    copyToClipboard,
-    populateTagChildren,
-});
 </script>
 
 <style scoped lang="scss">

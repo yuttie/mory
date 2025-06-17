@@ -347,17 +347,6 @@ watch(() => props.mode, (mode: string) => {
     });
   }
 });
-
-// Expose properties
-defineExpose({
-  focus,
-  blur,
-  resize,
-  scrollTo,
-  setTheme,
-  setKeybinding,
-  adjustKeybindings,
-});
 </script>
 
 <style scoped lang="scss">

@@ -408,20 +408,6 @@ watch(selectedEvent, async (newValue) => {
         selectedEventRenderedNote.value = renderedHtml;
     }
 });
-
-// Expose properties
-defineExpose({
-    onCalendarInput,
-    onKeydown,
-    onWheel,
-    load,
-    setToday,
-    viewDay,
-    showEvent,
-    getEventEndTime,
-    getEventColor,
-    getEventTextColor,
-});
 </script>
 
 <style scoped lang="scss">
