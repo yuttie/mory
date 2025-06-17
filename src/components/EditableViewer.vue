@@ -368,7 +368,7 @@ import {
     mdiXml,
 } from '@mdi/js';
 
-import { useRouter, useRoute } from '@/composables/vue-router';
+import { useRoute, useRouter } from 'vue-router/composables';
 import { useVuetify } from '@/composables/vuetify';
 import { useAppStore } from '@/stores/app';
 
