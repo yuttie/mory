@@ -865,28 +865,6 @@ async function addGroup() {
     newGroupName.value = '';
     newGroupFilter.value = '';
 }
-
-// Expose properties
-defineExpose({
-    onDraggableInput,
-    isToday,
-    select,
-    showEditTaskDialog,
-    closeNewTaskDialog,
-    closeNewGroupDialog,
-    closeEditTaskDialog,
-    openNewTaskDialogWithSelection,
-    sortDailyTasks,
-    moveUndoneToToday,
-    collectUndone,
-    loadIfNotEditing,
-    load,
-    save,
-    add,
-    updateSelected,
-    removeSelected,
-    addGroup,
-});
 </script>
 
 <style scoped lang="scss">

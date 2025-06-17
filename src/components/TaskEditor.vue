@@ -173,12 +173,6 @@ function removeTag(tag: string) {
     // FIXME We should emit an event instead like we do in template for bidirectional binding
     props.value.tags.splice(props.value.tags.indexOf(tag), 1);  // eslint-disable-line vue/no-mutating-props
 }
-
-// Expose properties
-defineExpose({
-    setScheduleToday,
-    removeTag,
-});
 </script>
 
 <style scoped lang="scss">

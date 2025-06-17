@@ -447,12 +447,6 @@ watch(currentEditorKeybinding, (newEditorKeybinding: string) => {
 watch(currentHighlightjsTheme, (newHighlightjsTheme: string) => {
   saveConfigValue('highlightjs-theme', newHighlightjsTheme);
 });
-
-// Expose properties
-defineExpose({
-  loadDefault,
-  saveAsDefault,
-});
 </script>
 
 <style scoped lang="scss">
