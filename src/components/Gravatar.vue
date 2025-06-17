@@ -9,12 +9,12 @@ import md5 from 'md5';
 
 // Props
 const props = defineProps<{
-  email?: string;
+  email: string | null;
 }>();
 
 // Computed properties
 const emailHash = computed(() => {
-  if (props.email !== undefined) {
+  if (props.email !== null) {
     return md5(props.email);
   }
   else {

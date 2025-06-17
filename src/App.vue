@@ -450,7 +450,7 @@ const username = computed(() => {
     }
 });
 
-const email = computed(() => {
+const email = computed((): string | null => {
     if (decodedToken.value) {
         return decodedToken.value.email;
     }
