@@ -90,6 +90,13 @@
             </v-card>
         </v-menu>
         <v-snackbar v-model="error" color="error" top timeout="5000">{{ errorText }}</v-snackbar>
+        <v-alert type="error" v-if="eventErrors.length > 0">
+            <ul>
+                <li
+                    v-for="[prop, value, eventName, entryPath, entryTitle] of eventErrors"
+                >Invalid event {{ prop }} value "{{ value }}" found in "{{ eventName }}" defined in <router-link v-bind:to="{ path: `/note/${entryPath}` }">{{ entryTitle ?? entryPath }}</router-link></li>
+            </ul>
+        </v-alert>
     </div>
 </template>
 
@@ -130,6 +137,7 @@ const entries: Ref<ListEntry[]> = ref([]);
 const isLoading = ref(false);
 const error = ref(false);
 const errorText = ref('');
+const eventErrors: Ref<[string, any, string, string, string][]> = ref([]);
 const calendarType = ref('month');
 const calendarCursor = ref(dayjs().format('YYYY-MM-DD'));
 const selectedEvent = ref(null);
@@ -194,6 +202,7 @@ const events = computed(() => {
         }
     }
     const events = [];
+    const newEventErrors = [];
     for (const entry of entries.value) {
         if (entry.metadata !== null) {
             // Choose a default color for the note based on its path
@@ -205,12 +214,12 @@ const events = computed(() => {
                         if (isMetadataEventMultiple(eventDetail)) {
                             for (const time of eventDetail.times) {
                                 if (!dayjs(time.start).isValid()) {
-                                    console.error("Invalid event start value \"%s\" found in \"%s\" defined in \"%s\" (title: \"%s\")", time.start, eventName, entry.path, entry.title);
+                                    newEventErrors.push(['start', time.start, eventName, entry.path, entry.title]);
                                     continue;
                                 }
                                 const normalizedEndTime = normalizeEndTime(time.end || eventDetail.end, time.start);
                                 if (normalizedEndTime === null) {
-                                    console.error("Invalid event end value \"%s\" found in \"%s\" defined in \"%s\" (title: \"%s\")", time.end, eventName, entry.path, entry.title);
+                                    newEventErrors.push(['end', time.end, eventName, entry.path, entry.title]);
                                     continue;
                                 }
                                 time.end = normalizedEndTime;
@@ -230,12 +239,12 @@ const events = computed(() => {
                         }
                         else {
                             if (!dayjs(eventDetail.start).isValid()) {
-                                console.error("Invalid event start value \"%s\" found in \"%s\" defined in \"%s\" (title: \"%s\")", eventDetail.start, eventName, entry.path, entry.title);
+                                newEventErrors.push(['start', eventDetail.start, eventName, entry.path, entry.title]);
                                 continue;
                             }
                             const normalizedEndTime = normalizeEndTime(eventDetail.end, eventDetail.start);
                             if (normalizedEndTime === null) {
-                                console.error("Invalid event end value \"%s\" found in \"%s\" defined in \"%s\" (title: \"%s\")", eventDetail.end, eventName, entry.path, entry.title);
+                                newEventErrors.push(['end', eventDetail.end, eventName, entry.path, entry.title]);
                                 continue;
                             }
                             eventDetail.end = normalizedEndTime;
@@ -257,6 +266,7 @@ const events = computed(() => {
             }
         }
     }
+    eventErrors.value = newEventErrors;
     return events;
 });
 
