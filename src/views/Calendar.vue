@@ -142,8 +142,12 @@ const calendar = ref(null);
 
 // Computed properties
 const events = computed(() => {
-    function normalizeEndTime(end: any, start: any): any {
-        const formatDateTime = (datetime) => {
+    function normalizeEndTime(end: string | undefined, start: string): string | undefined | null {
+        if (end === undefined) {
+            return undefined;
+        }
+
+        const formatDateTime = (datetime: dayjs.Dayjs) => {
             if (datetime.second() === 0) {
                 return datetime.format('YYYY-MM-DD HH:mm');
             }
@@ -155,12 +159,16 @@ const events = computed(() => {
             /^\+([\d.]+) *(y|M|w|d|h|m|s|ms)$/;
         const durationLongRegexp =
             /^\+([\d.]+) *(years?|months?|weeks?|days?|hours?|minutes?|seconds?|milliseconds?)$/i;
-        const match = durationShortRegexp.exec(end || '') || durationLongRegexp.exec(end || '');
+
+        const match = durationShortRegexp.exec(end) || durationLongRegexp.exec(end);
         if (match === null) {
+            // `end` is not in duration format
             if (dayjs(end).isValid()) {
+                // Return it as is if it's in valid format
                 return end;
             }
             else {
+                // Try to prefix it with start date
                 const prefixedEnd = dayjs(start).format('YYYY-MM-DD') + ' ' + end;
                 const parsedEnd = dayjs(prefixedEnd);
                 if (parsedEnd.isValid()) {
@@ -172,12 +180,14 @@ const events = computed(() => {
                     }
                 }
                 else {
-                    throw new Error(`Event end value is invalid: ${end}`);
+                    // `end` is invalid
+                    return null;
                 }
             }
         }
         else {
-            // The end time is calculated based on the duration from the start time
+            // `end` is in duration format
+            // Calculate actual end time based on the duration from the start time
             const amount = parseFloat(match[1]);
             const unit = match[2] as dayjs.ManipulateType;
             return formatDateTime(dayjs(start).add(amount, unit));
@@ -194,7 +204,16 @@ const events = computed(() => {
                         // If eventDetail has the 'times' property and it is an array
                         if (isMetadataEventMultiple(eventDetail)) {
                             for (const time of eventDetail.times) {
-                                time.end = normalizeEndTime(time.end || eventDetail.end, time.start);
+                                if (!dayjs(time.start).isValid()) {
+                                    console.error("Invalid event start value \"%s\" found in \"%s\" defined in \"%s\" (title: \"%s\")", time.start, eventName, entry.path, entry.title);
+                                    continue;
+                                }
+                                const normalizedEndTime = normalizeEndTime(time.end || eventDetail.end, time.start);
+                                if (normalizedEndTime === null) {
+                                    console.error("Invalid event end value \"%s\" found in \"%s\" defined in \"%s\" (title: \"%s\")", time.end, eventName, entry.path, entry.title);
+                                    continue;
+                                }
+                                time.end = normalizedEndTime;
                                 const event = {
                                     name: eventName,
                                     start: time.start,
@@ -210,7 +229,16 @@ const events = computed(() => {
                             }
                         }
                         else {
-                            eventDetail.end = normalizeEndTime(eventDetail.end, eventDetail.start);
+                            if (!dayjs(eventDetail.start).isValid()) {
+                                console.error("Invalid event start value \"%s\" found in \"%s\" defined in \"%s\" (title: \"%s\")", eventDetail.start, eventName, entry.path, entry.title);
+                                continue;
+                            }
+                            const normalizedEndTime = normalizeEndTime(eventDetail.end, eventDetail.start);
+                            if (normalizedEndTime === null) {
+                                console.error("Invalid event end value \"%s\" found in \"%s\" defined in \"%s\" (title: \"%s\")", eventDetail.end, eventName, entry.path, entry.title);
+                                continue;
+                            }
+                            eventDetail.end = normalizedEndTime;
                             const event = {
                                 name: eventName,
                                 start: eventDetail.start,
