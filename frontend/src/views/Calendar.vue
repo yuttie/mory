@@ -94,7 +94,7 @@
             <ul>
                 <li
                     v-for="[prop, value, eventName, entryPath, entryTitle] of eventErrors"
-                >Invalid event {{ prop }} value "{{ value }}" found in "{{ eventName }}" defined in <router-link v-bind:to="{ path: `/note/${entryPath}` }">{{ entryTitle ?? entryPath }}</router-link></li>
+                >Invalid event {{ prop }} value "{{ value }}" of "{{ eventName }}" defined in <router-link v-bind:to="{ path: `/note/${entryPath}` }">{{ entryTitle ?? entryPath }}</router-link></li>
             </ul>
         </v-alert>
     </div>
