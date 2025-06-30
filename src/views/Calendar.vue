@@ -322,24 +322,24 @@ function load() {
         .then(res => {
             entries.value = res.data;
             isLoading.value = false;
-        }).catch(error => {
-            if (error.response) {
-                if (error.response.status === 401) {
+        }).catch(err => {
+            if (err.response) {
+                if (err.response.status === 401) {
                     // Unauthorized
                     emit('tokenExpired', () => load());
                 }
                 else {
                     error.value = true;
-                    errorText.value = error.response;
+                    errorText.value = err.response;
                     isLoading.value = false;
-                    throw error;
+                    throw err;
                 }
             }
             else {
                 error.value = true;
-                errorText.value = error.toString();
+                errorText.value = err.toString();
                 isLoading.value = false;
-                throw error;
+                throw err;
             }
         });
 }
