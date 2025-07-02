@@ -14,12 +14,13 @@ function updateEvents() {
     })
     .then((notes) => {
       self.events = [];
+      const now = Date.now();
       for (const note of notes) {
         if (note.metadata && note.metadata.events) {
           for (const [name, event] of Object.entries(note.metadata.events)) {
             if (event.start) {
               const time = Date.parse(event.start);
-              if (time >= Date.now()) {
+              if (time >= now) {
                 self.events.push([time, name]);
               }
             }
@@ -27,7 +28,7 @@ function updateEvents() {
               for (const instance of event.times) {
                 if (instance.start) {
                   const time = Date.parse(instance.start);
-                  if (time >= Date.now()) {
+                  if (time >= now) {
                     self.events.push([time, name]);
                   }
                 }
