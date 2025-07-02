@@ -52,7 +52,7 @@ function checkEvents() {
       }, remainingTime);
     }
   }
-  self.checkEventsThreadc = setTimeout(checkEvents, 5 * 1000);
+  self.checkEventsThread = setTimeout(checkEvents, 5 * 1000);
 }
 
 self.addEventListener('activate', (event) => {
