@@ -47,7 +47,7 @@ function checkEvents() {
     if (0 <= remainingTime && remainingTime < 5 * 1000) {
       setTimeout(() => {
         self.registration.showNotification(name, {
-          icon: 'favicon.png',
+          icon: import.meta.env.VITE_APP_APPLICATION_ROOT + 'favicon.png',
         });
       }, remainingTime);
     }
