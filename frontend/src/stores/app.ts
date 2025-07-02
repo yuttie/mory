@@ -69,7 +69,7 @@ export const useAppStore = defineStore('app', () => {
   // Service worker
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register(`${import.meta.env.BASE_URL}service-worker.js`).then((registration) => {
-      console.log('Service worker registration succeeded:', registration);
+      console.log('Service worker registration succeeded.');
     }).catch((error) => {
       console.error(`Service worker registration failed: ${error}`);
     });
