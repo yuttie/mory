@@ -1,4 +1,4 @@
-#!/usr/bin/sh
+#!/bin/sh
 set -eu
 
 find /usr/share/nginx/html -type f -exec sed \
