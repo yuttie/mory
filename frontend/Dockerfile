@@ -1,5 +1,5 @@
 # build stage
-FROM node:20-alpine as build-stage
+FROM node:20-alpine AS build-stage
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm install
@@ -9,7 +9,7 @@ RUN VITE_APP_APPLICATION_ROOT="VITE_APP_APPLICATION_ROOT_VALUE_TO_BE_REPLACED_LA
     npm run build
 
 # production stage
-FROM nginx:stable-alpine as production-stage
+FROM nginx:stable-alpine AS production-stage
 RUN rm /etc/nginx/conf.d/default.conf
 COPY docker/nginx-default.conf /etc/nginx/conf.d/default.conf
 COPY --from=build-stage /app/dist /usr/share/nginx/html
