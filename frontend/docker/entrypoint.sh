@@ -7,4 +7,4 @@ find /usr/share/nginx/html -type f -exec sed \
     -e "s|/*VITE_APP_API_URL_VALUE_TO_BE_REPLACED_LATER/*|${VITE_APP_API_URL}|g" \
     '{}' \
     \;
-exec nginx -g 'daemon off;'
+exec "$@"
