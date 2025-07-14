@@ -83,6 +83,7 @@ export const useAppStore = defineStore('app', () => {
           value: {
             apiUrl: new URL(import.meta.env.VITE_APP_API_URL!, window.location.href).href,
             apiToken: token.value,
+            appRoot: import.meta.env.VITE_APP_APPLICATION_ROOT,
           },
         });
       });

@@ -48,7 +48,7 @@ function checkEvents() {
     if (0 <= remainingTime && remainingTime < 5 * 1000) {
       setTimeout(() => {
         self.registration.showNotification(name, {
-          icon: import.meta.env.VITE_APP_APPLICATION_ROOT + 'favicon.png',
+          icon: self.appRoot + 'favicon.png',
         });
       }, remainingTime);
     }
@@ -67,6 +67,7 @@ self.addEventListener('message', event => {
     self.apiUrl = config.apiUrl;
     self.filesUrl = new URL('files/', self.apiUrl).href;
     self.apiToken = config.apiToken;
+    self.appRoot = config.appRoot;
 
     event.waitUntil((async () => {
       const allClients = await self.clients.matchAll({
