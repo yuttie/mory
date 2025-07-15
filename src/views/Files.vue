@@ -1,5 +1,5 @@
 <template>
-    <div id="find" class="d-flex flex-column">
+    <div id="files" class="d-flex flex-column">
         <v-menu
             v-model="showingTagList"
             v-bind:close-on-content-click="false"
@@ -257,7 +257,7 @@ const matchedEntries = computed(() => {
 
 // Lifecycle hooks
 onMounted(() => {
-    document.title = `Find | ${import.meta.env.VITE_APP_NAME}`;
+    document.title = `Files | ${import.meta.env.VITE_APP_NAME}`;
 
     window.addEventListener('keydown', handleKeydown);
 
@@ -474,7 +474,7 @@ watch(queryText, (q: string | null) => {
 </script>
 
 <style scoped lang="scss">
-#find {
+#files {
     height: 100%;
 }
 

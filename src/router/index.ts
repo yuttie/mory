@@ -6,7 +6,7 @@ import { v7 as uuidv7 } from 'uuid';
 const Home     = () => import('../views/Home.vue');
 const Calendar = () => import('../views/Calendar.vue');
 const Tasks    = () => import('../views/Tasks.vue');
-const Find     = () => import('../views/Find.vue');
+const Files    = () => import('../views/Files.vue');
 const Note     = () => import('../views/Note.vue');
 const Config   = () => import('../views/Config.vue');
 const About    = () => import('../views/About.vue');
@@ -47,9 +47,9 @@ const routes: Array<RouteConfig> = [
     },
   },
   {
-    path: '/find',
-    name: 'Find',
-    component: Find,
+    path: '/files',
+    name: 'Files',
+    component: Files,
   },
   {
     path: '/note/:path*',
