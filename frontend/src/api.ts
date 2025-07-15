@@ -157,6 +157,10 @@ export function uploadFiles(fd: FormData) {
   return getAxios().post(`/files`, fd);
 }
 
+export function searchNotes(pattern: string) {
+  return getAxios().post('/notes', { pattern: pattern });
+}
+
 export interface TaskData {
     tasks: { backlog: Task[], scheduled: { [key: string]: Task[] } };
     groups: { name: string, filter: string }[];

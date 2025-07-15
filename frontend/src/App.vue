@@ -66,6 +66,7 @@
                 <v-list-item color="primary" link to="/calendar"><v-list-item-icon><v-icon dense>{{ mdiCalendarOutline }}</v-icon></v-list-item-icon><v-list-item-title>Calendar</v-list-item-title></v-list-item>
                 <v-list-item color="primary" link to="/tasks"><v-list-item-icon><v-icon dense>{{ mdiBallotOutline }}</v-icon></v-list-item-icon><v-list-item-title>Tasks</v-list-item-title></v-list-item>
                 <v-list-item color="primary" link to="/files"><v-list-item-icon><v-icon dense>{{ mdiFileDocumentMultipleOutline }}</v-icon></v-list-item-icon><v-list-item-title>Files</v-list-item-title></v-list-item>
+                <v-list-item color="primary" link to="/search"><v-list-item-icon><v-icon dense>{{ mdiMagnify }}</v-icon></v-list-item-icon><v-list-item-title>Search</v-list-item-title></v-list-item>
                 <v-list-item color="primary" link to="/config"><v-list-item-icon><v-icon dense>{{ mdiCogOutline }}</v-icon></v-list-item-icon><v-list-item-title>Config</v-list-item-title></v-list-item>
                 <v-list-item color="primary" link to="/about"><v-list-item-icon><v-icon dense>{{ mdiInformationOutline }}</v-icon></v-list-item-icon><v-list-item-title>About</v-list-item-title></v-list-item>
             </v-list>
@@ -304,6 +305,7 @@
                 <v-btn text to="/calendar" class="flex-grow-1"><v-icon>{{ mdiCalendarOutline             }}</v-icon></v-btn>
                 <v-btn text to="/tasks"    class="flex-grow-1"><v-icon>{{ mdiBallotOutline               }}</v-icon></v-btn>
                 <v-btn text to="/files"    class="flex-grow-1"><v-icon>{{ mdiFileDocumentMultipleOutline }}</v-icon></v-btn>
+                <v-btn text to="/search"   class="flex-grow-1"><v-icon>{{ mdiMagnify                     }}</v-icon></v-btn>
                 <v-btn text to="/config"   class="flex-grow-1"><v-icon>{{ mdiCogOutline                  }}</v-icon></v-btn>
                 <v-btn text to="/about"    class="flex-grow-1"><v-icon>{{ mdiInformationOutline          }}</v-icon></v-btn>
             </v-btn-toggle>
