@@ -12,6 +12,7 @@ use std::string::String;
 use std::sync::Arc;
 use std::time;
 
+use anyhow::Context;
 use argon2;
 use axum::{
     BoxError,
@@ -85,7 +86,7 @@ async fn main() {
 
     let protected_api = Router::new()
         .route("/commit_id", get(get_commit_id))
-        .route("/notes", get(get_notes))
+        .route("/notes", get(get_notes).post(post_notes))
         .route("/notes/*path", get(get_notes_path).put(put_notes_path).delete(delete_notes_path))
         .route("/files", post(post_files).layer(DefaultBodyLimit::max(16 * 1024 * 1024)))
         .route("/files/*path", get(get_files_path))
@@ -887,6 +888,76 @@ fn extract_metadata(blob: &[u8]) -> (Option<serde_yaml::Value>, Option<String>) 
     }
 }
 
+/// Search notes for a given query with `git grep`.
+pub async fn post_notes(
+    Json(query): Json<GrepQuery>,
+) -> impl IntoResponse {
+    let git_dir = env::var("MORIED_GIT_DIR").unwrap();
+    match grep_bare_repo(&git_dir, &query.pattern, "HEAD").await {
+        Ok(matches) => Json(matches).into_response(),
+        Err(err) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Error: {}", err),
+        ).into_response(),
+    }
+}
+
+pub async fn grep_bare_repo(
+    git_dir: &str,
+    pattern: &str,
+    revision: &str,
+) -> anyhow::Result<Vec<models::GrepMatch>> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(git_dir)
+        .arg("grep")
+        .arg("--line-number")
+        .arg("--null")
+        .arg("-I")  // Don’t match the pattern in binary files
+        .arg(pattern)
+        .arg(revision)
+        .output()
+        .await
+        .with_context(|| "Failed to execute git grep")?;
+
+    if !output.status.success() {
+        return Err(anyhow::anyhow!(
+            "git grep failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut results = Vec::new();
+
+    for line in stdout.lines() {
+        let mut parts = line.split('\0');
+
+        let file = match parts.next() {
+            Some(f) => f.strip_prefix(&format!("{revision}:")).unwrap_or(f),
+            None => continue,
+        };
+
+        let line_no = match parts.next().and_then(|s| s.parse::<usize>().ok()) {
+            Some(n) => n,
+            None => continue,
+        };
+
+        let content = match parts.next() {
+            Some(c) => c.to_string(),
+            None => continue,
+        };
+
+        results.push(GrepMatch {
+            file: file.to_string(),
+            line: line_no,
+            content,
+        });
+    }
+
+    Ok(results)
+}
+
 mod models {
     use std::fs::File;
     use std::path::PathBuf;
@@ -1026,5 +1097,17 @@ mod models {
         Rename {
             from: String,
         },
+    }
+
+    #[derive(Debug, Deserialize, Serialize, Clone)]
+    pub struct GrepQuery {
+        pub pattern: String,
+    }
+
+    #[derive(Serialize)]
+    pub struct GrepMatch {
+        pub file: String,
+        pub line: usize,
+        pub content: String,
     }
 }
