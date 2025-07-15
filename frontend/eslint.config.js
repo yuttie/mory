@@ -38,7 +38,7 @@ export default ts.config(
       'vue/v-bind-style': ['error', 'longform'],
       'vue/v-on-style': ['error', 'longform'],
       'vue/valid-v-slot': ['error', { 'allowModifiers': true }],
-      'vue/multi-word-component-names': ['error', { 'ignores': ['About', 'Calendar', 'Config', 'Editor', 'Find', 'Gravatar', 'Home', 'Note', 'Tasks']}],
+      'vue/multi-word-component-names': ['error', { 'ignores': ['About', 'Calendar', 'Config', 'Editor', 'Files', 'Gravatar', 'Home', 'Note', 'Tasks']}],
       'vue/html-indent': ['warn', 4, {}],
     },
   },

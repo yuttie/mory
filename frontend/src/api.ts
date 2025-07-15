@@ -88,7 +88,7 @@ export function isTask(task: any): task is Task {
     && 'note' in task;
 }
 
-// Find
+// Files
 export interface Query {
   paths: Set<any>;
   tags: Set<any>;
