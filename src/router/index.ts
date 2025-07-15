@@ -7,6 +7,7 @@ const Home     = () => import('../views/Home.vue');
 const Calendar = () => import('../views/Calendar.vue');
 const Tasks    = () => import('../views/Tasks.vue');
 const Files    = () => import('../views/Files.vue');
+const Search   = () => import('../views/Search.vue');
 const Note     = () => import('../views/Note.vue');
 const Config   = () => import('../views/Config.vue');
 const About    = () => import('../views/About.vue');
@@ -50,6 +51,11 @@ const routes: Array<RouteConfig> = [
     path: '/files',
     name: 'Files',
     component: Files,
+  },
+  {
+    path: '/search',
+    name: 'Search',
+    component: Search,
   },
   {
     path: '/note/:path*',
