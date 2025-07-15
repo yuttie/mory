@@ -14,6 +14,7 @@ RUN touch src/main.rs && cargo build --release
 FROM debian:bookworm-slim as production-stage
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
     imagemagick \
     inkscape \
     && rm -rf /var/lib/apt/lists/*
