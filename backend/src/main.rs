@@ -85,12 +85,11 @@ async fn main() {
         .allow_credentials(true);
 
     let protected_api = Router::new()
-        .route("/commit_id", get(get_commit_id))
         .route("/notes", get(get_notes).post(post_notes))
         .route("/notes/*path", get(get_notes_path).put(put_notes_path).delete(delete_notes_path))
         .route("/files", post(post_files).layer(DefaultBodyLimit::max(16 * 1024 * 1024)))
         .route("/files/*path", get(get_files_path))
-        .with_state(state)
+        .with_state(state.clone())
         .route_layer(middleware::from_fn(auth));
     let login_api = Router::new()
         .route("/login", post(post_login))
@@ -104,9 +103,16 @@ async fn main() {
                 .buffer(1)  // Required to make it Clone.
                 .rate_limit(1, time::Duration::from_secs(3))
         );
+    let protected_api_v2 = Router::new()
+        .route("/commits/head", get(v2::get_commits_head))
+        .with_state(state.clone())
+        .route_layer(middleware::from_fn(auth));
+    let api_v2 = Router::new()
+        .merge(protected_api_v2);
     let api = Router::new()
         .merge(protected_api)
         .merge(login_api)
+        .nest("/v2", api_v2)
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
@@ -193,16 +199,6 @@ async fn post_login(
     else {
         StatusCode::UNAUTHORIZED.into_response()
     }
-}
-
-async fn get_commit_id(
-    State(state): State<Arc<AppState>>,
-) -> Result<Json<String>, AppError> {
-    let repo = state.repo.lock().await;
-    let head = repo.head()?;
-    let commit = head.peel_to_commit()?;
-    let commit_id = commit.id();
-    Ok(Json(commit_id.to_string()))
 }
 
 async fn get_notes(
@@ -956,6 +952,20 @@ pub async fn grep_bare_repo(
     }
 
     Ok(results)
+}
+
+mod v2 {
+    use super::*;
+
+    pub async fn get_commits_head(
+        State(state): State<Arc<AppState>>,
+    ) -> Result<Json<String>, AppError> {
+        let repo = state.repo.lock().await;
+        let head = repo.head()?;
+        let commit = head.peel_to_commit()?;
+        let commit_id = commit.id();
+        Ok(Json(commit_id.to_string()))
+    }
 }
 
 mod models {
