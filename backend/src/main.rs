@@ -461,22 +461,25 @@ async fn get_notes(
 async fn find_entry_blob(
     state: &Arc<AppState>,
     path: &str,
-) -> Option<Vec<u8>> {
+) -> Option<(Oid, Vec<u8>)> {
     // Search an index of HEAD for the given path
-    let entry = {
+    let (oid, entry) = {
         let repo = state.repo.lock().await;
 
         // Build an in-memory index of HEAD
-        let head = repo.head().ok()?;
-        let head_tree = head.peel_to_tree().ok()?;
+        let head_ref = repo.head().ok()?;
+        let head_oid = head_ref.target()?;
+        let head_tree = head_ref.peel_to_tree().ok()?;
 
         let mut index = Index::new().ok()?;
         index.read_tree(&head_tree).ok()?;
 
         // Find the entry whose path matches our requested string
-        index
+        let entry = index
             .iter()
-            .find(|entry| std::str::from_utf8(&entry.path).map(|p| p == path).unwrap_or(false))?
+            .find(|entry| std::str::from_utf8(&entry.path).map(|p| p == path).unwrap_or(false))?;
+
+        (head_oid, entry)
     };
 
     // Load the blob's bytes
@@ -485,7 +488,7 @@ async fn find_entry_blob(
         repo.find_blob(entry.id).map(|blob| Vec::from(blob.content())).ok()?
     };
 
-    Some(content)
+    Some((oid, content))
 }
 
 fn content_response(content: Vec<u8>, path: &Path) -> Response {
@@ -504,7 +507,7 @@ async fn get_notes_path(
 ) -> Response {
     debug!("get_notes_path");
 
-    if let Some(content) = find_entry_blob(&state, &path).await {
+    if let Some((_, content)) = find_entry_blob(&state, &path).await {
         content_response(content, path.as_ref())
     }
     else {
@@ -723,7 +726,7 @@ async fn get_files_path(
 ) -> Response {
     debug!("get_files_path");
 
-    if let Some(content) = find_entry_blob(&state, &path).await {
+    if let Some((_, content)) = find_entry_blob(&state, &path).await {
         match mime_guess::from_path::<&Path>(path.as_ref()).first() {
             Some(mime) if mime.type_() == "image" => {
                 serve_image_content(content, path.as_ref()).await
