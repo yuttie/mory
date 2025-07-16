@@ -311,6 +311,9 @@
                 </draggable>
             </div>
         </div>
+        <v-overlay v-bind:value="isLoading" z-index="10" opacity="0">
+            <v-progress-circular indeterminate color="blue-grey lighten-3" size="64"></v-progress-circular>
+        </v-overlay>
         <v-snackbar v-model="errorNotification" color="error" top timeout="5000">{{ errorNotificationText }}</v-snackbar>
     </div>
 </template>
@@ -525,7 +528,12 @@ const groupedTasks = computed(() => {
 // Lifecycle hooks
 onMounted(() => {
     document.title = `Tasks | ${import.meta.env.VITE_APP_NAME}`;
+    window.addEventListener('focus', load);
     load();
+});
+
+onUnmounted(() => {
+    window.removeEventListener('focus', load);
 });
 
 // Methods
