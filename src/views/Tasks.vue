@@ -352,6 +352,7 @@ const emit = defineEmits<{
 }>();
 
 // Reactive states
+const eTag: Ref<string | null> = ref(null);
 const tasks = ref({
     backlog: [] as Task[],
     scheduled: {} as { [key: string]: Task[] }
@@ -717,21 +718,29 @@ async function loadIfNotEditing() {
 async function load() {
     isLoading.value = true;
     try {
-        const data = await api.getTaskData();
+        const [newETag, data] = await (eTag.value === null ? api.getTaskDataV2() : api.getTaskDataV2(eTag.value));
 
-        // Always show slots for today and tomorrow
-        const today = dayjs().format('YYYY-MM-DD');
-        const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
-        data.tasks.scheduled[today] = data.tasks.scheduled[today] ?? [];
-        data.tasks.scheduled[tomorrow] = data.tasks.scheduled[tomorrow] ?? [];
+        if (data === null) {
+            // Not updated, nothing to do
+        }
+        else {
+            // Update ETag
+            eTag.value = newETag;
 
-        // Replace with the data
-        tasks.value.backlog.splice(0, tasks.value.backlog.length, ...data.tasks.backlog);
-        Object.keys(tasks.value.scheduled).forEach(key => del(tasks.value.scheduled, key));
-        Object.entries(data.tasks.scheduled).forEach(([key, value]) => {
-            set(tasks.value.scheduled, key, value);
-        });
-        groups.value.splice(0, groups.value.length, ...data.groups);
+            // Always show slots for today and tomorrow
+            const today = dayjs().format('YYYY-MM-DD');
+            const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
+            data.tasks.scheduled[today] = data.tasks.scheduled[today] ?? [];
+            data.tasks.scheduled[tomorrow] = data.tasks.scheduled[tomorrow] ?? [];
+
+            // Replace with the data
+            tasks.value.backlog.splice(0, tasks.value.backlog.length, ...data.tasks.backlog);
+            Object.keys(tasks.value.scheduled).forEach(key => del(tasks.value.scheduled, key));
+            Object.entries(data.tasks.scheduled).forEach(([key, value]) => {
+                set(tasks.value.scheduled, key, value);
+            });
+            groups.value.splice(0, groups.value.length, ...data.groups);
+        }
 
         isLoading.value = false;
     }

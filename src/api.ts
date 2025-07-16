@@ -179,6 +179,31 @@ export async function getTaskData(): Promise<TaskData> {
     return data;
 }
 
+export async function getTaskDataV2(eTag?: string): Promise<[string, TaskData | null]> {
+    const headers = {};
+    if (eTag) {
+        headers['If-None-Match'] = eTag;
+    }
+    const res = await getAxios().get(`/v2/files/.mory/tasks.yaml`, {
+        headers: headers,
+        validateStatus: (status) => (status >= 200 && status < 300) || status === 304,
+    });
+    if (res.status === 304) {
+        return [res.headers.etag, null];
+    }
+    else {
+        const data = YAML.parse(res.data) as TaskData;
+
+        // Give a unique ID to each task if missing
+        data.tasks.backlog.forEach((task) => task.id = task.id ?? crypto.randomUUID());
+        for (const tasks of Object.values(data.tasks.scheduled)) {
+            tasks.forEach((task) => task.id = task.id ?? crypto.randomUUID());
+        }
+
+        return [res.headers.etag, data];
+    }
+}
+
 export async function putTaskData(data: TaskData) {
     // Clean up
     data = structuredClone(data);
