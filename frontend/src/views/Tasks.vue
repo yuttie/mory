@@ -744,13 +744,13 @@ async function load() {
                 }
                 else if (error.response.status === 404) {
                     // Create a new one
-                    await api.addNote('.mory/tasks.yaml', YAML.stringify({
+                    await api.putTaskData({
                         tasks: {
                             backlog: [],
                             scheduled: {},
                         },
                         groups: [],
-                    }));
+                    });
                     load();
                 }
                 else {
