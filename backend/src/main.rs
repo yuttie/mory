@@ -100,6 +100,7 @@ async fn main() {
         );
     let protected_api_v2 = Router::new()
         .route("/commits/head", get(v2::get_commits_head))
+        .route("/files/*path", get(v2::get_files_path))
         .with_state(state.clone())
         .route_layer(middleware::from_fn(auth));
     let api_v2 = Router::new()
@@ -961,6 +962,35 @@ mod v2 {
         let commit = head.peel_to_commit()?;
         let commit_id = commit.id();
         Ok(Json(commit_id.to_string()))
+    }
+
+    fn attach_oid(mut res: Response, oid: git2::Oid) -> Response {
+        // ETag values should be quoted
+        let etag_value = format!("\"{}\"", oid);
+        res.headers_mut().insert(
+            header::ETAG,
+            HeaderValue::from_str(&etag_value).unwrap(),
+        );
+        res
+    }
+
+    pub async fn get_files_path(
+        extract::Path(path): extract::Path<String>,
+        extract::State(state): extract::State<Arc<AppState>>,
+    ) -> Response {
+        debug!("v2::get_files_path");
+        if let Some((oid, content)) = find_entry_blob(&state, &path).await {
+            let res = match mime_guess::from_path::<&Path>(path.as_ref()).first() {
+                Some(mime) if mime.type_() == "image" => {
+                    serve_image_content(content, path.as_ref()).await
+                },
+                _ => content_response(content, path.as_ref()),
+            };
+            attach_oid(res, oid)
+        }
+        else {
+            StatusCode::NOT_FOUND.into_response()
+        }
     }
 }
 
