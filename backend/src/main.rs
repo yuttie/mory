@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::Write;
 use std::iter::once;
 use std::os::unix::ffi::OsStrExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::vec::Vec;
 use std::string::String;
@@ -458,41 +458,54 @@ async fn get_notes(
     }
 }
 
+async fn find_entry_blob(
+    state: &Arc<AppState>,
+    path: &str,
+) -> Option<Vec<u8>> {
+    // Search an index of HEAD for the given path
+    let entry = {
+        let repo = state.repo.lock().await;
+
+        // Build an in-memory index of HEAD
+        let head = repo.head().ok()?;
+        let head_tree = head.peel_to_tree().ok()?;
+
+        let mut index = Index::new().ok()?;
+        index.read_tree(&head_tree).ok()?;
+
+        // Find the entry whose path matches our requested string
+        index
+            .iter()
+            .find(|entry| std::str::from_utf8(&entry.path).map(|p| p == path).unwrap_or(false))?
+    };
+
+    // Load the blob's bytes
+    let content = {
+        let repo = state.repo.lock().await;
+        repo.find_blob(entry.id).map(|blob| Vec::from(blob.content())).ok()?
+    };
+
+    Some(content)
+}
+
+fn content_response(content: Vec<u8>, path: &Path) -> Response {
+    let mut res = content.into_response();
+    if let Some(mime) = mime_guess::from_path(path).first() {
+        res.headers_mut()
+            .insert(header::CONTENT_TYPE, mime.as_ref().parse().unwrap())
+            .unwrap();
+    }
+    res
+}
+
 async fn get_notes_path(
     extract::Path(path): extract::Path<String>,
     extract::State(state): extract::State<Arc<AppState>>,
 ) -> Response {
     debug!("get_notes_path");
 
-    // Find a file at the given path
-    let found = {
-        let repo = state.repo.lock().await;
-
-        let head = repo.head().unwrap();
-        let head_tree = head.peel_to_tree().unwrap();
-
-        let mut index = Index::new().unwrap();
-        index.read_tree(&head_tree).unwrap();
-
-        index.iter().find(|entry| std::str::from_utf8(&entry.path).unwrap() == path)
-    };
-    if let Some(entry) = found {
-        let found = {
-            let repo = state.repo.lock().await;
-            repo.find_blob(entry.id).map(|blob| Vec::from(blob.content()))
-        };
-        match found {
-            Ok(content) => {
-                let mut res = content.into_response();
-                // Guess the mime type
-                let guess = mime_guess::from_path(std::str::from_utf8(&entry.path).unwrap());
-                if let Some(mime) = guess.first() {
-                    res.headers_mut().insert(header::CONTENT_TYPE, mime.as_ref().parse().unwrap()).unwrap();
-                }
-                res
-            },
-            Err(_) => StatusCode::NOT_FOUND.into_response(),
-        }
+    if let Some(content) = find_entry_blob(&state, &path).await {
+        content_response(content, path.as_ref())
     }
     else {
         StatusCode::NOT_FOUND.into_response()
@@ -648,92 +661,74 @@ async fn delete_notes_path(
     }
 }
 
+async fn serve_image_content(content: Vec<u8>, path: &Path) -> Response {
+    // Build cache path
+    let cache_root = PathBuf::from(env::var("MORIED_IMAGE_CACHE_DIR")
+        .expect("MORIED_IMAGE_CACHE_DIR must be set"));
+    let hash = Sha1::digest(&content);
+    let mut buf = [0u8; 40];
+    let hex = base16ct::lower::encode_str(&hash, &mut buf).unwrap();
+    let cache_path = cache_root.join(&hex);
+
+    // If we already have a webp in cache, serve it
+    if let Ok(meta) = tokio::fs::metadata(&cache_path).await {
+        if meta.is_file() {
+            if let Ok(cached) = tokio::fs::read(&cache_path).await {
+                let mut res = cached.into_response();
+                res.headers_mut()
+                    .insert(header::CONTENT_TYPE, "image/webp".parse().unwrap())
+                    .unwrap();
+                return res;
+            }
+        }
+    }
+
+    // Otherwise write a temp file, call `convert`, cache & serve
+    let tmp_dir = tempdir().unwrap();
+    let tmp_file_path = tmp_dir.path().join(path.file_name().unwrap());
+    tokio::fs::write(&tmp_file_path, &content).await.unwrap();
+
+    let output = Command::new("convert")
+        .arg(&tmp_file_path)
+        .arg("-quality")
+        .arg("1")
+        .arg("webp:-")
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap()
+        .wait_with_output()
+        .await
+        .unwrap();
+
+    if output.status.success() {
+        if let Some(parent) = cache_path.parent() {
+            tokio::fs::create_dir_all(parent).await.unwrap();
+        }
+        tokio::fs::write(&cache_path, &output.stdout).await.unwrap();
+
+        let mut res = output.stdout.into_response();
+        res.headers_mut()
+            .insert(header::CONTENT_TYPE, "image/webp".parse().unwrap())
+            .unwrap();
+        res
+    } else {
+        // Fallback to original image bytes + mime
+        content_response(content, &path)
+    }
+}
+
 async fn get_files_path(
     extract::Path(path): extract::Path<String>,
     extract::State(state): extract::State<Arc<AppState>>,
 ) -> Response {
     debug!("get_files_path");
 
-    let found = {
-        let repo = state.repo.lock().await;
-
-        let head = repo.head().unwrap();
-        let head_tree = head.peel_to_tree().unwrap();
-
-        let mut index = Index::new().unwrap();
-        index.read_tree(&head_tree).unwrap();
-
-        index.iter().find(|entry| std::str::from_utf8(&entry.path).unwrap() == path)
-    };
-    if let Some(entry) = found {
-        let found = {
-            let repo = state.repo.lock().await;
-            repo.find_blob(entry.id).map(|blob| Vec::from(blob.content()))
-        };
-        match found {
-            Ok(content) => {
-                // Guess the mime type
-                let entry_path = PathBuf::from(std::str::from_utf8(&entry.path).unwrap());
-                let guess = mime_guess::from_path(&entry_path);
-                if let Some(mime) = guess.first() {
-                    if mime.type_() == "image" {
-                        let mut cache_path = PathBuf::from(env::var("MORIED_IMAGE_CACHE_DIR").unwrap());
-                        {
-                            let input_hash = Sha1::digest(&content);
-                            let mut buf = [0u8; 40];
-                            let input_hash_hex = base16ct::lower::encode_str(&input_hash, &mut buf).unwrap();
-                            cache_path.push(input_hash_hex);
-                        }
-                        if cache_path.is_file() {
-                            let mut buf = Vec::new();
-                            let mut cache_file = tokio::fs::File::open(&cache_path).await.unwrap();
-                            cache_file.read_to_end(&mut buf).await.unwrap();
-
-                            let mut res = buf.into_response();
-                            res.headers_mut().insert(header::CONTENT_TYPE, "image/webp".parse().unwrap()).unwrap();
-                            res
-                        }
-                        else {
-                            let tmp_dir = tempdir().unwrap();
-                            let tmp_file_path = tmp_dir.path().join(entry_path.file_name().unwrap());
-                            let mut tmp_file = tokio::fs::File::create(&tmp_file_path).await.unwrap();
-                            tmp_file.write_all(&content).await.unwrap();
-                            let child = Command::new("convert")
-                                .arg(&tmp_file_path)
-                                .arg("-quality")
-                                .arg("1")
-                                .arg("webp:-")
-                                .stdout(Stdio::piped())
-                                .spawn()
-                                .unwrap();
-                            let output = child.wait_with_output().await.unwrap();
-                            if output.status.success() {
-                                tokio::fs::create_dir_all(cache_path.parent().unwrap()).await.unwrap();
-                                let mut cache_file = tokio::fs::File::create(&cache_path).await.unwrap();
-                                cache_file.write_all(&output.stdout).await.unwrap();
-
-                                let mut res = output.stdout.into_response();
-                                res.headers_mut().insert(header::CONTENT_TYPE, "image/webp".parse().unwrap()).unwrap();
-                                res
-                            }
-                            else {
-                                let mut res = content.into_response();
-                                res.headers_mut().insert(header::CONTENT_TYPE, mime.as_ref().parse().unwrap()).unwrap();
-                                res
-                            }
-                        }
-                    }
-                    else {
-                        let mut res = content.into_response();
-                        res.headers_mut().insert(header::CONTENT_TYPE, mime.as_ref().parse().unwrap()).unwrap();
-                        res
-                    }
-                }
-                else {
-                    content.into_response()
-                }
+    if let Some(content) = find_entry_blob(&state, &path).await {
+        match mime_guess::from_path::<&Path>(path.as_ref()).first() {
+            Some(mime) if mime.type_() == "image" => {
+                serve_image_content(content, path.as_ref()).await
             },
-            Err(_) => StatusCode::NOT_FOUND.into_response()
+            _ => content_response(content, path.as_ref()),
         }
     }
     else {
