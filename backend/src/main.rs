@@ -971,6 +971,10 @@ mod v2 {
             header::ETAG,
             HeaderValue::from_str(&etag_value).unwrap(),
         );
+        res.headers_mut().insert(
+            header::ACCESS_CONTROL_EXPOSE_HEADERS,
+            HeaderValue::from_str("ETag").unwrap(),
+        );
         res
     }
 
