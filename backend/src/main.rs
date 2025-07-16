@@ -100,7 +100,7 @@ async fn main() {
         );
     let protected_api_v2 = Router::new()
         .route("/commits/head", get(v2::get_commits_head))
-        .route("/files/*path", get(v2::get_files_path))
+        .route("/files/*path", get(v2::get_files_path).head(v2::head_files_path))
         .with_state(state.clone())
         .route_layer(middleware::from_fn(auth));
     let api_v2 = Router::new()
@@ -974,11 +974,10 @@ mod v2 {
         res
     }
 
-    pub async fn get_files_path(
-        extract::Path(path): extract::Path<String>,
-        extract::State(state): extract::State<Arc<AppState>>,
+    async fn make_files_path_response(
+        path: String,
+        state: Arc<AppState>,
     ) -> Response {
-        debug!("v2::get_files_path");
         if let Some((oid, content)) = find_entry_blob(&state, &path).await {
             let res = match mime_guess::from_path::<&Path>(path.as_ref()).first() {
                 Some(mime) if mime.type_() == "image" => {
@@ -991,6 +990,31 @@ mod v2 {
         else {
             StatusCode::NOT_FOUND.into_response()
         }
+    }
+
+    fn head_from_full(mut full: Response) -> Response {
+        let mut head = Response::builder()
+            .status(full.status())
+            .body(Body::empty())
+            .unwrap();
+        *head.headers_mut() = full.headers().clone();
+        head
+    }
+
+    pub async fn get_files_path(
+        extract::Path(path): extract::Path<String>,
+        extract::State(state): extract::State<Arc<AppState>>,
+    ) -> Response {
+        debug!("v2::get_files_path");
+        make_files_path_response(path, state).await
+    }
+
+    pub async fn head_files_path(
+        extract::Path(path): extract::Path<String>,
+        extract::State(state): extract::State<Arc<AppState>>,
+    ) -> Response {
+        debug!("v2::head_files_path");
+        head_from_full(make_files_path_response(path, state).await)
     }
 }
 
