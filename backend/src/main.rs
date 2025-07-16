@@ -494,9 +494,10 @@ async fn find_entry_blob(
 fn content_response(content: Vec<u8>, path: &Path) -> Response {
     let mut res = content.into_response();
     if let Some(mime) = mime_guess::from_path(path).first() {
-        res.headers_mut()
-            .insert(header::CONTENT_TYPE, mime.as_ref().parse().unwrap())
-            .unwrap();
+        res.headers_mut().insert(
+            header::CONTENT_TYPE,
+            mime.as_ref().parse().unwrap(),
+        );
     }
     res
 }
@@ -678,9 +679,10 @@ async fn serve_image_content(content: Vec<u8>, path: &Path) -> Response {
         if meta.is_file() {
             if let Ok(cached) = tokio::fs::read(&cache_path).await {
                 let mut res = cached.into_response();
-                res.headers_mut()
-                    .insert(header::CONTENT_TYPE, "image/webp".parse().unwrap())
-                    .unwrap();
+                res.headers_mut().insert(
+                    header::CONTENT_TYPE,
+                    "image/webp".parse().unwrap(),
+                );
                 return res;
             }
         }
@@ -710,9 +712,10 @@ async fn serve_image_content(content: Vec<u8>, path: &Path) -> Response {
         tokio::fs::write(&cache_path, &output.stdout).await.unwrap();
 
         let mut res = output.stdout.into_response();
-        res.headers_mut()
-            .insert(header::CONTENT_TYPE, "image/webp".parse().unwrap())
-            .unwrap();
+        res.headers_mut().insert(
+            header::CONTENT_TYPE,
+            "image/webp".parse().unwrap(),
+        );
         res
     } else {
         // Fallback to original image bytes + mime
