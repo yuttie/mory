@@ -21,6 +21,7 @@ use axum::{
     extract,
     http::{
         header,
+        HeaderMap,
         HeaderValue,
         Method,
         Request,
@@ -981,8 +982,22 @@ mod v2 {
     async fn make_files_path_response(
         path: String,
         state: Arc<AppState>,
+        headers: HeaderMap,
     ) -> Response {
         if let Some((oid, content)) = find_entry_blob(&state, &path).await {
+            // Check If-None-Match header, and shortcut to 304
+            let etag_value = format!("\"{}\"", oid);
+            if let Some(inm) = headers.get(header::IF_NONE_MATCH) {
+                if inm.to_str().unwrap_or("") == etag_value {
+                    return Response::builder()
+                        .status(StatusCode::NOT_MODIFIED)
+                        .header(header::ETAG, etag_value.clone())
+                        .header(header::ACCESS_CONTROL_EXPOSE_HEADERS, "ETag")
+                        .body(Body::empty())
+                        .unwrap();
+                }
+            }
+
             let res = match mime_guess::from_path::<&Path>(path.as_ref()).first() {
                 Some(mime) if mime.type_() == "image" => {
                     serve_image_content(content, path.as_ref()).await
@@ -1008,17 +1023,19 @@ mod v2 {
     pub async fn get_files_path(
         extract::Path(path): extract::Path<String>,
         extract::State(state): extract::State<Arc<AppState>>,
+        headers: HeaderMap,
     ) -> Response {
         debug!("v2::get_files_path");
-        make_files_path_response(path, state).await
+        make_files_path_response(path, state, headers).await
     }
 
     pub async fn head_files_path(
         extract::Path(path): extract::Path<String>,
         extract::State(state): extract::State<Arc<AppState>>,
+        headers: HeaderMap,
     ) -> Response {
         debug!("v2::head_files_path");
-        head_from_full(make_files_path_response(path, state).await)
+        head_from_full(make_files_path_response(path, state, headers).await)
     }
 }
 
