@@ -18,12 +18,7 @@ use axum::{
     BoxError,
     body::Body,
     error_handling::HandleErrorLayer,
-    extract::{
-        DefaultBodyLimit,
-        Multipart,
-        Path,
-        State,
-    },
+    extract,
     http::{
         header,
         HeaderValue,
@@ -87,7 +82,7 @@ async fn main() {
     let protected_api = Router::new()
         .route("/notes", get(get_notes).post(post_notes))
         .route("/notes/*path", get(get_notes_path).put(put_notes_path).delete(delete_notes_path))
-        .route("/files", post(post_files).layer(DefaultBodyLimit::max(16 * 1024 * 1024)))
+        .route("/files", post(post_files).layer(extract::DefaultBodyLimit::max(16 * 1024 * 1024)))
         .route("/files/*path", get(get_files_path))
         .with_state(state.clone())
         .route_layer(middleware::from_fn(auth));
@@ -202,7 +197,7 @@ async fn post_login(
 }
 
 async fn get_notes(
-    State(state): State<Arc<AppState>>,
+    extract::State(state): extract::State<Arc<AppState>>,
 ) -> Json<Vec<ListEntry>> {
     debug!("get_notes");
 
@@ -464,8 +459,8 @@ async fn get_notes(
 }
 
 async fn get_notes_path(
-    Path(path): Path<String>,
-    State(state): State<Arc<AppState>>,
+    extract::Path(path): extract::Path<String>,
+    extract::State(state): extract::State<Arc<AppState>>,
 ) -> Response {
     debug!("get_notes_path");
 
@@ -505,8 +500,8 @@ async fn get_notes_path(
 }
 
 async fn put_notes_path(
-    Path(path): Path<String>,
-    State(state): State<Arc<AppState>>,
+    extract::Path(path): extract::Path<String>,
+    extract::State(state): extract::State<Arc<AppState>>,
     Json(note_save): Json<NoteSave>,
 ) -> Response {
     debug!("put_notes_path");
@@ -605,8 +600,8 @@ async fn put_notes_path(
 }
 
 async fn delete_notes_path(
-    Path(path): Path<String>,
-    State(state): State<Arc<AppState>>,
+    extract::Path(path): extract::Path<String>,
+    extract::State(state): extract::State<Arc<AppState>>,
 ) -> Response {
     debug!("delete_notes_path");
 
@@ -654,8 +649,8 @@ async fn delete_notes_path(
 }
 
 async fn get_files_path(
-    Path(path): Path<String>,
-    State(state): State<Arc<AppState>>,
+    extract::Path(path): extract::Path<String>,
+    extract::State(state): extract::State<Arc<AppState>>,
 ) -> Response {
     debug!("get_files_path");
 
@@ -747,8 +742,8 @@ async fn get_files_path(
 }
 
 async fn post_files(
-    State(state): State<Arc<AppState>>,
-    mut multipart: Multipart,
+    extract::State(state): extract::State<Arc<AppState>>,
+    mut multipart: extract::Multipart,
 ) -> Response {
     debug!("post_files_path");
 
@@ -958,7 +953,7 @@ mod v2 {
     use super::*;
 
     pub async fn get_commits_head(
-        State(state): State<Arc<AppState>>,
+        extract::State(state): extract::State<Arc<AppState>>,
     ) -> Result<Json<String>, AppError> {
         let repo = state.repo.lock().await;
         let head = repo.head()?;
