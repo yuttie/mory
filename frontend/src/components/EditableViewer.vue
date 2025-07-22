@@ -607,16 +607,23 @@ events:
             // Update immediately
             updateRendered();
         }
+        editorIsVisible.value = true;
+        viewerIsVisible.value = true;
     }
     else {
         await load(route.params.path);
+        if (/\.(md|markdown)$/i.test(route.params.path)) {
+            // Show only viewer for files with rendering support
+            editorIsVisible.value = false;
+            viewerIsVisible.value = true;
+        }
+        else {
+            // Otherwise, show only editor
+            editorIsVisible.value = true;
+            viewerIsVisible.value = false;
+        }
     }
-
-    if (!/\.(md|markdown)$/i.test(route.params.path)) {
-        editorIsVisible.value = true;
-        viewerIsVisible.value = false;
-        focusOrBlurEditor();
-    }
+    focusOrBlurEditor();
 
     document.addEventListener('scroll', handleDocumentScroll);
 });
