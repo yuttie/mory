@@ -1608,10 +1608,11 @@ function save() {
             initialText.value = content;
             noteHasUpstream.value = true;
             isSaving.value = false;
-            // Remove 'mode' query parameter
+            // Remove 'mode' and 'template' query parameters
             if (Object.hasOwn(route.query, 'mode')) {
                 const newQuery = { ...route.query };
                 delete newQuery.mode;
+                delete newQuery.template;
                 router.replace({ query: newQuery });
             }
         }).catch(error => {
