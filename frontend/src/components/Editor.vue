@@ -169,138 +169,40 @@ function setKeybinding(keybinding: string) {
   }
   else if (keybinding === 'emacs') {
     import('ace-builds/src-noconflict/keybinding-emacs').then(() => {
-      ace.config.loadModule("ace/keyboard/emacs", function() {
-        // Do nothing
-      });
       editor.value!.setKeyboardHandler('ace/keyboard/emacs');
     });
   }
   else if (keybinding === 'sublime') {
     import('ace-builds/src-noconflict/keybinding-sublime').then(() => {
-      ace.config.loadModule("ace/keyboard/sublime", function() {
-        // Do nothing
-      });
       editor.value!.setKeyboardHandler('ace/keyboard/sublime');
     });
   }
   else if (keybinding === 'vim') {
     import('ace-builds/src-noconflict/keybinding-vim').then(() => {
-      ace.config.loadModule("ace/keyboard/vim", function() {
-        // Do nothing
-      });
       editor.value!.setKeyboardHandler('ace/keyboard/vim');
     });
   }
   else if (keybinding === 'vim-modified') {
     import('ace-builds/src-noconflict/keybinding-vim').then(() => {
-      ace.config.loadModule("ace/keyboard/vim", function(m) {
-        // Remove <C-d> for the insert mode from the default keymap
-        const i = m.handler.defaultKeymap.findIndex((entry: any) => entry.keys === '<C-d>' && entry.context === 'insert');
-        m.handler.defaultKeymap[i].keys = '';
-      });
-      editor.value!.setKeyboardHandler('ace/keyboard/vim');
-      // Adjust keybindings
-      adjustKeybindings(editor.value);
+      const keybinding = (window as any).ace.require('ace/keyboard/vim');
+      adjustKeybindings(keybinding);
+      editor.value!.setKeyboardHandler(keybinding.handler);
     });
   }
   else if (keybinding === 'vscode') {
     import('ace-builds/src-noconflict/keybinding-vscode').then(() => {
-      ace.config.loadModule("ace/keyboard/vscode", function() {
-        // Do nothing
-      });
       editor.value!.setKeyboardHandler('ace/keyboard/vscode');
     });
   }
 }
 
-function adjustKeybindings(editor: any) {
-  // Ctrl-a
-  editor.commands.removeCommand('gotolinestart', false);
-  editor.commands.addCommand({
-    name: "gotolinestart",
-    description: "Go to line start",
-    bindKey: { win: "Alt-Left|Home|Ctrl-A", mac: "Command-Left|Home|Ctrl-A" },
-    exec: function(editor: any) { editor.navigateLineStart(); },
-    multiSelectAction: "forEach",
-    scrollIntoView: "cursor",
-    readOnly: true
-  });
-  // Ctrl-e
-  editor.commands.removeCommand('gotolineend', false);
-  editor.commands.addCommand({
-    name: "gotolineend",
-    description: "Go to line end",
-    bindKey: { win: "Alt-Right|End|Ctrl-E", mac: "Command-Right|End|Ctrl-E" },
-    exec: function(editor: any) { editor.navigateLineEnd(); },
-    multiSelectAction: "forEach",
-    scrollIntoView: "cursor",
-    readOnly: true
-  });
-  // Ctrl-f
-  editor.commands.removeCommand('gotoright', false);
-  editor.commands.addCommand({
-    name: "gotoright",
-    description: "Go to right",
-    bindKey: { win: "Right|Ctrl-F", mac: "Right|Ctrl-F" },
-    exec: function(editor: any, args: any) { editor.navigateRight(args.times); },
-    multiSelectAction: "forEach",
-    scrollIntoView: "cursor",
-    readOnly: true
-  });
-  // Ctrl-b
-  editor.commands.removeCommand('gotoleft', false);
-  editor.commands.addCommand({
-    name: "gotoleft",
-    description: "Go to left",
-    bindKey: { win: "Left|Ctrl-B", mac: "Left|Ctrl-B" },
-    exec: function(editor: any, args: any) { editor.navigateLeft(args.times); },
-    multiSelectAction: "forEach",
-    scrollIntoView: "cursor",
-    readOnly: true
-  });
-  // Ctrl-d
-  editor.commands.removeCommand('del', false);
-  editor.commands.addCommand({
-    name: "del",
-    description: "Delete",
-    bindKey: { win: "Delete|Ctrl-D", mac: "Delete|Ctrl-D|Shift-Delete" },
-    exec: function(editor: any) { editor.remove("right"); },
-    multiSelectAction: "forEach",
-    scrollIntoView: "cursor"
-  });
-  // Ctrl-h
-  editor.commands.removeCommand('backspace', false);
-  editor.commands.addCommand({
-    name: "backspace",
-    description: "Backspace",
-    bindKey: {
-      win: "Shift-Backspace|Backspace|Ctrl-H",
-      mac: "Ctrl-Backspace|Shift-Backspace|Backspace|Ctrl-H"
-    },
-    exec: function(editor: any) { editor.remove("left"); },
-    multiSelectAction: "forEach",
-    scrollIntoView: "cursor"
-  });
-  // Alt-Right
-  editor.commands.removeCommand('blockindent', false);
-  editor.commands.addCommand({
-    name: "blockindent",
-    description: "Block indent",
-    bindKey: { win: "Ctrl-]|Alt-Right", mac: "Ctrl-]|Alt-Right" },
-    exec: function(editor: any) { editor.blockIndent(); },
-    multiSelectAction: "forEachLine",
-    scrollIntoView: "selectionPart"
-  });
-  // Alt-Left
-  editor.commands.removeCommand('blockoutdent', false);
-  editor.commands.addCommand({
-    name: "blockoutdent",
-    description: "Block outdent",
-    bindKey: { win: "Ctrl-[|Alt-Left", mac: "Ctrl-[|Alt-Left" },
-    exec: function(editor: any) { editor.blockOutdent(); },
-    multiSelectAction: "forEachLine",
-    scrollIntoView: "selectionPart"
-  });
+function adjustKeybindings(keybinding: any) {
+  keybinding.Vim.map("<C-a>", "<Home>", "insert");
+  keybinding.Vim.map("<C-e>", "<End>", "insert");
+  keybinding.handler.defaultKeymap.push({ keys: '<C-b>', type: 'motion', motion: 'moveByCharacters', motionArgs: { forward: false }, context: 'insert' });
+  keybinding.handler.defaultKeymap.push({ keys: '<C-f>', type: 'motion', motion: 'moveByCharacters', motionArgs: { forward: true }, context: 'insert' });
+  keybinding.Vim.map("<C-d>", "<Del>", "insert");
+  keybinding.Vim.map("<C-h>", "<BS>", "insert");
 }
 
 // Watchers
