@@ -347,6 +347,15 @@ watch(() => props.mode, (mode: string) => {
     });
   }
 });
+
+defineExpose({
+    focus,
+    blur,
+    resize,
+    getSelection,
+    replaceSelection,
+    scrollTo,
+});
 </script>
 
 <style scoped lang="scss">
