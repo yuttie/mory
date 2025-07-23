@@ -197,6 +197,8 @@ function setKeybinding(keybinding: string) {
 }
 
 function adjustKeybindings(Vim: any) {
+  Vim.map("j", "gj", "normal");
+  Vim.map("k", "gk", "normal");
   Vim.map("<C-a>", "<Home>", "insert");
   Vim.map("<C-e>", "<End>", "insert");
   Vim.mapCommand("<C-b>", "motion", "moveByCharacters", { forward: false }, { context: "insert" });
