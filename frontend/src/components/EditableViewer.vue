@@ -225,7 +225,7 @@
                                             Table of Contents
                                         </v-expansion-panel-header>
                                         <v-expansion-panel-content>
-                                            <ol class="tree">
+                                            <ol class="tree" ref="tocEl">
                                                 <li v-for="h1 of toc" v-bind:key="h1.title" class="level1">
                                                     <a v-bind:href="h1.href" v-on:click="jumpTo(h1.href)">{{ h1.title }}</a>
                                                     <ol>
@@ -427,6 +427,7 @@ const renderTimeoutId = ref(null as null | number);
 // Template Refs
 const editor = ref(null);
 const viewer = ref(null);
+const tocEl = ref(null);
 const shadowDomRootElement = ref(null);
 const shadowRoot = ref(null);
 const renderedContentDiv = ref(null);
@@ -1140,7 +1141,7 @@ function highlightVisibleTOCItems() {
     const scrollHeight = viewer.value.scrollHeight;
     const viewportRange = [scrollTop, scrollTop + clientHeight];
     for (const { href, range } of ranges) {
-        const target = document.querySelector(`.toc li:has(> a[href="${href}"])`);
+        const target = tocEl.value.querySelector<HTMLElement>(`li:has(> a[href="${href}"])`);
         if (range[0] < viewportRange[1] && (range[1] || scrollHeight) > viewportRange[0]) {
             target?.classList.add('visible');
         }
