@@ -105,6 +105,7 @@
                     </template>
                 </div>
                 <div class="viewer-pane"
+                    ref="viewer"
                     v-on:transitionend="onViewerPaneResize"
                 >
                     <div ref="shadowDomRootElement" style="user-select: text">
@@ -425,6 +426,7 @@ const renderTimeoutId = ref(null as null | number);
 
 // Template Refs
 const editor = ref(null);
+const viewer = ref(null);
 const shadowDomRootElement = ref(null);
 const shadowRoot = ref(null);
 const renderedContentDiv = ref(null);
@@ -625,7 +627,7 @@ events:
     }
     focusOrBlurEditor();
 
-    document.addEventListener('scroll', handleDocumentScroll);
+    viewer.value.addEventListener('scroll', handleDocumentScroll);
 });
 
 onUnmounted(() => {
@@ -640,7 +642,7 @@ onUnmounted(() => {
         renderTimeoutId.value = null;
     }
 
-    document.removeEventListener('scroll', handleDocumentScroll);
+    viewer.value.removeEventListener('scroll', handleDocumentScroll);
 });
 
 // Methods
@@ -1133,9 +1135,9 @@ function highlightVisibleTOCItems() {
     }
 
     // Highlight visible ranges
-    const scrollTop = document.documentElement.scrollTop;
-    const clientHeight = document.documentElement.clientHeight;
-    const scrollHeight = document.documentElement.scrollHeight;
+    const scrollTop = viewer.value.scrollTop;
+    const clientHeight = viewer.value.clientHeight;
+    const scrollHeight = viewer.value.scrollHeight;
     const viewportRange = [scrollTop, scrollTop + clientHeight];
     for (const { href, range } of ranges) {
         const target = document.querySelector(`.toc li:has(> a[href="${href}"])`);
@@ -1191,7 +1193,7 @@ function handleDocumentScroll() {
     }
 
     // Find the interval where the `scrollTop` belongs to
-    const scrollTop = document.documentElement.scrollTop;
+    const scrollTop = viewer.value.scrollTop;
     let intervalIndex = null;
     for (let i = 0; i < scrollMap.length - 1; ++i) {
         if (scrollMap[i][1] <= scrollTop && scrollTop < scrollMap[i + 1][1]) {
@@ -1277,7 +1279,7 @@ function onEditorScroll(lineNumber: number) {
 
         // Scroll by an offset
         const offset = offset1 + (offset2 - offset1) * (lineNumber - lineNumber1) / (lineNumber2 - lineNumber1);
-        document.documentElement.scrollTo({ top: offset, left: 0, behavior: 'auto' });
+        viewer.value.scrollTo({ top: offset, left: 0, behavior: 'auto' });
         ignoreNext.value = true;
     }
 }
