@@ -184,8 +184,8 @@ function setKeybinding(keybinding: string) {
   }
   else if (keybinding === 'vim-modified') {
     import('ace-builds/src-noconflict/keybinding-vim').then(() => {
-      const keybinding = (window as any).ace.require('ace/keyboard/vim');
-      adjustKeybindings(keybinding);
+      const keybinding = ace.require('ace/keyboard/vim');  // NOTE: `ace.require()` does not fetch the module. We need the dynamic import for actual loading.
+      adjustKeybindings(keybinding.Vim);
       editor.value!.setKeyboardHandler(keybinding.handler);
     });
   }
@@ -196,13 +196,13 @@ function setKeybinding(keybinding: string) {
   }
 }
 
-function adjustKeybindings(keybinding: any) {
-  keybinding.Vim.map("<C-a>", "<Home>", "insert");
-  keybinding.Vim.map("<C-e>", "<End>", "insert");
-  keybinding.Vim.mapCommand("<C-b>", "motion", "moveByCharacters", { forward: false }, { context: "insert" });
-  keybinding.Vim.mapCommand("<C-f>", "motion", "moveByCharacters", { forward: true }, { context: "insert" });
-  keybinding.Vim.map("<C-d>", "<Del>", "insert");
-  keybinding.Vim.map("<C-h>", "<BS>", "insert");
+function adjustKeybindings(Vim: any) {
+  Vim.map("<C-a>", "<Home>", "insert");
+  Vim.map("<C-e>", "<End>", "insert");
+  Vim.mapCommand("<C-b>", "motion", "moveByCharacters", { forward: false }, { context: "insert" });
+  Vim.mapCommand("<C-f>", "motion", "moveByCharacters", { forward: true }, { context: "insert" });
+  Vim.map("<C-d>", "<Del>", "insert");
+  Vim.map("<C-h>", "<BS>", "insert");
 }
 
 // Watchers
