@@ -199,8 +199,8 @@ function setKeybinding(keybinding: string) {
 function adjustKeybindings(keybinding: any) {
   keybinding.Vim.map("<C-a>", "<Home>", "insert");
   keybinding.Vim.map("<C-e>", "<End>", "insert");
-  keybinding.handler.defaultKeymap.push({ keys: '<C-b>', type: 'motion', motion: 'moveByCharacters', motionArgs: { forward: false }, context: 'insert' });
-  keybinding.handler.defaultKeymap.push({ keys: '<C-f>', type: 'motion', motion: 'moveByCharacters', motionArgs: { forward: true }, context: 'insert' });
+  keybinding.Vim.mapCommand("<C-b>", "motion", "moveByCharacters", { forward: false }, { context: "insert" });
+  keybinding.Vim.mapCommand("<C-f>", "motion", "moveByCharacters", { forward: true }, { context: "insert" });
   keybinding.Vim.map("<C-d>", "<Del>", "insert");
   keybinding.Vim.map("<C-h>", "<BS>", "insert");
 }
