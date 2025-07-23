@@ -1,5 +1,5 @@
 <template>
-    <div id="editable-viewer">
+    <div class="editable-viewer">
         <template v-if="notFound">
             <div>
                 <h1>Not Found</h1>
@@ -1726,7 +1726,7 @@ watch(toc, () => {
 <style scoped lang="scss">
 $navigation-drawer-width: 56px;
 
-#editable-viewer {
+.editable-viewer {
     position: relative;
     height: 100vh;
     display: flex;
