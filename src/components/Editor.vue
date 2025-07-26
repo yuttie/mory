@@ -215,7 +215,7 @@ watch(() => props.value, (value: string) => {
 
   if (value !== editor.value.getValue()) {  // eslint-disable-line @typescript-eslint/no-non-null-assertion
     const cursor = editor.value.getCursorPosition();  // eslint-disable-line @typescript-eslint/no-non-null-assertion
-    editor.value.setValue(value, -1);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+    editor.value.session.setValue(value);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
     editor.value.moveCursorToPosition(cursor);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
 
     // Fold metadata
