@@ -54,7 +54,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use models::*;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer())
         .with(tracing_subscriber::EnvFilter::from_default_env())
@@ -134,6 +134,8 @@ async fn main() {
     axum::serve(listener, app.into_make_service())
         .await
         .unwrap();
+
+    Ok(())
 }
 
 async fn auth(req: Request<Body>, next: Next) -> Result<Response, StatusCode> {
