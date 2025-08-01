@@ -255,6 +255,94 @@ fn collect_latest_ops(
     latest_ops
 }
 
+fn update_entries(
+    entries: &[ListEntry],
+    repo: &Repository,
+    last_commit_id: Oid,
+) -> Vec<ListEntry> {
+    use git2::Delta;
+
+    // Iterate over recent commit history to collect operations on files
+    let mut latest_ops = collect_latest_ops(repo, last_commit_id);
+
+    // Update existing entries
+    let mut new_entries: Vec<ListEntry> = Vec::with_capacity(entries.len());
+    for entry in entries {
+        let mut found = false;
+        match latest_ops.get(&entry.path) {
+            None => {
+                // Entry is untouched
+                new_entries.push(entry.clone());
+            },
+            Some(&(op, time, blob_id)) => {
+                // Entry is modified or deleted
+                found = true;
+                match op {
+                    Delta::Added | Delta::Modified => {
+                        // Get the file size
+                        let blob = repo.find_blob(blob_id).unwrap();
+                        let size = blob.size();
+                        // Extract metadata
+                        let (metadata, title) = extract_metadata(blob.content());
+                        // Add an entry
+                        new_entries.push(ListEntry {
+                            path: entry.path.to_owned(),
+                            size: size,
+                            mime_type: entry.mime_type.to_owned(),
+                            metadata: metadata,
+                            title: title,
+                            time: time,
+                        });
+                    },
+                    Delta::Deleted => {
+                        // Ignore the entry
+                    },
+                    _ => unreachable!(),
+                }
+            },
+        }
+        if found {
+            latest_ops.remove(&entry.path);
+        }
+    }
+
+    // Add newly created entries
+    for (path, (op, time, blob_id)) in latest_ops {
+        match op {
+            Delta::Added | Delta::Modified => {
+                // Guess the mime type
+                let guess = mime_guess::from_path(&path);
+                let mime_type = if let Some(mime) = guess.first() {
+                    mime.as_ref().parse().unwrap()
+                }
+                else {
+                    "application/octet-stream".to_string()
+                };
+                // Get the file size
+                let blob = repo.find_blob(blob_id).unwrap();
+                let size = blob.size();
+                // Extract metadata
+                let (metadata, title) = extract_metadata(blob.content());
+                // Add an entry
+                new_entries.push(ListEntry {
+                    path: path,
+                    size: size,
+                    mime_type: mime_type,
+                    metadata: metadata,
+                    title: title,
+                    time: time,
+                });
+            },
+            Delta::Deleted => {
+                // Ignore the entry
+            },
+            _ => unreachable!(),
+        }
+    }
+
+    new_entries
+}
+
 async fn get_notes(
     extract::State(state): extract::State<Arc<AppState>>,
 ) -> Json<Vec<ListEntry>> {
@@ -269,85 +357,8 @@ async fn get_notes(
             Json(entries.clone())
         },
         Cache::Invalid(last_commit_id, old_entries) => {
-            use git2::Delta;
-
-            // Iterate over recent commit history to collect operations on files
-            let mut latest_ops = collect_latest_ops(&repo, last_commit_id);
-
-            // Update existing entries
-            let mut entries: Vec<ListEntry> = Vec::with_capacity(old_entries.len());
-            for entry in old_entries {
-                let mut found = false;
-                match latest_ops.get(&entry.path) {
-                    None => {
-                        // Entry is untouched
-                        entries.push(entry.clone());
-                    },
-                    Some(&(op, time, blob_id)) => {
-                        // Entry is modified or deleted
-                        found = true;
-                        match op {
-                            Delta::Added | Delta::Modified => {
-                                // Get the file size
-                                let blob = repo.find_blob(blob_id).unwrap();
-                                let size = blob.size();
-                                // Extract metadata
-                                let (metadata, title) = extract_metadata(blob.content());
-                                // Add an entry
-                                entries.push(ListEntry {
-                                    path: entry.path.to_owned(),
-                                    size: size,
-                                    mime_type: entry.mime_type.to_owned(),
-                                    metadata: metadata,
-                                    title: title,
-                                    time: time,
-                                });
-                            },
-                            Delta::Deleted => {
-                                // Ignore the entry
-                            },
-                            _ => unreachable!(),
-                        }
-                    },
-                }
-                if found {
-                    latest_ops.remove(&entry.path);
-                }
-            }
-
-            // Add newly created entries
-            for (path, (op, time, blob_id)) in latest_ops {
-                match op {
-                    Delta::Added | Delta::Modified => {
-                        // Guess the mime type
-                        let guess = mime_guess::from_path(&path);
-                        let mime_type = if let Some(mime) = guess.first() {
-                            mime.as_ref().parse().unwrap()
-                        }
-                        else {
-                            "application/octet-stream".to_string()
-                        };
-                        // Get the file size
-                        let blob = repo.find_blob(blob_id).unwrap();
-                        let size = blob.size();
-                        // Extract metadata
-                        let (metadata, title) = extract_metadata(blob.content());
-                        // Add an entry
-                        entries.push(ListEntry {
-                            path: path,
-                            size: size,
-                            mime_type: mime_type,
-                            metadata: metadata,
-                            title: title,
-                            time: time,
-                        });
-                    },
-                    Delta::Deleted => {
-                        // Ignore the entry
-                    },
-                    _ => unreachable!(),
-                }
-            }
+            // Update entries
+            let entries: Vec<ListEntry> = update_entries(old_entries, &repo, last_commit_id);
 
             // Find the head commit
             let head = repo.head().unwrap();
