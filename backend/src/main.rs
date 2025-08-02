@@ -206,7 +206,7 @@ fn collect_latest_ops(
 ) -> HashMap<PathBuf, (git2::Delta, DateTime<FixedOffset>, Oid)> {
     use git2::Delta;
 
-    // Iterate over recent commit history to collect operations on files
+    // Iterate over recent commit history to collect latest file operations
     let mut latest_ops: HashMap<PathBuf, (Delta, DateTime<FixedOffset>, Oid)> = HashMap::new();
     let mut revwalk = repo.revwalk().unwrap();
     revwalk.set_sorting(git2::Sort::TOPOLOGICAL).unwrap();
