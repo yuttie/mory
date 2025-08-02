@@ -410,6 +410,7 @@ async fn get_notes(
                 debug!("{:?}", commit);
 
                 for parent in commit.parents() {
+                    // FIXME: We assume there were no conflict in the case of multiple parents
                     let parent_tree = parent.tree().unwrap();
                     let diff = repo.diff_tree_to_tree(Some(&parent_tree), Some(&tree), None).unwrap();
                     for delta in diff.deltas() {
