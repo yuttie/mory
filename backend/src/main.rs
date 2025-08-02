@@ -453,24 +453,18 @@ async fn get_notes(
                         match delta.status() {
                             Delta::Added | Delta::Modified => {
                                 let file = delta.new_file();
-                                let found = {
-                                    if let Some(path) = oid_path_map.get(&file.id()) {
-                                        path == file.path().unwrap()
-                                    }
-                                    else {
-                                        false
-                                    }
-                                };
-                                if found {
-                                    // Add an entry
-                                    let entry = create_entry_from_diff_file(&file, &commit, &repo);
-                                    debug!("{:?} {:?} {:?}", entry.time, delta.status(), entry.path);
-                                    entries.push(entry);
-                                    // Remove the entry from oid_path_map
-                                    oid_path_map.remove(&file.id());
-                                    // Finish if all of the entries have been processed
-                                    if oid_path_map.is_empty() {
-                                        break 'revwalk;
+                                if let Some(path) = oid_path_map.get(&file.id()) {
+                                    if path == file.path().unwrap() {
+                                        // Add an entry
+                                        let entry = create_entry_from_diff_file(&file, &commit, &repo);
+                                        debug!("{:?} {:?} {:?}", entry.time, delta.status(), entry.path);
+                                        entries.push(entry);
+                                        // Remove the entry from oid_path_map
+                                        oid_path_map.remove(&file.id());
+                                        // Finish if all of the entries have been processed
+                                        if oid_path_map.is_empty() {
+                                            break 'revwalk;
+                                        }
                                     }
                                 }
                             },
