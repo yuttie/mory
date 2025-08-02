@@ -255,6 +255,16 @@ fn collect_latest_ops(
     latest_ops
 }
 
+fn guess_mime_from_path<P: AsRef<Path>>(path: P) -> String {
+    let guess = mime_guess::from_path(path);
+    if let Some(mime) = guess.first() {
+        mime.as_ref().parse().unwrap()
+    }
+    else {
+        "application/octet-stream".to_string()
+    }
+}
+
 fn create_entry_from_diff_file(
     file: &git2::DiffFile,
     commit: &git2::Commit,
@@ -263,13 +273,7 @@ fn create_entry_from_diff_file(
     // Path
     let path = file.path().unwrap().to_owned();
     // Guess the mime type
-    let guess = mime_guess::from_path(&path);
-    let mime_type = if let Some(mime) = guess.first() {
-        mime.as_ref().parse().unwrap()
-    }
-    else {
-        "application/octet-stream".to_string()
-    };
+    let mime_type = guess_mime_from_path(&path);
     // Get the file size
     let blob = repo.find_blob(file.id()).unwrap();
     let size = blob.size();
@@ -402,13 +406,7 @@ fn update_entries(
         match op {
             Delta::Added | Delta::Modified => {
                 // Guess the mime type
-                let guess = mime_guess::from_path(&path);
-                let mime_type = if let Some(mime) = guess.first() {
-                    mime.as_ref().parse().unwrap()
-                }
-                else {
-                    "application/octet-stream".to_string()
-                };
+                let mime_type = guess_mime_from_path(&path);
                 // Get the file size
                 let blob = repo.find_blob(blob_id).unwrap();
                 let size = blob.size();
