@@ -290,6 +290,67 @@ fn create_entry_from_diff_file(
     }
 }
 
+fn collect_entries(
+    commit_id: Oid,
+    repo: &Repository,
+) -> Vec<ListEntry> {
+    // Find the commit and its tree
+    let commit = repo.find_commit(commit_id).unwrap();
+    let tree = commit.tree().unwrap();
+
+    // Load the tree into an index
+    let mut index = Index::new().unwrap();
+    index.read_tree(&tree).unwrap();
+
+    // Populate the list
+    let mut files: HashSet<PathBuf> = HashSet::new();
+    for entry in index.iter() {
+        let path = PathBuf::from(OsStr::from_bytes(&entry.path));
+        files.insert(path);
+    }
+
+    // Iterate over commit history until last modified times of all the files are determined
+    let mut entries: Vec<ListEntry> = Vec::new();
+    let mut revwalk = repo.revwalk().unwrap();
+    revwalk.set_sorting(git2::Sort::TOPOLOGICAL).unwrap();
+    revwalk.push(commit_id).unwrap();
+    'revwalk: for oid in revwalk {
+        let oid = oid.unwrap();
+        let commit = repo.find_commit(oid).unwrap();
+        let tree = commit.tree().unwrap();
+        debug!("{:?}", commit);
+
+        for parent in commit.parents() {
+            // FIXME: We assume there were no conflict in the case of multiple parents
+            let parent_tree = parent.tree().unwrap();
+            let diff = repo.diff_tree_to_tree(Some(&parent_tree), Some(&tree), None).unwrap();
+            for delta in diff.deltas() {
+                use git2::Delta;
+                match delta.status() {
+                    Delta::Added | Delta::Modified | Delta::Renamed | Delta::Copied => {
+                        let file = delta.new_file();
+                        let path = file.path().unwrap().to_owned();
+                        // If this is the most recent commit that touches the file
+                        if files.remove(&path) {
+                            // Add an entry
+                            let entry = create_entry_from_diff_file(&file, &commit, &repo);
+                            debug!("{:?} {:?} {:?}", entry.time, delta.status(), entry.path);
+                            entries.push(entry);
+                            // Finish if all the files have been processed
+                            if files.is_empty() {
+                                break 'revwalk;
+                            }
+                        }
+                    },
+                    _ => (),
+                }
+            }
+        }
+    }
+
+    entries
+}
+
 fn update_entries(
     entries: &[ListEntry],
     repo: &Repository,
@@ -412,60 +473,13 @@ async fn get_notes(
         Cache::None => {
             // Create a new list
 
-            // Find the head commit and tree
+            // Find the HEAD commit and tree
             let head = repo.head().unwrap();
             let head_commit = head.peel_to_commit().unwrap();
             let head_tree = head.peel_to_tree().unwrap();
 
-            // Load the head tree into an index
-            let mut index = Index::new().unwrap();
-            index.read_tree(&head_tree).unwrap();
-
-            // Populate the list
-            let mut files: HashSet<PathBuf> = HashSet::new();
-            for entry in index.iter() {
-                let path = PathBuf::from(OsStr::from_bytes(&entry.path));
-                files.insert(path);
-            }
-
-            // Iterate over commit history until last modified times of all the files are determined
-            let mut entries: Vec<ListEntry> = Vec::new();
-            let mut revwalk = repo.revwalk().unwrap();
-            revwalk.set_sorting(git2::Sort::TOPOLOGICAL).unwrap();
-            revwalk.push_head().unwrap();
-            'revwalk: for oid in revwalk {
-                let oid = oid.unwrap();
-                let commit = repo.find_commit(oid).unwrap();
-                let tree = commit.tree().unwrap();
-                debug!("{:?}", commit);
-
-                for parent in commit.parents() {
-                    // FIXME: We assume there were no conflict in the case of multiple parents
-                    let parent_tree = parent.tree().unwrap();
-                    let diff = repo.diff_tree_to_tree(Some(&parent_tree), Some(&tree), None).unwrap();
-                    for delta in diff.deltas() {
-                        use git2::Delta;
-                        match delta.status() {
-                            Delta::Added | Delta::Modified | Delta::Renamed | Delta::Copied => {
-                                let file = delta.new_file();
-                                let path = file.path().unwrap().to_owned();
-                                // If this is the most recent commit that touches the file
-                                if files.remove(&path) {
-                                    // Add an entry
-                                    let entry = create_entry_from_diff_file(&file, &commit, &repo);
-                                    debug!("{:?} {:?} {:?}", entry.time, delta.status(), entry.path);
-                                    entries.push(entry);
-                                    // Finish if all the files have been processed
-                                    if files.is_empty() {
-                                        break 'revwalk;
-                                    }
-                                }
-                            },
-                            _ => (),
-                        }
-                    }
-                }
-            }
+            // Collect entries for HEAD
+            let entries = collect_entries(head_commit.id(), &repo);
 
             // Save to a cache file
             let mut cache_file = File::create("cache.msgpack").unwrap();
