@@ -255,6 +255,41 @@ fn collect_latest_ops(
     latest_ops
 }
 
+fn create_entry_from_diff_file(
+    file: &git2::DiffFile,
+    commit: &git2::Commit,
+    repo: &Repository,
+) -> ListEntry {
+    // Path
+    let path = file.path().unwrap().to_owned();
+    // Guess the mime type
+    let guess = mime_guess::from_path(&path);
+    let mime_type = if let Some(mime) = guess.first() {
+        mime.as_ref().parse().unwrap()
+    }
+    else {
+        "application/octet-stream".to_string()
+    };
+    // Get the file size
+    let blob = repo.find_blob(file.id()).unwrap();
+    let size = blob.size();
+    // Extract metadata
+    let (metadata, title) = extract_metadata(blob.content());
+    // Time
+    let t = commit.time();
+    let tz = FixedOffset::east_opt(t.offset_minutes() * 60).unwrap();
+    let time = tz.timestamp_opt(t.seconds(), 0).unwrap();
+    // Return a new ListEntry
+    ListEntry {
+        path: path,
+        size: size,
+        mime_type: mime_type,
+        metadata: metadata,
+        title: title,
+        time: time,
+    }
+}
+
 fn update_entries(
     entries: &[ListEntry],
     repo: &Repository,
@@ -427,35 +462,12 @@ async fn get_notes(
                                     }
                                 };
                                 if found {
-                                    // Remove the entry from oid_path_map
-                                    let path = oid_path_map.remove(&file.id()).unwrap();
-                                    // Guess the mime type
-                                    let guess = mime_guess::from_path(&path);
-                                    let mime_type = if let Some(mime) = guess.first() {
-                                        mime.as_ref().parse().unwrap()
-                                    }
-                                    else {
-                                        "application/octet-stream".to_string()
-                                    };
-                                    // Get the file size
-                                    let blob = repo.find_blob(file.id()).unwrap();
-                                    let size = blob.size();
-                                    // Extract metadata
-                                    let (metadata, title) = extract_metadata(blob.content());
-                                    // Time
-                                    let t = commit.time();
-                                    let tz = FixedOffset::east_opt(t.offset_minutes() * 60).unwrap();
-                                    let time = tz.timestamp_opt(t.seconds(), 0).unwrap();
                                     // Add an entry
-                                    debug!("{:?} {:?} {:?}", time, delta.status(), path);
-                                    entries.push(ListEntry {
-                                        path: path,
-                                        size: size,
-                                        mime_type: mime_type,
-                                        metadata: metadata,
-                                        title: title,
-                                        time: time,
-                                    });
+                                    let entry = create_entry_from_diff_file(&file, &commit, &repo);
+                                    debug!("{:?} {:?} {:?}", entry.time, delta.status(), entry.path);
+                                    entries.push(entry);
+                                    // Remove the entry from oid_path_map
+                                    oid_path_map.remove(&file.id());
                                     // Finish if all of the entries have been processed
                                     if oid_path_map.is_empty() {
                                         break 'revwalk;
