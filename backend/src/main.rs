@@ -434,7 +434,7 @@ async fn get_notes(
             }
 
             // Iterate over commit history until last modified times of all the files are determined
-            let mut entries = Vec::new();
+            let mut entries: Vec<ListEntry> = Vec::new();
             let mut revwalk = repo.revwalk().unwrap();
             revwalk.set_sorting(git2::Sort::TOPOLOGICAL).unwrap();
             revwalk.push_head().unwrap();
