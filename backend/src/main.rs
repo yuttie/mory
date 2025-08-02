@@ -398,7 +398,7 @@ async fn get_notes(
                 oid_path_map.insert(entry.id, path);
             }
 
-            // Iterate over commit history to find out last modified time for each file
+            // Iterate over commit history until last modified times of all the files are determined
             let mut entries = Vec::new();
             let mut revwalk = repo.revwalk().unwrap();
             revwalk.set_sorting(git2::Sort::TOPOLOGICAL).unwrap();
