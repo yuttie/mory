@@ -451,7 +451,7 @@ async fn get_notes(
                     for delta in diff.deltas() {
                         use git2::Delta;
                         match delta.status() {
-                            Delta::Added | Delta::Modified => {
+                            Delta::Added | Delta::Modified | Delta::Renamed | Delta::Copied => {
                                 let file = delta.new_file();
                                 let path = file.path().unwrap().to_owned();
                                 // If this is the most recent commit that touches the file
