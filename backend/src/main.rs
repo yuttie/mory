@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::ffi::OsStr;
 use std::fs::File;
@@ -427,10 +427,10 @@ async fn get_notes(
             index.read_tree(&head_tree).unwrap();
 
             // Populate the list
-            let mut oid_path_map: HashMap<Oid, PathBuf> = HashMap::new();
+            let mut files: HashSet<PathBuf> = HashSet::new();
             for entry in index.iter() {
                 let path = PathBuf::from(OsStr::from_bytes(&entry.path));
-                oid_path_map.insert(entry.id, path);
+                files.insert(path);
             }
 
             // Iterate over commit history until last modified times of all the files are determined
@@ -453,18 +453,16 @@ async fn get_notes(
                         match delta.status() {
                             Delta::Added | Delta::Modified => {
                                 let file = delta.new_file();
-                                if let Some(path) = oid_path_map.get(&file.id()) {
-                                    if path == file.path().unwrap() {
-                                        // Add an entry
-                                        let entry = create_entry_from_diff_file(&file, &commit, &repo);
-                                        debug!("{:?} {:?} {:?}", entry.time, delta.status(), entry.path);
-                                        entries.push(entry);
-                                        // Remove the entry from oid_path_map
-                                        oid_path_map.remove(&file.id());
-                                        // Finish if all of the entries have been processed
-                                        if oid_path_map.is_empty() {
-                                            break 'revwalk;
-                                        }
+                                let path = file.path().unwrap().to_owned();
+                                // If this is the most recent commit that touches the file
+                                if files.remove(&path) {
+                                    // Add an entry
+                                    let entry = create_entry_from_diff_file(&file, &commit, &repo);
+                                    debug!("{:?} {:?} {:?}", entry.time, delta.status(), entry.path);
+                                    entries.push(entry);
+                                    // Finish if all the files have been processed
+                                    if files.is_empty() {
+                                        break 'revwalk;
                                     }
                                 }
                             },
