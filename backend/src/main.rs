@@ -303,15 +303,13 @@ fn update_entries(
     // Update existing entries
     let mut new_entries: Vec<ListEntry> = Vec::with_capacity(entries.len());
     for entry in entries {
-        let mut found = false;
-        match latest_ops.get(&entry.path) {
+        match latest_ops.remove(&entry.path) {
             None => {
                 // Entry is untouched
                 new_entries.push(entry.clone());
             },
-            Some(&(op, time, blob_id)) => {
+            Some((op, time, blob_id)) => {
                 // Entry is modified or deleted
-                found = true;
                 match op {
                     Delta::Added | Delta::Modified => {
                         // Get the file size
@@ -335,9 +333,6 @@ fn update_entries(
                     _ => unreachable!(),
                 }
             },
-        }
-        if found {
-            latest_ops.remove(&entry.path);
         }
     }
 
