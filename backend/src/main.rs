@@ -373,31 +373,26 @@ fn update_entries(
                 // Entry is untouched
                 new_entries.push(entry.clone());
             },
-            Some((op, time, blob_id)) => {
-                // Entry is modified or deleted
-                match op {
-                    Delta::Added | Delta::Modified => {
-                        // Get the file size
-                        let blob = repo.find_blob(blob_id).unwrap();
-                        let size = blob.size();
-                        // Extract metadata
-                        let (metadata, title) = extract_metadata(blob.content());
-                        // Add an entry
-                        new_entries.push(ListEntry {
-                            path: entry.path.to_owned(),
-                            size: size,
-                            mime_type: entry.mime_type.to_owned(),
-                            metadata: metadata,
-                            title: title,
-                            time: time,
-                        });
-                    },
-                    Delta::Deleted => {
-                        // Ignore the entry
-                    },
-                    _ => unreachable!(),
-                }
+            Some((Delta::Added | Delta::Modified, time, blob_id)) => {
+                // Get the file size
+                let blob = repo.find_blob(blob_id).unwrap();
+                let size = blob.size();
+                // Extract metadata
+                let (metadata, title) = extract_metadata(blob.content());
+                // Add an entry
+                new_entries.push(ListEntry {
+                    path: entry.path.to_owned(),
+                    size: size,
+                    mime_type: entry.mime_type.to_owned(),
+                    metadata: metadata,
+                    title: title,
+                    time: time,
+                });
             },
+            Some((Delta::Deleted, _, _)) => {
+                // Ignore the entry
+            },
+            _ => unreachable!(),
         }
     }
 
