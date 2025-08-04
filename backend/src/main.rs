@@ -69,7 +69,7 @@ async fn main() -> Result<()> {
             Err(e) => panic!("failed to open: {}", e),
         }
     };
-    let state = Arc::new(models::AppState::new(repo));
+    let state = models::AppState::new(repo);
 
     let addr = env::var("MORIED_LISTEN").unwrap();
     debug!("{:?}", addr);
@@ -428,7 +428,7 @@ fn update_entries(
 }
 
 async fn get_notes(
-    extract::State(state): extract::State<Arc<AppState>>,
+    extract::State(state): extract::State<AppState>,
 ) -> Json<Vec<ListEntry>> {
     debug!("get_notes");
 
@@ -493,7 +493,7 @@ async fn get_notes(
 }
 
 async fn find_entry_blob(
-    state: &Arc<AppState>,
+    state: &AppState,
     path: &str,
 ) -> Option<(Oid, Vec<u8>)> {
     // Search an index of HEAD for the given path
@@ -538,7 +538,7 @@ fn content_response(content: Vec<u8>, path: &Path) -> Response {
 
 async fn get_notes_path(
     extract::Path(path): extract::Path<String>,
-    extract::State(state): extract::State<Arc<AppState>>,
+    extract::State(state): extract::State<AppState>,
 ) -> Response {
     debug!("get_notes_path");
 
@@ -552,7 +552,7 @@ async fn get_notes_path(
 
 async fn put_notes_path(
     extract::Path(path): extract::Path<String>,
-    extract::State(state): extract::State<Arc<AppState>>,
+    extract::State(state): extract::State<AppState>,
     Json(note_save): Json<NoteSave>,
 ) -> Response {
     debug!("put_notes_path");
@@ -652,7 +652,7 @@ async fn put_notes_path(
 
 async fn delete_notes_path(
     extract::Path(path): extract::Path<String>,
-    extract::State(state): extract::State<Arc<AppState>>,
+    extract::State(state): extract::State<AppState>,
 ) -> Response {
     debug!("delete_notes_path");
 
@@ -759,7 +759,7 @@ async fn serve_image_content(content: Vec<u8>, path: &Path) -> Response {
 
 async fn get_files_path(
     extract::Path(path): extract::Path<String>,
-    extract::State(state): extract::State<Arc<AppState>>,
+    extract::State(state): extract::State<AppState>,
 ) -> Response {
     debug!("get_files_path");
 
@@ -777,7 +777,7 @@ async fn get_files_path(
 }
 
 async fn post_files(
-    extract::State(state): extract::State<Arc<AppState>>,
+    extract::State(state): extract::State<AppState>,
     mut multipart: extract::Multipart,
 ) -> Response {
     debug!("post_files_path");
@@ -988,7 +988,7 @@ mod v2 {
     use super::*;
 
     pub async fn get_commits_head(
-        extract::State(state): extract::State<Arc<AppState>>,
+        extract::State(state): extract::State<AppState>,
     ) -> Result<Json<String>, AppError> {
         let repo = state.repo.lock().await;
         let head = repo.head()?;
@@ -1013,7 +1013,7 @@ mod v2 {
 
     async fn make_files_path_response(
         path: String,
-        state: Arc<AppState>,
+        state: AppState,
         headers: HeaderMap,
     ) -> Response {
         if let Some((oid, content)) = find_entry_blob(&state, &path).await {
@@ -1054,7 +1054,7 @@ mod v2 {
 
     pub async fn get_files_path(
         extract::Path(path): extract::Path<String>,
-        extract::State(state): extract::State<Arc<AppState>>,
+        extract::State(state): extract::State<AppState>,
         headers: HeaderMap,
     ) -> Response {
         debug!("v2::get_files_path");
@@ -1063,7 +1063,7 @@ mod v2 {
 
     pub async fn head_files_path(
         extract::Path(path): extract::Path<String>,
-        extract::State(state): extract::State<Arc<AppState>>,
+        extract::State(state): extract::State<AppState>,
         headers: HeaderMap,
     ) -> Response {
         debug!("v2::head_files_path");
