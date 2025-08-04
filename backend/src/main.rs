@@ -1,18 +1,18 @@
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::ffi::OsStr;
-use std::fs::File;
 use std::io::Write;
 use std::iter::once;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::str::FromStr;
 use std::vec::Vec;
 use std::string::String;
 use std::sync::Arc;
 use std::time;
 
-use anyhow::Context;
+use anyhow::{Context, Result};
 use argon2;
 use axum::{
     BoxError,
@@ -40,8 +40,12 @@ use git2::{Index, IndexEntry, IndexTime, Repository, Oid};
 use jsonwebtoken as jwt;
 use mime_guess;
 use sha1::{Digest, Sha1};
+use sqlx::sqlite::{
+    SqlitePoolOptions,
+    SqliteConnectOptions,
+};
 use tempfile::tempdir;
-use tokio::{io::{AsyncReadExt, AsyncWriteExt}, process::Command};
+use tokio::{io::{AsyncReadExt, AsyncWriteExt}, process::Command, sync::Mutex};
 use tower::ServiceBuilder;
 use tower_http::{
     cors::CorsLayer,
@@ -62,6 +66,35 @@ async fn main() -> Result<()> {
 
     dotenv().ok();
 
+    // Cache database
+    let options = SqliteConnectOptions::from_str("sqlite://cache.sqlite")?
+        .create_if_missing(true);
+    let db_pool = SqlitePoolOptions::new()
+        .max_connections(4)
+        .connect_with(options)
+        .await?;
+    sqlx::query("
+            CREATE TABLE IF NOT EXISTS cache_state (
+                key    TEXT PRIMARY KEY,
+                value  ANY
+            ) STRICT, WITHOUT ROWID;
+        ")
+        .execute(&db_pool)
+        .await?;
+    sqlx::query("
+            CREATE TABLE IF NOT EXISTS entry (
+                path       TEXT PRIMARY KEY,
+                size       INTEGER NOT NULL,
+                mime_type  TEXT NOT NULL,
+                metadata   TEXT,
+                title      TEXT,
+                time       INTEGER,
+                tz_offset  INTEGER
+            ) STRICT;
+        ")
+        .execute(&db_pool)
+        .await?;
+
     let repo = {
         let git_dir = env::var("MORIED_GIT_DIR").unwrap();
         match Repository::open(git_dir) {
@@ -69,7 +102,10 @@ async fn main() -> Result<()> {
             Err(e) => panic!("failed to open: {}", e),
         }
     };
-    let state = models::AppState::new(repo);
+    let state = models::AppState {
+        repo: Arc::new(Mutex::new(repo)),
+        cache_db: db_pool,
+    };
 
     let addr = env::var("MORIED_LISTEN").unwrap();
     debug!("{:?}", addr);
@@ -431,65 +467,7 @@ async fn get_notes(
     extract::State(state): extract::State<AppState>,
 ) -> Json<Vec<ListEntry>> {
     debug!("get_notes");
-
-    // Check if a cache exists
-    let repo = state.repo.lock().await;
-    let mut cached_entries = state.cached_entries.lock().await;
-    match cached_entries.get(&repo) {
-        Cache::Valid(entries) => {
-            // Return the cache
-            Json(entries.clone())
-        },
-        Cache::Invalid(last_commit_id, old_entries) => {
-            // Update entries
-            let entries: Vec<ListEntry> = update_entries(old_entries, &repo, last_commit_id);
-
-            // Find the head commit
-            let head = repo.head().unwrap();
-            let head_commit = head.peel_to_commit().unwrap();
-
-            // Save to a cache file
-            let mut cache_file = File::create("cache.msgpack").unwrap();
-            rmp_serde::encode::write(&mut cache_file, &models::EntriesCache {
-                commit_id: head_commit.id().to_string(),
-                entries: entries.clone(),
-            }).unwrap();
-
-            // Reply
-            let reply = Json(entries.clone());
-            *cached_entries = Cached::Computed {
-                commit_id: head_commit.id(),
-                data: entries,
-            };
-            reply
-        },
-        Cache::None => {
-            // Create a new list
-
-            // Find the HEAD commit and tree
-            let head = repo.head().unwrap();
-            let head_commit = head.peel_to_commit().unwrap();
-            let head_tree = head.peel_to_tree().unwrap();
-
-            // Collect entries for HEAD
-            let entries = collect_entries(head_commit.id(), &repo);
-
-            // Save to a cache file
-            let mut cache_file = File::create("cache.msgpack").unwrap();
-            rmp_serde::encode::write(&mut cache_file, &models::EntriesCache {
-                commit_id: head_commit.id().to_string(),
-                entries: entries.clone(),
-            }).unwrap();
-
-            // Reply
-            let reply = Json(entries.clone());
-            *cached_entries = Cached::Computed {
-                commit_id: head_commit.id(),
-                data: entries,
-            };
-            reply
-        },
-    }
+    Json(state.get_entries().await.unwrap())
 }
 
 async fn find_entry_blob(
@@ -1072,18 +1050,21 @@ mod v2 {
 }
 
 mod models {
-    use std::fs::File;
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::option::Option;
 
+    use anyhow::Result;
     use axum::{
+        extract,
         http::StatusCode,
         response::{IntoResponse, Response},
     };
-    use chrono::{DateTime, FixedOffset};
+    use chrono::{DateTime, FixedOffset, offset::TimeZone};
     use git2::{Repository, Oid};
     use serde::{Deserialize, Serialize};
+    use serde_yaml;
+    use sqlx::{Row, SqlitePool, sqlite::SqliteRow};
     use tokio::sync::Mutex;
 
     pub type Metadata = serde_yaml::Value;
@@ -1103,44 +1084,6 @@ mod models {
         pub sub: String,
         pub exp: usize,
         pub email: String,
-    }
-
-    pub enum Cache<'a, T> {
-        Valid(&'a T),
-        Invalid(Oid, &'a T),
-        None,
-    }
-
-    pub enum Cached<T> {
-        Computed {
-            commit_id: Oid,
-            data: T,
-        },
-        None,
-    }
-
-    impl<T> Cached<T> {
-        pub fn get(&self, repo: &Repository) -> Cache<T> {
-            match self {
-                Cached::None => Cache::None,
-                Cached::Computed { commit_id, data } => {
-                    let head = repo.head().unwrap();
-                    let commit = head.peel_to_commit().expect("Failed to obtain the commit of HEAD");
-                    if *commit_id == commit.id() {
-                        Cache::Valid(data)
-                    }
-                    else {
-                        Cache::Invalid(*commit_id, data)
-                    }
-                },
-            }
-        }
-    }
-
-    #[derive(Deserialize, Serialize)]
-    pub struct EntriesCache {
-        pub commit_id: String,
-        pub entries: Vec<ListEntry>,
     }
 
     pub struct AppError(anyhow::Error);
@@ -1164,34 +1107,96 @@ mod models {
         }
     }
 
-    #[derive(Clone)]
+    #[derive(Clone, extract::FromRef)]
     pub struct AppState {
         pub repo: Arc<Mutex<Repository>>,
-        pub cached_entries: Arc<Mutex<Cached<Vec<ListEntry>>>>,
+        pub cache_db: SqlitePool,
     }
 
     impl AppState {
-        pub fn new(repo: Repository) -> AppState {
-            let cache = match File::open("cache.msgpack") {
-                Ok(file) => {
-                    if let Ok(cache) = rmp_serde::from_read::<_, EntriesCache>(file) {
-                        Cached::Computed {
-                            commit_id: Oid::from_str(&cache.commit_id).unwrap(),
-                            data: cache.entries,
-                        }
-                    }
-                    else {
-                        Cached::None
-                    }
-                },
-                Err(_) => {
-                    Cached::None
-                },
-            };
-            AppState {
-                repo: Arc::new(Mutex::new(repo)),
-                cached_entries: Arc::new(Mutex::new(cache)),
+        pub async fn get_entries(&self) -> Result<Vec<ListEntry>> {
+            // Rebuild the cache if it is old
+            let head_commit_id = self.repo.lock().await.head()?.peel_to_commit()?.id();
+            if self.get_cache_commit_id().await.ok() != Some(head_commit_id) {
+                self.rebuild_entries_cache(head_commit_id).await?;
             }
+
+            // Return the entries from the cache
+            let entries = sqlx::query(
+                    "SELECT * FROM entry;",
+                )
+                .map(|row: SqliteRow| {
+                    let tz = FixedOffset::east_opt(row.get("tz_offset")).unwrap();
+                    let time = tz.timestamp_opt(row.get("time"), 0).unwrap();
+                    ListEntry {
+                        path: row.get::<String, _>("path").into(),
+                        size: row.get::<i64, _>("size") as usize,
+                        mime_type: row.get("mime_type"),
+                        metadata: serde_yaml::from_str(&row.get::<String, _>("metadata")).unwrap(),
+                        title: row.get("title"),
+                        time: time,
+                    }
+                })
+                .fetch_all(&self.cache_db)
+                .await?;
+
+            Ok(entries)
+        }
+
+        async fn get_cache_commit_id(
+            &self,
+        ) -> Result<Oid> {
+            let commit_id = sqlx::query(
+                    "SELECT value FROM cache_state WHERE key = 'commit_id';",
+                )
+                .map(|row: SqliteRow| {
+                    Oid::from_str(&row.get::<String, _>("value")).unwrap()
+                })
+                .fetch_one(&self.cache_db)
+                .await?;
+
+            Ok(commit_id)
+        }
+
+        async fn rebuild_entries_cache(
+            &self,
+            commit_id: Oid,
+        ) -> Result<()> {
+            // Collect file entries from the repository
+            let entries = super::collect_entries(commit_id, &*self.repo.lock().await);
+
+            // Start a transaction
+            let mut tx = self.cache_db.begin().await?;
+
+            // Drop the current cache
+            sqlx::query("DELETE FROM entry;")
+                .execute(&mut *tx)
+                .await?;
+
+            // Build a new one
+            for entry in &entries {
+                sqlx::query("INSERT INTO entry VALUES (?, ?, ?, ?, ?, ?, ?);")
+                    .bind(entry.path.to_str())
+                    .bind(entry.size as i64)
+                    .bind(&entry.mime_type)
+                    .bind(serde_yaml::to_string(&entry.metadata).unwrap())
+                    .bind(&entry.title)
+                    .bind(entry.time.timestamp())
+                    .bind(entry.time.offset().local_minus_utc())
+                    .execute(&mut *tx)
+                    .await?;
+            }
+
+            // Record the commit ID
+            sqlx::query("INSERT INTO cache_state VALUES ('commit_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;")
+                .bind(commit_id.to_string())
+                .execute(&mut *tx)
+                .await?;
+
+            // End the transaction
+            tx.commit().await?;
+
+            Ok(())
         }
     }
 
