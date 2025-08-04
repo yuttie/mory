@@ -1115,11 +1115,8 @@ mod models {
 
     impl AppState {
         pub async fn get_entries(&self) -> Result<Vec<ListEntry>> {
-            // Rebuild the cache if it is old
-            let head_commit_id = self.repo.lock().await.head()?.peel_to_commit()?.id();
-            if self.get_cache_commit_id().await.ok() != Some(head_commit_id) {
-                self.rebuild_entries_cache(head_commit_id).await?;
-            }
+            // Rebuild the cache if it is stale
+            self.ensure_file_entries_cache_updated().await?;
 
             // Return the entries from the cache
             let entries = sqlx::query(
@@ -1143,55 +1140,52 @@ mod models {
             Ok(entries)
         }
 
-        async fn get_cache_commit_id(
+        async fn ensure_file_entries_cache_updated(
             &self,
-        ) -> Result<Oid> {
+        ) -> Result<()> {
+            let head_commit_id = self.repo.lock().await.head()?.peel_to_commit()?.id();
+
+            // Start an exclusive transaction
+            let mut tx = self.cache_db.begin_with("BEGIN EXCLUSIVE").await?;
+
             let commit_id = sqlx::query(
                     "SELECT value FROM cache_state WHERE key = 'commit_id';",
                 )
                 .map(|row: SqliteRow| {
-                    Oid::from_str(&row.get::<String, _>("value")).unwrap()
+                    Oid::from_str(row.get("value")).unwrap()
                 })
-                .fetch_one(&self.cache_db)
+                .fetch_optional(&mut *tx)
                 .await?;
 
-            Ok(commit_id)
-        }
+            if commit_id != Some(head_commit_id) {
+                // Collect file entries from the repository
+                let entries = super::collect_entries(head_commit_id, &*self.repo.lock().await);
 
-        async fn rebuild_entries_cache(
-            &self,
-            commit_id: Oid,
-        ) -> Result<()> {
-            // Collect file entries from the repository
-            let entries = super::collect_entries(commit_id, &*self.repo.lock().await);
+                // Drop the current cache
+                sqlx::query("DELETE FROM entry;")
+                    .execute(&mut *tx)
+                    .await?;
 
-            // Start a transaction
-            let mut tx = self.cache_db.begin().await?;
+                // Build a new one
+                for entry in &entries {
+                    sqlx::query("INSERT INTO entry VALUES (?, ?, ?, ?, ?, ?, ?);")
+                        .bind(entry.path.to_str())
+                        .bind(entry.size as i64)
+                        .bind(&entry.mime_type)
+                        .bind(serde_yaml::to_string(&entry.metadata).unwrap())
+                        .bind(&entry.title)
+                        .bind(entry.time.timestamp())
+                        .bind(entry.time.offset().local_minus_utc())
+                        .execute(&mut *tx)
+                        .await?;
+                }
 
-            // Drop the current cache
-            sqlx::query("DELETE FROM entry;")
-                .execute(&mut *tx)
-                .await?;
-
-            // Build a new one
-            for entry in &entries {
-                sqlx::query("INSERT INTO entry VALUES (?, ?, ?, ?, ?, ?, ?);")
-                    .bind(entry.path.to_str())
-                    .bind(entry.size as i64)
-                    .bind(&entry.mime_type)
-                    .bind(serde_yaml::to_string(&entry.metadata).unwrap())
-                    .bind(&entry.title)
-                    .bind(entry.time.timestamp())
-                    .bind(entry.time.offset().local_minus_utc())
+                // Record the commit ID
+                sqlx::query("INSERT INTO cache_state VALUES ('commit_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;")
+                    .bind(head_commit_id.to_string())
                     .execute(&mut *tx)
                     .await?;
             }
-
-            // Record the commit ID
-            sqlx::query("INSERT INTO cache_state VALUES ('commit_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;")
-                .bind(commit_id.to_string())
-                .execute(&mut *tx)
-                .await?;
 
             // End the transaction
             tx.commit().await?;
