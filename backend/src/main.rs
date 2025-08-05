@@ -45,7 +45,7 @@ use sqlx::sqlite::{
     SqliteConnectOptions,
 };
 use tempfile::tempdir;
-use tokio::{io::{AsyncReadExt, AsyncWriteExt}, process::Command, sync::Mutex};
+use tokio::{process::Command, sync::Mutex};
 use tower::ServiceBuilder;
 use tower_http::{
     cors::CorsLayer,
