@@ -41,8 +41,9 @@ use jsonwebtoken as jwt;
 use mime_guess;
 use sha1::{Digest, Sha1};
 use sqlx::sqlite::{
-    SqlitePoolOptions,
     SqliteConnectOptions,
+    SqlitePoolOptions,
+    SqliteTransaction,
 };
 use tempfile::tempdir;
 use tokio::{process::Command, sync::Mutex};
@@ -408,76 +409,71 @@ fn is_ancestor(
     Ok(false)
 }
 
-fn update_entries(
-    entries: &[ListEntry],
-    repo: &Repository,
+async fn update_entries_cache<'c>(
+    tx: &mut SqliteTransaction<'c>,
+    repo: Arc<Mutex<Repository>>,
     last_commit_id: Oid,
-) -> Vec<ListEntry> {
+) -> Result<()> {
     use git2::Delta;
 
     // Iterate over recent commit history to collect operations on files
-    let mut recent_ops = collect_recent_file_ops(repo, last_commit_id);
+    let recent_ops = collect_recent_file_ops(&*repo.lock().await, last_commit_id);
 
-    // Update existing entries
-    let mut new_entries: Vec<ListEntry> = Vec::with_capacity(entries.len());
-    for entry in entries {
-        match recent_ops.remove(&entry.path) {
-            None => {
-                // Entry is untouched
-                new_entries.push(entry.clone());
-            },
-            Some((Delta::Added | Delta::Modified, time, blob_id)) => {
-                // Get the file size
-                let blob = repo.find_blob(blob_id).unwrap();
-                let size = blob.size();
-                // Extract metadata
-                let (metadata, title) = extract_metadata(blob.content());
-                // Add an entry
-                new_entries.push(ListEntry {
-                    path: entry.path.to_owned(),
-                    size: size,
-                    mime_type: entry.mime_type.to_owned(),
-                    metadata: metadata,
-                    title: title,
-                    time: time,
-                });
-            },
-            Some((Delta::Deleted, _, _)) => {
-                // Ignore the entry
-            },
-            _ => unreachable!(),
-        }
-    }
-
-    // Add newly created entries
+    // Update existing entries in the cache
     for (path, (op, time, blob_id)) in recent_ops {
         match op {
             Delta::Added | Delta::Modified => {
                 // Guess the mime type
                 let mime_type = guess_mime_from_path(&path);
-                // Get the file size
-                let blob = repo.find_blob(blob_id).unwrap();
-                let size = blob.size();
-                // Extract metadata
-                let (metadata, title) = extract_metadata(blob.content());
-                // Add an entry
-                new_entries.push(ListEntry {
-                    path: path,
-                    size: size,
-                    mime_type: mime_type,
-                    metadata: metadata,
-                    title: title,
-                    time: time,
-                });
+                // Get the file size and extract metadata
+                let (size, metadata, title) = {
+                    let repo = repo.lock().await;
+                    let blob = repo.find_blob(blob_id).unwrap();
+                    let size = blob.size();
+                    let (metadata, title) = extract_metadata(blob.content());
+                    (size, metadata, title)
+                };
+                // Upsert the entry
+                sqlx::query("
+                        INSERT INTO entry
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                            ON CONFLICT(path) DO UPDATE SET
+                                size = excluded.size,
+                                mime_type = excluded.mime_type,
+                                metadata = excluded.metadata,
+                                title = excluded.title,
+                                time = excluded.time,
+                                tz_offset = excluded.tz_offset;
+                    ")
+                    .bind(path.to_str())
+                    .bind(size as i64)
+                    .bind(mime_type)
+                    .bind(serde_json::to_string(&metadata).unwrap())
+                    .bind(title)
+                    .bind(time.timestamp())
+                    .bind(time.offset().local_minus_utc())
+                    .execute(&mut **tx)
+                    .await?;
             },
             Delta::Deleted => {
-                // Ignore the entry
+                // Delete the entry
+                sqlx::query("DELETE FROM entry WHERE path = ?;")
+                    .bind(path.to_str())
+                    .execute(&mut **tx)
+                    .await?;
             },
             _ => unreachable!(),
         }
     }
 
-    new_entries
+    // Update the commit ID
+    let head_commit_id = repo.lock().await.head()?.peel_to_commit()?.id();
+    sqlx::query("INSERT INTO cache_state VALUES ('commit_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;")
+        .bind(head_commit_id.to_string())
+        .execute(&mut **tx)
+        .await?;
+
+    Ok(())
 }
 
 async fn get_notes(
@@ -1177,55 +1173,7 @@ mod models {
                 },
                 Some(cache_commit_id) if super::is_ancestor(&*self.repo.lock().await, cache_commit_id, head_commit_id)? => {
                     // Perform delta update
-                    let entries = sqlx::query(
-                            "SELECT * FROM entry;",
-                        )
-                        .map(|row: SqliteRow| {
-                            let tz = FixedOffset::east_opt(row.get("tz_offset")).unwrap();
-                            let time = tz.timestamp_opt(row.get("time"), 0).unwrap();
-                            ListEntry {
-                                path: row.get::<String, _>("path").into(),
-                                size: row.get::<i64, _>("size") as usize,
-                                mime_type: row.get("mime_type"),
-                                metadata: serde_json::from_str(&row.get::<String, _>("metadata")).unwrap(),
-                                title: row.get("title"),
-                                time: time,
-                            }
-                        })
-                        .fetch_all(&mut *tx)
-                        .await?;
-
-                    // Update entries
-                    let entries = super::update_entries(
-                        &entries,
-                        &*self.repo.lock().await,
-                        cache_commit_id,
-                    );
-
-                    // Drop the current cache
-                    sqlx::query("DELETE FROM entry;")
-                        .execute(&mut *tx)
-                        .await?;
-
-                    // Build a new one
-                    for entry in &entries {
-                        sqlx::query("INSERT INTO entry VALUES (?, ?, ?, ?, ?, ?, ?);")
-                            .bind(entry.path.to_str())
-                            .bind(entry.size as i64)
-                            .bind(&entry.mime_type)
-                            .bind(serde_json::to_string(&entry.metadata).unwrap())
-                            .bind(&entry.title)
-                            .bind(entry.time.timestamp())
-                            .bind(entry.time.offset().local_minus_utc())
-                            .execute(&mut *tx)
-                            .await?;
-                    }
-
-                    // Record the commit ID
-                    sqlx::query("INSERT INTO cache_state VALUES ('commit_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;")
-                        .bind(head_commit_id.to_string())
-                        .execute(&mut *tx)
-                        .await?;
+                    super::update_entries_cache(&mut tx, self.repo.clone(), cache_commit_id).await?;
                 },
                 _ => {
                     // Rebuild from scratch
