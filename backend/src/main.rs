@@ -1038,13 +1038,9 @@ mod v2 {
         }
     }
 
-    fn head_from_full(mut full: Response) -> Response {
-        let mut head = Response::builder()
-            .status(full.status())
-            .body(Body::empty())
-            .unwrap();
-        *head.headers_mut() = full.headers().clone();
-        head
+    fn head_from_full(full: Response) -> Response {
+        let (parts, _) = full.into_parts();
+        Response::from_parts(parts, Body::empty())
     }
 
     pub async fn get_files_path(
