@@ -1142,7 +1142,7 @@ mod models {
                         path: row.get::<String, _>("path").into(),
                         size: row.get::<i64, _>("size") as usize,
                         mime_type: row.get("mime_type"),
-                        metadata: serde_yaml::from_str(&row.get::<String, _>("metadata")).unwrap(),
+                        metadata: serde_json::from_str(&row.get::<String, _>("metadata")).unwrap(),
                         title: row.get("title"),
                         time: time,
                     }
@@ -1187,7 +1187,7 @@ mod models {
                                 path: row.get::<String, _>("path").into(),
                                 size: row.get::<i64, _>("size") as usize,
                                 mime_type: row.get("mime_type"),
-                                metadata: serde_yaml::from_str(&row.get::<String, _>("metadata")).unwrap(),
+                                metadata: serde_json::from_str(&row.get::<String, _>("metadata")).unwrap(),
                                 title: row.get("title"),
                                 time: time,
                             }
@@ -1213,7 +1213,7 @@ mod models {
                             .bind(entry.path.to_str())
                             .bind(entry.size as i64)
                             .bind(&entry.mime_type)
-                            .bind(serde_yaml::to_string(&entry.metadata).unwrap())
+                            .bind(serde_json::to_string(&entry.metadata).unwrap())
                             .bind(&entry.title)
                             .bind(entry.time.timestamp())
                             .bind(entry.time.offset().local_minus_utc())
@@ -1243,7 +1243,7 @@ mod models {
                             .bind(entry.path.to_str())
                             .bind(entry.size as i64)
                             .bind(&entry.mime_type)
-                            .bind(serde_yaml::to_string(&entry.metadata).unwrap())
+                            .bind(serde_json::to_string(&entry.metadata).unwrap())
                             .bind(&entry.title)
                             .bind(entry.time.timestamp())
                             .bind(entry.time.offset().local_minus_utc())

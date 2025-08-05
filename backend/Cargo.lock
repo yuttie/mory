@@ -1178,6 +1178,7 @@ dependencies = [
  "mime_guess",
  "rust-argon2",
  "serde",
+ "serde_json",
  "serde_yaml",
  "sha1",
  "sqlx",
