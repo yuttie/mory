@@ -243,8 +243,8 @@ fn collect_recent_file_ops(
 ) -> HashMap<PathBuf, (git2::Delta, DateTime<FixedOffset>, Oid)> {
     use git2::Delta;
 
-    // Iterate over recent commit history to collect latest file operations
-    let mut latest_ops: HashMap<PathBuf, (Delta, DateTime<FixedOffset>, Oid)> = HashMap::new();
+    // Iterate over commit history after `last_commit_id` to collect recent file operations
+    let mut recent_ops: HashMap<PathBuf, (Delta, DateTime<FixedOffset>, Oid)> = HashMap::new();
     let mut revwalk = repo.revwalk().unwrap();
     revwalk.set_sorting(git2::Sort::TOPOLOGICAL).unwrap();
     revwalk.push_range(&format!("{}..HEAD", last_commit_id)).unwrap();
@@ -268,7 +268,7 @@ fn collect_recent_file_ops(
                     Delta::Added | Delta::Modified => {
                         let file = delta.new_file();
                         let path = file.path().unwrap().to_owned();
-                        latest_ops.entry(path).or_insert((
+                        recent_ops.entry(path).or_insert((
                             delta.status(),
                             time,
                             file.id(),
@@ -277,7 +277,7 @@ fn collect_recent_file_ops(
                     Delta::Deleted => {
                         let file = delta.old_file();
                         let path = file.path().unwrap().to_owned();
-                        latest_ops.entry(path).or_insert((
+                        recent_ops.entry(path).or_insert((
                             delta.status(),
                             time,
                             file.id(),
@@ -289,7 +289,7 @@ fn collect_recent_file_ops(
         }
     }
 
-    latest_ops
+    recent_ops
 }
 
 fn guess_mime_from_path<P: AsRef<Path>>(path: P) -> String {
@@ -416,12 +416,12 @@ fn update_entries(
     use git2::Delta;
 
     // Iterate over recent commit history to collect operations on files
-    let mut latest_ops = collect_recent_file_ops(repo, last_commit_id);
+    let mut recent_ops = collect_recent_file_ops(repo, last_commit_id);
 
     // Update existing entries
     let mut new_entries: Vec<ListEntry> = Vec::with_capacity(entries.len());
     for entry in entries {
-        match latest_ops.remove(&entry.path) {
+        match recent_ops.remove(&entry.path) {
             None => {
                 // Entry is untouched
                 new_entries.push(entry.clone());
@@ -450,7 +450,7 @@ fn update_entries(
     }
 
     // Add newly created entries
-    for (path, (op, time, blob_id)) in latest_ops {
+    for (path, (op, time, blob_id)) in recent_ops {
         match op {
             Delta::Added | Delta::Modified => {
                 // Guess the mime type
