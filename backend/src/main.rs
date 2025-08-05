@@ -391,6 +391,22 @@ fn collect_entries(
     entries
 }
 
+fn is_ancestor(
+    repo: &Repository,
+    ancestor: Oid,
+    descendant: Oid,
+) -> Result<bool> {
+    let mut revwalk = repo.revwalk()?;
+    revwalk.push(descendant)?;
+    for oid_result in revwalk {
+        let oid = oid_result?;
+        if oid == ancestor {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 fn update_entries(
     entries: &[ListEntry],
     repo: &Repository,
@@ -1148,7 +1164,7 @@ mod models {
             // Start an exclusive transaction
             let mut tx = self.cache_db.begin_with("BEGIN EXCLUSIVE").await?;
 
-            let commit_id = sqlx::query(
+            let cache_commit_id_opt = sqlx::query(
                     "SELECT value FROM cache_state WHERE key = 'commit_id';",
                 )
                 .map(|row: SqliteRow| {
@@ -1157,34 +1173,93 @@ mod models {
                 .fetch_optional(&mut *tx)
                 .await?;
 
-            if commit_id != Some(head_commit_id) {
-                // Collect file entries from the repository
-                let entries = super::collect_entries(head_commit_id, &*self.repo.lock().await);
+            match cache_commit_id_opt {
+                Some(cache_commit_id) if cache_commit_id == head_commit_id => {
+                    // No update is needed
+                    ()
+                },
+                Some(cache_commit_id) if super::is_ancestor(&*self.repo.lock().await, cache_commit_id, head_commit_id)? => {
+                    // Perform delta update
+                    let entries = sqlx::query(
+                            "SELECT * FROM entry;",
+                        )
+                        .map(|row: SqliteRow| {
+                            let tz = FixedOffset::east_opt(row.get("tz_offset")).unwrap();
+                            let time = tz.timestamp_opt(row.get("time"), 0).unwrap();
+                            ListEntry {
+                                path: row.get::<String, _>("path").into(),
+                                size: row.get::<i64, _>("size") as usize,
+                                mime_type: row.get("mime_type"),
+                                metadata: serde_yaml::from_str(&row.get::<String, _>("metadata")).unwrap(),
+                                title: row.get("title"),
+                                time: time,
+                            }
+                        })
+                        .fetch_all(&mut *tx)
+                        .await?;
 
-                // Drop the current cache
-                sqlx::query("DELETE FROM entry;")
-                    .execute(&mut *tx)
-                    .await?;
+                    // Update entries
+                    let entries = super::update_entries(
+                        &entries,
+                        &*self.repo.lock().await,
+                        cache_commit_id,
+                    );
 
-                // Build a new one
-                for entry in &entries {
-                    sqlx::query("INSERT INTO entry VALUES (?, ?, ?, ?, ?, ?, ?);")
-                        .bind(entry.path.to_str())
-                        .bind(entry.size as i64)
-                        .bind(&entry.mime_type)
-                        .bind(serde_yaml::to_string(&entry.metadata).unwrap())
-                        .bind(&entry.title)
-                        .bind(entry.time.timestamp())
-                        .bind(entry.time.offset().local_minus_utc())
+                    // Drop the current cache
+                    sqlx::query("DELETE FROM entry;")
                         .execute(&mut *tx)
                         .await?;
-                }
 
-                // Record the commit ID
-                sqlx::query("INSERT INTO cache_state VALUES ('commit_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;")
-                    .bind(head_commit_id.to_string())
-                    .execute(&mut *tx)
-                    .await?;
+                    // Build a new one
+                    for entry in &entries {
+                        sqlx::query("INSERT INTO entry VALUES (?, ?, ?, ?, ?, ?, ?);")
+                            .bind(entry.path.to_str())
+                            .bind(entry.size as i64)
+                            .bind(&entry.mime_type)
+                            .bind(serde_yaml::to_string(&entry.metadata).unwrap())
+                            .bind(&entry.title)
+                            .bind(entry.time.timestamp())
+                            .bind(entry.time.offset().local_minus_utc())
+                            .execute(&mut *tx)
+                            .await?;
+                    }
+
+                    // Record the commit ID
+                    sqlx::query("INSERT INTO cache_state VALUES ('commit_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;")
+                        .bind(head_commit_id.to_string())
+                        .execute(&mut *tx)
+                        .await?;
+                },
+                _ => {
+                    // Rebuild from scratch
+                    // Collect file entries from the repository
+                    let entries = super::collect_entries(head_commit_id, &*self.repo.lock().await);
+
+                    // Drop the current cache
+                    sqlx::query("DELETE FROM entry;")
+                        .execute(&mut *tx)
+                        .await?;
+
+                    // Build a new one
+                    for entry in &entries {
+                        sqlx::query("INSERT INTO entry VALUES (?, ?, ?, ?, ?, ?, ?);")
+                            .bind(entry.path.to_str())
+                            .bind(entry.size as i64)
+                            .bind(&entry.mime_type)
+                            .bind(serde_yaml::to_string(&entry.metadata).unwrap())
+                            .bind(&entry.title)
+                            .bind(entry.time.timestamp())
+                            .bind(entry.time.offset().local_minus_utc())
+                            .execute(&mut *tx)
+                            .await?;
+                    }
+
+                    // Record the commit ID
+                    sqlx::query("INSERT INTO cache_state VALUES ('commit_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;")
+                        .bind(head_commit_id.to_string())
+                        .execute(&mut *tx)
+                        .await?;
+                },
             }
 
             // End the transaction
