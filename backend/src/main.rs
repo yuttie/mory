@@ -237,7 +237,7 @@ async fn post_login(
     }
 }
 
-fn collect_latest_ops(
+fn collect_recent_file_ops(
     repo: &Repository,
     last_commit_id: Oid,
 ) -> HashMap<PathBuf, (git2::Delta, DateTime<FixedOffset>, Oid)> {
@@ -416,7 +416,7 @@ fn update_entries(
     use git2::Delta;
 
     // Iterate over recent commit history to collect operations on files
-    let mut latest_ops = collect_latest_ops(repo, last_commit_id);
+    let mut latest_ops = collect_recent_file_ops(repo, last_commit_id);
 
     // Update existing entries
     let mut new_entries: Vec<ListEntry> = Vec::with_capacity(entries.len());
