@@ -241,11 +241,11 @@ async fn post_login(
 fn collect_recent_file_ops(
     repo: &Repository,
     last_commit_id: Oid,
-) -> HashMap<PathBuf, (git2::Delta, DateTime<FixedOffset>, Oid)> {
+) -> HashMap<PathBuf, (git2::Delta, git2::Time, Oid)> {
     use git2::Delta;
 
     // Iterate over commit history after `last_commit_id` to collect recent file operations
-    let mut recent_ops: HashMap<PathBuf, (Delta, DateTime<FixedOffset>, Oid)> = HashMap::new();
+    let mut recent_ops: HashMap<PathBuf, (Delta, git2::Time, Oid)> = HashMap::new();
     let mut revwalk = repo.revwalk().unwrap();
     revwalk.set_sorting(git2::Sort::TOPOLOGICAL).unwrap();
     revwalk.push_range(&format!("{}..HEAD", last_commit_id)).unwrap();
@@ -253,12 +253,6 @@ fn collect_recent_file_ops(
         let oid = oid.unwrap();
         let commit = repo.find_commit(oid).unwrap();
         debug!("{:?}", commit);
-
-        let time = {
-            let t = commit.time();
-            let tz = FixedOffset::east_opt(t.offset_minutes() * 60).unwrap();
-            tz.timestamp_opt(t.seconds(), 0).unwrap()
-        };
 
         let tree = commit.tree().unwrap();
         for parent in commit.parents() {
@@ -271,7 +265,7 @@ fn collect_recent_file_ops(
                         let path = file.path().unwrap().to_owned();
                         recent_ops.entry(path).or_insert((
                             delta.status(),
-                            time,
+                            commit.time(),
                             file.id(),
                         ));
                     },
@@ -280,7 +274,7 @@ fn collect_recent_file_ops(
                         let path = file.path().unwrap().to_owned();
                         recent_ops.entry(path).or_insert((
                             delta.status(),
-                            time,
+                            commit.time(),
                             file.id(),
                         ));
                     },
@@ -450,8 +444,8 @@ async fn update_entries_cache<'c>(
                     .bind(mime_type)
                     .bind(serde_json::to_string(&metadata).unwrap())
                     .bind(title)
-                    .bind(time.timestamp())
-                    .bind(time.offset().local_minus_utc())
+                    .bind(time.seconds())
+                    .bind(time.offset_minutes() * 60)
                     .execute(&mut **tx)
                     .await?;
             },
