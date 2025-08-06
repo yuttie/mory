@@ -237,14 +237,19 @@ async fn post_login(
     }
 }
 
+enum FileOp {
+    AddedOrModified(git2::Time, Oid),
+    Deleted,
+}
+
 fn collect_recent_file_ops(
     repo: &Repository,
     last_commit_id: Oid,
-) -> HashMap<PathBuf, (git2::Delta, git2::Time, Oid)> {
+) -> HashMap<PathBuf, FileOp> {
     use git2::Delta;
 
     // Iterate over commit history after `last_commit_id` to collect recent file operations
-    let mut recent_ops: HashMap<PathBuf, (Delta, git2::Time, Oid)> = HashMap::new();
+    let mut recent_ops: HashMap<PathBuf, FileOp> = HashMap::new();
     let mut revwalk = repo.revwalk().unwrap();
     revwalk.set_sorting(git2::Sort::TOPOLOGICAL).unwrap();
     revwalk.push_range(&format!("{}..HEAD", last_commit_id)).unwrap();
@@ -259,23 +264,29 @@ fn collect_recent_file_ops(
             let diff = repo.diff_tree_to_tree(Some(&parent_tree), Some(&tree), None).unwrap();
             for delta in diff.deltas() {
                 match delta.status() {
-                    Delta::Added | Delta::Modified => {
+                    Delta::Added | Delta::Modified | Delta::Copied => {
                         let file = delta.new_file();
                         let path = file.path().unwrap().to_owned();
-                        recent_ops.entry(path).or_insert((
-                            delta.status(),
+                        recent_ops.entry(path).or_insert(FileOp::AddedOrModified(
                             commit.time(),
                             file.id(),
                         ));
                     },
-                    Delta::Deleted => {
-                        let file = delta.old_file();
+                    Delta::Renamed => {
+                        let file = delta.new_file();
                         let path = file.path().unwrap().to_owned();
-                        recent_ops.entry(path).or_insert((
-                            delta.status(),
+                        recent_ops.entry(path).or_insert(FileOp::AddedOrModified(
                             commit.time(),
                             file.id(),
                         ));
+                        let file = delta.old_file();
+                        let path = file.path().unwrap().to_owned();
+                        recent_ops.entry(path).or_insert(FileOp::Deleted);
+                    },
+                    Delta::Deleted => {
+                        let file = delta.old_file();
+                        let path = file.path().unwrap().to_owned();
+                        recent_ops.entry(path).or_insert(FileOp::Deleted);
                     },
                     _ => (),
                 }
@@ -413,15 +424,13 @@ async fn update_entries_cache<'c>(
     repo: Arc<Mutex<Repository>>,
     last_commit_id: Oid,
 ) -> Result<()> {
-    use git2::Delta;
-
     // Iterate over recent commit history to collect operations on files
     let recent_ops = collect_recent_file_ops(&*repo.lock().unwrap(), last_commit_id);
 
     // Update existing entries in the cache
-    for (path, (op, time, blob_id)) in recent_ops {
+    for (path, op) in recent_ops {
         match op {
-            Delta::Added | Delta::Modified => {
+            FileOp::AddedOrModified(time, blob_id) => {
                 // Guess the mime type
                 let mime_type = guess_mime_from_path(&path);
                 // Get the file size and extract metadata
@@ -454,14 +463,13 @@ async fn update_entries_cache<'c>(
                     .execute(&mut **tx)
                     .await?;
             },
-            Delta::Deleted => {
+            FileOp::Deleted => {
                 // Delete the entry
                 sqlx::query("DELETE FROM entry WHERE path = ?;")
                     .bind(path.to_str())
                     .execute(&mut **tx)
                     .await?;
             },
-            _ => unreachable!(),
         }
     }
 
