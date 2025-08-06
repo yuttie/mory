@@ -9,7 +9,7 @@ use std::process::Stdio;
 use std::str::FromStr;
 use std::vec::Vec;
 use std::string::String;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time;
 
 use anyhow::{Context, Result};
@@ -45,7 +45,7 @@ use sqlx::sqlite::{
     SqliteTransaction,
 };
 use tempfile::tempdir;
-use tokio::{process::Command, sync::Mutex};
+use tokio::process::Command;
 use tower::ServiceBuilder;
 use tower_http::{
     cors::CorsLayer,
@@ -303,7 +303,7 @@ async fn rebuild_entries_cache<'c>(
 ) -> Result<()> {
     // Collect minimum necessary information for each file path
     let path_info_list: Vec<(PathBuf, git2::Time, Oid)> = {
-        let repo = repo.lock().await;
+        let repo = repo.lock().unwrap();
         // Find the commit and its tree
         let commit = repo.find_commit(commit_id).unwrap();
         let tree = commit.tree().unwrap();
@@ -364,7 +364,7 @@ async fn rebuild_entries_cache<'c>(
         let mime_type = guess_mime_from_path(&path);
         // Get the file size and extract metadata
         let (size, metadata, title) = {
-            let repo = repo.lock().await;
+            let repo = repo.lock().unwrap();
             let blob = repo.find_blob(blob_id)?;
             let size = blob.size();
             let (metadata, title) = extract_metadata(blob.content());
@@ -416,7 +416,7 @@ async fn update_entries_cache<'c>(
     use git2::Delta;
 
     // Iterate over recent commit history to collect operations on files
-    let recent_ops = collect_recent_file_ops(&*repo.lock().await, last_commit_id);
+    let recent_ops = collect_recent_file_ops(&*repo.lock().unwrap(), last_commit_id);
 
     // Update existing entries in the cache
     for (path, (op, time, blob_id)) in recent_ops {
@@ -426,7 +426,7 @@ async fn update_entries_cache<'c>(
                 let mime_type = guess_mime_from_path(&path);
                 // Get the file size and extract metadata
                 let (size, metadata, title) = {
-                    let repo = repo.lock().await;
+                    let repo = repo.lock().unwrap();
                     let blob = repo.find_blob(blob_id).unwrap();
                     let size = blob.size();
                     let (metadata, title) = extract_metadata(blob.content());
@@ -466,7 +466,7 @@ async fn update_entries_cache<'c>(
     }
 
     // Update the commit ID
-    let head_commit_id = repo.lock().await.head()?.peel_to_commit()?.id();
+    let head_commit_id = repo.lock().unwrap().head()?.peel_to_commit()?.id();
     sqlx::query("INSERT INTO cache_state VALUES ('commit_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;")
         .bind(head_commit_id.to_string())
         .execute(&mut **tx)
@@ -488,7 +488,7 @@ async fn find_entry_blob(
 ) -> Option<(Oid, Vec<u8>)> {
     // Search an index of HEAD for the given path
     let (oid, entry) = {
-        let repo = state.repo.lock().await;
+        let repo = state.repo.lock().unwrap();
 
         // Build an in-memory index of HEAD
         let head_ref = repo.head().ok()?;
@@ -508,7 +508,7 @@ async fn find_entry_blob(
 
     // Load the blob's bytes
     let content = {
-        let repo = state.repo.lock().await;
+        let repo = state.repo.lock().unwrap();
         repo.find_blob(entry.id).map(|blob| Vec::from(blob.content())).ok()?
     };
 
@@ -550,7 +550,7 @@ async fn put_notes_path(
 
     match note_save {
         NoteSave::Save { content, message } => {
-            let repo = state.repo.lock().await;
+            let repo = state.repo.lock().unwrap();
 
             let head = repo.head().unwrap();
             let head_tree = head.peel_to_tree().unwrap();
@@ -592,7 +592,7 @@ async fn put_notes_path(
         },
         NoteSave::Rename { from } => {
             let found = {
-                let repo = state.repo.lock().await;
+                let repo = state.repo.lock().unwrap();
 
                 let head = repo.head().unwrap();
                 let head_tree = head.peel_to_tree().unwrap();
@@ -603,7 +603,7 @@ async fn put_notes_path(
                 index.iter().find(|entry| std::str::from_utf8(&entry.path).unwrap() == from)
             };
             if let Some(mut entry) = found {
-                let repo = state.repo.lock().await;
+                let repo = state.repo.lock().unwrap();
 
                 let head = repo.head().unwrap();
                 let head_tree = head.peel_to_tree().unwrap();
@@ -647,7 +647,7 @@ async fn delete_notes_path(
     debug!("delete_notes_path");
 
     let found = {
-        let repo = state.repo.lock().await;
+        let repo = state.repo.lock().unwrap();
 
         let head = repo.head().unwrap();
         let head_tree = head.peel_to_tree().unwrap();
@@ -658,7 +658,7 @@ async fn delete_notes_path(
         index.iter().find(|entry| std::str::from_utf8(&entry.path).unwrap() == path)
     };
     if let Some(entry) = found {
-        let repo = state.repo.lock().await;
+        let repo = state.repo.lock().unwrap();
 
         let head = repo.head().unwrap();
         let head_tree = head.peel_to_tree().unwrap();
@@ -784,7 +784,7 @@ async fn post_files(
         let blob_oid = {
             let data = field.bytes().await.unwrap();
 
-            let repo = state.repo.lock().await;
+            let repo = state.repo.lock().unwrap();
             let mut writer = repo.blob_writer(None).unwrap();
             writer.write_all(&data).unwrap();
             writer.commit().unwrap()
@@ -795,7 +795,7 @@ async fn post_files(
     }
 
     // Commit
-    let repo = state.repo.lock().await;
+    let repo = state.repo.lock().unwrap();
 
     let head = repo.head().unwrap();
     let head_tree = head.peel_to_tree().unwrap();
@@ -980,7 +980,7 @@ mod v2 {
     pub async fn get_commits_head(
         extract::State(state): extract::State<AppState>,
     ) -> Result<Json<String>, AppError> {
-        let repo = state.repo.lock().await;
+        let repo = state.repo.lock().unwrap();
         let head = repo.head()?;
         let commit = head.peel_to_commit()?;
         let commit_id = commit.id();
@@ -1059,7 +1059,7 @@ mod v2 {
 
 mod models {
     use std::path::PathBuf;
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
     use std::option::Option;
 
     use anyhow::Result;
@@ -1073,7 +1073,6 @@ mod models {
     use serde::{Deserialize, Serialize};
     use serde_yaml;
     use sqlx::{Row, SqlitePool, sqlite::SqliteRow};
-    use tokio::sync::Mutex;
 
     pub type Metadata = serde_yaml::Value;
 
@@ -1151,7 +1150,7 @@ mod models {
         async fn ensure_file_entries_cache_updated(
             &self,
         ) -> Result<()> {
-            let head_commit_id = self.repo.lock().await.head()?.peel_to_commit()?.id();
+            let head_commit_id = self.repo.lock().unwrap().head()?.peel_to_commit()?.id();
 
             // Start an exclusive transaction
             let mut tx = self.cache_db.begin_with("BEGIN EXCLUSIVE").await?;
@@ -1170,7 +1169,7 @@ mod models {
                     // No update is needed
                     ()
                 },
-                Some(cache_commit_id) if super::is_ancestor(&*self.repo.lock().await, cache_commit_id, head_commit_id)? => {
+                Some(cache_commit_id) if super::is_ancestor(&*self.repo.lock().unwrap(), cache_commit_id, head_commit_id)? => {
                     // Perform delta update
                     super::update_entries_cache(&mut tx, self.repo.clone(), cache_commit_id).await?;
                 },
