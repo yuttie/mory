@@ -33,8 +33,7 @@ use axum::{
     Router,
     routing::{get, post},
 };
-use chrono::{DateTime, Duration, Utc, FixedOffset};
-use chrono::offset::TimeZone;
+use chrono::{DateTime, Duration, Utc};
 use dotenv::dotenv;
 use git2::{Index, IndexEntry, IndexTime, Repository, Oid};
 use jsonwebtoken as jwt;
@@ -297,94 +296,100 @@ fn guess_mime_from_path<P: AsRef<Path>>(path: P) -> String {
     }
 }
 
-fn create_entry_from_diff_file(
-    file: &git2::DiffFile,
-    commit: &git2::Commit,
-    repo: &Repository,
-) -> ListEntry {
-    // Path
-    let path = file.path().unwrap().to_owned();
-    // Guess the mime type
-    let mime_type = guess_mime_from_path(&path);
-    // Get the file size
-    let blob = repo.find_blob(file.id()).unwrap();
-    let size = blob.size();
-    // Extract metadata
-    let (metadata, title) = extract_metadata(blob.content());
-    // Time
-    let t = commit.time();
-    let tz = FixedOffset::east_opt(t.offset_minutes() * 60).unwrap();
-    let time = tz.timestamp_opt(t.seconds(), 0).unwrap();
-    // Return a new ListEntry
-    ListEntry {
-        path: path,
-        size: size,
-        mime_type: mime_type,
-        metadata: metadata,
-        title: title,
-        time: time,
-    }
-}
-
-fn collect_entries(
+async fn rebuild_entries_cache<'c>(
+    tx: &mut SqliteTransaction<'c>,
+    repo: Arc<Mutex<Repository>>,
     commit_id: Oid,
-    repo: &Repository,
-) -> Vec<ListEntry> {
-    // Find the commit and its tree
-    let commit = repo.find_commit(commit_id).unwrap();
-    let tree = commit.tree().unwrap();
-
-    // Load the tree into an index
-    let mut index = Index::new().unwrap();
-    index.read_tree(&tree).unwrap();
-
-    // Populate the list
-    let mut files: HashSet<PathBuf> = HashSet::new();
-    for entry in index.iter() {
-        let path = PathBuf::from(OsStr::from_bytes(&entry.path));
-        files.insert(path);
-    }
-
-    // Iterate over commit history until last modified times of all the files are determined
-    let mut entries: Vec<ListEntry> = Vec::new();
-    let mut revwalk = repo.revwalk().unwrap();
-    revwalk.set_sorting(git2::Sort::TOPOLOGICAL).unwrap();
-    revwalk.push(commit_id).unwrap();
-    'revwalk: for oid in revwalk {
-        let oid = oid.unwrap();
-        let commit = repo.find_commit(oid).unwrap();
+) -> Result<()> {
+    // Collect minimum necessary information for each file path
+    let path_info_list: Vec<(PathBuf, git2::Time, Oid)> = {
+        let repo = repo.lock().await;
+        // Find the commit and its tree
+        let commit = repo.find_commit(commit_id).unwrap();
         let tree = commit.tree().unwrap();
-        debug!("{:?}", commit);
+        // Load the tree into an index
+        let mut index = Index::new().unwrap();
+        index.read_tree(&tree).unwrap();
+        // Populate the target file set
+        let mut files: HashSet<PathBuf> = index.iter()
+            .map(|entry| PathBuf::from(OsStr::from_bytes(&entry.path)))
+            .collect();
+        // Iterate over commit history until last modified times of all the files are determined
+        let mut path_info_list: Vec<(PathBuf, git2::Time, Oid)> = Vec::with_capacity(files.len());
+        let mut revwalk = repo.revwalk()?;
+        revwalk.set_sorting(git2::Sort::TOPOLOGICAL)?;
+        revwalk.push(commit_id)?;
+        'revwalk: for oid in revwalk {
+            let oid = oid?;
+            let commit = repo.find_commit(oid)?;
+            let tree = commit.tree()?;
+            debug!("{:?}", commit);
 
-        for parent in commit.parents() {
-            // FIXME: We assume there were no conflict in the case of multiple parents
-            let parent_tree = parent.tree().unwrap();
-            let diff = repo.diff_tree_to_tree(Some(&parent_tree), Some(&tree), None).unwrap();
-            for delta in diff.deltas() {
-                use git2::Delta;
-                match delta.status() {
-                    Delta::Added | Delta::Modified | Delta::Renamed | Delta::Copied => {
-                        let file = delta.new_file();
-                        let path = file.path().unwrap().to_owned();
-                        // If this is the most recent commit that touches the file
-                        if files.remove(&path) {
-                            // Add an entry
-                            let entry = create_entry_from_diff_file(&file, &commit, &repo);
-                            debug!("{:?} {:?} {:?}", entry.time, delta.status(), entry.path);
-                            entries.push(entry);
-                            // Finish if all the files have been processed
-                            if files.is_empty() {
-                                break 'revwalk;
+            for parent in commit.parents() {
+                // FIXME: We assume there were no conflict in the case of multiple parents
+                let parent_tree = parent.tree()?;
+                let diff = repo.diff_tree_to_tree(Some(&parent_tree), Some(&tree), None)?;
+                for delta in diff.deltas() {
+                    use git2::Delta;
+                    match delta.status() {
+                        Delta::Added | Delta::Modified | Delta::Renamed | Delta::Copied => {
+                            let file = delta.new_file();
+                            let path = file.path().unwrap().to_owned();
+                            // If this is the most recent commit that touches the file
+                            if files.remove(&path) {
+                                // Add an entry
+                                path_info_list.push((path, commit.time(), file.id()));
+                                // Finish if all the files have been processed
+                                if files.is_empty() {
+                                    break 'revwalk;
+                                }
                             }
-                        }
-                    },
-                    _ => (),
+                        },
+                        _ => (),
+                    }
                 }
             }
         }
+        path_info_list
+    };
+
+    // Drop the current cache
+    sqlx::query("DELETE FROM entry;")
+        .execute(&mut **tx)
+        .await?;
+
+    // Insert entries
+    for (path, time, blob_id) in path_info_list {
+        // Guess the mime type
+        let mime_type = guess_mime_from_path(&path);
+        // Get the file size and extract metadata
+        let (size, metadata, title) = {
+            let repo = repo.lock().await;
+            let blob = repo.find_blob(blob_id)?;
+            let size = blob.size();
+            let (metadata, title) = extract_metadata(blob.content());
+            (size, metadata, title)
+        };
+        // Insert the entry
+        sqlx::query("INSERT INTO entry VALUES (?, ?, ?, ?, ?, ?, ?);")
+            .bind(path.to_str())
+            .bind(size as i64)
+            .bind(mime_type)
+            .bind(serde_json::to_string(&metadata).unwrap())
+            .bind(title)
+            .bind(time.seconds())
+            .bind(time.offset_minutes() * 60)
+            .execute(&mut **tx)
+            .await?;
     }
 
-    entries
+    // Record the commit ID
+    sqlx::query("INSERT INTO cache_state VALUES ('commit_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;")
+        .bind(commit_id.to_string())
+        .execute(&mut **tx)
+        .await?;
+
+    Ok(())
 }
 
 fn is_ancestor(
@@ -1171,33 +1176,7 @@ mod models {
                 },
                 _ => {
                     // Rebuild from scratch
-                    // Collect file entries from the repository
-                    let entries = super::collect_entries(head_commit_id, &*self.repo.lock().await);
-
-                    // Drop the current cache
-                    sqlx::query("DELETE FROM entry;")
-                        .execute(&mut *tx)
-                        .await?;
-
-                    // Build a new one
-                    for entry in &entries {
-                        sqlx::query("INSERT INTO entry VALUES (?, ?, ?, ?, ?, ?, ?);")
-                            .bind(entry.path.to_str())
-                            .bind(entry.size as i64)
-                            .bind(&entry.mime_type)
-                            .bind(serde_json::to_string(&entry.metadata).unwrap())
-                            .bind(&entry.title)
-                            .bind(entry.time.timestamp())
-                            .bind(entry.time.offset().local_minus_utc())
-                            .execute(&mut *tx)
-                            .await?;
-                    }
-
-                    // Record the commit ID
-                    sqlx::query("INSERT INTO cache_state VALUES ('commit_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;")
-                        .bind(head_commit_id.to_string())
-                        .execute(&mut *tx)
-                        .await?;
+                    super::rebuild_entries_cache(&mut tx, self.repo.clone(), head_commit_id).await?;
                 },
             }
 
