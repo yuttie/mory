@@ -726,7 +726,7 @@ async function loadIfNotEditing() {
 async function load() {
     isLoading.value = true;
     try {
-        const [newETag, data] = await (eTag.value === null ? api.getTaskDataV2() : api.getTaskDataV2(eTag.value));
+        const [newETag, data] = await (eTag.value === null ? api.getTaskData() : api.getTaskData(eTag.value));
 
         if (data === null) {
             // Not updated, nothing to do
