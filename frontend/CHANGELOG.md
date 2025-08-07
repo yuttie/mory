@@ -1,3 +1,166 @@
+## [0.20.0] - 2025-08-07
+
+### 🚀 Features
+
+- *(Home)* Sort entries by title
+- *(Home)* Show ages of notes
+- Show tag selector menu when dedicated button is clicked
+- *(Home)* Add sort buttons
+- *(Home)* Add icons indicating sort order
+- Prevent images on the page from being dragged and dropped within it
+- Add support for time-only event end values
+- Omit seconds format normalized event end time if possible
+- Move global error messages to the top
+- Catch also errors from Vue components
+- *(TaskEditor)* Allow task name text field to be multiline
+- Show errors on UI only in development
+- *(Find)* Show titles instead of paths if available
+- Truncate long titles/paths and show full text in a tooltip
+- *(Find)* Use different types of icons based on MIME types
+- *(Find)* Color icons
+- Lazy load images in rendered notes
+- Lower the contrast of the background
+- Remove because About.vue uses the SVG image
+- Update icons
+- Name new notes using UUIDv7
+- *(EditableViewer)* Make right sidebar collapsible like main sidebar
+- *(EditableViewer)* Fix position of toolbar during expansion of right sidebar for better usability
+- *(Tasks)* Always show today slot even if there are no tasks for today
+- *(Tasks)* Add reload button
+- *(Tasks)* Add search function
+- *(Tasks)* Adjust sizes of control on small screens
+- *(Tasks)* Make button sizes on dialogs flexible for mobile devices
+- *(Tasks)* Improve layout of date headers
+- *(Tasks)* Also always show slot of tomorrow
+- *(Calendar)* Allow one to go to previous/next year with PageDown/PageUp keys, respectively
+- *(Calendar)* Allow one to go to today by Home key
+- *(Calendar)* Show event definition errors on UI
+- *(Dockerfile)* Allow one to run arbitrary command after setup
+- Add Search view
+- *(Tasks)* Fetch task data via API v2 using conditional GET (If-None-Match)
+- *(Tasks)* Refresh task data on window focus
+- Use UUIDv4 for default note filename instead of UUIDv7
+
+### 🐛 Bug Fixes
+
+- *(Note)* Always show upstream state notifications regardless of current view mode
+- *(math)* Use SVG variant of rehype-mathjax
+- Handle only relevant drag-and-drop events and defer others to browser
+- *(Editor)* Fix errors on key input of <C-c>
+- *(EditableViewer)* Fix NavigationDuplicated error by avoiding replacing the route with the same value
+- *(App)* Adjust z-index values
+- *(App)* Improve margins of top right buttons
+- *(App)* Fix z-order of left sidebar and line numbers in editor
+- *(EditableViewer)* Correct z-order of right sidebar's border and v-expansion-panels inside this element
+- *(EditableViewer)* Place editor and viewer panes vertically in small screen
+- *(EditableViewer)* Fix behavior of mode selection buttons
+- *(EditableViewer)* Hide horizontal scroll bar of view pane
+- *(App)* Fix spaces around v-divider
+- *(api)* Assign new UUID to task only when it doesn't have one yet
+- Define order of task's properties including `id`
+- *(Tasks)* Properly assign unique IDs to new tasks
+- *(Tasks)* Do not reload when window gets focused because it reverts drag-and-drop operation
+- *(Tasks)* Keep default minimum width of buttons for easier operation on touch devices
+- *(App)* Add button for user to request notification
+- *(Calendar)* Use horizontal wheel scroll to go to previous/next month
+- *(Calendar)* Solve problem that v-touch directive is not available
+- *(EditableViewer)* Show horizontal border between editor and viewer in small screen
+- *(App)* Fix typo
+- *(App)* Correct wrong type
+- *(Calendar)* Validate event start and end times more strictly
+- *(Calendar)* Rename variable name so that it will not shadow reactive state variable `error`
+- *(service-worker)* Prefix notification icon path with app root
+- *(service-worker)* Fix typo
+- *(Dockerfile)* Fix FromAsCasing problem
+- *(docker)* Correct shebang path
+- *(service-worker)* Eliminate use of import.meta
+- *(Editor)* Expose methods that are used by EditableViewer
+- *(EditableViewer)* Remove also `template` query parameter
+- *(EditableViewer)* Always give focus to editor if visible
+- *(EditableViewer)* Restore ToC highlighting and scroll synchronization
+- *(EditableViewer)* Replace `id` attr of top-level element with `class` for better portability as component
+- *(Editor)* Eliminate initial empty text from undo stack
+
+### 💼 Other
+
+- Enable sourcemap generation
+
+### 🚜 Refactor
+
+- *(Editor)* Add methods to avoid direct access from EditableViewer
+- *(EditableViewer)* Fix comment that is no longer applicable
+- Replace `Object.prototype.hasOwnProperty.call()` with `Object.hasOwn()`
+- *(App)* Add the global error handlers that capture errors and promise rejections and show them in the UI
+- Remove imports of compiler macros: defineProps(), defineEmits() and defineExpose()
+- Remove debug prints
+- *(App)* Implement Notion-style collapsing sidebar
+- *(App)* Replace app bar with minimal toolbar overlay
+- *(App)* Replace v-app-bar with v-row for Notion-style top-right layout
+- *(App)* Rename mini-sidebar to mini-main-sidebar
+- *(EditableViewer)* Integrate .toolbar into right sidebar
+- *(EditableViewer)* Move minimize button in right sidebar to top when expanded
+- *(EditableViewer)* Simplify mode switch
+- *(EditableViewer)* Remove unused CSS rules
+- *(App)* Use denser UI layout
+- *(App)* Use smaller icons for dense UI
+- *(Tasks)* Improve usability by adjusting column layout
+- *(Tasks, api)* Give unique IDs to tasks when loading and use them as keys in v-for
+- *(Tasks)* Ensure `load()` method replaces values keeping their reactivity
+- *(Tasks)* Make margin between special columns and user-defined columns customizable via class
+- *(api)* Define interface of task data
+- *(api, Tasks)* Save cleaned copy of task data instead of mutating original which Tasks component holds
+- *(Tasks)* Replace `JSON.parse(JSON.stringify())` with `structuredClone()` for better performance
+- *(Tasks)* Simplify `add` method
+- *(Tasks)* Ensure draggable component and its inner v-for refer to same task array
+- *(Tasks)* Use nullish coalescing assignment (??=) instead of ||=
+- *(App)* Use `pa-0` instead of `style="padding: 0;"`
+- *(icon)* Replace @mdi/font with @mdi/js for optimizing bundle size
+- Remove unnecessary '?' from fields of defineProps type specifications
+- *(Gravatar)* Brush up implementation
+- *(vue-router)* Use official implementations of useRoute() and useRouter()
+- Remove defineExpose() usages that seem unused
+- *(Calendar)* Improve message
+- *(stores/app.ts)* Remove service worker registration object from successful registration message
+- *(service-worker)* Fix present time to compare with
+- *(Dockerfile)* Wrap CMD commandline in a shell script
+- Rename view "Find" to "Files"
+- *(Tasks)* Replace api.putTaskData() instead of api.addNote()
+- *(Editor)* Simplify key binding customization
+- *(Editor)* Use `Vim.mapCommand()` for non-key-to-key mappings for better consistency
+- *(Editor)* Brush up code for loading 'vim-modified' keybinding
+- *(EditableViewer)* Remove unnecessary dependency to `document` object
+
+### 📚 Documentation
+
+- *(Tasks)* Add comments to template
+- *(Tasks)* Add comment
+- Add reason why we need to manually enable directives
+- Use better name for the concept
+
+### ⚡ Performance
+
+- Optimize PNG files further
+
+### 🎨 Styling
+
+- Add semicolons
+- *(Calendar)* Double the indent size
+- *(App)* Double the indent size
+- *(Tasks)* Double the indent size
+- *(TaskEditor)* Double the indent size
+- Use indent size of 4
+- *(EditableViewer)* Increase indent width to 4 spaces
+
+### ⚙️ Miscellaneous Tasks
+
+- Switch package manager from yarn to npm
+- Analyze bundle with "rollup-plugin-visualizer"
+- *(eslint)* Configure indent size to 4 spaces
+- Update dependencies
+- Update dependencies to latest versions
+- Remove gathering and showing uncaught errors
+- Update axios
+
 ## 0.19.6 (2024-09-13)
 * feat(Home): Show title instead of path if available
 * Use randomUUID() from Web Crypto API instead of uuid package
