@@ -2,14 +2,15 @@ import Vue from 'vue';
 import VueRouter from 'vue-router';
 import type { RouteConfig } from 'vue-router';
 
-const Home     = () => import('../views/Home.vue');
-const Calendar = () => import('../views/Calendar.vue');
-const Tasks    = () => import('../views/Tasks.vue');
-const Files    = () => import('../views/Files.vue');
-const Search   = () => import('../views/Search.vue');
-const Note     = () => import('../views/Note.vue');
-const Config   = () => import('../views/Config.vue');
-const About    = () => import('../views/About.vue');
+const Home      = () => import('../views/Home.vue');
+const Calendar  = () => import('../views/Calendar.vue');
+const Tasks     = () => import('../views/Tasks.vue');
+const TasksNext = () => import('../views/TasksNext.vue');
+const Files     = () => import('../views/Files.vue');
+const Search    = () => import('../views/Search.vue');
+const Note      = () => import('../views/Note.vue');
+const Config    = () => import('../views/Config.vue');
+const About     = () => import('../views/About.vue');
 
 
 Vue.use(VueRouter);
@@ -34,6 +35,11 @@ const routes: Array<RouteConfig> = [
     path: '/tasks',
     name: 'Tasks',
     component: Tasks,
+  },
+  {
+    path: '/tasks-next',
+    name: 'TasksNext',
+    component: TasksNext,
   },
   {
     path: '/create',
