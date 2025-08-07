@@ -166,20 +166,7 @@ export interface TaskData {
     groups: { name: string, filter: string }[];
 }
 
-export async function getTaskData(): Promise<TaskData> {
-    const res = await getNote(".mory/tasks.yaml");
-    const data = YAML.parse(res.data) as TaskData;
-
-    // Give a unique ID to each task if missing
-    data.tasks.backlog.forEach((task) => task.id = task.id ?? crypto.randomUUID());
-    for (const tasks of Object.values(data.tasks.scheduled)) {
-        tasks.forEach((task) => task.id = task.id ?? crypto.randomUUID());
-    }
-
-    return data;
-}
-
-export async function getTaskDataV2(eTag?: string): Promise<[string, TaskData | null]> {
+export async function getTaskData(eTag?: string): Promise<[string, TaskData | null]> {
     const headers = {};
     if (eTag) {
         headers['If-None-Match'] = eTag;
