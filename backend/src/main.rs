@@ -487,7 +487,7 @@ async fn get_notes(
     extract::State(state): extract::State<AppState>,
 ) -> Json<Vec<ListEntry>> {
     debug!("get_notes");
-    Json(state.get_entries(None).await.unwrap())
+    Json(state.get_entries(None).await.unwrap().1)
 }
 
 async fn find_entry_blob(
@@ -1129,9 +1129,9 @@ mod models {
     }
 
     impl AppState {
-        pub async fn get_entries(&self, pattern_opt: Option<&str>) -> Result<Vec<ListEntry>> {
+        pub async fn get_entries(&self, pattern_opt: Option<&str>) -> Result<(Oid, Vec<ListEntry>)> {
             // Rebuild the cache if it is stale
-            self.ensure_file_entries_cache_updated().await?;
+            let head_commit_id = self.ensure_file_entries_cache_updated().await?;
 
             // Return the entries from the cache
             let query = if let Some(pattern) = pattern_opt {
@@ -1157,12 +1157,12 @@ mod models {
                 .fetch_all(&self.cache_db)
                 .await?;
 
-            Ok(entries)
+            Ok((head_commit_id, entries))
         }
 
         async fn ensure_file_entries_cache_updated(
             &self,
-        ) -> Result<()> {
+        ) -> Result<Oid> {
             let head_commit_id = self.repo.lock().unwrap().head()?.peel_to_commit()?.id();
 
             // Start an exclusive transaction
@@ -1195,7 +1195,7 @@ mod models {
             // End the transaction
             tx.commit().await?;
 
-            Ok(())
+            Ok(head_commit_id)
         }
     }
 
