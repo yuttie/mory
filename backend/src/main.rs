@@ -487,7 +487,7 @@ async fn get_notes(
     extract::State(state): extract::State<AppState>,
 ) -> Json<Vec<ListEntry>> {
     debug!("get_notes");
-    Json(state.get_entries().await.unwrap())
+    Json(state.get_entries(None).await.unwrap())
 }
 
 async fn find_entry_blob(
@@ -1129,14 +1129,19 @@ mod models {
     }
 
     impl AppState {
-        pub async fn get_entries(&self) -> Result<Vec<ListEntry>> {
+        pub async fn get_entries(&self, pattern_opt: Option<&str>) -> Result<Vec<ListEntry>> {
             // Rebuild the cache if it is stale
             self.ensure_file_entries_cache_updated().await?;
 
             // Return the entries from the cache
-            let entries = sqlx::query(
-                    "SELECT * FROM entry;",
-                )
+            let query = if let Some(pattern) = pattern_opt {
+                sqlx::query("SELECT * FROM entry WHERE path GLOB ?;")
+                    .bind(pattern)
+            }
+            else {
+                sqlx::query("SELECT * FROM entry;")
+            };
+            let entries = query
                 .map(|row: SqliteRow| {
                     let tz = FixedOffset::east_opt(row.get("tz_offset")).unwrap();
                     let time = tz.timestamp_opt(row.get("time"), 0).unwrap();
