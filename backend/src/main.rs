@@ -139,6 +139,8 @@ async fn main() -> Result<()> {
     let protected_api_v2 = Router::new()
         .route("/commits/head", get(v2::get_commits_head))
         .route("/files/*path", get(v2::get_files_path).head(v2::head_files_path))
+        .route("/tasks", get(v2::get_tasks))
+        .route("/events", get(v2::get_events))
         .with_state(state.clone())
         .route_layer(middleware::from_fn(auth));
     let api_v2 = Router::new()
@@ -1062,6 +1064,60 @@ mod v2 {
     ) -> Response {
         debug!("v2::head_files_path");
         head_from_full(make_files_path_response(path, state, headers).await)
+    }
+
+    pub async fn get_tasks(
+        extract::State(state): extract::State<AppState>,
+        headers: HeaderMap,
+    ) -> Response {
+        debug!("v2::get_tasks");
+
+        // Load task entries
+        let (head_commit_id, entries) = state.get_entries(Some(".tasks/*")).await.unwrap();
+
+        // Check If-None-Match header, and shortcut to 304
+        let etag_value = format!("\"{}\"", head_commit_id);
+        if let Some(inm) = headers.get(header::IF_NONE_MATCH) {
+            if inm.to_str().unwrap_or("") == etag_value {
+                return Response::builder()
+                    .status(StatusCode::NOT_MODIFIED)
+                    .header(header::ETAG, etag_value.clone())
+                    .header(header::ACCESS_CONTROL_EXPOSE_HEADERS, "ETag")
+                    .body(Body::empty())
+                    .unwrap();
+            }
+        }
+
+        // Normal response
+        let response = Json(entries).into_response();
+        attach_oid(response, head_commit_id)
+    }
+
+    pub async fn get_events(
+        extract::State(state): extract::State<AppState>,
+        headers: HeaderMap,
+    ) -> Response {
+        debug!("v2::get_events");
+
+        // Load event entries
+        let (head_commit_id, entries) = state.get_entries(Some(".events/*")).await.unwrap();
+
+        // Check If-None-Match header, and shortcut to 304
+        let etag_value = format!("\"{}\"", head_commit_id);
+        if let Some(inm) = headers.get(header::IF_NONE_MATCH) {
+            if inm.to_str().unwrap_or("") == etag_value {
+                return Response::builder()
+                    .status(StatusCode::NOT_MODIFIED)
+                    .header(header::ETAG, etag_value.clone())
+                    .header(header::ACCESS_CONTROL_EXPOSE_HEADERS, "ETag")
+                    .body(Body::empty())
+                    .unwrap();
+            }
+        }
+
+        // Normal response
+        let response = Json(entries).into_response();
+        attach_oid(response, head_commit_id)
     }
 }
 
