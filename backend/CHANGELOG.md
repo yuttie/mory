@@ -1,3 +1,13 @@
+## [1.3.1] - 2025-08-09
+
+### 🐛 Bug Fixes
+
+- *(CORS)* Allow If-None-Match header in requests
+
+### ⚙️ Miscellaneous Tasks
+
+- *(changelog)* Correct style of old entries so that they match current one
+
 ## [1.3.0] - 2025-08-07
 
 ### 🚀 Features
