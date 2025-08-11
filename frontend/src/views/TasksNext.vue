@@ -743,11 +743,7 @@ async function load() {
             eTag.value = newETag;
 
             // Set data
-            taskTree.value = [{
-                title: "All Tasks",
-                uuid: "00000000-0000-0000-0000-000000000000",
-                children: data,
-            }];
+            taskTree.value = data;
         }
 
         isLoading.value = false;
