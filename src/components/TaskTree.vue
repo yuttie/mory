@@ -6,7 +6,6 @@
         item-text="title"
         activatable
         dense
-        open-all
         return-object
         class="task-tree"
     >
