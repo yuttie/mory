@@ -1,314 +1,320 @@
 <template>
-    <div id="tasks" class="d-flex flex-column">
-        <v-toolbar flat outlined dense class="flex-grow-0">
-            <!-- New task button -->
-            <v-dialog
-                max-width="600px"
-                persistent
-                v-model="newTaskDialog"
-            >
-                <template v-slot:activator="{ on, attrs }">
-                    <v-btn
-                        text
-                        title="Add task"
-                        v-bind="{ ...attrs, class: { 'pa-0': !$vuetify.breakpoint.mdAndUp } }"
-                        v-on="on"
-                    >
-                        <v-icon>{{ mdiCheckboxMarkedCirclePlusOutline }}</v-icon>
-                        <span v-if="$vuetify.breakpoint.mdAndUp">Task</span>
-                    </v-btn>
-                </template>
-                <v-card>
-                    <v-card-actions>
-                        <v-spacer></v-spacer>
+    <div id="tasks" class="d-flex flex-row">
+        <TaskTree
+            v-bind:items="taskTree"
+            class="task-tree"
+        />
+        <div class="item-view d-flex flex-column">
+            <v-toolbar flat outlined dense class="flex-grow-0">
+                <!-- New task button -->
+                <v-dialog
+                    max-width="600px"
+                    persistent
+                    v-model="newTaskDialog"
+                >
+                    <template v-slot:activator="{ on, attrs }">
                         <v-btn
                             text
-                            color="primary"
-                            v-on:click="add(false)"
-                            v-bind:disabled="newTask.name.length === 0"
+                            title="Add task"
+                            v-bind="{ ...attrs, class: { 'pa-0': !$vuetify.breakpoint.mdAndUp } }"
+                            v-on="on"
                         >
-                            <v-icon>{{ mdiPlusBoxMultipleOutline }}</v-icon>
-                            <span v-if="$vuetify.breakpoint.smAndUp">Add & New</span>
+                            <v-icon>{{ mdiCheckboxMarkedCirclePlusOutline }}</v-icon>
+                            <span v-if="$vuetify.breakpoint.mdAndUp">Task</span>
                         </v-btn>
-                        <v-btn
-                            text
-                            color="primary"
-                            v-on:click="add"
-                            v-bind:disabled="newTask.name.length === 0"
-                        >
-                            <v-icon>{{ mdiPlusBoxOutline }}</v-icon>
-                            <span v-if="$vuetify.breakpoint.smAndUp">Add</span>
-                        </v-btn>
-                        <v-btn
-                            icon
-                            v-on:click="closeNewTaskDialog"
-                        ><v-icon>{{ mdiClose }}</v-icon></v-btn>
-                    </v-card-actions>
-                    <v-card-text>
-                        <TaskEditor v-model="newTask" v-bind:knownTags="knownTags"></TaskEditor>
-                    </v-card-text>
-                </v-card>
-            </v-dialog>
-
-            <!-- New group button -->
-            <v-dialog
-                max-width="600px"
-                persistent
-                v-model="newGroupDialog"
-            >
-                <template v-slot:activator="{ on, attrs }">
-                    <v-btn
-                        text
-                        title="Add group"
-                        v-bind="{ ...attrs, class: { 'pa-0': !$vuetify.breakpoint.mdAndUp } }"
-                        v-on="on"
-                    >
-                        <v-icon>{{ mdiFormatListGroupPlus }}</v-icon>
-                        <span v-if="$vuetify.breakpoint.mdAndUp">Group</span>
-                    </v-btn>
-                </template>
-                <v-card>
-                    <v-card-actions>
-                        <v-spacer></v-spacer>
-                        <v-btn
-                            text
-                            color="primary"
-                            v-on:click="addGroup"
-                            v-bind:disabled="newGroupName.length === 0 || newGroupFilter.length === 0"
-                        >
-                            <v-icon>{{ mdiPlusBoxOutline }}</v-icon>
-                            <span v-if="$vuetify.breakpoint.smAndUp">Add</span>
-                        </v-btn>
-                        <v-btn
-                            icon
-                            v-on:click="closeNewGroupDialog"
-                        ><v-icon>{{ mdiClose }}</v-icon></v-btn>
-                    </v-card-actions>
-                    <v-card-text>
-                        <v-text-field
-                            label="Name"
-                            autofocus
-                            prepend-icon="mdi-pencil"
-                            v-model="newGroupName"
-                        ></v-text-field>
-                        <v-text-field
-                            label="Tag"
-                            prepend-icon="mdi-tag-outline"
-                            v-model="newGroupFilter"
-                        ></v-text-field>
-                    </v-card-text>
-                </v-card>
-            </v-dialog>
-
-            <!-- Collect undone button -->
-            <v-btn
-                text
-                title="Collect undone"
-                v-bind:class="{ 'pa-0': !$vuetify.breakpoint.mdAndUp }"
-                v-on:click="collectUndone"
-            >
-                <v-icon>{{ mdiCheckboxMultipleBlankOutline }}</v-icon>
-                <span v-if="$vuetify.breakpoint.mdAndUp">Collect Undone</span>
-            </v-btn>
-
-            <!-- Hide done toggle -->
-            <v-switch
-                v-model="hideDone"
-                v-bind:label="$vuetify.breakpoint.mdAndUp ? 'Hide done' : null"
-                hide-details
-            ></v-switch>
-
-            <!-- Reload button -->
-            <v-btn
-                text
-                title="Reload"
-                v-bind:class="{ 'pa-0': !$vuetify.breakpoint.mdAndUp }"
-                v-on:click="loadIfNotEditing"
-            >
-                <v-icon>{{ mdiReload }}</v-icon>
-                <span v-if="$vuetify.breakpoint.mdAndUp">Reload</span>
-            </v-btn>
-
-            <!-- Search text box -->
-            <v-text-field
-                dense
-                label="Search"
-                clearable
-                v-model="searchQuery"
-                hide-details
-            ></v-text-field>
-
-            <!-- Progress bar for loading data -->
-            <v-progress-linear
-                absolute
-                bottom
-                indeterminate
-                color="primary"
-                v-bind:active="isLoading"
-            ></v-progress-linear>
-        </v-toolbar>
-        <v-dialog
-            max-width="600px"
-            persistent
-            v-if="editTarget"
-            v-model="editTaskDialog"
-            v-bind:activator="editTaskDialogActivator"
-        >
-            <v-card>
-                <v-card-actions>
-                    <v-spacer></v-spacer>
-                    <v-btn
-                        text
-                        v-on:click="openNewTaskDialogWithSelection"
-                    >
-                        <v-icon>{{ mdiPlusBoxOutline }}</v-icon>
-                        <span v-if="$vuetify.breakpoint.smAndUp">Add similar...</span>
-                    </v-btn>
-                    <v-btn
-                        text
-                        color="error"
-                        v-on:click="removeSelected"
-                    >
-                        <v-icon>{{ mdiDelete }}</v-icon>
-                        <span v-if="$vuetify.breakpoint.smAndUp">Delete</span>
-                    </v-btn>
-                    <v-btn
-                        text
-                        color="primary"
-                        v-on:click="updateSelected"
-                        v-bind:disabled="editTarget.name.length === 0"
-                    >
-                        <v-icon>{{ mdiContentSave }}</v-icon>
-                        <span v-if="$vuetify.breakpoint.smAndUp">Save</span>
-                    </v-btn>
-                    <v-btn
-                        icon
-                        v-on:click="closeEditTaskDialog"
-                    ><v-icon>{{ mdiClose }}</v-icon></v-btn>
-                </v-card-actions>
-                <v-card-text>
-                    <TaskEditor v-model="editTarget" v-bind:knownTags="knownTags"></TaskEditor>
-                </v-card-text>
-            </v-card>
-        </v-dialog>
-        <div class="groups-container flex-grow-1">
-            <div class="groups">
-                <v-card class="group">
-                    <v-card-title>Scheduled</v-card-title>
-                    <div class="task-list">
-                        <div
-                            v-for="[date, dayTasks] of scheduledTasks"
-                            v-bind:key="date"
-                            v-bind:class="{ today: isToday(date) }"
-                        >
-                            <div class="date-header d-flex flex-row">
-                                <span>{{ isToday(date) ? `Today (${date})` : isTomorrow(date) ? `Tomorrow (${date})` : date }}</span>
-                                <v-spacer></v-spacer>
-                                <v-btn
-                                    text
-                                    small
-                                    title="Sort"
-                                    style="min-width: unset;"
-                                    class="px-2"
-                                    v-on:click="sortDailyTasks(date)"
-                                >
-                                    <v-icon small>{{ mdiSortBoolAscendingVariant }}</v-icon>
-                                </v-btn>
-                                <v-btn
-                                    text
-                                    small
-                                    title="Move to today"
-                                    style="min-width: unset;"
-                                    class="px-2"
-                                    v-on:click="moveUndoneToToday(date)"
-                                >
-                                    <v-icon small>{{ mdiInboxArrowDown }}</v-icon>
-                                </v-btn>
-                            </div>
-                            <draggable
-                                group="tasks"
-                                v-bind:value="dayTasks"
-                                v-on:input="onDraggableInput(date, $event)"
-                                v-bind:delay="500"
-                                v-bind:delay-on-touch-only="true"
-                                v-on:end="save"
+                    </template>
+                    <v-card>
+                        <v-card-actions>
+                            <v-spacer></v-spacer>
+                            <v-btn
+                                text
+                                color="primary"
+                                v-on:click="add(false)"
+                                v-bind:disabled="newTask.name.length === 0"
                             >
-                                <TaskListItem
-                                    v-for="(task, index) of dayTasks"
-                                    v-bind:key="task.id"
-                                    v-bind:value="task"
-                                    v-on:click="showEditTaskDialog(date, index, task, $event);"
-                                    v-on:done-toggle="$set(task, 'done', $event); save();"
-                                ></TaskListItem>
-                            </draggable>
-                        </div>
-                    </div>
-                </v-card>
-                <v-card dense class="group">
-                    <v-card-title>With Deadline</v-card-title>
-                    <div class="task-list">
-                        <TaskListItem
-                            v-for="[date, index, task] of tasksWithDeadline"
-                            v-bind:key="task.id"
-                            v-bind:value="task"
-                            v-on:click="showEditTaskDialog(date, index, task, $event);"
-                            v-on:done-toggle="$set(task, 'done', $event); save();"
-                        ></TaskListItem>
-                    </div>
-                </v-card>
-                <v-card dense class="group">
-                    <v-card-title>Backlog</v-card-title>
-                    <draggable
-                        class="task-list"
-                        group="tasks"
-                        v-model="filteredTasks.backlog"
-                        v-bind:delay="500"
-                        v-bind:delay-on-touch-only="true"
-                        v-on:end="save"
-                    >
-                        <TaskListItem
-                            v-for="(task, index) of filteredTasks.backlog"
-                            v-bind:key="task.id"
-                            v-bind:value="task"
-                            v-on:click="showEditTaskDialog(null, index, task, $event);"
-                            v-on:done-toggle="$set(task, 'done', $event); save();"
-                        ></TaskListItem>
-                    </draggable>
-                </v-card>
+                                <v-icon>{{ mdiPlusBoxMultipleOutline }}</v-icon>
+                                <span v-if="$vuetify.breakpoint.smAndUp">Add & New</span>
+                            </v-btn>
+                            <v-btn
+                                text
+                                color="primary"
+                                v-on:click="add"
+                                v-bind:disabled="newTask.name.length === 0"
+                            >
+                                <v-icon>{{ mdiPlusBoxOutline }}</v-icon>
+                                <span v-if="$vuetify.breakpoint.smAndUp">Add</span>
+                            </v-btn>
+                            <v-btn
+                                icon
+                                v-on:click="closeNewTaskDialog"
+                            ><v-icon>{{ mdiClose }}</v-icon></v-btn>
+                        </v-card-actions>
+                        <v-card-text>
+                            <TaskEditor v-model="newTask" v-bind:knownTags="knownTags"></TaskEditor>
+                        </v-card-text>
+                    </v-card>
+                </v-dialog>
 
-                <div class="separator"><!-- Horizontal margin --></div>
+                <!-- New group button -->
+                <v-dialog
+                    max-width="600px"
+                    persistent
+                    v-model="newGroupDialog"
+                >
+                    <template v-slot:activator="{ on, attrs }">
+                        <v-btn
+                            text
+                            title="Add group"
+                            v-bind="{ ...attrs, class: { 'pa-0': !$vuetify.breakpoint.mdAndUp } }"
+                            v-on="on"
+                        >
+                            <v-icon>{{ mdiFormatListGroupPlus }}</v-icon>
+                            <span v-if="$vuetify.breakpoint.mdAndUp">Group</span>
+                        </v-btn>
+                    </template>
+                    <v-card>
+                        <v-card-actions>
+                            <v-spacer></v-spacer>
+                            <v-btn
+                                text
+                                color="primary"
+                                v-on:click="addGroup"
+                                v-bind:disabled="newGroupName.length === 0 || newGroupFilter.length === 0"
+                            >
+                                <v-icon>{{ mdiPlusBoxOutline }}</v-icon>
+                                <span v-if="$vuetify.breakpoint.smAndUp">Add</span>
+                            </v-btn>
+                            <v-btn
+                                icon
+                                v-on:click="closeNewGroupDialog"
+                            ><v-icon>{{ mdiClose }}</v-icon></v-btn>
+                        </v-card-actions>
+                        <v-card-text>
+                            <v-text-field
+                                label="Name"
+                                autofocus
+                                prepend-icon="mdi-pencil"
+                                v-model="newGroupName"
+                            ></v-text-field>
+                            <v-text-field
+                                label="Tag"
+                                prepend-icon="mdi-tag-outline"
+                                v-model="newGroupFilter"
+                            ></v-text-field>
+                        </v-card-text>
+                    </v-card>
+                </v-dialog>
 
-                <draggable class="custom-groups" v-model="groups" group="groups" v-bind:delay="500" v-bind:delay-on-touch-only="true" handle=".handle" v-on:end="save">
-                    <v-card v-for="group of groups" v-bind:key="group.name" class="group">
-                        <v-card-title class="handle">
-                            <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ group.name }}</span>
-                        </v-card-title>
+                <!-- Collect undone button -->
+                <v-btn
+                    text
+                    title="Collect undone"
+                    v-bind:class="{ 'pa-0': !$vuetify.breakpoint.mdAndUp }"
+                    v-on:click="collectUndone"
+                >
+                    <v-icon>{{ mdiCheckboxMultipleBlankOutline }}</v-icon>
+                    <span v-if="$vuetify.breakpoint.mdAndUp">Collect Undone</span>
+                </v-btn>
+
+                <!-- Hide done toggle -->
+                <v-switch
+                    v-model="hideDone"
+                    v-bind:label="$vuetify.breakpoint.mdAndUp ? 'Hide done' : null"
+                    hide-details
+                ></v-switch>
+
+                <!-- Reload button -->
+                <v-btn
+                    text
+                    title="Reload"
+                    v-bind:class="{ 'pa-0': !$vuetify.breakpoint.mdAndUp }"
+                    v-on:click="loadIfNotEditing"
+                >
+                    <v-icon>{{ mdiReload }}</v-icon>
+                    <span v-if="$vuetify.breakpoint.mdAndUp">Reload</span>
+                </v-btn>
+
+                <!-- Search text box -->
+                <v-text-field
+                    dense
+                    label="Search"
+                    clearable
+                    v-model="searchQuery"
+                    hide-details
+                ></v-text-field>
+
+                <!-- Progress bar for loading data -->
+                <v-progress-linear
+                    absolute
+                    bottom
+                    indeterminate
+                    color="primary"
+                    v-bind:active="isLoading"
+                ></v-progress-linear>
+            </v-toolbar>
+            <v-dialog
+                max-width="600px"
+                persistent
+                v-if="editTarget"
+                v-model="editTaskDialog"
+                v-bind:activator="editTaskDialogActivator"
+            >
+                <v-card>
+                    <v-card-actions>
+                        <v-spacer></v-spacer>
+                        <v-btn
+                            text
+                            v-on:click="openNewTaskDialogWithSelection"
+                        >
+                            <v-icon>{{ mdiPlusBoxOutline }}</v-icon>
+                            <span v-if="$vuetify.breakpoint.smAndUp">Add similar...</span>
+                        </v-btn>
+                        <v-btn
+                            text
+                            color="error"
+                            v-on:click="removeSelected"
+                        >
+                            <v-icon>{{ mdiDelete }}</v-icon>
+                            <span v-if="$vuetify.breakpoint.smAndUp">Delete</span>
+                        </v-btn>
+                        <v-btn
+                            text
+                            color="primary"
+                            v-on:click="updateSelected"
+                            v-bind:disabled="editTarget.name.length === 0"
+                        >
+                            <v-icon>{{ mdiContentSave }}</v-icon>
+                            <span v-if="$vuetify.breakpoint.smAndUp">Save</span>
+                        </v-btn>
+                        <v-btn
+                            icon
+                            v-on:click="closeEditTaskDialog"
+                        ><v-icon>{{ mdiClose }}</v-icon></v-btn>
+                    </v-card-actions>
+                    <v-card-text>
+                        <TaskEditor v-model="editTarget" v-bind:knownTags="knownTags"></TaskEditor>
+                    </v-card-text>
+                </v-card>
+            </v-dialog>
+            <div class="groups-container flex-grow-1">
+                <div class="groups">
+                    <v-card class="group">
+                        <v-card-title>Scheduled</v-card-title>
                         <div class="task-list">
-                            <div v-for="date of Object.keys(groupedTasks[group.name].scheduled).sort((a, b) => a < b ? 1 : a > b ? -1 : 0)" v-bind:key="date">
-                                <div class="date-header">{{ date }}</div>
-                                <template v-for="[index, task] of groupedTasks[group.name].scheduled[date]">
+                            <div
+                                v-for="[date, dayTasks] of scheduledTasks"
+                                v-bind:key="date"
+                                v-bind:class="{ today: isToday(date) }"
+                            >
+                                <div class="date-header d-flex flex-row">
+                                    <span>{{ isToday(date) ? `Today (${date})` : isTomorrow(date) ? `Tomorrow (${date})` : date }}</span>
+                                    <v-spacer></v-spacer>
+                                    <v-btn
+                                        text
+                                        small
+                                        title="Sort"
+                                        style="min-width: unset;"
+                                        class="px-2"
+                                        v-on:click="sortDailyTasks(date)"
+                                    >
+                                        <v-icon small>{{ mdiSortBoolAscendingVariant }}</v-icon>
+                                    </v-btn>
+                                    <v-btn
+                                        text
+                                        small
+                                        title="Move to today"
+                                        style="min-width: unset;"
+                                        class="px-2"
+                                        v-on:click="moveUndoneToToday(date)"
+                                    >
+                                        <v-icon small>{{ mdiInboxArrowDown }}</v-icon>
+                                    </v-btn>
+                                </div>
+                                <draggable
+                                    group="tasks"
+                                    v-bind:value="dayTasks"
+                                    v-on:input="onDraggableInput(date, $event)"
+                                    v-bind:delay="500"
+                                    v-bind:delay-on-touch-only="true"
+                                    v-on:end="save"
+                                >
                                     <TaskListItem
+                                        v-for="(task, index) of dayTasks"
                                         v-bind:key="task.id"
                                         v-bind:value="task"
                                         v-on:click="showEditTaskDialog(date, index, task, $event);"
                                         v-on:done-toggle="$set(task, 'done', $event); save();"
                                     ></TaskListItem>
-                                </template>
-                            </div>
-                            <div v-if="groupedTasks[group.name].backlog.length !== 0">
-                                <div class="date-header">Backlog</div>
-                                <template v-for="[index, task] of groupedTasks[group.name].backlog">
-                                    <TaskListItem
-                                        v-bind:key="task.id"
-                                        v-bind:value="task"
-                                        v-on:click="showEditTaskDialog(null, index, task, $event);"
-                                        v-on:done-toggle="$set(task, 'done', $event); save();"
-                                    ></TaskListItem>
-                                </template>
+                                </draggable>
                             </div>
                         </div>
                     </v-card>
-                </draggable>
+                    <v-card dense class="group">
+                        <v-card-title>With Deadline</v-card-title>
+                        <div class="task-list">
+                            <TaskListItem
+                                v-for="[date, index, task] of tasksWithDeadline"
+                                v-bind:key="task.id"
+                                v-bind:value="task"
+                                v-on:click="showEditTaskDialog(date, index, task, $event);"
+                                v-on:done-toggle="$set(task, 'done', $event); save();"
+                            ></TaskListItem>
+                        </div>
+                    </v-card>
+                    <v-card dense class="group">
+                        <v-card-title>Backlog</v-card-title>
+                        <draggable
+                            class="task-list"
+                            group="tasks"
+                            v-model="filteredTasks.backlog"
+                            v-bind:delay="500"
+                            v-bind:delay-on-touch-only="true"
+                            v-on:end="save"
+                        >
+                            <TaskListItem
+                                v-for="(task, index) of filteredTasks.backlog"
+                                v-bind:key="task.id"
+                                v-bind:value="task"
+                                v-on:click="showEditTaskDialog(null, index, task, $event);"
+                                v-on:done-toggle="$set(task, 'done', $event); save();"
+                            ></TaskListItem>
+                        </draggable>
+                    </v-card>
+
+                    <div class="separator"><!-- Horizontal margin --></div>
+
+                    <draggable class="custom-groups" v-model="groups" group="groups" v-bind:delay="500" v-bind:delay-on-touch-only="true" handle=".handle" v-on:end="save">
+                        <v-card v-for="group of groups" v-bind:key="group.name" class="group">
+                            <v-card-title class="handle">
+                                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ group.name }}</span>
+                            </v-card-title>
+                            <div class="task-list">
+                                <div v-for="date of Object.keys(groupedTasks[group.name].scheduled).sort((a, b) => a < b ? 1 : a > b ? -1 : 0)" v-bind:key="date">
+                                    <div class="date-header">{{ date }}</div>
+                                    <template v-for="[index, task] of groupedTasks[group.name].scheduled[date]">
+                                        <TaskListItem
+                                            v-bind:key="task.id"
+                                            v-bind:value="task"
+                                            v-on:click="showEditTaskDialog(date, index, task, $event);"
+                                            v-on:done-toggle="$set(task, 'done', $event); save();"
+                                        ></TaskListItem>
+                                    </template>
+                                </div>
+                                <div v-if="groupedTasks[group.name].backlog.length !== 0">
+                                    <div class="date-header">Backlog</div>
+                                    <template v-for="[index, task] of groupedTasks[group.name].backlog">
+                                        <TaskListItem
+                                            v-bind:key="task.id"
+                                            v-bind:value="task"
+                                            v-on:click="showEditTaskDialog(null, index, task, $event);"
+                                            v-on:done-toggle="$set(task, 'done', $event); save();"
+                                        ></TaskListItem>
+                                    </template>
+                                </div>
+                            </div>
+                        </v-card>
+                    </draggable>
+                </div>
             </div>
         </div>
         <v-overlay v-bind:value="isLoading" z-index="10" opacity="0">
@@ -356,6 +362,7 @@ const emit = defineEmits<{
 
 // Reactive states
 const eTag: Ref<string | null> = ref(null);
+const taskTree = ref([]);
 const tasks = ref({
     backlog: [] as Task[],
     scheduled: {} as { [key: string]: Task[] }
@@ -726,7 +733,7 @@ async function loadIfNotEditing() {
 async function load() {
     isLoading.value = true;
     try {
-        const [newETag, data] = await (eTag.value === null ? api.getTaskData() : api.getTaskData(eTag.value));
+        const [newETag, data] = await (eTag.value === null ? api.getTasks() : api.getTasks(eTag.value));
 
         if (data === null) {
             // Not updated, nothing to do
@@ -735,19 +742,12 @@ async function load() {
             // Update ETag
             eTag.value = newETag;
 
-            // Always show slots for today and tomorrow
-            const today = dayjs().format('YYYY-MM-DD');
-            const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
-            data.tasks.scheduled[today] = data.tasks.scheduled[today] ?? [];
-            data.tasks.scheduled[tomorrow] = data.tasks.scheduled[tomorrow] ?? [];
-
-            // Replace with the data
-            tasks.value.backlog.splice(0, tasks.value.backlog.length, ...data.tasks.backlog);
-            Object.keys(tasks.value.scheduled).forEach(key => del(tasks.value.scheduled, key));
-            Object.entries(data.tasks.scheduled).forEach(([key, value]) => {
-                set(tasks.value.scheduled, key, value);
-            });
-            groups.value.splice(0, groups.value.length, ...data.groups);
+            // Set data
+            taskTree.value = [{
+                title: "All Tasks",
+                uuid: "00000000-0000-0000-0000-000000000000",
+                children: data,
+            }];
         }
 
         isLoading.value = false;
@@ -758,32 +758,16 @@ async function load() {
                 if (error.response.status === 401) {
                     // Unauthorized
                     emit('tokenExpired', () => load());
+                    return;
                 }
-                else if (error.response.status === 404) {
-                    // Create a new one
-                    await api.putTaskData({
-                        tasks: {
-                            backlog: [],
-                            scheduled: {},
-                        },
-                        groups: [],
-                    });
-                    load();
-                }
-                else {
-                    errorNotification.value = true;
-                    errorNotificationText.value = error.toString();
-                    isLoading.value = false;
-                    throw error;
-                }
-            }
-            else {
-                errorNotification.value = true;
-                errorNotificationText.value = error.toString();
-                isLoading.value = false;
-                throw error;
             }
         }
+
+        // Unhandled errors
+        errorNotification.value = true;
+        errorNotificationText.value = error.toString();
+        isLoading.value = false;
+        throw error;
     }
 }
 
@@ -891,6 +875,12 @@ $space: 12px;
 #tasks {
     height: 100%;
     user-select: none;
+}
+.task-tree {
+    min-width: 300px;
+}
+.item-view {
+    flex: 1 1 0;
 }
 .groups-container {
     flex: 1 1 0;

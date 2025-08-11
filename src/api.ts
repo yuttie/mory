@@ -281,3 +281,32 @@ export async function putTaskData(data: TaskData) {
     // Send
     return await addNote('.mory/tasks.yaml', yaml);
 }
+
+interface TreeNode {
+    uuid: string,
+    name: string
+    path: string,
+    size: number,
+    mime_type: string,
+    metadata: object | null,
+    title: string | null,
+    mtime: string,
+    children: TreeNode[],
+}
+
+export async function getTasks(eTag?: string): Promise<[string, TreeNode | null]> {
+    const headers = {};
+    if (eTag) {
+        headers['If-None-Match'] = eTag;
+    }
+    const res = await getAxios().get(`/v2/tasks?format=tree`, {
+        headers: headers,
+        validateStatus: (status) => (status >= 200 && status < 300) || status === 304,
+    });
+    if (res.status === 304) {
+        return [res.headers.etag, null];
+    }
+    else {
+        return [res.headers.etag, res.data];
+    }
+}
