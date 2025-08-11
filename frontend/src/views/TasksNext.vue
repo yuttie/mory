@@ -533,10 +533,10 @@ const groupedTasks = computed(() => {
 });
 
 // Lifecycle hooks
-onMounted(() => {
+onMounted(async () => {
     document.title = `Tasks | ${import.meta.env.VITE_APP_NAME}`;
     window.addEventListener('focus', load);
-    load();
+    await load();
 });
 
 onUnmounted(() => {
