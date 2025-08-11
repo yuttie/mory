@@ -38,6 +38,7 @@ use dotenv::dotenv;
 use git2::{Index, IndexEntry, IndexTime, Repository, Oid};
 use jsonwebtoken as jwt;
 use mime_guess;
+use serde::Deserialize;
 use sha1::{Digest, Sha1};
 use sqlx::sqlite::{
     SqliteConnectOptions,
@@ -1066,7 +1067,13 @@ mod v2 {
         head_from_full(make_files_path_response(path, state, headers).await)
     }
 
+    #[derive(Deserialize)]
+    pub struct TaskQuery {
+        format: Option<String>,
+    }
+
     pub async fn get_tasks(
+        extract::Query(query): extract::Query<TaskQuery>,
         extract::State(state): extract::State<AppState>,
         headers: HeaderMap,
     ) -> Response {
@@ -1088,9 +1095,19 @@ mod v2 {
             }
         }
 
-        // Normal response
-        let response = Json(entries).into_response();
-        attach_oid(response, head_commit_id)
+        match query.format.as_deref() {
+            Some("tree") => {
+                // Tree structure response
+                let roots = entries_to_tree(&entries, Some(".tasks")).unwrap();
+                let response = Json(roots).into_response();
+                attach_oid(response, head_commit_id)
+            },
+            _ => {
+                // List structure response
+                let response = Json(entries).into_response();
+                attach_oid(response, head_commit_id)
+            },
+        }
     }
 
     pub async fn get_events(
@@ -1122,11 +1139,13 @@ mod v2 {
 }
 
 mod models {
-    use std::path::PathBuf;
+    use std::borrow::Cow;
+    use std::collections::HashMap;
+    use std::path::{Component, Path, PathBuf};
     use std::sync::{Arc, Mutex};
     use std::option::Option;
 
-    use anyhow::Result;
+    use anyhow::{bail, ensure, Context, Result};
     use axum::{
         extract,
         http::StatusCode,
@@ -1137,6 +1156,7 @@ mod models {
     use serde::{Deserialize, Serialize};
     use serde_yaml;
     use sqlx::{Row, SqlitePool, sqlite::SqliteRow};
+    use uuid::Uuid;
 
     pub type Metadata = serde_yaml::Value;
 
@@ -1148,6 +1168,169 @@ mod models {
         pub metadata: Option<Metadata>,
         pub title: Option<String>,
         pub time: DateTime<FixedOffset>,
+    }
+
+    #[derive(Debug, Serialize, Clone)]
+    pub struct TreeNode {
+        pub uuid: Uuid,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub name: Option<String>,
+        pub path: PathBuf,
+        pub size: usize,
+        pub mime_type: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub metadata: Option<Metadata>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub title: Option<String>,
+        pub mtime: DateTime<FixedOffset>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        pub children: Vec<TreeNode>,
+    }
+
+    pub fn entries_to_tree(entries: &[ListEntry], special_dir: Option<&str>) -> Result<Vec<TreeNode>> {
+        let mut nodes_by_uuid: HashMap<Uuid, TreeNode> = HashMap::with_capacity(entries.len());
+        let mut parent_of: HashMap<Uuid, Option<Uuid>> = HashMap::with_capacity(entries.len());
+
+        for e in entries {
+            let logical = strip_special_dir(&e.path, special_dir)
+                .with_context(|| format!("While handling {}", e.path.display()))?;
+
+            validate_path_constraints(&logical)
+                .with_context(|| format!("Path constraints violation: {}", e.path.display()))?;
+
+            // Extract UUID and optional name portions from filename stem
+            let stem = logical.file_stem().context("Missing filename stem")?
+                .to_str().context("Filename stem is not UTF-8")?;
+            let (file_uuid, name) = parse_file_uuid(stem)
+                .with_context(|| format!("While handling {}", e.path.display()))?;
+
+            let parent_uuid = logical.parent()
+                .and_then(|p| p.file_name())
+                .map(|os_str| -> Result<Uuid> {
+                    let s = os_str.to_str().context("Non-UTF-8 directory name")?;
+                    parse_uuid_v4(s)
+                })
+                .transpose()?;
+
+            let node = TreeNode {
+                uuid: file_uuid,
+                name,
+                path: e.path.clone(),
+                size: e.size,
+                mime_type: e.mime_type.clone(),
+                metadata: e.metadata.clone(),
+                title: e.title.clone(),
+                mtime: e.time,
+                children: Vec::new(),
+            };
+
+            ensure!(
+                nodes_by_uuid.insert(file_uuid, node).is_none(),
+                "Duplicate file UUID in entries: {}",
+                file_uuid
+            );
+            parent_of.insert(file_uuid, parent_uuid);
+        }
+
+        let mut children_of: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
+        for (child, maybe_parent) in &parent_of {
+            if let Some(p) = maybe_parent {
+                ensure!(
+                    nodes_by_uuid.contains_key(p),
+                    "Parent directory UUID {} has no corresponding file entry",
+                    p
+                );
+                children_of.entry(*p).or_default().push(*child);
+            }
+        }
+
+        let mut roots: Vec<TreeNode> = Vec::new();
+        let mut pool = nodes_by_uuid;
+        for (uuid, parent) in parent_of {
+            if parent.is_none() {
+                roots.push(assemble_tree(uuid, &mut pool, &children_of)?);
+            }
+        }
+
+        sort_forest(&mut roots);
+
+        Ok(roots)
+    }
+
+    fn strip_special_dir<'a>(path: &'a Path, special: Option<&str>) -> Result<Cow<'a, Path>> {
+        if let Some(sd) = special {
+            if let Some(Component::Normal(first)) = path.components().next() {
+                if first == sd {
+                    let stripped = path.strip_prefix(sd)
+                        .with_context(|| format!("Failed to strip special dir '{}' from {}", sd, path.display()))?;
+                    ensure!(stripped.components().next().is_some(), "Path becomes empty after stripping '{}'", sd);
+                    return Ok(Cow::Owned(stripped.to_path_buf()));
+                }
+            }
+        }
+        Ok(Cow::Borrowed(path))
+    }
+
+    fn validate_path_constraints(path: &Path) -> Result<()> {
+        for comp in path.components() {
+            match comp {
+                Component::CurDir | Component::ParentDir => {
+                    bail!("Path contains '.' or '..': {}", path.display());
+                }
+                Component::Normal(os_str) => {
+                    // Skip filename
+                    if Some(os_str) == path.file_name() {
+                        break;
+                    }
+                    let s = os_str.to_str().context("Non-UTF-8 directory component")?;
+                    parse_uuid_v4(s)
+                        .with_context(|| format!("Directory component must be UUIDv4 (got '{}')", s))?;
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    fn assemble_tree(id: Uuid, pool: &mut HashMap<Uuid, TreeNode>, children_of: &HashMap<Uuid, Vec<Uuid>>) -> Result<TreeNode> {
+        let mut me = pool.remove(&id)
+            .context("Specified node must exist in `pool`")?;
+        if let Some(kids) = children_of.get(&id) {
+            for &kid in kids {
+                let child_node = assemble_tree(kid, pool, children_of)?;
+                me.children.push(child_node);
+            }
+        }
+        Ok(me)
+    }
+
+    fn parse_file_uuid(stem: &str) -> Result<(Uuid, Option<String>)> {
+        ensure!(stem.len() >= 36, "stem too short for UUID");
+        let cand = &stem[stem.len() - 36..];
+        let uuid = parse_uuid_v4(cand)
+            .with_context(|| format!("Filename stem must end with UUIDv4: {}", stem))?;
+
+        let leading = &stem[..stem.len() - 36];
+        let leading = leading.strip_suffix('-').unwrap_or(leading);
+        let name = if leading.is_empty() { None } else { Some(leading.to_string()) };
+
+        Ok((uuid, name))
+    }
+
+    fn parse_uuid_v4(s: &str) -> Result<Uuid> {
+        let u = Uuid::parse_str(s)
+            .with_context(|| format!("'{}' is not a UUID", s))?;
+        ensure!(u.get_version() == Some(uuid::Version::Random), "UUID is not v4");
+        Ok(u)
+    }
+
+    fn sort_forest(nodes: &mut [TreeNode]) {
+        nodes.sort_by(|a, b| {
+            b.mtime.cmp(&a.mtime)
+        });
+        for n in nodes.iter_mut() {
+            sort_forest(&mut n.children);
+        }
     }
 
     #[derive(Debug, Serialize, Deserialize)]
