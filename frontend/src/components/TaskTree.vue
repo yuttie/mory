@@ -1,6 +1,7 @@
 <template>
     <v-treeview
         v-bind:items="items"
+        v-on:update:active="$emit('change', $event[0])"
         item-key="uuid"
         item-text="title"
         activatable
@@ -41,7 +42,7 @@ const props = defineProps<{
 
 // Emits
 const emit = defineEmits<{
-    (e: 'change', value: string): void;
+    (e: 'change', value: TreeNode): void;
 }>();
 
 // Reactive states
