@@ -374,19 +374,12 @@ const taskTree = computed(() => store.forest);
 const knownTags = computed((): [string, number][] => {
     // Collect tags
     const tagCounts = new Map();
-    for (const task of tasks.value.backlog as Task[]) {
-        for (const tag of task.tags || []) {
-            tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+    for (const node of store.allTasks) {
+        for (const tag of node.metadata.tags ?? []) {
+            tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
         }
     }
-    for (const [_date, dayTasks] of Object.entries(tasks.value.scheduled)) {
-        for (const task of dayTasks as Task[]) {
-            for (const tag of task.tags || []) {
-                tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
-            }
-        }
-    }
-    return [...tagCounts]
+    return Array.from(tagCounts)
         .sort(([_tag1, count1], [_tag2, count2]) => count2 - count1);
 });
 
