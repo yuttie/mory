@@ -284,7 +284,7 @@ import {
 import TaskEditor from '@/components/TaskEditor.vue';
 import TaskListItemNext from '@/components/TaskListItemNext.vue';
 import { useTaskForestStore } from '@/stores/task_forest';
-import type { NodeRecord } from '@/stores/task_forest';
+import type { TreeNodeRecord } from '@/stores/task_forest';
 
 import * as api from '@/api';
 import axios from 'axios';
@@ -335,7 +335,7 @@ const errorNotification = ref(false);
 const errorNotificationText = ref('');
 
 // Computed properties
-const backlog = computed((): NodeRecord[] => {
+const backlog = computed((): TreeNodeRecord[] => {
     const backlog = [];
     const targetTasks = store.selectedNodeId !== null ? store.selectedDescendants : store.allTasks;
     for (const t of targetTasks) {
@@ -345,7 +345,7 @@ const backlog = computed((): NodeRecord[] => {
     }
     return backlog;
 });
-const planned = computed((): { [key: string]: NodeRecord[] } => {
+const planned = computed((): { [key: string]: TreeNodeRecord[] } => {
     // Keep today, tomorrow, or other dates that have some undone tasks
     const today = dayjs().format('YYYY-MM-DD');
     const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
