@@ -3,6 +3,7 @@
         <TaskTree
             v-bind:items="taskTree"
             class="task-tree"
+            v-on:change="onTaskSelectionChangeInTree"
         />
         <div class="item-view d-flex flex-column">
             <v-toolbar flat outlined dense class="flex-grow-0">
@@ -198,11 +199,23 @@
             </v-dialog>
             <div class="groups-container flex-grow-1">
                 <div class="groups">
+                    <v-card dense class="group">
+                        <v-card-title>Backlog</v-card-title>
+                        <div class="task-list">
+                            <TaskListItemNext
+                                v-for="(task, index) of backlog"
+                                v-bind:key="task.uuid"
+                                v-bind:value="task"
+                                v-on:click="showEditTaskDialog(null, index, task, $event);"
+                                v-on:done-toggle="$set(task, 'done', $event); save();"
+                            />
+                        </div>
+                    </v-card>
                     <v-card class="group">
-                        <v-card-title>Scheduled</v-card-title>
+                        <v-card-title>Plan</v-card-title>
                         <div class="task-list">
                             <div
-                                v-for="[date, dayTasks] of scheduledTasks"
+                                v-for="[date, dayTasks] of Object.entries(planned)"
                                 v-bind:key="date"
                                 v-bind:class="{ today: isToday(date) }"
                             >
@@ -230,90 +243,16 @@
                                         <v-icon small>{{ mdiInboxArrowDown }}</v-icon>
                                     </v-btn>
                                 </div>
-                                <draggable
-                                    group="tasks"
-                                    v-bind:value="dayTasks"
-                                    v-on:input="onDraggableInput(date, $event)"
-                                    v-bind:delay="500"
-                                    v-bind:delay-on-touch-only="true"
-                                    v-on:end="save"
-                                >
-                                    <TaskListItem
-                                        v-for="(task, index) of dayTasks"
-                                        v-bind:key="task.id"
-                                        v-bind:value="task"
-                                        v-on:click="showEditTaskDialog(date, index, task, $event);"
-                                        v-on:done-toggle="$set(task, 'done', $event); save();"
-                                    ></TaskListItem>
-                                </draggable>
+                                <TaskListItemNext
+                                    v-for="(task, index) of dayTasks"
+                                    v-bind:key="task.uuid"
+                                    v-bind:value="task"
+                                    v-on:click="showEditTaskDialog(date, index, task, $event);"
+                                    v-on:done-toggle="$set(task, 'done', $event); save();"
+                                />
                             </div>
                         </div>
                     </v-card>
-                    <v-card dense class="group">
-                        <v-card-title>With Deadline</v-card-title>
-                        <div class="task-list">
-                            <TaskListItem
-                                v-for="[date, index, task] of tasksWithDeadline"
-                                v-bind:key="task.id"
-                                v-bind:value="task"
-                                v-on:click="showEditTaskDialog(date, index, task, $event);"
-                                v-on:done-toggle="$set(task, 'done', $event); save();"
-                            ></TaskListItem>
-                        </div>
-                    </v-card>
-                    <v-card dense class="group">
-                        <v-card-title>Backlog</v-card-title>
-                        <draggable
-                            class="task-list"
-                            group="tasks"
-                            v-model="filteredTasks.backlog"
-                            v-bind:delay="500"
-                            v-bind:delay-on-touch-only="true"
-                            v-on:end="save"
-                        >
-                            <TaskListItem
-                                v-for="(task, index) of filteredTasks.backlog"
-                                v-bind:key="task.id"
-                                v-bind:value="task"
-                                v-on:click="showEditTaskDialog(null, index, task, $event);"
-                                v-on:done-toggle="$set(task, 'done', $event); save();"
-                            ></TaskListItem>
-                        </draggable>
-                    </v-card>
-
-                    <div class="separator"><!-- Horizontal margin --></div>
-
-                    <draggable class="custom-groups" v-model="groups" group="groups" v-bind:delay="500" v-bind:delay-on-touch-only="true" handle=".handle" v-on:end="save">
-                        <v-card v-for="group of groups" v-bind:key="group.name" class="group">
-                            <v-card-title class="handle">
-                                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ group.name }}</span>
-                            </v-card-title>
-                            <div class="task-list">
-                                <div v-for="date of Object.keys(groupedTasks[group.name].scheduled).sort((a, b) => a < b ? 1 : a > b ? -1 : 0)" v-bind:key="date">
-                                    <div class="date-header">{{ date }}</div>
-                                    <template v-for="[index, task] of groupedTasks[group.name].scheduled[date]">
-                                        <TaskListItem
-                                            v-bind:key="task.id"
-                                            v-bind:value="task"
-                                            v-on:click="showEditTaskDialog(date, index, task, $event);"
-                                            v-on:done-toggle="$set(task, 'done', $event); save();"
-                                        ></TaskListItem>
-                                    </template>
-                                </div>
-                                <div v-if="groupedTasks[group.name].backlog.length !== 0">
-                                    <div class="date-header">Backlog</div>
-                                    <template v-for="[index, task] of groupedTasks[group.name].backlog">
-                                        <TaskListItem
-                                            v-bind:key="task.id"
-                                            v-bind:value="task"
-                                            v-on:click="showEditTaskDialog(null, index, task, $event);"
-                                            v-on:done-toggle="$set(task, 'done', $event); save();"
-                                        ></TaskListItem>
-                                    </template>
-                                </div>
-                            </div>
-                        </v-card>
-                    </draggable>
                 </div>
             </div>
         </div>
@@ -343,7 +282,9 @@ import {
 } from '@mdi/js';
 
 import TaskEditor from '@/components/TaskEditor.vue';
-import TaskListItem from '@/components/TaskListItem.vue';
+import TaskListItemNext from '@/components/TaskListItemNext.vue';
+import { useTaskForestStore } from '@/stores/task_forest';
+import type { NodeRecord } from '@/stores/task_forest';
 
 import * as api from '@/api';
 import axios from 'axios';
@@ -355,6 +296,9 @@ import YAML from 'yaml';
 
 dayjs.extend(isSameOrAfter);
 
+// Composables
+const store = useTaskForestStore();
+
 // Emits
 const emit = defineEmits<{
     (e: 'tokenExpired', callback: () => void): void;
@@ -362,11 +306,6 @@ const emit = defineEmits<{
 
 // Reactive states
 const eTag: Ref<string | null> = ref(null);
-const taskTree = ref([]);
-const tasks = ref({
-    backlog: [] as Task[],
-    scheduled: {} as { [key: string]: Task[] }
-});
 const groups: Ref<{ name: string, filter: string }[]> = ref([]);
 const searchQuery = ref("");
 // Task
@@ -396,6 +335,42 @@ const errorNotification = ref(false);
 const errorNotificationText = ref('');
 
 // Computed properties
+const backlog = computed((): NodeRecord[] => {
+    const backlog = [];
+    const targetTasks = store.selectedNodeId !== null ? store.selectedDescendants : store.allTasks;
+    for (const t of targetTasks) {
+        if (!t.metadata.task.planned_dates) {
+            backlog.push(t);
+        }
+    }
+    return backlog;
+});
+const planned = computed((): { [key: string]: NodeRecord[] } => {
+    // Keep today, tomorrow, or other dates that have some undone tasks
+    const today = dayjs().format('YYYY-MM-DD');
+    const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
+    const planned = {
+        [today]: [],
+        [tomorrow]: [],
+    };
+    const targetTasks = store.selectedNodeId !== null ? store.selectedDescendants : store.allTasks;
+    for (const t of targetTasks) {
+        if (t.metadata.task.planned_dates) {
+            for (const date of t.metadata.task.planned_dates) {
+                planned[date] ??= [];
+                planned[date].push(t);
+            }
+        }
+    }
+    return planned;
+});
+const tasks = computed(() => {
+    return {
+        backlog: [],
+        scheduled: {},
+    };
+});
+const taskTree = computed(() => store.forest);
 const knownTags = computed((): [string, number][] => {
     // Collect tags
     const tagCounts = new Map();
@@ -415,123 +390,6 @@ const knownTags = computed((): [string, number][] => {
         .sort(([_tag1, count1], [_tag2, count2]) => count2 - count1);
 });
 
-const filteredTasks = computed(() => {
-    const re = new RegExp(searchQuery.value, "i");
-    const processedTasks = {};
-    processedTasks.backlog = tasks.value.backlog.filter((task) => re.test(task.name) || task.tags?.some((tag) => re.test(tag)));
-    processedTasks.scheduled = {};
-    for (const [date, dayTasks] of Object.entries(tasks.value.scheduled)) {
-        processedTasks.scheduled[date] = dayTasks.filter((task) => re.test(task.name) || task.tags?.some((tag) => re.test(tag)));
-    }
-    return processedTasks;
-});
-
-const scheduledTasks = computed(() => {
-    let dates = Object.keys(filteredTasks.value.scheduled);
-    dates.sort((a, b) => a < b ? 1 : a > b ? -1 : 0);
-    if (hideDone.value) {
-        // Keep today, tomorrow, or other dates that have some undone tasks
-        const today = dayjs().format('YYYY-MM-DD');
-        const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
-        dates = dates.filter(date => {
-            return date === today || date === tomorrow || filteredTasks.value.scheduled[date].some(task => !task.done);
-        });
-    }
-    return dates.map((date) => [date, filteredTasks.value.scheduled[date]]);
-});
-
-const tasksWithDeadline = computed(() => {
-    const result: [string | null, number, Task][] = [];
-    // Backlog
-    for (const [i, task] of filteredTasks.value.backlog.entries()) {
-        if (task.deadline) {
-            result.push([null, i, task]);
-        }
-    }
-    // Scheduled
-    for (const [date, dayTasks] of Object.entries(filteredTasks.value.scheduled)) {
-        for (const [i, task] of dayTasks.entries()) {
-            if (task.deadline) {
-                result.push([date, i, task]);
-            }
-        }
-    }
-    if (hideDone.value) {
-        // Remove scheduled tasks which are done
-        let i = 0;
-        while (i < result.length) {
-            let [_date, _i, task] = result[i];
-            if (task.done) {
-                result.splice(i, 1);
-            }
-            else {
-                i += 1;
-            }
-        }
-    }
-    // Sort
-    result.sort(([_date1, _i1, task1], [_date2, _i2, task2]) => {
-        if (task1.done && !task2.done) {
-            return +1;
-        }
-        else if (!task1.done && task2.done) {
-            return -1;
-        }
-        else {
-            const deadline1 = dayjs(task1.deadline);
-            const deadline2 = dayjs(task2.deadline);
-            if (deadline1.isAfter(deadline2)) {
-                return -1;
-            }
-            else if (deadline2.isAfter(deadline1)) {
-                return +1;
-            }
-            else {
-                return 0;
-            }
-        }
-    });
-    return result;
-});
-
-const groupedTasks = computed(() => {
-    type Grouped = {
-        backlog: [number, Task][];
-        scheduled: { [key: string]: [number, Task][] };
-    };
-    const result: { [key: string]: Grouped } = {};
-    for (const group of groups.value) {
-        const grouped: Grouped = {
-            backlog: [],
-            scheduled: {},
-        };
-        // Backlog
-        for (const [i, task] of filteredTasks.value.backlog.entries()) {
-            if ((task.tags || []).includes(group.filter)) {
-                grouped.backlog.push([i, task]);
-            }
-        }
-        // Scheduled
-        for (const [date, dayTasks] of Object.entries(filteredTasks.value.scheduled)) {
-            grouped.scheduled[date] = [];
-            for (const [i, task] of dayTasks.entries()) {
-                if ((task.tags || []).includes(group.filter)) {
-                    grouped.scheduled[date].push([i, task]);
-                }
-            }
-            // Remove if empty or all tasks are done
-            const empty = grouped.scheduled[date].length === 0;
-            const allDone = grouped.scheduled[date].every(([_, task]) => task.done);
-            if (empty || hideDone.value && allDone) {
-                delete grouped.scheduled[date];
-            }
-        }
-        // Add
-        result[group.name] = grouped;
-    }
-    return result;
-});
-
 // Lifecycle hooks
 onMounted(async () => {
     document.title = `Tasks | ${import.meta.env.VITE_APP_NAME}`;
@@ -544,6 +402,10 @@ onUnmounted(() => {
 });
 
 // Methods
+function onTaskSelectionChangeInTree(x) {
+    store.selectNode(x !== undefined ? x.uuid : null);
+}
+
 function onDraggableInput(date: string, newTasks: Task[]) {
     set(tasks.value.scheduled, date, newTasks);
 }
@@ -733,17 +595,13 @@ async function loadIfNotEditing() {
 async function load() {
     isLoading.value = true;
     try {
-        const [newETag, data] = await (eTag.value === null ? api.getTasks() : api.getTasks(eTag.value));
+        const [newETag, data] = await (store.eTag === null ? api.getTasks() : api.getTasks(store.eTag));
 
         if (data === null) {
             // Not updated, nothing to do
         }
         else {
-            // Update ETag
-            eTag.value = newETag;
-
-            // Set data
-            taskTree.value = data;
+            store.replaceFromServer(data, newETag);
         }
 
         isLoading.value = false;
