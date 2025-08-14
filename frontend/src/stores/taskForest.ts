@@ -1,27 +1,7 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 
-export type JsonValue =
-    | { [k: string]: JsonValue }
-    | JsonValue[]
-    | string
-    | number
-    | boolean
-    | null;
-
-export type UUID = string;
-
-export interface ApiTreeNode {
-    uuid: UUID;
-    name?: string | null;
-    path: string;
-    size: number;
-    mime_type: string;
-    metadata?: JsonValue | null;
-    title?: string | null;
-    mtime: string;  // RFC3339/ISO string
-    children?: ApiTreeNode[];
-}
+import type { JsonValue, UUID, ApiTreeNode } from '@/api/task';
 
 export interface TreeNodeRecord {
     uuid: UUID;
