@@ -31,17 +31,16 @@ import {
     mdiFolderOpen,
 } from '@mdi/js';
 
-import * as api from '@/api';
-import type { TreeNode } from '@/api';
+import type { ApiTreeNode } from '@/api/task';
 
 // Props
 const props = defineProps<{
-  items: TreeNode[];
+  items: ApiTreeNode[];
 }>();
 
 // Emits
 const emit = defineEmits<{
-    (e: 'change', value: TreeNode): void;
+    (e: 'change', value: ApiTreeNode): void;
 }>();
 
 // Reactive states

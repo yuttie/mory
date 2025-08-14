@@ -286,7 +286,7 @@ import TaskListItemNext from '@/components/TaskListItemNext.vue';
 import { useTaskForestStore } from '@/stores/taskForest';
 import type { TreeNodeRecord } from '@/stores/taskForest';
 
-import * as api from '@/api';
+import * as api from '@/api/task';
 import axios from 'axios';
 import type { Task } from '@/api';
 import draggable from 'vuedraggable';
