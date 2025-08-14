@@ -65,6 +65,12 @@ export const useTaskForestStore = defineStore('taskForest', () => {
         return rootIds.value.map((rid) => toApiTreeNode(rid));
     });
 
+    // --- Single node ---
+
+    const selectedNode = computed<TreeNodeRecord>(() =>
+        nodesById.value[selectedNodeId.value] ?? null
+    );
+
     // --- Flattened node list  ---
 
     const allTaskIds = computed<UUID[]>(() => {
@@ -255,6 +261,8 @@ export const useTaskForestStore = defineStore('taskForest', () => {
         hasData,
         // -- Forest --
         forest,
+        // -- Single node --
+        selectedNode,
         // -- Flattened node list --
         allTaskIds,
         selectedDescendantIds,
