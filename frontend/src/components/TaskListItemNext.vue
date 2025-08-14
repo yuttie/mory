@@ -45,7 +45,7 @@
 <script lang="ts" setup>
 import { computed } from 'vue';
 
-import type { TreeNodeRecord } from '@/stores/task_forest';
+import type { TreeNodeRecord } from '@/stores/taskForest';
 
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
