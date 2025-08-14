@@ -283,8 +283,8 @@ import {
 
 import TaskEditor from '@/components/TaskEditor.vue';
 import TaskListItemNext from '@/components/TaskListItemNext.vue';
-import { useTaskForestStore } from '@/stores/task_forest';
-import type { TreeNodeRecord } from '@/stores/task_forest';
+import { useTaskForestStore } from '@/stores/taskForest';
+import type { TreeNodeRecord } from '@/stores/taskForest';
 
 import * as api from '@/api';
 import axios from 'axios';
