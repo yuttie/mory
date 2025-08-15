@@ -256,7 +256,7 @@
                 </div>
             </div>
         </div>
-        <v-overlay v-bind:value="isLoading" z-index="20">
+        <v-overlay v-bind:value="store.isLoading" z-index="20">
             <v-progress-circular indeterminate size="64"></v-progress-circular>
         </v-overlay>
         <v-snackbar v-model="errorNotification" color="error" top timeout="5000">{{ errorNotificationText }}</v-snackbar>
@@ -329,7 +329,6 @@ const newGroupDialog = ref(false);
 const newGroupName = ref('');
 const newGroupFilter = ref('');
 // Others
-const isLoading = ref(false);
 const hideDone = ref(true);
 const errorNotification = ref(false);
 const errorNotificationText = ref('');
@@ -586,18 +585,8 @@ async function loadIfNotEditing() {
 }
 
 async function load() {
-    isLoading.value = true;
     try {
-        const [newETag, data] = await (store.eTag === null ? api.getTasks() : api.getTasks(store.eTag));
-
-        if (data === null) {
-            // Not updated, nothing to do
-        }
-        else {
-            store.replaceFromServer(data, newETag);
-        }
-
-        isLoading.value = false;
+        await store.refresh();
     }
     catch (error) {
         if (axios.isAxiosError(error)) {
@@ -613,7 +602,6 @@ async function load() {
         // Unhandled errors
         errorNotification.value = true;
         errorNotificationText.value = error.toString();
-        isLoading.value = false;
         throw error;
     }
 }

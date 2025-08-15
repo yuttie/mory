@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 
 import type { JsonValue, UUID, ApiTreeNode } from '@/api/task';
+import * as api from '@/api/task';
 
 export interface TreeNodeRecord {
     uuid: UUID;
@@ -29,14 +30,16 @@ export const useTaskForestStore = defineStore('taskForest', () => {
     const pathToId = ref<PathToId>({});
     const rootIds = ref<UUID[]>([]);
 
-    // ETag
-    const lastETag = ref<string | null>(null);
-
     // Selection
     const selectedNodeId = ref<UUID | null>(null);
 
+    // Fetch
+    const lastETag = ref<string | null>(null);
+    const isLoading = ref(false);
+
     // ===== Getters =====
 
+    const isLoaded = computed<boolean>(() => lastETag.value !== null);
     const hasData = computed<boolean>(() => Object.keys(nodesById.value).length > 0);
 
     // --- Forest ---
@@ -148,6 +151,31 @@ export const useTaskForestStore = defineStore('taskForest', () => {
             .filter((n): n is TreeNodeRecord => Boolean(n));
     }
 
+    // --- Fetch ---
+
+    async function refresh(): Promise<'not-modified' | 'ok'> {
+        if (isLoading.value) {
+            return 'not-modified';
+        }
+        isLoading.value = true;
+        try {
+            const [newETag, data] = await (lastETag.value === null ? api.getTasks() : api.getTasks(lastETag.value));
+
+            if (data !== null) {
+                // Updated
+                replaceFromServer(data, newETag);
+                return 'ok';
+            }
+            else {
+                // Not updated
+                return 'not-modified';
+            }
+        }
+        finally {
+            isLoading.value = false;
+        }
+    }
+
     // --- Ingestion ---
 
     function replaceFromServer(forest: ApiTreeNode[], etag?: string | null): void {
@@ -234,10 +262,12 @@ export const useTaskForestStore = defineStore('taskForest', () => {
         parentById,
         pathToId,
         rootIds,
-        lastETag,
         selectedNodeId,
+        lastETag,
+        isLoading,
 
         // === Getters ===
+        isLoaded,
         hasData,
         // -- Forest --
         forest,
@@ -262,6 +292,8 @@ export const useTaskForestStore = defineStore('taskForest', () => {
         toApiTreeNode,
         // -- Flattened node list --
         flattenSubtree,
+        // -- Fetch --
+        refresh,
         // -- Ingestion --
         replaceFromServer,
         mergeFromServer,
