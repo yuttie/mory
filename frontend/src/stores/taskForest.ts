@@ -159,7 +159,7 @@ export const useTaskForestStore = defineStore('taskForest', () => {
         }
         isLoading.value = true;
         try {
-            const [newETag, data] = await (lastETag.value === null ? api.getTasks() : api.getTasks(lastETag.value));
+            const [newETag, data] = await (lastETag.value === null ? api.getTaskForest() : api.getTaskForest(lastETag.value));
 
             if (data !== null) {
                 // Updated

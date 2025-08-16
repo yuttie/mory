@@ -15,7 +15,7 @@ export interface ApiTreeNode {
     children?: ApiTreeNode[];
 }
 
-export async function getTasks(eTag?: string): Promise<[string, ApiTreeNode | null]> {
+export async function getTaskForest(eTag?: string): Promise<[string, ApiTreeNode | null]> {
     const headers = {};
     if (eTag) {
         headers['If-None-Match'] = eTag;
