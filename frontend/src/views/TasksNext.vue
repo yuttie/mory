@@ -6,7 +6,7 @@
                 v-bind:active="selectedNode?.uuid"
                 v-on:change="onTaskSelectionChangeInTree"
             />
-            <div class="item-view d-flex flex-column" style="background: #B0BEC5;">
+            <div class="item-view d-flex flex-column">
                 <div class="d-flex flex-row">
                     <v-tabs v-model="itemViewTab">
                         <v-tab
@@ -331,6 +331,7 @@ $space: 12px;
 
 .item-view {
     flex: 1 1 0;
+    background: #B0BEC5;
 }
 
 .groups-container {
