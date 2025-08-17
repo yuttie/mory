@@ -13,10 +13,7 @@
                     rounded
                     single-line
                     clearable
-                    prepend-inner-icon="mdi-magnify"
-                    append-icon="mdi-tag"
                     v-on:click:clear="clearQuery"
-                    v-on:click:append="on.click"
                     type="text"
                     label="Search"
                     autocomplete="off"
@@ -24,6 +21,12 @@
                     ref="queryEl"
                     class="mx-3 mt-3 flex-grow-0"
                 >
+                    <template v-slot:prepend-inner>
+                        <v-icon>{{ mdiMagnify }}</v-icon>
+                    </template>
+                    <template v-slot:append>
+                        <v-icon v-on:click="on.click">{{ mdiTag }}</v-icon>
+                    </template>
                 </v-text-field>
             </template>
             <v-card>
@@ -121,6 +124,8 @@ import {
     mdiFileDocumentOutline,
     mdiFileOutline,
     mdiImageOutline,
+    mdiMagnify,
+    mdiTag,
 } from '@mdi/js';
 
 import * as api from '@/api';
