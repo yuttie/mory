@@ -10,6 +10,17 @@
         >
             <v-card-title>
                 {{ isEdit ? 'Edit Task' : 'New Task' }}
+                <v-btn
+                    v-if="isEdit"
+                    v-bind:to="{ path: `/note/${taskPath}` }"
+                    target="_blank"
+                    title="Open as note"
+                    class="ml-1"
+                    plain
+                    icon
+                >
+                    <v-icon>{{ mdiPencilBoxOutline }}</v-icon>
+                </v-btn>
                 <v-spacer />
                 <v-btn
                     v-if="isEdit"
@@ -296,6 +307,7 @@ import {
     mdiHelpCircleOutline,
     mdiNoteEditOutline,
     mdiPercentOutline,
+    mdiPencilBoxOutline,
     mdiPriorityHigh,
     mdiTagMultipleOutline,
     mdiTarget,
