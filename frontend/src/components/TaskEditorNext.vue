@@ -329,7 +329,6 @@ type EditableTask = {
 const props = defineProps<{
     taskPath: string;
     knownTags: [string, number][];
-    busy?: boolean;
 }>();
 const pathRef = toRef(props, 'taskPath');
 
