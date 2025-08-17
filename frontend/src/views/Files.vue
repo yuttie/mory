@@ -1,5 +1,5 @@
 <template>
-    <div id="files" class="d-flex flex-column">
+    <div id="files" class="d-flex flex-column pt-10">
         <v-menu
             v-model="showingTagList"
             v-bind:close-on-content-click="false"
