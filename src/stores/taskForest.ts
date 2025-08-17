@@ -144,6 +144,13 @@ export const useTaskForestStore = defineStore('taskForest', () => {
 
     // --- Flattened node list  ---
 
+    function flattenDescendants(rootId: UUID): TreeNodeRecord[] {
+        const ids = collectDescendants(rootId, childrenById.value);
+        return ids
+            .map((id) => nodesById.value[id])
+            .filter((n): n is TreeNodeRecord => Boolean(n));
+    }
+
     function flattenSubtree(rootId: UUID): TreeNodeRecord[] {
         const ids = [rootId, ...collectDescendants(rootId, childrenById.value)];
         return ids
@@ -291,6 +298,7 @@ export const useTaskForestStore = defineStore('taskForest', () => {
         subtree,
         toApiTreeNode,
         // -- Flattened node list --
+        flattenDescendants,
         flattenSubtree,
         // -- Fetch --
         refresh,
