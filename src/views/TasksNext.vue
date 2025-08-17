@@ -1,300 +1,112 @@
 <template>
     <div id="tasks" class="d-flex flex-row">
-        <TaskTree
-            v-bind:items="taskTree"
-            class="task-tree"
-            v-on:change="onTaskSelectionChangeInTree"
-        />
-        <div class="item-view d-flex flex-column">
-            <v-toolbar flat outlined dense class="flex-grow-0">
-                <!-- New task button -->
-                <v-dialog
-                    max-width="600px"
-                    persistent
-                    v-model="newTaskDialog"
-                >
-                    <template v-slot:activator="{ on, attrs }">
-                        <v-btn
-                            text
-                            title="Add task"
-                            v-bind="{ ...attrs, class: { 'pa-0': !$vuetify.breakpoint.mdAndUp } }"
-                            v-on="on"
+        <template v-if="store.isLoaded">
+            <TaskTree
+                v-bind:items="store.forest"
+                v-bind:active="selectedNode?.uuid"
+                v-on:change="onTaskSelectionChangeInTree"
+            />
+            <div class="item-view d-flex flex-column" style="background: #B0BEC5;">
+                <div class="d-flex flex-row">
+                    <v-tabs v-model="itemViewTab">
+                        <v-tab
+                            v-if="newTaskPath ?? selectedNode"
+                            tab-value="selected"
                         >
-                            <v-icon>{{ mdiCheckboxMarkedCirclePlusOutline }}</v-icon>
-                            <span v-if="$vuetify.breakpoint.mdAndUp">Task</span>
-                        </v-btn>
-                    </template>
-                    <v-card>
-                        <v-card-actions>
-                            <v-spacer></v-spacer>
+                            {{ newTaskPath ? 'New' : 'Selected' }}
+                        </v-tab>
+                        <v-tab tab-value="descendants">
+                            {{ selectedNode ? 'Descendants' : 'All tasks' }}
+                        </v-tab>
+                    </v-tabs>
+                </div>
+                <v-tabs-items
+                    v-model="itemViewTab"
+                    class="d-flex flex-column"
+                    style="flex: 1 1 0; background: transparent;"
+                >
+                    <v-tab-item v-if="newTaskPath ?? selectedNode" value="selected">
+                        <TaskEditorNext
+                            ref="taskEditorRef"
+                            v-bind:task-path="newTaskPath ?? selectedNode.path"
+                            v-bind:known-tags="knownTags"
+                            class="ma-4"
+                            v-on:save="onSelectedTaskSave"
+                            v-on:delete="onSelectedTaskDelete"
+                        />
+                    </v-tab-item>
+                    <v-tab-item value="descendants">
+                        <v-toolbar flat outlined dense class="flex-grow-0">
+                            <!-- New task button -->
                             <v-btn
-                                text
-                                color="primary"
-                                v-on:click="add(false)"
-                                v-bind:disabled="newTask.name.length === 0"
+                                title="Add"
+                                outlined
+                                v-bind:class="{ 'pa-0': !$vuetify.breakpoint.mdAndUp }"
+                                v-on:click="newTask"
                             >
-                                <v-icon>{{ mdiPlusBoxMultipleOutline }}</v-icon>
-                                <span v-if="$vuetify.breakpoint.smAndUp">Add & New</span>
+                                <v-icon>{{ mdiPlus }}</v-icon>
+                                <span v-if="$vuetify.breakpoint.mdAndUp">Add</span>
                             </v-btn>
-                            <v-btn
-                                text
-                                color="primary"
-                                v-on:click="add"
-                                v-bind:disabled="newTask.name.length === 0"
-                            >
-                                <v-icon>{{ mdiPlusBoxOutline }}</v-icon>
-                                <span v-if="$vuetify.breakpoint.smAndUp">Add</span>
-                            </v-btn>
-                            <v-btn
-                                icon
-                                v-on:click="closeNewTaskDialog"
-                            ><v-icon>{{ mdiClose }}</v-icon></v-btn>
-                        </v-card-actions>
-                        <v-card-text>
-                            <TaskEditor v-model="newTask" v-bind:knownTags="knownTags"></TaskEditor>
-                        </v-card-text>
-                    </v-card>
-                </v-dialog>
-
-                <!-- New group button -->
-                <v-dialog
-                    max-width="600px"
-                    persistent
-                    v-model="newGroupDialog"
-                >
-                    <template v-slot:activator="{ on, attrs }">
-                        <v-btn
-                            text
-                            title="Add group"
-                            v-bind="{ ...attrs, class: { 'pa-0': !$vuetify.breakpoint.mdAndUp } }"
-                            v-on="on"
-                        >
-                            <v-icon>{{ mdiFormatListGroupPlus }}</v-icon>
-                            <span v-if="$vuetify.breakpoint.mdAndUp">Group</span>
-                        </v-btn>
-                    </template>
-                    <v-card>
-                        <v-card-actions>
-                            <v-spacer></v-spacer>
-                            <v-btn
-                                text
-                                color="primary"
-                                v-on:click="addGroup"
-                                v-bind:disabled="newGroupName.length === 0 || newGroupFilter.length === 0"
-                            >
-                                <v-icon>{{ mdiPlusBoxOutline }}</v-icon>
-                                <span v-if="$vuetify.breakpoint.smAndUp">Add</span>
-                            </v-btn>
-                            <v-btn
-                                icon
-                                v-on:click="closeNewGroupDialog"
-                            ><v-icon>{{ mdiClose }}</v-icon></v-btn>
-                        </v-card-actions>
-                        <v-card-text>
-                            <v-text-field
-                                label="Name"
-                                autofocus
-                                prepend-icon="mdi-pencil"
-                                v-model="newGroupName"
-                            ></v-text-field>
-                            <v-text-field
-                                label="Tag"
-                                prepend-icon="mdi-tag-outline"
-                                v-model="newGroupFilter"
-                            ></v-text-field>
-                        </v-card-text>
-                    </v-card>
-                </v-dialog>
-
-                <!-- Collect undone button -->
-                <v-btn
-                    text
-                    title="Collect undone"
-                    v-bind:class="{ 'pa-0': !$vuetify.breakpoint.mdAndUp }"
-                    v-on:click="collectUndone"
-                >
-                    <v-icon>{{ mdiCheckboxMultipleBlankOutline }}</v-icon>
-                    <span v-if="$vuetify.breakpoint.mdAndUp">Collect Undone</span>
-                </v-btn>
-
-                <!-- Hide done toggle -->
-                <v-switch
-                    v-model="hideDone"
-                    v-bind:label="$vuetify.breakpoint.mdAndUp ? 'Hide done' : null"
-                    hide-details
-                ></v-switch>
-
-                <!-- Reload button -->
-                <v-btn
-                    text
-                    title="Reload"
-                    v-bind:class="{ 'pa-0': !$vuetify.breakpoint.mdAndUp }"
-                    v-on:click="loadIfNotEditing"
-                >
-                    <v-icon>{{ mdiReload }}</v-icon>
-                    <span v-if="$vuetify.breakpoint.mdAndUp">Reload</span>
-                </v-btn>
-
-                <!-- Search text box -->
-                <v-text-field
-                    dense
-                    label="Search"
-                    clearable
-                    v-model="searchQuery"
-                    hide-details
-                ></v-text-field>
-
-                <!-- Progress bar for loading data -->
-                <v-progress-linear
-                    absolute
-                    bottom
-                    indeterminate
-                    color="primary"
-                    v-bind:active="isLoading"
-                ></v-progress-linear>
-            </v-toolbar>
-            <v-dialog
-                max-width="600px"
-                persistent
-                v-if="editTarget"
-                v-model="editTaskDialog"
-                v-bind:activator="editTaskDialogActivator"
-            >
-                <v-card>
-                    <v-card-actions>
-                        <v-spacer></v-spacer>
-                        <v-btn
-                            text
-                            v-on:click="openNewTaskDialogWithSelection"
-                        >
-                            <v-icon>{{ mdiPlusBoxOutline }}</v-icon>
-                            <span v-if="$vuetify.breakpoint.smAndUp">Add similar...</span>
-                        </v-btn>
-                        <v-btn
-                            text
-                            color="error"
-                            v-on:click="removeSelected"
-                        >
-                            <v-icon>{{ mdiDelete }}</v-icon>
-                            <span v-if="$vuetify.breakpoint.smAndUp">Delete</span>
-                        </v-btn>
-                        <v-btn
-                            text
-                            color="primary"
-                            v-on:click="updateSelected"
-                            v-bind:disabled="editTarget.name.length === 0"
-                        >
-                            <v-icon>{{ mdiContentSave }}</v-icon>
-                            <span v-if="$vuetify.breakpoint.smAndUp">Save</span>
-                        </v-btn>
-                        <v-btn
-                            icon
-                            v-on:click="closeEditTaskDialog"
-                        ><v-icon>{{ mdiClose }}</v-icon></v-btn>
-                    </v-card-actions>
-                    <v-card-text>
-                        <TaskEditor v-model="editTarget" v-bind:knownTags="knownTags"></TaskEditor>
-                    </v-card-text>
-                </v-card>
-            </v-dialog>
-            <div class="groups-container flex-grow-1">
-                <div class="groups">
-                    <v-card dense class="group">
-                        <v-card-title>Backlog</v-card-title>
-                        <div class="task-list">
-                            <TaskListItemNext
-                                v-for="(task, index) of backlog"
-                                v-bind:key="task.uuid"
-                                v-bind:value="task"
-                                v-on:click="showEditTaskDialog(null, index, task, $event);"
-                                v-on:done-toggle="$set(task, 'done', $event); save();"
-                            />
-                        </div>
-                    </v-card>
-                    <v-card class="group">
-                        <v-card-title>Plan</v-card-title>
-                        <div class="task-list">
-                            <div
-                                v-for="[date, dayTasks] of Object.entries(planned)"
-                                v-bind:key="date"
-                                v-bind:class="{ today: isToday(date) }"
-                            >
-                                <div class="date-header d-flex flex-row">
-                                    <span>{{ isToday(date) ? `Today (${date})` : isTomorrow(date) ? `Tomorrow (${date})` : date }}</span>
-                                    <v-spacer></v-spacer>
-                                    <v-btn
-                                        text
-                                        small
-                                        title="Sort"
-                                        style="min-width: unset;"
-                                        class="px-2"
-                                        v-on:click="sortDailyTasks(date)"
-                                    >
-                                        <v-icon small>{{ mdiSortBoolAscendingVariant }}</v-icon>
-                                    </v-btn>
-                                    <v-btn
-                                        text
-                                        small
-                                        title="Move to today"
-                                        style="min-width: unset;"
-                                        class="px-2"
-                                        v-on:click="moveUndoneToToday(date)"
-                                    >
-                                        <v-icon small>{{ mdiInboxArrowDown }}</v-icon>
-                                    </v-btn>
-                                </div>
-                                <TaskListItemNext
-                                    v-for="(task, index) of dayTasks"
-                                    v-bind:key="task.uuid"
-                                    v-bind:value="task"
-                                    v-on:click="showEditTaskDialog(date, index, task, $event);"
-                                    v-on:done-toggle="$set(task, 'done', $event); save();"
-                                />
+                        </v-toolbar>
+                        <div class="groups-container flex-grow-1">
+                            <div class="groups">
+                                <v-card dense class="group">
+                                    <v-card-title>Backlog</v-card-title>
+                                    <div class="task-list">
+                                        <TaskListItemNext
+                                            v-for="task of backlog"
+                                            v-bind:key="task.uuid"
+                                            v-bind:value="task"
+                                        />
+                                    </div>
+                                </v-card>
+                                <v-card class="group">
+                                    <v-card-title>Scheduled</v-card-title>
+                                    <div class="task-list">
+                                        <div
+                                            v-for="[date, dayTasks] of Object.entries(scheduled)"
+                                            v-bind:key="date"
+                                            v-bind:class="{ today: isToday(date) }"
+                                        >
+                                            <div class="date-header d-flex flex-row">
+                                                <span>{{ isToday(date) ? `Today (${date})` : isTomorrow(date) ? `Tomorrow (${date})` : date }}</span>
+                                            </div>
+                                            <TaskListItemNext
+                                                v-for="task of dayTasks"
+                                                v-bind:key="task.uuid"
+                                                v-bind:value="task"
+                                            />
+                                        </div>
+                                    </div>
+                                </v-card>
                             </div>
                         </div>
-                    </v-card>
-                </div>
+                    </v-tab-item>
+                </v-tabs-items>
             </div>
-        </div>
+        </template>
         <v-overlay v-bind:value="store.isLoading" z-index="20">
-            <v-progress-circular indeterminate size="64"></v-progress-circular>
+            <v-progress-circular indeterminate size="64" />
         </v-overlay>
-        <v-snackbar v-model="errorNotification" color="error" top timeout="5000">{{ errorNotificationText }}</v-snackbar>
+        <v-snackbar v-model="error" color="error" top timeout="5000">{{ error }}</v-snackbar>
     </div>
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onMounted, onUnmounted, set, del } from 'vue';
-import type { Ref } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 
 import {
-    mdiCheckboxMarkedCirclePlusOutline,
-    mdiCheckboxMultipleBlankOutline,
-    mdiClose,
-    mdiContentSave,
-    mdiDelete,
-    mdiFormatListGroupPlus,
-    mdiInboxArrowDown,
-    mdiPlusBoxMultipleOutline,
-    mdiPlusBoxOutline,
-    mdiReload,
-    mdiSortBoolAscendingVariant,
+    mdiPlus,
 } from '@mdi/js';
 
-import TaskEditor from '@/components/TaskEditor.vue';
+import TaskEditorNext from '@/components/TaskEditorNext.vue';
 import TaskListItemNext from '@/components/TaskListItemNext.vue';
-import { useTaskForestStore } from '@/stores/taskForest';
-import type { TreeNodeRecord } from '@/stores/taskForest';
+import { type TreeNodeRecord, useTaskForestStore } from '@/stores/taskForest';
 
-import * as api from '@/api/task';
+import * as api from '@/api';
+import { type UUID, type Task, render } from '@/task';
 import axios from 'axios';
-import type { Task } from '@/api';
-import draggable from 'vuedraggable';
 import dayjs from 'dayjs';
-import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
-import YAML from 'yaml';
-
-dayjs.extend(isSameOrAfter);
 
 // Composables
 const store = useTaskForestStore();
@@ -305,81 +117,70 @@ const emit = defineEmits<{
 }>();
 
 // Reactive states
-const eTag: Ref<string | null> = ref(null);
-const groups: Ref<{ name: string, filter: string }[]> = ref([]);
-const searchQuery = ref("");
-// Task
-const newTask: Ref<Task> = ref({
-    id: crypto.randomUUID(),
-    name: '',
-    deadline: null,
-    schedule: null,
-    done: false,
-    tags: [],
-    note: '',
-});
-const newTaskDialog = ref(false);
-const selectedTaskIndex: Ref<null | number> = ref(null);
-const selectedTask: Ref<null | Task> = ref(null);
-const editTarget: Ref<null | Task> = ref(null);
-const editTaskDialog = ref(false);
-const editTaskDialogActivator: Ref<any> = ref(null);
-// Group
-const newGroupDialog = ref(false);
-const newGroupName = ref('');
-const newGroupFilter = ref('');
-// Others
-const hideDone = ref(true);
-const errorNotification = ref(false);
-const errorNotificationText = ref('');
+const taskEditorRef = ref<any>(null);
+const itemViewTab = ref<string>('descendants');
+const selectedNode = ref<TreeNodeRecord | undefined>(undefined);
+const newTaskPath = ref<string | null>(null);
+const error = ref<string | null>(null);
 
 // Computed properties
-const backlog = computed((): TreeNodeRecord[] => {
+const backlog = computed<TreeNodeRecord[]>(() => {
     const backlog = [];
-    const targetTasks = store.selectedNodeId !== null ? store.selectedDescendants : store.allTasks;
+    const targetTasks = selectedNode.value
+        ? store.flattenDescendants(selectedNode.value.uuid)
+        : store.allTasks;
     for (const t of targetTasks) {
-        if (!t.metadata.task.planned_dates) {
+        if (!t.metadata?.task?.scheduled_dates?.length) {
             backlog.push(t);
         }
     }
     return backlog;
 });
-const planned = computed((): { [key: string]: TreeNodeRecord[] } => {
+
+const scheduled = computed<Record<string, TreeNodeRecord[]>>(() => {
     // Keep today, tomorrow, or other dates that have some undone tasks
     const today = dayjs().format('YYYY-MM-DD');
     const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
-    const planned = {
+    const scheduled: Record<string, TreeNodeRecord[]> = {
         [today]: [],
         [tomorrow]: [],
     };
-    const targetTasks = store.selectedNodeId !== null ? store.selectedDescendants : store.allTasks;
+    const targetTasks = selectedNode.value
+        ? store.flattenDescendants(selectedNode.value.uuid)
+        : store.allTasks;
     for (const t of targetTasks) {
-        if (t.metadata.task.planned_dates) {
-            for (const date of t.metadata.task.planned_dates) {
-                planned[date] ??= [];
-                planned[date].push(t);
+        if (t.metadata?.task?.scheduled_dates) {
+            for (const date of t.metadata.task.scheduled_dates) {
+                scheduled[date] ??= [];
+                scheduled[date].push(t);
             }
         }
     }
-    return planned;
+    return scheduled;
 });
-const tasks = computed(() => {
-    return {
-        backlog: [],
-        scheduled: {},
-    };
-});
-const taskTree = computed(() => store.forest);
-const knownTags = computed((): [string, number][] => {
+
+const knownTags = computed<[string, number][]>(() => {
     // Collect tags
     const tagCounts = new Map();
     for (const node of store.allTasks) {
-        for (const tag of node.metadata.tags ?? []) {
+        for (const tag of node.metadata?.tags ?? []) {
             tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
         }
     }
     return Array.from(tagCounts)
         .sort(([_tag1, count1], [_tag2, count2]) => count2 - count1);
+});
+
+// Watchers
+watch(selectedNode, (node) => {
+    if (node) {
+        // Open 'selected' tab when a task is selected
+        itemViewTab.value = 'selected';
+    }
+    else {
+        // Open 'descendants' tab when nothing is selected
+        itemViewTab.value = 'descendants';
+    }
 });
 
 // Lifecycle hooks
@@ -394,12 +195,99 @@ onUnmounted(() => {
 });
 
 // Methods
-function onTaskSelectionChangeInTree(x) {
-    store.selectNode(x !== undefined ? x.uuid : null);
+function onTaskSelectionChangeInTree(id: UUID | undefined) {
+    selectedNode.value = id ? store.node(id) : undefined;
 }
 
-function onDraggableInput(date: string, newTasks: Task[]) {
-    set(tasks.value.scheduled, date, newTasks);
+function newTask() {
+    let parentDir;
+    if (selectedNode.value) {
+        // Create a task under the selected one
+        const selected = selectedNode.value;
+        const idx = selected.path.lastIndexOf('/');
+        parentDir = selected.path.slice(0, idx) + '/' + selected.uuid;
+    }
+    else {
+        // Create a task under the root
+        parentDir = '.tasks';
+    }
+    newTaskPath.value = parentDir + '/' + crypto.randomUUID() + '.md';
+    // Show 'selected' tab
+    itemViewTab.value = 'selected';
+}
+
+async function onSelectedTaskSave(task: Task) {
+    const path = newTaskPath.value ?? selectedNode.value?.path;
+    if (!path) {
+        return;
+    }
+    const node: TreeNodeRecord = {
+        uuid: task.uuid,
+        name: null,
+        path: path,
+        size: 0,
+        mime_type: 'text/markdown',
+        metadata: {
+            task: {
+                status: task.status,
+                progress: task.progress,
+                importance: task.importance,
+                urgency: task.urgency,
+                ...(task.start_at ? { start_at: task.start_at } : {}),
+                ...(task.due_by ? { due_by: task.due_by } : {}),
+                ...(task.deadline ? { deadline: task.deadline } : {}),
+                scheduled_dates: task.scheduled_dates,
+            },
+            tags: task.tags,
+        },
+        title: task.title,
+        mtime: '',
+    };
+    const markdown = render(task);
+    if (newTaskPath.value) {
+        // Create a new one
+        await api.addNote(newTaskPath.value, markdown);
+        // Update the store locally for immediate update
+        const i = newTaskPath.value.lastIndexOf('/');
+        const parentPath = newTaskPath.value.slice(0, i);
+        const j = parentPath.lastIndexOf('/');
+        const parentUuid = j === -1 ? null : parentPath.slice(j + 1);
+        store.addNodeLocal(parentUuid, node);
+        // Select the task
+        newTaskPath.value = null;
+        selectedNode.value = store.node(task.uuid);
+        taskEditorRef.value.refresh();  // Refresh task editor manually because its task-path prop retains the same value
+        // Show 'selected' tab
+        itemViewTab.value = 'selected';
+        // Refresh the store
+        await store.refresh();
+    }
+    else if (selectedNode.value) {
+        // Update the existing one
+        await api.addNote(selectedNode.value.path, markdown);
+        // Update the store locally for immediate update
+        store.replaceNodeLocal(node);
+        // Refresh the store
+        await store.refresh();
+    }
+}
+
+async function onSelectedTaskDelete(path: string) {
+    // Look up UUID by path
+    const uuid = store.idByPath(path);
+    if (!uuid) {
+        return;
+    }
+    // Delete the task
+    await api.deleteNote(path);
+    // Update the store locally for immediate update
+    store.deleteLeafLocal(uuid);
+    // Unselect
+    if (selectedNode.value?.uuid === uuid) {
+        selectedNode.value = undefined;
+    }
+    // Refresh the store
+    await store.refresh();
 }
 
 function isToday(date: string) {
@@ -410,296 +298,20 @@ function isTomorrow(date: string) {
     return date === dayjs().add(1, 'day').format('YYYY-MM-DD');
 }
 
-function select(date: string | null, index: number | null, task: Task | null) {
-    selectedTaskIndex.value = index;
-    if (task !== null) {
-        task.schedule = date;
-    }
-    selectedTask.value = task;
-    if (task !== null) {
-        editTarget.value = structuredClone(task);
-        editTarget.value.name     ??= '';
-        editTarget.value.deadline ??= null;
-        editTarget.value.schedule ??= null;
-        editTarget.value.done     ??= false;
-        editTarget.value.tags     ??= [];
-        editTarget.value.note     ??= '';
-    }
-    else {
-        editTarget.value = null;
-    }
-}
-
-function showEditTaskDialog(date: string | null, index: number, task: Task, event: MouseEvent) {
-    const open = () => {
-        select(date, index, task);
-        editTaskDialogActivator.value = (event.target as Element).parentElement!;
-        setTimeout(() => {
-            editTaskDialog.value = true;
-        }, 0);
-    };
-
-    if (editTaskDialog.value) {
-        editTaskDialog.value = false;
-        setTimeout(open, 0);
-    }
-    else {
-        open();
-    }
-}
-
-function closeNewTaskDialog() {
-    // Close the dialog
-    newTaskDialog.value = false;
-    // Reset
-    newTask.value = {
-        id: crypto.randomUUID(),
-        name: '',
-        deadline: null,
-        schedule: null,
-        done: false,
-        tags: [],
-        note: '',
-    };
-}
-
-function closeNewGroupDialog() {
-    // Close the dialog
-    newGroupDialog.value = false;
-    // Reset
-    newGroupName.value = '';
-    newGroupFilter.value = '';
-}
-
-function closeEditTaskDialog() {
-    // Close the dialog
-    editTaskDialog.value = false;
-    // Reset
-    select(null, null, null);
-}
-
-function openNewTaskDialogWithSelection() {
-    newTask.value = structuredClone(editTarget.value);
-    newTask.id = crypto.randomUUID();
-    newTask.value.name += ' (copy)';
-    newTaskDialog.value = true;
-    closeEditTaskDialog();
-}
-
-async function sortDailyTasks(date: string) {
-    // Sort tasks by completion and then deadline
-    tasks.value.scheduled[date] = tasks.value.scheduled[date].slice().sort((task1, task2) => {
-        if (task1.done && !task2.done) {
-            return +1;
-        }
-        else if (!task1.done && task2.done) {
-            return -1;
-        }
-        else {
-            if (!task1.deadline && task2.deadline) {
-                return +1;
-            }
-            else if (task1.deadline && !task2.deadline) {
-                return -1;
-            }
-            else {
-                const deadline1 = dayjs(task1.deadline);
-                const deadline2 = dayjs(task2.deadline);
-                if (deadline1.isAfter(deadline2)) {
-                    return +1;
-                }
-                else if (deadline2.isAfter(deadline1)) {
-                    return -1;
-                }
-                else {
-                    return 0;
-                }
-            }
-        }
-    });
-    // Save
-    await save();
-}
-
-async function moveUndoneToToday(date: string) {
-    const dayTasks = tasks.value.scheduled[date];
-    // Collect undone tasks
-    const undone = [];
-    let i = 0;
-    while (i < dayTasks.length) {
-        const task = dayTasks[i];
-        if (task.done) {
-            i += 1;
-        }
-        else {
-            dayTasks.splice(i, 1);
-            undone.push(task);
-        }
-    }
-    // Schedule them today
-    const today = dayjs().startOf('day');
-    const todayDate = today.format('YYYY-MM-DD');
-    if (!Object.hasOwn(tasks.value.scheduled, todayDate)) {
-        tasks.value.scheduled[todayDate] = [];
-    }
-    tasks.value.scheduled[todayDate].unshift(...undone);
-    // Save
-    await save();
-}
-
-async function collectUndone() {
-    const today = dayjs().startOf('day');
-    // Collect undone tasks
-    const undone = [];
-    const dates = Object.keys(tasks.value.scheduled).sort();
-    for (const date of dates) {
-        if (dayjs(date).isSameOrAfter(today)) {
-            break;
-        }
-        const dayTasks: Task[] = tasks.value.scheduled[date];
-        for (let i = 0; i < dayTasks.length;) {
-            const task = dayTasks[i];
-            if (task.done) {
-                ++i;
-            }
-            else {
-                undone.push(task)
-                dayTasks.splice(i, 1);
-            }
-        }
-    }
-    // Schedule them today
-    const todayDate = today.format('YYYY-MM-DD');
-    if (!Object.hasOwn(tasks.value.scheduled, todayDate)) {
-        tasks.value.scheduled[todayDate] = [];
-    }
-    tasks.value.scheduled[todayDate].unshift(...undone);
-    // Save
-    await save();
-}
-
-async function loadIfNotEditing() {
-    if (editTarget.value === null) {
-        await load();
-    }
-}
-
 async function load() {
+    error.value = null;
     try {
         await store.refresh();
     }
-    catch (error) {
-        if (axios.isAxiosError(error)) {
-            if (error.response) {
-                if (error.response.status === 401) {
-                    // Unauthorized
-                    emit('tokenExpired', () => load());
-                    return;
-                }
-            }
+    catch (e) {
+        if (axios.isAxiosError(e) && e.response?.status === 401) {
+            // Unauthorized
+            emit('tokenExpired', () => load());
+            return;
         }
-
         // Unhandled errors
-        errorNotification.value = true;
-        errorNotificationText.value = error.toString();
-        throw error;
+        error.value = e.toString();
     }
-}
-
-async function save() {
-    return await api.putTaskData({ tasks: tasks.value, groups: groups.value });
-}
-
-async function add(closeDialog = true) {
-    // Insert a new task
-    const task: Task = structuredClone(newTask.value);
-    if (task.schedule !== null) {
-        tasks.value.scheduled[task.schedule] ??= [];
-        tasks.value.scheduled[task.schedule].unshift(task);
-    }
-    else {
-        tasks.value.backlog.unshift(task);
-    }
-
-    // Save
-    await save();
-
-    // Close the dialog or keep it open to continue creating another similar tasks
-    if (closeDialog) {
-        closeNewTaskDialog();
-    }
-    else {
-        // Inherit values from the previous task except for id, name, and tags
-        newTask.value = structuredClone(newTask.value);
-        newTask.value.id = crypto.randomUUID();
-        newTask.value.name = '';
-        newTask.value.tags = [...newTask.value.tags];
-    }
-}
-
-async function updateSelected() {
-    if (selectedTask.value === null) {
-        throw new Error('selectedTask is null');
-    }
-    if (editTarget.value === null) {
-        throw new Error('editTarget is null');
-    }
-    // Copy back
-    selectedTask.value.name = editTarget.value.name;
-    selectedTask.value.deadline = editTarget.value.deadline;
-    selectedTask.value.done = editTarget.value.done;
-    selectedTask.value.tags = editTarget.value.tags;
-    selectedTask.value.note = editTarget.value.note;
-    // Move to other list
-    const oldDate = selectedTask.value.schedule;
-    const newDate = editTarget.value.schedule;
-    if (newDate !== oldDate) {
-        // Remove it from the original list
-        const list = oldDate === null ? tasks.value.backlog : tasks.value.scheduled[oldDate];
-        list.splice(selectedTaskIndex.value!, 1);
-        // Put into a new list
-        if (newDate === null) {
-            tasks.value.backlog.unshift(selectedTask.value);
-        }
-        else {
-            if (!Object.hasOwn(tasks.value.scheduled, newDate)) {
-                tasks.value.scheduled[newDate] = [];
-            }
-            tasks.value.scheduled[newDate].unshift(selectedTask.value);
-        }
-    }
-    // Save
-    await save();
-    // Close
-    closeEditTaskDialog();
-}
-
-async function removeSelected() {
-    if (selectedTask.value === null) {
-        throw new Error('selectedTask is null');
-    }
-    const list = selectedTask.value.schedule === null ? tasks.value.backlog : tasks.value.scheduled[selectedTask.value.schedule];
-    list.splice(selectedTaskIndex.value!, 1);
-    // Save
-    await save();
-    // Close
-    closeEditTaskDialog();
-}
-
-async function addGroup() {
-    // Create a new group
-    const group: any = {
-        name: newGroupName.value,
-        filter: newGroupFilter.value,
-    };
-    groups.value.unshift(group);
-    // Save
-    await save();
-    // Hide the dialog
-    newGroupDialog.value = false;
-    // Reset
-    newGroupName.value = '';
-    newGroupFilter.value = '';
 }
 </script>
 
@@ -711,17 +323,22 @@ $space: 12px;
     height: 100%;
     user-select: none;
 }
+
 .task-tree {
-    min-width: 300px;
+    width: 300px;
+    overflow: hidden auto;
 }
+
 .item-view {
     flex: 1 1 0;
 }
+
 .groups-container {
     flex: 1 1 0;
     overflow-x: auto;
     overflow-y: hidden;
 }
+
 .groups {
     display: flex;
     width: fit-content;
@@ -729,12 +346,7 @@ $space: 12px;
     gap: $space;
     padding: $space;
 }
-.custom-groups {
-    display: flex;
-    width: fit-content;
-    height: 100%;
-    gap: $space;
-}
+
 .group {
     display: flex;
     flex-direction: column;
@@ -742,22 +354,12 @@ $space: 12px;
     max-height: 100%;
     width: $group-width;
 }
-.custom-groups .group {
-    &.sortable-ghost {
-        visibility: hidden;
-    }
-}
-.handle {
-    cursor: grab;
-}
+
 .task-list {
     overflow-y: auto;
 
     .date-header {
         padding: 2px 8px 0 8px;
-    }
-    .task-list-item {
-        padding: 4px 8px;
     }
     div > .date-header {
         border-bottom: 2px solid #ddd;
@@ -767,7 +369,14 @@ $space: 12px;
         margin-top: 12px;
     }
 }
-.separator {
-    margin: 0 1em;
+
+:deep(.item-view .v-window__container) {
+    flex: 1 1 0;
+}
+
+:deep(.item-view .v-window-item) {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
 }
 </style>
