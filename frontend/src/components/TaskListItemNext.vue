@@ -7,66 +7,68 @@
             color="primary"
             v-bind:value="done"
             v-on:input="$emit('toggle-done', $event)"
-        ></v-simple-checkbox>
-        <span
-            class="tag"
-            v-for="tag of value.metadata.tags"
-            v-bind:key="tag"
-        >{{ tag }}</span>
-        <span>{{ value.title }}</span>
-        <span
-            class="additional-info"
-            v-if="value.note"
-        >
-            <v-tooltip bottom>
-                <template v-slot:activator="{ on, attrs }">
-                    <v-icon small v-bind="attrs" v-on="on">{{ mdiNoteTextOutline }}</v-icon>
-                </template>
-                <div class="note-tooltip">{{ value.note }}</div>
-            </v-tooltip>
-        </span>
-        <span
-            class="additional-info"
-            v-if="startAt"
-            v-bind:style="startAtStyle"
-        >
-            <v-tooltip bottom>
-                <template v-slot:activator="{ on, attrs }">
-                    <span v-bind="attrs" v-on="on">
-                        <v-icon small v-bind:style="startAtStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ startAtText }}
-                    </span>
-                </template>
-                <div>{{ startAt }}</div>
-            </v-tooltip>
-        </span>
-        <span
-            class="additional-info"
-            v-if="dueBy"
-            v-bind:style="dueByStyle"
-        >
-            <v-tooltip bottom>
-                <template v-slot:activator="{ on, attrs }">
-                    <span v-bind="attrs" v-on="on">
-                        <v-icon small v-bind:style="dueByStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ dueByText }}
-                    </span>
-                </template>
-                <div>{{ dueBy }}</div>
-            </v-tooltip>
-        </span>
-        <span
-            class="additional-info"
-            v-if="deadline"
-            v-bind:style="deadlineStyle"
-        >
-            <v-tooltip bottom>
-                <template v-slot:activator="{ on, attrs }">
-                    <span v-bind="attrs" v-on="on">
-                        <v-icon small v-bind:style="deadlineStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ deadlineText }}
-                    </span>
-                </template>
-                <div>{{ deadline }}</div>
-            </v-tooltip>
-        </span>
+        />
+        <div>
+            <span
+                class="tag"
+                v-for="tag of value.metadata.tags"
+                v-bind:key="tag"
+            >{{ tag }}</span>
+            <span class="title-text">{{ value.title }}</span>
+            <span
+                class="additional-info"
+                v-if="value.note"
+            >
+                <v-tooltip bottom>
+                    <template v-slot:activator="{ on, attrs }">
+                        <v-icon small v-bind="attrs" v-on="on">{{ mdiNoteTextOutline }}</v-icon>
+                    </template>
+                    <div class="note-tooltip">{{ value.note }}</div>
+                </v-tooltip>
+            </span>
+            <span
+                class="additional-info"
+                v-if="startAt"
+                v-bind:style="startAtStyle"
+            >
+                <v-tooltip bottom>
+                    <template v-slot:activator="{ on, attrs }">
+                        <span v-bind="attrs" v-on="on">
+                            <v-icon small v-bind:style="startAtStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ startAtText }}
+                        </span>
+                    </template>
+                    <div>{{ startAt }}</div>
+                </v-tooltip>
+            </span>
+            <span
+                class="additional-info"
+                v-if="dueBy"
+                v-bind:style="dueByStyle"
+            >
+                <v-tooltip bottom>
+                    <template v-slot:activator="{ on, attrs }">
+                        <span v-bind="attrs" v-on="on">
+                            <v-icon small v-bind:style="dueByStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ dueByText }}
+                        </span>
+                    </template>
+                    <div>{{ dueBy }}</div>
+                </v-tooltip>
+            </span>
+            <span
+                class="additional-info"
+                v-if="deadline"
+                v-bind:style="deadlineStyle"
+            >
+                <v-tooltip bottom>
+                    <template v-slot:activator="{ on, attrs }">
+                        <span v-bind="attrs" v-on="on">
+                            <v-icon small v-bind:style="deadlineStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ deadlineText }}
+                        </span>
+                    </template>
+                    <div>{{ deadline }}</div>
+                </v-tooltip>
+            </span>
+        </div>
     </div>
 </template>
 
@@ -188,6 +190,9 @@ const deadlineStyle = computed<Record<string, string>>(() => {
 
 <style scoped lang="scss">
 .task-list-item {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
     font-size: 14px;
     padding: 4px 4px;
     cursor: pointer;
@@ -213,6 +218,9 @@ const deadlineStyle = computed<Record<string, string>>(() => {
         display: inline;
         vertical-align: middle;
     }
+}
+.v-simple-checkbox {
+    align-self: unset;  /* Override default value of 'center' */
 }
 .additional-info {
     display: inline-block;
