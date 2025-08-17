@@ -1,3 +1,52 @@
+## [1.0.0] - 2025-08-17
+
+### 🚀 Features
+
+- *(files)* Add dedicated icons for task notes and event notes
+- *(tasks-next)* Add reworked task management view
+
+### 🐛 Bug Fixes
+
+- *(tasks-next)* Improve appearance of loader overlay
+- *(tasks-next)* Correct type names
+
+### 🚜 Refactor
+
+- *(api)* Rename confusing function name from getTaskDataV2() to getTaskData(), overwriting old function
+- *(tasks-next)* Reorganize task-related API
+- *(tasks-next)* Move logic to fetch task forest to taskForest store
+- *(tasks-next)* Emphasize return type by rename
+- *(tasks-next)* Move background color specification for .item-view from inline CSS to <style>
+
+### ⚙️ Miscellaneous Tasks
+
+- *(tasks-next)* Copy Task.vue to TaskNext.vue and add /tasks-next route for v2 development
+- *(tasks-next)* Add TaskTree component to TasksNext view
+- *(tasks-next)* TaskTree emits 'change' event when selection changed
+- *(tasks-next)* Await call of load()
+- *(tasks-next)* Remove unnecessary top-level tree node
+- *(tasks-next)* Show all or descendants of selected task in right pane
+- *(tasks-next)* Update implementation of knownTags computed property
+- *(tasks-next)* Rename src/stores/task_forest.ts to src/stores/taskForest.ts
+- *(tasks-next)* Add selectedNode computed property
+- *(tasks-next)* Add flattenDescendants action to TaskForest store, which is useful for external selection management
+- *(tasks-next)* Add to TaskForest store actions for creating, replacing, and deleting node locally
+- *(tasks-next)* Add composable for asynchronously fetching task
+- *(tasks-next)* Add module for frontend task types and utilities
+- *(tasks-next)* Add extractFrontmatterH1AndRest utility function
+- *(tasks-next)* Add getTask() function for retrieving task by path
+- *(tasks-next)* Add extractFileUuid() utility
+- *(tasks-next)* Apply task representation change to TaskTree component
+- *(tasks-next)* Add 'active' prop to TaskTree in order to allow programmatic item activation
+- *(tasks-next)* Update TaskListItemNext component for new task representation
+- *(tasks-next)* Improve event name of TaskListItemNext
+- *(tasks-next)* Add date selection component
+- *(tasks-next)* Add reworked task editor component
+- *(tasks-next)* Remove debug prints in TaskListItemNext component
+- *(tasks-next)* Remove unused 'busy' prop from TaskEditorNext
+- *(tasks-next)* Expose refresh method from TaskEditorNext so that parent component can manually refresh data
+- *(tasks-next)* Align checkbox and texts to top in TaskListItemNext component
+
 ## [0.20.0] - 2025-08-07
 
 ### 🚀 Features
