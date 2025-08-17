@@ -194,12 +194,12 @@
                     >
                         <v-badge
                             v-bind:color="uploadListBadgeColor"
-                            v-bind:icon="uploadListBadgeIcon"
                             v-bind:value="uploadList.length > 0"
                             overlap
-                            dot
-                            small
                         >
+                            <template v-slot:badge>
+                                <v-icon>{{ uploadListBadgeIcon }}</v-icon>
+                            </template>
                             <v-icon>{{ mdiCloudUploadOutline }}</v-icon>
                         </v-badge>
                     </v-btn>
@@ -473,11 +473,11 @@ const uploadListBadgeColor = computed(() => {
 const uploadListBadgeIcon = computed(() => {
     const [status, _num] = uploadListStatus.value;
 
-    if      (status === 'in-progress') { return 'mdi-autorenew';         }
-    else if (status === 'error')       { return 'mdi-exclamation-thick'; }
-    else if (status === 'success')     { return 'mdi-check';             }
+    if      (status === 'in-progress') { return mdiAutorenew;        }
+    else if (status === 'error')       { return mdiExclamationThick; }
+    else if (status === 'success')     { return mdiCheck;            }
     else {
-        return 'mdi-help';
+        return mdiHelp;
     }
 });
 
