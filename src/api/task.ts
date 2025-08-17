@@ -71,3 +71,16 @@ export async function getTask(taskPath: string, eTag?: string): Promise<[string,
         return [res.headers.etag, task];
     }
 }
+
+export function extractFileUuid(path: string): UUID {
+    const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const EXT_RE = /\.[^.]*$/;
+    const lastSlashIdx = path.lastIndexOf('/');
+    const filename = path.slice(lastSlashIdx + 1);  // NOTE: Works even if '/' was not found
+    const stem = filename.replace(EXT_RE, '');
+    const uuid = stem.slice(-36);
+    if (!UUID_V4_RE.test(uuid)) {
+        throw new Error(`Filename stem must end with a UUIDv4: ${path}`);
+    }
+    return uuid;
+}
