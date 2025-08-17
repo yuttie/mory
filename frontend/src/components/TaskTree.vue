@@ -2,11 +2,11 @@
     <v-treeview
         v-bind:items="items"
         v-on:update:active="$emit('change', $event[0])"
+        v-bind:active="(active ?? '') !== '' ? [active] : []"
         item-key="uuid"
         item-text="title"
         activatable
         dense
-        return-object
         class="task-tree"
     >
         <template v-slot:prepend="{ item, open }">
@@ -31,11 +31,12 @@ import {
     mdiFolderOpen,
 } from '@mdi/js';
 
-import type { ApiTreeNode } from '@/api/task';
+import type { UUID, ApiTreeNode } from '@/api/task';
 
 // Props
 const props = defineProps<{
-  items: ApiTreeNode[];
+    items: ApiTreeNode[];
+    active?: UUID;
 }>();
 
 // Emits
