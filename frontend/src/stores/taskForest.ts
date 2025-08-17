@@ -245,6 +245,83 @@ export const useTaskForestStore = defineStore('taskForest', () => {
         selectedNodeId.value = idByPath(path) ?? null;
     }
 
+    // --- Local CRUD operations ---
+
+    function addNodeLocal(parent: UUID | null, node: TreeNodeRecord, index?: number): void {
+        upsertNodeRecord(node);
+        indexPath(node.path, node.uuid);
+        ensureChildBucket(node.uuid);
+
+        if (parent === null) {
+            const roots = [...rootIds.value];
+            const pos = clampIndex(index ?? roots.length, roots.length);
+            roots.splice(pos, 0, node.uuid);
+            rootIds.value = roots;
+            setParentOf(node.uuid, null);
+        }
+        else {
+            const sibs = [...(childrenById.value[parent] || [])];
+            const pos = clampIndex(index ?? sibs.length, sibs.length);
+            sibs.splice(pos, 0, node.uuid);
+            setChildrenOf(parent, sibs);
+            setParentOf(node.uuid, parent);
+        }
+    }
+
+    function replaceNodeLocal(next: TreeNodeRecord): void {
+        const id = next.uuid;
+        const prev = node(id);
+        if (!prev) {
+            throw new Error(`replaceNodeLocal: node ${id} not found.`);
+        }
+        if (prev.path !== next.path) {
+            throw new Error(`replaceNodeLocal: new path ${next.path} does not match old one ${prev.path}.`);
+        }
+        upsertNodeRecord(next);
+    }
+
+    function deleteLeafLocal(id: UUID): void {
+        const rec = node(id);
+        if (!rec) {
+            throw new Error(`deleteLeafLocal: node ${id} not found.`);
+        }
+
+        const kids = childrenById.value[id] || [];
+        if (kids.length > 0) {
+            throw new Error(`deleteLeafLocal: node ${id} has children and cannot be deleted.`);
+        }
+
+        // Detach from parent or roots
+        const p = parentOf(id);
+        if (p === null) {
+            rootIds.value = rootIds.value.filter((rid) => rid !== id);
+        } else {
+            const remaining = (childrenById.value[p] || []).filter((cid) => cid !== id);
+            setChildrenOf(p, remaining);
+        }
+
+        // Drop path index
+        unindexPath(rec.path);
+
+        // Remove from maps
+        const nextNodes = { ...nodesById.value };
+        delete nextNodes[id];
+        setNodes(nextNodes);
+
+        const nextParents = { ...parentById.value };
+        delete nextParents[id];
+        setParents(nextParents);
+
+        const nextChildren = { ...childrenById.value };
+        delete nextChildren[id];
+        setChildren(nextChildren);
+
+        // Clear selection if it targeted this node
+        if (selectedNodeId.value === id) {
+            selectedNodeId.value = null;
+        }
+    }
+
     // ===== Helper functions =====
 
     // --- Ingestion ---
@@ -260,6 +337,30 @@ export const useTaskForestStore = defineStore('taskForest', () => {
     }
     function setPathIndex(next: PathToId): void {
         pathToId.value = next;
+    }
+
+    // --- Local CRUD operations ---
+
+    function upsertNodeRecord(rec: TreeNodeRecord): void {
+        setNodes({ ...nodesById.value, [rec.uuid]: rec });
+    }
+    function ensureChildBucket(id: UUID): void {
+        if (!childrenById.value[id]) {
+            setChildren({ ...childrenById.value, [id]: [] });
+        }
+    }
+    function setChildrenOf(id: UUID, childIds: UUID[]): void {
+        setChildren({ ...childrenById.value, [id]: [...childIds] });
+    }
+    function setParentOf(id: UUID, parent: UUID | null): void {
+        setParents({ ...parentById.value, [id]: parent });
+    }
+    function indexPath(path: string, id: UUID): void {
+        setPathIndex({ ...pathToId.value, [path]: id });
+    }
+    function unindexPath(path: string): void {
+        const { [path]: _omit, ...rest } = pathToId.value;
+        setPathIndex(rest);
     }
 
     return {
@@ -308,6 +409,10 @@ export const useTaskForestStore = defineStore('taskForest', () => {
         // -- Selection --
         selectNode,
         selectByPath,
+        // -- Local CRUD operations --
+        addNodeLocal,
+        replaceNodeLocal,
+        deleteLeafLocal,
     };
 });
 
@@ -358,4 +463,8 @@ function ingest(
         ingest(child, uuid, nextNodes, nextChildren, nextParents, nextPaths);
     }
     nextChildren[uuid] = kids;
+}
+
+function clampIndex(index: number, length: number): number {
+    return Math.max(0, Math.min(index, length));
 }
