@@ -115,7 +115,6 @@ const done = computed<boolean>(() => {
 });
 
 const startAt = computed<string | null>(() => {
-    console.log('startAt:', props.value.metadata?.task?.start_at);
     return props.value.metadata?.task?.start_at ?? null;
 });
 
@@ -140,7 +139,6 @@ const startAtStyle = computed<Record<string, string>>(() => {
 });
 
 const dueBy = computed<string | null>(() => {
-    console.log('dueBy:', props.value.metadata?.task?.due_by);
     return props.value.metadata?.task?.due_by ?? null;
 });
 
@@ -165,7 +163,6 @@ const dueByStyle = computed<Record<string, string>>(() => {
 });
 
 const deadline = computed<string | null>(() => {
-    console.log('deadline:', props.value.metadata?.task?.deadline);
     return props.value.metadata?.task?.deadline ?? null;
 });
 
