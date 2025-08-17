@@ -65,6 +65,7 @@
                 <v-list-item color="primary" link to="/"><v-list-item-icon><v-icon dense>{{ mdiHomeOutline }}</v-icon></v-list-item-icon><v-list-item-title>Home</v-list-item-title></v-list-item>
                 <v-list-item color="primary" link to="/calendar"><v-list-item-icon><v-icon dense>{{ mdiCalendarOutline }}</v-icon></v-list-item-icon><v-list-item-title>Calendar</v-list-item-title></v-list-item>
                 <v-list-item color="primary" link to="/tasks"><v-list-item-icon><v-icon dense>{{ mdiBallotOutline }}</v-icon></v-list-item-icon><v-list-item-title>Tasks</v-list-item-title></v-list-item>
+                <v-list-item color="primary" link to="/tasks-next"><v-list-item-icon><v-icon dense>{{ mdiBallotOutline }}</v-icon></v-list-item-icon><v-list-item-title>Tasks (New)</v-list-item-title></v-list-item>
                 <v-list-item color="primary" link to="/files"><v-list-item-icon><v-icon dense>{{ mdiFileDocumentMultipleOutline }}</v-icon></v-list-item-icon><v-list-item-title>Files</v-list-item-title></v-list-item>
                 <v-list-item color="primary" link to="/search"><v-list-item-icon><v-icon dense>{{ mdiMagnify }}</v-icon></v-list-item-icon><v-list-item-title>Search</v-list-item-title></v-list-item>
                 <v-list-item color="primary" link to="/config"><v-list-item-icon><v-icon dense>{{ mdiCogOutline }}</v-icon></v-list-item-icon><v-list-item-title>Config</v-list-item-title></v-list-item>
