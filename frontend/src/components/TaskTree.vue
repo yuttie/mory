@@ -14,7 +14,7 @@
                 {{ open ? mdiFolderOpen : mdiFolder }}
             </v-icon>
             <v-icon v-else dense>
-                {{ item.metadata.task.status === 'completed' ? mdiCheckboxMarkedOutline : mdiCheckboxBlankOutline }}
+                {{ item.metadata?.task?.status?.kind === 'done' ? mdiCheckboxMarkedOutline : mdiCheckboxBlankOutline }}
             </v-icon>
         </template>
     </v-treeview>
