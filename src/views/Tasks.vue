@@ -88,14 +88,20 @@
                         <v-text-field
                             label="Name"
                             autofocus
-                            prepend-icon="mdi-pencil"
                             v-model="newGroupName"
-                        ></v-text-field>
+                        >
+                            <template v-slot:prepend>
+                                <v-icon>{{ mdiPencil }}</v-icon>
+                            </template>
+                        </v-text-field>
                         <v-text-field
                             label="Tag"
-                            prepend-icon="mdi-tag-outline"
                             v-model="newGroupFilter"
-                        ></v-text-field>
+                        >
+                            <template v-slot:prepend>
+                                <v-icon>{{ mdiTagOutline }}</v-icon>
+                            </template>
+                        </v-text-field>
                     </v-card-text>
                 </v-card>
             </v-dialog>
@@ -330,10 +336,12 @@ import {
     mdiDelete,
     mdiFormatListGroupPlus,
     mdiInboxArrowDown,
+    mdiPencil,
     mdiPlusBoxMultipleOutline,
     mdiPlusBoxOutline,
     mdiReload,
     mdiSortBoolAscendingVariant,
+    mdiTagOutline,
 } from '@mdi/js';
 
 import TaskEditor from '@/components/TaskEditor.vue';
