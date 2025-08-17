@@ -333,7 +333,7 @@ const props = defineProps<{
 const pathRef = toRef(props, 'taskPath');
 
 // Composables
-const { task, loading, error } = useFetchTask(pathRef);
+const { task, loading, error, refresh } = useFetchTask(pathRef);
 
 // Emits
 const emit = defineEmits<{
@@ -488,6 +488,11 @@ function onDelete(): void {
     }
     emit('delete', props.taskPath);
 }
+
+// Expose
+defineExpose({
+  refresh,
+});
 </script>
 
 <style scoped lang="scss">
