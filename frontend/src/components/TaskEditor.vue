@@ -7,12 +7,15 @@
                         label="Name"
                         autofocus
                         hide-details="auto"
-                        prepend-icon="mdi-pencil"
                         v-bind:value="value.name"
                         v-on:input="$emit('input', { ...value, name: $event })"
                         auto-grow
                         rows="1"
-                    ></v-textarea>
+                    >
+                        <template v-slot:prepend>
+                            <v-icon>{{ mdiPencil }}</v-icon>
+                        </template>
+                    </v-textarea>
                 </v-col>
             </v-row>
             <v-row>
@@ -27,8 +30,10 @@
                         hide-details="auto"
                         label="Tags"
                         multiple
-                        prepend-icon="mdi-tag-multiple-outline"
                     >
+                        <template v-slot:prepend>
+                            <v-icon>{{ mdiTagMultipleOutline }}</v-icon>
+                        </template>
                         <template v-slot:selection="{ attrs, item, select, selected }">
                             <v-chip
                                 v-bind="attrs"
@@ -58,13 +63,16 @@
                                 v-bind:value="value.schedule"
                                 v-on:input="$emit('input', { ...value, schedule: $event })"
                                 label="Schedule on"
-                                prepend-icon="mdi-calendar"
                                 readonly
                                 clearable
                                 hide-details="auto"
                                 v-bind="attrs"
                                 v-on="on"
-                            ></v-text-field>
+                            >
+                                <template v-slot:prepend>
+                                    <v-icon>{{ mdiCalendar }}</v-icon>
+                                </template>
+                            </v-text-field>
                         </template>
                         <v-date-picker
                             v-bind:value="value.schedule"
@@ -93,13 +101,16 @@
                                 v-bind:value="value.deadline"
                                 v-on:input="$emit('input', { ...value, deadline: $event })"
                                 label="Deadline"
-                                prepend-icon="mdi-calendar"
                                 readonly
                                 clearable
                                 hide-details="auto"
                                 v-bind="attrs"
                                 v-on="on"
-                            ></v-text-field>
+                            >
+                                <template v-slot:prepend>
+                                    <v-icon>{{ mdiCalendar }}</v-icon>
+                                </template>
+                            </v-text-field>
                         </template>
                         <v-date-picker
                             v-bind:value="value.deadline"
@@ -123,8 +134,11 @@
                         hide-details="auto"
                         v-bind:value="value.note"
                         v-on:input="$emit('input', { ...value, note: $event })"
-                        prepend-icon="mdi-text"
-                    ></v-textarea>
+                    >
+                        <template v-slot:prepend>
+                            <v-icon>{{ mdiText }}</v-icon>
+                        </template>
+                    </v-textarea>
                 </v-col>
             </v-row>
         </v-container>
@@ -134,6 +148,12 @@
 <script lang="ts" setup>
 import { ref, computed } from 'vue';
 
+import {
+    mdiCalendar,
+    mdiPencil,
+    mdiTagMultipleOutline,
+    mdiText,
+} from '@mdi/js';
 import type { Task } from '@/api';
 
 import dayjs from 'dayjs';
