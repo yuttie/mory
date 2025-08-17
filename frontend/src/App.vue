@@ -350,10 +350,6 @@
                 </form>
             </div>
         </div>
-
-        <v-overlay v-bind:value="appStore.isLoggingIn" z-index="100" opacity="0">
-            <v-progress-circular indeterminate color="blue-grey lighten-3" size="64"></v-progress-circular>
-        </v-overlay>
     </v-app>
 </template>
 
