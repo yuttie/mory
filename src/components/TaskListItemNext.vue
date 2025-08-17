@@ -6,7 +6,7 @@
         <v-simple-checkbox
             color="primary"
             v-bind:value="done"
-            v-on:input="$emit('done-toggle', $event)"
+            v-on:input="$emit('toggle-done', $event)"
         ></v-simple-checkbox>
         <span
             class="tag"
@@ -106,7 +106,7 @@ const props = defineProps<{
 // Emits
 const emit = defineEmits<{
     (e: 'click', event: Event): void;
-    (e: 'done-toggle', event: Event): void;
+    (e: 'toggle-done', event: Event): void;
 }>();
 
 // Computed properties
