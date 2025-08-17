@@ -115,6 +115,8 @@ import type { Ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router/composables';
 
 import {
+    mdiCalendarClock,
+    mdiCheckboxMarkedOutline,
     mdiDelete,
     mdiFileDocumentOutline,
     mdiFileOutline,
@@ -239,7 +241,13 @@ const matchedEntries = computed(() => {
             title: entry.title,
             time: dayjs(entry.time),
             ...(() => {
-                if (entry.mime_type.startsWith("image/")) {
+                if (entry.path.startsWith(".tasks/")) {
+                    return { icon: mdiCheckboxMarkedOutline, iconColor: "#ffa600" };
+                }
+                else if (entry.path.startsWith(".events/")) {
+                    return { icon: mdiCalendarClock, iconColor: "#b95050" };
+                }
+                else if (entry.mime_type.startsWith("image/")) {
                     return { icon: mdiImageOutline, iconColor: "#62b950" };
                 }
                 else if (entry.mime_type.startsWith("text/")) {
