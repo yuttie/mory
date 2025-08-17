@@ -21,7 +21,7 @@
     >
       <v-tooltip bottom>
         <template v-slot:activator="{ on, attrs }">
-          <v-icon small v-bind="attrs" v-on="on">mdi-note-text-outline</v-icon>
+          <v-icon small v-bind="attrs" v-on="on">{{ mdiNoteTextOutline }}</v-icon>
         </template>
         <div class="note-tooltip">{{ value.note }}</div>
       </v-tooltip>
@@ -34,7 +34,7 @@
       <v-tooltip bottom>
         <template v-slot:activator="{ on, attrs }">
           <span v-bind="attrs" v-on="on">
-            <v-icon small v-bind:style="deadlineStyle" class="mr-1">mdi-calendar</v-icon>{{ deadlineText }}
+            <v-icon small v-bind:style="deadlineStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ deadlineText }}
           </span>
         </template>
         <div>{{ value.deadline }}</div>
@@ -45,6 +45,11 @@
 
 <script lang="ts" setup>
 import { computed } from 'vue';
+
+import {
+    mdiNoteTextOutline,
+    mdiCalendar,
+} from '@mdi/js';
 
 import type { Task } from '@/api';
 
