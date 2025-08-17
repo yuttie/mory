@@ -1,3 +1,10 @@
+## [1.4.0] - 2025-08-17
+
+### 🚀 Features
+
+- *(api)* Support tree-structured response via ?format=tree
+- *(api)* Add provisional endpoints for retrieving tasks and events
+
 ## [1.3.1] - 2025-08-09
 
 ### 🐛 Bug Fixes
