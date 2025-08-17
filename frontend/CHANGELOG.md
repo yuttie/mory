@@ -1,3 +1,23 @@
+## [1.1.0] - 2025-08-17
+
+### 🚀 Features
+
+- *(tasks-next)* Add button to open task as note
+
+### 🐛 Bug Fixes
+
+- *(views/Files)* Add top padding to prevent overlap of search box and buttons
+- *(views/Files)* Restore appearance and functionality by adding missing icons
+- *(views/Home)* Add missing icons
+- *(App)* Restore missing icons
+- *(components/TaskListItem)* Restore missing icons
+- *(components/TaskEditor)* Restore missing icons
+- *(views/Tasks)* Restore missing icons
+
+### ⚙️ Miscellaneous Tasks
+
+- *(App)* Remove redundant login overlay
+
 ## [1.0.0] - 2025-08-17
 
 ### 🚀 Features
