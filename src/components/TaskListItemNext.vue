@@ -5,7 +5,7 @@
     >
         <v-simple-checkbox
             color="primary"
-            v-bind:value="value.metadata.task.status === 'completed'"
+            v-bind:value="done"
             v-on:input="$emit('done-toggle', $event)"
         ></v-simple-checkbox>
         <span
@@ -20,23 +20,51 @@
         >
             <v-tooltip bottom>
                 <template v-slot:activator="{ on, attrs }">
-                    <v-icon small v-bind="attrs" v-on="on">mdi-note-text-outline</v-icon>
+                    <v-icon small v-bind="attrs" v-on="on">{{ mdiNoteTextOutline }}</v-icon>
                 </template>
                 <div class="note-tooltip">{{ value.note }}</div>
             </v-tooltip>
         </span>
         <span
             class="additional-info"
-            v-if="value.deadline"
+            v-if="startAt"
+            v-bind:style="startAtStyle"
+        >
+            <v-tooltip bottom>
+                <template v-slot:activator="{ on, attrs }">
+                    <span v-bind="attrs" v-on="on">
+                        <v-icon small v-bind:style="startAtStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ startAtText }}
+                    </span>
+                </template>
+                <div>{{ startAt }}</div>
+            </v-tooltip>
+        </span>
+        <span
+            class="additional-info"
+            v-if="dueBy"
+            v-bind:style="dueByStyle"
+        >
+            <v-tooltip bottom>
+                <template v-slot:activator="{ on, attrs }">
+                    <span v-bind="attrs" v-on="on">
+                        <v-icon small v-bind:style="dueByStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ dueByText }}
+                    </span>
+                </template>
+                <div>{{ dueBy }}</div>
+            </v-tooltip>
+        </span>
+        <span
+            class="additional-info"
+            v-if="deadline"
             v-bind:style="deadlineStyle"
         >
             <v-tooltip bottom>
                 <template v-slot:activator="{ on, attrs }">
                     <span v-bind="attrs" v-on="on">
-                        <v-icon small v-bind:style="deadlineStyle" class="mr-1">mdi-calendar</v-icon>{{ deadlineText }}
+                        <v-icon small v-bind:style="deadlineStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ deadlineText }}
                     </span>
                 </template>
-                <div>{{ value.deadline }}</div>
+                <div>{{ deadline }}</div>
             </v-tooltip>
         </span>
     </div>
@@ -44,6 +72,11 @@
 
 <script lang="ts" setup>
 import { computed } from 'vue';
+
+import {
+    mdiCalendar,
+    mdiNoteTextOutline,
+} from '@mdi/js';
 
 import type { TreeNodeRecord } from '@/stores/taskForest';
 
@@ -77,24 +110,73 @@ const emit = defineEmits<{
 }>();
 
 // Computed properties
-const completed = computed((): boolean => {
-    console.log(structuredClone(props.value.metadata.task));
-    return props.value.metadata.task.status === 'completed';
+const done = computed<boolean>(() => {
+    return props.value.metadata?.task?.status?.kind === 'done';
 });
 
-const deadlineText = computed((): string => {
-    if (typeof props.value.deadline === 'string') {
-        return dayjs(props.value.deadline).endOf('day').fromNow();
+const startAt = computed<string | null>(() => {
+    console.log('startAt:', props.value.metadata?.task?.start_at);
+    return props.value.metadata?.task?.start_at ?? null;
+});
+
+const startAtText = computed<string>(() => {
+    return startAt.value ? dayjs(startAt.value).endOf('day').fromNow() : '';
+});
+
+const startAtStyle = computed<Record<string, string>>(() => {
+    if (!done.value && startAt.value) {
+        const now = dayjs();
+        const daysLeft = dayjs(props.value.metadata.task.start_at).diff(now, 'day');
+        const g = daysLeft < 3 ? 127 : 0;
+        const b = daysLeft < 3 ? 255 : 0;
+        const color = `rgb(0, ${g}, ${b})`;
+        return {
+            color: color,
+        };
     }
     else {
-        return '';
+        return {};
     }
 });
 
-const deadlineStyle = computed((): Record<string, string> => {
-    if (!props.value.done && props.value.deadline) {
+const dueBy = computed<string | null>(() => {
+    console.log('dueBy:', props.value.metadata?.task?.due_by);
+    return props.value.metadata?.task?.due_by ?? null;
+});
+
+const dueByText = computed<string>(() => {
+    return dueBy.value ? dayjs(dueBy.value).endOf('day').fromNow() : '';
+});
+
+const dueByStyle = computed<Record<string, string>>(() => {
+    if (!done.value && dueBy.value) {
         const now = dayjs();
-        const daysLeft = dayjs(props.value.deadline).diff(now, 'day');
+        const daysLeft = dayjs(props.value.metadata.task.due_by).diff(now, 'day');
+        const r = daysLeft < 3 ? 255 : 0;
+        const g = daysLeft < 3 ? 127 : 0;
+        const color = `rgb(${r}, ${g}, 0)`;
+        return {
+            color: color,
+        };
+    }
+    else {
+        return {};
+    }
+});
+
+const deadline = computed<string | null>(() => {
+    console.log('deadline:', props.value.metadata?.task?.deadline);
+    return props.value.metadata?.task?.deadline ?? null;
+});
+
+const deadlineText = computed<string>(() => {
+    return deadline.value ? dayjs(deadline.value).endOf('day').fromNow() : '';
+});
+
+const deadlineStyle = computed<Record<string, string>>(() => {
+    if (!done.value && deadline.value) {
+        const now = dayjs();
+        const daysLeft = dayjs(props.value.metadata.task.deadline).diff(now, 'day');
         const r = daysLeft < 7 ? 255 : 0;
         const color = `rgb(${r}, 0, 0)`;
         return {
