@@ -13,12 +13,12 @@
             text
             x-small
             v-on:click="changeSortOrder(category[0], 'title')"
-          ><v-icon x-small v-if="sortOrders.get(category[0])[0] === 'title'">{{ sortOrders.get(category[0])[1] ? 'mdi-sort-descending' : 'mdi-sort-ascending' }}</v-icon>sort by title</v-btn>
+          ><v-icon x-small v-if="sortOrders.get(category[0])[0] === 'title'">{{ sortOrders.get(category[0])[1] ? mdiSortDescending : mdiSortAscending }}</v-icon>sort by title</v-btn>
           <v-btn
             text
             x-small
             v-on:click="changeSortOrder(category[0], 'time')"
-          ><v-icon x-small v-if="sortOrders.get(category[0])[0] === 'time'">{{ sortOrders.get(category[0])[1] ? 'mdi-sort-descending' : 'mdi-sort-ascending' }}</v-icon>sort by time</v-btn>
+          ><v-icon x-small v-if="sortOrders.get(category[0])[0] === 'time'">{{ sortOrders.get(category[0])[1] ? mdiSortDescending : mdiSortAscending }}</v-icon>sort by time</v-btn>
         </div>
         <ul>
           <li
@@ -41,6 +41,11 @@
 <script lang="ts" setup>
 import { ref, computed, onMounted } from 'vue';
 import type { Ref } from 'vue';
+
+import {
+    mdiSortAscending,
+    mdiSortDescending,
+} from '@mdi/js';
 
 import * as api from '@/api';
 import type { ListEntry2 } from '@/api';
