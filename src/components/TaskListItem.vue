@@ -40,6 +40,7 @@
         <div>{{ value.deadline }}</div>
       </v-tooltip>
     </span>
+    <v-btn v-if="!migrated" x-small outlined v-on:click.stop="onMigrate">Migrate</v-btn>
   </div>
 </template>
 
@@ -74,12 +75,14 @@ dayjs.extend(relativeTime, {
 // Props
 const props = defineProps<{
   value: Task;
+  migrated: boolean;
 }>();
 
 // Emits
 const emit = defineEmits<{
   (e: 'click', event: Event): void;
   (e: 'done-toggle', event: Event): void;
+  (e: 'migrate', value: Task): void;
 }>();
 
 // Computed properties
@@ -106,6 +109,11 @@ const deadlineStyle = computed((): Record<string, string> => {
     return {};
   }
 });
+
+// Methods
+function onMigrate() {
+    emit('migrate', props.value);
+}
 </script>
 
 <style scoped lang="scss">
