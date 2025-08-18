@@ -3,11 +3,9 @@
         v-on:click="$emit('click', $event)"
         class="task-list-item"
     >
-        <v-simple-checkbox
-            color="primary"
-            v-bind:value="done"
-            v-on:input="$emit('toggle-done', $event)"
-        />
+        <v-icon class="mr-1">
+            {{ done ? mdiCheckboxMarkedOutline : mdiCheckboxBlankOutline }}
+        </v-icon>
         <div>
             <span
                 class="tag"
@@ -77,6 +75,8 @@ import { computed } from 'vue';
 
 import {
     mdiCalendar,
+    mdiCheckboxBlankOutline,
+    mdiCheckboxMarkedOutline,
     mdiNoteTextOutline,
 } from '@mdi/js';
 
@@ -108,7 +108,6 @@ const props = defineProps<{
 // Emits
 const emit = defineEmits<{
     (e: 'click', event: Event): void;
-    (e: 'toggle-done', event: Event): void;
 }>();
 
 // Computed properties
