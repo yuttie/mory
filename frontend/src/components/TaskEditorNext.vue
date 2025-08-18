@@ -277,6 +277,12 @@
                         no-title
                         full-width
                     />
+                    <v-subheader>All selected dates</v-subheader>
+                    <ul class="date-list">
+                        <li v-for="date of form.scheduled_dates.toSorted()">
+                            {{ date }}
+                        </li>
+                    </ul>
                 </div>
                 <div class="note-pane flex-grow-1 pl-3">
                     <!-- Note -->
@@ -517,6 +523,17 @@ defineExpose({
     width: 350px;
     box-sizing: content-box;
     overflow-y: auto;
+}
+
+.date-list {
+    column-width: 6em;
+    column-gap: 1em;
+}
+
+.date-list > li {
+    break-inside: avoid;
+    -webkit-column-break-inside: avoid;
+    padding-inline-start: 0.1em;
 }
 
 .full-height-textarea {
