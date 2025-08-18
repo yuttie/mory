@@ -1,3 +1,19 @@
+## [1.3.0] - 2025-08-18
+
+### 🚀 Features
+
+- *(components/TaskEditorNext)* List all selected dates under calendar
+
+### 🐛 Bug Fixes
+
+- *(App)* Correct lock icon position
+- *(components/TaskEditorNext)* Correct text field label
+- *(views/TasksNext)* Always refresh task editor after save
+
+### ⚙️ Miscellaneous Tasks
+
+- *(components/TaskEditorNext)* Hide scheduled date list if none is selected
+
 ## [1.2.0] - 2025-08-18
 
 ### 🚀 Features
