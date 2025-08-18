@@ -113,8 +113,8 @@
                     <div v-if="form.status.kind === 'waiting'" class="ml-10">
                         <v-text-field
                             v-model.trim="form.status.waiting_for"
-                            v-bind:rules="[required('Waiting on is required.')]"
-                            label="Waiting on"
+                            v-bind:rules="[required('Waiting for is required.')]"
+                            label="Waiting for"
                             required
                         >
                             <template v-slot:prepend>
