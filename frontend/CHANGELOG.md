@@ -1,3 +1,15 @@
+## [1.4.0] - 2025-08-18
+
+### 🚀 Features
+
+- *(views/TasksNext)* Activate corresponding tree item when task is clicked in 'descendants' tab view
+- *(views/TasksNext)* Automatically open tree nodes up to selected task
+
+### ⚙️ Miscellaneous Tasks
+
+- *(components/TaskListItemNext)* Remove toggle functionality of done status
+- *(components/TaskTree)* Preserve original event name
+
 ## [1.3.0] - 2025-08-18
 
 ### 🚀 Features
