@@ -1,3 +1,9 @@
+## [1.2.0] - 2025-08-18
+
+### 🚀 Features
+
+- *(views/Tasks)* Add migrate button to create copy of task in new task management view
+
 ## [1.1.0] - 2025-08-17
 
 ### 🚀 Features
