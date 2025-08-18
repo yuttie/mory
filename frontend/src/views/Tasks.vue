@@ -243,6 +243,8 @@
                                     v-for="(task, index) of dayTasks"
                                     v-bind:key="task.id"
                                     v-bind:value="task"
+                                    v-bind:migrated="store.node(task.id) !== undefined"
+                                    v-on:migrate="onTaskMigrate"
                                     v-on:click="showEditTaskDialog(date, index, task, $event);"
                                     v-on:done-toggle="$set(task, 'done', $event); save();"
                                 ></TaskListItem>
@@ -257,6 +259,8 @@
                             v-for="[date, index, task] of tasksWithDeadline"
                             v-bind:key="task.id"
                             v-bind:value="task"
+                            v-bind:migrated="store.node(task.id) !== undefined"
+                            v-on:migrate="onTaskMigrate"
                             v-on:click="showEditTaskDialog(date, index, task, $event);"
                             v-on:done-toggle="$set(task, 'done', $event); save();"
                         ></TaskListItem>
@@ -276,6 +280,8 @@
                             v-for="(task, index) of filteredTasks.backlog"
                             v-bind:key="task.id"
                             v-bind:value="task"
+                            v-bind:migrated="store.node(task.id) !== undefined"
+                            v-on:migrate="onTaskMigrate"
                             v-on:click="showEditTaskDialog(null, index, task, $event);"
                             v-on:done-toggle="$set(task, 'done', $event); save();"
                         ></TaskListItem>
@@ -296,6 +302,8 @@
                                     <TaskListItem
                                         v-bind:key="task.id"
                                         v-bind:value="task"
+                                        v-bind:migrated="store.node(task.id) !== undefined"
+                                        v-on:migrate="onTaskMigrate"
                                         v-on:click="showEditTaskDialog(date, index, task, $event);"
                                         v-on:done-toggle="$set(task, 'done', $event); save();"
                                     ></TaskListItem>
@@ -307,6 +315,8 @@
                                     <TaskListItem
                                         v-bind:key="task.id"
                                         v-bind:value="task"
+                                        v-bind:migrated="store.node(task.id) !== undefined"
+                                        v-on:migrate="onTaskMigrate"
                                         v-on:click="showEditTaskDialog(null, index, task, $event);"
                                         v-on:done-toggle="$set(task, 'done', $event); save();"
                                     ></TaskListItem>
@@ -346,16 +356,21 @@ import {
 
 import TaskEditor from '@/components/TaskEditor.vue';
 import TaskListItem from '@/components/TaskListItem.vue';
+import { useTaskForestStore } from '@/stores/taskForest';
 
 import * as api from '@/api';
 import axios from 'axios';
 import type { Task } from '@/api';
+import { type Task as Taskv2, render as renderTaskv2 } from '@/task';
 import draggable from 'vuedraggable';
 import dayjs from 'dayjs';
 import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
 import YAML from 'yaml';
 
 dayjs.extend(isSameOrAfter);
+
+// Composables
+const store = useTaskForestStore();
 
 // Emits
 const emit = defineEmits<{
@@ -545,6 +560,25 @@ onUnmounted(() => {
 });
 
 // Methods
+async function onTaskMigrate(t: Task) {
+    const task: Taskv2 = {
+        uuid: t.id,
+        title: t.name,
+        tags: t.tags,
+        status: t.done ? { kind: 'done', completed_at: t.schedule } : { kind: 'todo' },
+        progress: t.done ? 100 : 0,
+        importance: 3,
+        urgency: 3,
+        ...(t.deadline ? { deadline: t.deadline } : {}),
+        scheduled_dates: [t.schedule],
+        note: t.note,
+    };
+    const markdown = renderTaskv2(task);
+    const path = `.tasks/${task.uuid}.md`;
+    api.addNote(path, markdown);
+    store.refresh();
+}
+
 function onDraggableInput(date: string, newTasks: Task[]) {
     set(tasks.value.scheduled, date, newTasks);
 }
