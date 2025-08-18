@@ -277,12 +277,14 @@
                         no-title
                         full-width
                     />
-                    <v-subheader>All selected dates</v-subheader>
-                    <ul class="date-list">
-                        <li v-for="date of form.scheduled_dates.toSorted()">
-                            {{ date }}
-                        </li>
-                    </ul>
+                    <template v-if="form.scheduled_dates.length > 0">
+                        <v-subheader>All selected dates</v-subheader>
+                        <ul class="date-list">
+                            <li v-for="date of form.scheduled_dates.toSorted()">
+                                {{ date }}
+                            </li>
+                        </ul>
+                    </template>
                 </div>
                 <div class="note-pane flex-grow-1 pl-3">
                     <!-- Note -->
