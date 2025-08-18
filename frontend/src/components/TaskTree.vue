@@ -2,7 +2,7 @@
     <v-treeview
         v-bind:items="items"
         v-on:update:open="$emit('update:open', $event)"
-        v-on:update:active="$emit('change', $event[0])"
+        v-on:update:active="$emit('update:active', $event[0])"
         v-bind:open="open"
         v-bind:active="(active ?? '') !== '' ? [active] : []"
         item-key="uuid"
@@ -45,7 +45,7 @@ const props = defineProps<{
 // Emits
 const emit = defineEmits<{
     (e: 'update:open', value: UUID[]): void;
-    (e: 'change', value: ApiTreeNode): void;
+    (e: 'update:active', value: ApiTreeNode): void;
 }>();
 
 // Reactive states
