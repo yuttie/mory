@@ -317,7 +317,7 @@
                 <v-alert type="error" v-show="appStore.loginError">
                     {{ appStore.loginError }}
                 </v-alert>
-                <v-icon x-large>{{ mdiLock }}</v-icon>
+                <v-icon x-large class="mx-auto">{{ mdiLock }}</v-icon>
                 <h2>Login</h2>
                 <form>
                     <v-text-field
