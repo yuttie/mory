@@ -4,6 +4,7 @@
             <TaskTree
                 v-bind:items="store.forest"
                 v-bind:active="selectedNode?.uuid"
+                v-bind:open.sync="openNodes"
                 v-on:change="onTaskSelectionChangeInTree"
             />
             <div class="item-view d-flex flex-column">
@@ -122,6 +123,7 @@ const emit = defineEmits<{
 const taskEditorRef = ref<any>(null);
 const itemViewTab = ref<string>('descendants');
 const selectedNode = ref<TreeNodeRecord | undefined>(undefined);
+const openNodes = ref<UUID[]>([]);
 const newTaskPath = ref<string | null>(null);
 const error = ref<string | null>(null);
 
@@ -203,6 +205,14 @@ function onTaskSelectionChangeInTree(id: UUID | undefined) {
 
 function onTaskListItemClick(id: UUID) {
     selectedNode.value = store.node(id);
+    // Open tree up to the corresponding item
+    const next = new Set(openNodes.value);
+    let parent = store.parentOf(id);
+    while (parent) {
+        next.add(parent);
+        parent = store.parentOf(parent);
+    }
+    openNodes.value = [...next];
 }
 
 function newTask() {
