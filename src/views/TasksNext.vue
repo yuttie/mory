@@ -256,7 +256,6 @@ async function onSelectedTaskSave(task: Task) {
         // Select the task
         newTaskPath.value = null;
         selectedNode.value = store.node(task.uuid);
-        taskEditorRef.value.refresh();  // Refresh task editor manually because its task-path prop retains the same value
         // Show 'selected' tab
         itemViewTab.value = 'selected';
         // Refresh the store
@@ -270,6 +269,8 @@ async function onSelectedTaskSave(task: Task) {
         // Refresh the store
         await store.refresh();
     }
+    // Refresh task editor manually because its task-path prop retains the same value
+    taskEditorRef.value.refresh();
 }
 
 async function onSelectedTaskDelete(path: string) {
