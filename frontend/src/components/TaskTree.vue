@@ -1,7 +1,9 @@
 <template>
     <v-treeview
         v-bind:items="items"
+        v-on:update:open="$emit('update:open', $event)"
         v-on:update:active="$emit('change', $event[0])"
+        v-bind:open="open"
         v-bind:active="(active ?? '') !== '' ? [active] : []"
         item-key="uuid"
         item-text="title"
@@ -36,11 +38,13 @@ import type { UUID, ApiTreeNode } from '@/api/task';
 // Props
 const props = defineProps<{
     items: ApiTreeNode[];
+    open: UUID[];
     active?: UUID;
 }>();
 
 // Emits
 const emit = defineEmits<{
+    (e: 'update:open', value: UUID[]): void;
     (e: 'change', value: ApiTreeNode): void;
 }>();
 
