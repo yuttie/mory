@@ -57,6 +57,7 @@
                                             v-for="task of backlog"
                                             v-bind:key="task.uuid"
                                             v-bind:value="task"
+                                            v-on:click="onTaskListItemClick(task.uuid)"
                                         />
                                     </div>
                                 </v-card>
@@ -75,6 +76,7 @@
                                                 v-for="task of dayTasks"
                                                 v-bind:key="task.uuid"
                                                 v-bind:value="task"
+                                                v-on:click="onTaskListItemClick(task.uuid)"
                                             />
                                         </div>
                                     </div>
@@ -197,6 +199,10 @@ onUnmounted(() => {
 // Methods
 function onTaskSelectionChangeInTree(id: UUID | undefined) {
     selectedNode.value = id ? store.node(id) : undefined;
+}
+
+function onTaskListItemClick(id: UUID) {
+    selectedNode.value = store.node(id);
 }
 
 function newTask() {
