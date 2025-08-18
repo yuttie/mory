@@ -5,7 +5,7 @@
                 v-bind:items="store.forest"
                 v-bind:active="selectedNode?.uuid"
                 v-bind:open.sync="openNodes"
-                v-on:change="onTaskSelectionChangeInTree"
+                v-on:update:active="onTaskSelectionChangeInTree"
             />
             <div class="item-view d-flex flex-column">
                 <div class="d-flex flex-row">
