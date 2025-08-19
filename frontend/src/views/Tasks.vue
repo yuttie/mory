@@ -769,6 +769,7 @@ async function load() {
     isLoading.value = true;
     try {
         const [newETag, data] = await (eTag.value === null ? api.getTaskData() : api.getTaskData(eTag.value));
+        await store.refresh();
 
         if (data === null) {
             // Not updated, nothing to do
