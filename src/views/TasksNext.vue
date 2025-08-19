@@ -1,12 +1,15 @@
 <template>
     <div id="tasks" class="d-flex flex-row">
         <template v-if="store.isLoaded">
-            <TaskTree
-                v-bind:items="store.forest"
-                v-bind:active="selectedNode?.uuid"
-                v-bind:open.sync="openNodes"
-                v-on:update:active="onTaskSelectionChangeInTree"
-            />
+            <div class="d-flex flex-column"><!-- NOTE: Necessary for <TaskTree> to have vertical scrollbar -->
+                <TaskTree
+                    v-bind:items="store.forest"
+                    v-bind:active="selectedNode?.uuid"
+                    v-bind:open.sync="openNodes"
+                    v-on:update:active="onTaskSelectionChangeInTree"
+                    style="flex: 1 1 0"
+                />
+            </div>
             <div class="item-view d-flex flex-column">
                 <div class="d-flex flex-row">
                     <v-tabs v-model="itemViewTab">
