@@ -1,3 +1,10 @@
+## [1.4.1] - 2025-08-19
+
+### 🐛 Bug Fixes
+
+- *(views/TasksNext)* Correct overflow behavior so that task tree can have scrollbar
+- *(views/Tasks)* Refresh taskForest store on mounted
+
 ## [1.4.0] - 2025-08-18
 
 ### 🚀 Features
