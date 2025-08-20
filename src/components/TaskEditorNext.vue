@@ -374,6 +374,16 @@ const form = reactive<EditableTask>({
     scheduled_dates: [],
     note: '',
 });
+const uiValid = ref(true);
+
+// Template refs
+const formRef = ref<any>(null);
+
+// Computed properties
+const uuid = computed<UUID>(() => extractFileUuid(props.taskPath));
+
+const isEdit = computed<boolean>(() => !!task.value);
+
 const initialForm = computed<EditableTask>(() => {
     const t = task.value;
     if (!t) {
@@ -405,15 +415,6 @@ const initialForm = computed<EditableTask>(() => {
         note: t.note ?? '',
     };
 });
-const uiValid = ref(true);
-
-// Template refs
-const formRef = ref<any>(null);
-
-// Computed properties
-const uuid = computed<UUID>(() => extractFileUuid(props.taskPath));
-
-const isEdit = computed<boolean>(() => !!task.value);
 
 const progress = computed<number>({
     get: () => form.progress,
@@ -459,40 +460,6 @@ const tagItems = computed<{ text: string; value: string; }[]>(() =>
         };
     })
 );
-
-// Helper functions for comparison
-function arraysEqual<T>(a: T[], b: T[]): boolean {
-    if (a.length !== b.length) return false;
-    return a.every((val, index) => val === b[index]);
-}
-
-function statusEqual(a: Status, b: Status): boolean {
-    if (a.kind !== b.kind) return false;
-    
-    switch (a.kind) {
-        case 'todo':
-        case 'in_progress':
-            return true; // These only have 'kind' property
-        case 'waiting':
-            return a.waiting_for === (b as WaitingStatus).waiting_for &&
-                   a.expected_by === (b as WaitingStatus).expected_by &&
-                   a.contact === (b as WaitingStatus).contact &&
-                   a.follow_up_at === (b as WaitingStatus).follow_up_at;
-        case 'blocked':
-            return a.blocked_by === (b as BlockedStatus).blocked_by;
-        case 'on_hold':
-            return a.hold_reason === (b as OnHoldStatus).hold_reason &&
-                   a.review_at === (b as OnHoldStatus).review_at;
-        case 'done':
-            return a.completed_at === (b as DoneStatus).completed_at &&
-                   a.completion_note === (b as DoneStatus).completion_note;
-        case 'canceled':
-            return a.canceled_at === (b as CanceledStatus).canceled_at &&
-                   a.cancel_reason === (b as CanceledStatus).cancel_reason;
-        default:
-            return false;
-    }
-}
 
 const isModified = computed<boolean>(() => {
     return (
@@ -605,6 +572,40 @@ function onDelete(): void {
         return;
     }
     emit('delete', props.taskPath);
+}
+
+// Helper functions for comparison
+function arraysEqual<T>(a: T[], b: T[]): boolean {
+    if (a.length !== b.length) { return false; }
+    return a.every((val, index) => val === b[index]);
+}
+
+function statusEqual(a: Status, b: Status): boolean {
+    if (a.kind !== b.kind) { return false; }
+
+    switch (a.kind) {
+        case 'todo':
+        case 'in_progress':
+            return true; // These only have 'kind' property
+        case 'waiting':
+            return a.waiting_for === (b as WaitingStatus).waiting_for &&
+                   a.expected_by === (b as WaitingStatus).expected_by &&
+                   a.contact === (b as WaitingStatus).contact &&
+                   a.follow_up_at === (b as WaitingStatus).follow_up_at;
+        case 'blocked':
+            return a.blocked_by === (b as BlockedStatus).blocked_by;
+        case 'on_hold':
+            return a.hold_reason === (b as OnHoldStatus).hold_reason &&
+                   a.review_at === (b as OnHoldStatus).review_at;
+        case 'done':
+            return a.completed_at === (b as DoneStatus).completed_at &&
+                   a.completion_note === (b as DoneStatus).completion_note;
+        case 'canceled':
+            return a.canceled_at === (b as CanceledStatus).canceled_at &&
+                   a.cancel_reason === (b as CanceledStatus).cancel_reason;
+        default:
+            return false;
+    }
 }
 
 // Expose
