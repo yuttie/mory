@@ -387,8 +387,6 @@ import {
 
 import { useAppStore } from '@/stores/app';
 
-import Gravatar from '@/components/Gravatar.vue';
-
 import * as api from '@/api';
 import { loadConfigValue, saveConfigValue } from '@/config';
 import type { Claim, ListEntry2, UploadEntry } from '@/api';
