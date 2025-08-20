@@ -76,6 +76,18 @@ export async function renderMarkdown(markdown: string): Promise<VFile> {
   return file;
 }
 
+// Worker-based rendering function
+export async function renderMarkdownWorker(markdown: string): Promise<VFile> {
+  try {
+    const { renderMarkdownInWorker } = await import('./markdown-worker-service');
+    return await renderMarkdownInWorker(markdown);
+  } catch (error) {
+    console.warn('Worker-based markdown rendering failed, falling back to main thread:', error);
+    // Fallback to main thread processing
+    return renderMarkdown(markdown);
+  }
+}
+
 /**
  * Parse markdown and return frontmatter (YAML), first H1 text, and the rest after the H1.
  *
