@@ -380,7 +380,7 @@ import type { DefinedError } from 'ajv';
 import * as api from '@/api';
 import { loadConfigValue } from '@/config';
 import { CliPrettify } from 'markdown-table-prettify';
-import { renderMarkdown } from '@/markdown';
+import { renderMarkdownWorker } from '@/markdown';
 import less from 'less';
 
 const ajv = new Ajv();
@@ -955,8 +955,8 @@ function formatTable() {
 }
 
 async function updateRendered() {
-    // Render the body
-    const renderedFile = await renderMarkdown(text.value);
+    // Render the body using worker thread
+    const renderedFile = await renderMarkdownWorker(text.value);
     const renderedHtml = String(renderedFile);
     const metadata = renderedFile.data.matter;
     const parseError = renderedFile.data.matterParseError;
