@@ -323,7 +323,6 @@ import {
     mdiTrafficLightOutline,
 } from '@mdi/js';
 
-import DateSelector from '@/components/DateSelector.vue';
 import { extractFileUuid } from '@/api/task';
 import type { UUID, Task, Status, StatusKind } from '@/task';
 import { STATUS_LABEL, nextOptions, makeDefaultStatus, canTransition } from '@/task';

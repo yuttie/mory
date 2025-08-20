@@ -354,8 +354,6 @@ import {
     mdiTagOutline,
 } from '@mdi/js';
 
-import TaskEditor from '@/components/TaskEditor.vue';
-import TaskListItem from '@/components/TaskListItem.vue';
 import { useTaskForestStore } from '@/stores/taskForest';
 
 import * as api from '@/api';
