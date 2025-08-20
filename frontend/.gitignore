@@ -1,7 +1,9 @@
+# Auto-generated files
 .DS_Store
 node_modules
 /dist
 stats.html
+components.d.ts
 
 # Base env file
 .env
