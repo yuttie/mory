@@ -105,8 +105,6 @@ import {
     mdiPlus,
 } from '@mdi/js';
 
-import TaskEditorNext from '@/components/TaskEditorNext.vue';
-import TaskListItemNext from '@/components/TaskListItemNext.vue';
 import { type TreeNodeRecord, useTaskForestStore } from '@/stores/taskForest';
 
 import * as api from '@/api';
