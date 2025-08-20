@@ -302,7 +302,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive, computed, watch, toRef } from 'vue';
+import { ref, reactive, computed, watch, toRef, onMounted, onUnmounted } from 'vue';
 
 import {
     mdiAccountOutline,
@@ -374,6 +374,19 @@ const form = reactive<EditableTask>({
     scheduled_dates: [],
     note: '',
 });
+const initialForm = reactive<EditableTask>({
+    title: '',
+    tags: [],
+    status: { kind: 'todo' },
+    progress: 0,
+    importance: 3,
+    urgency: 3,
+    start_at: '',
+    due_by: '',
+    deadline: '',
+    scheduled_dates: [],
+    note: '',
+});
 const uiValid = ref(true);
 
 // Template refs
@@ -431,6 +444,22 @@ const tagItems = computed<{ text: string; value: string; }[]>(() =>
     })
 );
 
+const isModified = computed<boolean>(() => {
+    return (
+        form.title !== initialForm.title ||
+        JSON.stringify(form.tags) !== JSON.stringify(initialForm.tags) ||
+        JSON.stringify(form.status) !== JSON.stringify(initialForm.status) ||
+        form.progress !== initialForm.progress ||
+        form.importance !== initialForm.importance ||
+        form.urgency !== initialForm.urgency ||
+        form.start_at !== initialForm.start_at ||
+        form.due_by !== initialForm.due_by ||
+        form.deadline !== initialForm.deadline ||
+        JSON.stringify(form.scheduled_dates) !== JSON.stringify(initialForm.scheduled_dates) ||
+        form.note !== initialForm.note
+    );
+});
+
 // Watchers
 watch(
     task,
@@ -439,6 +468,15 @@ watch(
     },
     { immediate: true },
 );
+
+// Lifecycle hooks
+onMounted(() => {
+    window.addEventListener('beforeunload', onBeforeunload);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('beforeunload', onBeforeunload);
+});
 
 // Methods
 function resetFromTask(t?: Task | undefined | null): void {
@@ -467,6 +505,30 @@ function resetFromTask(t?: Task | undefined | null): void {
         form.deadline = t.deadline ?? '';
         form.scheduled_dates = Array.isArray(t.scheduled_dates) ? [...t.scheduled_dates] : [];
         form.note = t.note ?? '';
+    }
+    
+    // Update initial form state to track modifications
+    initialForm.title = form.title;
+    initialForm.tags = [...form.tags];
+    initialForm.status = { ...form.status };
+    initialForm.progress = form.progress;
+    initialForm.importance = form.importance;
+    initialForm.urgency = form.urgency;
+    initialForm.start_at = form.start_at;
+    initialForm.due_by = form.due_by;
+    initialForm.deadline = form.deadline;
+    initialForm.scheduled_dates = [...form.scheduled_dates];
+    initialForm.note = form.note;
+}
+
+function onBeforeunload(e: any) {
+    if (isModified.value) {
+        // Cancel the event
+        e.preventDefault();
+        e.returnValue = '';  // Chrome requires returnValue to be set
+    }
+    else {
+        delete e['returnValue'];  // This guarantees the browser unload happens
     }
 }
 
@@ -499,6 +561,19 @@ function onSave(): void {
         note: form.note,
     };
     emit('save', task);
+    
+    // Update initial form state after successful save to reset modification tracking
+    initialForm.title = form.title;
+    initialForm.tags = [...form.tags];
+    initialForm.status = { ...form.status };
+    initialForm.progress = form.progress;
+    initialForm.importance = form.importance;
+    initialForm.urgency = form.urgency;
+    initialForm.start_at = form.start_at;
+    initialForm.due_by = form.due_by;
+    initialForm.deadline = form.deadline;
+    initialForm.scheduled_dates = [...form.scheduled_dates];
+    initialForm.note = form.note;
 }
 
 function onDelete(): void {
