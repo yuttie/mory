@@ -324,7 +324,7 @@ import {
 } from '@mdi/js';
 
 import { extractFileUuid } from '@/api/task';
-import type { UUID, Task, Status, StatusKind } from '@/task';
+import type { UUID, Task, Status, StatusKind, WaitingStatus, BlockedStatus, OnHoldStatus, DoneStatus, CanceledStatus } from '@/task';
 import { STATUS_LABEL, nextOptions, makeDefaultStatus, canTransition } from '@/task';
 import { useFetchTask } from '@/composables/fetchTask';
 
@@ -460,18 +460,52 @@ const tagItems = computed<{ text: string; value: string; }[]>(() =>
     })
 );
 
+// Helper functions for comparison
+function arraysEqual<T>(a: T[], b: T[]): boolean {
+    if (a.length !== b.length) return false;
+    return a.every((val, index) => val === b[index]);
+}
+
+function statusEqual(a: Status, b: Status): boolean {
+    if (a.kind !== b.kind) return false;
+    
+    switch (a.kind) {
+        case 'todo':
+        case 'in_progress':
+            return true; // These only have 'kind' property
+        case 'waiting':
+            return a.waiting_for === (b as WaitingStatus).waiting_for &&
+                   a.expected_by === (b as WaitingStatus).expected_by &&
+                   a.contact === (b as WaitingStatus).contact &&
+                   a.follow_up_at === (b as WaitingStatus).follow_up_at;
+        case 'blocked':
+            return a.blocked_by === (b as BlockedStatus).blocked_by;
+        case 'on_hold':
+            return a.hold_reason === (b as OnHoldStatus).hold_reason &&
+                   a.review_at === (b as OnHoldStatus).review_at;
+        case 'done':
+            return a.completed_at === (b as DoneStatus).completed_at &&
+                   a.completion_note === (b as DoneStatus).completion_note;
+        case 'canceled':
+            return a.canceled_at === (b as CanceledStatus).canceled_at &&
+                   a.cancel_reason === (b as CanceledStatus).cancel_reason;
+        default:
+            return false;
+    }
+}
+
 const isModified = computed<boolean>(() => {
     return (
         form.title !== initialForm.value.title ||
-        JSON.stringify(form.tags) !== JSON.stringify(initialForm.value.tags) ||
-        JSON.stringify(form.status) !== JSON.stringify(initialForm.value.status) ||
+        !arraysEqual(form.tags, initialForm.value.tags) ||
+        !statusEqual(form.status, initialForm.value.status) ||
         form.progress !== initialForm.value.progress ||
         form.importance !== initialForm.value.importance ||
         form.urgency !== initialForm.value.urgency ||
         form.start_at !== initialForm.value.start_at ||
         form.due_by !== initialForm.value.due_by ||
         form.deadline !== initialForm.value.deadline ||
-        JSON.stringify(form.scheduled_dates) !== JSON.stringify(initialForm.value.scheduled_dates) ||
+        !arraysEqual(form.scheduled_dates, initialForm.value.scheduled_dates) ||
         form.note !== initialForm.value.note
     );
 });
