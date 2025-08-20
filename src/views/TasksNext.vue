@@ -215,6 +215,11 @@ onUnmounted(() => {
 
 // Methods
 function onTaskSelectionChangeInTree(id: UUID | undefined) {
+    // Don't select tag groups as they're not tasks
+    if (id && id.startsWith('tag-group-')) {
+        selectedNode.value = undefined;
+        return;
+    }
     selectedNode.value = id ? store.node(id) : undefined;
 }
 
@@ -232,8 +237,8 @@ function onTaskListItemClick(id: UUID) {
 
 function newTask() {
     let parentDir;
-    if (selectedNode.value) {
-        // Create a task under the selected one
+    if (selectedNode.value && !selectedNode.value.uuid.startsWith('tag-group-')) {
+        // Create a task under the selected one (but not under tag groups)
         const selected = selectedNode.value;
         const idx = selected.path.lastIndexOf('/');
         parentDir = selected.path.slice(0, idx) + '/' + selected.uuid;

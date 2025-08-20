@@ -45,7 +45,41 @@ export const useTaskForestStore = defineStore('taskForest', () => {
     // --- Forest ---
 
     const forest = computed<ApiTreeNode[]>(() => {
-        return rootIds.value.map((rid) => toApiTreeNode(rid));
+        // Group root tasks by their first tag
+        const tagGroups = new Map<string, UUID[]>();
+        
+        for (const rid of rootIds.value) {
+            const node = nodesById.value[rid];
+            if (!node) continue;
+            
+            // Get the first tag, or use "Untagged" as default
+            const firstTag = node.metadata?.tags?.[0] ?? 'Untagged';
+            
+            if (!tagGroups.has(firstTag)) {
+                tagGroups.set(firstTag, []);
+            }
+            tagGroups.get(firstTag)!.push(rid);
+        }
+        
+        // Create tag group nodes
+        const result: ApiTreeNode[] = [];
+        for (const [tag, taskIds] of tagGroups) {
+            // Create a virtual tag group node
+            const tagGroupNode: ApiTreeNode = {
+                uuid: `tag-group-${tag}`,
+                name: null,
+                path: `.tags/${tag}`,
+                size: 0,
+                mime_type: 'application/x-tag-group',
+                metadata: { tag_group: tag },
+                title: tag,
+                mtime: new Date().toISOString(),
+                children: taskIds.map((rid) => toApiTreeNode(rid))
+            };
+            result.push(tagGroupNode);
+        }
+        
+        return result;
     });
 
     // --- Single node ---
@@ -99,17 +133,65 @@ export const useTaskForestStore = defineStore('taskForest', () => {
     // --- Accessors ---
 
     function node(id: UUID): TreeNodeRecord | undefined {
+        // Handle virtual tag group nodes
+        if (id.startsWith('tag-group-')) {
+            const tag = id.replace('tag-group-', '');
+            return {
+                uuid: id,
+                name: null,
+                path: `.tags/${tag}`,
+                size: 0,
+                mime_type: 'application/x-tag-group',
+                metadata: { tag_group: tag },
+                title: tag,
+                mtime: new Date().toISOString()
+            };
+        }
+        
         return nodesById.value[id];
     }
 
     function childrenOf(id: UUID): TreeNodeRecord[] {
+        // Handle virtual tag group nodes
+        if (id.startsWith('tag-group-')) {
+            const tag = id.replace('tag-group-', '');
+            // Find all root tasks with this tag (or no tags for "Untagged")
+            const result: TreeNodeRecord[] = [];
+            for (const rid of rootIds.value) {
+                const node = nodesById.value[rid];
+                if (!node) continue;
+                
+                const firstTag = node.metadata?.tags?.[0] ?? 'Untagged';
+                if (firstTag === tag) {
+                    result.push(node);
+                }
+            }
+            return result;
+        }
+        
         return (childrenById.value[id] || [])
             .map((cid) => nodesById.value[cid])
             .filter((n): n is TreeNodeRecord => Boolean(n));
     }
 
     function parentOf(id: UUID): UUID | null {
-        return parentById.value[id] ?? null;
+        // If this is a tag group node, it has no parent (it's a root)
+        if (id.startsWith('tag-group-')) {
+            return null;
+        }
+        
+        // Check if this is a root task that should be under a tag group
+        const currentParent = parentById.value[id];
+        if (currentParent === null) {
+            // This is a root task, so its parent should be the tag group
+            const node = nodesById.value[id];
+            if (node) {
+                const firstTag = node.metadata?.tags?.[0] ?? 'Untagged';
+                return `tag-group-${firstTag}`;
+            }
+        }
+        
+        return currentParent ?? null;
     }
 
     function idByPath(path: string): UUID | undefined {
@@ -123,6 +205,34 @@ export const useTaskForestStore = defineStore('taskForest', () => {
     }
 
     function toApiTreeNode(id: UUID): ApiTreeNode {
+        // Handle virtual tag group nodes
+        if (id.startsWith('tag-group-')) {
+            const tag = id.replace('tag-group-', '');
+            // Find all root tasks with this tag
+            const children: ApiTreeNode[] = [];
+            for (const rid of rootIds.value) {
+                const node = nodesById.value[rid];
+                if (!node) continue;
+                
+                const firstTag = node.metadata?.tags?.[0] ?? 'Untagged';
+                if (firstTag === tag) {
+                    children.push(toApiTreeNode(rid));
+                }
+            }
+            
+            return {
+                uuid: id,
+                name: null,
+                path: `.tags/${tag}`,
+                size: 0,
+                mime_type: 'application/x-tag-group',
+                metadata: { tag_group: tag },
+                title: tag,
+                mtime: new Date().toISOString(),
+                children: children
+            };
+        }
+        
         const rec = nodesById.value[id];
         if (!rec) {
             throw new Error(`Node not found: ${id}`);
