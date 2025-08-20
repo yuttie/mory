@@ -404,11 +404,9 @@ const progress = computed<number>({
     },
 });
 
-const prevStatus = computed<Status>(() => task.value?.status ?? { kind: 'todo' });
-
 const statusOptions = computed<{ kind: StatusKind, label: string }[]>(() => {
-    const allowed = nextOptions(prevStatus.value);
-    const opts = [prevStatus.value.kind, ...allowed] as StatusKind[];
+    const allowed = nextOptions(initialForm.status);
+    const opts = [initialForm.status.kind, ...allowed] as StatusKind[];
     const items = Array.from(new Set(opts))
         .map((k) => { return { kind: k, label: STATUS_LABEL[k] }; });
     return items;
@@ -425,7 +423,7 @@ const selectedKind = computed<StatusKind>({
 });
 
 const statusGateError = computed<string | undefined>(() => {
-    const from = prevStatus.value;
+    const from = initialForm.status;
     const to = form.status.kind;
     if (canTransition(from, to)) {
         return undefined;
