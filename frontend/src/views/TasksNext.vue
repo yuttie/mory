@@ -51,6 +51,21 @@
                                 <v-icon>{{ mdiPlus }}</v-icon>
                                 <span v-if="$vuetify.breakpoint.mdAndUp">Add</span>
                             </v-btn>
+                            
+                            <v-spacer />
+                            
+                            <!-- Auto-create issues button -->
+                            <v-btn
+                                title="Auto-create issues from notes"
+                                outlined
+                                v-bind:loading="autoCreatingIssues"
+                                v-bind:disabled="autoCreatingIssues"
+                                v-bind:class="{ 'pa-0': !$vuetify.breakpoint.mdAndUp }"
+                                v-on:click="showAutoIssueDialog = true"
+                            >
+                                <v-icon>{{ mdiAutorenew }}</v-icon>
+                                <span v-if="$vuetify.breakpoint.mdAndUp">Auto Issues</span>
+                            </v-btn>
                         </v-toolbar>
                         <div class="groups-container flex-grow-1">
                             <div class="groups">
@@ -95,6 +110,81 @@
             <v-progress-circular indeterminate size="64" />
         </v-overlay>
         <v-snackbar v-model="error" color="error" top timeout="5000">{{ error }}</v-snackbar>
+        
+        <!-- Auto Issue Creation Dialog -->
+        <v-dialog v-model="showAutoIssueDialog" max-width="600px" persistent>
+            <v-card>
+                <v-card-title>
+                    <span class="headline">Auto-Create Issues</span>
+                </v-card-title>
+                <v-card-text>
+                    <div v-if="!autoIssuePreviewLoading && !autoCreatingIssues">
+                        <p>Scan your notes for actionable items (TODO, FIXME, BUG, ACTION) and automatically create tasks.</p>
+                        
+                        <v-expansion-panels v-if="previewIssues.length > 0" class="mb-4">
+                            <v-expansion-panel>
+                                <v-expansion-panel-header>
+                                    Preview: {{ previewIssues.length }} issues found
+                                </v-expansion-panel-header>
+                                <v-expansion-panel-content>
+                                    <div v-for="issue in previewIssues.slice(0, 10)" :key="issue.sourceFile + issue.lineNumber" class="mb-2">
+                                        <div class="d-flex align-center">
+                                            <v-chip small :color="issue.type === 'bug' || issue.type === 'fixme' ? 'red' : issue.type === 'todo' || issue.type === 'action' ? 'blue' : 'grey'" dark class="mr-2">
+                                                {{ issue.type.toUpperCase() }}
+                                            </v-chip>
+                                            <span class="font-weight-medium">{{ issue.title }}</span>
+                                        </div>
+                                        <div class="text-caption text--secondary ml-8">
+                                            {{ issue.sourceFile }}:{{ issue.lineNumber }}
+                                        </div>
+                                    </div>
+                                    <div v-if="previewIssues.length > 10" class="text-caption">
+                                        ...and {{ previewIssues.length - 10 }} more
+                                    </div>
+                                </v-expansion-panel-content>
+                            </v-expansion-panel>
+                        </v-expansion-panels>
+                        
+                        <div v-else-if="previewIssues.length === 0 && !autoIssuePreviewLoading">
+                            <v-alert type="info" dense>
+                                No actionable items found in your notes.
+                            </v-alert>
+                        </div>
+                    </div>
+                    
+                    <div v-if="autoIssuePreviewLoading" class="text-center">
+                        <v-progress-circular indeterminate />
+                        <div class="mt-2">Scanning notes...</div>
+                    </div>
+                    
+                    <div v-if="autoCreatingIssues" class="text-center">
+                        <v-progress-circular indeterminate />
+                        <div class="mt-2">Creating {{ previewIssues.length }} tasks...</div>
+                    </div>
+                    
+                    <div v-if="autoIssueResult" class="mt-4">
+                        <v-alert v-if="autoIssueResult.createdTasks.length > 0" type="success" dense>
+                            Successfully created {{ autoIssueResult.createdTasks.length }} tasks!
+                        </v-alert>
+                        <v-alert v-if="autoIssueResult.errors.length > 0" type="warning" dense>
+                            {{ autoIssueResult.errors.length }} errors occurred during creation.
+                        </v-alert>
+                    </div>
+                </v-card-text>
+                <v-card-actions>
+                    <v-spacer />
+                    <v-btn text v-on:click="closeAutoIssueDialog">Cancel</v-btn>
+                    <v-btn 
+                        color="primary" 
+                        v-bind:disabled="previewIssues.length === 0 || autoCreatingIssues"
+                        v-bind:loading="autoCreatingIssues"
+                        v-on:click="createAutoIssues"
+                    >
+                        Create {{ previewIssues.length }} Tasks
+                    </v-btn>
+                </v-card-actions>
+            </v-card>
+        </v-dialog>
     </div>
 </template>
 
@@ -103,6 +193,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 
 import {
     mdiPlus,
+    mdiAutorenew,
 } from '@mdi/js';
 
 import TaskEditorNext from '@/components/TaskEditorNext.vue';
@@ -111,6 +202,8 @@ import { type TreeNodeRecord, useTaskForestStore } from '@/stores/taskForest';
 
 import * as api from '@/api';
 import { type UUID, type Task, render } from '@/task';
+import { autoIssueService } from '@/services/autoIssueService';
+import type { DetectedIssue, AutoIssueResult } from '@/services/autoIssueService';
 import axios from 'axios';
 import dayjs from 'dayjs';
 
@@ -129,6 +222,13 @@ const selectedNode = ref<TreeNodeRecord | undefined>(undefined);
 const openNodes = ref<UUID[]>([]);
 const newTaskPath = ref<string | null>(null);
 const error = ref<string | null>(null);
+
+// Auto-issue creation states
+const showAutoIssueDialog = ref<boolean>(false);
+const autoIssuePreviewLoading = ref<boolean>(false);
+const autoCreatingIssues = ref<boolean>(false);
+const previewIssues = ref<DetectedIssue[]>([]);
+const autoIssueResult = ref<AutoIssueResult | null>(null);
 
 // Computed properties
 const backlog = computed<TreeNodeRecord[]>(() => {
@@ -332,6 +432,52 @@ async function load() {
         // Unhandled errors
         error.value = e.toString();
     }
+}
+
+// Auto-issue creation methods
+watch(showAutoIssueDialog, async (newValue) => {
+    if (newValue) {
+        await previewAutoIssues();
+    }
+});
+
+async function previewAutoIssues() {
+    autoIssuePreviewLoading.value = true;
+    autoIssueResult.value = null;
+    try {
+        previewIssues.value = await autoIssueService.previewIssues();
+    } catch (e) {
+        error.value = `Error previewing issues: ${e instanceof Error ? e.message : String(e)}`;
+        previewIssues.value = [];
+    } finally {
+        autoIssuePreviewLoading.value = false;
+    }
+}
+
+async function createAutoIssues() {
+    autoCreatingIssues.value = true;
+    try {
+        autoIssueResult.value = await autoIssueService.scanAndCreateIssues();
+        
+        if (autoIssueResult.value.createdTasks.length > 0) {
+            // Refresh the store to show new tasks
+            await store.refresh();
+        }
+        
+        if (autoIssueResult.value.errors.length > 0) {
+            console.warn('Auto-issue creation errors:', autoIssueResult.value.errors);
+        }
+    } catch (e) {
+        error.value = `Error creating auto-issues: ${e instanceof Error ? e.message : String(e)}`;
+    } finally {
+        autoCreatingIssues.value = false;
+    }
+}
+
+function closeAutoIssueDialog() {
+    showAutoIssueDialog.value = false;
+    previewIssues.value = [];
+    autoIssueResult.value = null;
 }
 </script>
 
