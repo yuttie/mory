@@ -45,6 +45,114 @@
                     }
                 }
             ]
+        },
+        "todo-status": {
+            "type": "object",
+            "properties": {
+                "kind": { "const": "todo" }
+            },
+            "required": ["kind"],
+            "additionalProperties": false
+        },
+        "in-progress-status": {
+            "type": "object",
+            "properties": {
+                "kind": { "const": "in_progress" }
+            },
+            "required": ["kind"],
+            "additionalProperties": false
+        },
+        "waiting-status": {
+            "type": "object",
+            "properties": {
+                "kind": { "const": "waiting" },
+                "waiting_for": { "type": "string" },
+                "expected_by": { "type": "string" },
+                "contact": { "type": "string" },
+                "follow_up_at": { "type": "string" }
+            },
+            "required": ["kind", "waiting_for"],
+            "additionalProperties": false
+        },
+        "blocked-status": {
+            "type": "object",
+            "properties": {
+                "kind": { "const": "blocked" },
+                "blocked_by": { "type": "string" }
+            },
+            "required": ["kind", "blocked_by"],
+            "additionalProperties": false
+        },
+        "on-hold-status": {
+            "type": "object",
+            "properties": {
+                "kind": { "const": "on_hold" },
+                "hold_reason": { "type": "string" },
+                "review_at": { "type": "string" }
+            },
+            "required": ["kind", "hold_reason"],
+            "additionalProperties": false
+        },
+        "done-status": {
+            "type": "object",
+            "properties": {
+                "kind": { "const": "done" },
+                "completed_at": { "type": "string" },
+                "completion_note": { "type": "string" }
+            },
+            "required": ["kind", "completed_at"],
+            "additionalProperties": false
+        },
+        "canceled-status": {
+            "type": "object",
+            "properties": {
+                "kind": { "const": "canceled" },
+                "canceled_at": { "type": "string" },
+                "cancel_reason": { "type": "string" }
+            },
+            "required": ["kind", "canceled_at", "cancel_reason"],
+            "additionalProperties": false
+        },
+        "task-status": {
+            "oneOf": [
+                { "$ref": "#/definitions/todo-status" },
+                { "$ref": "#/definitions/in-progress-status" },
+                { "$ref": "#/definitions/waiting-status" },
+                { "$ref": "#/definitions/blocked-status" },
+                { "$ref": "#/definitions/on-hold-status" },
+                { "$ref": "#/definitions/done-status" },
+                { "$ref": "#/definitions/canceled-status" }
+            ]
+        },
+        "task": {
+            "type": "object",
+            "properties": {
+                "status": { "$ref": "#/definitions/task-status" },
+                "progress": { 
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                },
+                "importance": { 
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 5
+                },
+                "urgency": { 
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 5
+                },
+                "start_at": { "type": "string" },
+                "due_by": { "type": "string" },
+                "deadline": { "type": "string" },
+                "scheduled_dates": {
+                    "type": "array",
+                    "items": { "type": "string" }
+                }
+            },
+            "required": ["status", "progress", "importance", "urgency", "scheduled_dates"],
+            "additionalProperties": false
         }
     },
     "type": "object",
@@ -72,6 +180,12 @@
                         ]
                     }
                 }
+            ]
+        },
+        "task": {
+            "oneOf": [
+                { "type": "null" },
+                { "$ref": "#/definitions/task" }
             ]
         }
     }
