@@ -5,8 +5,6 @@
 </template>
 
 <script lang="ts" setup>
-import EditableViewer from '@/components/EditableViewer.vue';
-
 // Emits
 const emit = defineEmits<{
   (e: 'tokenExpired', callback: () => void): void;
