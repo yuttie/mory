@@ -374,18 +374,36 @@ const form = reactive<EditableTask>({
     scheduled_dates: [],
     note: '',
 });
-const initialForm = reactive<EditableTask>({
-    title: '',
-    tags: [],
-    status: { kind: 'todo' },
-    progress: 0,
-    importance: 3,
-    urgency: 3,
-    start_at: '',
-    due_by: '',
-    deadline: '',
-    scheduled_dates: [],
-    note: '',
+const initialForm = computed<EditableTask>(() => {
+    const t = task.value;
+    if (!t) {
+        return {
+            title: '',
+            tags: [],
+            status: { kind: 'todo' },
+            progress: 0,
+            importance: 3,
+            urgency: 3,
+            start_at: '',
+            due_by: '',
+            deadline: '',
+            scheduled_dates: [],
+            note: '',
+        };
+    }
+    return {
+        title: t.title ?? '',
+        tags: Array.isArray(t.tags) ? [...t.tags] : [],
+        status: (t.status === undefined || t.status === null) ? { kind: 'todo' } : { ...t.status },
+        progress: t.progress ?? 0,
+        importance: t.importance ?? 3,
+        urgency: t.urgency ?? 3,
+        start_at: t.start_at ?? '',
+        due_by: t.due_by ?? '',
+        deadline: t.deadline ?? '',
+        scheduled_dates: Array.isArray(t.scheduled_dates) ? [...t.scheduled_dates] : [],
+        note: t.note ?? '',
+    };
 });
 const uiValid = ref(true);
 
@@ -405,8 +423,8 @@ const progress = computed<number>({
 });
 
 const statusOptions = computed<{ kind: StatusKind, label: string }[]>(() => {
-    const allowed = nextOptions(initialForm.status);
-    const opts = [initialForm.status.kind, ...allowed] as StatusKind[];
+    const allowed = nextOptions(initialForm.value.status);
+    const opts = [initialForm.value.status.kind, ...allowed] as StatusKind[];
     const items = Array.from(new Set(opts))
         .map((k) => { return { kind: k, label: STATUS_LABEL[k] }; });
     return items;
@@ -423,7 +441,7 @@ const selectedKind = computed<StatusKind>({
 });
 
 const statusGateError = computed<string | undefined>(() => {
-    const from = initialForm.status;
+    const from = initialForm.value.status;
     const to = form.status.kind;
     if (canTransition(from, to)) {
         return undefined;
@@ -444,17 +462,17 @@ const tagItems = computed<{ text: string; value: string; }[]>(() =>
 
 const isModified = computed<boolean>(() => {
     return (
-        form.title !== initialForm.title ||
-        JSON.stringify(form.tags) !== JSON.stringify(initialForm.tags) ||
-        JSON.stringify(form.status) !== JSON.stringify(initialForm.status) ||
-        form.progress !== initialForm.progress ||
-        form.importance !== initialForm.importance ||
-        form.urgency !== initialForm.urgency ||
-        form.start_at !== initialForm.start_at ||
-        form.due_by !== initialForm.due_by ||
-        form.deadline !== initialForm.deadline ||
-        JSON.stringify(form.scheduled_dates) !== JSON.stringify(initialForm.scheduled_dates) ||
-        form.note !== initialForm.note
+        form.title !== initialForm.value.title ||
+        JSON.stringify(form.tags) !== JSON.stringify(initialForm.value.tags) ||
+        JSON.stringify(form.status) !== JSON.stringify(initialForm.value.status) ||
+        form.progress !== initialForm.value.progress ||
+        form.importance !== initialForm.value.importance ||
+        form.urgency !== initialForm.value.urgency ||
+        form.start_at !== initialForm.value.start_at ||
+        form.due_by !== initialForm.value.due_by ||
+        form.deadline !== initialForm.value.deadline ||
+        JSON.stringify(form.scheduled_dates) !== JSON.stringify(initialForm.value.scheduled_dates) ||
+        form.note !== initialForm.value.note
     );
 });
 
@@ -504,19 +522,6 @@ function resetFromTask(t?: Task | undefined | null): void {
         form.scheduled_dates = Array.isArray(t.scheduled_dates) ? [...t.scheduled_dates] : [];
         form.note = t.note ?? '';
     }
-    
-    // Update initial form state to track modifications
-    initialForm.title = form.title;
-    initialForm.tags = [...form.tags];
-    initialForm.status = { ...form.status };
-    initialForm.progress = form.progress;
-    initialForm.importance = form.importance;
-    initialForm.urgency = form.urgency;
-    initialForm.start_at = form.start_at;
-    initialForm.due_by = form.due_by;
-    initialForm.deadline = form.deadline;
-    initialForm.scheduled_dates = [...form.scheduled_dates];
-    initialForm.note = form.note;
 }
 
 function onBeforeunload(e: any) {
@@ -559,19 +564,6 @@ function onSave(): void {
         note: form.note,
     };
     emit('save', task);
-    
-    // Update initial form state after successful save to reset modification tracking
-    initialForm.title = form.title;
-    initialForm.tags = [...form.tags];
-    initialForm.status = { ...form.status };
-    initialForm.progress = form.progress;
-    initialForm.importance = form.importance;
-    initialForm.urgency = form.urgency;
-    initialForm.start_at = form.start_at;
-    initialForm.due_by = form.due_by;
-    initialForm.deadline = form.deadline;
-    initialForm.scheduled_dates = [...form.scheduled_dates];
-    initialForm.note = form.note;
 }
 
 function onDelete(): void {
