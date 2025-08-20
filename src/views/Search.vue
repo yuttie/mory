@@ -1,12 +1,13 @@
 <template>
-    <div id="search" class="d-flex flex-column">
-        <div class="mx-3 mt-15 d-flex flex-row align-center" style="gap: 1em;">
+    <div id="search" class="mt-15 pa-3 d-flex flex-column">
+        <v-form v-on:submit.prevent="search">
             <v-text-field
                 v-model="queryText"
                 filled
                 rounded
                 single-line
                 clearable
+                block
                 v-on:click:clear="clearQuery"
                 type="text"
                 label="Search"
@@ -16,9 +17,8 @@
                 class="flex-grow-1"
             >
             </v-text-field>
-            <v-btn v-on:click="search" class="flex-grow-0 align-self-middle">Search</v-btn>
-        </div>
-        <ul>
+        </v-form>
+        <ul style="overflow: auto">
             <li v-for="item of results">
                 <router-link v-bind:to="{ name: 'Note', params: { path: item.file } }">{{ item.file }}</router-link>
                 <span>{{ item.number }}</span>
