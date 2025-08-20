@@ -302,7 +302,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive, computed, watch, toRef } from 'vue';
+import { ref, reactive, computed, watch, toRef, onMounted, onUnmounted } from 'vue';
 
 import {
     mdiAccountOutline,
@@ -324,7 +324,7 @@ import {
 } from '@mdi/js';
 
 import { extractFileUuid } from '@/api/task';
-import type { UUID, Task, Status, StatusKind } from '@/task';
+import type { UUID, Task, Status, StatusKind, WaitingStatus, BlockedStatus, OnHoldStatus, DoneStatus, CanceledStatus } from '@/task';
 import { STATUS_LABEL, nextOptions, makeDefaultStatus, canTransition } from '@/task';
 import { useFetchTask } from '@/composables/fetchTask';
 
@@ -384,6 +384,38 @@ const uuid = computed<UUID>(() => extractFileUuid(props.taskPath));
 
 const isEdit = computed<boolean>(() => !!task.value);
 
+const initialForm = computed<EditableTask>(() => {
+    const t = task.value;
+    if (!t) {
+        return {
+            title: '',
+            tags: [],
+            status: { kind: 'todo' },
+            progress: 0,
+            importance: 3,
+            urgency: 3,
+            start_at: '',
+            due_by: '',
+            deadline: '',
+            scheduled_dates: [],
+            note: '',
+        };
+    }
+    return {
+        title: t.title ?? '',
+        tags: Array.isArray(t.tags) ? [...t.tags] : [],
+        status: (t.status === undefined || t.status === null) ? { kind: 'todo' } : { ...t.status },
+        progress: t.progress ?? 0,
+        importance: t.importance ?? 3,
+        urgency: t.urgency ?? 3,
+        start_at: t.start_at ?? '',
+        due_by: t.due_by ?? '',
+        deadline: t.deadline ?? '',
+        scheduled_dates: Array.isArray(t.scheduled_dates) ? [...t.scheduled_dates] : [],
+        note: t.note ?? '',
+    };
+});
+
 const progress = computed<number>({
     get: () => form.progress,
     set: (p) => {
@@ -391,11 +423,9 @@ const progress = computed<number>({
     },
 });
 
-const prevStatus = computed<Status>(() => task.value?.status ?? { kind: 'todo' });
-
 const statusOptions = computed<{ kind: StatusKind, label: string }[]>(() => {
-    const allowed = nextOptions(prevStatus.value);
-    const opts = [prevStatus.value.kind, ...allowed] as StatusKind[];
+    const allowed = nextOptions(initialForm.value.status);
+    const opts = [initialForm.value.status.kind, ...allowed] as StatusKind[];
     const items = Array.from(new Set(opts))
         .map((k) => { return { kind: k, label: STATUS_LABEL[k] }; });
     return items;
@@ -412,7 +442,7 @@ const selectedKind = computed<StatusKind>({
 });
 
 const statusGateError = computed<string | undefined>(() => {
-    const from = prevStatus.value;
+    const from = initialForm.value.status;
     const to = form.status.kind;
     if (canTransition(from, to)) {
         return undefined;
@@ -431,6 +461,22 @@ const tagItems = computed<{ text: string; value: string; }[]>(() =>
     })
 );
 
+const isModified = computed<boolean>(() => {
+    return (
+        form.title !== initialForm.value.title ||
+        !arraysEqual(form.tags, initialForm.value.tags) ||
+        !statusEqual(form.status, initialForm.value.status) ||
+        form.progress !== initialForm.value.progress ||
+        form.importance !== initialForm.value.importance ||
+        form.urgency !== initialForm.value.urgency ||
+        form.start_at !== initialForm.value.start_at ||
+        form.due_by !== initialForm.value.due_by ||
+        form.deadline !== initialForm.value.deadline ||
+        !arraysEqual(form.scheduled_dates, initialForm.value.scheduled_dates) ||
+        form.note !== initialForm.value.note
+    );
+});
+
 // Watchers
 watch(
     task,
@@ -439,6 +485,15 @@ watch(
     },
     { immediate: true },
 );
+
+// Lifecycle hooks
+onMounted(() => {
+    window.addEventListener('beforeunload', onBeforeunload);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('beforeunload', onBeforeunload);
+});
 
 // Methods
 function resetFromTask(t?: Task | undefined | null): void {
@@ -467,6 +522,17 @@ function resetFromTask(t?: Task | undefined | null): void {
         form.deadline = t.deadline ?? '';
         form.scheduled_dates = Array.isArray(t.scheduled_dates) ? [...t.scheduled_dates] : [];
         form.note = t.note ?? '';
+    }
+}
+
+function onBeforeunload(e: any) {
+    if (isModified.value) {
+        // Cancel the event
+        e.preventDefault();
+        e.returnValue = '';  // Chrome requires returnValue to be set
+    }
+    else {
+        delete e['returnValue'];  // This guarantees the browser unload happens
     }
 }
 
@@ -506,6 +572,40 @@ function onDelete(): void {
         return;
     }
     emit('delete', props.taskPath);
+}
+
+// Helper functions for comparison
+function arraysEqual<T>(a: T[], b: T[]): boolean {
+    if (a.length !== b.length) { return false; }
+    return a.every((val, index) => val === b[index]);
+}
+
+function statusEqual(a: Status, b: Status): boolean {
+    if (a.kind !== b.kind) { return false; }
+
+    switch (a.kind) {
+        case 'todo':
+        case 'in_progress':
+            return true; // These only have 'kind' property
+        case 'waiting':
+            return a.waiting_for === (b as WaitingStatus).waiting_for &&
+                   a.expected_by === (b as WaitingStatus).expected_by &&
+                   a.contact === (b as WaitingStatus).contact &&
+                   a.follow_up_at === (b as WaitingStatus).follow_up_at;
+        case 'blocked':
+            return a.blocked_by === (b as BlockedStatus).blocked_by;
+        case 'on_hold':
+            return a.hold_reason === (b as OnHoldStatus).hold_reason &&
+                   a.review_at === (b as OnHoldStatus).review_at;
+        case 'done':
+            return a.completed_at === (b as DoneStatus).completed_at &&
+                   a.completion_note === (b as DoneStatus).completion_note;
+        case 'canceled':
+            return a.canceled_at === (b as CanceledStatus).canceled_at &&
+                   a.cancel_reason === (b as CanceledStatus).cancel_reason;
+        default:
+            return false;
+    }
 }
 
 // Expose
