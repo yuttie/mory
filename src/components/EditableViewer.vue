@@ -373,7 +373,6 @@ import { useRoute, useRouter } from 'vue-router/composables';
 import { useVuetify } from '@/composables/vuetify';
 import { useAppStore } from '@/stores/app';
 
-import Editor from '@/components/Editor.vue';
 import metadataSchema from '@/metadata-schema.json';
 
 import Ajv from 'ajv';
