@@ -1,54 +1,29 @@
 import { unified } from 'unified';
 import remarkParse from 'remark-parse';
 import remarkFrontmatter from 'remark-frontmatter';
-import myRemarkYamlFrontmatter from '@/remark-yaml-frontmatter';
 import remarkGfm from 'remark-gfm';
-import { remarkDefinitionList, defListHastHandlers } from 'remark-definition-list';
 import remarkMath from 'remark-math';
 import remarkRehype from 'remark-rehype';
 import rehypeRaw from 'rehype-raw';
-import myRehypeEmbedLineNumbers from '@/rehype-embed-line-numbers';
-import myRehypeLazyLoadImages from '@/rehype-lazy-load-images';
-import rehypeUrlInspector from '@jsdevtools/rehype-url-inspector';
 import rehypeSlug from 'rehype-slug';
 import rehypeAutolinkHeadings from 'rehype-autolink-headings';
-import rehypeHighlight from 'rehype-highlight';
-import rehypeKatex from 'rehype-katex';
-import rehypeMermaid from 'rehype-mermaid';
 import rehypeStringify from 'rehype-stringify';
-import { all } from 'lowlight';
 
 // State variables
 let processor = null;
 let isInitialized = false;
 
-// Initialize the markdown processor
+// Initialize the markdown processor with minimal plugins to avoid DOM dependencies
 function initializeProcessor(apiFilesUrl) {
   processor = unified()
     .use(remarkParse)
     .use(remarkFrontmatter)
-    .use(myRemarkYamlFrontmatter)
     .use(remarkGfm)
-    .use(remarkDefinitionList)
     .use(remarkMath)
     .use(remarkRehype, {
-      handlers: {
-        ...defListHastHandlers,
-      },
       allowDangerousHtml: true,
     })
     .use(rehypeRaw)
-    .use(myRehypeEmbedLineNumbers)
-    .use(myRehypeLazyLoadImages)
-    .use(rehypeUrlInspector, {
-      inspectEach: ({ url, propertyName, node }) => {
-        if (node.tagName === 'img' && propertyName === 'src' && node.properties) {
-          if (!/^(\/|https?:\/\/)/.test(url)) {
-            node.properties[propertyName] = apiFilesUrl + url;
-          }
-        }
-      },
-    })
     .use(rehypeSlug)
     .use(rehypeAutolinkHeadings, {
       properties: {
@@ -56,15 +31,6 @@ function initializeProcessor(apiFilesUrl) {
         tabIndex: -1,
         class: 'header-anchor mdi mdi-link-variant',
       },
-    })
-    .use(rehypeHighlight, {
-      languages: all,
-    })
-    .use(rehypeKatex, {
-      macros: {},
-    })
-    .use(rehypeMermaid, {
-      strategy: 'inline-svg',
     })
     .use(rehypeStringify, {
       allowDangerousHtml: true,

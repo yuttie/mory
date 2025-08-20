@@ -24,9 +24,11 @@ class MarkdownWorkerService {
       this.worker.addEventListener('message', this.handleWorkerMessage.bind(this));
       this.worker.addEventListener('error', this.handleWorkerError.bind(this));
 
-      // Wait for worker to be ready
+      // Wait for worker to be ready and initialize it
+      const apiFilesUrl = new URL('files/', new URL(import.meta.env.VITE_APP_API_URL || '/api/', window.location.href)).href;
+      
       await this.sendMessage('init', {
-        apiFilesUrl: new URL('files/', new URL(import.meta.env.VITE_APP_API_URL!, window.location.href)).href
+        apiFilesUrl
       });
 
       this.isInitialized = true;
@@ -57,10 +59,10 @@ class MarkdownWorkerService {
   }
 
   private handleWorkerError(event: ErrorEvent) {
-    console.error('Worker error:', event.error);
+    console.error('Worker error:', event.error, event.message, event.filename, event.lineno, event.colno);
     // Reject all pending messages
     for (const { reject } of this.pendingMessages.values()) {
-      reject(new Error('Worker error: ' + event.error?.message || 'Unknown error'));
+      reject(new Error('Worker error: ' + (event.error?.message || event.message || 'Unknown error')));
     }
     this.pendingMessages.clear();
   }
