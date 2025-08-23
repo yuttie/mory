@@ -126,14 +126,18 @@
                             v-bind:rules="[(v) => v === '' || isDateTime('Invalid format.')(v)]"
                             label="Expected by (optional)"
                         />
-                        <v-text-field
+                        <v-combobox
                             v-model.trim="form.status.contact"
+                            v-bind:items="contactItems"
+                            v-bind:return-object="false"
                             label="Contact (optional)"
+                            clearable
+                            hide-selected
                         >
                             <template v-slot:prepend>
                                 <v-icon>{{ mdiAccountOutline }}</v-icon>
                             </template>
-                        </v-text-field>
+                        </v-combobox>
                         <DateSelector
                             v-model="form.status.follow_up_at"
                             v-bind:rules="[(v) => v === '' || isDateTime('Invalid format.')(v)]"
@@ -348,6 +352,7 @@ type EditableTask = {
 const props = defineProps<{
     taskPath: string;
     knownTags: [string, number][];
+    knownContacts: [string, number][];
 }>();
 const pathRef = toRef(props, 'taskPath');
 
@@ -457,6 +462,15 @@ const tagItems = computed<{ text: string; value: string; }[]>(() =>
         return {
             text: `${tag} (${count})`,
             value: tag,
+        };
+    })
+);
+
+const contactItems = computed<{ text: string; value: string; }[]>(() =>
+    props.knownContacts.map(([contact, count]) => {
+        return {
+            text: `${contact} (${count})`,
+            value: contact,
         };
     })
 );

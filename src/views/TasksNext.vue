@@ -34,6 +34,7 @@
                             ref="taskEditorRef"
                             v-bind:task-path="newTaskPath ?? selectedNode.path"
                             v-bind:known-tags="knownTags"
+                            v-bind:known-contacts="knownContacts"
                             class="ma-4"
                             v-on:save="onSelectedTaskSave"
                             v-on:delete="onSelectedTaskDelete"
@@ -174,6 +175,19 @@ const knownTags = computed<[string, number][]>(() => {
     }
     return Array.from(tagCounts)
         .sort(([_tag1, count1], [_tag2, count2]) => count2 - count1);
+});
+
+const knownContacts = computed<[string, number][]>(() => {
+    // Collect contacts
+    const contactCounts = new Map();
+    for (const node of store.allTasks) {
+        const contact = node.metadata?.task?.status?.contact;
+        if (contact && contact.trim() !== '') {
+            contactCounts.set(contact, (contactCounts.get(contact) ?? 0) + 1);
+        }
+    }
+    return Array.from(contactCounts)
+        .sort(([_contact1, count1], [_contact2, count2]) => count2 - count1);
 });
 
 // Watchers
