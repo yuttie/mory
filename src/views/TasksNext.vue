@@ -19,14 +19,8 @@
                         >
                             {{ newTaskPath ? 'New' : 'Selected' }}
                         </v-tab>
-                        <v-tab
-                            v-if="selectedTagGroup"
-                            tab-value="tagged-tasks"
-                        >
-                            Tagged Tasks
-                        </v-tab>
                         <v-tab tab-value="descendants">
-                            {{ selectedNode ? 'Descendants' : 'All tasks' }}
+                            {{ selectedTagGroup ? 'Tagged Tasks' : selectedNode ? 'Descendants' : 'All tasks' }}
                         </v-tab>
                     </v-tabs>
                 </div>
@@ -46,25 +40,8 @@
                             v-on:delete="onSelectedTaskDelete"
                         />
                     </v-tab-item>
-                    <v-tab-item v-if="selectedTagGroup" value="tagged-tasks">
-                        <div class="groups-container flex-grow-1">
-                            <div class="groups">
-                                <v-card dense class="group">
-                                    <v-card-title>{{ selectedTagGroup }} Tasks</v-card-title>
-                                    <div class="task-list">
-                                        <TaskListItemNext
-                                            v-for="task of taggedTasks"
-                                            v-bind:key="task.uuid"
-                                            v-bind:value="task"
-                                            v-on:click="onTaskListItemClick(task.uuid)"
-                                        />
-                                    </div>
-                                </v-card>
-                            </div>
-                        </div>
-                    </v-tab-item>
                     <v-tab-item value="descendants">
-                        <v-toolbar flat outlined dense class="flex-grow-0">
+                        <v-toolbar flat outlined dense class="flex-grow-0" v-if="!selectedTagGroup">
                             <!-- New task button -->
                             <v-btn
                                 title="Add"
@@ -156,9 +133,18 @@ const error = ref<string | null>(null);
 // Computed properties
 const backlog = computed<TreeNodeRecord[]>(() => {
     const backlog = [];
-    const targetTasks = selectedNode.value
-        ? store.flattenDescendants(selectedNode.value.uuid)
-        : store.allTasks;
+    let targetTasks;
+    
+    if (selectedTagGroup.value) {
+        // Show tasks from the selected tag group
+        targetTasks = store.childrenOf(`tag-group-${selectedTagGroup.value}`);
+    } else {
+        // Show tasks based on selected node (descendants or all tasks)
+        targetTasks = selectedNode.value
+            ? store.flattenDescendants(selectedNode.value.uuid)
+            : store.allTasks;
+    }
+    
     for (const t of targetTasks) {
         if (!t.metadata?.task?.scheduled_dates?.length) {
             backlog.push(t);
@@ -175,9 +161,18 @@ const scheduled = computed<Record<string, TreeNodeRecord[]>>(() => {
         [today]: [],
         [tomorrow]: [],
     };
-    const targetTasks = selectedNode.value
-        ? store.flattenDescendants(selectedNode.value.uuid)
-        : store.allTasks;
+    
+    let targetTasks;
+    if (selectedTagGroup.value) {
+        // Show tasks from the selected tag group
+        targetTasks = store.childrenOf(`tag-group-${selectedTagGroup.value}`);
+    } else {
+        // Show tasks based on selected node (descendants or all tasks)
+        targetTasks = selectedNode.value
+            ? store.flattenDescendants(selectedNode.value.uuid)
+            : store.allTasks;
+    }
+    
     for (const t of targetTasks) {
         if (t.metadata?.task?.scheduled_dates) {
             for (const date of t.metadata.task.scheduled_dates) {
@@ -214,11 +209,6 @@ const knownContacts = computed<[string, number][]>(() => {
         .sort(([_contact1, count1], [_contact2, count2]) => count2 - count1);
 });
 
-const taggedTasks = computed<TreeNodeRecord[]>(() => {
-    if (!selectedTagGroup.value) return [];
-    return store.childrenOf(`tag-group-${selectedTagGroup.value}`);
-});
-
 // Watchers
 watch(selectedNode, (node) => {
     if (node) {
@@ -237,8 +227,8 @@ watch(selectedTagGroup, (tagGroup) => {
     if (tagGroup) {
         // Clear task selection when a tag group is selected
         selectedNode.value = undefined;
-        // Open 'tagged-tasks' tab when a tag group is selected
-        itemViewTab.value = 'tagged-tasks';
+        // Open 'descendants' tab when a tag group is selected (will show as "Tagged Tasks")
+        itemViewTab.value = 'descendants';
     }
 });
 
