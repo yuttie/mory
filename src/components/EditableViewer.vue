@@ -1027,12 +1027,20 @@ async function updateRendered() {
     // Prevent images on the page from being dragged and dropped within it
     const images = renderedContentDiv.value.querySelectorAll('img');
     for (const img of images) {
-        img.addEventListener('dragstart', (event) => {
+        img.addEventListener('dragstart', (_event) => {
             appStore.draggingViewerContent = true;
         });
-        img.addEventListener('dragend', (event) => {
+        img.addEventListener('dragend', (_event) => {
             appStore.draggingViewerContent = false;
         });
+        
+        // Force reload images through service worker by refreshing src attribute
+        // This ensures newly inserted images are properly loaded with authentication
+        if (img.src) {
+            const originalSrc = img.src;
+            img.src = '';
+            img.src = originalSrc;
+        }
     }
 
     // Update the page title
