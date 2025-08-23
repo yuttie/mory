@@ -65,7 +65,7 @@
                             type="application/pdf"
                             width="100%"
                             height="800px"
-                        >
+                        />
                         <div class="media-info">
                             <h2>{{ filename }}</h2>
                             <p>{{ mimeType }}</p>
@@ -137,8 +137,10 @@ const mediaType = computed(() => {
 
 // Lifecycle hooks
 onMounted(() => {
-  document.title = `${filename.value} | ${import.meta.env.VITE_APP_NAME}`;
-  loadMediaInfo();
+    if (typeof document !== 'undefined') {
+        document.title = `${filename.value} | ${import.meta.env.VITE_APP_NAME}`;
+    }
+    loadMediaInfo();
 });
 
 // Methods
@@ -181,14 +183,14 @@ async function loadMediaInfo() {
 }
 
 function isMediaFile(mimeType: string): boolean {
-  return mimeType.startsWith('image/') || 
-         mimeType.startsWith('video/') || 
-         mimeType === 'application/pdf';
+    return mimeType.startsWith('image/') || 
+           mimeType.startsWith('video/') || 
+           mimeType === 'application/pdf';
 }
 
 function onMediaError() {
-  error.value = true;
-  errorMessage.value = 'Failed to load media content';
+    error.value = true;
+    errorMessage.value = 'Failed to load media content';
 }
 </script>
 
