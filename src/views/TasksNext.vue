@@ -35,6 +35,7 @@
                             v-bind:task-path="newTaskPath ?? selectedNode.path"
                             v-bind:known-tags="knownTags"
                             v-bind:known-contacts="knownContacts"
+                            v-bind:parent-task-title="newTaskPath && selectedNode ? selectedNode.title : undefined"
                             class="ma-4"
                             v-on:save="onSelectedTaskSave"
                             v-on:delete="onSelectedTaskDelete"
