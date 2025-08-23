@@ -14,10 +14,16 @@
                 <div class="d-flex flex-row">
                     <v-tabs v-model="itemViewTab">
                         <v-tab
-                            v-if="newTaskPath ?? selectedNode"
+                            v-if="(newTaskPath ?? selectedNode) && !selectedTagGroup"
                             tab-value="selected"
                         >
                             {{ newTaskPath ? 'New' : 'Selected' }}
+                        </v-tab>
+                        <v-tab
+                            v-if="selectedTagGroup"
+                            tab-value="tagged-tasks"
+                        >
+                            Tagged Tasks
                         </v-tab>
                         <v-tab tab-value="descendants">
                             {{ selectedNode ? 'Descendants' : 'All tasks' }}
@@ -29,7 +35,7 @@
                     class="d-flex flex-column"
                     style="flex: 1 1 0; background: transparent;"
                 >
-                    <v-tab-item v-if="newTaskPath ?? selectedNode" value="selected">
+                    <v-tab-item v-if="(newTaskPath ?? selectedNode) && !selectedTagGroup" value="selected">
                         <TaskEditorNext
                             ref="taskEditorRef"
                             v-bind:task-path="newTaskPath ?? selectedNode.path"
@@ -39,6 +45,23 @@
                             v-on:save="onSelectedTaskSave"
                             v-on:delete="onSelectedTaskDelete"
                         />
+                    </v-tab-item>
+                    <v-tab-item v-if="selectedTagGroup" value="tagged-tasks">
+                        <div class="groups-container flex-grow-1">
+                            <div class="groups">
+                                <v-card dense class="group">
+                                    <v-card-title>{{ selectedTagGroup }} Tasks</v-card-title>
+                                    <div class="task-list">
+                                        <TaskListItemNext
+                                            v-for="task of taggedTasks"
+                                            v-bind:key="task.uuid"
+                                            v-bind:value="task"
+                                            v-on:click="onTaskListItemClick(task.uuid)"
+                                        />
+                                    </div>
+                                </v-card>
+                            </div>
+                        </div>
                     </v-tab-item>
                     <v-tab-item value="descendants">
                         <v-toolbar flat outlined dense class="flex-grow-0">
@@ -125,6 +148,7 @@ const emit = defineEmits<{
 const taskEditorRef = ref<any>(null);
 const itemViewTab = ref<string>('descendants');
 const selectedNode = ref<TreeNodeRecord | undefined>(undefined);
+const selectedTagGroup = ref<string | null>(null);
 const openNodes = ref<UUID[]>([]);
 const newTaskPath = ref<string | null>(null);
 const error = ref<string | null>(null);
@@ -190,15 +214,31 @@ const knownContacts = computed<[string, number][]>(() => {
         .sort(([_contact1, count1], [_contact2, count2]) => count2 - count1);
 });
 
+const taggedTasks = computed<TreeNodeRecord[]>(() => {
+    if (!selectedTagGroup.value) return [];
+    return store.childrenOf(`tag-group-${selectedTagGroup.value}`);
+});
+
 // Watchers
 watch(selectedNode, (node) => {
     if (node) {
+        // Clear tag group selection when a task is selected
+        selectedTagGroup.value = null;
         // Open 'selected' tab when a task is selected
         itemViewTab.value = 'selected';
     }
     else {
         // Open 'descendants' tab when nothing is selected
         itemViewTab.value = 'descendants';
+    }
+});
+
+watch(selectedTagGroup, (tagGroup) => {
+    if (tagGroup) {
+        // Clear task selection when a tag group is selected
+        selectedNode.value = undefined;
+        // Open 'tagged-tasks' tab when a tag group is selected
+        itemViewTab.value = 'tagged-tasks';
     }
 });
 
@@ -215,15 +255,21 @@ onUnmounted(() => {
 
 // Methods
 function onTaskSelectionChangeInTree(id: UUID | undefined) {
-    // Don't select tag groups as they're not tasks
     if (id && id.startsWith('tag-group-')) {
+        // Handle tag group selection
+        const tagName = id.replace('tag-group-', '');
+        selectedTagGroup.value = tagName;
         selectedNode.value = undefined;
         return;
     }
+    
+    // Handle regular task selection
+    selectedTagGroup.value = null;
     selectedNode.value = id ? store.node(id) : undefined;
 }
 
 function onTaskListItemClick(id: UUID) {
+    selectedTagGroup.value = null;
     selectedNode.value = store.node(id);
     // Open tree up to the corresponding item
     const next = new Set(openNodes.value);
@@ -248,7 +294,8 @@ function newTask() {
         parentDir = '.tasks';
     }
     newTaskPath.value = parentDir + '/' + crypto.randomUUID() + '.md';
-    // Show 'selected' tab
+    // Clear tag group selection and show 'selected' tab
+    selectedTagGroup.value = null;
     itemViewTab.value = 'selected';
 }
 

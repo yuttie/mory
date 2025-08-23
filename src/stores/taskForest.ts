@@ -75,9 +75,28 @@ export const useTaskForestStore = defineStore('taskForest', () => {
             tagGroups.get(firstTag)!.push(taskId);
         }
         
-        // Create tag group nodes
         const result: ApiTreeNode[] = [];
-        for (const [tag, taskIds] of tagGroups) {
+        
+        // First, add top-level tasks that have children (parent nodes)
+        for (const [id, parent] of Object.entries(parentById.value)) {
+            if (parent === null) {
+                // Check if this task has children
+                const children = childrenById.value[id];
+                if (children && children.length > 0) {
+                    result.push(toApiTreeNode(id));
+                }
+            }
+        }
+        
+        // Then, add tag group nodes sorted alphabetically (with "Untagged" at the end)
+        const sortedTags = Array.from(tagGroups.keys()).sort((a, b) => {
+            if (a === 'Untagged') return 1;
+            if (b === 'Untagged') return -1;
+            return a.localeCompare(b);
+        });
+        
+        for (const tag of sortedTags) {
+            const taskIds = tagGroups.get(tag)!;
             // Create a virtual tag group node
             const tagGroupNode: ApiTreeNode = {
                 uuid: `tag-group-${tag}`,
@@ -91,17 +110,6 @@ export const useTaskForestStore = defineStore('taskForest', () => {
                 children: taskIds.map((taskId) => toApiTreeNode(taskId))
             };
             result.push(tagGroupNode);
-        }
-        
-        // Add top-level tasks that have children directly to the forest (not grouped by tags)
-        for (const [id, parent] of Object.entries(parentById.value)) {
-            if (parent === null) {
-                // Check if this task has children
-                const children = childrenById.value[id];
-                if (children && children.length > 0) {
-                    result.push(toApiTreeNode(id));
-                }
-            }
         }
         
         return result;
