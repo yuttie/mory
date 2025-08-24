@@ -3,7 +3,7 @@
         <template v-if="store.isLoaded">
             <div class="d-flex flex-column"><!-- NOTE: Necessary for <TaskTree> to have vertical scrollbar -->
                 <TaskTree
-                    v-bind:items="taggedForest.forestWithTags"
+                    v-bind:items="taggedForest.forestWithTags.value"
                     v-bind:active="activeNodeId"
                     v-bind:open.sync="openNodes"
                     v-on:update:active="onTaskSelectionChangeInTree"
