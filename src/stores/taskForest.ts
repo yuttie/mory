@@ -186,7 +186,7 @@ export const useTaskForestStore = defineStore('taskForest', () => {
                 // This is a top-level task with no children, so its parent should be the tag group
                 const node = nodesById.value[id];
                 if (node) {
-                    const firstTag = (node.metadata && typeof node.metadata === 'object' && 'tags' in node.metadata && Array.isArray(node.metadata.tags)) 
+                    const firstTag = (node.metadata && typeof node.metadata === 'object' && 'tags' in node.metadata && Array.isArray(node.metadata.tags))
                         ? String(node.metadata.tags[0] || 'Untagged')
                         : 'Untagged';
                     return `tag-group-${firstTag}`;
@@ -308,7 +308,7 @@ export const useTaskForestStore = defineStore('taskForest', () => {
                     if (!node) continue;
 
                     // Get the first tag, or use "Untagged" as default
-                    const firstTag = (node.metadata && typeof node.metadata === 'object' && 'tags' in node.metadata && Array.isArray(node.metadata.tags)) 
+                    const firstTag = (node.metadata && typeof node.metadata === 'object' && 'tags' in node.metadata && Array.isArray(node.metadata.tags))
                         ? String(node.metadata.tags[0] || 'Untagged')
                         : 'Untagged';
 
