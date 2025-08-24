@@ -1,4 +1,5 @@
 import { computed, ref, watch } from 'vue';
+import { storeToRefs } from 'pinia';
 import { useTaskForestStore, type TreeNodeRecord } from '@/stores/taskForest';
 import type { ApiTreeNode, UUID } from '@/api/task';
 
@@ -157,8 +158,8 @@ export function useTaggedForest() {
     };
 
     return {
-        // Re-export all basic store functionality first
-        ...store,
+        // Re-export all reactive state and computed properties using storeToRefs
+        ...storeToRefs(store),
         
         // Enhanced tree with tags
         forestWithTags,
@@ -167,6 +168,21 @@ export function useTaggedForest() {
         node,
         childrenOf,
         parentOf,
+        
+        // Re-export remaining store actions (non-overridden)
+        idByPath: store.idByPath,
+        subtree: store.subtree,
+        toApiTreeNode: store.toApiTreeNode,
+        flattenDescendants: store.flattenDescendants,
+        flattenSubtree: store.flattenSubtree,
+        refresh: store.refresh,
+        replaceFromServer: store.replaceFromServer,
+        mergeFromServer: store.mergeFromServer,
+        selectNode: store.selectNode,
+        selectByPath: store.selectByPath,
+        addNodeLocal: store.addNodeLocal,
+        replaceNodeLocal: store.replaceNodeLocal,
+        deleteLeafLocal: store.deleteLeafLocal,
         
         // Tag-specific state (read-only)
         tagGroups: computed(() => tagGroups.value),
