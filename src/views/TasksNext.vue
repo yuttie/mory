@@ -1,9 +1,9 @@
 <template>
     <div id="tasks" class="d-flex flex-row">
-        <template v-if="taggedForest.isLoaded">
+        <template v-if="store.isLoaded">
             <div class="d-flex flex-column"><!-- NOTE: Necessary for <TaskTree> to have vertical scrollbar -->
                 <TaskTree
-                    v-bind:items="taggedForest.forestWithTags"
+                    v-bind:items="store.forestWithTags"
                     v-bind:active="activeNodeId"
                     v-bind:open.sync="openNodes"
                     v-on:update:active="onTaskSelectionChangeInTree"
@@ -92,7 +92,7 @@
                 </v-tabs-items>
             </div>
         </template>
-        <v-overlay v-bind:value="taggedForest.isLoading" z-index="20">
+        <v-overlay v-bind:value="store.isLoading" z-index="20">
             <v-progress-circular indeterminate size="64" />
         </v-overlay>
         <v-snackbar v-model="error" color="error" top timeout="5000">{{ error }}</v-snackbar>
@@ -115,7 +115,7 @@ import axios from 'axios';
 import dayjs from 'dayjs';
 
 // Stores
-const taggedForest = useTaggedTaskForestStore();
+const store = useTaggedTaskForestStore();
 
 // Emits
 const emit = defineEmits<{
@@ -152,12 +152,12 @@ const backlog = computed<TreeNodeRecord[]>(() => {
 
     if (isTagGroupSelected.value && selectedTagName.value) {
         // Show tasks from the selected tag group
-        targetTasks = taggedForest.childrenOf(`tag-group-${selectedTagName.value}`);
+        targetTasks = store.childrenOf(`tag-group-${selectedTagName.value}`);
     } else {
         // Show tasks based on selected node (descendants or all tasks)
         targetTasks = selectedNode.value && !isTagGroupSelected.value
-            ? taggedForest.flattenDescendants(selectedNode.value.uuid)
-            : taggedForest.allTasks;
+            ? store.flattenDescendants(selectedNode.value.uuid)
+            : store.allTasks;
     }
 
     for (const t of targetTasks) {
@@ -180,12 +180,12 @@ const scheduled = computed<Record<string, TreeNodeRecord[]>>(() => {
     let targetTasks;
     if (isTagGroupSelected.value && selectedTagName.value) {
         // Show tasks from the selected tag group
-        targetTasks = taggedForest.childrenOf(`tag-group-${selectedTagName.value}`);
+        targetTasks = store.childrenOf(`tag-group-${selectedTagName.value}`);
     } else {
         // Show tasks based on selected node (descendants or all tasks)
         targetTasks = selectedNode.value && !isTagGroupSelected.value
-            ? taggedForest.flattenDescendants(selectedNode.value.uuid)
-            : taggedForest.allTasks;
+            ? store.flattenDescendants(selectedNode.value.uuid)
+            : store.allTasks;
     }
 
     for (const t of targetTasks) {
@@ -202,7 +202,7 @@ const scheduled = computed<Record<string, TreeNodeRecord[]>>(() => {
 const knownTags = computed<[string, number][]>(() => {
     // Collect tags
     const tagCounts = new Map();
-    for (const node of taggedForest.allTasks) {
+    for (const node of store.allTasks) {
         for (const tag of node.metadata?.tags ?? []) {
             tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
         }
@@ -214,7 +214,7 @@ const knownTags = computed<[string, number][]>(() => {
 const knownContacts = computed<[string, number][]>(() => {
     // Collect contacts
     const contactCounts = new Map();
-    for (const node of taggedForest.allTasks) {
+    for (const node of store.allTasks) {
         const contact = node.metadata?.task?.status?.contact;
         if (contact && contact.trim() !== '') {
             contactCounts.set(contact, (contactCounts.get(contact) ?? 0) + 1);
@@ -251,22 +251,22 @@ onUnmounted(() => {
 function onTaskSelectionChangeInTree(id: UUID | undefined) {
     if (id && id.startsWith('tag-group-')) {
         // Handle tag group selection - get the virtual node from the tagged forest wrapper
-        selectedNode.value = taggedForest.node(id);
+        selectedNode.value = store.node(id);
         return;
     }
 
     // Handle regular task selection
-    selectedNode.value = id ? taggedForest.node(id) : undefined;
+    selectedNode.value = id ? store.node(id) : undefined;
 }
 
 function onTaskListItemClick(id: UUID) {
-    selectedNode.value = taggedForest.node(id);
+    selectedNode.value = store.node(id);
     // Open tree up to the corresponding item
     const next = new Set(openNodes.value);
-    let parent = taggedForest.parentOf(id);
+    let parent = store.parentOf(id);
     while (parent) {
         next.add(parent);
-        parent = taggedForest.parentOf(parent);
+        parent = store.parentOf(parent);
     }
     openNodes.value = [...next];
 }
@@ -325,22 +325,22 @@ async function onSelectedTaskSave(task: Task) {
         const parentPath = newTaskPath.value.slice(0, i);
         const j = parentPath.lastIndexOf('/');
         const parentUuid = j === -1 ? null : parentPath.slice(j + 1);
-        taggedForest.addNodeLocal(parentUuid, node);
+        store.addNodeLocal(parentUuid, node);
         // Select the task
         newTaskPath.value = null;
-        selectedNode.value = taggedForest.node(task.uuid);
+        selectedNode.value = store.node(task.uuid);
         // Show 'selected' tab
         itemViewTab.value = 'selected';
         // Refresh the store
-        await taggedForest.refresh();
+        await store.refresh();
     }
     else if (selectedNode.value) {
         // Update the existing one
         await api.addNote(selectedNode.value.path, markdown);
         // Update the store locally for immediate update
-        taggedForest.replaceNodeLocal(node);
+        store.replaceNodeLocal(node);
         // Refresh the store
-        await taggedForest.refresh();
+        await store.refresh();
     }
     // Refresh task editor manually because its task-path prop retains the same value
     taskEditorRef.value.refresh();
@@ -348,20 +348,20 @@ async function onSelectedTaskSave(task: Task) {
 
 async function onSelectedTaskDelete(path: string) {
     // Look up UUID by path
-    const uuid = taggedForest.idByPath(path);
+    const uuid = store.idByPath(path);
     if (!uuid) {
         return;
     }
     // Delete the task
     await api.deleteNote(path);
     // Update the store locally for immediate update
-    taggedForest.deleteLeafLocal(uuid);
+    store.deleteLeafLocal(uuid);
     // Unselect
     if (selectedNode.value?.uuid === uuid) {
         selectedNode.value = undefined;
     }
     // Refresh the store
-    await taggedForest.refresh();
+    await store.refresh();
 }
 
 function isToday(date: string) {
@@ -375,7 +375,7 @@ function isTomorrow(date: string) {
 async function load() {
     error.value = null;
     try {
-        await taggedForest.refresh();
+        await store.refresh();
     }
     catch (e) {
         if (axios.isAxiosError(e) && e.response?.status === 401) {
