@@ -148,7 +148,7 @@ const selectedTagName = computed<string | null>(() => {
 const backlog = computed<TreeNodeRecord[]>(() => {
     const backlog = [];
     let targetTasks;
-    
+
     if (isTagGroupSelected.value && selectedTagName.value) {
         // Show tasks from the selected tag group
         targetTasks = store.childrenOf(`tag-group-${selectedTagName.value}`);
@@ -158,7 +158,7 @@ const backlog = computed<TreeNodeRecord[]>(() => {
             ? store.flattenDescendants(selectedNode.value.uuid)
             : store.allTasks;
     }
-    
+
     for (const t of targetTasks) {
         if (!t.metadata?.task?.scheduled_dates?.length) {
             backlog.push(t);
@@ -175,7 +175,7 @@ const scheduled = computed<Record<string, TreeNodeRecord[]>>(() => {
         [today]: [],
         [tomorrow]: [],
     };
-    
+
     let targetTasks;
     if (isTagGroupSelected.value && selectedTagName.value) {
         // Show tasks from the selected tag group
@@ -186,7 +186,7 @@ const scheduled = computed<Record<string, TreeNodeRecord[]>>(() => {
             ? store.flattenDescendants(selectedNode.value.uuid)
             : store.allTasks;
     }
-    
+
     for (const t of targetTasks) {
         if (t.metadata?.task?.scheduled_dates) {
             for (const date of t.metadata.task.scheduled_dates) {
@@ -253,7 +253,7 @@ function onTaskSelectionChangeInTree(id: UUID | undefined) {
         selectedNode.value = store.node(id);
         return;
     }
-    
+
     // Handle regular task selection
     selectedNode.value = id ? store.node(id) : undefined;
 }

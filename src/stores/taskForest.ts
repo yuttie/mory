@@ -54,19 +54,19 @@ export const useTaskForestStore = defineStore('taskForest', () => {
 
     const forestWithTags = computed<ApiTreeNode[]>(() => {
         const result: ApiTreeNode[] = [];
-        
+
         // First, add parent nodes (tasks with children)
         for (const parentId of parentNodes.value) {
             result.push(toApiTreeNode(parentId));
         }
-        
+
         // Then, add tag group nodes sorted alphabetically (with "Untagged" at the end)
         const sortedTags = Array.from(tagGroups.value.keys()).sort((a, b) => {
             if (a === 'Untagged') return 1;
             if (b === 'Untagged') return -1;
             return a.localeCompare(b);
         });
-        
+
         for (const tag of sortedTags) {
             const taskIds = tagGroups.value.get(tag)!;
             // Create a virtual tag group node
@@ -83,7 +83,7 @@ export const useTaskForestStore = defineStore('taskForest', () => {
             };
             result.push(tagGroupNode);
         }
-        
+
         return result;
     });
 
@@ -152,7 +152,7 @@ export const useTaskForestStore = defineStore('taskForest', () => {
                 mtime: new Date().toISOString()
             };
         }
-        
+
         return nodesById.value[id];
     }
 
@@ -165,7 +165,7 @@ export const useTaskForestStore = defineStore('taskForest', () => {
                 .map((taskId) => nodesById.value[taskId])
                 .filter((n): n is TreeNodeRecord => Boolean(n));
         }
-        
+
         return (childrenById.value[id] || [])
             .map((cid) => nodesById.value[cid])
             .filter((n): n is TreeNodeRecord => Boolean(n));
@@ -176,7 +176,7 @@ export const useTaskForestStore = defineStore('taskForest', () => {
         if (id.startsWith('tag-group-')) {
             return null;
         }
-        
+
         // Check if this is a top-level task
         const currentParent = parentById.value[id];
         if (currentParent === null) {
@@ -195,7 +195,7 @@ export const useTaskForestStore = defineStore('taskForest', () => {
             // If it has children, it stays at the root (return null)
             return null;
         }
-        
+
         return currentParent ?? null;
     }
 
@@ -215,7 +215,7 @@ export const useTaskForestStore = defineStore('taskForest', () => {
             const tag = id.replace('tag-group-', '');
             const taskIds = tagGroups.value.get(tag) || [];
             const children: ApiTreeNode[] = taskIds.map((taskId) => toApiTreeNode(taskId));
-            
+
             return {
                 uuid: id,
                 name: null,
@@ -228,7 +228,7 @@ export const useTaskForestStore = defineStore('taskForest', () => {
                 children: children
             };
         }
-        
+
         const rec = nodesById.value[id];
         if (!rec) {
             throw new Error(`Node not found: ${id}`);
@@ -294,7 +294,7 @@ export const useTaskForestStore = defineStore('taskForest', () => {
     function preprocessTagGroups(): void {
         const newTagGroups = new Map<string, UUID[]>();
         const newParentNodes: UUID[] = [];
-        
+
         // Find all tasks that have no parent and no children (leaf tasks at root level)
         for (const [id, parent] of Object.entries(parentById.value)) {
             if (parent === null) {
@@ -306,12 +306,12 @@ export const useTaskForestStore = defineStore('taskForest', () => {
                     // This is a leaf task at root level - group by first tag
                     const node = nodesById.value[id];
                     if (!node) continue;
-                    
+
                     // Get the first tag, or use "Untagged" as default
                     const firstTag = (node.metadata && typeof node.metadata === 'object' && 'tags' in node.metadata && Array.isArray(node.metadata.tags)) 
                         ? String(node.metadata.tags[0] || 'Untagged')
                         : 'Untagged';
-                    
+
                     if (!newTagGroups.has(firstTag)) {
                         newTagGroups.set(firstTag, []);
                     }
@@ -319,7 +319,7 @@ export const useTaskForestStore = defineStore('taskForest', () => {
                 }
             }
         }
-        
+
         tagGroups.value = newTagGroups;
         parentNodes.value = newParentNodes;
     }
@@ -411,7 +411,7 @@ export const useTaskForestStore = defineStore('taskForest', () => {
             setChildrenOf(parent, sibs);
             setParentOf(node.uuid, parent);
         }
-        
+
         // Preprocess tag groups after local changes
         preprocessTagGroups();
     }
@@ -426,7 +426,7 @@ export const useTaskForestStore = defineStore('taskForest', () => {
             throw new Error(`replaceNodeLocal: new path ${next.path} does not match old one ${prev.path}.`);
         }
         upsertNodeRecord(next);
-        
+
         // Preprocess tag groups after local changes (in case tags changed)
         preprocessTagGroups();
     }
@@ -471,7 +471,7 @@ export const useTaskForestStore = defineStore('taskForest', () => {
         if (selectedNodeId.value === id) {
             selectedNodeId.value = null;
         }
-        
+
         // Preprocess tag groups after deletion
         preprocessTagGroups();
     }
