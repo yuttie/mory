@@ -3,7 +3,7 @@
         <template v-if="taggedForest.isLoaded">
             <div class="d-flex flex-column"><!-- NOTE: Necessary for <TaskTree> to have vertical scrollbar -->
                 <TaskTree
-                    v-bind:items="taggedForest.forestWithTags.value"
+                    v-bind:items="taggedForest.forestWithTags"
                     v-bind:active="activeNodeId"
                     v-bind:open.sync="openNodes"
                     v-on:update:active="onTaskSelectionChangeInTree"
@@ -107,15 +107,15 @@ import {
 } from '@mdi/js';
 
 import { type TreeNodeRecord } from '@/stores/taskForest';
-import { useTaggedForest } from '@/composables/useTaggedForest';
+import { useTaggedTaskForestStore } from '@/stores/taggedTaskForest';
 
 import * as api from '@/api';
 import { type UUID, type Task, render } from '@/task';
 import axios from 'axios';
 import dayjs from 'dayjs';
 
-// Composables
-const taggedForest = useTaggedForest();
+// Stores
+const taggedForest = useTaggedTaskForestStore();
 
 // Emits
 const emit = defineEmits<{

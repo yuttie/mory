@@ -1,24 +1,35 @@
+import { defineStore } from 'pinia';
 import { computed, ref, watch } from 'vue';
-import { storeToRefs } from 'pinia';
-import { useTaskForestStore, type TreeNodeRecord } from '@/stores/taskForest';
+import { useTaskForestStore, type TreeNodeRecord } from './taskForest';
 import type { ApiTreeNode, UUID } from '@/api/task';
 
 /**
- * Composable that wraps the basic forestStore and adds tag grouping functionality.
+ * Pinia store that extends the basic forestStore with tag grouping functionality.
  * This provides a clean separation between core forest operations and tag enhancements.
  */
-export function useTaggedForest() {
+export const useTaggedTaskForestStore = defineStore('taggedTaskForest', () => {
     const store = useTaskForestStore();
 
     // Tag-specific state
     const tagGroups = ref<Map<string, UUID[]>>(new Map());
     const sortedTagKeys = ref<string[]>([]);
     const parentNodes = ref<UUID[]>([]);
+    const tagGroupNodeCache = ref<Map<string, TreeNodeRecord>>(new Map());
 
     // Preprocess tag groups whenever the forest changes
     const preprocessTagGroups = () => {
+        // Only process if store has data
+        if (!store.hasData) {
+            tagGroups.value = new Map();
+            sortedTagKeys.value = [];
+            parentNodes.value = [];
+            tagGroupNodeCache.value = new Map();
+            return;
+        }
+
         const newTagGroups = new Map<string, UUID[]>();
         const newParentNodes: UUID[] = [];
+        const newTagGroupCache = new Map<string, TreeNodeRecord>();
 
         // Find all tasks that have no parent and no children (leaf tasks at root level)
         for (const [id, parent] of Object.entries(store.parentById)) {
@@ -52,9 +63,25 @@ export function useTaggedForest() {
             return a.localeCompare(b);
         });
 
+        // Create cached virtual tag group nodes for stable object identity
+        for (const tag of newSortedTagKeys) {
+            const tagGroupId = `tag-group-${tag}`;
+            newTagGroupCache.set(tagGroupId, {
+                uuid: tagGroupId,
+                name: null,
+                path: `.tags/${tag}`,
+                size: 0,
+                mime_type: 'application/x-tag-group',
+                metadata: { tag_group: tag },
+                title: tag,
+                mtime: new Date().toISOString()
+            });
+        }
+
         tagGroups.value = newTagGroups;
         sortedTagKeys.value = newSortedTagKeys;
         parentNodes.value = newParentNodes;
+        tagGroupNodeCache.value = newTagGroupCache;
     };
 
     // Watch for changes in the forest to reprocess tag groups
@@ -66,49 +93,52 @@ export function useTaggedForest() {
 
     // Enhanced forest with tag grouping
     const forestWithTags = computed<ApiTreeNode[]>(() => {
-        const result: ApiTreeNode[] = [];
+        try {
+            if (!store.hasData) {
+                return [];
+            }
 
-        // First, add parent nodes (tasks with children)
-        for (const parentId of parentNodes.value) {
-            result.push(store.toApiTreeNode(parentId));
+            const result: ApiTreeNode[] = [];
+
+            // First, add parent nodes (tasks with children)
+            for (const parentId of parentNodes.value) {
+                if (store.nodesById[parentId]) {
+                    result.push(store.toApiTreeNode(parentId));
+                }
+            }
+
+            // Then, add tag group nodes using pre-sorted tags
+            for (const tag of sortedTagKeys.value) {
+                const taskIds = tagGroups.value.get(tag)!;
+                // Create a virtual tag group node
+                const tagGroupNode: ApiTreeNode = {
+                    uuid: `tag-group-${tag}`,
+                    name: null,
+                    path: `.tags/${tag}`,
+                    size: 0,
+                    mime_type: 'application/x-tag-group',
+                    metadata: { tag_group: tag },
+                    title: tag,
+                    mtime: new Date().toISOString(),
+                    children: taskIds
+                        .filter((taskId) => store.nodesById[taskId])
+                        .map((taskId) => store.toApiTreeNode(taskId))
+                };
+                result.push(tagGroupNode);
+            }
+
+            return result;
+        } catch (error) {
+            console.error('Error in forestWithTags:', error);
+            return [];
         }
-
-        // Then, add tag group nodes using pre-sorted tags
-        for (const tag of sortedTagKeys.value) {
-            const taskIds = tagGroups.value.get(tag)!;
-            // Create a virtual tag group node
-            const tagGroupNode: ApiTreeNode = {
-                uuid: `tag-group-${tag}`,
-                name: null,
-                path: `.tags/${tag}`,
-                size: 0,
-                mime_type: 'application/x-tag-group',
-                metadata: { tag_group: tag },
-                title: tag,
-                mtime: new Date().toISOString(),
-                children: taskIds.map((taskId) => store.toApiTreeNode(taskId))
-            };
-            result.push(tagGroupNode);
-        }
-
-        return result;
     });
 
     // Enhanced node accessor that handles tag groups
     const node = (id: UUID): TreeNodeRecord | undefined => {
-        // Handle virtual tag group nodes
+        // Handle virtual tag group nodes using cached objects
         if (id.startsWith('tag-group-')) {
-            const tag = id.replace('tag-group-', '');
-            return {
-                uuid: id,
-                name: null,
-                path: `.tags/${tag}`,
-                size: 0,
-                mime_type: 'application/x-tag-group',
-                metadata: { tag_group: tag },
-                title: tag,
-                mtime: new Date().toISOString()
-            };
+            return tagGroupNodeCache.value.get(id);
         }
 
         return store.node(id);
@@ -158,18 +188,35 @@ export function useTaggedForest() {
     };
 
     return {
-        // Re-export all reactive state and computed properties using storeToRefs
-        ...storeToRefs(store),
-        
-        // Enhanced tree with tags
+        // === Re-export basic store state and computed properties ===
+        nodesById: computed(() => store.nodesById),
+        childrenById: computed(() => store.childrenById),
+        parentById: computed(() => store.parentById),
+        pathToId: computed(() => store.pathToId),
+        rootIds: computed(() => store.rootIds),
+        selectedNodeId: computed(() => store.selectedNodeId),
+        lastETag: computed(() => store.lastETag),
+        isLoading: computed(() => store.isLoading),
+        isLoaded: computed(() => store.isLoaded),
+        hasData: computed(() => store.hasData),
+        forest: computed(() => store.forest),
+        selectedNode: computed(() => store.selectedNode),
+        allTaskIds: computed(() => store.allTaskIds),
+        selectedDescendantIds: computed(() => store.selectedDescendantIds),
+        selectedSubtreeNodeIds: computed(() => store.selectedSubtreeNodeIds),
+        allTasks: computed(() => store.allTasks),
+        selectedDescendants: computed(() => store.selectedDescendants),
+        selectedSubtreeNodes: computed(() => store.selectedSubtreeNodes),
+
+        // === Enhanced properties with tag functionality ===
         forestWithTags,
-        
-        // Enhanced accessors (override store methods)
+
+        // === Enhanced accessors (override store methods) ===
         node,
         childrenOf,
         parentOf,
-        
-        // Re-export remaining store actions (non-overridden)
+
+        // === Re-export store actions ===
         idByPath: store.idByPath,
         subtree: store.subtree,
         toApiTreeNode: store.toApiTreeNode,
@@ -183,9 +230,9 @@ export function useTaggedForest() {
         addNodeLocal: store.addNodeLocal,
         replaceNodeLocal: store.replaceNodeLocal,
         deleteLeafLocal: store.deleteLeafLocal,
-        
-        // Tag-specific state (read-only)
+
+        // === Tag-specific state (read-only) ===
         tagGroups: computed(() => tagGroups.value),
         parentNodes: computed(() => parentNodes.value)
     };
-}
+});
