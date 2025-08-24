@@ -3,7 +3,7 @@
         <template v-if="store.isLoaded">
             <div class="d-flex flex-column"><!-- NOTE: Necessary for <TaskTree> to have vertical scrollbar -->
                 <TaskTree
-                    v-bind:items="store.forestWithTags"
+                    v-bind:items="taggedForest.forestWithTags"
                     v-bind:active="activeNodeId"
                     v-bind:open.sync="openNodes"
                     v-on:update:active="onTaskSelectionChangeInTree"
@@ -107,6 +107,7 @@ import {
 } from '@mdi/js';
 
 import { type TreeNodeRecord, useTaskForestStore } from '@/stores/taskForest';
+import { useTaggedForest } from '@/composables/useTaggedForest';
 
 import * as api from '@/api';
 import { type UUID, type Task, render } from '@/task';
@@ -115,6 +116,7 @@ import dayjs from 'dayjs';
 
 // Composables
 const store = useTaskForestStore();
+const taggedForest = useTaggedForest();
 
 // Emits
 const emit = defineEmits<{
@@ -151,7 +153,7 @@ const backlog = computed<TreeNodeRecord[]>(() => {
 
     if (isTagGroupSelected.value && selectedTagName.value) {
         // Show tasks from the selected tag group
-        targetTasks = store.childrenOf(`tag-group-${selectedTagName.value}`);
+        targetTasks = taggedForest.childrenOf(`tag-group-${selectedTagName.value}`);
     } else {
         // Show tasks based on selected node (descendants or all tasks)
         targetTasks = selectedNode.value && !isTagGroupSelected.value
@@ -179,7 +181,7 @@ const scheduled = computed<Record<string, TreeNodeRecord[]>>(() => {
     let targetTasks;
     if (isTagGroupSelected.value && selectedTagName.value) {
         // Show tasks from the selected tag group
-        targetTasks = store.childrenOf(`tag-group-${selectedTagName.value}`);
+        targetTasks = taggedForest.childrenOf(`tag-group-${selectedTagName.value}`);
     } else {
         // Show tasks based on selected node (descendants or all tasks)
         targetTasks = selectedNode.value && !isTagGroupSelected.value
@@ -249,23 +251,23 @@ onUnmounted(() => {
 // Methods
 function onTaskSelectionChangeInTree(id: UUID | undefined) {
     if (id && id.startsWith('tag-group-')) {
-        // Handle tag group selection - get the virtual node from the store
-        selectedNode.value = store.node(id);
+        // Handle tag group selection - get the virtual node from the tagged forest wrapper
+        selectedNode.value = taggedForest.node(id);
         return;
     }
 
     // Handle regular task selection
-    selectedNode.value = id ? store.node(id) : undefined;
+    selectedNode.value = id ? taggedForest.node(id) : undefined;
 }
 
 function onTaskListItemClick(id: UUID) {
-    selectedNode.value = store.node(id);
+    selectedNode.value = taggedForest.node(id);
     // Open tree up to the corresponding item
     const next = new Set(openNodes.value);
-    let parent = store.parentOf(id);
+    let parent = taggedForest.parentOf(id);
     while (parent) {
         next.add(parent);
-        parent = store.parentOf(parent);
+        parent = taggedForest.parentOf(parent);
     }
     openNodes.value = [...next];
 }
@@ -327,7 +329,7 @@ async function onSelectedTaskSave(task: Task) {
         store.addNodeLocal(parentUuid, node);
         // Select the task
         newTaskPath.value = null;
-        selectedNode.value = store.node(task.uuid);
+        selectedNode.value = taggedForest.node(task.uuid);
         // Show 'selected' tab
         itemViewTab.value = 'selected';
         // Refresh the store
