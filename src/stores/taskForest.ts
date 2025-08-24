@@ -45,6 +45,10 @@ export const useTaskForestStore = defineStore('taskForest', () => {
     // --- Forest ---
 
     const forest = computed<ApiTreeNode[]>(() => {
+        return rootIds.value.map((rid) => toApiTreeNode(rid));
+    });
+
+    const forestWithTags = computed<ApiTreeNode[]>(() => {
         // Group top-level tasks that have no children by their first tag
         const tagGroups = new Map<string, UUID[]>();
         
@@ -546,6 +550,7 @@ export const useTaskForestStore = defineStore('taskForest', () => {
         hasData,
         // -- Forest --
         forest,
+        forestWithTags,
         // -- Single node --
         selectedNode,
         // -- Flattened node list --
