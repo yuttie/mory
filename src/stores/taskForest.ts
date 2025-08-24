@@ -30,6 +30,10 @@ export const useTaskForestStore = defineStore('taskForest', () => {
     const pathToId = ref<PathToId>({});
     const rootIds = ref<UUID[]>([]);
 
+    // Preprocessed tag groups
+    const tagGroups = ref<Map<string, UUID[]>>(new Map());
+    const parentNodes = ref<UUID[]>([]);
+
     // Selection
     const selectedNodeId = ref<UUID | null>(null);
 
@@ -49,58 +53,22 @@ export const useTaskForestStore = defineStore('taskForest', () => {
     });
 
     const forestWithTags = computed<ApiTreeNode[]>(() => {
-        // Group top-level tasks that have no children by their first tag
-        const tagGroups = new Map<string, UUID[]>();
-        
-        // Find all tasks that have no parent and no children (leaf tasks at root level)
-        const leafTasksAtRoot: UUID[] = [];
-        for (const [id, parent] of Object.entries(parentById.value)) {
-            if (parent === null) {
-                // Check if this task has no children
-                const children = childrenById.value[id];
-                if (!children || children.length === 0) {
-                    leafTasksAtRoot.push(id);
-                }
-            }
-        }
-        
-        for (const taskId of leafTasksAtRoot) {
-            const node = nodesById.value[taskId];
-            if (!node) continue;
-            
-            // Get the first tag, or use "Untagged" as default
-            const firstTag = (node.metadata && typeof node.metadata === 'object' && 'tags' in node.metadata && Array.isArray(node.metadata.tags)) 
-                ? String(node.metadata.tags[0] || 'Untagged')
-                : 'Untagged';
-            
-            if (!tagGroups.has(firstTag)) {
-                tagGroups.set(firstTag, []);
-            }
-            tagGroups.get(firstTag)!.push(taskId);
-        }
-        
         const result: ApiTreeNode[] = [];
         
-        // First, add top-level tasks that have children (parent nodes)
-        for (const [id, parent] of Object.entries(parentById.value)) {
-            if (parent === null) {
-                // Check if this task has children
-                const children = childrenById.value[id];
-                if (children && children.length > 0) {
-                    result.push(toApiTreeNode(id));
-                }
-            }
+        // First, add parent nodes (tasks with children)
+        for (const parentId of parentNodes.value) {
+            result.push(toApiTreeNode(parentId));
         }
         
         // Then, add tag group nodes sorted alphabetically (with "Untagged" at the end)
-        const sortedTags = Array.from(tagGroups.keys()).sort((a, b) => {
+        const sortedTags = Array.from(tagGroups.value.keys()).sort((a, b) => {
             if (a === 'Untagged') return 1;
             if (b === 'Untagged') return -1;
             return a.localeCompare(b);
         });
         
         for (const tag of sortedTags) {
-            const taskIds = tagGroups.get(tag)!;
+            const taskIds = tagGroups.value.get(tag)!;
             // Create a virtual tag group node
             const tagGroupNode: ApiTreeNode = {
                 uuid: `tag-group-${tag}`,
@@ -192,26 +160,10 @@ export const useTaskForestStore = defineStore('taskForest', () => {
         // Handle virtual tag group nodes
         if (id.startsWith('tag-group-')) {
             const tag = id.replace('tag-group-', '');
-            // Find all top-level tasks with no children that have this tag (or no tags for "Untagged")
-            const result: TreeNodeRecord[] = [];
-            for (const [taskId, parent] of Object.entries(parentById.value)) {
-                if (parent === null) {
-                    // Check if this task has no children
-                    const children = childrenById.value[taskId];
-                    if (!children || children.length === 0) {
-                        const node = nodesById.value[taskId];
-                        if (!node) continue;
-                        
-                        const firstTag = (node.metadata && typeof node.metadata === 'object' && 'tags' in node.metadata && Array.isArray(node.metadata.tags)) 
-                            ? String(node.metadata.tags[0] || 'Untagged')
-                            : 'Untagged';
-                        if (firstTag === tag) {
-                            result.push(node);
-                        }
-                    }
-                }
-            }
-            return result;
+            const taskIds = tagGroups.value.get(tag) || [];
+            return taskIds
+                .map((taskId) => nodesById.value[taskId])
+                .filter((n): n is TreeNodeRecord => Boolean(n));
         }
         
         return (childrenById.value[id] || [])
@@ -261,25 +213,8 @@ export const useTaskForestStore = defineStore('taskForest', () => {
         // Handle virtual tag group nodes
         if (id.startsWith('tag-group-')) {
             const tag = id.replace('tag-group-', '');
-            // Find all top-level tasks with no children that have this tag
-            const children: ApiTreeNode[] = [];
-            for (const [taskId, parent] of Object.entries(parentById.value)) {
-                if (parent === null) {
-                    // Check if this task has no children
-                    const childrenOfTask = childrenById.value[taskId];
-                    if (!childrenOfTask || childrenOfTask.length === 0) {
-                        const node = nodesById.value[taskId];
-                        if (!node) continue;
-                        
-                        const firstTag = (node.metadata && typeof node.metadata === 'object' && 'tags' in node.metadata && Array.isArray(node.metadata.tags)) 
-                            ? String(node.metadata.tags[0] || 'Untagged')
-                            : 'Untagged';
-                        if (firstTag === tag) {
-                            children.push(toApiTreeNode(taskId));
-                        }
-                    }
-                }
-            }
+            const taskIds = tagGroups.value.get(tag) || [];
+            const children: ApiTreeNode[] = taskIds.map((taskId) => toApiTreeNode(taskId));
             
             return {
                 uuid: id,
@@ -356,6 +291,39 @@ export const useTaskForestStore = defineStore('taskForest', () => {
 
     // --- Ingestion ---
 
+    function preprocessTagGroups(): void {
+        const newTagGroups = new Map<string, UUID[]>();
+        const newParentNodes: UUID[] = [];
+        
+        // Find all tasks that have no parent and no children (leaf tasks at root level)
+        for (const [id, parent] of Object.entries(parentById.value)) {
+            if (parent === null) {
+                const children = childrenById.value[id];
+                if (children && children.length > 0) {
+                    // This is a parent node (top-level task with children)
+                    newParentNodes.push(id);
+                } else {
+                    // This is a leaf task at root level - group by first tag
+                    const node = nodesById.value[id];
+                    if (!node) continue;
+                    
+                    // Get the first tag, or use "Untagged" as default
+                    const firstTag = (node.metadata && typeof node.metadata === 'object' && 'tags' in node.metadata && Array.isArray(node.metadata.tags)) 
+                        ? String(node.metadata.tags[0] || 'Untagged')
+                        : 'Untagged';
+                    
+                    if (!newTagGroups.has(firstTag)) {
+                        newTagGroups.set(firstTag, []);
+                    }
+                    newTagGroups.get(firstTag)!.push(id);
+                }
+            }
+        }
+        
+        tagGroups.value = newTagGroups;
+        parentNodes.value = newParentNodes;
+    }
+
     function replaceFromServer(forest: ApiTreeNode[], etag?: string | null): void {
         const nextNodes: NodeById = {};
         const nextChildren: IdsById = {};
@@ -373,6 +341,9 @@ export const useTaskForestStore = defineStore('taskForest', () => {
         setParents(nextParents);
         setPathIndex(nextPaths);
         rootIds.value = roots;
+
+        // Preprocess tag groups after data is set
+        preprocessTagGroups();
 
         if (etag !== undefined) {
             lastETag.value = etag;
@@ -401,6 +372,9 @@ export const useTaskForestStore = defineStore('taskForest', () => {
         setParents(nextParents);
         setPathIndex(nextPaths);
         rootIds.value = Array.from(roots);
+
+        // Preprocess tag groups after data is merged
+        preprocessTagGroups();
 
         if (etag !== undefined) {
             lastETag.value = etag;
@@ -437,6 +411,9 @@ export const useTaskForestStore = defineStore('taskForest', () => {
             setChildrenOf(parent, sibs);
             setParentOf(node.uuid, parent);
         }
+        
+        // Preprocess tag groups after local changes
+        preprocessTagGroups();
     }
 
     function replaceNodeLocal(next: TreeNodeRecord): void {
@@ -449,6 +426,9 @@ export const useTaskForestStore = defineStore('taskForest', () => {
             throw new Error(`replaceNodeLocal: new path ${next.path} does not match old one ${prev.path}.`);
         }
         upsertNodeRecord(next);
+        
+        // Preprocess tag groups after local changes (in case tags changed)
+        preprocessTagGroups();
     }
 
     function deleteLeafLocal(id: UUID): void {
@@ -491,6 +471,9 @@ export const useTaskForestStore = defineStore('taskForest', () => {
         if (selectedNodeId.value === id) {
             selectedNodeId.value = null;
         }
+        
+        // Preprocess tag groups after deletion
+        preprocessTagGroups();
     }
 
     // ===== Helper functions =====
@@ -541,6 +524,8 @@ export const useTaskForestStore = defineStore('taskForest', () => {
         parentById,
         pathToId,
         rootIds,
+        tagGroups,
+        parentNodes,
         selectedNodeId,
         lastETag,
         isLoading,
