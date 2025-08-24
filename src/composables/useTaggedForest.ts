@@ -51,7 +51,7 @@ export function useTaggedForest() {
     watch(
         () => [store.nodesById, store.parentById, store.childrenById, store.rootIds],
         () => preprocessTagGroups(),
-        { deep: true, immediate: true }
+        { immediate: true }
     );
 
     // Enhanced forest with tag grouping

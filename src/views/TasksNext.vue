@@ -252,22 +252,22 @@ onUnmounted(() => {
 function onTaskSelectionChangeInTree(id: UUID | undefined) {
     if (id && id.startsWith('tag-group-')) {
         // Handle tag group selection - get the virtual node from the tagged forest wrapper
-        selectedNode.value = taggedForest.node(id);
+        selectedNode.value = store.node(id);
         return;
     }
 
     // Handle regular task selection
-    selectedNode.value = id ? taggedForest.node(id) : undefined;
+    selectedNode.value = id ? store.node(id) : undefined;
 }
 
 function onTaskListItemClick(id: UUID) {
-    selectedNode.value = taggedForest.node(id);
+    selectedNode.value = store.node(id);
     // Open tree up to the corresponding item
     const next = new Set(openNodes.value);
-    let parent = taggedForest.parentOf(id);
+    let parent = store.parentOf(id);
     while (parent) {
         next.add(parent);
-        parent = taggedForest.parentOf(parent);
+        parent = store.parentOf(parent);
     }
     openNodes.value = [...next];
 }
@@ -329,7 +329,7 @@ async function onSelectedTaskSave(task: Task) {
         store.addNodeLocal(parentUuid, node);
         // Select the task
         newTaskPath.value = null;
-        selectedNode.value = taggedForest.node(task.uuid);
+        selectedNode.value = store.node(task.uuid);
         // Show 'selected' tab
         itemViewTab.value = 'selected';
         // Refresh the store
