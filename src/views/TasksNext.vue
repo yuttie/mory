@@ -4,7 +4,7 @@
             <div class="d-flex flex-column"><!-- NOTE: Necessary for <TaskTree> to have vertical scrollbar -->
                 <TaskTree
                     v-bind:items="store.forest"
-                    v-bind:active="selectedNode?.uuid"
+                    v-bind:active="activeNodeId"
                     v-bind:open.sync="openNodes"
                     v-on:update:active="onTaskSelectionChangeInTree"
                     style="flex: 1 1 0"
@@ -131,6 +131,13 @@ const newTaskPath = ref<string | null>(null);
 const error = ref<string | null>(null);
 
 // Computed properties
+const activeNodeId = computed<string | undefined>(() => {
+    if (selectedTagGroup.value) {
+        return `tag-group-${selectedTagGroup.value}`;
+    }
+    return selectedNode.value?.uuid;
+});
+
 const backlog = computed<TreeNodeRecord[]>(() => {
     const backlog = [];
     let targetTasks;
