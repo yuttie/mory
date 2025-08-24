@@ -14,13 +14,13 @@
                 <div class="d-flex flex-row">
                     <v-tabs v-model="itemViewTab">
                         <v-tab
-                            v-if="(newTaskPath ?? selectedNode) && !selectedTagGroup"
+                            v-if="(newTaskPath ?? selectedNode) && !isTagGroupSelected"
                             tab-value="selected"
                         >
                             {{ newTaskPath ? 'New' : 'Selected' }}
                         </v-tab>
                         <v-tab tab-value="descendants">
-                            {{ selectedTagGroup ? 'Tagged Tasks' : selectedNode ? 'Descendants' : 'All tasks' }}
+                            {{ isTagGroupSelected ? 'Tagged Tasks' : selectedNode ? 'Descendants' : 'All tasks' }}
                         </v-tab>
                     </v-tabs>
                 </div>
@@ -29,7 +29,7 @@
                     class="d-flex flex-column"
                     style="flex: 1 1 0; background: transparent;"
                 >
-                    <v-tab-item v-if="(newTaskPath ?? selectedNode) && !selectedTagGroup" value="selected">
+                    <v-tab-item v-if="(newTaskPath ?? selectedNode) && !isTagGroupSelected" value="selected">
                         <TaskEditorNext
                             ref="taskEditorRef"
                             v-bind:task-path="newTaskPath ?? selectedNode.path"
@@ -41,7 +41,7 @@
                         />
                     </v-tab-item>
                     <v-tab-item value="descendants">
-                        <v-toolbar flat outlined dense class="flex-grow-0" v-if="!selectedTagGroup">
+                        <v-toolbar flat outlined dense class="flex-grow-0" v-if="!isTagGroupSelected">
                             <!-- New task button -->
                             <v-btn
                                 title="Add"
@@ -125,29 +125,36 @@ const emit = defineEmits<{
 const taskEditorRef = ref<any>(null);
 const itemViewTab = ref<string>('descendants');
 const selectedNode = ref<TreeNodeRecord | undefined>(undefined);
-const selectedTagGroup = ref<string | null>(null);
 const openNodes = ref<UUID[]>([]);
 const newTaskPath = ref<string | null>(null);
 const error = ref<string | null>(null);
 
 // Computed properties
 const activeNodeId = computed<string | undefined>(() => {
-    if (selectedTagGroup.value) {
-        return `tag-group-${selectedTagGroup.value}`;
-    }
     return selectedNode.value?.uuid;
+});
+
+const isTagGroupSelected = computed<boolean>(() => {
+    return selectedNode.value?.uuid?.startsWith('tag-group-') ?? false;
+});
+
+const selectedTagName = computed<string | null>(() => {
+    if (isTagGroupSelected.value && selectedNode.value?.uuid) {
+        return selectedNode.value.uuid.replace('tag-group-', '');
+    }
+    return null;
 });
 
 const backlog = computed<TreeNodeRecord[]>(() => {
     const backlog = [];
     let targetTasks;
     
-    if (selectedTagGroup.value) {
+    if (isTagGroupSelected.value && selectedTagName.value) {
         // Show tasks from the selected tag group
-        targetTasks = store.childrenOf(`tag-group-${selectedTagGroup.value}`);
+        targetTasks = store.childrenOf(`tag-group-${selectedTagName.value}`);
     } else {
         // Show tasks based on selected node (descendants or all tasks)
-        targetTasks = selectedNode.value
+        targetTasks = selectedNode.value && !isTagGroupSelected.value
             ? store.flattenDescendants(selectedNode.value.uuid)
             : store.allTasks;
     }
@@ -170,12 +177,12 @@ const scheduled = computed<Record<string, TreeNodeRecord[]>>(() => {
     };
     
     let targetTasks;
-    if (selectedTagGroup.value) {
+    if (isTagGroupSelected.value && selectedTagName.value) {
         // Show tasks from the selected tag group
-        targetTasks = store.childrenOf(`tag-group-${selectedTagGroup.value}`);
+        targetTasks = store.childrenOf(`tag-group-${selectedTagName.value}`);
     } else {
         // Show tasks based on selected node (descendants or all tasks)
-        targetTasks = selectedNode.value
+        targetTasks = selectedNode.value && !isTagGroupSelected.value
             ? store.flattenDescendants(selectedNode.value.uuid)
             : store.allTasks;
     }
@@ -218,23 +225,12 @@ const knownContacts = computed<[string, number][]>(() => {
 
 // Watchers
 watch(selectedNode, (node) => {
-    if (node) {
-        // Clear tag group selection when a task is selected
-        selectedTagGroup.value = null;
-        // Open 'selected' tab when a task is selected
+    if (node && !node.uuid.startsWith('tag-group-')) {
+        // Open 'selected' tab when a regular task is selected
         itemViewTab.value = 'selected';
     }
     else {
-        // Open 'descendants' tab when nothing is selected
-        itemViewTab.value = 'descendants';
-    }
-});
-
-watch(selectedTagGroup, (tagGroup) => {
-    if (tagGroup) {
-        // Clear task selection when a tag group is selected
-        selectedNode.value = undefined;
-        // Open 'descendants' tab when a tag group is selected (will show as "Tagged Tasks")
+        // Open 'descendants' tab when nothing is selected or a tag group is selected
         itemViewTab.value = 'descendants';
     }
 });
@@ -253,20 +249,16 @@ onUnmounted(() => {
 // Methods
 function onTaskSelectionChangeInTree(id: UUID | undefined) {
     if (id && id.startsWith('tag-group-')) {
-        // Handle tag group selection
-        const tagName = id.replace('tag-group-', '');
-        selectedTagGroup.value = tagName;
-        selectedNode.value = undefined;
+        // Handle tag group selection - get the virtual node from the store
+        selectedNode.value = store.node(id);
         return;
     }
     
     // Handle regular task selection
-    selectedTagGroup.value = null;
     selectedNode.value = id ? store.node(id) : undefined;
 }
 
 function onTaskListItemClick(id: UUID) {
-    selectedTagGroup.value = null;
     selectedNode.value = store.node(id);
     // Open tree up to the corresponding item
     const next = new Set(openNodes.value);
@@ -292,7 +284,7 @@ function newTask() {
     }
     newTaskPath.value = parentDir + '/' + crypto.randomUUID() + '.md';
     // Clear tag group selection and show 'selected' tab
-    selectedTagGroup.value = null;
+    selectedNode.value = undefined;
     itemViewTab.value = 'selected';
 }
 
