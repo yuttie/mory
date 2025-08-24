@@ -11,6 +11,7 @@ export function useTaggedForest() {
 
     // Tag-specific state
     const tagGroups = ref<Map<string, UUID[]>>(new Map());
+    const sortedTagKeys = ref<string[]>([]);
     const parentNodes = ref<UUID[]>([]);
 
     // Preprocess tag groups whenever the forest changes
@@ -43,7 +44,15 @@ export function useTaggedForest() {
             }
         }
 
+        // Sort tag keys alphabetically with "Untagged" at the end
+        const newSortedTagKeys = Array.from(newTagGroups.keys()).sort((a, b) => {
+            if (a === 'Untagged') return 1;
+            if (b === 'Untagged') return -1;
+            return a.localeCompare(b);
+        });
+
         tagGroups.value = newTagGroups;
+        sortedTagKeys.value = newSortedTagKeys;
         parentNodes.value = newParentNodes;
     };
 
@@ -63,14 +72,8 @@ export function useTaggedForest() {
             result.push(store.toApiTreeNode(parentId));
         }
 
-        // Then, add tag group nodes sorted alphabetically (with "Untagged" at the end)
-        const sortedTags = Array.from(tagGroups.value.keys()).sort((a, b) => {
-            if (a === 'Untagged') return 1;
-            if (b === 'Untagged') return -1;
-            return a.localeCompare(b);
-        });
-
-        for (const tag of sortedTags) {
+        // Then, add tag group nodes using pre-sorted tags
+        for (const tag of sortedTagKeys.value) {
             const taskIds = tagGroups.value.get(tag)!;
             // Create a virtual tag group node
             const tagGroupNode: ApiTreeNode = {
