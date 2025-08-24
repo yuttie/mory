@@ -157,19 +157,19 @@ export function useTaggedForest() {
     };
 
     return {
+        // Re-export all basic store functionality first
+        ...store,
+        
         // Enhanced tree with tags
         forestWithTags,
         
-        // Enhanced accessors
+        // Enhanced accessors (override store methods)
         node,
         childrenOf,
         parentOf,
         
         // Tag-specific state (read-only)
         tagGroups: computed(() => tagGroups.value),
-        parentNodes: computed(() => parentNodes.value),
-        
-        // Re-export all basic store functionality
-        ...store
+        parentNodes: computed(() => parentNodes.value)
     };
 }
