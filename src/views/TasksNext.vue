@@ -14,7 +14,7 @@
                 <div class="d-flex flex-row">
                     <v-tabs v-model="itemViewTab">
                         <v-tab
-                            v-if="(newTaskPath ?? selectedNode) && !isTagGroupSelected"
+                            v-if="newTaskPath || selectedNode && !isTagGroupSelected"
                             tab-value="selected"
                         >
                             {{ newTaskPath ? 'New' : 'Selected' }}
@@ -29,7 +29,7 @@
                     class="d-flex flex-column"
                     style="flex: 1 1 0; background: transparent;"
                 >
-                    <v-tab-item v-if="(newTaskPath ?? selectedNode) && !isTagGroupSelected" value="selected">
+                    <v-tab-item v-if="newTaskPath || selectedNode && !isTagGroupSelected" value="selected">
                         <TaskEditorNext
                             ref="taskEditorRef"
                             v-bind:task-path="newTaskPath ?? selectedNode.path"
@@ -279,8 +279,7 @@ function newTask() {
         parentDir = '.tasks';
     }
     newTaskPath.value = parentDir + '/' + crypto.randomUUID() + '.md';
-    // Clear tag group selection and show 'selected' tab
-    selectedNode.value = undefined;
+    // Show 'selected' tab
     itemViewTab.value = 'selected';
 }
 
