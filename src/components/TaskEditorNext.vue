@@ -495,8 +495,15 @@ const isModified = computed<boolean>(() => {
 // Watchers
 watch(
     task,
-    (t) => {
-        resetFromTask(t);
+    (newTask, oldTask) => {
+        // If both old and new task values are undefined/null, 
+        // we're switching parents during new task creation - preserve form
+        if ((newTask === null || newTask === undefined) && 
+            (oldTask === null || oldTask === undefined)) {
+            return; // Don't reset the form
+        }
+        
+        resetFromTask(newTask);
     },
     { immediate: true },
 );
