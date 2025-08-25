@@ -3,8 +3,8 @@
         <template v-if="store.isLoaded">
             <div class="d-flex flex-column"><!-- NOTE: Necessary for <TaskTree> to have vertical scrollbar -->
                 <TaskTree
-                    v-bind:items="store.forest"
-                    v-bind:active="selectedNode?.uuid"
+                    v-bind:items="store.forestWithTags"
+                    v-bind:active="activeNodeId"
                     v-bind:open.sync="openNodes"
                     v-on:update:active="onTaskSelectionChangeInTree"
                     style="flex: 1 1 0"
@@ -14,13 +14,13 @@
                 <div class="d-flex flex-row">
                     <v-tabs v-model="itemViewTab">
                         <v-tab
-                            v-if="newTaskPath ?? selectedNode"
+                            v-if="newTaskPath || selectedNode && !isTagGroupSelected"
                             tab-value="selected"
                         >
                             {{ newTaskPath ? 'New' : 'Selected' }}
                         </v-tab>
                         <v-tab tab-value="descendants">
-                            {{ selectedNode ? 'Descendants' : 'All tasks' }}
+                            {{ isTagGroupSelected ? 'Tagged Tasks' : selectedNode ? 'Descendants' : 'All tasks' }}
                         </v-tab>
                     </v-tabs>
                 </div>
@@ -29,7 +29,7 @@
                     class="d-flex flex-column"
                     style="flex: 1 1 0; background: transparent;"
                 >
-                    <v-tab-item v-if="newTaskPath ?? selectedNode" value="selected">
+                    <v-tab-item v-if="newTaskPath || selectedNode && !isTagGroupSelected" value="selected">
                         <TaskEditorNext
                             ref="taskEditorRef"
                             v-bind:task-path="newTaskPath ?? selectedNode.path"
@@ -41,7 +41,7 @@
                         />
                     </v-tab-item>
                     <v-tab-item value="descendants">
-                        <v-toolbar flat outlined dense class="flex-grow-0">
+                        <v-toolbar flat outlined dense class="flex-grow-0" v-if="!isTagGroupSelected">
                             <!-- New task button -->
                             <v-btn
                                 title="Add"
@@ -106,15 +106,16 @@ import {
     mdiPlus,
 } from '@mdi/js';
 
-import { type TreeNodeRecord, useTaskForestStore } from '@/stores/taskForest';
+import { type TreeNodeRecord } from '@/stores/taskForest';
+import { useTaggedTaskForestStore } from '@/stores/taggedTaskForest';
 
 import * as api from '@/api';
 import { type UUID, type Task, render } from '@/task';
 import axios from 'axios';
 import dayjs from 'dayjs';
 
-// Composables
-const store = useTaskForestStore();
+// Stores
+const store = useTaggedTaskForestStore();
 
 // Emits
 const emit = defineEmits<{
@@ -130,11 +131,36 @@ const newTaskPath = ref<string | null>(null);
 const error = ref<string | null>(null);
 
 // Computed properties
+const activeNodeId = computed<string | undefined>(() => {
+    return selectedNode.value?.uuid;
+});
+
+const isTagGroupSelected = computed<boolean>(() => {
+    return activeNodeId.value?.startsWith('tag-group-') ?? false;
+});
+
+const selectedTagName = computed<string | null>(() => {
+    if (activeNodeId.value && isTagGroupSelected.value) {
+        return selectedNode.value.uuid.replace('tag-group-', '');
+    }
+    return null;
+});
+
 const backlog = computed<TreeNodeRecord[]>(() => {
     const backlog = [];
-    const targetTasks = selectedNode.value
-        ? store.flattenDescendants(selectedNode.value.uuid)
-        : store.allTasks;
+
+    let targetTasks;
+    if (isTagGroupSelected.value && selectedTagName.value) {
+        // Show tasks from the selected tag group
+        targetTasks = store.childrenOf(`tag-group-${selectedTagName.value}`);
+    }
+    else {
+        // Show tasks based on selected node (descendants or all tasks)
+        targetTasks = selectedNode.value && !isTagGroupSelected.value
+            ? store.flattenDescendants(selectedNode.value.uuid)
+            : store.allTasks;
+    }
+
     for (const t of targetTasks) {
         if (!t.metadata?.task?.scheduled_dates?.length) {
             backlog.push(t);
@@ -151,9 +177,19 @@ const scheduled = computed<Record<string, TreeNodeRecord[]>>(() => {
         [today]: [],
         [tomorrow]: [],
     };
-    const targetTasks = selectedNode.value
-        ? store.flattenDescendants(selectedNode.value.uuid)
-        : store.allTasks;
+
+    let targetTasks;
+    if (isTagGroupSelected.value && selectedTagName.value) {
+        // Show tasks from the selected tag group
+        targetTasks = store.childrenOf(`tag-group-${selectedTagName.value}`);
+    }
+    else {
+        // Show tasks based on selected node (descendants or all tasks)
+        targetTasks = selectedNode.value && !isTagGroupSelected.value
+            ? store.flattenDescendants(selectedNode.value.uuid)
+            : store.allTasks;
+    }
+
     for (const t of targetTasks) {
         if (t.metadata?.task?.scheduled_dates) {
             for (const date of t.metadata.task.scheduled_dates) {
@@ -192,12 +228,12 @@ const knownContacts = computed<[string, number][]>(() => {
 
 // Watchers
 watch(selectedNode, (node) => {
-    if (node) {
-        // Open 'selected' tab when a task is selected
+    if (node && !node.uuid.startsWith('tag-group-')) {
+        // Open 'selected' tab when a regular task is selected
         itemViewTab.value = 'selected';
     }
     else {
-        // Open 'descendants' tab when nothing is selected
+        // Open 'descendants' tab when nothing is selected or a tag group is selected
         itemViewTab.value = 'descendants';
     }
 });
@@ -232,8 +268,8 @@ function onTaskListItemClick(id: UUID) {
 
 function newTask() {
     let parentDir;
-    if (selectedNode.value) {
-        // Create a task under the selected one
+    if (selectedNode.value && !isTagGroupSelected.value) {
+        // Create a task under the selected one (but not under tag groups)
         const selected = selectedNode.value;
         const idx = selected.path.lastIndexOf('/');
         parentDir = selected.path.slice(0, idx) + '/' + selected.uuid;
@@ -315,7 +351,7 @@ async function onSelectedTaskDelete(path: string) {
     // Update the store locally for immediate update
     store.deleteLeafLocal(uuid);
     // Unselect
-    if (selectedNode.value?.uuid === uuid) {
+    if (activeNodeId.value === uuid) {
         selectedNode.value = undefined;
     }
     // Refresh the store
