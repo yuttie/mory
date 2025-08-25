@@ -251,13 +251,6 @@ onUnmounted(() => {
 
 // Methods
 function onTaskSelectionChangeInTree(id: UUID | undefined) {
-    if (id && id.startsWith('tag-group-')) {
-        // Handle tag group selection - get the virtual node from the tagged forest wrapper
-        selectedNode.value = store.node(id);
-        return;
-    }
-
-    // Handle regular task selection
     selectedNode.value = id ? store.node(id) : undefined;
 }
 
