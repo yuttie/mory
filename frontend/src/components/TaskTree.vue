@@ -13,7 +13,7 @@
     >
         <template v-slot:prepend="{ item, open }">
             <v-icon v-if="item.children" dense>
-                {{ open ? mdiFolderOpen : mdiFolder }}
+                {{ item.metadata?.task?.status?.kind === 'done' ? mdiCheckboxMultipleMarkedOutline : mdiCheckboxMultipleBlankOutline }}
             </v-icon>
             <v-icon v-else dense>
                 {{ item.metadata?.task?.status?.kind === 'done' ? mdiCheckboxMarkedOutline : mdiCheckboxBlankOutline }}
@@ -29,8 +29,8 @@ import type { Ref } from 'vue';
 import {
     mdiCheckboxBlankOutline,
     mdiCheckboxMarkedOutline,
-    mdiFolder,
-    mdiFolderOpen,
+    mdiCheckboxMultipleBlankOutline,
+    mdiCheckboxMultipleMarkedOutline,
 } from '@mdi/js';
 
 import type { UUID, ApiTreeNode } from '@/api/task';
