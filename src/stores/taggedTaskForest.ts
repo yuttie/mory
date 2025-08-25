@@ -12,8 +12,8 @@ export const useTaggedTaskForestStore = defineStore('taggedTaskForest', () => {
 
     // Tag-specific state
     const tagGroups = ref<Map<string, UUID[]>>(new Map());
-    const sortedTagKeys = ref<string[]>([]);
-    const parentNodes = ref<UUID[]>([]);
+    const sortedTags = ref<string[]>([]);
+    const parentNodeIds = ref<UUID[]>([]);
     const tagGroupNodeCache = ref<Map<string, TreeNodeRecord>>(new Map());
 
     // Preprocess tag groups whenever the forest changes
@@ -21,52 +21,53 @@ export const useTaggedTaskForestStore = defineStore('taggedTaskForest', () => {
         // Only process if store has data
         if (!store.hasData) {
             tagGroups.value = new Map();
-            sortedTagKeys.value = [];
-            parentNodes.value = [];
+            sortedTags.value = [];
+            parentNodeIds.value = [];
             tagGroupNodeCache.value = new Map();
             return;
         }
 
         const newTagGroups = new Map<string, UUID[]>();
-        const newParentNodes: UUID[] = [];
-        const newTagGroupCache = new Map<string, TreeNodeRecord>();
+        const newParentNodeIds: UUID[] = [];
+        const newTagGroupNodeCache = new Map<string, TreeNodeRecord>();
 
-        // Find all tasks that have no parent and no children (leaf tasks at root level)
+        // Find all parent tasks and leaf tasks at root level
+        // - Parent tasks: ones that have no parent and some children
+        // - Leaf tasks: ones that have no parent and no children
         for (const [id, parent] of Object.entries(store.parentById)) {
-            if (parent === null) {
-                const children = store.childrenById[id];
-                if (children && children.length > 0) {
-                    // This is a parent node (top-level task with children)
-                    newParentNodes.push(id);
-                } else {
-                    // This is a leaf task at root level - group by first tag
-                    const node = store.nodesById[id];
-                    if (!node) continue;
+            if (parent !== null) { continue; }
+            const children = store.childrenById[id];
+            if (children && children.length > 0) {
+                // This is a parent node (top-level task with children)
+                newParentNodeIds.push(id);
+            } else {
+                // This is a leaf task at root level - group by first tag
+                const node = store.nodesById[id];
+                if (!node) { continue; }
 
-                    // Get the first tag, or use "Untagged" as default
-                    const firstTag = (node.metadata && typeof node.metadata === 'object' && 'tags' in node.metadata && Array.isArray(node.metadata.tags))
-                        ? String(node.metadata.tags[0] || 'Untagged')
-                        : 'Untagged';
+                // Get the first tag, or use "Untagged" as default
+                const firstTag = (node.metadata && typeof node.metadata === 'object' && 'tags' in node.metadata && Array.isArray(node.metadata.tags))
+                    ? String(node.metadata.tags[0] || 'Untagged')
+                    : 'Untagged';
 
-                    if (!newTagGroups.has(firstTag)) {
-                        newTagGroups.set(firstTag, []);
-                    }
-                    newTagGroups.get(firstTag)!.push(id);
+                if (!newTagGroups.has(firstTag)) {
+                    newTagGroups.set(firstTag, []);
                 }
+                newTagGroups.get(firstTag)!.push(id);
             }
         }
 
         // Sort tag keys alphabetically with "Untagged" at the end
-        const newSortedTagKeys = Array.from(newTagGroups.keys()).sort((a, b) => {
+        const newSortedTags = Array.from(newTagGroups.keys()).sort((a, b) => {
             if (a === 'Untagged') return 1;
             if (b === 'Untagged') return -1;
             return a.localeCompare(b);
         });
 
         // Create cached virtual tag group nodes for stable object identity
-        for (const tag of newSortedTagKeys) {
+        for (const tag of newSortedTags) {
             const tagGroupId = `tag-group-${tag}`;
-            newTagGroupCache.set(tagGroupId, {
+            newTagGroupNodeCache.set(tagGroupId, {
                 uuid: tagGroupId,
                 name: null,
                 path: `.tags/${tag}`,
@@ -74,21 +75,21 @@ export const useTaggedTaskForestStore = defineStore('taggedTaskForest', () => {
                 mime_type: 'application/x-tag-group',
                 metadata: { tag_group: tag },
                 title: tag,
-                mtime: new Date().toISOString()
+                mtime: new Date().toISOString(),
             });
         }
 
         tagGroups.value = newTagGroups;
-        sortedTagKeys.value = newSortedTagKeys;
-        parentNodes.value = newParentNodes;
-        tagGroupNodeCache.value = newTagGroupCache;
+        sortedTags.value = newSortedTags;
+        parentNodeIds.value = newParentNodeIds;
+        tagGroupNodeCache.value = newTagGroupNodeCache;
     };
 
     // Watch for changes in the forest to reprocess tag groups
     watch(
         () => [store.nodesById, store.parentById, store.childrenById, store.rootIds],
         () => preprocessTagGroups(),
-        { immediate: true }
+        { immediate: true },
     );
 
     // Enhanced forest with tag grouping
@@ -101,14 +102,14 @@ export const useTaggedTaskForestStore = defineStore('taggedTaskForest', () => {
             const result: ApiTreeNode[] = [];
 
             // First, add parent nodes (tasks with children)
-            for (const parentId of parentNodes.value) {
+            for (const parentId of parentNodeIds.value) {
                 if (store.nodesById[parentId]) {
                     result.push(store.toApiTreeNode(parentId));
                 }
             }
 
             // Then, add tag group nodes using pre-sorted tags
-            for (const tag of sortedTagKeys.value) {
+            for (const tag of sortedTags.value) {
                 const taskIds = tagGroups.value.get(tag)!;
                 // Create a virtual tag group node
                 const tagGroupNode: ApiTreeNode = {
@@ -122,7 +123,7 @@ export const useTaggedTaskForestStore = defineStore('taggedTaskForest', () => {
                     mtime: new Date().toISOString(),
                     children: taskIds
                         .filter((taskId) => store.nodesById[taskId])
-                        .map((taskId) => store.toApiTreeNode(taskId))
+                        .map((taskId) => store.toApiTreeNode(taskId)),
                 };
                 result.push(tagGroupNode);
             }
@@ -233,6 +234,6 @@ export const useTaggedTaskForestStore = defineStore('taggedTaskForest', () => {
 
         // === Tag-specific state (read-only) ===
         tagGroups: computed(() => tagGroups.value),
-        parentNodes: computed(() => parentNodes.value)
+        parentNodeIds: computed(() => parentNodeIds.value)
     };
 });
