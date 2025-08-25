@@ -50,8 +50,8 @@ export const useTaskForestStore = defineStore('taskForest', () => {
 
     // --- Single node ---
 
-    const selectedNode = computed<TreeNodeRecord>(() =>
-        nodesById.value[selectedNodeId.value] ?? null
+    const selectedNode = computed<TreeNodeRecord | null>(() =>
+        selectedNodeId.value ? nodesById.value[selectedNodeId.value] ?? null : null
     );
 
     // --- Flattened node list  ---
