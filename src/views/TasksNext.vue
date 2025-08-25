@@ -148,12 +148,13 @@ const selectedTagName = computed<string | null>(() => {
 
 const backlog = computed<TreeNodeRecord[]>(() => {
     const backlog = [];
-    let targetTasks;
 
+    let targetTasks;
     if (isTagGroupSelected.value && selectedTagName.value) {
         // Show tasks from the selected tag group
         targetTasks = store.childrenOf(`tag-group-${selectedTagName.value}`);
-    } else {
+    }
+    else {
         // Show tasks based on selected node (descendants or all tasks)
         targetTasks = selectedNode.value && !isTagGroupSelected.value
             ? store.flattenDescendants(selectedNode.value.uuid)
@@ -181,7 +182,8 @@ const scheduled = computed<Record<string, TreeNodeRecord[]>>(() => {
     if (isTagGroupSelected.value && selectedTagName.value) {
         // Show tasks from the selected tag group
         targetTasks = store.childrenOf(`tag-group-${selectedTagName.value}`);
-    } else {
+    }
+    else {
         // Show tasks based on selected node (descendants or all tasks)
         targetTasks = selectedNode.value && !isTagGroupSelected.value
             ? store.flattenDescendants(selectedNode.value.uuid)
