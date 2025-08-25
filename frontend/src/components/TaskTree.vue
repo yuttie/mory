@@ -12,7 +12,10 @@
         class="task-tree"
     >
         <template v-slot:prepend="{ item, open }">
-            <v-icon v-if="item.children" dense>
+            <v-icon v-if="item.metadata?.tag_group" dense>
+                {{ mdiTag }}
+            </v-icon>
+            <v-icon v-else-if="item.children" dense>
                 {{ item.metadata?.task?.status?.kind === 'done' ? mdiCheckboxMultipleMarkedOutline : mdiCheckboxMultipleBlankOutline }}
             </v-icon>
             <v-icon v-else dense>
@@ -31,6 +34,7 @@ import {
     mdiCheckboxMarkedOutline,
     mdiCheckboxMultipleBlankOutline,
     mdiCheckboxMultipleMarkedOutline,
+    mdiTag,
 } from '@mdi/js';
 
 import type { UUID, ApiTreeNode } from '@/api/task';
