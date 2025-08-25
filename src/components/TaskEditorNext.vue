@@ -9,7 +9,7 @@
             v-on:submit.prevent="onSave"
         >
             <v-card-title>
-                {{ isEdit ? 'Edit Task' : 'New Task' }}
+                {{ isEdit ? 'Edit Task' : (props.parentTaskTitle ? `New Task as subtask of ${props.parentTaskTitle}` : 'New Task') }}
                 <v-btn
                     v-if="isEdit"
                     v-bind:to="{ path: `/note/${taskPath}` }"
@@ -353,6 +353,7 @@ const props = defineProps<{
     taskPath: string;
     knownTags: [string, number][];
     knownContacts: [string, number][];
+    parentTaskTitle?: string;
 }>();
 const pathRef = toRef(props, 'taskPath');
 
@@ -494,8 +495,15 @@ const isModified = computed<boolean>(() => {
 // Watchers
 watch(
     task,
-    (t) => {
-        resetFromTask(t);
+    (newTask, oldTask) => {
+        // If both old and new task values are undefined/null, 
+        // we're switching parents during new task creation - preserve form
+        if ((newTask === null || newTask === undefined) && 
+            (oldTask === null || oldTask === undefined)) {
+            return; // Don't reset the form
+        }
+        
+        resetFromTask(newTask);
     },
     { immediate: true },
 );
