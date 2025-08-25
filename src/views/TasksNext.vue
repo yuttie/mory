@@ -268,7 +268,7 @@ function onTaskListItemClick(id: UUID) {
 
 function newTask() {
     let parentDir;
-    if (selectedNode.value && !selectedNode.value.uuid.startsWith('tag-group-')) {
+    if (selectedNode.value && !isTagGroupSelected.value) {
         // Create a task under the selected one (but not under tag groups)
         const selected = selectedNode.value;
         const idx = selected.path.lastIndexOf('/');
