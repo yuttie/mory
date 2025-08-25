@@ -232,10 +232,20 @@ watch(selectedNode, (node) => {
     if (node && !node.uuid.startsWith('tag-group-')) {
         // Open 'selected' tab when a regular task is selected
         itemViewTab.value = 'selected';
+        
+        // If we're creating a new task, update the parent directory
+        if (newTaskPath.value) {
+            updateNewTaskParent();
+        }
     }
     else {
         // Open 'descendants' tab when nothing is selected or a tag group is selected
         itemViewTab.value = 'descendants';
+        
+        // If we're creating a new task and no node is selected, update to root
+        if (newTaskPath.value) {
+            updateNewTaskParent();
+        }
     }
 });
 
@@ -268,6 +278,14 @@ function onTaskListItemClick(id: UUID) {
 }
 
 function newTask() {
+    // Generate new UUID for the task
+    const taskUuid = crypto.randomUUID();
+    newTaskPath.value = getNewTaskPath(taskUuid);
+    // Show 'selected' tab
+    itemViewTab.value = 'selected';
+}
+
+function getNewTaskPath(taskUuid: string): string {
     let parentDir;
     if (selectedNode.value && !isTagGroupSelected.value) {
         // Create a task under the selected one (but not under tag groups)
@@ -279,9 +297,19 @@ function newTask() {
         // Create a task under the root
         parentDir = '.tasks';
     }
-    newTaskPath.value = parentDir + '/' + crypto.randomUUID() + '.md';
-    // Show 'selected' tab
-    itemViewTab.value = 'selected';
+    return parentDir + '/' + taskUuid + '.md';
+}
+
+function updateNewTaskParent() {
+    if (!newTaskPath.value) return;
+    
+    // Extract the UUID from the current newTaskPath
+    const pathParts = newTaskPath.value.split('/');
+    const filename = pathParts[pathParts.length - 1];
+    const taskUuid = filename.replace('.md', '');
+    
+    // Update the path with the new parent but same UUID
+    newTaskPath.value = getNewTaskPath(taskUuid);
 }
 
 async function onSelectedTaskSave(task: Task) {
