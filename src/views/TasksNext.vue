@@ -136,11 +136,11 @@ const activeNodeId = computed<string | undefined>(() => {
 });
 
 const isTagGroupSelected = computed<boolean>(() => {
-    return selectedNode.value?.uuid?.startsWith('tag-group-') ?? false;
+    return activeNodeId.value?.startsWith('tag-group-') ?? false;
 });
 
 const selectedTagName = computed<string | null>(() => {
-    if (isTagGroupSelected.value && selectedNode.value?.uuid) {
+    if (activeNodeId.value && isTagGroupSelected.value) {
         return selectedNode.value.uuid.replace('tag-group-', '');
     }
     return null;
@@ -357,7 +357,7 @@ async function onSelectedTaskDelete(path: string) {
     // Update the store locally for immediate update
     store.deleteLeafLocal(uuid);
     // Unselect
-    if (selectedNode.value?.uuid === uuid) {
+    if (activeNodeId.value === uuid) {
         selectedNode.value = undefined;
     }
     // Refresh the store
