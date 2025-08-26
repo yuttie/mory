@@ -60,12 +60,15 @@
                 <!-- PDF viewer -->
                 <template v-else-if="mediaType === 'pdf'">
                     <div class="pdf-viewer">
-                        <embed
+                        <iframe
                             v-bind:src="mediaUrl"
                             type="application/pdf"
                             width="100%"
                             height="800px"
-                        />
+                            frameborder="0"
+                        >
+                            <p>Your browser does not support embedded PDFs. <a v-bind:href="mediaUrl" target="_blank">Click here to view the PDF</a></p>
+                        </iframe>
                         <div class="media-info">
                             <h2>{{ filename }}</h2>
                             <p>{{ mimeType }}</p>
@@ -244,7 +247,7 @@ function onMediaError() {
   margin: auto;
 }
 
-.pdf-viewer embed {
+.pdf-viewer iframe {
   flex: 1;
   min-height: 800px;
 }
