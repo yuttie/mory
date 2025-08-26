@@ -240,19 +240,8 @@ watch(selectedNode, (node) => {
             updateNewTaskParent();
         }
     }
-    else if (node && node.uuid.startsWith('tag-group-')) {
-        // Tag group selected
-        if (newTaskPath.value) {
-            // If we're creating a new task, switch to selected tab and update parent
-            itemViewTab.value = 'selected';
-            updateNewTaskParent();
-        } else {
-            // If not creating a new task, show descendants
-            itemViewTab.value = 'descendants';
-        }
-    }
     else {
-        // Nothing selected
+        // Tag group selected or nothing selected
         if (newTaskPath.value) {
             // If we're creating a new task, switch to selected tab and update parent
             itemViewTab.value = 'selected';
