@@ -15,13 +15,14 @@
             dismissible
             style="z-index: 100; margin-bottom: 2px;"
         >{{ error.message }}</v-alert>
+        <!-- Navigation drawer for desktop -->
         <v-navigation-drawer
+            v-if="!$vuetify.breakpoint.xs"
             app
             clipped
             v-bind:mini-variant="miniMainSidebar"
             v-bind:expand-on-hover="miniMainSidebar"
             permanent
-            v-if="!$vuetify.breakpoint.xs"
         >
             <v-list dense nav>
                 <v-list-item
@@ -62,6 +63,68 @@
                 dense
                 nav
             >
+                <v-list-item color="primary" link to="/"><v-list-item-icon><v-icon dense>{{ mdiHomeOutline }}</v-icon></v-list-item-icon><v-list-item-title>Home</v-list-item-title></v-list-item>
+                <v-list-item color="primary" link to="/calendar"><v-list-item-icon><v-icon dense>{{ mdiCalendarOutline }}</v-icon></v-list-item-icon><v-list-item-title>Calendar</v-list-item-title></v-list-item>
+                <v-list-item color="primary" link to="/tasks"><v-list-item-icon><v-icon dense>{{ mdiBallotOutline }}</v-icon></v-list-item-icon><v-list-item-title>Tasks</v-list-item-title></v-list-item>
+                <v-list-item color="primary" link to="/tasks-next"><v-list-item-icon><v-icon dense>{{ mdiBallotOutline }}</v-icon></v-list-item-icon><v-list-item-title>Tasks (New)</v-list-item-title></v-list-item>
+                <v-list-item color="primary" link to="/files"><v-list-item-icon><v-icon dense>{{ mdiFileDocumentMultipleOutline }}</v-icon></v-list-item-icon><v-list-item-title>Files</v-list-item-title></v-list-item>
+                <v-list-item color="primary" link to="/search"><v-list-item-icon><v-icon dense>{{ mdiMagnify }}</v-icon></v-list-item-icon><v-list-item-title>Search</v-list-item-title></v-list-item>
+                <v-list-item color="primary" link to="/config"><v-list-item-icon><v-icon dense>{{ mdiCogOutline }}</v-icon></v-list-item-icon><v-list-item-title>Config</v-list-item-title></v-list-item>
+                <v-list-item color="primary" link to="/about"><v-list-item-icon><v-icon dense>{{ mdiInformationOutline }}</v-icon></v-list-item-icon><v-list-item-title>About</v-list-item-title></v-list-item>
+            </v-list>
+
+            <v-divider></v-divider>
+
+            <v-list>
+                <v-treeview
+                    v-bind:active.sync="noteTreeActive"
+                    v-bind:items="noteTreeRoot"
+                    v-bind:load-children="populateTagChildren"
+                    v-bind:open.sync="noteTreeOpen"
+                    activatable
+                    open-on-click
+                    transition
+                    dense
+                >
+                    <template v-slot:prepend="{ item, open }">
+                        <v-icon v-if="item.children" dense>
+                            {{ open ? mdiFolderOpen : mdiFolder }}
+                        </v-icon>
+                        <v-icon v-else dense>
+                            {{ mdiFileDocumentOutline }}
+                        </v-icon>
+                    </template>
+                </v-treeview>
+            </v-list>
+        </v-navigation-drawer>
+
+        <!-- Navigation drawer for mobile -->
+        <v-navigation-drawer
+            v-else
+            app
+            clipped
+            temporary
+            v-model="mobileDrawer"
+        >
+            <v-list
+                dense
+                nav
+            >
+                <v-list-item>
+                    <v-img
+                        src="/img/logo.svg"
+                        aspect-ratio="1"
+                        contain
+                        max-width="24"
+                        max-height="24"
+                        class="mr-2"
+                    ></v-img>
+                    <v-list-item-content>
+                        <v-list-item-title class="text-h5">
+                            mory
+                        </v-list-item-title>
+                    </v-list-item-content>
+                </v-list-item>
                 <v-list-item color="primary" link to="/"><v-list-item-icon><v-icon dense>{{ mdiHomeOutline }}</v-icon></v-list-item-icon><v-list-item-title>Home</v-list-item-title></v-list-item>
                 <v-list-item color="primary" link to="/calendar"><v-list-item-icon><v-icon dense>{{ mdiCalendarOutline }}</v-icon></v-list-item-icon><v-list-item-title>Calendar</v-list-item-title></v-list-item>
                 <v-list-item color="primary" link to="/tasks"><v-list-item-icon><v-icon dense>{{ mdiBallotOutline }}</v-icon></v-list-item-icon><v-list-item-title>Tasks</v-list-item-title></v-list-item>
@@ -287,29 +350,15 @@
             </v-menu>
         </v-row>
 
+        <!-- App bar for mobile -->
         <v-app-bar
+            v-if="$vuetify.breakpoint.xs"
             app
             bottom
-            dense
             color="white"
-            elevation="0"
-            v-if="$vuetify.breakpoint.xs"
         >
-            <v-btn-toggle
-                borderless
-                color="primary"
-                group
-                tile
-                class="flex-grow-1 d-flex pa-0"
-            >
-                <v-btn text to="/"         class="flex-grow-1"><v-icon>{{ mdiHomeOutline                 }}</v-icon></v-btn>
-                <v-btn text to="/calendar" class="flex-grow-1"><v-icon>{{ mdiCalendarOutline             }}</v-icon></v-btn>
-                <v-btn text to="/tasks"    class="flex-grow-1"><v-icon>{{ mdiBallotOutline               }}</v-icon></v-btn>
-                <v-btn text to="/files"    class="flex-grow-1"><v-icon>{{ mdiFileDocumentMultipleOutline }}</v-icon></v-btn>
-                <v-btn text to="/search"   class="flex-grow-1"><v-icon>{{ mdiMagnify                     }}</v-icon></v-btn>
-                <v-btn text to="/config"   class="flex-grow-1"><v-icon>{{ mdiCogOutline                  }}</v-icon></v-btn>
-                <v-btn text to="/about"    class="flex-grow-1"><v-icon>{{ mdiInformationOutline          }}</v-icon></v-btn>
-            </v-btn-toggle>
+            <v-app-bar-nav-icon v-on:click="mobileDrawer = true" />
+            <v-toolbar-title>{{ $route.name }}</v-toolbar-title>
         </v-app-bar>
 
         <div v-if="!appStore.hasToken" class="login-overlay">
@@ -406,6 +455,7 @@ const appStore = useAppStore();
 // Reactive states
 const notificationPermission = ref(Notification.permission);
 const miniMainSidebar = ref(loadConfigValue("mini-main-sidebar", false));
+const mobileDrawer = ref(false);
 const loginUsername = ref("");
 const loginPassword = ref("");
 const templates = ref([] as string[]);
