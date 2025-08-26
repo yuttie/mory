@@ -60,15 +60,14 @@
                 <!-- PDF viewer -->
                 <template v-else-if="mediaType === 'pdf'">
                     <div class="pdf-viewer">
-                        <iframe
-                            v-bind:src="mediaUrl"
+                        <object
+                            v-bind:data="mediaUrl"
                             type="application/pdf"
                             width="100%"
                             height="800px"
-                            frameborder="0"
                         >
                             <p>Your browser does not support embedded PDFs. <a v-bind:href="mediaUrl" target="_blank">Click here to view the PDF</a></p>
-                        </iframe>
+                        </object>
                         <div class="media-info">
                             <h2>{{ filename }}</h2>
                             <p>{{ mimeType }}</p>
@@ -94,7 +93,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router/composables';
 import * as api from '@/api';
 import { getAxios } from '@/axios';
@@ -115,7 +114,7 @@ const notFound = ref(false);
 const error = ref(false);
 const errorMessage = ref('');
 const mimeType = ref('');
-const pdfDataUrl = ref('');
+const pdfBlobUrl = ref('');
 
 // Computed properties
 const filename = computed(() => {
@@ -125,9 +124,9 @@ const filename = computed(() => {
 });
 
 const mediaUrl = computed(() => {
-  // For PDFs, use the data URL if available
-  if (mediaType.value === 'pdf' && pdfDataUrl.value) {
-    return pdfDataUrl.value;
+  // For PDFs, use the blob URL if available
+  if (mediaType.value === 'pdf' && pdfBlobUrl.value) {
+    return pdfBlobUrl.value;
   }
   // Construct the API endpoint URL for the media file
   // Using the same /files/ endpoint that serves file content
@@ -152,6 +151,13 @@ onMounted(() => {
         document.title = `${filename.value} | ${import.meta.env.VITE_APP_NAME}`;
     }
     loadMediaInfo();
+});
+
+onUnmounted(() => {
+    // Clean up blob URL to prevent memory leaks
+    if (pdfBlobUrl.value) {
+        URL.revokeObjectURL(pdfBlobUrl.value);
+    }
 });
 
 // Methods
@@ -216,24 +222,21 @@ async function loadPdfContent() {
             responseType: 'arraybuffer'
         });
         
-        // Convert the PDF arraybuffer to a data URL
+        // Convert the PDF arraybuffer to a blob URL
         const blob = new Blob([response.data], { type: 'application/pdf' });
-        const reader = new FileReader();
         
-        return new Promise<void>((resolve, reject) => {
-            reader.onload = () => {
-                pdfDataUrl.value = reader.result as string;
-                resolve();
-            };
-            reader.onerror = () => {
-                reject(new Error('Failed to convert PDF to data URL'));
-            };
-            reader.readAsDataURL(blob);
-        });
+        // Clean up previous blob URL if it exists
+        if (pdfBlobUrl.value) {
+            URL.revokeObjectURL(pdfBlobUrl.value);
+        }
+        
+        // Create new blob URL
+        pdfBlobUrl.value = URL.createObjectURL(blob);
+        
     } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         console.error('Failed to load PDF content:', err);
-        // Fall back to direct URL if data URL fails
-        pdfDataUrl.value = '';
+        // Fall back to direct URL if blob URL fails
+        pdfBlobUrl.value = '';
         throw err;
     }
 }
@@ -287,7 +290,7 @@ async function loadPdfContent() {
   margin: auto;
 }
 
-.pdf-viewer iframe {
+.pdf-viewer object {
   flex: 1;
   min-height: 800px;
 }
