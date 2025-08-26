@@ -39,6 +39,7 @@
                             class="ma-4"
                             v-on:save="onSelectedTaskSave"
                             v-on:delete="onSelectedTaskDelete"
+                            v-on:cancel="onNewTaskCancel"
                         />
                     </v-tab-item>
                     <v-tab-item value="descendants">
@@ -385,6 +386,12 @@ async function onSelectedTaskDelete(path: string) {
     }
     // Refresh the store
     await store.refresh();
+}
+
+function onNewTaskCancel() {
+    // Clear the new task path and return to descendants view
+    newTaskPath.value = null;
+    itemViewTab.value = 'descendants';
 }
 
 function isToday(date: string) {

@@ -23,6 +23,15 @@
                 </v-btn>
                 <v-spacer />
                 <v-btn
+                    v-if="!isEdit"
+                    text
+                    class="mr-3"
+                    v-on:click="onCancel"
+                >
+                    <v-icon>{{ mdiClose }}</v-icon>
+                    <span v-if="$vuetify.breakpoint.smAndUp">Cancel</span>
+                </v-btn>
+                <v-btn
                     v-if="isEdit"
                     color="error"
                     text
@@ -313,6 +322,7 @@ import {
     mdiCalendarCursorOutline,
     mdiCalendarOutline,
     mdiCancel,
+    mdiClose,
     mdiContentSave,
     mdiDelete,
     mdiFormatHeader1,
@@ -364,6 +374,7 @@ const { task, loading, error, refresh } = useFetchTask(pathRef);
 const emit = defineEmits<{
     (e: 'save', value: Task): void;
     (e: 'delete', path: string): void;
+    (e: 'cancel'): void;
 }>();
 
 // Reactive states
@@ -594,6 +605,10 @@ function onDelete(): void {
         return;
     }
     emit('delete', props.taskPath);
+}
+
+function onCancel(): void {
+    emit('cancel');
 }
 
 // Helper functions for comparison
