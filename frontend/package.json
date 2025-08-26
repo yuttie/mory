@@ -2,7 +2,10 @@
   "name": "mory",
   "version": "1.4.1",
   "private": true,
-  "author": "Yuta Taniguchi <yuta.taniguchi.y.t@gmail.com>",
+  "author": {
+    "name": "Yuta Taniguchi",
+    "email": "yuta.taniguchi.y.t@gmail.com"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

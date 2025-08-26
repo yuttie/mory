@@ -9,7 +9,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd());
   process.env.VITE_APP_NAME = appName;
   process.env.VITE_APP_VERSION = appVersion;
-  process.env.VITE_APP_AUTHOR = appAuthor;
+  process.env.VITE_APP_AUTHOR = appAuthor.name;
   process.env.VITE_APP_BUILD_YEAR = String(new Date().getFullYear());
 
   return {
