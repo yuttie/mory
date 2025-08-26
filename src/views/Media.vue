@@ -97,6 +97,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router/composables';
 import * as api from '@/api';
+import { getAxios } from '@/axios';
 
 const apiFilesUrl = new URL('files/', new URL(import.meta.env.VITE_APP_API_URL!, window.location.href)).href;
 
@@ -114,6 +115,7 @@ const notFound = ref(false);
 const error = ref(false);
 const errorMessage = ref('');
 const mimeType = ref('');
+const pdfDataUrl = ref('');
 
 // Computed properties
 const filename = computed(() => {
@@ -123,6 +125,10 @@ const filename = computed(() => {
 });
 
 const mediaUrl = computed(() => {
+  // For PDFs, use the data URL if available
+  if (mediaType.value === 'pdf' && pdfDataUrl.value) {
+    return pdfDataUrl.value;
+  }
   // Construct the API endpoint URL for the media file
   // Using the same /files/ endpoint that serves file content
   return apiFilesUrl + filename.value;
@@ -173,6 +179,11 @@ async function loadMediaInfo() {
             return;
         }
 
+        // For PDFs, fetch the content and convert to data URL
+        if (fileEntry.mime_type === 'application/pdf') {
+            await loadPdfContent();
+        }
+
     } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         if (err.response?.status === 401) {
             emit('tokenExpired', () => loadMediaInfo());
@@ -196,6 +207,35 @@ function isMediaFile(mimeType: string): boolean {
 function onMediaError() {
     error.value = true;
     errorMessage.value = 'Failed to load media content';
+}
+
+async function loadPdfContent() {
+    try {
+        const axios = getAxios();
+        const response = await axios.get(`/files/${filename.value}`, {
+            responseType: 'arraybuffer'
+        });
+        
+        // Convert the PDF arraybuffer to a data URL
+        const blob = new Blob([response.data], { type: 'application/pdf' });
+        const reader = new FileReader();
+        
+        return new Promise<void>((resolve, reject) => {
+            reader.onload = () => {
+                pdfDataUrl.value = reader.result as string;
+                resolve();
+            };
+            reader.onerror = () => {
+                reject(new Error('Failed to convert PDF to data URL'));
+            };
+            reader.readAsDataURL(blob);
+        });
+    } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+        console.error('Failed to load PDF content:', err);
+        // Fall back to direct URL if data URL fails
+        pdfDataUrl.value = '';
+        throw err;
+    }
 }
 </script>
 
