@@ -9,7 +9,7 @@
             v-on:submit.prevent="onSave"
         >
             <v-card-title>
-                {{ isEdit ? 'Edit Task' : (props.parentTaskTitle ? `New Task as subtask of ${props.parentTaskTitle}` : 'New Task') }}
+                {{ isEdit ? 'Edit Task' : (props.parentTaskTitle ? `New Task as subtask of "${props.parentTaskTitle}"` : 'New Task') }}
                 <v-btn
                     v-if="isEdit"
                     v-bind:to="{ path: `/note/${taskPath}` }"
