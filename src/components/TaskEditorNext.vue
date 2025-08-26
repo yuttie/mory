@@ -528,10 +528,8 @@ watch(
         // Only update tags if we're creating a new task (no existing task)
         if (!task.value && newTag !== oldTag) {
             if (newTag) {
-                // If switching to a tag, ensure it's in the tags array
-                if (!form.tags.includes(newTag)) {
-                    form.tags = [newTag, ...form.tags.filter(tag => tag !== newTag)];
-                }
+                // If switching to a tag, ensure it's in the tags array as the first element
+                form.tags = [newTag, ...form.tags.filter(tag => tag !== newTag)];
             } else if (oldTag) {
                 // If switching away from a tag, remove it from tags array
                 form.tags = form.tags.filter(tag => tag !== oldTag);
