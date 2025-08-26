@@ -9,6 +9,7 @@ const TasksNext = () => import('../views/TasksNext.vue');
 const Files     = () => import('../views/Files.vue');
 const Search    = () => import('../views/Search.vue');
 const Note      = () => import('../views/Note.vue');
+const Media     = () => import('../views/Media.vue');
 const Config    = () => import('../views/Config.vue');
 const About     = () => import('../views/About.vue');
 
@@ -66,6 +67,11 @@ const routes: Array<RouteConfig> = [
     path: '/note/:path*',
     name: 'Note',
     component: Note,
+  },
+  {
+    path: '/media/:path*',
+    name: 'Media',
+    component: Media,
   },
   {
     path: '/config',
