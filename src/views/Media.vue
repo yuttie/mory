@@ -95,6 +95,8 @@ import { ref, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router/composables';
 import * as api from '@/api';
 
+const apiFilesUrl = new URL('files/', new URL(import.meta.env.VITE_APP_API_URL!, window.location.href)).href;
+
 // Emits
 const emit = defineEmits<{
   (e: 'tokenExpired', callback: () => void): void;
@@ -119,8 +121,8 @@ const filename = computed(() => {
 
 const mediaUrl = computed(() => {
   // Construct the API endpoint URL for the media file
-  // Using the same /notes/ endpoint that serves file content
-  return `/notes/${filename.value}`;
+  // Using the same /files/ endpoint that serves file content
+  return apiFilesUrl + filename.value;
 });
 
 const mediaType = computed(() => {
