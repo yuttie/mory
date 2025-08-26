@@ -1,3 +1,40 @@
+## [1.5.0] - 2025-08-26
+
+### 🚀 Features
+
+- *(views/Search)* Trigger search on Enter key
+- *(metadata)* Update metadata schema to support task management from tasks-next branch merge (#124)
+- *(components/TaskEditorNext)* Prevent page transition when there are unsaved changes in TaskEditorNext (#128)
+- *(components/TaskEditorNext)* Implement auto-completion functionality for contact field in TaskEditorNext component (#130)
+- *(components/TaskTree)* Show task completion status of parent tasks
+- *(components/TaskTree)* Implement tag grouping with Pinia store architecture and fix task editor visibility (#125)
+- *(components/TaskEditorNext, views/TasksNext)* Add parent task context, switching capability, cancel option, and tag-based task creation (#134)
+- *(views/TasksNext)* Add Eisenhower Matrix view to the descendants tab page (#129)
+- *(views/TasksNext)* Add mobile screen support for TasksNext view (#136)
+- *(mobile)* Improve navigation drawer and app bar
+- *(views/TasksNext)* Show task group for each possible task status kind
+- *(views/TasksNext)* Extract "Scheduled" task group into separate view
+- *(views/TasksNext)* Use <v-btn-toggle> instead of <v-select> for switching view
+- *(file-types)* Implement Media viewer component for images, videos, and PDFs (#135)
+
+### 🚜 Refactor
+
+- *(import)* Let unplugin-vue-components auto-import components
+
+### 📚 Documentation
+
+- *(README)* Describe summary of app
+- *(README)* Add note about single-user focus and privacy
+
+### 🎨 Styling
+
+- Remove trailing spaces
+- *(views/About)* Show only author name
+
+### ⚙️ Miscellaneous Tasks
+
+- Ignore components.d.ts
+
 ## [1.4.1] - 2025-08-19
 
 ### 🐛 Bug Fixes
