@@ -1,7 +1,7 @@
 <template>
-    <div id="tasks" class="d-flex flex-row">
+    <div id="tasks" class="d-flex" v-bind:class="{ 'flex-column': !$vuetify.breakpoint.mdAndUp, 'flex-row': $vuetify.breakpoint.mdAndUp }">
         <template v-if="store.isLoaded">
-            <div class="d-flex flex-column"><!-- NOTE: Necessary for <TaskTree> to have vertical scrollbar -->
+            <div class="d-flex flex-column task-tree-container"><!-- NOTE: Necessary for <TaskTree> to have vertical scrollbar -->
                 <TaskTree
                     v-bind:items="store.forestWithTags"
                     v-bind:active="activeNodeId"
@@ -55,7 +55,7 @@
                                 dense
                                 outlined
                                 hide-details
-                                style="max-width: 200px"
+                                v-bind:style="{ 'max-width': $vuetify.breakpoint.mdAndUp ? '200px' : '150px' }"
                             />
                             <!-- New task button -->
                             <v-btn
@@ -555,14 +555,45 @@ $space: 12px;
     user-select: none;
 }
 
+/* Mobile responsive adjustments for main container */
+@media (max-width: 959px) { /* md breakpoint in Vuetify 2 */
+    #tasks {
+        padding: 4px;
+    }
+}
+
 .task-tree {
     width: 300px;
     overflow: hidden auto;
 }
 
+.task-tree-container {
+    width: 300px;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 959px) { /* md breakpoint in Vuetify 2 */
+    .task-tree-container {
+        width: 100%;
+        max-height: 200px;
+        min-height: 150px;
+    }
+    
+    .task-tree {
+        width: 100%;
+    }
+}
+
 .item-view {
     flex: 1 1 0;
     background: #B0BEC5;
+}
+
+/* Mobile responsive adjustments for item view */
+@media (max-width: 959px) { /* md breakpoint in Vuetify 2 */
+    .item-view {
+        min-height: 0; /* Allow shrinking on mobile */
+    }
 }
 
 .groups-container {
@@ -585,6 +616,21 @@ $space: 12px;
     align-self: flex-start;
     max-height: 100%;
     width: $group-width;
+}
+
+/* Mobile responsive adjustments for groups */
+@media (max-width: 959px) { /* md breakpoint in Vuetify 2 */
+    .groups {
+        flex-direction: column;
+        width: 100%;
+        padding: $space / 2;
+        gap: $space / 2;
+    }
+    
+    .group {
+        width: 100%;
+        max-height: 300px;
+    }
 }
 
 .task-list {
@@ -627,11 +673,33 @@ $space: 12px;
     flex: 1 1 0;
 }
 
+/* Mobile responsive adjustments for Eisenhower matrix */
+@media (max-width: 959px) { /* md breakpoint in Vuetify 2 */
+    .eisenhower-matrix {
+        padding: $space / 2;
+        gap: $space / 2;
+    }
+    
+    .matrix-row {
+        flex-direction: column;
+        flex: none;
+    }
+}
+
 .quadrant {
     flex: 1 1 0;
     display: flex;
     flex-direction: column;
     max-height: 100%;
+}
+
+/* Mobile responsive adjustments for quadrants */
+@media (max-width: 959px) { /* md breakpoint in Vuetify 2 */
+    .quadrant {
+        flex: none;
+        max-height: 250px;
+        min-height: 200px;
+    }
 }
 
 .quadrant-header {
