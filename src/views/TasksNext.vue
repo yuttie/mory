@@ -35,13 +35,16 @@
                             v-bind:task-path="newTaskPath ?? selectedNode.path"
                             v-bind:known-tags="knownTags"
                             v-bind:known-contacts="knownContacts"
+                            v-bind:parent-task-title="newTaskPath && selectedNode ? selectedNode.title : undefined"
+                            v-bind:selected-tag="newTaskPath && selectedNode && isTagGroupSelected ? selectedTagName : undefined"
                             class="ma-4"
                             v-on:save="onSelectedTaskSave"
                             v-on:delete="onSelectedTaskDelete"
+                            v-on:cancel="onNewTaskCancel"
                         />
                     </v-tab-item>
                     <v-tab-item value="descendants">
-                        <v-toolbar flat outlined dense class="flex-grow-0" v-if="!isTagGroupSelected">
+                        <v-toolbar flat outlined dense class="flex-grow-0">
                             <!-- New task button -->
                             <v-btn
                                 title="Add"
@@ -231,10 +234,22 @@ watch(selectedNode, (node) => {
     if (node && !node.uuid.startsWith('tag-group-')) {
         // Open 'selected' tab when a regular task is selected
         itemViewTab.value = 'selected';
+        
+        // If we're creating a new task, update the parent directory
+        if (newTaskPath.value) {
+            updateNewTaskParent();
+        }
     }
     else {
-        // Open 'descendants' tab when nothing is selected or a tag group is selected
-        itemViewTab.value = 'descendants';
+        // Tag group selected or nothing selected
+        if (newTaskPath.value) {
+            // If we're creating a new task, switch to selected tab and update parent
+            itemViewTab.value = 'selected';
+            updateNewTaskParent();
+        } else {
+            // If not creating a new task, show descendants
+            itemViewTab.value = 'descendants';
+        }
     }
 });
 
@@ -267,6 +282,14 @@ function onTaskListItemClick(id: UUID) {
 }
 
 function newTask() {
+    // Generate new UUID for the task
+    const taskUuid = crypto.randomUUID();
+    newTaskPath.value = getNewTaskPath(taskUuid);
+    // Show 'selected' tab
+    itemViewTab.value = 'selected';
+}
+
+function getNewTaskPath(taskUuid: string): string {
     let parentDir;
     if (selectedNode.value && !isTagGroupSelected.value) {
         // Create a task under the selected one (but not under tag groups)
@@ -275,12 +298,22 @@ function newTask() {
         parentDir = selected.path.slice(0, idx) + '/' + selected.uuid;
     }
     else {
-        // Create a task under the root
+        // Create a task under the root (for tag groups or no selection)
         parentDir = '.tasks';
     }
-    newTaskPath.value = parentDir + '/' + crypto.randomUUID() + '.md';
-    // Show 'selected' tab
-    itemViewTab.value = 'selected';
+    return parentDir + '/' + taskUuid + '.md';
+}
+
+function updateNewTaskParent() {
+    if (!newTaskPath.value) return;
+    
+    // Extract the UUID from the current newTaskPath
+    const pathParts = newTaskPath.value.split('/');
+    const filename = pathParts[pathParts.length - 1];
+    const taskUuid = filename.replace('.md', '');
+    
+    // Update the path with the new parent but same UUID
+    newTaskPath.value = getNewTaskPath(taskUuid);
 }
 
 async function onSelectedTaskSave(task: Task) {
@@ -356,6 +389,12 @@ async function onSelectedTaskDelete(path: string) {
     }
     // Refresh the store
     await store.refresh();
+}
+
+function onNewTaskCancel() {
+    // Clear the new task path and return to descendants view
+    newTaskPath.value = null;
+    itemViewTab.value = 'descendants';
 }
 
 function isToday(date: string) {

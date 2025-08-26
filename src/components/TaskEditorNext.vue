@@ -9,7 +9,7 @@
             v-on:submit.prevent="onSave"
         >
             <v-card-title>
-                {{ isEdit ? 'Edit Task' : 'New Task' }}
+                {{ isEdit ? 'Edit task' : getNewTaskTitle() }}
                 <v-btn
                     v-if="isEdit"
                     v-bind:to="{ path: `/note/${taskPath}` }"
@@ -22,6 +22,15 @@
                     <v-icon>{{ mdiPencilBoxOutline }}</v-icon>
                 </v-btn>
                 <v-spacer />
+                <v-btn
+                    v-if="!isEdit"
+                    text
+                    class="mr-3"
+                    v-on:click="onCancel"
+                >
+                    <v-icon>{{ mdiClose }}</v-icon>
+                    <span v-if="$vuetify.breakpoint.smAndUp">Cancel</span>
+                </v-btn>
                 <v-btn
                     v-if="isEdit"
                     color="error"
@@ -313,6 +322,7 @@ import {
     mdiCalendarCursorOutline,
     mdiCalendarOutline,
     mdiCancel,
+    mdiClose,
     mdiContentSave,
     mdiDelete,
     mdiFormatHeader1,
@@ -353,6 +363,8 @@ const props = defineProps<{
     taskPath: string;
     knownTags: [string, number][];
     knownContacts: [string, number][];
+    parentTaskTitle?: string;
+    selectedTag?: string;
 }>();
 const pathRef = toRef(props, 'taskPath');
 
@@ -363,6 +375,7 @@ const { task, loading, error, refresh } = useFetchTask(pathRef);
 const emit = defineEmits<{
     (e: 'save', value: Task): void;
     (e: 'delete', path: string): void;
+    (e: 'cancel'): void;
 }>();
 
 // Reactive states
@@ -392,9 +405,10 @@ const isEdit = computed<boolean>(() => !!task.value);
 const initialForm = computed<EditableTask>(() => {
     const t = task.value;
     if (!t) {
+        const defaultTags = props.selectedTag ? [props.selectedTag] : [];
         return {
             title: '',
-            tags: [],
+            tags: defaultTags,
             status: { kind: 'todo' },
             progress: 0,
             importance: 3,
@@ -494,10 +508,34 @@ const isModified = computed<boolean>(() => {
 // Watchers
 watch(
     task,
-    (t) => {
-        resetFromTask(t);
+    (newTask, oldTask) => {
+        // If both old and new task values are undefined/null, 
+        // we're switching parents during new task creation - preserve form
+        if ((newTask === null || newTask === undefined) && 
+            (oldTask === null || oldTask === undefined)) {
+            return; // Don't reset the form
+        }
+        
+        resetFromTask(newTask);
     },
     { immediate: true },
+);
+
+// Watch for changes in selectedTag during new task creation
+watch(
+    () => props.selectedTag,
+    (newTag, oldTag) => {
+        // Only update tags if we're creating a new task (no existing task)
+        if (!task.value && newTag !== oldTag) {
+            if (newTag) {
+                // If switching to a tag, ensure it's in the tags array as the first element
+                form.tags = [newTag, ...form.tags.filter(tag => tag !== newTag)];
+            } else if (oldTag) {
+                // If switching away from a tag, remove it from tags array
+                form.tags = form.tags.filter(tag => tag !== oldTag);
+            }
+        }
+    }
 );
 
 // Lifecycle hooks
@@ -510,10 +548,21 @@ onUnmounted(() => {
 });
 
 // Methods
+function getNewTaskTitle(): string {
+    if (props.selectedTag) {
+        return `New task with tag "${props.selectedTag}"`;
+    } else if (props.parentTaskTitle) {
+        return `New subtask of "${props.parentTaskTitle}"`;
+    } else {
+        return 'New task';
+    }
+}
+
 function resetFromTask(t?: Task | undefined | null): void {
     if (!t) {
+        const defaultTags = props.selectedTag ? [props.selectedTag] : [];
         form.title = '';
-        form.tags = [];
+        form.tags = defaultTags;
         form.status = { kind: 'todo' };
         form.progress = 0;
         form.importance = 3;
@@ -586,6 +635,10 @@ function onDelete(): void {
         return;
     }
     emit('delete', props.taskPath);
+}
+
+function onCancel(): void {
+    emit('cancel');
 }
 
 // Helper functions for comparison
