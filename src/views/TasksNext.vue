@@ -70,8 +70,8 @@
                             </v-btn>
                         </v-toolbar>
                         <div class="groups-container flex-grow-1">
-                            <!-- Current view -->
-                            <div v-if="descendantsViewMode === 'current'" class="groups">
+                            <!-- Status view -->
+                            <div v-if="descendantsViewMode === 'status'" class="groups">
                                 <v-card dense class="group">
                                     <v-card-title>Backlog</v-card-title>
                                     <div class="task-list">
@@ -209,7 +209,7 @@ const selectedNode = ref<TreeNodeRecord | undefined>(undefined);
 const openNodes = ref<UUID[]>([]);
 const newTaskPath = ref<string | null>(null);
 const error = ref<string | null>(null);
-const descendantsViewMode = ref<string>('current');
+const descendantsViewMode = ref<string>('status');
 
 // Computed properties
 const activeNodeId = computed<string | undefined>(() => {
@@ -341,7 +341,7 @@ const eisenhowerQuadrants = computed(() => {
 });
 
 const viewModeOptions = computed(() => [
-    { text: 'Current View', value: 'current' },
+    { text: 'Status View', value: 'status' },
     { text: 'Eisenhower Matrix', value: 'eisenhower' },
 ]);
 
