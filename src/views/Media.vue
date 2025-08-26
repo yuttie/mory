@@ -185,7 +185,7 @@ async function loadMediaInfo() {
             return;
         }
 
-        // For PDFs, fetch the content and convert to data URL
+        // For PDFs, fetch the content and convert to a blob URL
         if (fileEntry.mime_type === 'application/pdf') {
             await loadPdfContent();
         }
