@@ -9,7 +9,7 @@
             v-on:submit.prevent="onSave"
         >
             <v-card-title>
-                {{ isEdit ? 'Edit task' : (props.parentTaskTitle ? `New subtask of "${props.parentTaskTitle}"` : 'New task') }}
+                {{ isEdit ? 'Edit task' : getNewTaskTitle() }}
                 <v-btn
                     v-if="isEdit"
                     v-bind:to="{ path: `/note/${taskPath}` }"
@@ -364,6 +364,7 @@ const props = defineProps<{
     knownTags: [string, number][];
     knownContacts: [string, number][];
     parentTaskTitle?: string;
+    selectedTag?: string;
 }>();
 const pathRef = toRef(props, 'taskPath');
 
@@ -404,9 +405,10 @@ const isEdit = computed<boolean>(() => !!task.value);
 const initialForm = computed<EditableTask>(() => {
     const t = task.value;
     if (!t) {
+        const defaultTags = props.selectedTag ? [props.selectedTag] : [];
         return {
             title: '',
-            tags: [],
+            tags: defaultTags,
             status: { kind: 'todo' },
             progress: 0,
             importance: 3,
@@ -519,6 +521,25 @@ watch(
     { immediate: true },
 );
 
+// Watch for changes in selectedTag during new task creation
+watch(
+    () => props.selectedTag,
+    (newTag, oldTag) => {
+        // Only update tags if we're creating a new task (no existing task)
+        if (!task.value && newTag !== oldTag) {
+            if (newTag) {
+                // If switching to a tag, ensure it's in the tags array
+                if (!form.tags.includes(newTag)) {
+                    form.tags = [newTag, ...form.tags.filter(tag => tag !== newTag)];
+                }
+            } else if (oldTag) {
+                // If switching away from a tag, remove it from tags array
+                form.tags = form.tags.filter(tag => tag !== oldTag);
+            }
+        }
+    }
+);
+
 // Lifecycle hooks
 onMounted(() => {
     window.addEventListener('beforeunload', onBeforeunload);
@@ -529,10 +550,21 @@ onUnmounted(() => {
 });
 
 // Methods
+function getNewTaskTitle(): string {
+    if (props.selectedTag) {
+        return `New task with tag "${props.selectedTag}"`;
+    } else if (props.parentTaskTitle) {
+        return `New subtask of "${props.parentTaskTitle}"`;
+    } else {
+        return 'New task';
+    }
+}
+
 function resetFromTask(t?: Task | undefined | null): void {
     if (!t) {
+        const defaultTags = props.selectedTag ? [props.selectedTag] : [];
         form.title = '';
-        form.tags = [];
+        form.tags = defaultTags;
         form.status = { kind: 'todo' };
         form.progress = 0;
         form.importance = 3;

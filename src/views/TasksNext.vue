@@ -14,7 +14,7 @@
                 <div class="d-flex flex-row">
                     <v-tabs v-model="itemViewTab">
                         <v-tab
-                            v-if="newTaskPath || selectedNode && !isTagGroupSelected"
+                            v-if="newTaskPath || selectedNode && (!isTagGroupSelected || newTaskPath)"
                             tab-value="selected"
                         >
                             {{ newTaskPath ? 'New' : 'Selected' }}
@@ -29,13 +29,14 @@
                     class="d-flex flex-column"
                     style="flex: 1 1 0; background: transparent;"
                 >
-                    <v-tab-item v-if="newTaskPath || selectedNode && !isTagGroupSelected" value="selected">
+                    <v-tab-item v-if="newTaskPath || selectedNode && (!isTagGroupSelected || newTaskPath)" value="selected">
                         <TaskEditorNext
                             ref="taskEditorRef"
                             v-bind:task-path="newTaskPath ?? selectedNode.path"
                             v-bind:known-tags="knownTags"
                             v-bind:known-contacts="knownContacts"
                             v-bind:parent-task-title="newTaskPath && selectedNode ? selectedNode.title : undefined"
+                            v-bind:selected-tag="newTaskPath && isTagGroupSelected && selectedNode ? selectedTagName : undefined"
                             class="ma-4"
                             v-on:save="onSelectedTaskSave"
                             v-on:delete="onSelectedTaskDelete"
@@ -43,7 +44,7 @@
                         />
                     </v-tab-item>
                     <v-tab-item value="descendants">
-                        <v-toolbar flat outlined dense class="flex-grow-0" v-if="!isTagGroupSelected">
+                        <v-toolbar flat outlined dense class="flex-grow-0">
                             <!-- New task button -->
                             <v-btn
                                 title="Add"
@@ -239,8 +240,19 @@ watch(selectedNode, (node) => {
             updateNewTaskParent();
         }
     }
+    else if (node && node.uuid.startsWith('tag-group-')) {
+        // Tag group selected
+        if (newTaskPath.value) {
+            // If we're creating a new task, switch to selected tab and update parent
+            itemViewTab.value = 'selected';
+            updateNewTaskParent();
+        } else {
+            // If not creating a new task, show descendants
+            itemViewTab.value = 'descendants';
+        }
+    }
     else {
-        // Open 'descendants' tab when nothing is selected or a tag group is selected
+        // Open 'descendants' tab when nothing is selected
         itemViewTab.value = 'descendants';
         
         // If we're creating a new task and no node is selected, update to root
@@ -295,7 +307,7 @@ function getNewTaskPath(taskUuid: string): string {
         parentDir = selected.path.slice(0, idx) + '/' + selected.uuid;
     }
     else {
-        // Create a task under the root
+        // Create a task under the root (for tag groups or no selection)
         parentDir = '.tasks';
     }
     return parentDir + '/' + taskUuid + '.md';
