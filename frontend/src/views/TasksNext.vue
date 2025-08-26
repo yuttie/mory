@@ -72,26 +72,6 @@
                         <div class="groups-container flex-grow-1">
                             <!-- Status view -->
                             <div v-if="descendantsViewMode === 'status'" class="groups">
-                                <v-card class="group">
-                                    <v-card-title>Scheduled</v-card-title>
-                                    <div class="task-list">
-                                        <div
-                                            v-for="[date, dayTasks] of Object.entries(scheduled)"
-                                            v-bind:key="date"
-                                            v-bind:class="{ today: isToday(date) }"
-                                        >
-                                            <div class="date-header d-flex flex-row">
-                                                <span>{{ isToday(date) ? `Today (${date})` : isTomorrow(date) ? `Tomorrow (${date})` : date }}</span>
-                                            </div>
-                                            <TaskListItemNext
-                                                v-for="task of dayTasks"
-                                                v-bind:key="task.uuid"
-                                                v-bind:value="task"
-                                                v-on:click="onTaskListItemClick(task.uuid)"
-                                            />
-                                        </div>
-                                    </div>
-                                </v-card>
                                 <v-card dense class="group">
                                     <v-card-title>To do</v-card-title>
                                     <div class="task-list">
@@ -167,6 +147,29 @@
                                             v-bind:value="task"
                                             v-on:click="onTaskListItemClick(task.uuid)"
                                         />
+                                    </div>
+                                </v-card>
+                            </div>
+                            <!-- Schedule view -->
+                            <div v-else-if="descendantsViewMode === 'schedule'" class="groups">
+                                <v-card class="group">
+                                    <v-card-title>Scheduled</v-card-title>
+                                    <div class="task-list">
+                                        <div
+                                            v-for="[date, dayTasks] of Object.entries(scheduled)"
+                                            v-bind:key="date"
+                                            v-bind:class="{ today: isToday(date) }"
+                                        >
+                                            <div class="date-header d-flex flex-row">
+                                                <span>{{ isToday(date) ? `Today (${date})` : isTomorrow(date) ? `Tomorrow (${date})` : date }}</span>
+                                            </div>
+                                            <TaskListItemNext
+                                                v-for="task of dayTasks"
+                                                v-bind:key="task.uuid"
+                                                v-bind:value="task"
+                                                v-on:click="onTaskListItemClick(task.uuid)"
+                                            />
+                                        </div>
                                     </div>
                                 </v-card>
                             </div>
@@ -275,7 +278,7 @@ const selectedNode = ref<TreeNodeRecord | undefined>(undefined);
 const openNodes = ref<UUID[]>([]);
 const newTaskPath = ref<string | null>(null);
 const error = ref<string | null>(null);
-const descendantsViewMode = ref<'status' | 'eisenhower'>('status');
+const descendantsViewMode = ref<'status' | 'schedule' | 'eisenhower'>('status');
 
 // Computed properties
 const activeNodeId = computed<string | undefined>(() => {
@@ -432,6 +435,7 @@ const eisenhowerQuadrants = computed(() => {
 
 const viewModeOptions = computed(() => [
     { text: 'Status View', value: 'status' },
+    { text: 'Schedule View', value: 'schedule' },
     { text: 'Eisenhower Matrix', value: 'eisenhower' },
 ]);
 
