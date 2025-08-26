@@ -72,17 +72,6 @@
                         <div class="groups-container flex-grow-1">
                             <!-- Status view -->
                             <div v-if="descendantsViewMode === 'status'" class="groups">
-                                <v-card dense class="group">
-                                    <v-card-title>Backlog</v-card-title>
-                                    <div class="task-list">
-                                        <TaskListItemNext
-                                            v-for="task of backlog"
-                                            v-bind:key="task.uuid"
-                                            v-bind:value="task"
-                                            v-on:click="onTaskListItemClick(task.uuid)"
-                                        />
-                                    </div>
-                                </v-card>
                                 <v-card class="group">
                                     <v-card-title>Scheduled</v-card-title>
                                     <div class="task-list">
@@ -101,6 +90,83 @@
                                                 v-on:click="onTaskListItemClick(task.uuid)"
                                             />
                                         </div>
+                                    </div>
+                                </v-card>
+                                <v-card dense class="group">
+                                    <v-card-title>To do</v-card-title>
+                                    <div class="task-list">
+                                        <TaskListItemNext
+                                            v-for="task of taskStatuses.todo"
+                                            v-bind:key="task.uuid"
+                                            v-bind:value="task"
+                                            v-on:click="onTaskListItemClick(task.uuid)"
+                                        />
+                                    </div>
+                                </v-card>
+                                <v-card dense class="group">
+                                    <v-card-title>In progress</v-card-title>
+                                    <div class="task-list">
+                                        <TaskListItemNext
+                                            v-for="task of taskStatuses.inProgress"
+                                            v-bind:key="task.uuid"
+                                            v-bind:value="task"
+                                            v-on:click="onTaskListItemClick(task.uuid)"
+                                        />
+                                    </div>
+                                </v-card>
+                                <v-card dense class="group">
+                                    <v-card-title>Waiting</v-card-title>
+                                    <div class="task-list">
+                                        <TaskListItemNext
+                                            v-for="task of taskStatuses.waiting"
+                                            v-bind:key="task.uuid"
+                                            v-bind:value="task"
+                                            v-on:click="onTaskListItemClick(task.uuid)"
+                                        />
+                                    </div>
+                                </v-card>
+                                <v-card dense class="group">
+                                    <v-card-title>Blocked</v-card-title>
+                                    <div class="task-list">
+                                        <TaskListItemNext
+                                            v-for="task of taskStatuses.blocked"
+                                            v-bind:key="task.uuid"
+                                            v-bind:value="task"
+                                            v-on:click="onTaskListItemClick(task.uuid)"
+                                        />
+                                    </div>
+                                </v-card>
+                                <v-card dense class="group">
+                                    <v-card-title>On hold</v-card-title>
+                                    <div class="task-list">
+                                        <TaskListItemNext
+                                            v-for="task of taskStatuses.onHold"
+                                            v-bind:key="task.uuid"
+                                            v-bind:value="task"
+                                            v-on:click="onTaskListItemClick(task.uuid)"
+                                        />
+                                    </div>
+                                </v-card>
+                                <v-card dense class="group">
+                                    <v-card-title>Done</v-card-title>
+                                    <div class="task-list">
+                                        <TaskListItemNext
+                                            v-for="task of taskStatuses.done"
+                                            v-bind:key="task.uuid"
+                                            v-bind:value="task"
+                                            v-on:click="onTaskListItemClick(task.uuid)"
+                                        />
+                                    </div>
+                                </v-card>
+                                <v-card dense class="group">
+                                    <v-card-title>Canceled</v-card-title>
+                                    <div class="task-list">
+                                        <TaskListItemNext
+                                            v-for="task of taskStatuses.canceled"
+                                            v-bind:key="task.uuid"
+                                            v-bind:value="task"
+                                            v-on:click="onTaskListItemClick(task.uuid)"
+                                        />
                                     </div>
                                 </v-card>
                             </div>
@@ -190,7 +256,7 @@ import { type TreeNodeRecord } from '@/stores/taskForest';
 import { useTaggedTaskForestStore } from '@/stores/taggedTaskForest';
 
 import * as api from '@/api';
-import { type UUID, type Task, render } from '@/task';
+import { type UUID, type StatusKind, type Task, render } from '@/task';
 import axios from 'axios';
 import dayjs from 'dayjs';
 
@@ -227,9 +293,7 @@ const selectedTagName = computed<string | null>(() => {
     return null;
 });
 
-const backlog = computed<TreeNodeRecord[]>(() => {
-    const backlog = [];
-
+const taskStatuses = computed<TreeNodeRecord[]>(() => {
     let targetTasks;
     if (isTagGroupSelected.value && selectedTagName.value) {
         // Show tasks from the selected tag group
@@ -242,12 +306,30 @@ const backlog = computed<TreeNodeRecord[]>(() => {
             : store.allTasks;
     }
 
-    for (const t of targetTasks) {
-        if (!t.metadata?.task?.scheduled_dates?.length) {
-            backlog.push(t);
+    const statuses = {
+        todo: [] as TreeNodeRecord[],
+        inProgress: [] as TreeNodeRecord[],
+        waiting: [] as TreeNodeRecord[],
+        blocked: [] as TreeNodeRecord[],
+        onHold: [] as TreeNodeRecord[],
+        done: [] as TreeNodeRecord[],
+        canceled: [] as TreeNodeRecord[],
+    };
+
+    for (const task of targetTasks) {
+        const kind: StatusKind = task.metadata?.task?.status?.kind ?? 'todo';
+        switch (kind) {
+            case 'todo': statuses.todo.push(task); break;
+            case 'in_progress': statuses.inProgress.push(task); break;
+            case 'waiting': statuses.waiting.push(task); break;
+            case 'blocked': statuses.blocked.push(task); break;
+            case 'on_hold': statuses.onHold.push(task); break;
+            case 'done': statuses.done.push(task); break;
+            case 'canceled': statuses.canceled.push(task); break;
         }
     }
-    return backlog;
+
+    return statuses;
 });
 
 const scheduled = computed<Record<string, TreeNodeRecord[]>>(() => {
