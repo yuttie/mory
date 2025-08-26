@@ -128,17 +128,17 @@
             "type": "object",
             "properties": {
                 "status": { "$ref": "#/definitions/task-status" },
-                "progress": { 
+                "progress": {
                     "type": "number",
                     "minimum": 0,
                     "maximum": 100
                 },
-                "importance": { 
+                "importance": {
                     "type": "number",
                     "minimum": 1,
                     "maximum": 5
                 },
-                "urgency": { 
+                "urgency": {
                     "type": "number",
                     "minimum": 1,
                     "maximum": 5

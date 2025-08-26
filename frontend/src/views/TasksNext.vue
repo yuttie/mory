@@ -323,17 +323,17 @@ const eisenhowerQuadrants = computed(() => {
 
     const quadrants = {
         doFirst: [] as TreeNodeRecord[],      // High importance, High urgency
-        schedule: [] as TreeNodeRecord[],     // High importance, Low urgency  
+        schedule: [] as TreeNodeRecord[],     // High importance, Low urgency
         delegate: [] as TreeNodeRecord[],     // Low importance, High urgency
         eliminate: [] as TreeNodeRecord[],    // Low importance, Low urgency
     };
-    
+
     for (const task of targetTasks) {
         const importance = task.metadata?.task?.importance ?? 3;
         const urgency = task.metadata?.task?.urgency ?? 3;
         const isHighImportance = importance >= 4;
         const isHighUrgency = urgency >= 4;
-        
+
         if (isHighImportance && isHighUrgency) {
             quadrants.doFirst.push(task);
         } else if (isHighImportance && !isHighUrgency) {
@@ -344,7 +344,7 @@ const eisenhowerQuadrants = computed(() => {
             quadrants.eliminate.push(task);
         }
     }
-    
+
     return quadrants;
 });
 
@@ -358,7 +358,7 @@ watch(selectedNode, (node) => {
     if (node && !node.uuid.startsWith('tag-group-')) {
         // Open 'selected' tab when a regular task is selected
         itemViewTab.value = 'selected';
-        
+
         // If we're creating a new task, update the parent directory
         if (newTaskPath.value) {
             updateNewTaskParent();
@@ -430,12 +430,12 @@ function getNewTaskPath(taskUuid: string): string {
 
 function updateNewTaskParent() {
     if (!newTaskPath.value) return;
-    
+
     // Extract the UUID from the current newTaskPath
     const pathParts = newTaskPath.value.split('/');
     const filename = pathParts[pathParts.length - 1];
     const taskUuid = filename.replace('.md', '');
-    
+
     // Update the path with the new parent but same UUID
     newTaskPath.value = getNewTaskPath(taskUuid);
 }
