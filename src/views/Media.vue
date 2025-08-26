@@ -155,7 +155,7 @@ async function loadMediaInfo() {
         // First, get the file list to find MIME type information
         const listResponse = await api.listNotes();
         const fileEntry = listResponse.data.find((entry: any) => entry.path === filename.value); // eslint-disable-line @typescript-eslint/no-explicit-any
-        
+
         if (!fileEntry) {
             notFound.value = true;
             return;
@@ -185,8 +185,8 @@ async function loadMediaInfo() {
 }
 
 function isMediaFile(mimeType: string): boolean {
-    return mimeType.startsWith('image/') || 
-           mimeType.startsWith('video/') || 
+    return mimeType.startsWith('image/') ||
+           mimeType.startsWith('video/') ||
            mimeType === 'application/pdf';
 }
 
