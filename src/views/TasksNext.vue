@@ -209,7 +209,7 @@ const selectedNode = ref<TreeNodeRecord | undefined>(undefined);
 const openNodes = ref<UUID[]>([]);
 const newTaskPath = ref<string | null>(null);
 const error = ref<string | null>(null);
-const descendantsViewMode = ref<string>('status');
+const descendantsViewMode = ref<'status' | 'eisenhower'>('status');
 
 // Computed properties
 const activeNodeId = computed<string | undefined>(() => {
