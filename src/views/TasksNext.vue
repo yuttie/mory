@@ -252,12 +252,14 @@ watch(selectedNode, (node) => {
         }
     }
     else {
-        // Open 'descendants' tab when nothing is selected
-        itemViewTab.value = 'descendants';
-        
-        // If we're creating a new task and no node is selected, update to root
+        // Nothing selected
         if (newTaskPath.value) {
+            // If we're creating a new task, switch to selected tab and update parent
+            itemViewTab.value = 'selected';
             updateNewTaskParent();
+        } else {
+            // If not creating a new task, show descendants
+            itemViewTab.value = 'descendants';
         }
     }
 });
