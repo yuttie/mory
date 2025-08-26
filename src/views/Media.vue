@@ -292,7 +292,7 @@ async function loadPdfContent() {
 
 .pdf-viewer object {
   flex: 1;
-  min-height: 800px;
+  min-height: 0;
 }
 
 .media-info {
