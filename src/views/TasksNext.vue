@@ -46,17 +46,18 @@
                     <v-tab-item value="descendants">
                         <v-toolbar flat outlined dense class="flex-grow-0">
                             <!-- View mode selector -->
-                            <v-select
+                            <v-btn-toggle
                                 v-model="descendantsViewMode"
-                                v-bind:items="viewModeOptions"
-                                item-text="text"
-                                item-value="value"
-                                label="View"
                                 dense
-                                outlined
-                                hide-details
-                                v-bind:style="{ 'max-width': $vuetify.breakpoint.mdAndUp ? '200px' : '150px' }"
-                            />
+                            >
+                                <v-btn
+                                    v-for="{ text, icon, value } of viewModeOptions"
+                                    v-bind:value="value"
+                                >
+                                    <v-icon>{{ icon }}</v-icon>
+                                    <span v-if="$vuetify.breakpoint.mdAndUp">{{ text }}</span>
+                                </v-btn>
+                            </v-btn-toggle>
                             <!-- New task button -->
                             <v-btn
                                 title="Add"
@@ -252,7 +253,10 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 
 import {
+    mdiCalendarMultiselectOutline,
+    mdiGridLarge,
     mdiPlus,
+    mdiTrafficLightOutline,
 } from '@mdi/js';
 
 import { type TreeNodeRecord } from '@/stores/taskForest';
@@ -434,9 +438,9 @@ const eisenhowerQuadrants = computed(() => {
 });
 
 const viewModeOptions = computed(() => [
-    { text: 'Status View', value: 'status' },
-    { text: 'Schedule View', value: 'schedule' },
-    { text: 'Eisenhower Matrix', value: 'eisenhower' },
+    { text: 'Status View', icon: mdiTrafficLightOutline, value: 'status' },
+    { text: 'Schedule View', icon: mdiCalendarMultiselectOutline, value: 'schedule' },
+    { text: 'Eisenhower Matrix', icon: mdiGridLarge, value: 'eisenhower' },
 ]);
 
 // Watchers
