@@ -45,17 +45,6 @@
                     </v-tab-item>
                     <v-tab-item value="descendants">
                         <v-toolbar flat outlined dense class="flex-grow-0">
-                            <!-- New task button -->
-                            <v-btn
-                                title="Add"
-                                outlined
-                                v-bind:class="{ 'pa-0': !$vuetify.breakpoint.mdAndUp }"
-                                v-on:click="newTask"
-                            >
-                                <v-icon>{{ mdiPlus }}</v-icon>
-                                <span v-if="$vuetify.breakpoint.mdAndUp">Add</span>
-                            </v-btn>
-                            <v-spacer />
                             <!-- View mode selector -->
                             <v-select
                                 v-model="descendantsViewMode"
@@ -68,6 +57,17 @@
                                 hide-details
                                 style="max-width: 200px"
                             />
+                            <!-- New task button -->
+                            <v-btn
+                                title="Add"
+                                outlined
+                                class="ml-3"
+                                v-bind:class="{ 'pa-0': !$vuetify.breakpoint.mdAndUp }"
+                                v-on:click="newTask"
+                            >
+                                <v-icon>{{ mdiPlus }}</v-icon>
+                                <span v-if="$vuetify.breakpoint.mdAndUp">Add</span>
+                            </v-btn>
                         </v-toolbar>
                         <div class="groups-container flex-grow-1">
                             <!-- Current view -->
