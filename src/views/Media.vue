@@ -221,18 +221,18 @@ async function loadPdfContent() {
         const response = await axios.get(`/files/${filename.value}`, {
             responseType: 'arraybuffer'
         });
-        
+
         // Convert the PDF arraybuffer to a blob URL
         const blob = new Blob([response.data], { type: 'application/pdf' });
-        
+
         // Clean up previous blob URL if it exists
         if (pdfBlobUrl.value) {
             URL.revokeObjectURL(pdfBlobUrl.value);
         }
-        
+
         // Create new blob URL
         pdfBlobUrl.value = URL.createObjectURL(blob);
-        
+
     } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         console.error('Failed to load PDF content:', err);
         // Fall back to direct URL if blob URL fails
