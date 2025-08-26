@@ -45,10 +45,23 @@
                     </v-tab-item>
                     <v-tab-item value="descendants">
                         <v-toolbar flat outlined dense class="flex-grow-0">
+                            <!-- View mode selector -->
+                            <v-select
+                                v-model="descendantsViewMode"
+                                v-bind:items="viewModeOptions"
+                                item-text="text"
+                                item-value="value"
+                                label="View"
+                                dense
+                                outlined
+                                hide-details
+                                style="max-width: 200px"
+                            />
                             <!-- New task button -->
                             <v-btn
                                 title="Add"
                                 outlined
+                                class="ml-3"
                                 v-bind:class="{ 'pa-0': !$vuetify.breakpoint.mdAndUp }"
                                 v-on:click="newTask"
                             >
@@ -57,7 +70,8 @@
                             </v-btn>
                         </v-toolbar>
                         <div class="groups-container flex-grow-1">
-                            <div class="groups">
+                            <!-- Status view -->
+                            <div v-if="descendantsViewMode === 'status'" class="groups">
                                 <v-card dense class="group">
                                     <v-card-title>Backlog</v-card-title>
                                     <div class="task-list">
@@ -89,6 +103,69 @@
                                         </div>
                                     </div>
                                 </v-card>
+                            </div>
+                            <!-- Eisenhower Matrix view -->
+                            <div v-else-if="descendantsViewMode === 'eisenhower'" class="eisenhower-matrix">
+                                <div class="matrix-row">
+                                    <v-card class="quadrant urgent-important">
+                                        <v-card-title class="quadrant-header">
+                                            <span class="quadrant-title">Do First</span>
+                                            <span class="quadrant-subtitle">Urgent & Important</span>
+                                        </v-card-title>
+                                        <div class="task-list">
+                                            <TaskListItemNext
+                                                v-for="task of eisenhowerQuadrants.doFirst"
+                                                v-bind:key="task.uuid"
+                                                v-bind:value="task"
+                                                v-on:click="onTaskListItemClick(task.uuid)"
+                                            />
+                                        </div>
+                                    </v-card>
+                                    <v-card class="quadrant important-not-urgent">
+                                        <v-card-title class="quadrant-header">
+                                            <span class="quadrant-title">Schedule</span>
+                                            <span class="quadrant-subtitle">Important, Not Urgent</span>
+                                        </v-card-title>
+                                        <div class="task-list">
+                                            <TaskListItemNext
+                                                v-for="task of eisenhowerQuadrants.schedule"
+                                                v-bind:key="task.uuid"
+                                                v-bind:value="task"
+                                                v-on:click="onTaskListItemClick(task.uuid)"
+                                            />
+                                        </div>
+                                    </v-card>
+                                </div>
+                                <div class="matrix-row">
+                                    <v-card class="quadrant urgent-not-important">
+                                        <v-card-title class="quadrant-header">
+                                            <span class="quadrant-title">Delegate</span>
+                                            <span class="quadrant-subtitle">Urgent, Not Important</span>
+                                        </v-card-title>
+                                        <div class="task-list">
+                                            <TaskListItemNext
+                                                v-for="task of eisenhowerQuadrants.delegate"
+                                                v-bind:key="task.uuid"
+                                                v-bind:value="task"
+                                                v-on:click="onTaskListItemClick(task.uuid)"
+                                            />
+                                        </div>
+                                    </v-card>
+                                    <v-card class="quadrant not-urgent-not-important">
+                                        <v-card-title class="quadrant-header">
+                                            <span class="quadrant-title">Eliminate</span>
+                                            <span class="quadrant-subtitle">Not Urgent, Not Important</span>
+                                        </v-card-title>
+                                        <div class="task-list">
+                                            <TaskListItemNext
+                                                v-for="task of eisenhowerQuadrants.eliminate"
+                                                v-bind:key="task.uuid"
+                                                v-bind:value="task"
+                                                v-on:click="onTaskListItemClick(task.uuid)"
+                                            />
+                                        </div>
+                                    </v-card>
+                                </div>
                             </div>
                         </div>
                     </v-tab-item>
@@ -132,6 +209,7 @@ const selectedNode = ref<TreeNodeRecord | undefined>(undefined);
 const openNodes = ref<UUID[]>([]);
 const newTaskPath = ref<string | null>(null);
 const error = ref<string | null>(null);
+const descendantsViewMode = ref<'status' | 'eisenhower'>('status');
 
 // Computed properties
 const activeNodeId = computed<string | undefined>(() => {
@@ -228,6 +306,52 @@ const knownContacts = computed<[string, number][]>(() => {
     return Array.from(contactCounts)
         .sort(([_contact1, count1], [_contact2, count2]) => count2 - count1);
 });
+
+// Eisenhower Matrix computed properties
+const eisenhowerQuadrants = computed(() => {
+    let targetTasks;
+    if (isTagGroupSelected.value && selectedTagName.value) {
+        // Show tasks from the selected tag group
+        targetTasks = store.childrenOf(`tag-group-${selectedTagName.value}`);
+    }
+    else {
+        // Show tasks based on selected node (descendants or all tasks)
+        targetTasks = selectedNode.value && !isTagGroupSelected.value
+            ? store.flattenDescendants(selectedNode.value.uuid)
+            : store.allTasks;
+    }
+
+    const quadrants = {
+        doFirst: [] as TreeNodeRecord[],      // High importance, High urgency
+        schedule: [] as TreeNodeRecord[],     // High importance, Low urgency  
+        delegate: [] as TreeNodeRecord[],     // Low importance, High urgency
+        eliminate: [] as TreeNodeRecord[],    // Low importance, Low urgency
+    };
+    
+    for (const task of targetTasks) {
+        const importance = task.metadata?.task?.importance ?? 3;
+        const urgency = task.metadata?.task?.urgency ?? 3;
+        const isHighImportance = importance >= 4;
+        const isHighUrgency = urgency >= 4;
+        
+        if (isHighImportance && isHighUrgency) {
+            quadrants.doFirst.push(task);
+        } else if (isHighImportance && !isHighUrgency) {
+            quadrants.schedule.push(task);
+        } else if (!isHighImportance && isHighUrgency) {
+            quadrants.delegate.push(task);
+        } else {
+            quadrants.eliminate.push(task);
+        }
+    }
+    
+    return quadrants;
+});
+
+const viewModeOptions = computed(() => [
+    { text: 'Status View', value: 'status' },
+    { text: 'Eisenhower Matrix', value: 'eisenhower' },
+]);
 
 // Watchers
 watch(selectedNode, (node) => {
@@ -486,5 +610,61 @@ $space: 12px;
     display: flex;
     flex-direction: column;
     flex: 1 1 0;
+}
+
+/* Eisenhower Matrix styles */
+.eisenhower-matrix {
+    display: flex;
+    flex-direction: column;
+    gap: $space;
+    padding: $space;
+    height: 100%;
+}
+
+.matrix-row {
+    display: flex;
+    gap: $space;
+    flex: 1 1 0;
+}
+
+.quadrant {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    max-height: 100%;
+}
+
+.quadrant-header {
+    flex-direction: column;
+    align-items: flex-start !important;
+    padding-bottom: 8px;
+}
+
+.quadrant-title {
+    font-weight: 600;
+    font-size: 1.1em;
+}
+
+.quadrant-subtitle {
+    font-size: 0.85em;
+    color: rgba(0, 0, 0, 0.6);
+    font-weight: 400;
+}
+
+/* Color coding for quadrants */
+.urgent-important {
+    border-left: 4px solid #f44336; /* Red - Critical */
+}
+
+.important-not-urgent {
+    border-left: 4px solid #2196f3; /* Blue - Important */
+}
+
+.urgent-not-important {
+    border-left: 4px solid #ff9800; /* Orange - Delegate */
+}
+
+.not-urgent-not-important {
+    border-left: 4px solid #9e9e9e; /* Gray - Eliminate */
 }
 </style>
