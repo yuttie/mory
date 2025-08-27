@@ -176,66 +176,62 @@
                             </div>
                             <!-- Eisenhower Matrix view -->
                             <div v-else-if="descendantsViewMode === 'eisenhower'" class="eisenhower-matrix">
-                                <div class="matrix-row">
-                                    <v-card class="quadrant urgent-important">
-                                        <v-card-title class="quadrant-header">
-                                            <span class="quadrant-title">Do First</span>
-                                            <span class="quadrant-subtitle">Urgent & Important</span>
-                                        </v-card-title>
-                                        <div class="task-list">
-                                            <TaskListItemNext
-                                                v-for="task of eisenhowerQuadrants.doFirst"
-                                                v-bind:key="task.uuid"
-                                                v-bind:value="task"
-                                                v-on:click="onTaskListItemClick(task.uuid)"
-                                            />
-                                        </div>
-                                    </v-card>
-                                    <v-card class="quadrant important-not-urgent">
-                                        <v-card-title class="quadrant-header">
-                                            <span class="quadrant-title">Schedule</span>
-                                            <span class="quadrant-subtitle">Important, Not Urgent</span>
-                                        </v-card-title>
-                                        <div class="task-list">
-                                            <TaskListItemNext
-                                                v-for="task of eisenhowerQuadrants.schedule"
-                                                v-bind:key="task.uuid"
-                                                v-bind:value="task"
-                                                v-on:click="onTaskListItemClick(task.uuid)"
-                                            />
-                                        </div>
-                                    </v-card>
-                                </div>
-                                <div class="matrix-row">
-                                    <v-card class="quadrant urgent-not-important">
-                                        <v-card-title class="quadrant-header">
-                                            <span class="quadrant-title">Delegate</span>
-                                            <span class="quadrant-subtitle">Urgent, Not Important</span>
-                                        </v-card-title>
-                                        <div class="task-list">
-                                            <TaskListItemNext
-                                                v-for="task of eisenhowerQuadrants.delegate"
-                                                v-bind:key="task.uuid"
-                                                v-bind:value="task"
-                                                v-on:click="onTaskListItemClick(task.uuid)"
-                                            />
-                                        </div>
-                                    </v-card>
-                                    <v-card class="quadrant not-urgent-not-important">
-                                        <v-card-title class="quadrant-header">
-                                            <span class="quadrant-title">Eliminate</span>
-                                            <span class="quadrant-subtitle">Not Urgent, Not Important</span>
-                                        </v-card-title>
-                                        <div class="task-list">
-                                            <TaskListItemNext
-                                                v-for="task of eisenhowerQuadrants.eliminate"
-                                                v-bind:key="task.uuid"
-                                                v-bind:value="task"
-                                                v-on:click="onTaskListItemClick(task.uuid)"
-                                            />
-                                        </div>
-                                    </v-card>
-                                </div>
+                                <v-card class="quadrant urgent-important">
+                                    <v-card-title class="quadrant-header">
+                                        <span class="quadrant-title">Do First</span>
+                                        <span class="quadrant-subtitle">Urgent & Important</span>
+                                    </v-card-title>
+                                    <div class="task-list">
+                                        <TaskListItemNext
+                                            v-for="task of eisenhowerQuadrants.doFirst"
+                                            v-bind:key="task.uuid"
+                                            v-bind:value="task"
+                                            v-on:click="onTaskListItemClick(task.uuid)"
+                                        />
+                                    </div>
+                                </v-card>
+                                <v-card class="quadrant important-not-urgent">
+                                    <v-card-title class="quadrant-header">
+                                        <span class="quadrant-title">Schedule</span>
+                                        <span class="quadrant-subtitle">Important, Not Urgent</span>
+                                    </v-card-title>
+                                    <div class="task-list">
+                                        <TaskListItemNext
+                                            v-for="task of eisenhowerQuadrants.schedule"
+                                            v-bind:key="task.uuid"
+                                            v-bind:value="task"
+                                            v-on:click="onTaskListItemClick(task.uuid)"
+                                        />
+                                    </div>
+                                </v-card>
+                                <v-card class="quadrant urgent-not-important">
+                                    <v-card-title class="quadrant-header">
+                                        <span class="quadrant-title">Delegate</span>
+                                        <span class="quadrant-subtitle">Urgent, Not Important</span>
+                                    </v-card-title>
+                                    <div class="task-list">
+                                        <TaskListItemNext
+                                            v-for="task of eisenhowerQuadrants.delegate"
+                                            v-bind:key="task.uuid"
+                                            v-bind:value="task"
+                                            v-on:click="onTaskListItemClick(task.uuid)"
+                                        />
+                                    </div>
+                                </v-card>
+                                <v-card class="quadrant not-urgent-not-important">
+                                    <v-card-title class="quadrant-header">
+                                        <span class="quadrant-title">Eliminate</span>
+                                        <span class="quadrant-subtitle">Not Urgent, Not Important</span>
+                                    </v-card-title>
+                                    <div class="task-list">
+                                        <TaskListItemNext
+                                            v-for="task of eisenhowerQuadrants.eliminate"
+                                            v-bind:key="task.uuid"
+                                            v-bind:value="task"
+                                            v-on:click="onTaskListItemClick(task.uuid)"
+                                        />
+                                    </div>
+                                </v-card>
                             </div>
                         </div>
                     </v-tab-item>
@@ -750,8 +746,9 @@ $space: 12px;
 
 /* Eisenhower Matrix styles */
 .eisenhower-matrix {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(2, 1fr);
     gap: $space;
     padding: $space;
     height: 100%;
@@ -777,10 +774,10 @@ $space: 12px;
 }
 
 .quadrant {
-    flex: 1 1 0;
     display: flex;
     flex-direction: column;
     max-height: 100%;
+    overflow: auto;
 }
 
 /* Mobile responsive adjustments for quadrants */
