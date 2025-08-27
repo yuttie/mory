@@ -1,3 +1,18 @@
+## [1.5.1] - 2025-08-27
+
+### 🐛 Bug Fixes
+
+- *(frontend/views/TasksNext)* Keep all Eisenhower Matrix quadrants uniformly sized
+
+### 🎨 Styling
+
+- *(frontend/views/TasksNext)* Remove trailing spaces
+
+### ⚙️ Miscellaneous Tasks
+
+- *(frontend)* Add cliff.toml
+- *(docs)* Add top-level README.md
+
 ## [1.5.0] - 2025-08-26
 
 ### 🚀 Features
