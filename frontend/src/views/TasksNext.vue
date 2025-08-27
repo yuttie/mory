@@ -488,13 +488,6 @@ function navigateToState(selectedNodeId?: string, tab?: string, viewMode?: strin
     });
 }
 
-function initializeURL() {
-    // If we're on the basic route, redirect to the parameterized route with defaults
-    if (route.name === 'TasksNext') {
-        navigateToState();
-    }
-}
-
 // Watchers for opening tree nodes when selected node changes
 watch(selectedNode, (node) => {
     if (node) {
@@ -509,21 +502,11 @@ watch(selectedNode, (node) => {
     }
 });
 
-// Watch for route changes to handle basic route redirect
-watch(route, () => {
-    initializeURL();
-}, { immediate: false });
-
 // Lifecycle hooks
 onMounted(async () => {
     document.title = `Tasks | ${import.meta.env.VITE_APP_NAME}`;
     window.addEventListener('focus', load);
     await load();
-    
-    // Initialize URL after store is loaded
-    if (store.isLoaded) {
-        initializeURL();
-    }
 });
 
 onUnmounted(() => {
@@ -683,8 +666,6 @@ async function load() {
     error.value = null;
     try {
         await store.refresh();
-        // Initialize URL after store is refreshed
-        initializeURL();
     }
     catch (e) {
         if (axios.isAxiosError(e) && e.response?.status === 401) {
