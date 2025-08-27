@@ -2,6 +2,40 @@
     <div id="tasks" class="d-flex" v-bind:class="{ 'flex-column': !$vuetify.breakpoint.mdAndUp, 'flex-row': $vuetify.breakpoint.mdAndUp }">
         <template v-if="store.isLoaded">
             <div class="d-flex flex-column task-tree-container"><!-- NOTE: Necessary for <TaskTree> to have vertical scrollbar -->
+                <v-toolbar flat class="flex-grow-0">
+                    <v-toolbar-title>
+                        <span>{{ store.allTasks.filter((t) => !['done', 'canceled'].includes(t.metadata?.task?.status?.kind)).length }} tasks left</span>
+                    </v-toolbar-title>
+                    <v-spacer />
+                    <v-menu
+                        offset-y
+                        v-bind:close-on-content-click="false"
+                    >
+                        <template v-slot:activator="{ on, attrs }">
+                            <v-btn
+                                icon
+                                v-bind="attrs"
+                                v-on="on"
+                            >
+                                <v-icon>{{ mdiDotsVertical }}</v-icon>
+                            </v-btn>
+                        </template>
+                        <v-list>
+                            <v-subheader>Statistics</v-subheader>
+                            <v-list-item>
+                                <v-list-item-content>
+                                    <v-list-item-title v-for="[kind, label] of Object.entries(STATUS_LABEL)">
+                                        {{ label }}: {{ store.allTasks.filter((t) => [kind].includes(t.metadata?.task?.status?.kind)).length }}
+                                    </v-list-item-title>
+                                </v-list-item-content>
+                            </v-list-item>
+                        </v-list>
+                        <v-divider></v-divider>
+                        <v-list>
+                            <v-subheader>Config</v-subheader>
+                        </v-list>
+                    </v-menu>
+                </v-toolbar>
                 <TaskTree
                     v-bind:items="store.forestWithTags"
                     v-bind:active="activeNodeId"
@@ -258,6 +292,7 @@ import { useRoute, useRouter } from 'vue-router/composables';
 
 import {
     mdiCalendarMultiselectOutline,
+    mdiDotsVertical,
     mdiGridLarge,
     mdiPlus,
     mdiTrafficLightOutline,
@@ -267,7 +302,7 @@ import { type TreeNodeRecord } from '@/stores/taskForest';
 import { useTaggedTaskForestStore } from '@/stores/taggedTaskForest';
 
 import * as api from '@/api';
-import { type UUID, type StatusKind, type Task, render } from '@/task';
+import { type UUID, type StatusKind, type Task, STATUS_LABEL, render } from '@/task';
 import axios from 'axios';
 import dayjs from 'dayjs';
 
