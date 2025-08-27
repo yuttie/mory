@@ -43,6 +43,11 @@ const routes: Array<RouteConfig> = [
     component: TasksNext,
   },
   {
+    path: '/tasks-next/:selectedNodeId/:tab/:viewMode',
+    name: 'TasksNextWithParams',
+    component: TasksNext,
+  },
+  {
     path: '/create',
     name: 'Create',
     redirect: to => {

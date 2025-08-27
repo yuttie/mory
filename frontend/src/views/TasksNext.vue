@@ -247,6 +247,7 @@
 
 <script lang="ts" setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router/composables';
 
 import {
     mdiCalendarMultiselectOutline,
@@ -266,13 +267,17 @@ import dayjs from 'dayjs';
 // Stores
 const store = useTaggedTaskForestStore();
 
+// Router
+const router = useRouter();
+const route = useRoute();
+
 // Emits
 const emit = defineEmits<{
     (e: 'tokenExpired', callback: () => void): void;
 }>();
 
 // Reactive states
-const taskEditorRef = ref<any>(null);
+const taskEditorRef = ref<InstanceType<any> | null>(null);
 const itemViewTab = ref<string>('descendants');
 const selectedNode = ref<TreeNodeRecord | undefined>(undefined);
 const openNodes = ref<UUID[]>([]);
@@ -439,6 +444,62 @@ const viewModeOptions = computed(() => [
     { text: 'Eisenhower Matrix', icon: mdiGridLarge, value: 'eisenhower' },
 ]);
 
+// URL synchronization functions
+function updateURL() {
+    const params = {
+        selectedNodeId: selectedNode.value?.uuid || '_',
+        tab: itemViewTab.value || 'descendants',
+        viewMode: descendantsViewMode.value || 'status'
+    };
+    
+    // Only update URL if current route doesn't match the desired state
+    if (route.params.selectedNodeId !== params.selectedNodeId ||
+        route.params.tab !== params.tab ||
+        route.params.viewMode !== params.viewMode) {
+        
+        router.push({
+            name: 'TasksNextWithParams',
+            params: params
+        }).catch(err => {
+            // Ignore navigation duplicated errors
+            if (err.name !== 'NavigationDuplicated') {
+                // eslint-disable-next-line no-console
+                console.error('Router navigation error:', err);
+            }
+        });
+    }
+}
+
+function loadFromURL() {
+    if (route.name === 'TasksNextWithParams' && route.params.selectedNodeId) {
+        // Load state from URL parameters
+        const nodeId = route.params.selectedNodeId === '_' ? undefined : route.params.selectedNodeId;
+        const tab = route.params.tab || 'descendants';
+        const viewMode = route.params.viewMode || 'status';
+        
+        // Set state without triggering watchers initially
+        if (nodeId && nodeId !== selectedNode.value?.uuid) {
+            const node = store.node(nodeId);
+            if (node) {
+                selectedNode.value = node;
+                // Open tree up to the corresponding item
+                const next = new Set(openNodes.value);
+                let parent = store.parentOf(nodeId);
+                while (parent) {
+                    next.add(parent);
+                    parent = store.parentOf(parent);
+                }
+                openNodes.value = [...next];
+            }
+        } else if (!nodeId) {
+            selectedNode.value = undefined;
+        }
+        
+        itemViewTab.value = tab;
+        descendantsViewMode.value = viewMode as 'status' | 'schedule' | 'eisenhower';
+    }
+}
+
 // Watchers
 watch(selectedNode, (node) => {
     if (node && !node.uuid.startsWith('tag-group-')) {
@@ -461,13 +522,36 @@ watch(selectedNode, (node) => {
             itemViewTab.value = 'descendants';
         }
     }
+    
+    // Update URL when selectedNode changes
+    updateURL();
 });
+
+// Watch for tab changes and update URL
+watch(itemViewTab, () => {
+    updateURL();
+});
+
+// Watch for view mode changes and update URL
+watch(descendantsViewMode, () => {
+    updateURL();
+});
+
+// Watch for route changes and load state from URL
+watch(route, () => {
+    loadFromURL();
+}, { immediate: false });
 
 // Lifecycle hooks
 onMounted(async () => {
     document.title = `Tasks | ${import.meta.env.VITE_APP_NAME}`;
     window.addEventListener('focus', load);
     await load();
+    
+    // Load state from URL after store is loaded
+    if (store.isLoaded) {
+        loadFromURL();
+    }
 });
 
 onUnmounted(() => {
@@ -619,6 +703,8 @@ async function load() {
     error.value = null;
     try {
         await store.refresh();
+        // Load state from URL after store is refreshed
+        loadFromURL();
     }
     catch (e) {
         if (axios.isAxiosError(e) && e.response?.status === 401) {
