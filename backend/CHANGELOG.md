@@ -1,3 +1,9 @@
+## [1.4.1] - 2025-08-27
+
+### 🐛 Bug Fixes
+
+- *(docker)* Update image for production stage due to compiled binary requiring glibc-2.39
+
 ## [1.4.0] - 2025-08-17
 
 ### 🚀 Features
