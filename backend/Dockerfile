@@ -11,7 +11,7 @@ COPY src src
 RUN touch src/main.rs && cargo build --release
 
 # production stage
-FROM debian:bookworm-slim AS production-stage
+FROM debian:trixie-slim AS production-stage
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
