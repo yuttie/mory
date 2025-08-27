@@ -664,7 +664,7 @@ $space: 12px;
         max-height: 200px;
         min-height: 150px;
     }
-    
+
     .task-tree {
         width: 100%;
     }
@@ -712,7 +712,7 @@ $space: 12px;
         padding: $space / 2;
         gap: $space / 2;
     }
-    
+
     .group {
         width: 100%;
         max-height: 300px;
@@ -766,7 +766,7 @@ $space: 12px;
         padding: $space / 2;
         gap: $space / 2;
     }
-    
+
     .matrix-row {
         flex-direction: column;
         flex: none;
