@@ -33,6 +33,26 @@
                         <v-divider></v-divider>
                         <v-list>
                             <v-subheader>Config</v-subheader>
+                            <v-list-item>
+                                <v-list-item-content>
+                                    <v-switch
+                                        v-model="hideDone"
+                                        label="Hide done tasks"
+                                        hide-details
+                                        class="mt-0"
+                                    ></v-switch>
+                                </v-list-item-content>
+                            </v-list-item>
+                            <v-list-item>
+                                <v-list-item-content>
+                                    <v-switch
+                                        v-model="hideCanceled"
+                                        label="Hide canceled tasks"
+                                        hide-details
+                                        class="mt-0"
+                                    ></v-switch>
+                                </v-list-item-content>
+                            </v-list-item>
                         </v-list>
                     </v-menu>
                 </v-toolbar>
@@ -323,6 +343,8 @@ const taskEditorRef = ref<any>(null);
 const openNodes = ref<UUID[]>([]);
 const newTaskPath = ref<string | null>(null);
 const error = ref<string | null>(null);
+const hideDone = ref<boolean>(false);
+const hideCanceled = ref<boolean>(false);
 
 // URL-derived state (single source of truth)
 const selectedNode = computed<TreeNodeRecord | undefined>(() => {
@@ -363,7 +385,7 @@ const selectedTagName = computed<string | null>(() => {
     return null;
 });
 
-const taskStatuses = computed<TreeNodeRecord[]>(() => {
+const taskStatuses = computed(() => {
     let targetTasks;
     if (isTagGroupSelected.value && selectedTagName.value) {
         // Show tasks from the selected tag group
@@ -394,8 +416,16 @@ const taskStatuses = computed<TreeNodeRecord[]>(() => {
             case 'waiting': statuses.waiting.push(task); break;
             case 'blocked': statuses.blocked.push(task); break;
             case 'on_hold': statuses.onHold.push(task); break;
-            case 'done': statuses.done.push(task); break;
-            case 'canceled': statuses.canceled.push(task); break;
+            case 'done': 
+                if (!hideDone.value) {
+                    statuses.done.push(task);
+                }
+                break;
+            case 'canceled': 
+                if (!hideCanceled.value) {
+                    statuses.canceled.push(task);
+                }
+                break;
         }
     }
 
