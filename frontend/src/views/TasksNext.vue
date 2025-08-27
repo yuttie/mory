@@ -56,7 +56,6 @@
                             >
                                 <v-btn
                                     v-for="{ text, icon, value } of viewModeOptions"
-                                    v-bind:key="value"
                                     v-bind:value="value"
                                 >
                                     <v-icon>{{ icon }}</v-icon>
@@ -282,7 +281,7 @@ const emit = defineEmits<{
 }>();
 
 // Reactive states
-const taskEditorRef = ref<InstanceType<any> | null>(null);
+const taskEditorRef = ref<any>(null);
 const openNodes = ref<UUID[]>([]);
 const newTaskPath = ref<string | null>(null);
 const error = ref<string | null>(null);
@@ -547,25 +546,16 @@ function onTaskSelectionChangeInTree(id: UUID | undefined) {
 }
 
 function onTaskListItemClick(id: UUID) {
-    // Open tree up to the corresponding item
-    const next = new Set(openNodes.value);
-    let parent = store.parentOf(id);
-    while (parent) {
-        next.add(parent);
-        parent = store.parentOf(parent);
-    }
-    openNodes.value = [...next];
-    
     // Navigate to selected task
     navigateToState(id, 'selected', descendantsViewMode.value);
 }
 
 function newTask() {
-    // Generate new UUID for the task
+    // Navigate to selected tab first
+    navigateToState(selectedNode.value?.uuid, 'selected', descendantsViewMode.value);
+    // Then generate new UUID and set path for the task
     const taskUuid = crypto.randomUUID();
     newTaskPath.value = getNewTaskPath(taskUuid);
-    // Navigate to selected tab for new task creation
-    navigateToState(selectedNode.value?.uuid, 'selected', descendantsViewMode.value);
 }
 
 function getNewTaskPath(taskUuid: string): string {
