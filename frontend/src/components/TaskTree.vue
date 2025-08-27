@@ -16,11 +16,16 @@
                 {{ mdiTag }}
             </v-icon>
             <v-icon v-else-if="item.children" dense>
-                {{ item.metadata?.task?.status?.kind === 'done' ? mdiCheckboxMultipleMarkedOutline : mdiCheckboxMultipleBlankOutline }}
+                {{ item.metadata?.task?.status?.kind === 'done' ? mdiFolderCheck : item.metadata?.task?.status?.kind === 'canceled' ? mdiFolderOff : mdiFolder }}
             </v-icon>
             <v-icon v-else dense>
-                {{ item.metadata?.task?.status?.kind === 'done' ? mdiCheckboxMarkedOutline : mdiCheckboxBlankOutline }}
+                {{ item.metadata?.task?.status?.kind === 'done' ? mdiCheckboxMarkedOutline : item.metadata?.task?.status?.kind === 'canceled' ? mdiCheckboxBlankOffOutline : mdiCheckboxBlankOutline }}
             </v-icon>
+        </template>
+        <template v-slot:label="{ item, open }">
+            <span v-bind:style="{ textDecorationLine: item.metadata?.task?.status?.kind === 'canceled' ? 'line-through' : 'none' }">
+                {{ item.title }}
+            </span>
         </template>
     </v-treeview>
 </template>
@@ -30,10 +35,12 @@ import { ref, computed, onMounted, onUnmounted, set, del } from 'vue';
 import type { Ref } from 'vue';
 
 import {
+    mdiCheckboxBlankOffOutline,
     mdiCheckboxBlankOutline,
     mdiCheckboxMarkedOutline,
-    mdiCheckboxMultipleBlankOutline,
-    mdiCheckboxMultipleMarkedOutline,
+    mdiFolder,
+    mdiFolderCheck,
+    mdiFolderOff,
     mdiTag,
 } from '@mdi/js';
 
