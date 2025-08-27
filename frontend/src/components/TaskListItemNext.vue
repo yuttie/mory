@@ -4,7 +4,7 @@
         class="task-list-item"
     >
         <v-icon class="mr-1">
-            {{ done ? mdiCheckboxMarkedOutline : mdiCheckboxBlankOutline }}
+            {{ done ? mdiCheckboxMarkedOutline : canceled ? mdiCheckboxBlankOffOutline : mdiCheckboxBlankOutline }}
         </v-icon>
         <div>
             <span
@@ -12,7 +12,7 @@
                 v-for="tag of value.metadata.tags"
                 v-bind:key="tag"
             >{{ tag }}</span>
-            <span class="title-text">{{ value.title }}</span>
+            <span class="title-text" v-bind:class="{ strikethrough: canceled }">{{ value.title }}</span>
             <span
                 class="additional-info"
                 v-if="value.note"
@@ -77,6 +77,7 @@ import {
     mdiCalendar,
     mdiCheckboxBlankOutline,
     mdiCheckboxMarkedOutline,
+    mdiCheckboxBlankOffOutline,
     mdiNoteTextOutline,
 } from '@mdi/js';
 
@@ -113,6 +114,10 @@ const emit = defineEmits<{
 // Computed properties
 const done = computed<boolean>(() => {
     return props.value.metadata?.task?.status?.kind === 'done';
+});
+
+const canceled = computed<boolean>(() => {
+    return props.value.metadata?.task?.status?.kind === 'canceled';
 });
 
 const startAt = computed<string | null>(() => {
@@ -232,6 +237,9 @@ const deadlineStyle = computed<Record<string, string>>(() => {
     padding: 1px 2px;
     border: 1px solid #eee;
     margin-right: 3px;
+}
+.strikethrough {
+    text-decoration-line: line-through;
 }
 .note-tooltip {
     white-space: pre-wrap;
