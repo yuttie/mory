@@ -4,7 +4,7 @@
             <div class="d-flex flex-column task-tree-container"><!-- NOTE: Necessary for <TaskTree> to have vertical scrollbar -->
                 <v-toolbar flat class="flex-grow-0">
                     <v-toolbar-title>
-                        <span>{{ store.allTasks.filter((t) => !['done', 'canceled'].includes(t.metadata?.task?.status?.kind)).length }} tasks left</span>
+                        <span>{{ filteredTasksCount }} tasks left</span>
                     </v-toolbar-title>
                     <v-spacer />
                     <v-menu
@@ -57,7 +57,7 @@
                     </v-menu>
                 </v-toolbar>
                 <TaskTree
-                    v-bind:items="store.forestWithTags"
+                    v-bind:items="filteredForestWithTags"
                     v-bind:active="activeNodeId"
                     v-bind:open.sync="openNodes"
                     v-on:update:active="onTaskSelectionChangeInTree"
@@ -432,6 +432,60 @@ const taskStatuses = computed(() => {
     return statuses;
 });
 
+// Helper function to recursively filter tree nodes based on task status
+function filterTreeNodes(nodes: any[], hideDone: boolean, hideCanceled: boolean): any[] {
+    return nodes
+        .map(node => {
+            // If this is a task node, check if it should be filtered out
+            const taskStatus = node.metadata?.task?.status?.kind;
+            const shouldFilterOut = 
+                (hideDone && taskStatus === 'done') || 
+                (hideCanceled && taskStatus === 'canceled');
+
+            if (shouldFilterOut) {
+                return null; // Filter out this node
+            }
+
+            // If this node has children, recursively filter them
+            let filteredChildren = node.children;
+            if (node.children && node.children.length > 0) {
+                filteredChildren = filterTreeNodes(node.children, hideDone, hideCanceled);
+            }
+
+            // Return the node with filtered children
+            return {
+                ...node,
+                children: filteredChildren
+            };
+        })
+        .filter(node => node !== null); // Remove filtered out nodes
+}
+
+// Computed property for filtered forest with tags
+const filteredForestWithTags = computed(() => {
+    return filterTreeNodes(store.forestWithTags, hideDone.value, hideCanceled.value);
+});
+
+// Computed property for task count that reflects current filtering
+const filteredTasksCount = computed(() => {
+    return store.allTasks.filter((t) => {
+        const kind = t.metadata?.task?.status?.kind;
+        // Always exclude done and canceled from the "tasks left" count, regardless of filter switches
+        if (['done', 'canceled'].includes(kind)) return false;
+        return true;
+    }).length;
+});
+
+// Helper function to filter task list based on status
+function filterTasksByStatus(tasks: TreeNodeRecord[]): TreeNodeRecord[] {
+    return tasks.filter(task => {
+        const kind: StatusKind = task.metadata?.task?.status?.kind ?? 'todo';
+        if (hideDone.value && kind === 'done') return false;
+        if (hideCanceled.value && kind === 'canceled') return false;
+        return true;
+    });
+}
+
 const scheduled = computed<Record<string, TreeNodeRecord[]>>(() => {
     // Keep today, tomorrow, or other dates that have some undone tasks
     const today = dayjs().format('YYYY-MM-DD');
@@ -453,7 +507,10 @@ const scheduled = computed<Record<string, TreeNodeRecord[]>>(() => {
             : store.allTasks;
     }
 
-    for (const t of targetTasks) {
+    // Apply filtering based on task status
+    const filteredTasks = filterTasksByStatus(targetTasks);
+
+    for (const t of filteredTasks) {
         if (t.metadata?.task?.scheduled_dates) {
             for (const date of t.metadata.task.scheduled_dates) {
                 scheduled[date] ??= [];
@@ -503,6 +560,9 @@ const eisenhowerQuadrants = computed(() => {
             : store.allTasks;
     }
 
+    // Apply filtering based on task status
+    const filteredTasks = filterTasksByStatus(targetTasks);
+
     const quadrants = {
         doFirst: [] as TreeNodeRecord[],      // High importance, High urgency
         schedule: [] as TreeNodeRecord[],     // High importance, Low urgency
@@ -510,7 +570,7 @@ const eisenhowerQuadrants = computed(() => {
         eliminate: [] as TreeNodeRecord[],    // Low importance, Low urgency
     };
 
-    for (const task of targetTasks) {
+    for (const task of filteredTasks) {
         const importance = task.metadata?.task?.importance ?? 3;
         const urgency = task.metadata?.task?.urgency ?? 3;
         const isHighImportance = importance >= 4;
