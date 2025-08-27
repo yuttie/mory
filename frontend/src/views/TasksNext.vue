@@ -53,6 +53,7 @@
                                 v-bind:value="descendantsViewMode"
                                 v-on:change="onViewModeChange"
                                 dense
+                                mandatory
                             >
                                 <v-btn
                                     v-for="{ text, icon, value } of viewModeOptions"
