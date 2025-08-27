@@ -432,31 +432,79 @@ const taskStatuses = computed(() => {
     return statuses;
 });
 
-// Helper function to recursively filter tree nodes based on task status
+// Helper function to recursively flatten all descendants of a node
+function flattenSubtreeNodes(node: any): any[] {
+    const result = [node];
+    if (node.children && node.children.length > 0) {
+        for (const child of node.children) {
+            result.push(...flattenSubtreeNodes(child));
+        }
+    }
+    return result;
+}
+
+// Helper function to check if entire subtree should be filtered
+function shouldFilterEntireSubtree(node: any, hideDone: boolean, hideCanceled: boolean): boolean {
+    // Get all descendants of this subtree (including the parent)
+    const allDescendants = flattenSubtreeNodes(node);
+    
+    // Check if ALL descendants have status that should be filtered
+    return allDescendants.every(descendant => {
+        const status = descendant.metadata?.task?.status?.kind;
+        return (hideDone && status === 'done') || (hideCanceled && status === 'canceled');
+    });
+}
+
+// Helper function to recursively filter tree nodes based on task status with subtree logic
 function filterTreeNodes(nodes: any[], hideDone: boolean, hideCanceled: boolean): any[] {
     return nodes
         .map(node => {
-            // If this is a task node, check if it should be filtered out
+            // Check if this is a tag group node (virtual parent)
+            if (node.uuid.startsWith('tag-group-')) {
+                // For tag groups, filter children individually since they're virtual parents
+                let filteredChildren = node.children;
+                if (node.children && node.children.length > 0) {
+                    filteredChildren = node.children.filter(child => {
+                        const taskStatus = child.metadata?.task?.status?.kind;
+                        const shouldFilterOut = 
+                            (hideDone && taskStatus === 'done') || 
+                            (hideCanceled && taskStatus === 'canceled');
+                        return !shouldFilterOut;
+                    });
+                }
+                
+                // Return the tag group with filtered children
+                return { ...node, children: filteredChildren };
+            }
+            
+            // For real task nodes
             const taskStatus = node.metadata?.task?.status?.kind;
-            const shouldFilterOut = 
-                (hideDone && taskStatus === 'done') || 
-                (hideCanceled && taskStatus === 'canceled');
-
-            if (shouldFilterOut) {
-                return null; // Filter out this node
-            }
-
-            // If this node has children, recursively filter them
-            let filteredChildren = node.children;
+            
+            // Check if this node has children (is a real parent task forming a subtree)
             if (node.children && node.children.length > 0) {
-                filteredChildren = filterTreeNodes(node.children, hideDone, hideCanceled);
+                // This is a parent task - check if ALL descendants should be filtered
+                const allDescendantsFiltered = shouldFilterEntireSubtree(node, hideDone, hideCanceled);
+                
+                if (allDescendantsFiltered) {
+                    return null; // Filter out entire subtree
+                }
+                
+                // Recursively filter children (but they follow the same subtree rules)
+                const filteredChildren = filterTreeNodes(node.children, hideDone, hideCanceled);
+                return { ...node, children: filteredChildren };
+            } else {
+                // This is a leaf task without children - apply individual filtering
+                // (This should only happen for tasks under tag groups, as per the logic)
+                const shouldFilterOut = 
+                    (hideDone && taskStatus === 'done') || 
+                    (hideCanceled && taskStatus === 'canceled');
+                
+                if (shouldFilterOut) {
+                    return null; // Filter out this individual task
+                }
+                
+                return node;
             }
-
-            // Return the node with filtered children
-            return {
-                ...node,
-                children: filteredChildren
-            };
         })
         .filter(node => node !== null); // Remove filtered out nodes
 }
