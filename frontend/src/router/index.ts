@@ -40,6 +40,16 @@ const routes: Array<RouteConfig> = [
   {
     path: '/tasks-next',
     name: 'TasksNext',
+    redirect: to => {
+      return {
+        name: 'TasksNextWithParams',
+        params: { selectedNodeId: '_', tab: 'descendants', viewMode: 'status' },
+      };
+    },
+  },
+  {
+    path: '/tasks-next/:selectedNodeId/:tab/:viewMode',
+    name: 'TasksNextWithParams',
     component: TasksNext,
   },
   {

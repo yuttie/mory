@@ -12,7 +12,10 @@
             </div>
             <div class="item-view d-flex flex-column">
                 <div class="d-flex flex-row">
-                    <v-tabs v-model="itemViewTab">
+                    <v-tabs 
+                        v-bind:value="itemViewTab"
+                        v-on:change="onTabChange"
+                    >
                         <v-tab
                             v-if="newTaskPath || selectedNode && !isTagGroupSelected"
                             tab-value="selected"
@@ -25,7 +28,7 @@
                     </v-tabs>
                 </div>
                 <v-tabs-items
-                    v-model="itemViewTab"
+                    v-bind:value="itemViewTab"
                     class="d-flex flex-column"
                     style="flex: 1 1 0; background: transparent;"
                 >
@@ -47,7 +50,8 @@
                         <v-toolbar flat outlined dense class="flex-grow-0">
                             <!-- View mode selector -->
                             <v-btn-toggle
-                                v-model="descendantsViewMode"
+                                v-bind:value="descendantsViewMode"
+                                v-on:change="onViewModeChange"
                                 dense
                             >
                                 <v-btn
@@ -247,6 +251,7 @@
 
 <script lang="ts" setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router/composables';
 
 import {
     mdiCalendarMultiselectOutline,
@@ -266,6 +271,10 @@ import dayjs from 'dayjs';
 // Stores
 const store = useTaggedTaskForestStore();
 
+// Router
+const router = useRouter();
+const route = useRoute();
+
 // Emits
 const emit = defineEmits<{
     (e: 'tokenExpired', callback: () => void): void;
@@ -273,12 +282,32 @@ const emit = defineEmits<{
 
 // Reactive states
 const taskEditorRef = ref<any>(null);
-const itemViewTab = ref<string>('descendants');
-const selectedNode = ref<TreeNodeRecord | undefined>(undefined);
 const openNodes = ref<UUID[]>([]);
 const newTaskPath = ref<string | null>(null);
 const error = ref<string | null>(null);
-const descendantsViewMode = ref<'status' | 'schedule' | 'eisenhower'>('status');
+
+// URL-derived state (single source of truth)
+const selectedNode = computed<TreeNodeRecord | undefined>(() => {
+    if (route.name === 'TasksNextWithParams' && route.params.selectedNodeId) {
+        const nodeId = route.params.selectedNodeId === '_' ? undefined : route.params.selectedNodeId;
+        return nodeId ? store.node(nodeId) : undefined;
+    }
+    return undefined;
+});
+
+const itemViewTab = computed<string>(() => {
+    if (route.name === 'TasksNextWithParams' && route.params.tab) {
+        return route.params.tab;
+    }
+    return 'descendants';
+});
+
+const descendantsViewMode = computed<'status' | 'schedule' | 'eisenhower'>(() => {
+    if (route.name === 'TasksNextWithParams' && route.params.viewMode) {
+        return route.params.viewMode as 'status' | 'schedule' | 'eisenhower';
+    }
+    return 'status';
+});
 
 // Computed properties
 const activeNodeId = computed<string | undefined>(() => {
@@ -439,27 +468,37 @@ const viewModeOptions = computed(() => [
     { text: 'Eisenhower Matrix', icon: mdiGridLarge, value: 'eisenhower' },
 ]);
 
-// Watchers
-watch(selectedNode, (node) => {
-    if (node && !node.uuid.startsWith('tag-group-')) {
-        // Open 'selected' tab when a regular task is selected
-        itemViewTab.value = 'selected';
+// URL management functions
+function navigateToState(selectedNodeId?: string, tab?: string, viewMode?: string) {
+    const params = {
+        selectedNodeId: selectedNodeId || '_',
+        tab: tab || 'descendants',
+        viewMode: viewMode || 'status'
+    };
+    
+    router.push({
+        name: 'TasksNextWithParams',
+        params: params
+    }).catch(err => {
+        // Ignore navigation duplicated errors
+        if (err.name !== 'NavigationDuplicated') {
+            // eslint-disable-next-line no-console
+            console.error('Router navigation error:', err);
+        }
+    });
+}
 
-        // If we're creating a new task, update the parent directory
-        if (newTaskPath.value) {
-            updateNewTaskParent();
+// Watchers for opening tree nodes when selected node changes
+watch(selectedNode, (node) => {
+    if (node) {
+        // Open tree up to the corresponding item
+        const next = new Set(openNodes.value);
+        let parent = store.parentOf(node.uuid);
+        while (parent) {
+            next.add(parent);
+            parent = store.parentOf(parent);
         }
-    }
-    else {
-        // Tag group selected or nothing selected
-        if (newTaskPath.value) {
-            // If we're creating a new task, switch to selected tab and update parent
-            itemViewTab.value = 'selected';
-            updateNewTaskParent();
-        } else {
-            // If not creating a new task, show descendants
-            itemViewTab.value = 'descendants';
-        }
+        openNodes.value = [...next];
     }
 });
 
@@ -474,29 +513,32 @@ onUnmounted(() => {
     window.removeEventListener('focus', load);
 });
 
+// Event handlers for UI interactions
+function onTabChange(newTab: string) {
+    navigateToState(selectedNode.value?.uuid, newTab, descendantsViewMode.value);
+}
+
+function onViewModeChange(newViewMode: string) {
+    navigateToState(selectedNode.value?.uuid, itemViewTab.value, newViewMode);
+}
+
 // Methods
 function onTaskSelectionChangeInTree(id: UUID | undefined) {
-    selectedNode.value = id ? store.node(id) : undefined;
+    const tab = (id && !id.startsWith('tag-group-')) ? 'selected' : 'descendants';
+    navigateToState(id, tab, descendantsViewMode.value);
 }
 
 function onTaskListItemClick(id: UUID) {
-    selectedNode.value = store.node(id);
-    // Open tree up to the corresponding item
-    const next = new Set(openNodes.value);
-    let parent = store.parentOf(id);
-    while (parent) {
-        next.add(parent);
-        parent = store.parentOf(parent);
-    }
-    openNodes.value = [...next];
+    // Navigate to selected task
+    navigateToState(id, 'selected', descendantsViewMode.value);
 }
 
 function newTask() {
-    // Generate new UUID for the task
+    // Navigate to selected tab first
+    navigateToState(selectedNode.value?.uuid, 'selected', descendantsViewMode.value);
+    // Then generate new UUID and set path for the task
     const taskUuid = crypto.randomUUID();
     newTaskPath.value = getNewTaskPath(taskUuid);
-    // Show 'selected' tab
-    itemViewTab.value = 'selected';
 }
 
 function getNewTaskPath(taskUuid: string): string {
@@ -525,6 +567,13 @@ function updateNewTaskParent() {
     // Update the path with the new parent but same UUID
     newTaskPath.value = getNewTaskPath(taskUuid);
 }
+
+// Watch for new task creation to update parent when selectedNode changes
+watch(selectedNode, () => {
+    if (newTaskPath.value) {
+        updateNewTaskParent();
+    }
+});
 
 async function onSelectedTaskSave(task: Task) {
     const path = newTaskPath.value ?? selectedNode.value?.path;
@@ -563,11 +612,9 @@ async function onSelectedTaskSave(task: Task) {
         const j = parentPath.lastIndexOf('/');
         const parentUuid = j === -1 ? null : parentPath.slice(j + 1);
         store.addNodeLocal(parentUuid, node);
-        // Select the task
+        // Select the task and navigate to it
         newTaskPath.value = null;
-        selectedNode.value = store.node(task.uuid);
-        // Show 'selected' tab
-        itemViewTab.value = 'selected';
+        navigateToState(task.uuid, 'selected', descendantsViewMode.value);
         // Refresh the store
         await store.refresh();
     }
@@ -593,9 +640,9 @@ async function onSelectedTaskDelete(path: string) {
     await api.deleteNote(path);
     // Update the store locally for immediate update
     store.deleteLeafLocal(uuid);
-    // Unselect
+    // Unselect by navigating to no selection
     if (activeNodeId.value === uuid) {
-        selectedNode.value = undefined;
+        navigateToState(undefined, 'descendants', descendantsViewMode.value);
     }
     // Refresh the store
     await store.refresh();
@@ -604,7 +651,7 @@ async function onSelectedTaskDelete(path: string) {
 function onNewTaskCancel() {
     // Clear the new task path and return to descendants view
     newTaskPath.value = null;
-    itemViewTab.value = 'descendants';
+    navigateToState(selectedNode.value?.uuid, 'descendants', descendantsViewMode.value);
 }
 
 function isToday(date: string) {

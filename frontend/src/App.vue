@@ -2,7 +2,7 @@
     <v-app id="app" ref="app">
         <v-main v-if="appStore.serviceWorkerConfigured && appStore.serviceWorkerHasToken">
             <v-container fluid pa-0 style="height: 100%;">
-                <router-view v-if="!(!appStore.hasToken && !routerViewEl)" v-bind:key="$route.path" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerViewEl"/>
+                <router-view v-if="!(!appStore.hasToken && !routerViewEl)" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerViewEl"/>
             </v-container>
         </v-main>
 
