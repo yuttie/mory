@@ -67,6 +67,7 @@
                             <!-- New task button -->
                             <v-btn
                                 title="Add"
+                                color="primary"
                                 outlined
                                 class="ml-3"
                                 v-bind:class="{ 'pa-0': !$vuetify.breakpoint.mdAndUp }"
