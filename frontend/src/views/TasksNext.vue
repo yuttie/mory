@@ -74,9 +74,9 @@
                                 <span v-if="$vuetify.breakpoint.mdAndUp">Add</span>
                             </v-btn>
                         </v-toolbar>
-                        <div class="groups-container flex-grow-1">
+                        <div class="view-container flex-grow-1">
                             <!-- Status view -->
-                            <div v-if="descendantsViewMode === 'status'" class="groups">
+                            <div v-if="descendantsViewMode === 'status'" class="status-view groups">
                                 <v-card dense class="group">
                                     <v-card-title>To do</v-card-title>
                                     <div class="task-list">
@@ -156,7 +156,7 @@
                                 </v-card>
                             </div>
                             <!-- Schedule view -->
-                            <div v-else-if="descendantsViewMode === 'schedule'" class="groups">
+                            <div v-else-if="descendantsViewMode === 'schedule'" class="schedule-view groups">
                                 <v-card class="group">
                                     <v-card-title>Scheduled</v-card-title>
                                     <div class="task-list">
@@ -463,8 +463,8 @@ const eisenhowerQuadrants = computed(() => {
 });
 
 const viewModeOptions = computed(() => [
-    { text: 'Status View', icon: mdiTrafficLightOutline, value: 'status' },
-    { text: 'Schedule View', icon: mdiCalendarMultiselectOutline, value: 'schedule' },
+    { text: 'Status', icon: mdiTrafficLightOutline, value: 'status' },
+    { text: 'Schedule', icon: mdiCalendarMultiselectOutline, value: 'schedule' },
     { text: 'Eisenhower Matrix', icon: mdiGridLarge, value: 'eisenhower' },
 ]);
 
@@ -729,21 +729,27 @@ $space: 12px;
     }
 }
 
-.groups-container {
+.view-container {
     flex: 1 1 0;
-    overflow-x: auto;
-    overflow-y: hidden;
+    display: flex;
+    flex-direction: row;
+    overflow: hidden;
 }
 
 .groups {
+    flex: 1 1 0;
     display: flex;
-    width: fit-content;
+    flex-direction: row;
+    width: 0;
     height: 100%;
+    overflow-x: auto;
     gap: $space;
     padding: $space;
 }
 
 .group {
+    flex-grow: 0;
+    flex-shrink: 0;
     display: flex;
     flex-direction: column;
     align-self: flex-start;
@@ -754,15 +760,14 @@ $space: 12px;
 /* Mobile responsive adjustments for groups */
 @media (max-width: 959px) { /* md breakpoint in Vuetify 2 */
     .groups {
-        flex-direction: column;
-        width: 100%;
         padding: $space / 2;
         gap: $space / 2;
     }
 
     .group {
+        flex-shrink: 0;
+        flex-grow: 1;
         width: 100%;
-        max-height: 300px;
     }
 }
 
@@ -793,6 +798,7 @@ $space: 12px;
 
 /* Eisenhower Matrix styles */
 .eisenhower-matrix {
+    flex: 1 1 0;
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     grid-template-rows: repeat(2, 1fr);
@@ -829,10 +835,8 @@ $space: 12px;
 
 /* Mobile responsive adjustments for quadrants */
 @media (max-width: 959px) { /* md breakpoint in Vuetify 2 */
-    .quadrant {
-        flex: none;
-        max-height: 250px;
-        min-height: 200px;
+    .quadrant-subtitle {
+        display: none;
     }
 }
 
