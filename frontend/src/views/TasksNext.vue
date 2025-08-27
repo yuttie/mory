@@ -56,6 +56,7 @@
                             >
                                 <v-btn
                                     v-for="{ text, icon, value } of viewModeOptions"
+                                    v-bind:key="value"
                                     v-bind:value="value"
                                 >
                                     <v-icon>{{ icon }}</v-icon>
