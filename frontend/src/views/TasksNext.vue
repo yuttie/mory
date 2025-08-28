@@ -415,17 +415,6 @@ const taskStatuses = computed(() => {
     return statuses;
 });
 
-// Helper function to recursively flatten all descendants of a node
-function flattenSubtreeNodes(node: any): any[] {
-    const result = [node];
-    if (node.children && node.children.length > 0) {
-        for (const child of node.children) {
-            result.push(...flattenSubtreeNodes(child));
-        }
-    }
-    return result;
-}
-
 // Helper function to check if entire subtree should be filtered
 function isEntireSubtreeCompleted(node: any): boolean {
     const status = node.metadata?.task?.status?.kind;
