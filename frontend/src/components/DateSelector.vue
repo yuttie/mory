@@ -18,12 +18,21 @@
                 v-on="on"
             >
                 <template v-slot:prepend>
-                    <v-icon>{{ includeTime ? mdiClockOutline : mdiCalendarOutline }}</v-icon>
+                    <v-icon>{{ timeEnabled ? mdiClockOutline : mdiCalendarOutline }}</v-icon>
                 </template>
             </v-text-field>
         </template>
 
         <div>
+            <div class="pa-2">
+                <v-switch
+                    v-model="timeEnabled"
+                    label="Include time"
+                    hide-details
+                    dense
+                    v-on:change="onTimeToggle"
+                />
+            </div>
             <v-date-picker
                 v-model="dateValue"
                 no-title
@@ -32,7 +41,7 @@
                 v-on:input="onDatePick"
             />
             <v-time-picker
-                v-if="includeTime"
+                v-if="timeEnabled"
                 v-model="timeValue"
                 format="24hr"
                 scrollable
@@ -58,16 +67,16 @@ const props = withDefaults(
     defineProps<{
         value?: string | null | undefined;
         label?: string | undefined;
-        rules?: any[];
+        rules?: Array<(value: string) => boolean | string>;
         required?: boolean;
         clearable?: boolean;
         hideDetails?: HideDetails;
-        includeTime?: boolean;
+        includeTime?: boolean; // Deprecated: kept for backward compatibility as initial state
     }>(),
     {
         value: undefined,
         label: undefined,
-        rules: [],
+        rules: () => [],
         required: false,
         clearable: true,
         hideDetails: false,
@@ -82,6 +91,22 @@ const emit = defineEmits<{
 
 // Reactive states
 const menu = ref(false);
+
+// Internal state for time enablement - user can control this via UI toggle
+const timeEnabled = ref(false);
+
+// Initialize timeEnabled based on the current value or includeTime prop
+const initializeTimeEnabled = () => {
+    if (props.value) {
+        const { time } = parseDateTime(props.value);
+        timeEnabled.value = time !== null;
+    } else {
+        timeEnabled.value = props.includeTime;
+    }
+};
+
+// Initialize on mount
+initializeTimeEnabled();
 
 // Parse the input value to extract date and time parts
 const parseDateTime = (value: string | null | undefined): { date: string | null; time: string | null } => {
@@ -120,7 +145,7 @@ const dateValue = computed<string | null>({
 
 const timeValue = computed<string | null>({
     get: () => {
-        if (!props.includeTime) return null;
+        if (!timeEnabled.value) return null;
         const { time } = parseDateTime(props.value);
         return time;
     },
@@ -133,7 +158,7 @@ const timeValue = computed<string | null>({
 const displayValue = computed(() => {
     if (!props.value) return '';
     
-    if (props.includeTime) {
+    if (timeEnabled.value) {
         const { date, time } = parseDateTime(props.value);
         if (date && time) {
             return `${date} ${time}`;
@@ -152,7 +177,7 @@ const updateValue = (date: string | null, time: string | null) => {
         return;
     }
     
-    if (props.includeTime && time) {
+    if (timeEnabled.value && time) {
         emit('input', `${date} ${time}`);
     } else {
         emit('input', date);
@@ -162,7 +187,7 @@ const updateValue = (date: string | null, time: string | null) => {
 // Methods
 function onDatePick(date: string) {
     updateValue(date, timeValue.value);
-    if (!props.includeTime) {
+    if (!timeEnabled.value) {
         menu.value = false;
     }
 }
@@ -170,6 +195,20 @@ function onDatePick(date: string) {
 function onTimePick(time: string) {
     updateValue(dateValue.value, time);
     menu.value = false;
+}
+
+function onTimeToggle() {
+    if (!timeEnabled.value) {
+        // If time is disabled, update value to date-only format
+        if (dateValue.value) {
+            emit('input', dateValue.value);
+        }
+    } else {
+        // If time is enabled and we have a date, set default time if none exists
+        if (dateValue.value && !timeValue.value) {
+            updateValue(dateValue.value, '12:00');
+        }
+    }
 }
 </script>
 
