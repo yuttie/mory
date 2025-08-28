@@ -79,6 +79,18 @@
                     style="flex: 1 1 0; background: transparent;"
                 >
                     <v-tab-item v-if="newTaskPath || selectedNode && !isTagGroupSelected" value="selected">
+                        <!-- Action buttons for existing tasks -->
+                        <div v-if="!newTaskPath && selectedNode" class="d-flex justify-end ma-2">
+                            <v-btn
+                                small
+                                outlined
+                                color="primary"
+                                v-on:click="showChangeParentDialog"
+                            >
+                                <v-icon small class="mr-1">{{ mdiFileTreeOutline }}</v-icon>
+                                Change Parent
+                            </v-btn>
+                        </div>
                         <TaskEditorNext
                             ref="taskEditorRef"
                             v-bind:task-path="newTaskPath ?? selectedNode.path"
@@ -336,6 +348,15 @@
             <v-progress-circular indeterminate size="64" />
         </v-overlay>
         <v-snackbar v-model="error" color="error" top timeout="5000">{{ error }}</v-snackbar>
+        
+        <!-- Parent Selection Dialog -->
+        <ParentSelectionDialog
+            v-model="showParentDialog"
+            v-bind:task-uuid="selectedNode?.uuid || null"
+            v-bind:task-title="selectedNode?.title || 'Untitled'"
+            v-bind:items="store.forestWithTags"
+            v-on:move="onMoveTask"
+        />
     </div>
 </template>
 
@@ -346,6 +367,7 @@ import { useRoute, useRouter } from 'vue-router/composables';
 import {
     mdiCalendarMultiselectOutline,
     mdiDotsVertical,
+    mdiFileTreeOutline,
     mdiGridLarge,
     mdiPlus,
     mdiTrafficLightOutline,
@@ -378,6 +400,7 @@ const newTaskPath = ref<string | null>(null);
 const error = ref<string | null>(null);
 const hideCompletedInTreeView = ref<boolean>(false);
 const hideCompletedInItemView = ref<boolean>(false);
+const showParentDialog = ref<boolean>(false);
 
 // URL-derived state (single source of truth)
 const selectedNode = computed<TreeNodeRecord | undefined>(() => {
@@ -815,6 +838,28 @@ function onNewTaskCancel() {
     // Clear the new task path and return to descendants view
     newTaskPath.value = null;
     navigateToState(selectedNode.value?.uuid, 'descendants', descendantsViewMode.value);
+}
+
+async function onMoveTask(newParentUuid: UUID | null) {
+    if (!selectedNode.value) {
+        return;
+    }
+
+    try {
+        await store.moveNode(selectedNode.value.uuid, newParentUuid);
+        
+        // Navigate to the moved task to keep it selected
+        navigateToState(selectedNode.value.uuid, 'selected', descendantsViewMode.value);
+    } catch (e) {
+        console.error('Failed to move task:', e);
+        error.value = e instanceof Error ? e.message : 'Failed to move task';
+    }
+}
+
+function showChangeParentDialog() {
+    if (selectedNode.value && !isTagGroupSelected.value) {
+        showParentDialog.value = true;
+    }
 }
 
 function isToday(date: string) {

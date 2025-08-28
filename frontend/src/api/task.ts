@@ -84,3 +84,23 @@ export function extractFileUuid(path: string): UUID {
     }
     return uuid;
 }
+
+export function buildTaskPath(taskUuid: UUID, parentUuid: UUID | null): string {
+    if (parentUuid === null) {
+        return `.tasks/${taskUuid}.md`;
+    } else {
+        return `.tasks/${parentUuid}/${taskUuid}.md`;
+    }
+}
+
+export async function moveTask(taskUuid: UUID, oldParentUuid: UUID | null, newParentUuid: UUID | null): Promise<void> {
+    const oldPath = buildTaskPath(taskUuid, oldParentUuid);
+    const newPath = buildTaskPath(taskUuid, newParentUuid);
+    
+    if (oldPath === newPath) {
+        return; // No move needed
+    }
+
+    const { renameNote } = await import('@/api');
+    await renameNote(oldPath, newPath);
+}

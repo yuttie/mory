@@ -322,6 +322,104 @@ export const useTaskForestStore = defineStore('taskForest', () => {
         }
     }
 
+    function moveNodeLocal(nodeId: UUID, newParent: UUID | null, index?: number): void {
+        const rec = node(nodeId);
+        if (!rec) {
+            throw new Error(`moveNodeLocal: node ${nodeId} not found.`);
+        }
+
+        // Prevent moving a node to its own descendant (circular reference)
+        if (newParent !== null) {
+            const descendants = collectDescendants(nodeId, childrenById.value);
+            if (descendants.includes(newParent)) {
+                throw new Error(`moveNodeLocal: cannot move node ${nodeId} to its own descendant ${newParent}.`);
+            }
+        }
+
+        // Get the current parent
+        const currentParent = parentOf(nodeId);
+
+        // Don't do anything if moving to the same parent
+        if (currentParent === newParent) {
+            return;
+        }
+
+        // Remove from current parent
+        if (currentParent === null) {
+            rootIds.value = rootIds.value.filter((rid) => rid !== nodeId);
+        } else {
+            const currentSiblings = (childrenById.value[currentParent] || []).filter((cid) => cid !== nodeId);
+            setChildrenOf(currentParent, currentSiblings);
+        }
+
+        // Add to new parent
+        if (newParent === null) {
+            const roots = [...rootIds.value];
+            const pos = clampIndex(index ?? roots.length, roots.length);
+            roots.splice(pos, 0, nodeId);
+            rootIds.value = roots;
+            setParentOf(nodeId, null);
+        } else {
+            ensureChildBucket(newParent);
+            const newSiblings = [...(childrenById.value[newParent] || [])];
+            const pos = clampIndex(index ?? newSiblings.length, newSiblings.length);
+            newSiblings.splice(pos, 0, nodeId);
+            setChildrenOf(newParent, newSiblings);
+            setParentOf(nodeId, newParent);
+        }
+
+        // Update paths for the moved node and all its descendants
+        updatePathsAfterMove(nodeId, newParent);
+    }
+
+    function updatePathsAfterMove(nodeId: UUID, newParent: UUID | null): void {
+        const rec = node(nodeId);
+        if (!rec) return;
+
+        // Calculate new path
+        const newPath = newParent === null 
+            ? `.tasks/${nodeId}.md`
+            : `.tasks/${newParent}/${nodeId}.md`;
+
+        // Update the node's path
+        const oldPath = rec.path;
+        const updatedNode = { ...rec, path: newPath };
+        upsertNodeRecord(updatedNode);
+
+        // Update path index
+        unindexPath(oldPath);
+        indexPath(newPath, nodeId);
+
+        // Recursively update descendants
+        const children = childrenById.value[nodeId] || [];
+        for (const childId of children) {
+            updatePathsAfterMove(childId, nodeId);
+        }
+    }
+
+    async function moveNode(nodeId: UUID, newParent: UUID | null, index?: number): Promise<void> {
+        const rec = node(nodeId);
+        if (!rec) {
+            throw new Error(`moveNode: node ${nodeId} not found.`);
+        }
+
+        const currentParent = parentOf(nodeId);
+        
+        // Don't do anything if moving to the same parent
+        if (currentParent === newParent) {
+            return;
+        }
+
+        // Move on server first
+        await api.moveTask(nodeId, currentParent, newParent);
+
+        // Update local state
+        moveNodeLocal(nodeId, newParent, index);
+
+        // Refresh the store to sync with server
+        await refresh();
+    }
+
     // ===== Helper functions =====
 
     // --- Ingestion ---
@@ -413,6 +511,8 @@ export const useTaskForestStore = defineStore('taskForest', () => {
         addNodeLocal,
         replaceNodeLocal,
         deleteLeafLocal,
+        moveNodeLocal,
+        moveNode,
     };
 });
 
