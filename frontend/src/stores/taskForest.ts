@@ -410,8 +410,10 @@ export const useTaskForestStore = defineStore('taskForest', () => {
             return;
         }
 
-        // Move on server first
-        await api.moveTask(nodeId, currentParent, newParent);
+        // Move on server first (this will move the entire subtree)
+        await api.moveTaskSubtree(nodeId, currentParent, newParent, {
+            childrenOf: (id: UUID) => childrenOf(id)
+        });
 
         // Update local state
         moveNodeLocal(nodeId, newParent, index);
