@@ -36,18 +36,8 @@
                             <v-list-item>
                                 <v-list-item-content>
                                     <v-switch
-                                        v-model="hideDone"
-                                        label="Hide done tasks"
-                                        hide-details
-                                        class="mt-0"
-                                    ></v-switch>
-                                </v-list-item-content>
-                            </v-list-item>
-                            <v-list-item>
-                                <v-list-item-content>
-                                    <v-switch
-                                        v-model="hideCanceled"
-                                        label="Hide canceled tasks"
+                                        v-model="hideCompleted"
+                                        label="Hide completed tasks"
                                         hide-details
                                         class="mt-0"
                                     ></v-switch>
@@ -343,8 +333,7 @@ const taskEditorRef = ref<any>(null);
 const openNodes = ref<UUID[]>([]);
 const newTaskPath = ref<string | null>(null);
 const error = ref<string | null>(null);
-const hideDone = ref<boolean>(false);
-const hideCanceled = ref<boolean>(false);
+const hideCompleted = ref<boolean>(false);
 
 // URL-derived state (single source of truth)
 const selectedNode = computed<TreeNodeRecord | undefined>(() => {
@@ -416,16 +405,8 @@ const taskStatuses = computed(() => {
             case 'waiting': statuses.waiting.push(task); break;
             case 'blocked': statuses.blocked.push(task); break;
             case 'on_hold': statuses.onHold.push(task); break;
-            case 'done': 
-                if (!hideDone.value) {
-                    statuses.done.push(task);
-                }
-                break;
-            case 'canceled': 
-                if (!hideCanceled.value) {
-                    statuses.canceled.push(task);
-                }
-                break;
+            case 'done': statuses.done.push(task); break;
+            case 'canceled': statuses.canceled.push(task); break;
         }
     }
 
@@ -444,19 +425,19 @@ function flattenSubtreeNodes(node: any): any[] {
 }
 
 // Helper function to check if entire subtree should be filtered
-function shouldFilterEntireSubtree(node: any, hideDone: boolean, hideCanceled: boolean): boolean {
+function shouldFilterEntireSubtree(node: any, hideCompleted: boolean): boolean {
     // Get all descendants of this subtree (including the parent)
     const allDescendants = flattenSubtreeNodes(node);
     
     // Check if ALL descendants have status that should be filtered
     return allDescendants.every(descendant => {
         const status = descendant.metadata?.task?.status?.kind;
-        return (hideDone && status === 'done') || (hideCanceled && status === 'canceled');
+        return hideCompleted && (status === 'done' || status === 'canceled');
     });
 }
 
 // Helper function to recursively filter tree nodes based on task status with subtree logic
-function filterTreeNodes(nodes: any[], hideDone: boolean, hideCanceled: boolean): any[] {
+function filterTreeNodes(nodes: any[], hideCompleted: boolean): any[] {
     return nodes
         .map(node => {
             // Check if this is a tag group node (virtual parent)
@@ -467,8 +448,7 @@ function filterTreeNodes(nodes: any[], hideDone: boolean, hideCanceled: boolean)
                     filteredChildren = node.children.filter(child => {
                         const taskStatus = child.metadata?.task?.status?.kind;
                         const shouldFilterOut = 
-                            (hideDone && taskStatus === 'done') || 
-                            (hideCanceled && taskStatus === 'canceled');
+                            hideCompleted && (taskStatus === 'done' || taskStatus === 'canceled');
                         return !shouldFilterOut;
                     });
                 }
@@ -483,21 +463,20 @@ function filterTreeNodes(nodes: any[], hideDone: boolean, hideCanceled: boolean)
             // Check if this node has children (is a real parent task forming a subtree)
             if (node.children && node.children.length > 0) {
                 // This is a parent task - check if ALL descendants should be filtered
-                const allDescendantsFiltered = shouldFilterEntireSubtree(node, hideDone, hideCanceled);
+                const allDescendantsFiltered = shouldFilterEntireSubtree(node, hideCompleted);
                 
                 if (allDescendantsFiltered) {
                     return null; // Filter out entire subtree
                 }
                 
                 // Recursively filter children (but they follow the same subtree rules)
-                const filteredChildren = filterTreeNodes(node.children, hideDone, hideCanceled);
+                const filteredChildren = filterTreeNodes(node.children, hideCompleted);
                 return { ...node, children: filteredChildren };
             } else {
                 // This is a leaf task without children - apply individual filtering
                 // (This should only happen for tasks under tag groups, as per the logic)
                 const shouldFilterOut = 
-                    (hideDone && taskStatus === 'done') || 
-                    (hideCanceled && taskStatus === 'canceled');
+                    hideCompleted && (taskStatus === 'done' || taskStatus === 'canceled');
                 
                 if (shouldFilterOut) {
                     return null; // Filter out this individual task
@@ -511,7 +490,7 @@ function filterTreeNodes(nodes: any[], hideDone: boolean, hideCanceled: boolean)
 
 // Computed property for filtered forest with tags
 const filteredForestWithTags = computed(() => {
-    return filterTreeNodes(store.forestWithTags, hideDone.value, hideCanceled.value);
+    return filterTreeNodes(store.forestWithTags, hideCompleted.value);
 });
 
 // Computed property for task count that reflects current filtering
@@ -528,8 +507,7 @@ const filteredTasksCount = computed(() => {
 function filterTasksByStatus(tasks: TreeNodeRecord[]): TreeNodeRecord[] {
     return tasks.filter(task => {
         const kind: StatusKind = task.metadata?.task?.status?.kind ?? 'todo';
-        if (hideDone.value && kind === 'done') return false;
-        if (hideCanceled.value && kind === 'canceled') return false;
+        if (hideCompleted.value && (kind === 'done' || kind === 'canceled')) return false;
         return true;
     });
 }
