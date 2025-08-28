@@ -104,3 +104,16 @@ export async function moveTask(taskUuid: UUID, oldParentUuid: UUID | null, newPa
     const { renameNote } = await import('@/api');
     await renameNote(oldPath, newPath);
 }
+
+export async function moveTaskSubtree(taskUuid: UUID, oldParentUuid: UUID | null, newParentUuid: UUID | null, taskForestStore: any): Promise<void> {
+    // First move the task itself
+    await moveTask(taskUuid, oldParentUuid, newParentUuid);
+    
+    // Then move all its descendants recursively
+    // The descendants' new parent is still the same task (taskUuid), but their paths change
+    // because the task's path changed
+    const children = taskForestStore.childrenOf(taskUuid);
+    for (const child of children) {
+        await moveTaskSubtree(child.uuid, taskUuid, taskUuid, taskForestStore);
+    }
+}

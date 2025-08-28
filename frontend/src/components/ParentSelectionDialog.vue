@@ -98,7 +98,7 @@ const filteredItems = computed<ApiTreeNode[]>(() => {
             return null; // Exclude the task being moved
         }
         
-        if (isDescendantOf(props.taskUuid, node)) {
+        if (isDescendantOfTask(node.uuid)) {
             return null; // Exclude descendants of the task being moved
         }
 
@@ -117,6 +117,42 @@ const filteredItems = computed<ApiTreeNode[]>(() => {
         .filter((node): node is ApiTreeNode => node !== null);
 });
 
+// Helper function to check if a node is a descendant of the task being moved
+function isDescendantOfTask(nodeUuid: UUID): boolean {
+    if (!props.taskUuid) return false;
+    
+    // Find the task being moved in the tree
+    function findTaskInTree(nodes: ApiTreeNode[], targetUuid: UUID): ApiTreeNode | null {
+        for (const node of nodes) {
+            if (node.uuid === targetUuid) {
+                return node;
+            }
+            if (node.children) {
+                const found = findTaskInTree(node.children, targetUuid);
+                if (found) return found;
+            }
+        }
+        return null;
+    }
+    
+    const taskNode = findTaskInTree(props.items, props.taskUuid);
+    if (!taskNode) return false;
+    
+    // Check if nodeUuid is a descendant of taskNode
+    function isInSubtree(subtreeRoot: ApiTreeNode, targetUuid: UUID): boolean {
+        if (!subtreeRoot.children) return false;
+        
+        for (const child of subtreeRoot.children) {
+            if (child.uuid === targetUuid || isInSubtree(child, targetUuid)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    return isInSubtree(taskNode, nodeUuid);
+}
+
 const canMove = computed<boolean>(() => {
     return props.taskUuid !== null;
 });
@@ -131,17 +167,6 @@ function confirmMove(): void {
         emit('move', selectedParent.value);
         emit('input', false);
     }
-}
-
-function isDescendantOf(ancestorUuid: UUID, node: ApiTreeNode): boolean {
-    if (!node.children) return false;
-    
-    for (const child of node.children) {
-        if (child.uuid === ancestorUuid || isDescendantOf(ancestorUuid, child)) {
-            return true;
-        }
-    }
-    return false;
 }
 
 // Watch for dialog open to reset state
