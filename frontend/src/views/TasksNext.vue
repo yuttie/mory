@@ -377,18 +377,6 @@ const selectedTagName = computed<string | null>(() => {
 });
 
 const taskStatuses = computed(() => {
-    let targetTasks;
-    if (isTagGroupSelected.value && selectedTagName.value) {
-        // Show tasks from the selected tag group
-        targetTasks = store.childrenOf(`tag-group-${selectedTagName.value}`);
-    }
-    else {
-        // Show tasks based on selected node (descendants or all tasks)
-        targetTasks = selectedNode.value && !isTagGroupSelected.value
-            ? store.flattenDescendants(selectedNode.value.uuid)
-            : store.allTasks;
-    }
-
     const statuses = {
         todo: [] as TreeNodeRecord[],
         inProgress: [] as TreeNodeRecord[],
@@ -399,7 +387,7 @@ const taskStatuses = computed(() => {
         canceled: [] as TreeNodeRecord[],
     };
 
-    for (const task of targetTasks) {
+    for (const task of selectedNodeDescendants.value) {
         const kind: StatusKind = task.metadata?.task?.status?.kind ?? 'todo';
         switch (kind) {
             case 'todo': statuses.todo.push(task); break;
@@ -501,15 +489,7 @@ function filterTasksByStatus(tasks: TreeNodeRecord[]): TreeNodeRecord[] {
     });
 }
 
-const scheduled = computed<Record<string, TreeNodeRecord[]>>(() => {
-    // Keep today, tomorrow, or other dates that have some undone tasks
-    const today = dayjs().format('YYYY-MM-DD');
-    const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
-    const scheduled: Record<string, TreeNodeRecord[]> = {
-        [today]: [],
-        [tomorrow]: [],
-    };
-
+const selectedNodeDescendants = computed<TreeNodeRecord[]>(() => {
     let targetTasks;
     if (isTagGroupSelected.value && selectedTagName.value) {
         // Show tasks from the selected tag group
@@ -522,10 +502,23 @@ const scheduled = computed<Record<string, TreeNodeRecord[]>>(() => {
             : store.allTasks;
     }
 
-    // Apply filtering based on task status
-    const filteredTasks = filterTasksByStatus(targetTasks);
+    return targetTasks;
+});
 
-    for (const t of filteredTasks) {
+const filteredSelectedNodeDescendants = computed<TreeNodeRecord[]>(() => {
+    return filterTasksByStatus(selectedNodeDescendants.value, hideCompletedInItemView.value);
+});
+
+const scheduled = computed<Record<string, TreeNodeRecord[]>>(() => {
+    // Keep today, tomorrow, or other dates that have some undone tasks
+    const today = dayjs().format('YYYY-MM-DD');
+    const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
+    const scheduled: Record<string, TreeNodeRecord[]> = {
+        [today]: [],
+        [tomorrow]: [],
+    };
+
+    for (const t of filteredSelectedNodeDescendants.value) {
         if (t.metadata?.task?.scheduled_dates) {
             for (const date of t.metadata.task.scheduled_dates) {
                 scheduled[date] ??= [];
@@ -563,21 +556,6 @@ const knownContacts = computed<[string, number][]>(() => {
 
 // Eisenhower Matrix computed properties
 const eisenhowerQuadrants = computed(() => {
-    let targetTasks;
-    if (isTagGroupSelected.value && selectedTagName.value) {
-        // Show tasks from the selected tag group
-        targetTasks = store.childrenOf(`tag-group-${selectedTagName.value}`);
-    }
-    else {
-        // Show tasks based on selected node (descendants or all tasks)
-        targetTasks = selectedNode.value && !isTagGroupSelected.value
-            ? store.flattenDescendants(selectedNode.value.uuid)
-            : store.allTasks;
-    }
-
-    // Apply filtering based on task status
-    const filteredTasks = filterTasksByStatus(targetTasks);
-
     const quadrants = {
         doFirst: [] as TreeNodeRecord[],      // High importance, High urgency
         schedule: [] as TreeNodeRecord[],     // High importance, Low urgency
@@ -585,7 +563,7 @@ const eisenhowerQuadrants = computed(() => {
         eliminate: [] as TreeNodeRecord[],    // Low importance, Low urgency
     };
 
-    for (const task of filteredTasks) {
+    for (const task of filteredSelectedNodeDescendants.value) {
         const importance = task.metadata?.task?.importance ?? 3;
         const urgency = task.metadata?.task?.urgency ?? 3;
         const isHighImportance = importance >= 4;
