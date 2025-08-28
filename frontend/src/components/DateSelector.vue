@@ -39,7 +39,7 @@
                     v-on:input="onTimePick"
                 />
             </div>
-            <v-list>
+            <v-list v-if="showTimeToggle">
                 <v-list-item>
                     <v-switch
                         v-model="timeEnabled"
@@ -53,7 +53,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import dayjs from 'dayjs';
 
 import {
@@ -72,16 +72,16 @@ const props = withDefaults(
         required?: boolean;
         clearable?: boolean;
         hideDetails?: HideDetails;
-        includeTime?: boolean; // Deprecated: kept for backward compatibility as initial state
+        includeTime?: boolean;
     }>(),
     {
         value: undefined,
         label: undefined,
-        rules: () => [],
+        rules: [],
         required: false,
         clearable: true,
         hideDetails: false,
-        includeTime: false,
+        includeTime: undefined,
     },
 );
 
@@ -93,21 +93,34 @@ const emit = defineEmits<{
 // Reactive states
 const menu = ref(false);
 
-// Internal state for time enablement - user can control this via UI toggle
+// Determine if the includeTime prop was explicitly provided
+const includeTimeExplicitlyProvided = props.includeTime !== undefined;
+
+// Show the time toggle only if includeTime prop was not explicitly provided
+const showTimeToggle = computed(() => !includeTimeExplicitlyProvided);
+
+// Internal state for time enablement
 const timeEnabled = ref(false);
 
 // Initialize timeEnabled based on the current value or includeTime prop
 const initializeTimeEnabled = () => {
-    if (props.value) {
+    if (includeTimeExplicitlyProvided) {
+        // If includeTime prop is explicitly provided, use that value
+        timeEnabled.value = props.includeTime!;
+    } else if (props.value) {
+        // If no explicit includeTime prop, determine from current value
         const { time } = parseDateTime(props.value);
         timeEnabled.value = time !== null;
     } else {
-        timeEnabled.value = props.includeTime;
+        // Default to false if no value and no explicit includeTime prop
+        timeEnabled.value = false;
     }
 };
 
 // Initialize on mount
-initializeTimeEnabled();
+onMounted(() => {
+    initializeTimeEnabled();
+});
 
 // Parse the input value to extract date and time parts
 const parseDateTime = (value: string | null | undefined): { date: string | null; time: string | null } => {
