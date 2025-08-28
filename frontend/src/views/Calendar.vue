@@ -2,10 +2,10 @@
     <div id="calendar" class="d-flex flex-column">
         <v-toolbar flat outlined dense class="flex-grow-0">
             <v-btn outlined v-on:click="setToday" class="mr-3">Today</v-btn>
-            <v-btn icon small v-on:click="$refs.calendar.prev()">
+            <v-btn icon small v-on:click="navigateCalendar('prev')">
                 <v-icon>{{ mdiChevronLeft }}</v-icon>
             </v-btn>
-            <v-btn icon small v-on:click="$refs.calendar.next()" class="mr-3">
+            <v-btn icon small v-on:click="navigateCalendar('next')" class="mr-3">
                 <v-icon>{{ mdiChevronRight }}</v-icon>
             </v-btn>
             <v-toolbar-title v-if="$refs.calendar" class="mr-3">
@@ -31,8 +31,8 @@
             v-on:click:more="viewDay"
             v-on:click:date="viewDay"
             v-touch="{
-                left: () => $refs.calendar.next(),
-                right: () => $refs.calendar.prev(),
+                left: () => navigateCalendar('next'),
+                right: () => navigateCalendar('prev'),
             }"
             color="primary"
             class="flex-grow-1"
@@ -274,11 +274,6 @@ const events = computed(() => {
 onMounted(() => {
     document.title = `Calendar | ${import.meta.env.VITE_APP_NAME}`;
 
-    if (route.name === 'CalendarWithDate') {
-        calendarType.value = route.params.type;
-        calendarCursor.value = dayjs(route.params.date, 'YYYY/MM/DD').format('YYYY-MM-DD');
-    }
-
     window.addEventListener('keydown', onKeydown);
     window.addEventListener('wheel', onWheel);
     window.addEventListener('focus', load);
@@ -299,18 +294,46 @@ function onCalendarInput(date: string) {
     });
 }
 
+function navigateCalendar(direction: 'prev' | 'next', amount = 1) {
+    const currentDate = dayjs(calendarCursor.value, 'YYYY-MM-DD');
+    let newDate: dayjs.Dayjs;
+    
+    if (calendarType.value === 'month') {
+        newDate = direction === 'prev' 
+            ? currentDate.subtract(amount, 'month')
+            : currentDate.add(amount, 'month');
+    } else if (calendarType.value === 'week') {
+        newDate = direction === 'prev'
+            ? currentDate.subtract(amount, 'week')
+            : currentDate.add(amount, 'week');
+    } else if (calendarType.value === 'day') {
+        newDate = direction === 'prev'
+            ? currentDate.subtract(amount, 'day')
+            : currentDate.add(amount, 'day');
+    } else {
+        // Default to day navigation
+        newDate = direction === 'prev'
+            ? currentDate.subtract(amount, 'day')
+            : currentDate.add(amount, 'day');
+    }
+    
+    router.push({
+        path: `/calendar/${calendarType.value}/${newDate.format('YYYY/MM/DD')}`,
+    });
+}
+
 function onKeydown(e: KeyboardEvent) {
     if (e.key === 'ArrowLeft') {
-        (calendar.value as any).prev();
+        navigateCalendar('prev');
     }
     else if (e.key === 'ArrowRight') {
-        (calendar.value as any).next();
+        navigateCalendar('next');
     }
     else if (e.key === 'PageDown') {
-        (calendar.value as any).prev(12);
+        navigateCalendar('prev', 12);
     }
     else if (e.key === 'PageUp') {
-        (calendar.value as any).next(12);
+        navigateCalendar('next', 12);
     }
     else if (e.key === 'Home') {
         setToday();
@@ -319,10 +342,10 @@ function onKeydown(e: KeyboardEvent) {
 
 function onWheel(e: WheelEvent) {
     if (e.deltaX < 0) {
-        (calendar.value as any).prev();
+        navigateCalendar('prev');
     }
     else if (e.deltaX > 0) {
-        (calendar.value as any).next();
+        navigateCalendar('next');
     }
 }
 
@@ -446,6 +469,16 @@ watch(selectedEvent, async (newValue) => {
         selectedEventRenderedNote.value = renderedHtml;
     }
 });
+
+watch(route, (newRoute) => {
+    if (newRoute.name === 'CalendarWithDate') {
+        calendarType.value = newRoute.params.type as string;
+        calendarCursor.value = dayjs(newRoute.params.date as string, 'YYYY/MM/DD').format('YYYY-MM-DD');
+    } else if (newRoute.name === 'Calendar') {
+        calendarType.value = 'month';
+        calendarCursor.value = dayjs().format('YYYY-MM-DD');
+    }
+}, { immediate: true });
 </script>
 
 <style scoped lang="scss">
