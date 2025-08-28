@@ -426,14 +426,14 @@ function flattenSubtreeNodes(node: any): any[] {
 
 // Helper function to check if entire subtree should be filtered
 function isEntireSubtreeCompleted(node: any): boolean {
-    // Get all descendants of this subtree (including the parent)
-    const allSubtreeNodes = flattenSubtreeNodes(node);
+    const status = node.metadata?.task?.status?.kind;
+    const completed = status === 'done' || status === 'canceled';
+    if (!completed) {
+        return false;
+    }
 
-    // Check if ALL descendants have status that should be filtered
-    return allSubtreeNodes.every(descendant => {
-        const status = descendant.metadata?.task?.status?.kind;
-        return status === 'done' || status === 'canceled';
-    });
+    // Check if ALL descendants have statuses considered completed
+    return (node.children ?? []).every(isEntireSubtreeCompleted);
 }
 
 // Helper function to recursively filter tree nodes based on task status with subtree logic
