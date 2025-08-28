@@ -36,13 +36,13 @@
                             <v-list-item>
                                 <v-list-item-action>
                                     <v-switch
-                                        v-model="hideCompleted"
+                                        v-model="hideCompletedInTreeView"
                                         hide-details
                                         class="mt-0"
                                     ></v-switch>
                                 </v-list-item-action>
                                 <v-list-item-title>
-                                    Hide completed tasks
+                                    Hide completed tasks in tree view
                                 </v-list-item-title>
                             </v-list-item>
                         </v-list>
@@ -122,6 +122,47 @@
                                 <v-icon>{{ mdiPlus }}</v-icon>
                                 <span v-if="$vuetify.breakpoint.mdAndUp">Add</span>
                             </v-btn>
+                            <v-spacer />
+                            <v-menu
+                                offset-y
+                                v-bind:close-on-content-click="false"
+                            >
+                                <template v-slot:activator="{ on, attrs }">
+                                    <v-btn
+                                        icon
+                                        v-bind="attrs"
+                                        v-on="on"
+                                    >
+                                        <v-icon>{{ mdiDotsVertical }}</v-icon>
+                                    </v-btn>
+                                </template>
+                                <v-list>
+                                    <v-subheader>Descendants statistics</v-subheader>
+                                    <v-list-item>
+                                        <v-list-item-content>
+                                            <v-list-item-title v-for="[kind, label] of Object.entries(STATUS_LABEL)">
+                                                {{ label }}: {{ selectedNodeDescendants.filter((t) => [kind].includes(t.metadata?.task?.status?.kind)).length }}
+                                            </v-list-item-title>
+                                        </v-list-item-content>
+                                    </v-list-item>
+                                </v-list>
+                                <v-divider></v-divider>
+                                <v-list>
+                                    <v-subheader>Config</v-subheader>
+                                    <v-list-item>
+                                        <v-list-item-action>
+                                            <v-switch
+                                                v-model="hideCompletedInItemView"
+                                                hide-details
+                                                class="mt-0"
+                                            ></v-switch>
+                                        </v-list-item-action>
+                                        <v-list-item-title>
+                                            Hide completed tasks in item view
+                                        </v-list-item-title>
+                                    </v-list-item>
+                                </v-list>
+                            </v-menu>
                         </v-toolbar>
                         <div class="view-container flex-grow-1">
                             <!-- Status view -->
@@ -335,7 +376,8 @@ const taskEditorRef = ref<any>(null);
 const openNodes = ref<UUID[]>([]);
 const newTaskPath = ref<string | null>(null);
 const error = ref<string | null>(null);
-const hideCompleted = ref<boolean>(false);
+const hideCompletedInTreeView = ref<boolean>(false);
+const hideCompletedInItemView = ref<boolean>(false);
 
 // URL-derived state (single source of truth)
 const selectedNode = computed<TreeNodeRecord | undefined>(() => {
@@ -467,7 +509,7 @@ function filterTreeNodes(nodes: any[], hideCompleted: boolean): any[] {
 
 // Computed property for filtered forest with tags
 const filteredForestWithTags = computed(() => {
-    return filterTreeNodes(store.forestWithTags, hideCompleted.value);
+    return filterTreeNodes(store.forestWithTags, hideCompletedInTreeView.value);
 });
 
 // Computed property for task count that reflects current filtering
@@ -481,10 +523,10 @@ const filteredTasksCount = computed(() => {
 });
 
 // Helper function to filter task list based on status
-function filterTasksByStatus(tasks: TreeNodeRecord[]): TreeNodeRecord[] {
+function filterTasksByStatus(tasks: TreeNodeRecord[], hideCompleted: boolean): TreeNodeRecord[] {
     return tasks.filter(task => {
         const kind: StatusKind = task.metadata?.task?.status?.kind ?? 'todo';
-        if (hideCompleted.value && (kind === 'done' || kind === 'canceled')) return false;
+        if (hideCompleted && (kind === 'done' || kind === 'canceled')) return false;
         return true;
     });
 }
