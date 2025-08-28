@@ -425,14 +425,14 @@ function flattenSubtreeNodes(node: any): any[] {
 }
 
 // Helper function to check if entire subtree should be filtered
-function shouldFilterEntireSubtree(node: any, hideCompleted: boolean): boolean {
+function isEntireSubtreeCompleted(node: any): boolean {
     // Get all descendants of this subtree (including the parent)
-    const allDescendants = flattenSubtreeNodes(node);
+    const allSubtreeNodes = flattenSubtreeNodes(node);
 
     // Check if ALL descendants have status that should be filtered
-    return allDescendants.every(descendant => {
+    return allSubtreeNodes.every(descendant => {
         const status = descendant.metadata?.task?.status?.kind;
-        return hideCompleted && (status === 'done' || status === 'canceled');
+        return status === 'done' || status === 'canceled';
     });
 }
 
@@ -462,16 +462,14 @@ function filterTreeNodes(nodes: any[], hideCompleted: boolean): any[] {
 
             // Check if this node has children (is a real parent task forming a subtree)
             if (node.children && node.children.length > 0) {
-                // This is a parent task - check if ALL descendants should be filtered
-                const allDescendantsFiltered = shouldFilterEntireSubtree(node, hideCompleted);
+                // This is a parent task - check if ALL descendants are completed
+                const completed = isEntireSubtreeCompleted(node);
 
-                if (allDescendantsFiltered) {
+                if (hideCompleted && completed) {
                     return null; // Filter out entire subtree
                 }
 
-                // Recursively filter children (but they follow the same subtree rules)
-                const filteredChildren = filterTreeNodes(node.children, hideCompleted);
-                return { ...node, children: filteredChildren };
+                return node;
             } else {
                 // This is a leaf task without children - apply individual filtering
                 // (This should only happen for tasks under tag groups, as per the logic)
