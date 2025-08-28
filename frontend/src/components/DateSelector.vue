@@ -23,31 +23,32 @@
             </v-text-field>
         </template>
 
-        <div>
-            <div class="pa-2">
-                <v-switch
-                    v-model="timeEnabled"
-                    label="Include time"
-                    hide-details
-                    dense
-                    v-on:change="onTimeToggle"
+        <v-card>
+            <div class="d-flex flex-row align-end">
+                <v-date-picker
+                    v-model="dateValue"
+                    scrollable
+                    show-adjacent-months
+                    v-on:input="onDatePick"
+                />
+                <v-time-picker
+                    v-if="timeEnabled"
+                    v-model="timeValue"
+                    format="24hr"
+                    scrollable
+                    v-on:input="onTimePick"
                 />
             </div>
-            <v-date-picker
-                v-model="dateValue"
-                no-title
-                scrollable
-                show-adjacent-months
-                v-on:input="onDatePick"
-            />
-            <v-time-picker
-                v-if="timeEnabled"
-                v-model="timeValue"
-                format="24hr"
-                scrollable
-                v-on:input="onTimePick"
-            />
-        </div>
+            <v-list>
+                <v-list-item>
+                    <v-switch
+                        v-model="timeEnabled"
+                        label="Include time"
+                        v-on:change="onTimeToggle"
+                    />
+                </v-list-item>
+            </v-list>
+        </v-card>
     </v-menu>
 </template>
 
@@ -187,14 +188,10 @@ const updateValue = (date: string | null, time: string | null) => {
 // Methods
 function onDatePick(date: string) {
     updateValue(date, timeValue.value);
-    if (!timeEnabled.value) {
-        menu.value = false;
-    }
 }
 
 function onTimePick(time: string) {
     updateValue(dateValue.value, time);
-    menu.value = false;
 }
 
 function onTimeToggle() {
@@ -213,4 +210,10 @@ function onTimeToggle() {
 </script>
 
 <style scoped lang="scss">
+:deep(.v-date-picker-title) {
+    height: 70px;
+}
+:deep(.v-picker__title) {
+    border-radius: 0;
+}
 </style>
