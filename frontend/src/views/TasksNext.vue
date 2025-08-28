@@ -56,7 +56,7 @@
             </div>
             <div class="item-view d-flex flex-column">
                 <div class="d-flex flex-row">
-                    <v-tabs 
+                    <v-tabs
                         v-bind:value="itemViewTab"
                         v-on:change="onTabChange"
                     >
@@ -428,7 +428,7 @@ function flattenSubtreeNodes(node: any): any[] {
 function shouldFilterEntireSubtree(node: any, hideCompleted: boolean): boolean {
     // Get all descendants of this subtree (including the parent)
     const allDescendants = flattenSubtreeNodes(node);
-    
+
     // Check if ALL descendants have status that should be filtered
     return allDescendants.every(descendant => {
         const status = descendant.metadata?.task?.status?.kind;
@@ -447,41 +447,41 @@ function filterTreeNodes(nodes: any[], hideCompleted: boolean): any[] {
                 if (node.children && node.children.length > 0) {
                     filteredChildren = node.children.filter(child => {
                         const taskStatus = child.metadata?.task?.status?.kind;
-                        const shouldFilterOut = 
+                        const shouldFilterOut =
                             hideCompleted && (taskStatus === 'done' || taskStatus === 'canceled');
                         return !shouldFilterOut;
                     });
                 }
-                
+
                 // Return the tag group with filtered children
                 return { ...node, children: filteredChildren };
             }
-            
+
             // For real task nodes
             const taskStatus = node.metadata?.task?.status?.kind;
-            
+
             // Check if this node has children (is a real parent task forming a subtree)
             if (node.children && node.children.length > 0) {
                 // This is a parent task - check if ALL descendants should be filtered
                 const allDescendantsFiltered = shouldFilterEntireSubtree(node, hideCompleted);
-                
+
                 if (allDescendantsFiltered) {
                     return null; // Filter out entire subtree
                 }
-                
+
                 // Recursively filter children (but they follow the same subtree rules)
                 const filteredChildren = filterTreeNodes(node.children, hideCompleted);
                 return { ...node, children: filteredChildren };
             } else {
                 // This is a leaf task without children - apply individual filtering
                 // (This should only happen for tasks under tag groups, as per the logic)
-                const shouldFilterOut = 
+                const shouldFilterOut =
                     hideCompleted && (taskStatus === 'done' || taskStatus === 'canceled');
-                
+
                 if (shouldFilterOut) {
                     return null; // Filter out this individual task
                 }
-                
+
                 return node;
             }
         })
@@ -629,7 +629,7 @@ function navigateToState(selectedNodeId?: string, tab?: string, viewMode?: strin
         tab: tab || 'descendants',
         viewMode: viewMode || 'status'
     };
-    
+
     router.push({
         name: 'TasksNextWithParams',
         params: params
