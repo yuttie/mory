@@ -106,7 +106,10 @@
          style="color:#000000;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:medium;line-height:normal;font-family:sans-serif;font-variant-ligatures:normal;font-variant-position:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-alternates:normal;font-variant-east-asian:normal;font-feature-settings:normal;font-variation-settings:normal;text-indent:0;text-align:start;text-decoration:none;text-decoration-line:none;text-decoration-style:solid;text-decoration-color:#000000;letter-spacing:normal;word-spacing:normal;text-transform:none;writing-mode:lr-tb;direction:ltr;text-orientation:mixed;dominant-baseline:auto;baseline-shift:baseline;text-anchor:start;white-space:normal;shape-padding:0;shape-margin:0;inline-size:0;clip-rule:nonzero;display:inline;overflow:visible;visibility:visible;opacity:1;isolation:auto;mix-blend-mode:normal;color-interpolation:sRGB;color-interpolation-filters:linearRGB;solid-color:#000000;solid-opacity:1;vector-effect:none;fill:#edf9fa;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:0.362616;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;color-rendering:auto;image-rendering:auto;shape-rendering:auto;text-rendering:auto;enable-background:accumulate;stop-color:#000000;stop-opacity:1"
          d="m 11.1503,25.35443 19.55602,11.29115 36.872998,21.28901 9.6e-4,22.579914 L 48.024738,69.224309 30.70632,59.225498 V 113.09848 L 16.03847,104.63024 11.1503,101.80685 V 47.934823 Z"
          sodipodi:nodetypes="ccccccccccc" />
-      <circle cx="120" cy="15" r="12" fill="#4CAF50" opacity="0.8" stroke="white" stroke-width="1"/>
+      <circle cx="111" cy="15" r="13" fill="#ffffff" opacity="0.9" stroke="#4CAF50" stroke-width="1"/>
+  <g transform="translate(102, 6) scale(0.75)">
+    <path d="M19,19H5V8H19M16,1V3H8V1H6V3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3H18V1M17,12H12V17H17V12Z" fill="#4CAF50" stroke="#333" stroke-width="0.5" opacity="0.95"/>
+  </g>
 </g>
   </g>
 </svg>
