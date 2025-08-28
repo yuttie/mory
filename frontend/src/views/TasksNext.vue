@@ -4,7 +4,7 @@
             <div class="d-flex flex-column task-tree-container"><!-- NOTE: Necessary for <TaskTree> to have vertical scrollbar -->
                 <v-toolbar flat class="flex-grow-0">
                     <v-toolbar-title>
-                        <span>{{ store.allTasks.filter((t) => !['done', 'canceled'].includes(t.metadata?.task?.status?.kind)).length }} tasks left</span>
+                        <span>{{ filteredTasksCount }} tasks left</span>
                     </v-toolbar-title>
                     <v-spacer />
                     <v-menu
@@ -33,11 +33,23 @@
                         <v-divider></v-divider>
                         <v-list>
                             <v-subheader>Config</v-subheader>
+                            <v-list-item>
+                                <v-list-item-action>
+                                    <v-switch
+                                        v-model="hideCompletedInTreeView"
+                                        hide-details
+                                        class="mt-0"
+                                    ></v-switch>
+                                </v-list-item-action>
+                                <v-list-item-title>
+                                    Hide completed tasks in tree view
+                                </v-list-item-title>
+                            </v-list-item>
                         </v-list>
                     </v-menu>
                 </v-toolbar>
                 <TaskTree
-                    v-bind:items="store.forestWithTags"
+                    v-bind:items="filteredForestWithTags"
                     v-bind:active="activeNodeId"
                     v-bind:open.sync="openNodes"
                     v-on:update:active="onTaskSelectionChangeInTree"
@@ -46,7 +58,7 @@
             </div>
             <div class="item-view d-flex flex-column">
                 <div class="d-flex flex-row">
-                    <v-tabs 
+                    <v-tabs
                         v-bind:value="itemViewTab"
                         v-on:change="onTabChange"
                     >
@@ -110,6 +122,47 @@
                                 <v-icon>{{ mdiPlus }}</v-icon>
                                 <span v-if="$vuetify.breakpoint.mdAndUp">Add</span>
                             </v-btn>
+                            <v-spacer />
+                            <v-menu
+                                offset-y
+                                v-bind:close-on-content-click="false"
+                            >
+                                <template v-slot:activator="{ on, attrs }">
+                                    <v-btn
+                                        icon
+                                        v-bind="attrs"
+                                        v-on="on"
+                                    >
+                                        <v-icon>{{ mdiDotsVertical }}</v-icon>
+                                    </v-btn>
+                                </template>
+                                <v-list>
+                                    <v-subheader>Descendants statistics</v-subheader>
+                                    <v-list-item>
+                                        <v-list-item-content>
+                                            <v-list-item-title v-for="[kind, label] of Object.entries(STATUS_LABEL)">
+                                                {{ label }}: {{ selectedNodeDescendants.filter((t) => [kind].includes(t.metadata?.task?.status?.kind)).length }}
+                                            </v-list-item-title>
+                                        </v-list-item-content>
+                                    </v-list-item>
+                                </v-list>
+                                <v-divider></v-divider>
+                                <v-list>
+                                    <v-subheader>Config</v-subheader>
+                                    <v-list-item>
+                                        <v-list-item-action>
+                                            <v-switch
+                                                v-model="hideCompletedInItemView"
+                                                hide-details
+                                                class="mt-0"
+                                            ></v-switch>
+                                        </v-list-item-action>
+                                        <v-list-item-title>
+                                            Hide completed tasks in item view
+                                        </v-list-item-title>
+                                    </v-list-item>
+                                </v-list>
+                            </v-menu>
                         </v-toolbar>
                         <div class="view-container flex-grow-1">
                             <!-- Status view -->
@@ -323,6 +376,8 @@ const taskEditorRef = ref<any>(null);
 const openNodes = ref<UUID[]>([]);
 const newTaskPath = ref<string | null>(null);
 const error = ref<string | null>(null);
+const hideCompletedInTreeView = ref<boolean>(false);
+const hideCompletedInItemView = ref<boolean>(false);
 
 // URL-derived state (single source of truth)
 const selectedNode = computed<TreeNodeRecord | undefined>(() => {
@@ -363,19 +418,7 @@ const selectedTagName = computed<string | null>(() => {
     return null;
 });
 
-const taskStatuses = computed<TreeNodeRecord[]>(() => {
-    let targetTasks;
-    if (isTagGroupSelected.value && selectedTagName.value) {
-        // Show tasks from the selected tag group
-        targetTasks = store.childrenOf(`tag-group-${selectedTagName.value}`);
-    }
-    else {
-        // Show tasks based on selected node (descendants or all tasks)
-        targetTasks = selectedNode.value && !isTagGroupSelected.value
-            ? store.flattenDescendants(selectedNode.value.uuid)
-            : store.allTasks;
-    }
-
+const taskStatuses = computed(() => {
     const statuses = {
         todo: [] as TreeNodeRecord[],
         inProgress: [] as TreeNodeRecord[],
@@ -386,7 +429,7 @@ const taskStatuses = computed<TreeNodeRecord[]>(() => {
         canceled: [] as TreeNodeRecord[],
     };
 
-    for (const task of targetTasks) {
+    for (const task of selectedNodeDescendants.value) {
         const kind: StatusKind = task.metadata?.task?.status?.kind ?? 'todo';
         switch (kind) {
             case 'todo': statuses.todo.push(task); break;
@@ -402,15 +445,93 @@ const taskStatuses = computed<TreeNodeRecord[]>(() => {
     return statuses;
 });
 
-const scheduled = computed<Record<string, TreeNodeRecord[]>>(() => {
-    // Keep today, tomorrow, or other dates that have some undone tasks
-    const today = dayjs().format('YYYY-MM-DD');
-    const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
-    const scheduled: Record<string, TreeNodeRecord[]> = {
-        [today]: [],
-        [tomorrow]: [],
-    };
+// Helper function to check if entire subtree should be filtered
+function isEntireSubtreeCompleted(node: any): boolean {
+    const status = node.metadata?.task?.status?.kind;
+    const completed = status === 'done' || status === 'canceled';
+    if (!completed) {
+        return false;
+    }
 
+    // Check if ALL descendants have statuses considered completed
+    return (node.children ?? []).every(isEntireSubtreeCompleted);
+}
+
+// Helper function to recursively filter tree nodes based on task status with subtree logic
+function filterTreeNodes(nodes: any[], hideCompleted: boolean): any[] {
+    return nodes
+        .map(node => {
+            // Check if this is a tag group node (virtual parent)
+            if (node.uuid.startsWith('tag-group-')) {
+                // For tag groups, filter children individually since they're virtual parents
+                let filteredChildren = node.children;
+                if (node.children && node.children.length > 0) {
+                    filteredChildren = node.children.filter(child => {
+                        const taskStatus = child.metadata?.task?.status?.kind;
+                        const shouldFilterOut =
+                            hideCompleted && (taskStatus === 'done' || taskStatus === 'canceled');
+                        return !shouldFilterOut;
+                    });
+                }
+
+                // Return the tag group with filtered children
+                return { ...node, children: filteredChildren };
+            }
+
+            // For real task nodes
+            const taskStatus = node.metadata?.task?.status?.kind;
+
+            // Check if this node has children (is a real parent task forming a subtree)
+            if (node.children && node.children.length > 0) {
+                // This is a parent task - check if ALL descendants are completed
+                const completed = isEntireSubtreeCompleted(node);
+
+                if (hideCompleted && completed) {
+                    return null; // Filter out entire subtree
+                }
+
+                return node;
+            } else {
+                // This is a leaf task without children - apply individual filtering
+                // (This should only happen for tasks under tag groups, as per the logic)
+                const shouldFilterOut =
+                    hideCompleted && (taskStatus === 'done' || taskStatus === 'canceled');
+
+                if (shouldFilterOut) {
+                    return null; // Filter out this individual task
+                }
+
+                return node;
+            }
+        })
+        .filter(node => node !== null); // Remove filtered out nodes
+}
+
+// Computed property for filtered forest with tags
+const filteredForestWithTags = computed(() => {
+    return filterTreeNodes(store.forestWithTags, hideCompletedInTreeView.value);
+});
+
+// Computed property for task count that reflects current filtering
+const filteredTasksCount = computed(() => {
+    return store.allTasks.filter((t) => {
+        const kind = t.metadata?.task?.status?.kind;
+        // Always exclude done and canceled from the "tasks left" count, regardless of filter switches
+        if (['done', 'canceled'].includes(kind)) return false;
+        return true;
+    }).length;
+});
+
+// Helper function to filter task list based on status
+function filterTasksByStatus(tasks: TreeNodeRecord[], hideCompleted: boolean): TreeNodeRecord[] {
+    return tasks.filter(task => {
+        const kind: StatusKind = task.metadata?.task?.status?.kind ?? 'todo';
+        if (hideCompleted && (kind === 'done' || kind === 'canceled')) return false;
+        return true;
+    });
+}
+
+const selectedNodeDescendants = computed<TreeNodeRecord[]>(() => {
     let targetTasks;
     if (isTagGroupSelected.value && selectedTagName.value) {
         // Show tasks from the selected tag group
@@ -423,7 +544,23 @@ const scheduled = computed<Record<string, TreeNodeRecord[]>>(() => {
             : store.allTasks;
     }
 
-    for (const t of targetTasks) {
+    return targetTasks;
+});
+
+const filteredSelectedNodeDescendants = computed<TreeNodeRecord[]>(() => {
+    return filterTasksByStatus(selectedNodeDescendants.value, hideCompletedInItemView.value);
+});
+
+const scheduled = computed<Record<string, TreeNodeRecord[]>>(() => {
+    // Keep today, tomorrow, or other dates that have some undone tasks
+    const today = dayjs().format('YYYY-MM-DD');
+    const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
+    const scheduled: Record<string, TreeNodeRecord[]> = {
+        [today]: [],
+        [tomorrow]: [],
+    };
+
+    for (const t of filteredSelectedNodeDescendants.value) {
         if (t.metadata?.task?.scheduled_dates) {
             for (const date of t.metadata.task.scheduled_dates) {
                 scheduled[date] ??= [];
@@ -461,18 +598,6 @@ const knownContacts = computed<[string, number][]>(() => {
 
 // Eisenhower Matrix computed properties
 const eisenhowerQuadrants = computed(() => {
-    let targetTasks;
-    if (isTagGroupSelected.value && selectedTagName.value) {
-        // Show tasks from the selected tag group
-        targetTasks = store.childrenOf(`tag-group-${selectedTagName.value}`);
-    }
-    else {
-        // Show tasks based on selected node (descendants or all tasks)
-        targetTasks = selectedNode.value && !isTagGroupSelected.value
-            ? store.flattenDescendants(selectedNode.value.uuid)
-            : store.allTasks;
-    }
-
     const quadrants = {
         doFirst: [] as TreeNodeRecord[],      // High importance, High urgency
         schedule: [] as TreeNodeRecord[],     // High importance, Low urgency
@@ -480,7 +605,7 @@ const eisenhowerQuadrants = computed(() => {
         eliminate: [] as TreeNodeRecord[],    // Low importance, Low urgency
     };
 
-    for (const task of targetTasks) {
+    for (const task of filteredSelectedNodeDescendants.value) {
         const importance = task.metadata?.task?.importance ?? 3;
         const urgency = task.metadata?.task?.urgency ?? 3;
         const isHighImportance = importance >= 4;
@@ -513,7 +638,7 @@ function navigateToState(selectedNodeId?: string, tab?: string, viewMode?: strin
         tab: tab || 'descendants',
         viewMode: viewMode || 'status'
     };
-    
+
     router.push({
         name: 'TasksNextWithParams',
         params: params
