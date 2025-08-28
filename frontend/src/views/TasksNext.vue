@@ -34,14 +34,16 @@
                         <v-list>
                             <v-subheader>Config</v-subheader>
                             <v-list-item>
-                                <v-list-item-content>
+                                <v-list-item-action>
                                     <v-switch
                                         v-model="hideCompleted"
-                                        label="Hide completed tasks"
                                         hide-details
                                         class="mt-0"
                                     ></v-switch>
-                                </v-list-item-content>
+                                </v-list-item-action>
+                                <v-list-item-title>
+                                    Hide completed tasks
+                                </v-list-item-title>
                             </v-list-item>
                         </v-list>
                     </v-menu>
