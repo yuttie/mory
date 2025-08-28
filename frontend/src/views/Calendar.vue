@@ -289,8 +289,13 @@ onUnmounted(() => {
 
 // Methods
 function onCalendarInput(date: string) {
+    const formattedDate = dayjs(date, 'YYYY-MM-DD');
     router.push({
-        path: `/calendar/${calendarType.value}/${dayjs(date, 'YYYY-MM-DD').format('YYYY/MM/DD')}`,
+        name: 'CalendarWithDate',
+        params: { 
+            type: calendarType.value, 
+            date: [formattedDate.format('YYYY'), formattedDate.format('MM'), formattedDate.format('DD')] 
+        },
     });
 }
 
@@ -318,7 +323,11 @@ function navigateCalendar(direction: 'prev' | 'next', amount = 1) {
     }
     
     router.push({
-        path: `/calendar/${calendarType.value}/${newDate.format('YYYY/MM/DD')}`,
+        name: 'CalendarWithDate',
+        params: { 
+            type: calendarType.value, 
+            date: [newDate.format('YYYY'), newDate.format('MM'), newDate.format('DD')] 
+        },
     });
 }
 
@@ -384,8 +393,13 @@ function setToday() {
 }
 
 function viewDay({ date }: { date: string }) {
+    const formattedDate = dayjs(date, 'YYYY-MM-DD');
     router.push({
-        path: `/calendar/day/${dayjs(date, 'YYYY-MM-DD').format('YYYY/MM/DD')}`,
+        name: 'CalendarWithDate',
+        params: { 
+            type: 'day', 
+            date: [formattedDate.format('YYYY'), formattedDate.format('MM'), formattedDate.format('DD')] 
+        },
     });
 }
 
@@ -474,9 +488,6 @@ watch(route, (newRoute) => {
     if (newRoute.name === 'CalendarWithDate') {
         calendarType.value = newRoute.params.type as string;
         calendarCursor.value = dayjs(newRoute.params.date as string, 'YYYY/MM/DD').format('YYYY-MM-DD');
-    } else if (newRoute.name === 'Calendar') {
-        calendarType.value = 'month';
-        calendarCursor.value = dayjs().format('YYYY-MM-DD');
     }
 }, { immediate: true });
 </script>
