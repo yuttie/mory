@@ -289,12 +289,12 @@ onUnmounted(() => {
 
 // Methods
 function onCalendarInput(date: string) {
-    const formattedDate = dayjs(date, 'YYYY-MM-DD');
+    const parsedDate = dayjs(date, 'YYYY-MM-DD');
     router.push({
         name: 'CalendarWithDate',
         params: { 
             type: calendarType.value, 
-            date: [formattedDate.format('YYYY'), formattedDate.format('MM'), formattedDate.format('DD')] 
+            date: [parsedDate.format('YYYY'), parsedDate.format('MM'), parsedDate.format('DD')] 
         },
     });
 }
@@ -393,12 +393,12 @@ function setToday() {
 }
 
 function viewDay({ date }: { date: string }) {
-    const formattedDate = dayjs(date, 'YYYY-MM-DD');
+    const parsedDate = dayjs(date, 'YYYY-MM-DD');
     router.push({
         name: 'CalendarWithDate',
         params: { 
             type: 'day', 
-            date: [formattedDate.format('YYYY'), formattedDate.format('MM'), formattedDate.format('DD')] 
+            date: [parsedDate.format('YYYY'), parsedDate.format('MM'), parsedDate.format('DD')] 
         },
     });
 }
