@@ -106,9 +106,8 @@
          style="color:#000000;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:medium;line-height:normal;font-family:sans-serif;font-variant-ligatures:normal;font-variant-position:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-alternates:normal;font-variant-east-asian:normal;font-feature-settings:normal;font-variation-settings:normal;text-indent:0;text-align:start;text-decoration:none;text-decoration-line:none;text-decoration-style:solid;text-decoration-color:#000000;letter-spacing:normal;word-spacing:normal;text-transform:none;writing-mode:lr-tb;direction:ltr;text-orientation:mixed;dominant-baseline:auto;baseline-shift:baseline;text-anchor:start;white-space:normal;shape-padding:0;shape-margin:0;inline-size:0;clip-rule:nonzero;display:inline;overflow:visible;visibility:visible;opacity:1;isolation:auto;mix-blend-mode:normal;color-interpolation:sRGB;color-interpolation-filters:linearRGB;solid-color:#000000;solid-opacity:1;vector-effect:none;fill:#edf9fa;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:0.362616;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;color-rendering:auto;image-rendering:auto;shape-rendering:auto;text-rendering:auto;enable-background:accumulate;stop-color:#000000;stop-opacity:1"
          d="m 11.1503,25.35443 19.55602,11.29115 36.872998,21.28901 9.6e-4,22.579914 L 48.024738,69.224309 30.70632,59.225498 V 113.09848 L 16.03847,104.63024 11.1503,101.80685 V 47.934823 Z"
          sodipodi:nodetypes="ccccccccccc" />
-      <circle cx="111" cy="15" r="13" fill="#ffffff" opacity="0.9" stroke="#E91E63" stroke-width="1"/>
-  <g transform="translate(102, 6) scale(0.75)">
-    <path d="M22,16V4A2,2 0 0,0 20,2H8A2,2 0 0,0 6,4V16A2,2 0 0,0 8,18H20A2,2 0 0,0 22,16M11,12L13.03,14.71L16,11L20,16H8M2,6V20A2,2 0 0,0 4,22H18V20H4V6" fill="#E91E63" stroke="#333" stroke-width="0.5" opacity="0.95"/>
+      <g transform="translate(64, 64) scale(4)">
+    <path d="M22,16V4A2,2 0 0,0 20,2H8A2,2 0 0,0 6,4V16A2,2 0 0,0 8,18H20A2,2 0 0,0 22,16M11,12L13.03,14.71L16,11L20,16H8M2,6V20A2,2 0 0,0 4,22H18V20H4V6" fill="#ffffff" stroke="#ffffff" stroke-width="0" opacity="0.95"/>
   </g>
 </g>
   </g>

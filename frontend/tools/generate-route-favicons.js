@@ -69,13 +69,13 @@ if (!fs.existsSync(outputDir)) {
 /**
  * Convert MDI path data to SVG path element
  */
-function createIconPath(pathData, size = 16, x = 104, y = 8, color = '#ffffff') {
+function createIconPath(pathData, size, x, y, color) {
   // MDI icons are designed on a 24x24 viewBox
   // We scale them down and position them in the top-right corner
   const scale = size / 24;
   
   return `  <g transform="translate(${x}, ${y}) scale(${scale})">
-    <path d="${pathData}" fill="${color}" stroke="#333" stroke-width="0.5" opacity="0.95"/>
+    <path d="${pathData}" fill="${color}" stroke="#ffffff" stroke-width="0" opacity="0.95"/>
   </g>`;
 }
 
@@ -87,13 +87,10 @@ function createRouteSVG(route, config) {
   const logoContent = fs.readFileSync(logoPath, 'utf8');
   
   // Create the icon overlay
-  const iconOverlay = createIconPath(config.icon, 18, 102, 6, config.color);
-  
-  // Also add a subtle background circle for the icon to make it more visible
-  const iconBackground = `  <circle cx="111" cy="15" r="13" fill="#ffffff" opacity="0.9" stroke="${config.color}" stroke-width="1"/>`;
+  const iconOverlay = createIconPath(config.icon, 96, 64, 64, '#ffffff');
   
   // Insert both the background and icon before the closing </g> tag
-  const modifiedSVG = logoContent.replace('</g>', `${iconBackground}\n${iconOverlay}\n</g>`);
+  const modifiedSVG = logoContent.replace('</g>', `${iconOverlay}\n</g>`);
   
   // Save the modified SVG
   const svgPath = path.join(outputDir, `favicon-${route}.svg`);
