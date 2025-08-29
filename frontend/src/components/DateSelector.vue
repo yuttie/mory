@@ -24,44 +24,50 @@
         </template>
 
         <v-card>
-            <div class="d-flex flex-row align-end">
-                <v-date-picker
-                    v-model="dateValue"
-                    scrollable
-                    show-adjacent-months
-                    v-on:input="onDatePick"
-                />
-                <v-time-picker
-                    v-if="timeEnabled"
-                    v-model="timeValue"
-                    format="24hr"
-                    scrollable
-                    v-on:input="onTimePick"
-                />
-            </div>
-            <v-list v-if="showTimeToggle || showTimezoneSelector">
-                <v-list-item v-if="showTimeToggle">
-                    <v-switch
-                        v-model="timeEnabled"
-                        label="Include time"
-                        v-on:change="onTimeToggle"
+            <div class="d-flex flex-row align-start">
+                <div class="d-flex flex-column">
+                    <v-date-picker
+                        v-model="dateValue"
+                        scrollable
+                        show-adjacent-months
+                        v-on:input="onDatePick"
                     />
-                </v-list-item>
-                <v-list-item v-if="showTimezoneSelector">
-                    <v-select
-                        v-model="selectedTimezone"
-                        v-bind:items="timezoneOptions"
-                        label="Timezone"
-                        item-text="text"
-                        item-value="value"
-                        v-on:input="onTimezonePick"
-                    >
-                        <template v-slot:prepend>
-                            <v-icon>{{ mdiEarth }}</v-icon>
-                        </template>
-                    </v-select>
-                </v-list-item>
-            </v-list>
+                    <v-list v-if="showTimeToggle || showTimezoneSelector">
+                        <v-list-item v-if="showTimeToggle">
+                            <v-switch
+                                v-model="timeEnabled"
+                                label="Include time"
+                                v-on:change="onTimeToggle"
+                            />
+                        </v-list-item>
+                    </v-list>
+                </div>
+                <div class="d-flex flex-column">
+                    <v-time-picker
+                        v-if="timeEnabled"
+                        v-model="timeValue"
+                        format="24hr"
+                        scrollable
+                        v-on:input="onTimePick"
+                    />
+                    <v-list v-if="showTimeToggle || showTimezoneSelector">
+                        <v-list-item v-if="showTimezoneSelector">
+                            <v-select
+                                v-model="selectedTimezone"
+                                v-bind:items="timezoneOptions"
+                                label="Timezone"
+                                item-text="text"
+                                item-value="value"
+                                v-on:input="onTimezonePick"
+                            >
+                                <template v-slot:prepend>
+                                    <v-icon>{{ mdiEarth }}</v-icon>
+                                </template>
+                            </v-select>
+                        </v-list-item>
+                    </v-list>
+                </div>
+            </div>
         </v-card>
     </v-menu>
 </template>
