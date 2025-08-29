@@ -70,7 +70,6 @@
 import { ref, computed, onMounted } from 'vue';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
-import timezone from 'dayjs/plugin/timezone';
 
 import {
     mdiCalendarOutline,
@@ -78,24 +77,37 @@ import {
     mdiEarth,
 } from '@mdi/js';
 
-// Extend dayjs with timezone support
+// Extend dayjs with UTC support
 dayjs.extend(utc);
-dayjs.extend(timezone);
 
-// Common timezone options
+// ISO8601-style timezone options
 const timezoneOptions = [
-    { text: 'UTC', value: 'UTC' },
-    { text: 'America/New_York', value: 'America/New_York' },
-    { text: 'America/Chicago', value: 'America/Chicago' },
-    { text: 'America/Denver', value: 'America/Denver' },
-    { text: 'America/Los_Angeles', value: 'America/Los_Angeles' },
-    { text: 'Europe/London', value: 'Europe/London' },
-    { text: 'Europe/Berlin', value: 'Europe/Berlin' },
-    { text: 'Europe/Paris', value: 'Europe/Paris' },
-    { text: 'Asia/Tokyo', value: 'Asia/Tokyo' },
-    { text: 'Asia/Shanghai', value: 'Asia/Shanghai' },
-    { text: 'Asia/Kolkata', value: 'Asia/Kolkata' },
-    { text: 'Australia/Sydney', value: 'Australia/Sydney' },
+    { text: 'UTC (+00:00)', value: '+00:00' },
+    { text: 'UTC-12 (-12:00)', value: '-12:00' },
+    { text: 'UTC-11 (-11:00)', value: '-11:00' },
+    { text: 'UTC-10 (-10:00)', value: '-10:00' },
+    { text: 'UTC-9 (-09:00)', value: '-09:00' },
+    { text: 'UTC-8 (-08:00)', value: '-08:00' },
+    { text: 'UTC-7 (-07:00)', value: '-07:00' },
+    { text: 'UTC-6 (-06:00)', value: '-06:00' },
+    { text: 'UTC-5 (-05:00)', value: '-05:00' },
+    { text: 'UTC-4 (-04:00)', value: '-04:00' },
+    { text: 'UTC-3 (-03:00)', value: '-03:00' },
+    { text: 'UTC-2 (-02:00)', value: '-02:00' },
+    { text: 'UTC-1 (-01:00)', value: '-01:00' },
+    { text: 'UTC+1 (+01:00)', value: '+01:00' },
+    { text: 'UTC+2 (+02:00)', value: '+02:00' },
+    { text: 'UTC+3 (+03:00)', value: '+03:00' },
+    { text: 'UTC+4 (+04:00)', value: '+04:00' },
+    { text: 'UTC+5 (+05:00)', value: '+05:00' },
+    { text: 'UTC+5:30 (+05:30)', value: '+05:30' },
+    { text: 'UTC+6 (+06:00)', value: '+06:00' },
+    { text: 'UTC+7 (+07:00)', value: '+07:00' },
+    { text: 'UTC+8 (+08:00)', value: '+08:00' },
+    { text: 'UTC+9 (+09:00)', value: '+09:00' },
+    { text: 'UTC+10 (+10:00)', value: '+10:00' },
+    { text: 'UTC+11 (+11:00)', value: '+11:00' },
+    { text: 'UTC+12 (+12:00)', value: '+12:00' },
 ];
 
 type HideDetails = boolean | 'auto';
@@ -116,13 +128,13 @@ const props = withDefaults(
     {
         value: undefined,
         label: undefined,
-        rules: [],
+        rules: () => [],
         required: false,
         clearable: true,
         hideDetails: false,
         includeTime: undefined,
         includeTimezone: false,
-        timezone: 'UTC',
+        timezone: '+00:00',
     },
 );
 
@@ -145,7 +157,7 @@ const showTimeToggle = computed(() => !includeTimeExplicitlyProvided);
 const timeEnabled = ref(false);
 
 // Internal state for timezone selection
-const selectedTimezone = ref(props.timezone || 'UTC');
+const selectedTimezone = ref(props.timezone || '+00:00');
 
 // Show timezone selector when time is enabled and includeTimezone is true
 const showTimezoneSelector = computed(() => timeEnabled.value && props.includeTimezone);
@@ -190,13 +202,13 @@ const parseDateTime = (value: string | null | undefined): { date: string | null;
         const date = parsed.format('YYYY-MM-DD');
         const time = parsed.format('HH:mm');
         
-        // Extract timezone from the input value if present
+        // Extract timezone from the input value if present (ISO8601 format only)
         let timezone: string | null = null;
         if (value.includes(' ') || value.includes('T') || value.match(/\d{2}:\d{2}/)) {
-            // Check for timezone indicators
-            const tzMatch = value.match(/([A-Z]{3,4}|\+\d{2}:\d{2}|-\d{2}:\d{2}|Z)$/);
+            // Check for ISO8601 timezone indicators: +HH:MM, -HH:MM, Z
+            const tzMatch = value.match(/([+-]\d{2}:\d{2}|Z)$/);
             if (tzMatch) {
-                timezone = tzMatch[1] === 'Z' ? 'UTC' : tzMatch[1];
+                timezone = tzMatch[1] === 'Z' ? '+00:00' : tzMatch[1];
             }
             return { date, time, timezone };
         } else {
@@ -259,15 +271,8 @@ const updateValue = (date: string | null, time: string | null, timezone?: string
     if (timeEnabled.value && time) {
         let value = `${date} ${time}`;
         if (props.includeTimezone && timezone) {
-            // Create a dayjs object with timezone and format it
-            const dt = dayjs.tz(`${date} ${time}`, timezone);
-            value = dt.format('YYYY-MM-DD HH:mm');
-            // Include timezone indicator
-            if (timezone !== 'UTC') {
-                value += ` ${timezone}`;
-            } else {
-                value += ' UTC';
-            }
+            // For ISO8601 format, directly append the timezone offset
+            value += timezone;
         }
         emit('input', value);
     } else {
