@@ -226,7 +226,7 @@ function onTimeToggle() {
 :deep(.v-date-picker-title) {
     height: 70px;
 }
-:deep(.v-picker__title) {
+:deep(.v-picker) {
     border-radius: 0;
 }
 </style>
