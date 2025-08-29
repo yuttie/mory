@@ -354,7 +354,7 @@
             v-model="showParentDialog"
             v-bind:task-uuid="selectedNode?.uuid || null"
             v-bind:task-title="selectedNode?.title || 'Untitled'"
-            v-bind:items="store.forestWithTags"
+            v-bind:items="store.forest"
             v-on:move="onMoveTask"
         />
     </div>
