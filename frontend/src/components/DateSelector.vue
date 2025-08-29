@@ -275,7 +275,7 @@ const displayValue = computed(() => {
             let display = `${date} ${time}`;
             // Only show timezone if it's different from local timezone
             if (showTimezoneSelector.value && selectedTimezone.value !== getLocalTimezone()) {
-                display += ` ${selectedTimezone.value}`;
+                display += selectedTimezone.value;
             }
             return display;
         } else if (date) {
