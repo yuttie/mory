@@ -211,7 +211,7 @@ function onTimeToggle() {
     if (!timeEnabled.value) {
         // If time is disabled, update value to date-only format
         if (dateValue.value) {
-            emit('input', dateValue.value);
+            updateValue(dateValue.value, timeValue.value);
         }
     } else {
         // If time is enabled and we have a date, set default time if none exists
