@@ -112,9 +112,33 @@ const filteredItems = computed<ApiTreeNode[]>(() => {
         };
     }
 
-    return props.items
-        .map(filterNode)
-        .filter((node): node is ApiTreeNode => node !== null);
+    // Helper function to flatten tag nodes and promote their children to top level
+    function processNodes(nodes: ApiTreeNode[]): ApiTreeNode[] {
+        const result: ApiTreeNode[] = [];
+        
+        for (const node of nodes) {
+            // Check if this is a virtual tag node
+            if (node.metadata && typeof node.metadata === 'object' && 'tag_group' in node.metadata) {
+                // This is a tag node - don't include it, but include its children as top-level
+                if (node.children) {
+                    const processedChildren = node.children
+                        .map(filterNode)
+                        .filter((child): child is ApiTreeNode => child !== null);
+                    result.push(...processedChildren);
+                }
+            } else {
+                // This is a regular node - apply normal filtering
+                const filteredNode = filterNode(node);
+                if (filteredNode) {
+                    result.push(filteredNode);
+                }
+            }
+        }
+        
+        return result;
+    }
+
+    return processNodes(props.items);
 });
 
 // Helper function to check if a node is a descendant of the task being moved
