@@ -39,13 +39,27 @@
                     v-on:input="onTimePick"
                 />
             </div>
-            <v-list v-if="showTimeToggle">
-                <v-list-item>
+            <v-list v-if="showTimeToggle || showTimezoneSelector">
+                <v-list-item v-if="showTimeToggle">
                     <v-switch
                         v-model="timeEnabled"
                         label="Include time"
                         v-on:change="onTimeToggle"
                     />
+                </v-list-item>
+                <v-list-item v-if="showTimezoneSelector">
+                    <v-select
+                        v-model="selectedTimezone"
+                        v-bind:items="timezoneOptions"
+                        label="Timezone"
+                        item-text="text"
+                        item-value="value"
+                        v-on:input="onTimezonePick"
+                    >
+                        <template v-slot:prepend>
+                            <v-icon>{{ mdiEarth }}</v-icon>
+                        </template>
+                    </v-select>
                 </v-list-item>
             </v-list>
         </v-card>
@@ -55,11 +69,34 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
 
 import {
     mdiCalendarOutline,
     mdiClockOutline,
+    mdiEarth,
 } from '@mdi/js';
+
+// Extend dayjs with timezone support
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
+// Common timezone options
+const timezoneOptions = [
+    { text: 'UTC', value: 'UTC' },
+    { text: 'America/New_York', value: 'America/New_York' },
+    { text: 'America/Chicago', value: 'America/Chicago' },
+    { text: 'America/Denver', value: 'America/Denver' },
+    { text: 'America/Los_Angeles', value: 'America/Los_Angeles' },
+    { text: 'Europe/London', value: 'Europe/London' },
+    { text: 'Europe/Berlin', value: 'Europe/Berlin' },
+    { text: 'Europe/Paris', value: 'Europe/Paris' },
+    { text: 'Asia/Tokyo', value: 'Asia/Tokyo' },
+    { text: 'Asia/Shanghai', value: 'Asia/Shanghai' },
+    { text: 'Asia/Kolkata', value: 'Asia/Kolkata' },
+    { text: 'Australia/Sydney', value: 'Australia/Sydney' },
+];
 
 type HideDetails = boolean | 'auto';
 
@@ -73,6 +110,8 @@ const props = withDefaults(
         clearable?: boolean;
         hideDetails?: HideDetails;
         includeTime?: boolean;
+        includeTimezone?: boolean;
+        timezone?: string;
     }>(),
     {
         value: undefined,
@@ -82,12 +121,15 @@ const props = withDefaults(
         clearable: true,
         hideDetails: false,
         includeTime: undefined,
+        includeTimezone: false,
+        timezone: 'UTC',
     },
 );
 
 // Emits
 const emit = defineEmits<{
     (e: 'input', value: string | null): void;
+    (e: 'timezone-change', timezone: string): void;
 }>();
 
 // Reactive states
@@ -102,6 +144,12 @@ const showTimeToggle = computed(() => !includeTimeExplicitlyProvided);
 // Internal state for time enablement
 const timeEnabled = ref(false);
 
+// Internal state for timezone selection
+const selectedTimezone = ref(props.timezone || 'UTC');
+
+// Show timezone selector when time is enabled and includeTimezone is true
+const showTimezoneSelector = computed(() => timeEnabled.value && props.includeTimezone);
+
 // Initialize timeEnabled based on the current value or includeTime prop
 const initializeTimeEnabled = () => {
     if (includeTimeExplicitlyProvided) {
@@ -115,6 +163,14 @@ const initializeTimeEnabled = () => {
         // Default to false if no value and no explicit includeTime prop
         timeEnabled.value = false;
     }
+
+    // Initialize timezone from value if present
+    if (props.value) {
+        const { timezone } = parseDateTime(props.value);
+        if (timezone) {
+            selectedTimezone.value = timezone;
+        }
+    }
 };
 
 // Initialize on mount
@@ -123,9 +179,9 @@ onMounted(() => {
 });
 
 // Parse the input value to extract date and time parts
-const parseDateTime = (value: string | null | undefined): { date: string | null; time: string | null } => {
+const parseDateTime = (value: string | null | undefined): { date: string | null; time: string | null; timezone: string | null } => {
     if (!value) {
-        return { date: null, time: null };
+        return { date: null, time: null, timezone: null };
     }
     
     // Try to parse with dayjs to handle various formats
@@ -134,16 +190,21 @@ const parseDateTime = (value: string | null | undefined): { date: string | null;
         const date = parsed.format('YYYY-MM-DD');
         const time = parsed.format('HH:mm');
         
-        // Check if the original value contains time information
-        // If it's just a date (like "2023-12-25"), don't extract time
+        // Extract timezone from the input value if present
+        let timezone: string | null = null;
         if (value.includes(' ') || value.includes('T') || value.match(/\d{2}:\d{2}/)) {
-            return { date, time };
+            // Check for timezone indicators
+            const tzMatch = value.match(/([A-Z]{3,4}|\+\d{2}:\d{2}|-\d{2}:\d{2}|Z)$/);
+            if (tzMatch) {
+                timezone = tzMatch[1] === 'Z' ? 'UTC' : tzMatch[1];
+            }
+            return { date, time, timezone };
         } else {
-            return { date, time: null };
+            return { date, time: null, timezone: null };
         }
     }
     
-    return { date: null, time: null };
+    return { date: null, time: null, timezone: null };
 };
 
 // Computed properties for date and time values
@@ -153,7 +214,7 @@ const dateValue = computed<string | null>({
         return date;
     },
     set: (v) => {
-        updateValue(v, timeValue.value);
+        updateValue(v, timeValue.value, selectedTimezone.value);
     },
 });
 
@@ -164,7 +225,7 @@ const timeValue = computed<string | null>({
         return time;
     },
     set: (v) => {
-        updateValue(dateValue.value, v);
+        updateValue(dateValue.value, v, selectedTimezone.value);
     },
 });
 
@@ -175,7 +236,11 @@ const displayValue = computed(() => {
     if (timeEnabled.value) {
         const { date, time } = parseDateTime(props.value);
         if (date && time) {
-            return `${date} ${time}`;
+            let display = `${date} ${time}`;
+            if (showTimezoneSelector.value) {
+                display += ` ${selectedTimezone.value}`;
+            }
+            return display;
         } else if (date) {
             return date;
         }
@@ -185,14 +250,26 @@ const displayValue = computed(() => {
 });
 
 // Update the combined value
-const updateValue = (date: string | null, time: string | null) => {
+const updateValue = (date: string | null, time: string | null, timezone?: string) => {
     if (!date) {
         emit('input', null);
         return;
     }
     
     if (timeEnabled.value && time) {
-        emit('input', `${date} ${time}`);
+        let value = `${date} ${time}`;
+        if (props.includeTimezone && timezone) {
+            // Create a dayjs object with timezone and format it
+            const dt = dayjs.tz(`${date} ${time}`, timezone);
+            value = dt.format('YYYY-MM-DD HH:mm');
+            // Include timezone indicator
+            if (timezone !== 'UTC') {
+                value += ` ${timezone}`;
+            } else {
+                value += ' UTC';
+            }
+        }
+        emit('input', value);
     } else {
         emit('input', date);
     }
@@ -200,23 +277,29 @@ const updateValue = (date: string | null, time: string | null) => {
 
 // Methods
 function onDatePick(date: string) {
-    updateValue(date, timeValue.value);
+    updateValue(date, timeValue.value, selectedTimezone.value);
 }
 
 function onTimePick(time: string) {
-    updateValue(dateValue.value, time);
+    updateValue(dateValue.value, time, selectedTimezone.value);
+}
+
+function onTimezonePick(timezone: string) {
+    selectedTimezone.value = timezone;
+    emit('timezone-change', timezone);
+    updateValue(dateValue.value, timeValue.value, timezone);
 }
 
 function onTimeToggle() {
     if (!timeEnabled.value) {
         // If time is disabled, update value to date-only format
         if (dateValue.value) {
-            updateValue(dateValue.value, timeValue.value);
+            updateValue(dateValue.value, timeValue.value, selectedTimezone.value);
         }
     } else {
         // If time is enabled and we have a date, set default time if none exists
         if (dateValue.value && !timeValue.value) {
-            updateValue(dateValue.value, '12:00');
+            updateValue(dateValue.value, '12:00', selectedTimezone.value);
         }
     }
 }
