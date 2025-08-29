@@ -401,7 +401,20 @@ export const useTaskForestStore = defineStore('taskForest', () => {
         if (parentUuid === null) {
             return `.tasks/${taskUuid}.md`;
         } else {
-            return `.tasks/${parentUuid}/${taskUuid}.md`;
+            // Build the full hierarchical path by walking up the parent chain
+            const pathComponents: UUID[] = [];
+            let currentParent = parentUuid;
+            
+            // Walk up the parent chain to build the complete directory path
+            while (currentParent !== null) {
+                pathComponents.unshift(currentParent);
+                const nextParent = parentOf(currentParent);
+                currentParent = nextParent;
+            }
+            
+            // Construct the full path: .tasks/grandparent/parent/child.md
+            const directoryPath = pathComponents.join('/');
+            return `.tasks/${directoryPath}/${taskUuid}.md`;
         }
     }
 
