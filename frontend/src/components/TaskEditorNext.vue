@@ -388,7 +388,7 @@ const emit = defineEmits<{
     (e: 'save', value: Task): void;
     (e: 'delete', path: string): void;
     (e: 'cancel'): void;
-    (e: 'changeParent'): void;
+    (e: 'change-parent'): void;
 }>();
 
 // Reactive states
@@ -655,7 +655,7 @@ function onCancel(): void {
 }
 
 function onChangeParent(): void {
-    emit('changeParent');
+    emit('change-parent');
 }
 
 // Helper functions for comparison

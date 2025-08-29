@@ -90,7 +90,7 @@
                             v-on:save="onSelectedTaskSave"
                             v-on:delete="onSelectedTaskDelete"
                             v-on:cancel="onNewTaskCancel"
-                            v-on:changeParent="showChangeParentDialog"
+                            v-on:change-parent="showChangeParentDialog"
                         />
                     </v-tab-item>
                     <v-tab-item value="descendants">
