@@ -72,14 +72,7 @@
     </v-menu>
 </template>
 
-<script lang="ts">
-// Calculate local timezone at module scope
-const offsetMinutes = new Date().getTimezoneOffset();
-const offsetHours = Math.floor(Math.abs(offsetMinutes) / 60);
-const offsetMins = Math.abs(offsetMinutes) % 60;
-const sign = offsetMinutes <= 0 ? '+' : '-';
-export const LOCAL_TIMEZONE = `${sign}${offsetHours.toString().padStart(2, '0')}:${offsetMins.toString().padStart(2, '0')}`;
-</script>
+
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
@@ -104,34 +97,34 @@ const getLocalTimezone = (): string => {
     return `${sign}${offsetHours.toString().padStart(2, '0')}:${offsetMins.toString().padStart(2, '0')}`;
 };
 
-// ISO8601-style timezone options
+// ISO8601-style timezone options with special names
 const timezoneOptions = [
-    { text: 'UTC (+00:00)', value: '+00:00' },
-    { text: 'UTC-12 (-12:00)', value: '-12:00' },
+    { text: 'GMT/UTC (+00:00)', value: '+00:00' },
+    { text: 'AoE - Anywhere on Earth (-12:00)', value: '-12:00' },
     { text: 'UTC-11 (-11:00)', value: '-11:00' },
-    { text: 'UTC-10 (-10:00)', value: '-10:00' },
-    { text: 'UTC-9 (-09:00)', value: '-09:00' },
-    { text: 'UTC-8 (-08:00)', value: '-08:00' },
-    { text: 'UTC-7 (-07:00)', value: '-07:00' },
-    { text: 'UTC-6 (-06:00)', value: '-06:00' },
-    { text: 'UTC-5 (-05:00)', value: '-05:00' },
+    { text: 'HST - Hawaii Standard Time (-10:00)', value: '-10:00' },
+    { text: 'AKST - Alaska Standard Time (-09:00)', value: '-09:00' },
+    { text: 'PST - Pacific Standard Time (-08:00)', value: '-08:00' },
+    { text: 'MST - Mountain Standard Time (-07:00)', value: '-07:00' },
+    { text: 'CST - Central Standard Time (-06:00)', value: '-06:00' },
+    { text: 'EST - Eastern Standard Time (-05:00)', value: '-05:00' },
     { text: 'UTC-4 (-04:00)', value: '-04:00' },
     { text: 'UTC-3 (-03:00)', value: '-03:00' },
     { text: 'UTC-2 (-02:00)', value: '-02:00' },
     { text: 'UTC-1 (-01:00)', value: '-01:00' },
-    { text: 'UTC+1 (+01:00)', value: '+01:00' },
-    { text: 'UTC+2 (+02:00)', value: '+02:00' },
+    { text: 'CET - Central European Time (+01:00)', value: '+01:00' },
+    { text: 'EET - Eastern European Time (+02:00)', value: '+02:00' },
     { text: 'UTC+3 (+03:00)', value: '+03:00' },
     { text: 'UTC+4 (+04:00)', value: '+04:00' },
     { text: 'UTC+5 (+05:00)', value: '+05:00' },
-    { text: 'UTC+5:30 (+05:30)', value: '+05:30' },
+    { text: 'IST - India Standard Time (+05:30)', value: '+05:30' },
     { text: 'UTC+6 (+06:00)', value: '+06:00' },
     { text: 'UTC+7 (+07:00)', value: '+07:00' },
-    { text: 'UTC+8 (+08:00)', value: '+08:00' },
-    { text: 'UTC+9 (+09:00)', value: '+09:00' },
-    { text: 'UTC+10 (+10:00)', value: '+10:00' },
+    { text: 'CST - China Standard Time (+08:00)', value: '+08:00' },
+    { text: 'JST - Japan Standard Time (+09:00)', value: '+09:00' },
+    { text: 'AEST - Australian Eastern Standard Time (+10:00)', value: '+10:00' },
     { text: 'UTC+11 (+11:00)', value: '+11:00' },
-    { text: 'UTC+12 (+12:00)', value: '+12:00' },
+    { text: 'NZST - New Zealand Standard Time (+12:00)', value: '+12:00' },
 ];
 
 type HideDetails = boolean | 'auto';
@@ -146,8 +139,6 @@ const props = withDefaults(
         clearable?: boolean;
         hideDetails?: HideDetails;
         includeTime?: boolean;
-        includeTimezone?: boolean;
-        timezone?: string;
     }>(),
     {
         value: undefined,
@@ -157,15 +148,12 @@ const props = withDefaults(
         clearable: true,
         hideDetails: false,
         includeTime: undefined,
-        includeTimezone: false,
-        timezone: '+00:00',
     },
 );
 
 // Emits
 const emit = defineEmits<{
     (e: 'input', value: string | null): void;
-    (e: 'timezone-change', timezone: string): void;
 }>();
 
 // Reactive states
@@ -180,8 +168,8 @@ const showTimeToggle = computed(() => !includeTimeExplicitlyProvided);
 // Internal state for time enablement
 const timeEnabled = ref(false);
 
-// Internal state for timezone selection
-const selectedTimezone = ref(props.timezone !== '+00:00' ? props.timezone : getLocalTimezone());
+// Internal state for timezone selection - always default to local timezone
+const selectedTimezone = ref(getLocalTimezone());
 
 // Always show timezone selector when time is enabled
 const showTimezoneSelector = computed(() => timeEnabled.value);
@@ -317,7 +305,6 @@ function onTimePick(time: string) {
 
 function onTimezonePick(timezone: string) {
     selectedTimezone.value = timezone;
-    emit('timezone-change', timezone);
     updateValue(dateValue.value, timeValue.value, timezone);
 }
 
