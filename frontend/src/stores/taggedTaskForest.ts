@@ -223,6 +223,7 @@ export const useTaggedTaskForestStore = defineStore('taggedTaskForest', () => {
         toApiTreeNode: store.toApiTreeNode,
         flattenDescendants: store.flattenDescendants,
         flattenSubtree: store.flattenSubtree,
+        moveNode: store.moveNode,
         refresh: store.refresh,
         replaceFromServer: store.replaceFromServer,
         mergeFromServer: store.mergeFromServer,
@@ -231,6 +232,7 @@ export const useTaggedTaskForestStore = defineStore('taggedTaskForest', () => {
         addNodeLocal: store.addNodeLocal,
         replaceNodeLocal: store.replaceNodeLocal,
         deleteLeafLocal: store.deleteLeafLocal,
+        moveNodeLocal: store.moveNodeLocal,
 
         // === Tag-specific state (read-only) ===
         tagGroups: computed(() => tagGroups.value),
