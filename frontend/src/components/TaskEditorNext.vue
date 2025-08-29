@@ -33,6 +33,17 @@
                 </v-btn>
                 <v-btn
                     v-if="isEdit"
+                    small
+                    outlined
+                    color="primary"
+                    class="mr-3"
+                    v-on:click="onChangeParent"
+                >
+                    <v-icon small class="mr-1">{{ mdiFileTreeOutline }}</v-icon>
+                    <span v-if="$vuetify.breakpoint.smAndUp">Change Parent</span>
+                </v-btn>
+                <v-btn
+                    v-if="isEdit"
                     color="error"
                     text
                     class="mr-3"
@@ -325,6 +336,7 @@ import {
     mdiClose,
     mdiContentSave,
     mdiDelete,
+    mdiFileTreeOutline,
     mdiFormatHeader1,
     mdiHelpCircleOutline,
     mdiNoteEditOutline,
@@ -376,6 +388,7 @@ const emit = defineEmits<{
     (e: 'save', value: Task): void;
     (e: 'delete', path: string): void;
     (e: 'cancel'): void;
+    (e: 'changeParent'): void;
 }>();
 
 // Reactive states
@@ -639,6 +652,10 @@ function onDelete(): void {
 
 function onCancel(): void {
     emit('cancel');
+}
+
+function onChangeParent(): void {
+    emit('changeParent');
 }
 
 // Helper functions for comparison

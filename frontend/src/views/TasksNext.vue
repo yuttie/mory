@@ -79,18 +79,6 @@
                     style="flex: 1 1 0; background: transparent;"
                 >
                     <v-tab-item v-if="newTaskPath || selectedNode && !isTagGroupSelected" value="selected">
-                        <!-- Action buttons for existing tasks -->
-                        <div v-if="!newTaskPath && selectedNode" class="d-flex justify-end ma-2">
-                            <v-btn
-                                small
-                                outlined
-                                color="primary"
-                                v-on:click="showChangeParentDialog"
-                            >
-                                <v-icon small class="mr-1">{{ mdiFileTreeOutline }}</v-icon>
-                                Change Parent
-                            </v-btn>
-                        </div>
                         <TaskEditorNext
                             ref="taskEditorRef"
                             v-bind:task-path="newTaskPath ?? selectedNode.path"
@@ -102,6 +90,7 @@
                             v-on:save="onSelectedTaskSave"
                             v-on:delete="onSelectedTaskDelete"
                             v-on:cancel="onNewTaskCancel"
+                            v-on:changeParent="showChangeParentDialog"
                         />
                     </v-tab-item>
                     <v-tab-item value="descendants">
@@ -367,7 +356,6 @@ import { useRoute, useRouter } from 'vue-router/composables';
 import {
     mdiCalendarMultiselectOutline,
     mdiDotsVertical,
-    mdiFileTreeOutline,
     mdiGridLarge,
     mdiPlus,
     mdiTrafficLightOutline,
