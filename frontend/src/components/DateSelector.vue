@@ -66,6 +66,15 @@
     </v-menu>
 </template>
 
+<script lang="ts">
+// Calculate local timezone at module scope
+const offsetMinutes = new Date().getTimezoneOffset();
+const offsetHours = Math.floor(Math.abs(offsetMinutes) / 60);
+const offsetMins = Math.abs(offsetMinutes) % 60;
+const sign = offsetMinutes <= 0 ? '+' : '-';
+export const LOCAL_TIMEZONE = `${sign}${offsetHours.toString().padStart(2, '0')}:${offsetMins.toString().padStart(2, '0')}`;
+</script>
+
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import dayjs from 'dayjs';
@@ -79,6 +88,15 @@ import {
 
 // Extend dayjs with UTC support
 dayjs.extend(utc);
+
+// Get local timezone in ISO8601 format
+const getLocalTimezone = (): string => {
+    const offsetMinutes = new Date().getTimezoneOffset();
+    const offsetHours = Math.floor(Math.abs(offsetMinutes) / 60);
+    const offsetMins = Math.abs(offsetMinutes) % 60;
+    const sign = offsetMinutes <= 0 ? '+' : '-';
+    return `${sign}${offsetHours.toString().padStart(2, '0')}:${offsetMins.toString().padStart(2, '0')}`;
+};
 
 // ISO8601-style timezone options
 const timezoneOptions = [
@@ -157,10 +175,10 @@ const showTimeToggle = computed(() => !includeTimeExplicitlyProvided);
 const timeEnabled = ref(false);
 
 // Internal state for timezone selection
-const selectedTimezone = ref(props.timezone || '+00:00');
+const selectedTimezone = ref(props.timezone !== '+00:00' ? props.timezone : getLocalTimezone());
 
-// Show timezone selector when time is enabled and includeTimezone is true
-const showTimezoneSelector = computed(() => timeEnabled.value && props.includeTimezone);
+// Always show timezone selector when time is enabled
+const showTimezoneSelector = computed(() => timeEnabled.value);
 
 // Initialize timeEnabled based on the current value or includeTime prop
 const initializeTimeEnabled = () => {
@@ -249,7 +267,8 @@ const displayValue = computed(() => {
         const { date, time } = parseDateTime(props.value);
         if (date && time) {
             let display = `${date} ${time}`;
-            if (showTimezoneSelector.value) {
+            // Only show timezone if it's different from local timezone
+            if (showTimezoneSelector.value && selectedTimezone.value !== getLocalTimezone()) {
                 display += ` ${selectedTimezone.value}`;
             }
             return display;
@@ -270,7 +289,8 @@ const updateValue = (date: string | null, time: string | null, timezone?: string
     
     if (timeEnabled.value && time) {
         let value = `${date} ${time}`;
-        if (props.includeTimezone && timezone) {
+        // Always include timezone when time is enabled
+        if (timezone) {
             // For ISO8601 format, directly append the timezone offset
             value += timezone;
         }
