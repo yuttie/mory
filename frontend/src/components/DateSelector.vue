@@ -32,8 +32,8 @@
                         show-adjacent-months
                         v-on:input="onDatePick"
                     />
-                    <v-list v-if="showTimeToggle || showTimezoneSelector">
-                        <v-list-item v-if="showTimeToggle">
+                    <v-list v-if="showTimeToggle">
+                        <v-list-item>
                             <v-switch
                                 v-model="timeEnabled"
                                 label="Include time"
@@ -50,8 +50,8 @@
                         scrollable
                         v-on:input="onTimePick"
                     />
-                    <v-list v-if="showTimeToggle || showTimezoneSelector">
-                        <v-list-item v-if="showTimezoneSelector">
+                    <v-list v-if="showTimeToggle && showTimezoneSelector">
+                        <v-list-item>
                             <v-select
                                 v-model="selectedTimezone"
                                 v-bind:items="timezoneOptions"
