@@ -250,7 +250,7 @@
                         v-bind:rules="[range(1, 5, 'Urgency must be 1..5')]"
                     />
                     <!-- Start date -->
-                    <v-text-field
+                    <DateSelector
                         v-model="form.start_at"
                         v-bind:rules="[(v) => v === '' || isDateTime('Invalid format.')(v)]"
                         label="Start date"
@@ -258,9 +258,9 @@
                         <template v-slot:prepend>
                             <v-icon>{{ mdiCalendarOutline }}</v-icon>
                         </template>
-                    </v-text-field>
+                    </DateSelector>
                     <!-- Due date -->
-                    <v-text-field
+                    <DateSelector
                         v-model="form.due_by"
                         v-bind:rules="[(v) => v === '' || isDateTime('Invalid format.')(v)]"
                         label="Due date (soft target)"
@@ -268,9 +268,9 @@
                         <template v-slot:prepend>
                             <v-icon>{{ mdiCalendarOutline }}</v-icon>
                         </template>
-                    </v-text-field>
+                    </DateSelector>
                     <!-- Deadline -->
-                    <v-text-field
+                    <DateSelector
                         v-model="form.deadline"
                         v-bind:rules="[(v) => v === '' || isDateTime('Invalid format.')(v)]"
                         label="Deadline (hard cutoff)"
@@ -278,7 +278,7 @@
                         <template v-slot:prepend>
                             <v-icon>{{ mdiCalendarOutline }}</v-icon>
                         </template>
-                    </v-text-field>
+                    </DateSelector>
                     <!-- Scheduled dates -->
                     <v-label>
                         <v-icon>{{ mdiCalendarCursorOutline }}</v-icon>
