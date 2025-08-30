@@ -117,12 +117,13 @@ const filteredItems = computed<ApiTreeNode[]>(() => {
 
 
 const canMove = computed<boolean>(() => {
-    return props.taskUuid !== null;
+    return props.taskUuid !== null && selectedParent.value !== undefined;
 });
 
-// Methods
-function selectParent(parentUuid: UUID | null): void {
-    selectedParent.value = parentUuid;
+// Methods  
+function selectParent(parentUuid: UUID | null | undefined): void {
+    // If tree deselects (parentUuid becomes undefined), auto-select root
+    selectedParent.value = parentUuid === undefined ? null : parentUuid;
 }
 
 function confirmMove(): void {

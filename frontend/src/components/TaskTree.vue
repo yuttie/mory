@@ -56,7 +56,7 @@ const props = defineProps<{
 // Emits
 const emit = defineEmits<{
     (e: 'update:open', value: UUID[]): void;
-    (e: 'update:active', value: ApiTreeNode): void;
+    (e: 'update:active', value: UUID | undefined): void;
 }>();
 
 // Reactive states
