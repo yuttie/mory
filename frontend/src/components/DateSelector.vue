@@ -213,9 +213,9 @@ const parseDateTime = (value: string | null | undefined): { date: string | null;
         const time = parsed.format('HH:mm');
         
         // Extract timezone from the input value if present (ISO8601 format only)
-        let timezone: string | null = null;
         if (value.includes(' ') || value.includes('T') || value.match(/\d{2}:\d{2}/)) {
             // Check for ISO8601 timezone indicators: +HH:MM, -HH:MM, Z
+            let timezone: string | null = null;
             const tzMatch = value.match(/([+-]\d{2}:\d{2}|Z)$/);
             if (tzMatch) {
                 timezone = tzMatch[1] === 'Z' ? '+00:00' : tzMatch[1];
