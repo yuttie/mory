@@ -406,7 +406,7 @@ const newGroupName = ref('');
 const newGroupFilter = ref('');
 // Others
 const isLoading = ref(false);
-const hideDone = useLocalStorage('hideDone', true);
+const hideDone = useLocalStorage('hide-done', true);
 const errorNotification = ref(false);
 const errorNotificationText = ref('');
 

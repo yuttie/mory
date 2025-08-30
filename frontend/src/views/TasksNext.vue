@@ -387,8 +387,8 @@ const taskEditorRef = ref<any>(null);
 const openNodes = ref<UUID[]>([]);
 const newTaskPath = ref<string | null>(null);
 const error = ref<string | null>(null);
-const hideCompletedInTreeView = useLocalStorage('hideCompletedInTreeView', false);
-const hideCompletedInItemView = useLocalStorage('hideCompletedInItemView', false);
+const hideCompletedInTreeView = useLocalStorage('hide-completed-in-tree-view', false);
+const hideCompletedInItemView = useLocalStorage('hide-completed-in-item-view', false);
 const showParentDialog = ref<boolean>(false);
 
 // URL-derived state (single source of truth)
