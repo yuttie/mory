@@ -352,6 +352,7 @@
 <script lang="ts" setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router/composables';
+import { useLocalStorage } from '@/composables/localStorage';
 
 import {
     mdiCalendarMultiselectOutline,
@@ -386,8 +387,8 @@ const taskEditorRef = ref<any>(null);
 const openNodes = ref<UUID[]>([]);
 const newTaskPath = ref<string | null>(null);
 const error = ref<string | null>(null);
-const hideCompletedInTreeView = ref<boolean>(false);
-const hideCompletedInItemView = ref<boolean>(false);
+const hideCompletedInTreeView = useLocalStorage('hide-completed-in-tree-view', false);
+const hideCompletedInItemView = useLocalStorage('hide-completed-in-item-view', false);
 const showParentDialog = ref<boolean>(false);
 
 // URL-derived state (single source of truth)
