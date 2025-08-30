@@ -310,6 +310,17 @@ fn guess_mime_from_path<P: AsRef<Path>>(path: P) -> String {
     }
 }
 
+fn get_timezone_offset(git_time: &git2::Time) -> i32 {
+    // Check for timezone override environment variable first
+    if let Ok(tz_offset_str) = env::var("MORIED_TIMEZONE_OFFSET") {
+        if let Ok(tz_offset) = tz_offset_str.parse::<i32>() {
+            return tz_offset;
+        }
+    }
+    // Fallback to git commit timezone offset
+    git_time.offset_minutes() * 60
+}
+
 async fn rebuild_entries_cache<'c>(
     tx: &mut SqliteTransaction<'c>,
     repo: Arc<Mutex<Repository>>,
@@ -392,7 +403,7 @@ async fn rebuild_entries_cache<'c>(
             .bind(serde_json::to_string(&metadata).unwrap())
             .bind(title)
             .bind(time.seconds())
-            .bind(time.offset_minutes() * 60)
+            .bind(get_timezone_offset(&time))
             .execute(&mut **tx)
             .await?;
     }
@@ -462,7 +473,7 @@ async fn update_entries_cache<'c>(
                     .bind(serde_json::to_string(&metadata).unwrap())
                     .bind(title)
                     .bind(time.seconds())
-                    .bind(time.offset_minutes() * 60)
+                    .bind(get_timezone_offset(&time))
                     .execute(&mut **tx)
                     .await?;
             },
@@ -1465,5 +1476,53 @@ mod models {
         pub file: String,
         pub line: usize,
         pub content: String,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+
+    #[test]
+    fn test_get_timezone_offset_with_override() {
+        // Set the override environment variable
+        env::set_var("MORIED_TIMEZONE_OFFSET", "-18000");
+        
+        // Create a dummy git time (this should be ignored when override is set)
+        let git_time = git2::Time::new(1640995200, 120); // Some arbitrary time with +2h offset
+        
+        // Should return the override value, not the git time offset
+        assert_eq!(get_timezone_offset(&git_time), -18000);
+        
+        // Clean up
+        env::remove_var("MORIED_TIMEZONE_OFFSET");
+    }
+
+    #[test]
+    fn test_get_timezone_offset_without_override() {
+        // Ensure no override is set
+        env::remove_var("MORIED_TIMEZONE_OFFSET");
+        
+        // Create a git time with +2h offset (120 minutes)
+        let git_time = git2::Time::new(1640995200, 120);
+        
+        // Should return the git time offset in seconds (120 * 60 = 7200)
+        assert_eq!(get_timezone_offset(&git_time), 7200);
+    }
+
+    #[test]
+    fn test_get_timezone_offset_invalid_override() {
+        // Set an invalid override value
+        env::set_var("MORIED_TIMEZONE_OFFSET", "invalid");
+        
+        // Create a git time with +3h offset (180 minutes)
+        let git_time = git2::Time::new(1640995200, 180);
+        
+        // Should fallback to git time offset when override is invalid
+        assert_eq!(get_timezone_offset(&git_time), 10800); // 180 * 60
+        
+        // Clean up
+        env::remove_var("MORIED_TIMEZONE_OFFSET");
     }
 }
