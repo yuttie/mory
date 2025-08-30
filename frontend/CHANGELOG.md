@@ -1,3 +1,27 @@
+## [1.6.0] - 2025-08-30
+
+### 🚀 Features
+
+- *(components/DateSelector)* Enhanced DateSelector with local timezone defaults (#146)
+- *(components/TaskEditorNext)* Use DateSelector component for start date, due date and deadline
+- *(components/DateSelector)* Enhance DateSelector with includeTime prop and user-controlled time toggle (#142)
+- *(views/TasksNext)* Add dual toggle controls for completed task filtering with intelligent view-specific behavior (#141)
+- *(components/TaskTree)* Change appearance of items based on their status like TaskListItemNext
+- *(components/TaskListItemNext)* Show canceled tasks with strikethrough and appropriate icon
+- *(views/TasksNext)* Display task statistics in UI
+- *(frontend/views/TasksNext)* Improve responsive layout
+- *(views/TasksNext)* Add browser history support to TasksNext view with enhanced tab switching and tree navigation fixes (#140)
+
+### 🐛 Bug Fixes
+
+- *(views/Calendar)* Fix Calendar navigation to use URL as single source of truth (#145)
+- *(views/TasksNext)* Ensure one view switcher button is selected
+- *(views/TasksNext)* Specify `v-bind:key=`
+
+### ⚙️ Miscellaneous Tasks
+
+- *(views/TasksNext)* Give primary color to Add button
+
 ## [1.5.1] - 2025-08-27
 
 ### 🐛 Bug Fixes
