@@ -221,10 +221,6 @@ import {
 import { type TreeNodeRecord } from '@/stores/taskForest';
 import { useTaggedTaskForestStore } from '@/stores/taggedTaskForest';
 
-import TaskStatusView from '@/components/TaskStatusView.vue';
-import TaskScheduleView from '@/components/TaskScheduleView.vue';
-import TaskEisenhowerView from '@/components/TaskEisenhowerView.vue';
-
 import * as api from '@/api';
 import { type UUID, type StatusKind, type Task, STATUS_LABEL, render } from '@/task';
 import axios from 'axios';
