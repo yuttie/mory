@@ -3,6 +3,9 @@ import { computed, ref, watch } from 'vue';
 import { useTaskForestStore, type TreeNodeRecord } from './taskForest';
 import type { ApiTreeNode, UUID } from '@/api/task';
 
+// Re-export types from taskForest
+export type { TreeNodeRecord } from './taskForest';
+
 /**
  * Pinia store that extends the basic forestStore with tag grouping functionality.
  * This provides a clean separation between core forest operations and tag enhancements.
@@ -223,6 +226,7 @@ export const useTaggedTaskForestStore = defineStore('taggedTaskForest', () => {
         toApiTreeNode: store.toApiTreeNode,
         flattenDescendants: store.flattenDescendants,
         flattenSubtree: store.flattenSubtree,
+        moveNode: store.moveNode,
         refresh: store.refresh,
         replaceFromServer: store.replaceFromServer,
         mergeFromServer: store.mergeFromServer,
@@ -231,6 +235,9 @@ export const useTaggedTaskForestStore = defineStore('taggedTaskForest', () => {
         addNodeLocal: store.addNodeLocal,
         replaceNodeLocal: store.replaceNodeLocal,
         deleteLeafLocal: store.deleteLeafLocal,
+        moveNodeLocal: store.moveNodeLocal,
+        buildTaskPath: store.buildTaskPath,
+        moveTaskSubtreeOnServer: store.moveTaskSubtreeOnServer,
 
         // === Tag-specific state (read-only) ===
         tagGroups: computed(() => tagGroups.value),

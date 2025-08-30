@@ -322,6 +322,176 @@ export const useTaskForestStore = defineStore('taskForest', () => {
         }
     }
 
+    function moveNodeLocal(nodeId: UUID, newParent: UUID | null, index?: number): void {
+        const rec = node(nodeId);
+        if (!rec) {
+            throw new Error(`moveNodeLocal: node ${nodeId} not found.`);
+        }
+
+        // Prevent moving a node to its own descendant (circular reference)
+        if (newParent !== null) {
+            const descendants = collectDescendants(nodeId, childrenById.value);
+            if (descendants.includes(newParent)) {
+                throw new Error(`moveNodeLocal: cannot move node ${nodeId} to its own descendant ${newParent}.`);
+            }
+        }
+
+        // Get the current parent
+        const currentParent = parentOf(nodeId);
+
+        // Don't do anything if moving to the same parent
+        if (currentParent === newParent) {
+            return;
+        }
+
+        // Remove from current parent
+        if (currentParent === null) {
+            rootIds.value = rootIds.value.filter((rid) => rid !== nodeId);
+        } else {
+            const currentSiblings = (childrenById.value[currentParent] || []).filter((cid) => cid !== nodeId);
+            setChildrenOf(currentParent, currentSiblings);
+        }
+
+        // Add to new parent
+        if (newParent === null) {
+            const roots = [...rootIds.value];
+            const pos = clampIndex(index ?? roots.length, roots.length);
+            roots.splice(pos, 0, nodeId);
+            rootIds.value = roots;
+            setParentOf(nodeId, null);
+        } else {
+            ensureChildBucket(newParent);
+            const newSiblings = [...(childrenById.value[newParent] || [])];
+            const pos = clampIndex(index ?? newSiblings.length, newSiblings.length);
+            newSiblings.splice(pos, 0, nodeId);
+            setChildrenOf(newParent, newSiblings);
+            setParentOf(nodeId, newParent);
+        }
+
+        // Update paths for the moved node and all its descendants
+        updatePathsAfterMove(nodeId, newParent);
+    }
+
+    function updatePathsAfterMove(nodeId: UUID, newParent: UUID | null): void {
+        const rec = node(nodeId);
+        if (!rec) return;
+
+        // Calculate new path using buildTaskPath to handle full hierarchy
+        const newPath = buildTaskPath(nodeId, newParent);
+
+        // Update the node's path
+        const oldPath = rec.path;
+        const updatedNode = { ...rec, path: newPath };
+        upsertNodeRecord(updatedNode);
+
+        // Update path index
+        unindexPath(oldPath);
+        indexPath(newPath, nodeId);
+
+        // Recursively update descendants
+        const children = childrenById.value[nodeId] || [];
+        for (const childId of children) {
+            updatePathsAfterMove(childId, nodeId);
+        }
+    }
+
+    function buildTaskPath(taskUuid: UUID, parentUuid: UUID | null): string {
+        if (parentUuid === null) {
+            return `.tasks/${taskUuid}.md`;
+        } else {
+            // Build the full hierarchical path by walking up the parent chain
+            const pathComponents: UUID[] = [];
+            let currentParent = parentUuid;
+            
+            // Walk up the parent chain to build the complete directory path
+            while (currentParent !== null) {
+                pathComponents.unshift(currentParent);
+                const nextParent = parentOf(currentParent);
+                currentParent = nextParent;
+            }
+            
+            // Construct the full path: .tasks/grandparent/parent/child.md
+            const directoryPath = pathComponents.join('/');
+            return `.tasks/${directoryPath}/${taskUuid}.md`;
+        }
+    }
+
+
+    async function moveTaskSubtreeOnServer(taskUuid: UUID, oldParentUuid: UUID | null, newParentUuid: UUID | null): Promise<void> {
+        // Prevent moving a node to its own descendant (circular reference)
+        if (newParentUuid !== null) {
+            const descendants = collectDescendants(taskUuid, childrenById.value);
+            if (descendants.includes(newParentUuid)) {
+                throw new Error(`moveTaskSubtreeOnServer: cannot move task ${taskUuid} to its own descendant ${newParentUuid}.`);
+            }
+        }
+
+        // Get the old and new base paths for the task
+        const oldPath = buildTaskPath(taskUuid, oldParentUuid);
+        const newPath = buildTaskPath(taskUuid, newParentUuid);
+        
+        if (oldPath === newPath) {
+            return; // No move needed
+        }
+
+        const { renameNote } = await import('@/api');
+        
+        // Move the task itself first
+        await renameNote(oldPath, newPath);
+        
+        // Recursively move all descendants using manual path calculation
+        await moveDescendantFiles(taskUuid, oldPath, newPath);
+    }
+
+    async function moveDescendantFiles(parentUuid: UUID, oldParentPath: string, newParentPath: string): Promise<void> {
+        const { renameNote } = await import('@/api');
+        const children = childrenOf(parentUuid);
+        
+        for (const child of children) {
+            try {
+                // Calculate the old and new parent directory paths for children
+                const oldParentDir = oldParentPath.replace('.md', '');
+                const newParentDir = newParentPath.replace('.md', '');
+                
+                // Build child paths
+                const childOldPath = `${oldParentDir}/${child.uuid}.md`;
+                const childNewPath = `${newParentDir}/${child.uuid}.md`;
+                
+                // Move the child file
+                await renameNote(childOldPath, childNewPath);
+                
+                // Recursively move the child's descendants
+                await moveDescendantFiles(child.uuid, childOldPath, childNewPath);
+            } catch (error) {
+                console.warn(`Failed to move child ${child.uuid}:`, error);
+                // Continue with other children even if one fails
+            }
+        }
+    }
+
+    async function moveNode(nodeId: UUID, newParent: UUID | null, index?: number): Promise<void> {
+        const rec = node(nodeId);
+        if (!rec) {
+            throw new Error(`moveNode: node ${nodeId} not found.`);
+        }
+
+        const currentParent = parentOf(nodeId);
+        
+        // Don't do anything if moving to the same parent
+        if (currentParent === newParent) {
+            return;
+        }
+
+        // Move on server first (this will move the entire subtree)
+        await moveTaskSubtreeOnServer(nodeId, currentParent, newParent);
+
+        // Update local state
+        moveNodeLocal(nodeId, newParent, index);
+
+        // Refresh the store to sync with server
+        await refresh();
+    }
+
     // ===== Helper functions =====
 
     // --- Ingestion ---
@@ -413,6 +583,11 @@ export const useTaskForestStore = defineStore('taskForest', () => {
         addNodeLocal,
         replaceNodeLocal,
         deleteLeafLocal,
+        moveNodeLocal,
+        moveNode,
+        // -- Helper functions --
+        buildTaskPath,
+        moveTaskSubtreeOnServer,
     };
 });
 

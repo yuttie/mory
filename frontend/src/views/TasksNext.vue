@@ -90,6 +90,7 @@
                             v-on:save="onSelectedTaskSave"
                             v-on:delete="onSelectedTaskDelete"
                             v-on:cancel="onNewTaskCancel"
+                            v-on:change-parent="showChangeParentDialog"
                         />
                     </v-tab-item>
                     <v-tab-item value="descendants">
@@ -336,6 +337,15 @@
             <v-progress-circular indeterminate size="64" />
         </v-overlay>
         <v-snackbar v-model="error" color="error" top timeout="5000">{{ error }}</v-snackbar>
+        
+        <!-- Parent Selection Dialog -->
+        <ParentSelectionDialog
+            v-model="showParentDialog"
+            v-bind:task-uuid="selectedNode?.uuid || null"
+            v-bind:task-title="selectedNode?.title || 'Untitled'"
+            v-bind:items="store.forest"
+            v-on:move="onMoveTask"
+        />
     </div>
 </template>
 
@@ -378,6 +388,7 @@ const newTaskPath = ref<string | null>(null);
 const error = ref<string | null>(null);
 const hideCompletedInTreeView = ref<boolean>(false);
 const hideCompletedInItemView = ref<boolean>(false);
+const showParentDialog = ref<boolean>(false);
 
 // URL-derived state (single source of truth)
 const selectedNode = computed<TreeNodeRecord | undefined>(() => {
@@ -815,6 +826,28 @@ function onNewTaskCancel() {
     // Clear the new task path and return to descendants view
     newTaskPath.value = null;
     navigateToState(selectedNode.value?.uuid, 'descendants', descendantsViewMode.value);
+}
+
+async function onMoveTask(newParentUuid: UUID | null) {
+    if (!selectedNode.value) {
+        return;
+    }
+
+    try {
+        await store.moveNode(selectedNode.value.uuid, newParentUuid);
+        
+        // Navigate to the moved task to keep it selected
+        navigateToState(selectedNode.value.uuid, 'selected', descendantsViewMode.value);
+    } catch (e) {
+        console.error('Failed to move task:', e);
+        error.value = e instanceof Error ? e.message : 'Failed to move task';
+    }
+}
+
+function showChangeParentDialog() {
+    if (selectedNode.value && !isTagGroupSelected.value) {
+        showParentDialog.value = true;
+    }
 }
 
 function isToday(date: string) {
