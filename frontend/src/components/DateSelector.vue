@@ -57,6 +57,7 @@
                                 label="Timezone"
                                 item-text="text"
                                 item-value="value"
+                                hide-details
                                 v-on:input="onTimezonePick"
                             >
                                 <template v-slot:prepend>
