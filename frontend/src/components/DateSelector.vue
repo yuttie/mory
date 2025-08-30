@@ -164,6 +164,9 @@ const menu = ref(false);
 // Determine if the includeTime prop was explicitly provided
 const includeTimeExplicitlyProvided = props.includeTime !== undefined;
 
+// Determine if the includeTimezone prop was explicitly provided
+const includeTimezoneExplicitlyProvided = props.includeTimezone !== undefined;
+
 // Show the time toggle only if includeTime prop was not explicitly provided
 const showTimeToggle = computed(() => !includeTimeExplicitlyProvided);
 
@@ -173,8 +176,13 @@ const timeEnabled = ref(false);
 // Internal state for timezone selection - always default to local timezone
 const selectedTimezone = ref(getLocalTimezone());
 
-// Always show timezone selector when time is enabled
-const showTimezoneSelector = computed(() => timeEnabled.value);
+// Show timezone selector based on includeTimezone prop if explicitly provided, otherwise when time is enabled
+const showTimezoneSelector = computed(() => {
+    if (includeTimezoneExplicitlyProvided) {
+        return props.includeTimezone && timeEnabled.value;
+    }
+    return timeEnabled.value;
+});
 
 // Initialize timeEnabled based on the current value or includeTime prop
 const initializeTimeEnabled = () => {
