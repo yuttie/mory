@@ -33,12 +33,12 @@ use axum::{
     Router,
     routing::{get, post},
 };
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, FixedOffset, Utc};
 use dotenv::dotenv;
 use git2::{Index, IndexEntry, IndexTime, Repository, Oid};
 use jsonwebtoken as jwt;
 use mime_guess;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
 use sqlx::sqlite::{
     SqliteConnectOptions,
@@ -55,8 +55,67 @@ use tower_http::{
 };
 use tracing::debug;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use utoipa::{OpenApi, ToSchema, IntoParams};
+use utoipa_swagger_ui::SwaggerUi;
 
 use models::*;
+
+#[derive(OpenApi)]
+#[openapi(
+    paths(
+        post_login,
+        get_notes, post_notes,
+        get_notes_path, put_notes_path, delete_notes_path,
+        post_files, get_files_path,
+        v2::get_commits_head,
+        v2::get_files_path, v2::head_files_path,
+        v2::get_tasks, v2::get_events
+    ),
+    components(
+        schemas(Login, Claims, NoteSave, GrepQuery, GrepMatch, ApiListEntry, ApiTreeNode, v2::TaskQuery)
+    ),
+    tags(
+        (name = "authentication", description = "Authentication endpoints"),
+        (name = "notes", description = "Notes management"),
+        (name = "files", description = "File operations"),
+        (name = "v2", description = "API version 2")
+    ),
+    info(
+        title = "Mory API",
+        description = "RESTful API for Mory - A personal knowledge management system",
+        version = "1.4.0",
+        contact(name = "Yuta Taniguchi", email = "yuta.taniguchi.y.t@gmail.com")
+    )
+)]
+struct ApiDoc;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_openapi_spec_basic() {
+        let spec = ApiDoc::openapi();
+        
+        // Verify basic info
+        assert_eq!(spec.info.title, "Mory API");
+        assert_eq!(spec.info.version, "1.4.0");
+        
+        // Verify we have paths
+        assert!(!spec.paths.paths.is_empty());
+        
+        println!("OpenAPI spec created successfully with {} paths", spec.paths.paths.len());
+        
+        // Export to JSON file for verification
+        if let Ok(json) = serde_json::to_string_pretty(&spec) {
+            if let Err(e) = std::fs::write("/tmp/mory_openapi.json", json) {
+                println!("Warning: Failed to write OpenAPI spec to file: {}", e);
+            } else {
+                println!("OpenAPI spec exported to /tmp/mory_openapi.json");
+            }
+        }
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -150,6 +209,7 @@ async fn main() -> Result<()> {
         .merge(protected_api)
         .merge(login_api)
         .nest("/v2", api_v2)
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
@@ -208,6 +268,19 @@ fn token_is_valid(header_value: &str) -> bool {
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/login",
+    tag = "authentication",
+    summary = "User authentication",
+    description = "Authenticate user and return JWT token",
+    request_body = Login,
+    responses(
+        (status = 200, description = "Authentication successful", body = String,
+         example = json!("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...")),
+        (status = 401, description = "Authentication failed")
+    )
+)]
 async fn post_login(
     Json(login): Json<Login>,
 ) -> Response {
@@ -486,11 +559,26 @@ async fn update_entries_cache<'c>(
     Ok(())
 }
 
+#[utoipa::path(
+    get,
+    path = "/notes",
+    tag = "notes",
+    summary = "List all notes",
+    description = "Retrieve a list of all notes in the repository",
+    responses(
+        (status = 200, description = "List of notes", body = Vec<ApiListEntry>),
+        (status = 401, description = "Unauthorized")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 async fn get_notes(
     extract::State(state): extract::State<AppState>,
-) -> Json<Vec<ListEntry>> {
+) -> Json<Vec<ApiListEntry>> {
     debug!("get_notes");
-    Json(state.get_entries(None).await.unwrap().1)
+    let entries = state.get_entries(None).await.unwrap().1;
+    Json(entries.into_iter().map(Into::into).collect())
 }
 
 async fn find_entry_blob(
@@ -537,6 +625,24 @@ fn content_response(content: Vec<u8>, path: &Path) -> Response {
     res
 }
 
+#[utoipa::path(
+    get,
+    path = "/notes/{path}",
+    tag = "notes",
+    summary = "Get a specific note",
+    description = "Retrieve the content of a specific note by path",
+    params(
+        ("path" = String, Path, description = "Path to the note file")
+    ),
+    responses(
+        (status = 200, description = "Note content", body = String),
+        (status = 404, description = "Note not found"),
+        (status = 401, description = "Unauthorized")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 async fn get_notes_path(
     extract::Path(path): extract::Path<String>,
     extract::State(state): extract::State<AppState>,
@@ -551,6 +657,25 @@ async fn get_notes_path(
     }
 }
 
+#[utoipa::path(
+    put,
+    path = "/notes/{path}",
+    tag = "notes",
+    summary = "Create or update a note",
+    description = "Create a new note or update an existing one",
+    params(
+        ("path" = String, Path, description = "Path to the note file")
+    ),
+    request_body = NoteSave,
+    responses(
+        (status = 200, description = "Note saved successfully", body = bool),
+        (status = 404, description = "Path not found"),
+        (status = 401, description = "Unauthorized")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 async fn put_notes_path(
     extract::Path(path): extract::Path<String>,
     extract::State(state): extract::State<AppState>,
@@ -651,6 +776,24 @@ async fn put_notes_path(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/notes/{path}",
+    tag = "notes",
+    summary = "Delete a note",
+    description = "Delete a specific note by path",
+    params(
+        ("path" = String, Path, description = "Path to the note file")
+    ),
+    responses(
+        (status = 200, description = "Note deleted successfully", body = bool),
+        (status = 404, description = "Note not found"),
+        (status = 401, description = "Unauthorized")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 async fn delete_notes_path(
     extract::Path(path): extract::Path<String>,
     extract::State(state): extract::State<AppState>,
@@ -758,6 +901,24 @@ async fn serve_image_content(content: Vec<u8>, path: &Path) -> Response {
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/files/{path}",
+    tag = "files",
+    summary = "Get a file",
+    description = "Retrieve file content by path",
+    params(
+        ("path" = String, Path, description = "Path to the file")
+    ),
+    responses(
+        (status = 200, description = "File content"),
+        (status = 404, description = "File not found"),
+        (status = 401, description = "Unauthorized")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 async fn get_files_path(
     extract::Path(path): extract::Path<String>,
     extract::State(state): extract::State<AppState>,
@@ -777,6 +938,25 @@ async fn get_files_path(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/files",
+    tag = "files",
+    summary = "Upload files",
+    description = "Upload one or more files using multipart form data",
+    request_body(
+        content_type = "multipart/form-data",
+        description = "Files to upload"
+    ),
+    responses(
+        (status = 200, description = "Files uploaded successfully"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Upload failed")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 async fn post_files(
     extract::State(state): extract::State<AppState>,
     mut multipart: extract::Multipart,
@@ -916,6 +1096,22 @@ fn extract_metadata(blob: &[u8]) -> (Option<serde_yaml::Value>, Option<String>) 
 }
 
 /// Search notes for a given query with `git grep`.
+#[utoipa::path(
+    post,
+    path = "/notes",
+    tag = "notes",
+    summary = "Search notes",
+    description = "Search through notes content using git grep",
+    request_body = GrepQuery,
+    responses(
+        (status = 200, description = "Search results", body = Vec<GrepMatch>),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn post_notes(
     Json(query): Json<GrepQuery>,
 ) -> impl IntoResponse {
@@ -988,6 +1184,21 @@ pub async fn grep_bare_repo(
 mod v2 {
     use super::*;
 
+    #[utoipa::path(
+        get,
+        path = "/v2/commits/head",
+        tag = "v2",
+        summary = "Get HEAD commit ID",
+        description = "Retrieve the commit ID of the current HEAD",
+        responses(
+            (status = 200, description = "HEAD commit ID", body = String),
+            (status = 401, description = "Unauthorized"),
+            (status = 500, description = "Internal server error")
+        ),
+        security(
+            ("bearer_auth" = [])
+        )
+    )]
     pub async fn get_commits_head(
         extract::State(state): extract::State<AppState>,
     ) -> Result<Json<String>, AppError> {
@@ -1049,6 +1260,25 @@ mod v2 {
         Response::from_parts(parts, Body::empty())
     }
 
+    #[utoipa::path(
+        get,
+        path = "/v2/files/{path}",
+        tag = "v2",
+        summary = "Get a file (v2)",
+        description = "Retrieve file content by path with ETag support",
+        params(
+            ("path" = String, Path, description = "Path to the file")
+        ),
+        responses(
+            (status = 200, description = "File content"),
+            (status = 304, description = "Not modified"),
+            (status = 404, description = "File not found"),
+            (status = 401, description = "Unauthorized")
+        ),
+        security(
+            ("bearer_auth" = [])
+        )
+    )]
     pub async fn get_files_path(
         extract::Path(path): extract::Path<String>,
         extract::State(state): extract::State<AppState>,
@@ -1058,6 +1288,25 @@ mod v2 {
         make_files_path_response(path, state, headers).await
     }
 
+    #[utoipa::path(
+        head,
+        path = "/v2/files/{path}",
+        tag = "v2",
+        summary = "Get file metadata (v2)",
+        description = "Retrieve file metadata only (HEAD request) with ETag support",
+        params(
+            ("path" = String, Path, description = "Path to the file")
+        ),
+        responses(
+            (status = 200, description = "File metadata in headers"),
+            (status = 304, description = "Not modified"),
+            (status = 404, description = "File not found"),
+            (status = 401, description = "Unauthorized")
+        ),
+        security(
+            ("bearer_auth" = [])
+        )
+    )]
     pub async fn head_files_path(
         extract::Path(path): extract::Path<String>,
         extract::State(state): extract::State<AppState>,
@@ -1067,11 +1316,27 @@ mod v2 {
         head_from_full(make_files_path_response(path, state, headers).await)
     }
 
-    #[derive(Deserialize)]
+    #[derive(Deserialize, ToSchema, IntoParams)]
     pub struct TaskQuery {
         format: Option<String>,
     }
 
+    #[utoipa::path(
+        get,
+        path = "/v2/tasks",
+        tag = "v2",
+        summary = "Get tasks",
+        description = "Retrieve tasks, optionally in tree format",
+        params(TaskQuery),
+        responses(
+            (status = 200, description = "List of tasks", body = Vec<ApiListEntry>),
+            (status = 304, description = "Not modified"),
+            (status = 401, description = "Unauthorized")
+        ),
+        security(
+            ("bearer_auth" = [])
+        )
+    )]
     pub async fn get_tasks(
         extract::Query(query): extract::Query<TaskQuery>,
         extract::State(state): extract::State<AppState>,
@@ -1110,6 +1375,21 @@ mod v2 {
         }
     }
 
+    #[utoipa::path(
+        get,
+        path = "/v2/events",
+        tag = "v2",
+        summary = "Get events",
+        description = "Retrieve calendar events from notes",
+        responses(
+            (status = 200, description = "List of events", body = Vec<ApiListEntry>),
+            (status = 304, description = "Not modified"),
+            (status = 401, description = "Unauthorized")
+        ),
+        security(
+            ("bearer_auth" = [])
+        )
+    )]
     pub async fn get_events(
         extract::State(state): extract::State<AppState>,
         headers: HeaderMap,
@@ -1154,11 +1434,38 @@ mod models {
     use chrono::{DateTime, FixedOffset, offset::TimeZone};
     use git2::{Repository, Oid};
     use serde::{Deserialize, Serialize};
+    use utoipa::ToSchema;
     use serde_yaml;
     use sqlx::{Row, SqlitePool, sqlite::SqliteRow};
     use uuid::Uuid;
 
     pub type Metadata = serde_yaml::Value;
+
+    /// API-friendly version of ListEntry with String paths for OpenAPI compatibility
+    #[derive(Debug, Serialize, ToSchema)]
+    pub struct ApiListEntry {
+        pub path: String,
+        pub size: usize,
+        pub mime_type: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub metadata: Option<serde_json::Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub title: Option<String>,
+        pub time: DateTime<FixedOffset>,
+    }
+
+    impl From<ListEntry> for ApiListEntry {
+        fn from(entry: ListEntry) -> Self {
+            Self {
+                path: entry.path.to_string_lossy().to_string(),
+                size: entry.size,
+                mime_type: entry.mime_type,
+                metadata: entry.metadata.and_then(|m| serde_json::to_value(m).ok()),
+                title: entry.title,
+                time: entry.time,
+            }
+        }
+    }
 
     #[derive(Debug, Deserialize, Serialize, Clone)]
     pub struct ListEntry {
@@ -1185,6 +1492,39 @@ mod models {
         pub mtime: DateTime<FixedOffset>,
         #[serde(skip_serializing_if = "Vec::is_empty")]
         pub children: Vec<TreeNode>,
+    }
+
+    /// API-friendly version of TreeNode with String paths for OpenAPI compatibility
+    #[derive(Debug, Serialize, ToSchema)]
+    pub struct ApiTreeNode {
+        pub uuid: Uuid,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub name: Option<String>,
+        pub path: String,
+        pub size: usize,
+        pub mime_type: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub metadata: Option<serde_json::Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub title: Option<String>,
+        pub mtime: DateTime<FixedOffset>,
+        // Note: children field removed to avoid recursive type issues in OpenAPI
+    }
+
+    impl From<TreeNode> for ApiTreeNode {
+        fn from(node: TreeNode) -> Self {
+            Self {
+                uuid: node.uuid,
+                name: node.name,
+                path: node.path.to_string_lossy().to_string(),
+                size: node.size,
+                mime_type: node.mime_type,
+                metadata: node.metadata.and_then(|m| serde_json::to_value(m).ok()),
+                title: node.title,
+                mtime: node.mtime,
+                // Note: children field removed to avoid recursive type issues in OpenAPI
+            }
+        }
     }
 
     pub fn entries_to_tree(entries: &[ListEntry], special_dir: Option<&str>) -> Result<Vec<TreeNode>> {
@@ -1333,7 +1673,7 @@ mod models {
         }
     }
 
-    #[derive(Debug, Serialize, Deserialize)]
+    #[derive(Debug, Serialize, Deserialize, ToSchema)]
     pub struct Claims {
         pub sub: String,
         pub exp: usize,
@@ -1438,13 +1778,13 @@ mod models {
         }
     }
 
-    #[derive(Debug, Deserialize, Serialize, Clone)]
+    #[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
     pub struct Login {
         pub user: String,
         pub password: String,
     }
 
-    #[derive(Debug, Deserialize, Serialize, Clone)]
+    #[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
     pub enum NoteSave {
         Save {
             content: String,
@@ -1455,12 +1795,12 @@ mod models {
         },
     }
 
-    #[derive(Debug, Deserialize, Serialize, Clone)]
+    #[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
     pub struct GrepQuery {
         pub pattern: String,
     }
 
-    #[derive(Serialize)]
+    #[derive(Serialize, ToSchema)]
     pub struct GrepMatch {
         pub file: String,
         pub line: usize,
