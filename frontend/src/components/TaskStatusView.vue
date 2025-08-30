@@ -85,7 +85,7 @@ import { type TreeNodeRecord } from '@/stores/taskForest';
 import { type UUID } from '@/task';
 
 // Props
-interface Props {
+const props = defineProps<{
     taskStatuses: {
         todo: TreeNodeRecord[];
         inProgress: TreeNodeRecord[];
@@ -95,9 +95,7 @@ interface Props {
         done: TreeNodeRecord[];
         canceled: TreeNodeRecord[];
     };
-}
-
-const props = defineProps<Props>();
+}>();
 
 // Emits
 const emit = defineEmits<{

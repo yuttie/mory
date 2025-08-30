@@ -64,16 +64,14 @@ import { type TreeNodeRecord } from '@/stores/taskForest';
 import { type UUID } from '@/task';
 
 // Props
-interface Props {
+const props = defineProps<{
     eisenhowerQuadrants: {
         doFirst: TreeNodeRecord[];
         schedule: TreeNodeRecord[];
         delegate: TreeNodeRecord[];
         eliminate: TreeNodeRecord[];
     };
-}
-
-const props = defineProps<Props>();
+}>();
 
 // Emits
 const emit = defineEmits<{

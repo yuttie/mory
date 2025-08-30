@@ -29,11 +29,9 @@ import { type UUID } from '@/task';
 import dayjs from 'dayjs';
 
 // Props
-interface Props {
+const props = defineProps<{
     scheduled: Record<string, TreeNodeRecord[]>;
-}
-
-const props = defineProps<Props>();
+}>();
 
 // Emits
 const emit = defineEmits<{
