@@ -156,7 +156,7 @@ const props = withDefaults(
     {
         value: undefined,
         label: undefined,
-        rules: () => [],
+        rules: [],
         required: false,
         clearable: true,
         hideDetails: false,
