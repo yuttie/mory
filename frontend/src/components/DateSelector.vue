@@ -77,16 +77,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import dayjs from 'dayjs';
-import utc from 'dayjs/plugin/utc';
 
 import {
     mdiCalendarOutline,
     mdiClockOutline,
     mdiEarth,
 } from '@mdi/js';
-
-// Extend dayjs with UTC support
-dayjs.extend(utc);
 
 // Get local timezone in ISO8601 format
 const getLocalTimezone = (): string => {
@@ -253,9 +249,10 @@ const timeValue = computed<string | null>({
 });
 
 // Computed property for timezone value extracted from the value prop
-const timezoneValue = computed<string>({
+const timezoneValue = computed<string | null>({
     get: () => {
-        if (!props.value || !timeEnabled.value) {
+        if (!timeEnabled.value) return null;
+        if (!props.value) {
             return getLocalTimezone();
         }
         const { timezone } = parseDateTime(props.value);
@@ -273,7 +270,11 @@ const displayValue = computed(() => {
     if (timeEnabled.value) {
         const { date, time } = parseDateTime(props.value);
         if (date && time) {
-            return `${date} ${time}${timezoneValue.value}`;
+            const localTz = getLocalTimezone();
+            const currentTz = timezoneValue.value || localTz;
+            // Only show timezone if it's different from local timezone
+            const timezoneDisplay = currentTz !== localTz ? currentTz : '';
+            return `${date} ${time}${timezoneDisplay}`;
         } else if (date) {
             return date;
         }
@@ -283,7 +284,7 @@ const displayValue = computed(() => {
 });
 
 // Update the combined value
-const updateValue = (date: string | null, time: string | null, timezone?: string) => {
+const updateValue = (date: string | null, time: string | null, timezone?: string | null) => {
     if (!date) {
         emit('input', null);
         return;
@@ -292,10 +293,8 @@ const updateValue = (date: string | null, time: string | null, timezone?: string
     if (timeEnabled.value && time) {
         let value = `${date} ${time}`;
         // Always include timezone when time is enabled
-        if (timezone) {
-            // For ISO8601 format, directly append the timezone offset
-            value += timezone;
-        }
+        const tz = timezone || getLocalTimezone();
+        value += tz;
         emit('input', value);
     } else {
         emit('input', date);
