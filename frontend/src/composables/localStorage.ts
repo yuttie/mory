@@ -1,4 +1,4 @@
-import { ref, watch, onUnmounted } from 'vue';
+import { ref, watch, onMounted, onUnmounted } from 'vue';
 import type { Ref } from 'vue';
 
 export function useLocalStorage<T>(key: string, initialValue: T): Ref<T> {
@@ -26,7 +26,10 @@ export function useLocalStorage<T>(key: string, initialValue: T): Ref<T> {
     }
   }
 
-  window.addEventListener('storage', handleStorageChange);
+  // Add event listener when component is mounted
+  onMounted(() => {
+    window.addEventListener('storage', handleStorageChange);
+  });
 
   // Cleanup event listener when component is unmounted
   onUnmounted(() => {
