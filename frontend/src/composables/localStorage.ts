@@ -16,7 +16,7 @@ export function useLocalStorage<T>(key: string, initialValue: T): Ref<T> {
 
   // Listen for storage events to react to external localStorage changes
   function handleStorageChange(e: StorageEvent) {
-    if (e.key === key && e.newValue !== null) {
+    if (e.key === key && e.newValue !== null && e.storageArea === localStorage) {
       try {
         const newValue = JSON.parse(e.newValue);
         value.value = newValue;
