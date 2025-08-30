@@ -161,7 +161,7 @@ const props = withDefaults(
         clearable: true,
         hideDetails: false,
         includeTime: undefined,
-        includeTimezone: false,
+        includeTimezone: true,
     },
 );
 
