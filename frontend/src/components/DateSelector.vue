@@ -97,34 +97,34 @@ const getLocalTimezone = (): string => {
     return `${sign}${offsetHours.toString().padStart(2, '0')}:${offsetMins.toString().padStart(2, '0')}`;
 };
 
-// ISO8601-style timezone options with special names
+// ISO8601-style timezone options
 const timezoneOptions = [
-    { text: 'GMT/UTC (+00:00)', value: '+00:00' },
-    { text: 'AoE - Anywhere on Earth (-12:00)', value: '-12:00' },
+    { text: 'UTC (+00:00)', value: '+00:00' },
+    { text: 'UTC-12 (-12:00)', value: '-12:00' },
     { text: 'UTC-11 (-11:00)', value: '-11:00' },
-    { text: 'HST - Hawaii Standard Time (-10:00)', value: '-10:00' },
-    { text: 'AKST - Alaska Standard Time (-09:00)', value: '-09:00' },
-    { text: 'PST - Pacific Standard Time (-08:00)', value: '-08:00' },
-    { text: 'MST - Mountain Standard Time (-07:00)', value: '-07:00' },
-    { text: 'CST - Central Standard Time (-06:00)', value: '-06:00' },
-    { text: 'EST - Eastern Standard Time (-05:00)', value: '-05:00' },
+    { text: 'UTC-10 (-10:00)', value: '-10:00' },
+    { text: 'UTC-9 (-09:00)', value: '-09:00' },
+    { text: 'UTC-8 (-08:00)', value: '-08:00' },
+    { text: 'UTC-7 (-07:00)', value: '-07:00' },
+    { text: 'UTC-6 (-06:00)', value: '-06:00' },
+    { text: 'UTC-5 (-05:00)', value: '-05:00' },
     { text: 'UTC-4 (-04:00)', value: '-04:00' },
     { text: 'UTC-3 (-03:00)', value: '-03:00' },
     { text: 'UTC-2 (-02:00)', value: '-02:00' },
     { text: 'UTC-1 (-01:00)', value: '-01:00' },
-    { text: 'CET - Central European Time (+01:00)', value: '+01:00' },
-    { text: 'EET - Eastern European Time (+02:00)', value: '+02:00' },
+    { text: 'UTC+1 (+01:00)', value: '+01:00' },
+    { text: 'UTC+2 (+02:00)', value: '+02:00' },
     { text: 'UTC+3 (+03:00)', value: '+03:00' },
     { text: 'UTC+4 (+04:00)', value: '+04:00' },
     { text: 'UTC+5 (+05:00)', value: '+05:00' },
-    { text: 'IST - India Standard Time (+05:30)', value: '+05:30' },
+    { text: 'UTC+5:30 (+05:30)', value: '+05:30' },
     { text: 'UTC+6 (+06:00)', value: '+06:00' },
     { text: 'UTC+7 (+07:00)', value: '+07:00' },
-    { text: 'CST - China Standard Time (+08:00)', value: '+08:00' },
-    { text: 'JST - Japan Standard Time (+09:00)', value: '+09:00' },
-    { text: 'AEST - Australian Eastern Standard Time (+10:00)', value: '+10:00' },
+    { text: 'UTC+8 (+08:00)', value: '+08:00' },
+    { text: 'UTC+9 (+09:00)', value: '+09:00' },
+    { text: 'UTC+10 (+10:00)', value: '+10:00' },
     { text: 'UTC+11 (+11:00)', value: '+11:00' },
-    { text: 'NZST - New Zealand Standard Time (+12:00)', value: '+12:00' },
+    { text: 'UTC+12 (+12:00)', value: '+12:00' },
 ];
 
 type HideDetails = boolean | 'auto';
