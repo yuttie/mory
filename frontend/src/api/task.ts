@@ -84,5 +84,3 @@ export function extractFileUuid(path: string): UUID {
     }
     return uuid;
 }
-
-

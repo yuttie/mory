@@ -92,14 +92,10 @@ const openNodes = ref<UUID[]>([]);
 const filteredItems = computed<ApiTreeNode[]>(() => {
     if (!props.taskUuid) return props.items;
     
-    // Filter out the task being moved and its descendants
+    // Filter out the task being moved (descendants are automatically excluded)
     function filterNode(node: ApiTreeNode): ApiTreeNode | null {
         if (node.uuid === props.taskUuid) {
             return null; // Exclude the task being moved
-        }
-        
-        if (isDescendantOfTask(node.uuid)) {
-            return null; // Exclude descendants of the task being moved
         }
 
         const filteredChildren = node.children
@@ -118,41 +114,7 @@ const filteredItems = computed<ApiTreeNode[]>(() => {
         .filter((item): item is ApiTreeNode => item !== null);
 });
 
-// Helper function to check if a node is a descendant of the task being moved
-function isDescendantOfTask(nodeUuid: UUID): boolean {
-    if (!props.taskUuid) return false;
-    
-    // Find the task being moved in the tree
-    function findTaskInTree(nodes: ApiTreeNode[], targetUuid: UUID): ApiTreeNode | null {
-        for (const node of nodes) {
-            if (node.uuid === targetUuid) {
-                return node;
-            }
-            if (node.children) {
-                const found = findTaskInTree(node.children, targetUuid);
-                if (found) return found;
-            }
-        }
-        return null;
-    }
-    
-    const taskNode = findTaskInTree(props.items, props.taskUuid);
-    if (!taskNode) return false;
-    
-    // Check if nodeUuid is a descendant of taskNode
-    function isInSubtree(subtreeRoot: ApiTreeNode, targetUuid: UUID): boolean {
-        if (!subtreeRoot.children) return false;
-        
-        for (const child of subtreeRoot.children) {
-            if (child.uuid === targetUuid || isInSubtree(child, targetUuid)) {
-                return true;
-            }
-        }
-        return false;
-    }
-    
-    return isInSubtree(taskNode, nodeUuid);
-}
+
 
 const canMove = computed<boolean>(() => {
     return props.taskUuid !== null;
