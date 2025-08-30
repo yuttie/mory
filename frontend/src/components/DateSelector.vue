@@ -252,9 +252,6 @@ const timeValue = computed<string | null>({
 const timezoneValue = computed<string | null>({
     get: () => {
         if (!timeEnabled.value) return null;
-        if (!props.value) {
-            return getLocalTimezone();
-        }
         const { timezone } = parseDateTime(props.value);
         return timezone || getLocalTimezone();
     },
@@ -270,11 +267,8 @@ const displayValue = computed(() => {
     if (timeEnabled.value) {
         const { date, time } = parseDateTime(props.value);
         if (date && time) {
-            const localTz = getLocalTimezone();
-            const currentTz = timezoneValue.value || localTz;
-            // Only show timezone if it's different from local timezone
-            const timezoneDisplay = currentTz !== localTz ? currentTz : '';
-            return `${date} ${time}${timezoneDisplay}`;
+            const currentTz = timezoneValue.value || getLocalTimezone();
+            return `${date} ${time}${currentTz}`;
         } else if (date) {
             return date;
         }
@@ -284,7 +278,7 @@ const displayValue = computed(() => {
 });
 
 // Update the combined value
-const updateValue = (date: string | null, time: string | null, timezone?: string | null) => {
+const updateValue = (date: string | null, time: string | null, timezone: string | null) => {
     if (!date) {
         emit('input', null);
         return;
