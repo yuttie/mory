@@ -1033,6 +1033,14 @@ async function updateRendered() {
         img.addEventListener('dragend', (event) => {
             appStore.draggingViewerContent = false;
         });
+        
+        // Force reload images through service worker by refreshing src attribute
+        // This ensures newly inserted images are properly loaded with authentication
+        if (img.src) {
+            const originalSrc = img.src;
+            img.src = '';
+            img.src = originalSrc;
+        }
     }
 
     // Update the page title
