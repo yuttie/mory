@@ -212,7 +212,8 @@ const parseDateTime = (value: string | null | undefined): { date: string | null;
         const date = parsed.format('YYYY-MM-DD');
         const time = parsed.format('HH:mm');
         
-        // Extract timezone from the input value if present (ISO8601 format only)
+        // Check if the original value contains time information
+        // If it's just a date (like "2023-12-25"), don't extract time
         if (value.includes(' ') || value.includes('T') || value.match(/\d{2}:\d{2}/)) {
             // Check for ISO8601 timezone indicators: +HH:MM, -HH:MM, Z
             let timezone: string | null = null;
