@@ -23,7 +23,10 @@
             </v-icon>
         </template>
         <template v-slot:label="{ item, open }">
-            <span v-bind:style="{ textDecorationLine: item.metadata?.task?.status?.kind === 'canceled' ? 'line-through' : 'none' }">
+            <span
+                v-bind:title="item.title"
+                v-bind:style="{ textDecorationLine: item.metadata?.task?.status?.kind === 'canceled' ? 'line-through' : 'none' }"
+            >
                 {{ item.title }}
             </span>
         </template>

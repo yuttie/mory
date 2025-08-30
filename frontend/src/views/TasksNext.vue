@@ -167,167 +167,23 @@
                         </v-toolbar>
                         <div class="view-container flex-grow-1">
                             <!-- Status view -->
-                            <div v-if="descendantsViewMode === 'status'" class="status-view groups">
-                                <v-card dense class="group">
-                                    <v-card-title>To do</v-card-title>
-                                    <div class="task-list">
-                                        <TaskListItemNext
-                                            v-for="task of taskStatuses.todo"
-                                            v-bind:key="task.uuid"
-                                            v-bind:value="task"
-                                            v-on:click="onTaskListItemClick(task.uuid)"
-                                        />
-                                    </div>
-                                </v-card>
-                                <v-card dense class="group">
-                                    <v-card-title>In progress</v-card-title>
-                                    <div class="task-list">
-                                        <TaskListItemNext
-                                            v-for="task of taskStatuses.inProgress"
-                                            v-bind:key="task.uuid"
-                                            v-bind:value="task"
-                                            v-on:click="onTaskListItemClick(task.uuid)"
-                                        />
-                                    </div>
-                                </v-card>
-                                <v-card dense class="group">
-                                    <v-card-title>Waiting</v-card-title>
-                                    <div class="task-list">
-                                        <TaskListItemNext
-                                            v-for="task of taskStatuses.waiting"
-                                            v-bind:key="task.uuid"
-                                            v-bind:value="task"
-                                            v-on:click="onTaskListItemClick(task.uuid)"
-                                        />
-                                    </div>
-                                </v-card>
-                                <v-card dense class="group">
-                                    <v-card-title>Blocked</v-card-title>
-                                    <div class="task-list">
-                                        <TaskListItemNext
-                                            v-for="task of taskStatuses.blocked"
-                                            v-bind:key="task.uuid"
-                                            v-bind:value="task"
-                                            v-on:click="onTaskListItemClick(task.uuid)"
-                                        />
-                                    </div>
-                                </v-card>
-                                <v-card dense class="group">
-                                    <v-card-title>On hold</v-card-title>
-                                    <div class="task-list">
-                                        <TaskListItemNext
-                                            v-for="task of taskStatuses.onHold"
-                                            v-bind:key="task.uuid"
-                                            v-bind:value="task"
-                                            v-on:click="onTaskListItemClick(task.uuid)"
-                                        />
-                                    </div>
-                                </v-card>
-                                <v-card dense class="group">
-                                    <v-card-title>Done</v-card-title>
-                                    <div class="task-list">
-                                        <TaskListItemNext
-                                            v-for="task of taskStatuses.done"
-                                            v-bind:key="task.uuid"
-                                            v-bind:value="task"
-                                            v-on:click="onTaskListItemClick(task.uuid)"
-                                        />
-                                    </div>
-                                </v-card>
-                                <v-card dense class="group">
-                                    <v-card-title>Canceled</v-card-title>
-                                    <div class="task-list">
-                                        <TaskListItemNext
-                                            v-for="task of taskStatuses.canceled"
-                                            v-bind:key="task.uuid"
-                                            v-bind:value="task"
-                                            v-on:click="onTaskListItemClick(task.uuid)"
-                                        />
-                                    </div>
-                                </v-card>
-                            </div>
+                            <TaskStatusView
+                                v-if="descendantsViewMode === 'status'"
+                                v-bind:task-statuses="taskStatuses"
+                                v-on:task-click="onTaskListItemClick"
+                            />
                             <!-- Schedule view -->
-                            <div v-else-if="descendantsViewMode === 'schedule'" class="schedule-view groups">
-                                <v-card class="group">
-                                    <v-card-title>Scheduled</v-card-title>
-                                    <div class="task-list">
-                                        <div
-                                            v-for="[date, dayTasks] of Object.entries(scheduled)"
-                                            v-bind:key="date"
-                                            v-bind:class="{ today: isToday(date) }"
-                                        >
-                                            <div class="date-header d-flex flex-row">
-                                                <span>{{ isToday(date) ? `Today (${date})` : isTomorrow(date) ? `Tomorrow (${date})` : date }}</span>
-                                            </div>
-                                            <TaskListItemNext
-                                                v-for="task of dayTasks"
-                                                v-bind:key="task.uuid"
-                                                v-bind:value="task"
-                                                v-on:click="onTaskListItemClick(task.uuid)"
-                                            />
-                                        </div>
-                                    </div>
-                                </v-card>
-                            </div>
+                            <TaskScheduleView
+                                v-else-if="descendantsViewMode === 'schedule'"
+                                v-bind:scheduled="scheduled"
+                                v-on:task-click="onTaskListItemClick"
+                            />
                             <!-- Eisenhower Matrix view -->
-                            <div v-else-if="descendantsViewMode === 'eisenhower'" class="eisenhower-matrix">
-                                <v-card class="quadrant urgent-important">
-                                    <v-card-title class="quadrant-header">
-                                        <span class="quadrant-title">Do First</span>
-                                        <span class="quadrant-subtitle">Urgent & Important</span>
-                                    </v-card-title>
-                                    <div class="task-list">
-                                        <TaskListItemNext
-                                            v-for="task of eisenhowerQuadrants.doFirst"
-                                            v-bind:key="task.uuid"
-                                            v-bind:value="task"
-                                            v-on:click="onTaskListItemClick(task.uuid)"
-                                        />
-                                    </div>
-                                </v-card>
-                                <v-card class="quadrant important-not-urgent">
-                                    <v-card-title class="quadrant-header">
-                                        <span class="quadrant-title">Schedule</span>
-                                        <span class="quadrant-subtitle">Important, Not Urgent</span>
-                                    </v-card-title>
-                                    <div class="task-list">
-                                        <TaskListItemNext
-                                            v-for="task of eisenhowerQuadrants.schedule"
-                                            v-bind:key="task.uuid"
-                                            v-bind:value="task"
-                                            v-on:click="onTaskListItemClick(task.uuid)"
-                                        />
-                                    </div>
-                                </v-card>
-                                <v-card class="quadrant urgent-not-important">
-                                    <v-card-title class="quadrant-header">
-                                        <span class="quadrant-title">Delegate</span>
-                                        <span class="quadrant-subtitle">Urgent, Not Important</span>
-                                    </v-card-title>
-                                    <div class="task-list">
-                                        <TaskListItemNext
-                                            v-for="task of eisenhowerQuadrants.delegate"
-                                            v-bind:key="task.uuid"
-                                            v-bind:value="task"
-                                            v-on:click="onTaskListItemClick(task.uuid)"
-                                        />
-                                    </div>
-                                </v-card>
-                                <v-card class="quadrant not-urgent-not-important">
-                                    <v-card-title class="quadrant-header">
-                                        <span class="quadrant-title">Eliminate</span>
-                                        <span class="quadrant-subtitle">Not Urgent, Not Important</span>
-                                    </v-card-title>
-                                    <div class="task-list">
-                                        <TaskListItemNext
-                                            v-for="task of eisenhowerQuadrants.eliminate"
-                                            v-bind:key="task.uuid"
-                                            v-bind:value="task"
-                                            v-on:click="onTaskListItemClick(task.uuid)"
-                                        />
-                                    </div>
-                                </v-card>
-                            </div>
+                            <TaskEisenhowerView
+                                v-else-if="descendantsViewMode === 'eisenhower'"
+                                v-bind:eisenhower-quadrants="eisenhowerQuadrants"
+                                v-on:task-click="onTaskListItemClick"
+                            />
                         </div>
                     </v-tab-item>
                 </v-tabs-items>
@@ -851,14 +707,6 @@ function showChangeParentDialog() {
     }
 }
 
-function isToday(date: string) {
-    return date === dayjs().format('YYYY-MM-DD');
-}
-
-function isTomorrow(date: string) {
-    return date === dayjs().add(1, 'day').format('YYYY-MM-DD');
-}
-
 async function load() {
     error.value = null;
     try {
@@ -877,9 +725,6 @@ async function load() {
 </script>
 
 <style scoped lang="scss">
-$group-width: 270px;
-$space: 12px;
-
 #tasks {
     height: 100%;
     user-select: none;
@@ -933,56 +778,6 @@ $space: 12px;
     overflow: hidden;
 }
 
-.groups {
-    flex: 1 1 0;
-    display: flex;
-    flex-direction: row;
-    width: 0;
-    height: 100%;
-    overflow-x: auto;
-    gap: $space;
-    padding: $space;
-}
-
-.group {
-    flex-grow: 0;
-    flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
-    align-self: flex-start;
-    max-height: 100%;
-    width: $group-width;
-}
-
-/* Mobile responsive adjustments for groups */
-@media (max-width: 959px) { /* md breakpoint in Vuetify 2 */
-    .groups {
-        padding: $space / 2;
-        gap: $space / 2;
-    }
-
-    .group {
-        flex-shrink: 0;
-        flex-grow: 1;
-        width: 100%;
-    }
-}
-
-.task-list {
-    overflow-y: auto;
-
-    .date-header {
-        padding: 2px 8px 0 8px;
-    }
-    div > .date-header {
-        border-bottom: 2px solid #ddd;
-        margin-bottom: 2px;
-    }
-    div + div > .date-header {
-        margin-top: 12px;
-    }
-}
-
 :deep(.item-view .v-window__container) {
     flex: 1 1 0;
 }
@@ -991,83 +786,5 @@ $space: 12px;
     display: flex;
     flex-direction: column;
     flex: 1 1 0;
-}
-
-/* Eisenhower Matrix styles */
-.eisenhower-matrix {
-    flex: 1 1 0;
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    grid-template-rows: repeat(2, 1fr);
-    gap: $space;
-    padding: $space;
-    height: 100%;
-}
-
-.matrix-row {
-    display: flex;
-    gap: $space;
-    flex: 1 1 0;
-}
-
-/* Mobile responsive adjustments for Eisenhower matrix */
-@media (max-width: 959px) { /* md breakpoint in Vuetify 2 */
-    .eisenhower-matrix {
-        padding: $space / 2;
-        gap: $space / 2;
-    }
-
-    .matrix-row {
-        flex-direction: column;
-        flex: none;
-    }
-}
-
-.quadrant {
-    display: flex;
-    flex-direction: column;
-    max-height: 100%;
-    overflow: auto;
-}
-
-/* Mobile responsive adjustments for quadrants */
-@media (max-width: 959px) { /* md breakpoint in Vuetify 2 */
-    .quadrant-subtitle {
-        display: none;
-    }
-}
-
-.quadrant-header {
-    flex-direction: column;
-    align-items: flex-start !important;
-    padding-bottom: 8px;
-}
-
-.quadrant-title {
-    font-weight: 600;
-    font-size: 1.1em;
-}
-
-.quadrant-subtitle {
-    font-size: 0.85em;
-    color: rgba(0, 0, 0, 0.6);
-    font-weight: 400;
-}
-
-/* Color coding for quadrants */
-.urgent-important {
-    border-left: 4px solid #f44336; /* Red - Critical */
-}
-
-.important-not-urgent {
-    border-left: 4px solid #2196f3; /* Blue - Important */
-}
-
-.urgent-not-important {
-    border-left: 4px solid #ff9800; /* Orange - Delegate */
-}
-
-.not-urgent-not-important {
-    border-left: 4px solid #9e9e9e; /* Gray - Eliminate */
 }
 </style>
