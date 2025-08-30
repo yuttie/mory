@@ -4,7 +4,7 @@
             <v-card-title>Scheduled</v-card-title>
             <div class="task-list">
                 <div
-                    v-for="[date, dayTasks] of Object.entries(scheduled)"
+                    v-for="date of scheduledDates"
                     v-bind:key="date"
                     v-bind:class="{ today: isToday(date) }"
                 >
@@ -12,7 +12,7 @@
                         <span>{{ isToday(date) ? `Today (${date})` : isTomorrow(date) ? `Tomorrow (${date})` : date }}</span>
                     </div>
                     <TaskListItemNext
-                        v-for="task of dayTasks"
+                        v-for="task of scheduled[date]"
                         v-bind:key="task.uuid"
                         v-bind:value="task"
                         v-on:click="onTaskClick(task.uuid)"
@@ -24,6 +24,7 @@
 </template>
 
 <script lang="ts" setup>
+import { computed } from 'vue';
 import { type TreeNodeRecord } from '@/stores/taskForest';
 import { type UUID } from '@/task';
 import dayjs from 'dayjs';
@@ -37,6 +38,11 @@ const props = defineProps<{
 const emit = defineEmits<{
     (e: 'task-click', taskUuid: UUID): void;
 }>();
+
+// Computed properties
+const scheduledDates = computed<string[]>(() => {
+    return Object.keys(props.scheduled).sort((a, b) => -a.localeCompare(b));
+});
 
 // Methods
 function onTaskClick(taskUuid: UUID) {
