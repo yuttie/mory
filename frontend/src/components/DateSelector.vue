@@ -42,15 +42,14 @@
                         </v-list-item>
                     </v-list>
                 </div>
-                <div class="d-flex flex-column">
+                <div v-if="timeEnabled" class="d-flex flex-column">
                     <v-time-picker
-                        v-if="timeEnabled"
                         v-model="timeValue"
                         format="24hr"
                         scrollable
                         v-on:input="onTimePick"
                     />
-                    <v-list v-if="showTimeToggle && showTimezoneSelector">
+                    <v-list>
                         <v-list-item>
                             <v-select
                                 v-model="selectedTimezone"
@@ -151,7 +150,6 @@ const props = withDefaults(
         clearable?: boolean;
         hideDetails?: HideDetails;
         includeTime?: boolean;
-        includeTimezone?: boolean;
     }>(),
     {
         value: undefined,
@@ -161,7 +159,6 @@ const props = withDefaults(
         clearable: true,
         hideDetails: false,
         includeTime: undefined,
-        includeTimezone: true,
     },
 );
 
@@ -176,9 +173,6 @@ const menu = ref(false);
 // Determine if the includeTime prop was explicitly provided
 const includeTimeExplicitlyProvided = props.includeTime !== undefined;
 
-// Determine if the includeTimezone prop was explicitly provided
-const includeTimezoneExplicitlyProvided = props.includeTimezone !== undefined;
-
 // Show the time toggle only if includeTime prop was not explicitly provided
 const showTimeToggle = computed(() => !includeTimeExplicitlyProvided);
 
@@ -187,14 +181,6 @@ const timeEnabled = ref(false);
 
 // Internal state for timezone selection - always default to local timezone
 const selectedTimezone = ref(getLocalTimezone());
-
-// Show timezone selector based on includeTimezone prop if explicitly provided, otherwise when time is enabled
-const showTimezoneSelector = computed(() => {
-    if (includeTimezoneExplicitlyProvided) {
-        return props.includeTimezone && timeEnabled.value;
-    }
-    return timeEnabled.value;
-});
 
 // Initialize timeEnabled based on the current value or includeTime prop
 const initializeTimeEnabled = () => {
@@ -282,12 +268,7 @@ const displayValue = computed(() => {
     if (timeEnabled.value) {
         const { date, time } = parseDateTime(props.value);
         if (date && time) {
-            let display = `${date} ${time}`;
-            // Only show timezone if it's different from local timezone
-            if (showTimezoneSelector.value && selectedTimezone.value !== getLocalTimezone()) {
-                display += selectedTimezone.value;
-            }
-            return display;
+            return `${date} ${time}${selectedTimezone.value}`;
         } else if (date) {
             return date;
         }
