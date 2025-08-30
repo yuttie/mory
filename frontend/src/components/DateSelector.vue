@@ -52,7 +52,7 @@
                     <v-list>
                         <v-list-item>
                             <v-select
-                                v-model="selectedTimezone"
+                                v-model="timezoneValue"
                                 v-bind:items="timezoneOptions"
                                 label="Timezone"
                                 item-text="text"
@@ -180,9 +180,6 @@ const showTimeToggle = computed(() => !includeTimeExplicitlyProvided);
 // Internal state for time enablement
 const timeEnabled = ref(false);
 
-// Internal state for timezone selection - always default to local timezone
-const selectedTimezone = ref(getLocalTimezone());
-
 // Initialize timeEnabled based on the current value or includeTime prop
 const initializeTimeEnabled = () => {
     if (includeTimeExplicitlyProvided) {
@@ -195,14 +192,6 @@ const initializeTimeEnabled = () => {
     } else {
         // Default to false if no value and no explicit includeTime prop
         timeEnabled.value = false;
-    }
-
-    // Initialize timezone from value if present
-    if (props.value) {
-        const { timezone } = parseDateTime(props.value);
-        if (timezone) {
-            selectedTimezone.value = timezone;
-        }
     }
 };
 
@@ -247,7 +236,7 @@ const dateValue = computed<string | null>({
         return date;
     },
     set: (v) => {
-        updateValue(v, timeValue.value, selectedTimezone.value);
+        updateValue(v, timeValue.value, timezoneValue.value);
     },
 });
 
@@ -258,7 +247,21 @@ const timeValue = computed<string | null>({
         return time;
     },
     set: (v) => {
-        updateValue(dateValue.value, v, selectedTimezone.value);
+        updateValue(dateValue.value, v, timezoneValue.value);
+    },
+});
+
+// Computed property for timezone value extracted from the value prop
+const timezoneValue = computed<string>({
+    get: () => {
+        if (!props.value || !timeEnabled.value) {
+            return getLocalTimezone();
+        }
+        const { timezone } = parseDateTime(props.value);
+        return timezone || getLocalTimezone();
+    },
+    set: (v) => {
+        updateValue(dateValue.value, timeValue.value, v);
     },
 });
 
@@ -269,7 +272,7 @@ const displayValue = computed(() => {
     if (timeEnabled.value) {
         const { date, time } = parseDateTime(props.value);
         if (date && time) {
-            return `${date} ${time}${selectedTimezone.value}`;
+            return `${date} ${time}${timezoneValue.value}`;
         } else if (date) {
             return date;
         }
@@ -300,15 +303,14 @@ const updateValue = (date: string | null, time: string | null, timezone?: string
 
 // Methods
 function onDatePick(date: string) {
-    updateValue(date, timeValue.value, selectedTimezone.value);
+    updateValue(date, timeValue.value, timezoneValue.value);
 }
 
 function onTimePick(time: string) {
-    updateValue(dateValue.value, time, selectedTimezone.value);
+    updateValue(dateValue.value, time, timezoneValue.value);
 }
 
 function onTimezonePick(timezone: string) {
-    selectedTimezone.value = timezone;
     updateValue(dateValue.value, timeValue.value, timezone);
 }
 
@@ -316,12 +318,12 @@ function onTimeToggle() {
     if (!timeEnabled.value) {
         // If time is disabled, update value to date-only format
         if (dateValue.value) {
-            updateValue(dateValue.value, timeValue.value, selectedTimezone.value);
+            updateValue(dateValue.value, timeValue.value, timezoneValue.value);
         }
     } else {
         // If time is enabled and we have a date, set default time if none exists
         if (dateValue.value && !timeValue.value) {
-            updateValue(dateValue.value, '12:00', selectedTimezone.value);
+            updateValue(dateValue.value, '12:00', timezoneValue.value);
         }
     }
 }
