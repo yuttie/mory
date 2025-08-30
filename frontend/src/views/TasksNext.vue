@@ -707,14 +707,6 @@ function showChangeParentDialog() {
     }
 }
 
-function isToday(date: string) {
-    return date === dayjs().format('YYYY-MM-DD');
-}
-
-function isTomorrow(date: string) {
-    return date === dayjs().add(1, 'day').format('YYYY-MM-DD');
-}
-
 async function load() {
     error.value = null;
     try {
