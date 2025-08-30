@@ -24,33 +24,55 @@
         </template>
 
         <v-card>
-            <div class="d-flex flex-row align-end">
-                <v-date-picker
-                    v-model="dateValue"
-                    scrollable
-                    show-adjacent-months
-                    v-on:input="onDatePick"
-                />
-                <v-time-picker
-                    v-if="timeEnabled"
-                    v-model="timeValue"
-                    format="24hr"
-                    scrollable
-                    v-on:input="onTimePick"
-                />
-            </div>
-            <v-list v-if="showTimeToggle">
-                <v-list-item>
-                    <v-switch
-                        v-model="timeEnabled"
-                        label="Include time"
-                        v-on:change="onTimeToggle"
+            <div class="d-flex flex-row align-start">
+                <div class="d-flex flex-column">
+                    <v-date-picker
+                        v-model="dateValue"
+                        scrollable
+                        show-adjacent-months
+                        v-on:input="onDatePick"
                     />
-                </v-list-item>
-            </v-list>
+                    <v-list v-if="showTimeToggle">
+                        <v-list-item>
+                            <v-switch
+                                v-model="timeEnabled"
+                                label="Include time"
+                                v-on:change="onTimeToggle"
+                            />
+                        </v-list-item>
+                    </v-list>
+                </div>
+                <div v-if="timeEnabled" class="d-flex flex-column">
+                    <v-time-picker
+                        v-model="timeValue"
+                        format="24hr"
+                        scrollable
+                        v-on:input="onTimePick"
+                    />
+                    <v-list>
+                        <v-list-item>
+                            <v-select
+                                v-model="timezoneValue"
+                                v-bind:items="timezoneOptions"
+                                label="Timezone"
+                                item-text="text"
+                                item-value="value"
+                                hide-details
+                                v-on:input="onTimezonePick"
+                            >
+                                <template v-slot:prepend>
+                                    <v-icon>{{ mdiEarth }}</v-icon>
+                                </template>
+                            </v-select>
+                        </v-list-item>
+                    </v-list>
+                </div>
+            </div>
         </v-card>
     </v-menu>
 </template>
+
+
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
@@ -59,7 +81,59 @@ import dayjs from 'dayjs';
 import {
     mdiCalendarOutline,
     mdiClockOutline,
+    mdiEarth,
 } from '@mdi/js';
+
+// Get local timezone in ISO8601 format
+const getLocalTimezone = (): string => {
+    const offsetMinutes = new Date().getTimezoneOffset();
+    const offsetHours = Math.floor(Math.abs(offsetMinutes) / 60);
+    const offsetMins = Math.abs(offsetMinutes) % 60;
+    const sign = offsetMinutes <= 0 ? '+' : '-';
+    return `${sign}${offsetHours.toString().padStart(2, '0')}:${offsetMins.toString().padStart(2, '0')}`;
+};
+
+// ISO8601-style timezone options
+const timezoneOptions = [
+    { text: 'UTC−12:00', value: '−12:00' },
+    { text: 'UTC−11:00', value: '−11:00' },
+    { text: 'UTC−10:00', value: '−10:00' },
+    { text: 'UTC−09:30', value: '−09:30' },
+    { text: 'UTC−09:00', value: '−09:00' },
+    { text: 'UTC−08:00', value: '−08:00' },
+    { text: 'UTC−07:00', value: '−07:00' },
+    { text: 'UTC−06:00', value: '−06:00' },
+    { text: 'UTC−05:00', value: '−05:00' },
+    { text: 'UTC−04:00', value: '−04:00' },
+    { text: 'UTC−03:30', value: '−03:30' },
+    { text: 'UTC−03:00', value: '−03:00' },
+    { text: 'UTC−02:00', value: '−02:00' },
+    { text: 'UTC−01:00', value: '−01:00' },
+    { text: 'UTC+00:00', value: '+00:00' },
+    { text: 'UTC+01:00', value: '+01:00' },
+    { text: 'UTC+02:00', value: '+02:00' },
+    { text: 'UTC+03:00', value: '+03:00' },
+    { text: 'UTC+03:30', value: '+03:30' },
+    { text: 'UTC+04:00', value: '+04:00' },
+    { text: 'UTC+04:30', value: '+04:30' },
+    { text: 'UTC+05:00', value: '+05:00' },
+    { text: 'UTC+05:30', value: '+05:30' },
+    { text: 'UTC+05:45', value: '+05:45' },
+    { text: 'UTC+06:00', value: '+06:00' },
+    { text: 'UTC+06:30', value: '+06:30' },
+    { text: 'UTC+07:00', value: '+07:00' },
+    { text: 'UTC+08:00', value: '+08:00' },
+    { text: 'UTC+08:45', value: '+08:45' },
+    { text: 'UTC+09:00', value: '+09:00' },
+    { text: 'UTC+09:30', value: '+09:30' },
+    { text: 'UTC+10:00', value: '+10:00' },
+    { text: 'UTC+10:30', value: '+10:30' },
+    { text: 'UTC+11:00', value: '+11:00' },
+    { text: 'UTC+12:00', value: '+12:00' },
+    { text: 'UTC+12:45', value: '+12:45' },
+    { text: 'UTC+13:00', value: '+13:00' },
+    { text: 'UTC+14:00', value: '+14:00' },
+];
 
 type HideDetails = boolean | 'auto';
 
@@ -123,9 +197,9 @@ onMounted(() => {
 });
 
 // Parse the input value to extract date and time parts
-const parseDateTime = (value: string | null | undefined): { date: string | null; time: string | null } => {
+const parseDateTime = (value: string | null | undefined): { date: string | null; time: string | null; timezone: string | null } => {
     if (!value) {
-        return { date: null, time: null };
+        return { date: null, time: null, timezone: null };
     }
     
     // Try to parse with dayjs to handle various formats
@@ -137,13 +211,19 @@ const parseDateTime = (value: string | null | undefined): { date: string | null;
         // Check if the original value contains time information
         // If it's just a date (like "2023-12-25"), don't extract time
         if (value.includes(' ') || value.includes('T') || value.match(/\d{2}:\d{2}/)) {
-            return { date, time };
+            // Check for ISO8601 timezone indicators: +HH:MM, -HH:MM, Z
+            let timezone: string | null = null;
+            const tzMatch = value.match(/([+-]\d{2}:\d{2}|Z)$/);
+            if (tzMatch) {
+                timezone = tzMatch[1] === 'Z' ? '+00:00' : tzMatch[1];
+            }
+            return { date, time, timezone };
         } else {
-            return { date, time: null };
+            return { date, time: null, timezone: null };
         }
     }
     
-    return { date: null, time: null };
+    return { date: null, time: null, timezone: null };
 };
 
 // Computed properties for date and time values
@@ -153,7 +233,7 @@ const dateValue = computed<string | null>({
         return date;
     },
     set: (v) => {
-        updateValue(v, timeValue.value);
+        updateValue(v, timeValue.value, timezoneValue.value);
     },
 });
 
@@ -164,7 +244,19 @@ const timeValue = computed<string | null>({
         return time;
     },
     set: (v) => {
-        updateValue(dateValue.value, v);
+        updateValue(dateValue.value, v, timezoneValue.value);
+    },
+});
+
+// Computed property for timezone value extracted from the value prop
+const timezoneValue = computed<string | null>({
+    get: () => {
+        if (!timeEnabled.value) return null;
+        const { timezone } = parseDateTime(props.value);
+        return timezone || getLocalTimezone();
+    },
+    set: (v) => {
+        updateValue(dateValue.value, timeValue.value, v);
     },
 });
 
@@ -175,7 +267,8 @@ const displayValue = computed(() => {
     if (timeEnabled.value) {
         const { date, time } = parseDateTime(props.value);
         if (date && time) {
-            return `${date} ${time}`;
+            const currentTz = timezoneValue.value || getLocalTimezone();
+            return `${date} ${time}${currentTz}`;
         } else if (date) {
             return date;
         }
@@ -185,14 +278,18 @@ const displayValue = computed(() => {
 });
 
 // Update the combined value
-const updateValue = (date: string | null, time: string | null) => {
+const updateValue = (date: string | null, time: string | null, timezone: string | null) => {
     if (!date) {
         emit('input', null);
         return;
     }
     
     if (timeEnabled.value && time) {
-        emit('input', `${date} ${time}`);
+        let value = `${date} ${time}`;
+        // Always include timezone when time is enabled
+        const tz = timezone || getLocalTimezone();
+        value += tz;
+        emit('input', value);
     } else {
         emit('input', date);
     }
@@ -200,23 +297,27 @@ const updateValue = (date: string | null, time: string | null) => {
 
 // Methods
 function onDatePick(date: string) {
-    updateValue(date, timeValue.value);
+    updateValue(date, timeValue.value, timezoneValue.value);
 }
 
 function onTimePick(time: string) {
-    updateValue(dateValue.value, time);
+    updateValue(dateValue.value, time, timezoneValue.value);
+}
+
+function onTimezonePick(timezone: string) {
+    updateValue(dateValue.value, timeValue.value, timezone);
 }
 
 function onTimeToggle() {
     if (!timeEnabled.value) {
         // If time is disabled, update value to date-only format
         if (dateValue.value) {
-            updateValue(dateValue.value, timeValue.value);
+            updateValue(dateValue.value, timeValue.value, timezoneValue.value);
         }
     } else {
         // If time is enabled and we have a date, set default time if none exists
         if (dateValue.value && !timeValue.value) {
-            updateValue(dateValue.value, '12:00');
+            updateValue(dateValue.value, '12:00', timezoneValue.value);
         }
     }
 }
@@ -226,7 +327,7 @@ function onTimeToggle() {
 :deep(.v-date-picker-title) {
     height: 70px;
 }
-:deep(.v-picker__title) {
+:deep(.v-picker) {
     border-radius: 0;
 }
 </style>
