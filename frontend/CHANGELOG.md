@@ -1,3 +1,9 @@
+## [1.7.1] - 2025-08-30
+
+### 🐛 Bug Fixes
+
+- *(components/TaskScheduleView)* Sort dates in descending order
+
 ## [1.7.0] - 2025-08-30
 
 ### 🚀 Features
