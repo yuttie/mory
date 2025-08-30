@@ -1,3 +1,14 @@
+## [1.7.0] - 2025-08-30
+
+### 🚀 Features
+
+- *(composables/localStorage)* Make localStorage composable reactive to external changes (#152)
+- *(views/Tasks, views/TasksNext)* Make hideCompleted* variables persistent using localStorage (#151)
+
+### 🚜 Refactor
+
+- *(views/TasksNext)* Extract descendants views into separate components for better code organization (#149)
+
 ## [1.6.0] - 2025-08-30
 
 ### 🚀 Features
