@@ -139,6 +139,7 @@ const props = withDefaults(
         clearable?: boolean;
         hideDetails?: HideDetails;
         includeTime?: boolean;
+        includeTimezone?: boolean;
     }>(),
     {
         value: undefined,
@@ -148,6 +149,7 @@ const props = withDefaults(
         clearable: true,
         hideDetails: false,
         includeTime: undefined,
+        includeTimezone: false,
     },
 );
 
