@@ -337,6 +337,7 @@
 <script lang="ts" setup>
 import { ref, computed, onMounted, onUnmounted, set, del } from 'vue';
 import type { Ref } from 'vue';
+import { useLocalStorage } from '@/composables/localStorage';
 
 import {
     mdiCheckboxMarkedCirclePlusOutline,
@@ -405,7 +406,7 @@ const newGroupName = ref('');
 const newGroupFilter = ref('');
 // Others
 const isLoading = ref(false);
-const hideDone = ref(true);
+const hideDone = useLocalStorage('hideDone', true);
 const errorNotification = ref(false);
 const errorNotificationText = ref('');
 
