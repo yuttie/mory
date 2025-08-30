@@ -376,10 +376,8 @@ export const useTaskForestStore = defineStore('taskForest', () => {
         const rec = node(nodeId);
         if (!rec) return;
 
-        // Calculate new path
-        const newPath = newParent === null 
-            ? `.tasks/${nodeId}.md`
-            : `.tasks/${newParent}/${nodeId}.md`;
+        // Calculate new path using buildTaskPath to handle full hierarchy
+        const newPath = buildTaskPath(nodeId, newParent);
 
         // Update the node's path
         const oldPath = rec.path;
