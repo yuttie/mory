@@ -441,23 +441,29 @@ export const useTaskForestStore = defineStore('taskForest', () => {
         // Move the task itself first
         await renameNote(oldPath, newPath);
         
-        // Now recursively move all children
-        const children = childrenOf(taskUuid);
+        // Recursively move all descendants using manual path calculation
+        await moveDescendantFiles(taskUuid, oldPath, newPath);
+    }
+
+    async function moveDescendantFiles(parentUuid: UUID, oldParentPath: string, newParentPath: string): Promise<void> {
+        const { renameNote } = await import('@/api');
+        const children = childrenOf(parentUuid);
+        
         for (const child of children) {
             try {
                 // Calculate the old and new parent directory paths for children
-                const oldTaskDir = oldPath.replace('.md', '');
-                const newTaskDir = newPath.replace('.md', '');
+                const oldParentDir = oldParentPath.replace('.md', '');
+                const newParentDir = newParentPath.replace('.md', '');
                 
                 // Build child paths
-                const childOldPath = `${oldTaskDir}/${child.uuid}.md`;
-                const childNewPath = `${newTaskDir}/${child.uuid}.md`;
+                const childOldPath = `${oldParentDir}/${child.uuid}.md`;
+                const childNewPath = `${newParentDir}/${child.uuid}.md`;
                 
                 // Move the child file
                 await renameNote(childOldPath, childNewPath);
                 
-                // Recursively move the child's subtree
-                await moveTaskSubtreeOnServer(child.uuid, oldParentUuid, newParentUuid);
+                // Recursively move the child's descendants
+                await moveDescendantFiles(child.uuid, childOldPath, childNewPath);
             } catch (error) {
                 console.warn(`Failed to move child ${child.uuid}:`, error);
                 // Continue with other children even if one fails

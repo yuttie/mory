@@ -3,6 +3,9 @@ import { computed, ref, watch } from 'vue';
 import { useTaskForestStore, type TreeNodeRecord } from './taskForest';
 import type { ApiTreeNode, UUID } from '@/api/task';
 
+// Re-export types from taskForest
+export type { TreeNodeRecord } from './taskForest';
+
 /**
  * Pinia store that extends the basic forestStore with tag grouping functionality.
  * This provides a clean separation between core forest operations and tag enhancements.
