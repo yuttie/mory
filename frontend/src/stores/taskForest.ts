@@ -418,19 +418,16 @@ export const useTaskForestStore = defineStore('taskForest', () => {
         }
     }
 
-    async function moveTaskOnServer(taskUuid: UUID, oldParentUuid: UUID | null, newParentUuid: UUID | null): Promise<void> {
-        const oldPath = buildTaskPath(taskUuid, oldParentUuid);
-        const newPath = buildTaskPath(taskUuid, newParentUuid);
-        
-        if (oldPath === newPath) {
-            return; // No move needed
-        }
-
-        const { renameNote } = await import('@/api');
-        await renameNote(oldPath, newPath);
-    }
 
     async function moveTaskSubtreeOnServer(taskUuid: UUID, oldParentUuid: UUID | null, newParentUuid: UUID | null): Promise<void> {
+        // Prevent moving a node to its own descendant (circular reference)
+        if (newParentUuid !== null) {
+            const descendants = collectDescendants(taskUuid, childrenById.value);
+            if (descendants.includes(newParentUuid)) {
+                throw new Error(`moveTaskSubtreeOnServer: cannot move task ${taskUuid} to its own descendant ${newParentUuid}.`);
+            }
+        }
+
         // Get the old and new base paths for the task
         const oldPath = buildTaskPath(taskUuid, oldParentUuid);
         const newPath = buildTaskPath(taskUuid, newParentUuid);
@@ -445,24 +442,22 @@ export const useTaskForestStore = defineStore('taskForest', () => {
         await renameNote(oldPath, newPath);
         
         // Now recursively move all children
-        // Children's paths change because their parent directory changed
         const children = childrenOf(taskUuid);
         for (const child of children) {
-            // For direct children, we need to update their parent directory path
-            // The child files are stored under the task's directory, so when the task moves,
-            // all child files need to be moved too
-            const oldTaskDir = oldPath.replace('.md', '');
-            const newTaskDir = newPath.replace('.md', '');
-            
-            // Build actual old and new paths for the child
-            const actualChildOldPath = `${oldTaskDir}/${child.uuid}.md`;
-            const actualChildNewPath = `${newTaskDir}/${child.uuid}.md`;
-            
             try {
-                await renameNote(actualChildOldPath, actualChildNewPath);
+                // Calculate the old and new parent directory paths for children
+                const oldTaskDir = oldPath.replace('.md', '');
+                const newTaskDir = newPath.replace('.md', '');
                 
-                // Recursively move the child's children
-                await moveTaskSubtreeOnServer(child.uuid, taskUuid, taskUuid);
+                // Build child paths
+                const childOldPath = `${oldTaskDir}/${child.uuid}.md`;
+                const childNewPath = `${newTaskDir}/${child.uuid}.md`;
+                
+                // Move the child file
+                await renameNote(childOldPath, childNewPath);
+                
+                // Recursively move the child's subtree
+                await moveTaskSubtreeOnServer(child.uuid, oldParentUuid, newParentUuid);
             } catch (error) {
                 console.warn(`Failed to move child ${child.uuid}:`, error);
                 // Continue with other children even if one fails
@@ -588,7 +583,6 @@ export const useTaskForestStore = defineStore('taskForest', () => {
         moveNode,
         // -- Helper functions --
         buildTaskPath,
-        moveTaskOnServer,
         moveTaskSubtreeOnServer,
     };
 });
