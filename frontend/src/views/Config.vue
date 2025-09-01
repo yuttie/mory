@@ -1,33 +1,33 @@
 <template>
   <div id="config">
-    <h1>Config</h1>
+    <h1>{{ $t('config.title') }}</h1>
     <v-btn
       v-on:click="loadDefault"
       class="mt-4 mb-2"
-    >Load default</v-btn>
+    >{{ $t('config.load_default') }}</v-btn>
     <v-btn
       v-on:click="saveAsDefault"
       class="mt-2 mb-4"
-    >Save as default</v-btn>
+    >{{ $t('config.save_as_default') }}</v-btn>
     <v-alert text type="info">
-      The following settings are only applied to the current browser and never be saved in the repository unless saved as default.
+      {{ $t('config.settings_notice') }}
     </v-alert>
     <v-checkbox
       v-model="currentUseSimpleEditor"
-      label="Use Simple Editor"
+      :label="$t('config.use_simple_editor')"
     ></v-checkbox>
     <v-checkbox
       v-model="currentLockScroll"
-      label="Lock Scroll by Default"
+      :label="$t('config.lock_scroll')"
     ></v-checkbox>
     <v-text-field
       v-model="currentEditorFontFamily"
-      label="Editor Font Family"
+      :label="$t('config.editor_font_family')"
     >
     </v-text-field>
     <v-slider
       v-model="currentEditorFontSize"
-      label="Editor Font Size"
+      :label="$t('config.editor_font_size')"
       min="1"
       max="100"
       thumb-label
@@ -47,7 +47,7 @@
       v-bind:items="editorThemes"
       v-model="currentEditorTheme"
       menu-props="auto"
-      label="Editor Theme"
+      :label="$t('config.editor_theme')"
       item-text="name"
       item-value="value"
     >
@@ -65,9 +65,18 @@
       v-bind:items="highlightjsThemes"
       v-model="currentHighlightjsTheme"
       menu-props="auto"
-      label="Code Block Syntax Highlight Theme"
+      :label="$t('config.syntax_highlight_theme')"
       item-text="name"
       item-value="value"
+    >
+    </v-select>
+    <v-select
+      v-bind:items="availableLocales"
+      v-model="currentLocale"
+      menu-props="auto"
+      :label="$t('config.language')"
+      item-text="name"
+      item-value="code"
     >
     </v-select>
   </div>
@@ -78,7 +87,11 @@ import { ref, watch, onMounted } from 'vue';
 
 import * as api from '@/api';
 import { loadConfigValue, saveConfigValue } from '@/config';
+import { useI18n, setLocale, availableLocales } from '@/plugins/i18n';
 import YAML from 'yaml';
+
+// Composables
+const { t } = useI18n();
 
 // Reactive states
 const editorThemes = ref([
@@ -387,10 +400,11 @@ const currentEditorFontSize = ref(loadConfigValue('editor-font-size', 14));
 const currentEditorTheme = ref(loadConfigValue('editor-theme', 'default'));
 const currentEditorKeybinding = ref(loadConfigValue('editor-keybinding', 'default'));
 const currentHighlightjsTheme = ref(loadConfigValue('highlightjs-theme', 'default'));
+const currentLocale = ref(loadConfigValue('locale', 'en'));
 
 // Lifecycle hooks
 onMounted(() => {
-  document.title = `Config | ${import.meta.env.VITE_APP_NAME}`;
+  document.title = `${t('config.title')} | ${import.meta.env.VITE_APP_NAME}`;
 });
 
 // Methods
@@ -446,6 +460,10 @@ watch(currentEditorKeybinding, (newEditorKeybinding: string) => {
 
 watch(currentHighlightjsTheme, (newHighlightjsTheme: string) => {
   saveConfigValue('highlightjs-theme', newHighlightjsTheme);
+});
+
+watch(currentLocale, (newLocale: string) => {
+  setLocale(newLocale);
 });
 </script>
 

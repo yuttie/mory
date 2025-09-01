@@ -1,0 +1,58 @@
+{
+  "common": {
+    "search": "Search",
+    "loading": "Loading...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "navigation": {
+    "files": "Files",
+    "config": "Config",
+    "calendar": "Calendar",
+    "tasks": "Tasks",
+    "search": "Search",
+    "home": "Home",
+    "about": "About"
+  },
+  "files": {
+    "title": "Files",
+    "search_placeholder": "Search",
+    "no_files": "No files found",
+    "modified": "Modified",
+    "size": "Size",
+    "type": "Type"
+  },
+  "config": {
+    "title": "Config",
+    "load_default": "Load default",
+    "save_as_default": "Save as default",
+    "settings_notice": "The following settings are only applied to the current browser and never be saved in the repository unless saved as default.",
+    "use_simple_editor": "Use Simple Editor",
+    "lock_scroll": "Lock Scroll by Default",
+    "editor_font_family": "Editor Font Family",
+    "editor_font_size": "Editor Font Size",
+    "editor_theme": "Editor Theme",
+    "syntax_highlight_theme": "Syntax Highlight Theme",
+    "language": "Language"
+  },
+  "calendar": {
+    "title": "Calendar"
+  },
+  "tasks": {
+    "title": "Tasks"
+  },
+  "editor": {
+    "bold": "Bold",
+    "italic": "Italic",
+    "code": "Code",
+    "quote": "Quote",
+    "link": "Link",
+    "list": "List",
+    "table": "Table"
+  }
+}

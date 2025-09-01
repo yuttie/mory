@@ -1,0 +1,58 @@
+{
+  "common": {
+    "search": "検索",
+    "loading": "読み込み中...",
+    "save": "保存",
+    "cancel": "キャンセル",
+    "delete": "削除",
+    "edit": "編集",
+    "close": "閉じる",
+    "yes": "はい",
+    "no": "いいえ"
+  },
+  "navigation": {
+    "files": "ファイル",
+    "config": "設定",
+    "calendar": "カレンダー",
+    "tasks": "タスク",
+    "search": "検索",
+    "home": "ホーム",
+    "about": "について"
+  },
+  "files": {
+    "title": "ファイル",
+    "search_placeholder": "検索",
+    "no_files": "ファイルが見つかりません",
+    "modified": "更新日時",
+    "size": "サイズ",
+    "type": "種類"
+  },
+  "config": {
+    "title": "設定",
+    "load_default": "デフォルトを読み込む",
+    "save_as_default": "デフォルトとして保存",
+    "settings_notice": "以下の設定は現在のブラウザにのみ適用され、デフォルトとして保存しない限りリポジトリには保存されません。",
+    "use_simple_editor": "シンプルエディタを使用",
+    "lock_scroll": "デフォルトでスクロールをロック",
+    "editor_font_family": "エディタフォントファミリー",
+    "editor_font_size": "エディタフォントサイズ",
+    "editor_theme": "エディタテーマ",
+    "syntax_highlight_theme": "シンタックスハイライトテーマ",
+    "language": "言語"
+  },
+  "calendar": {
+    "title": "カレンダー"
+  },
+  "tasks": {
+    "title": "タスク"
+  },
+  "editor": {
+    "bold": "太字",
+    "italic": "斜体",
+    "code": "コード",
+    "quote": "引用",
+    "link": "リンク",
+    "list": "リスト",
+    "table": "テーブル"
+  }
+}
