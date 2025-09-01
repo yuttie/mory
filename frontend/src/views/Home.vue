@@ -544,7 +544,7 @@ const upcomingTasks = computed(() => {
     }
     
     // Collect tasks with deadlines from scheduled dates
-    for (const [date, dayTasks] of Object.entries(taskData.value.tasks.scheduled)) {
+    for (const [_date, dayTasks] of Object.entries(taskData.value.tasks.scheduled)) {
         for (const task of dayTasks) {
             if (task.deadline && dayjs(task.deadline).isAfter(now)) {
                 tasks.push(task);
@@ -600,8 +600,8 @@ async function loadTasks() {
       taskETag.value = eTag;
       taskData.value = data;
     }
-  } catch (err) {
-    console.error('Failed to load tasks:', err);
+  } catch (_err) {
+    console.error('Failed to load tasks:', _err);
   }
 }
 
@@ -619,7 +619,7 @@ async function createQuickNote() {
     
     // Reload notes to show the new one if it has home tags
     load();
-  } catch (err) {
+  } catch (_err) {
     errorText.value = 'Failed to create note';
     error.value = true;
   }
@@ -654,18 +654,18 @@ async function createQuickTask() {
     quickTaskName.value = '';
     quickTaskDeadline.value = '';
     quickTaskScheduleToday.value = false;
-  } catch (err) {
+  } catch (_err) {
     errorText.value = 'Failed to create task';
     error.value = true;
   }
 }
 
-async function updateTask(task: Task) {
+async function updateTask(_task: Task) {
   try {
     await saveTaskData();
     successText.value = 'Task updated!';
     successMessage.value = true;
-  } catch (err) {
+  } catch (_err) {
     errorText.value = 'Failed to update task';
     error.value = true;
   }
