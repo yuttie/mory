@@ -14,6 +14,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@iarna/toml": "^2.2.5",
     "@jsdevtools/rehype-url-inspector": "^2.0.2",
     "@mdi/js": "^7.4.47",
     "ace-builds": "^1.14.0",

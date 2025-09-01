@@ -886,18 +886,48 @@ fn extract_metadata(blob: &[u8]) -> (Option<serde_yaml::Value>, Option<String>) 
         let mut opts = markdown::ParseOptions::gfm();
         opts.constructs.frontmatter = true;
         if let Ok(node) = markdown::to_mdast(text, &opts) {
-            let metadata = if let Some(markdown::mdast::Node::Yaml(yaml_node)) = get_frontmatter_node(&node) {
-                match serde_yaml::from_str::<serde_yaml::Value>(&yaml_node.value) {
-                    Ok(doc) => {
-                        debug!("parsed YAML metadata: {:?}", &doc);
-                        Some(doc)
+            let metadata = if let Some(frontmatter_node) = get_frontmatter_node(&node) {
+                match frontmatter_node {
+                    markdown::mdast::Node::Yaml(yaml_node) => {
+                        match serde_yaml::from_str::<serde_yaml::Value>(&yaml_node.value) {
+                            Ok(doc) => {
+                                debug!("parsed YAML metadata: {:?}", &doc);
+                                Some(doc)
+                            },
+                            Err(err) => {
+                                debug!("failed to parse YAML metadata: {:?}", &err);
+                                let mut error_object = serde_yaml::Mapping::new();
+                                error_object.insert("error".into(), format!("{}", err).into());
+                                Some(serde_yaml::Value::Mapping(error_object))
+                            },
+                        }
                     },
-                    Err(err) => {
-                        debug!("failed to parse YAML metadata: {:?}", &err);
-                        let mut error_object = serde_yaml::Mapping::new();
-                        error_object.insert("error".into(), format!("{}", err).into());
-                        Some(serde_yaml::Value::Mapping(error_object))
+                    markdown::mdast::Node::Toml(toml_node) => {
+                        match toml::from_str::<toml::Table>(&toml_node.value) {
+                            Ok(toml_table) => {
+                                // Convert TOML table to serde_yaml::Value for consistency
+                                match serde_yaml::to_value(toml_table) {
+                                    Ok(yaml_value) => {
+                                        debug!("parsed TOML metadata: {:?}", &yaml_value);
+                                        Some(yaml_value)
+                                    },
+                                    Err(err) => {
+                                        debug!("failed to convert TOML to YAML value: {:?}", &err);
+                                        let mut error_object = serde_yaml::Mapping::new();
+                                        error_object.insert("error".into(), format!("{}", err).into());
+                                        Some(serde_yaml::Value::Mapping(error_object))
+                                    },
+                                }
+                            },
+                            Err(err) => {
+                                debug!("failed to parse TOML metadata: {:?}", &err);
+                                let mut error_object = serde_yaml::Mapping::new();
+                                error_object.insert("error".into(), format!("{}", err).into());
+                                Some(serde_yaml::Value::Mapping(error_object))
+                            },
+                        }
                     },
+                    _ => None,
                 }
             }
             else {
