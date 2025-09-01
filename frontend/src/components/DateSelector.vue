@@ -75,7 +75,7 @@
 
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, watch } from 'vue';
 import dayjs from 'dayjs';
 
 import {
@@ -191,10 +191,10 @@ const initializeTimeEnabled = () => {
     }
 };
 
-// Initialize on mount
-onMounted(() => {
+// Watch for changes to the value prop and re-initialize timeEnabled
+watch(() => props.value, () => {
     initializeTimeEnabled();
-});
+}, { immediate: true });
 
 // Parse the input value to extract date and time parts
 const parseDateTime = (value: string | null | undefined): { date: string | null; time: string | null; timezone: string | null } => {
