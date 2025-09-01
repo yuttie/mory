@@ -309,6 +309,85 @@
                             </li>
                         </ul>
                     </template>
+                    
+                    <!-- Efforts section -->
+                    <div class="mt-4">
+                        <v-label>
+                            <v-icon>{{ mdiClockOutline }}</v-icon>
+                            Effort Log
+                        </v-label>
+                        <div v-if="form.efforts.length > 0" class="mt-2">
+                            <v-card
+                                v-for="(effort, index) in form.efforts"
+                                v-bind:key="index"
+                                outlined
+                                class="mb-2 pa-3"
+                            >
+                                <div class="d-flex justify-space-between align-start">
+                                    <div class="flex-grow-1">
+                                        <div class="font-weight-bold">{{ effort.date }}</div>
+                                        <div class="mt-1">{{ effort.description }}</div>
+                                        <div v-if="effort.hours" class="text-caption text--secondary mt-1">
+                                            Hours: {{ effort.hours }}
+                                        </div>
+                                        <div class="text-caption text--secondary mt-1">
+                                            Logged: {{ formatDate(effort.created_at) }}
+                                        </div>
+                                    </div>
+                                    <v-btn
+                                        icon
+                                        small
+                                        v-on:click="removeEffort(index)"
+                                    >
+                                        <v-icon small>{{ mdiDelete }}</v-icon>
+                                    </v-btn>
+                                </div>
+                            </v-card>
+                        </div>
+                        <div v-else class="text-caption text--secondary mt-2 mb-2">
+                            No effort logged yet.
+                        </div>
+                        
+                        <!-- Add new effort -->
+                        <v-card outlined class="pa-3 mt-2">
+                            <v-text-field
+                                v-model="newEffort.date"
+                                label="Date (YYYY-MM-DD)"
+                                type="date"
+                                dense
+                                outlined
+                                class="mb-2"
+                            />
+                            <v-textarea
+                                v-model="newEffort.description"
+                                label="What did you work on?"
+                                placeholder="Describe what you accomplished..."
+                                rows="2"
+                                dense
+                                outlined
+                                class="mb-2"
+                            />
+                            <v-text-field
+                                v-model.number="newEffort.hours"
+                                label="Hours (optional)"
+                                type="number"
+                                step="0.5"
+                                min="0"
+                                max="24"
+                                dense
+                                outlined
+                                class="mb-2"
+                            />
+                            <v-btn
+                                color="primary"
+                                small
+                                v-bind:disabled="!newEffort.date || !newEffort.description.trim()"
+                                v-on:click="addEffort"
+                            >
+                                Add Effort
+                            </v-btn>
+                        </v-card>
+                    </div>
                 </div>
                 <div class="note-pane flex-grow-1 pl-3">
                     <!-- Note -->
@@ -334,6 +413,7 @@ import {
     mdiCalendarOutline,
     mdiCancel,
     mdiClose,
+    mdiClockOutline,
     mdiContentSave,
     mdiDelete,
     mdiFileTreeOutline,
@@ -350,7 +430,7 @@ import {
 } from '@mdi/js';
 
 import { extractFileUuid } from '@/api/task';
-import type { UUID, Task, Status, StatusKind, WaitingStatus, BlockedStatus, OnHoldStatus, DoneStatus, CanceledStatus } from '@/task';
+import type { UUID, Task, Status, StatusKind, WaitingStatus, BlockedStatus, OnHoldStatus, DoneStatus, CanceledStatus, Effort } from '@/task';
 import { STATUS_LABEL, nextOptions, makeDefaultStatus, canTransition } from '@/task';
 import { useFetchTask } from '@/composables/fetchTask';
 
@@ -367,6 +447,7 @@ type EditableTask = {
     due_by: string;
     deadline: string;
     scheduled_dates: string[];
+    efforts: Effort[];
     note: string;
 };
 
@@ -403,9 +484,17 @@ const form = reactive<EditableTask>({
     due_by: '',
     deadline: '',
     scheduled_dates: [],
+    efforts: [],
     note: '',
 });
 const uiValid = ref(true);
+
+// New effort form state
+const newEffort = reactive({
+    date: '',
+    description: '',
+    hours: null as number | null,
+});
 
 // Template refs
 const formRef = ref<any>(null);
@@ -430,6 +519,7 @@ const initialForm = computed<EditableTask>(() => {
             due_by: '',
             deadline: '',
             scheduled_dates: [],
+            efforts: [],
             note: '',
         };
     }
@@ -444,6 +534,7 @@ const initialForm = computed<EditableTask>(() => {
         due_by: t.due_by ?? '',
         deadline: t.deadline ?? '',
         scheduled_dates: Array.isArray(t.scheduled_dates) ? [...t.scheduled_dates] : [],
+        efforts: Array.isArray(t.efforts) ? [...t.efforts] : [],
         note: t.note ?? '',
     };
 });
@@ -584,6 +675,7 @@ function resetFromTask(t?: Task | undefined | null): void {
         form.due_by = '';
         form.deadline = '';
         form.scheduled_dates = [];
+        form.efforts = [];
         form.note = '';
     }
     else {
@@ -597,6 +689,7 @@ function resetFromTask(t?: Task | undefined | null): void {
         form.due_by = t.due_by ?? '';
         form.deadline = t.deadline ?? '';
         form.scheduled_dates = Array.isArray(t.scheduled_dates) ? [...t.scheduled_dates] : [];
+        form.efforts = Array.isArray(t.efforts) ? [...t.efforts] : [];
         form.note = t.note ?? '';
     }
 }
@@ -638,6 +731,7 @@ function onSave(): void {
         ...(form.due_by !== '' ? { due_by: form.due_by } : {}),
         ...(form.deadline !== '' ? { deadline: form.deadline } : {}),
         scheduled_dates: [...form.scheduled_dates],
+        ...(form.efforts.length > 0 ? { efforts: [...form.efforts] } : {}),
         note: form.note,
     };
     emit('save', task);
@@ -656,6 +750,35 @@ function onCancel(): void {
 
 function onChangeParent(): void {
     emit('change-parent');
+}
+
+// Effort management functions
+function addEffort(): void {
+    if (!newEffort.date || !newEffort.description.trim()) {
+        return;
+    }
+    
+    const effort: Effort = {
+        date: newEffort.date,
+        description: newEffort.description.trim(),
+        ...(newEffort.hours !== null && newEffort.hours > 0 ? { hours: newEffort.hours } : {}),
+        created_at: new Date().toISOString(),
+    };
+    
+    form.efforts.push(effort);
+    
+    // Reset form
+    newEffort.date = '';
+    newEffort.description = '';
+    newEffort.hours = null;
+}
+
+function removeEffort(index: number): void {
+    form.efforts.splice(index, 1);
+}
+
+function formatDate(dateString: string): string {
+    return dayjs(dateString).format('MMM D, YYYY h:mm A');
 }
 
 // Helper functions for comparison
