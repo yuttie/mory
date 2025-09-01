@@ -206,7 +206,6 @@ const parseDateTime = (value: string | null | undefined): { date: string | null;
     const parsed = dayjs(value);
     if (parsed.isValid()) {
         const date = parsed.format('YYYY-MM-DD');
-        const time = parsed.format('HH:mm');
         
         // Check if the original value contains time information
         // If it's just a date (like "2023-12-25"), don't extract time
@@ -216,7 +215,21 @@ const parseDateTime = (value: string | null | undefined): { date: string | null;
             const tzMatch = value.match(/([+-]\d{2}:\d{2}|Z)$/);
             if (tzMatch) {
                 timezone = tzMatch[1] === 'Z' ? '+00:00' : tzMatch[1];
+                
+                // Extract time in the original timezone context
+                // If we have timezone info, we need to get the time as it appears in that timezone
+                // not converted to local time
+                
+                // Parse the time portion directly from the original string
+                const timeMatch = value.match(/(\d{2}:\d{2}(?::\d{2})?)/);
+                if (timeMatch) {
+                    const time = timeMatch[1].substring(0, 5); // Take only HH:mm part
+                    return { date, time, timezone };
+                }
             }
+            
+            // No explicit timezone, use the parsed time (local context)
+            const time = parsed.format('HH:mm');
             return { date, time, timezone };
         } else {
             return { date, time: null, timezone: null };
