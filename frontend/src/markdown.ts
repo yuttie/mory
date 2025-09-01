@@ -1,7 +1,7 @@
 import { unified } from 'unified';
 import remarkParse from 'remark-parse';
 import remarkFrontmatter from 'remark-frontmatter';
-import myRemarkYamlFrontmatter from '@/remark-yaml-frontmatter';
+import myRemarkFrontmatterParser from '@/remark-frontmatter-parser';
 import remarkGfm from 'remark-gfm';
 import { remarkDefinitionList, defListHastHandlers } from 'remark-definition-list';
 import remarkMath from 'remark-math';
@@ -20,6 +20,13 @@ import { all } from 'lowlight';
 import type { VFile } from 'vfile';
 import { visit } from 'unist-util-visit';
 import type { Root, Heading, Yaml } from 'mdast';
+
+// Define Toml interface since it may not be exported from mdast
+interface Toml {
+  type: 'toml';
+  value: string;
+  position?: any;
+}
 import { toString } from 'mdast-util-to-string';
 
 
@@ -27,8 +34,8 @@ const apiFilesUrl = new URL('files/', new URL(import.meta.env.VITE_APP_API_URL!,
 
 const processor = unified()
   .use(remarkParse)
-  .use(remarkFrontmatter)
-  .use(myRemarkYamlFrontmatter)
+  .use(remarkFrontmatter, ['yaml', 'toml'])
+  .use(myRemarkFrontmatterParser)
   .use(remarkGfm)
   .use(remarkDefinitionList)
   .use(remarkMath)
@@ -94,15 +101,15 @@ export function extractFrontmatterH1AndRest(markdown: string): {
 } {
     const processor = unified()
         .use(remarkParse)
-        .use(remarkFrontmatter, ['yaml']);
+        .use(remarkFrontmatter, ['yaml', 'toml']);
 
     const tree = processor.parse(markdown) as Root;
 
     // 1) Frontmatter (only if it is the very first node)
     let frontmatter = '';
     let afterFrontmatterOffset = 0;
-    const first = tree.children[0] as Yaml | undefined;
-    if (first?.type === 'yaml') {
+    const first = tree.children[0] as Yaml | Toml | undefined;
+    if (first?.type === 'yaml' || first?.type === 'toml') {
         frontmatter = first.value ?? '';
         afterFrontmatterOffset = first.position?.end.offset ?? 0;
     }
