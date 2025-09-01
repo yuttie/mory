@@ -1,0 +1,47 @@
+name: Label Resolved Issues
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'frontend/CHANGELOG.md'
+      - 'backend/CHANGELOG.md'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Run in dry-run mode (no actual changes)'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  label-resolved-issues:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        # Fetch more history for better git log analysis
+        fetch-depth: 100
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Run issue labeling script
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+      run: |
+        echo "Running automated issue labeling..."
+        echo "Repository: $GITHUB_REPOSITORY"
+        echo "Dry run: $DRY_RUN"
+        echo ""
+        
+        node scripts/label-resolved-issues.js
