@@ -75,7 +75,7 @@
 
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import dayjs from 'dayjs';
 
 import {
@@ -193,6 +193,11 @@ const initializeTimeEnabled = () => {
 
 // Initialize on mount
 onMounted(() => {
+    initializeTimeEnabled();
+});
+
+// Watch for changes to the value prop and re-initialize timeEnabled
+watch(() => props.value, () => {
     initializeTimeEnabled();
 });
 
