@@ -15,7 +15,7 @@
                     clearable
                     v-on:click:clear="clearQuery"
                     type="text"
-                    label="Search"
+                    :label="$t('files.search_placeholder')"
                     autocomplete="off"
                     hide-details="auto"
                     ref="queryEl"
@@ -119,6 +119,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import type { Ref } from 'vue';
 
 import { useRoute, useRouter } from 'vue-router/composables';
+import { useI18n } from '@/plugins/i18n';
 
 import {
     mdiCalendarClock,
@@ -145,6 +146,7 @@ const emit = defineEmits<{
 // Composables
 const router = useRouter();
 const route = useRoute();
+const { t } = useI18n();
 
 // Reactive states
 const entries: Ref<ListEntry2[]> = ref([]);
@@ -162,9 +164,9 @@ const queryEl = ref(null);
 const headers = computed(() => {
     return [
         { text: 'Title or Path', value: 'path' },
-        { text: 'Modified', value: 'time', sort: (a: any, b: any) => a - b },
-        { text: 'Size', value: 'size' },
-        { text: 'Type', value: 'mimeType' },
+        { text: t('files.modified'), value: 'time', sort: (a: any, b: any) => a - b },
+        { text: t('files.size'), value: 'size' },
+        { text: t('files.type'), value: 'mimeType' },
         { text: 'Tags', value: 'tags', sortable: false },
     ];
 });
@@ -273,7 +275,7 @@ const matchedEntries = computed(() => {
 
 // Lifecycle hooks
 onMounted(() => {
-    document.title = `Files | ${import.meta.env.VITE_APP_NAME}`;
+    document.title = `${t('files.title')} | ${import.meta.env.VITE_APP_NAME}`;
 
     window.addEventListener('keydown', handleKeydown);
 
