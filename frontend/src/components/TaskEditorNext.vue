@@ -304,7 +304,7 @@
                     <template v-if="form.scheduled_dates.length > 0">
                         <v-subheader>All selected dates</v-subheader>
                         <ul class="date-list">
-                            <li v-for="date of form.scheduled_dates.toSorted()">
+                            <li v-for="date of form.scheduled_dates.toSorted()" v-bind:key="date">
                                 {{ date }}
                             </li>
                         </ul>
