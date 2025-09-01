@@ -1,3 +1,11 @@
+## [1.7.2] - 2025-09-01
+
+### 🐛 Bug Fixes
+
+- *(components/DateSelector)* Fix timezone wheel scroll issue in time picker component (#167)
+- *(components/DateSelector)* Fix DateSelector timeEnabled not updating when value prop changes (#161)
+- *(components/DateSelector)* Replace U+2212 (full-width minus) with U+002D (ASCII hyphen)
+
 ## [1.7.1] - 2025-08-30
 
 ### 🐛 Bug Fixes
