@@ -202,33 +202,25 @@ const parseDateTime = (value: string | null | undefined): { date: string | null;
         return { date: null, time: null, timezone: null };
     }
     
-    // Try to parse with dayjs to handle various formats
-    const parsed = dayjs(value);
+    // Check for ISO8601 timezone indicators: +HH:MM, -HH:MM, Z
+    let timezone: string | null = null;
+    let valueWithoutTimezone = value;
+    
+    const tzMatch = value.match(/([+-]\d{2}:\d{2}|Z)$/);
+    if (tzMatch) {
+        timezone = tzMatch[1] === 'Z' ? '+00:00' : tzMatch[1];
+        // Remove timezone part from the string
+        valueWithoutTimezone = value.replace(/([+-]\d{2}:\d{2}|Z)$/, '');
+    }
+    
+    // Parse the string without timezone using dayjs
+    const parsed = dayjs(valueWithoutTimezone);
     if (parsed.isValid()) {
         const date = parsed.format('YYYY-MM-DD');
         
         // Check if the original value contains time information
         // If it's just a date (like "2023-12-25"), don't extract time
-        if (value.includes(' ') || value.includes('T') || value.match(/\d{2}:\d{2}/)) {
-            // Check for ISO8601 timezone indicators: +HH:MM, -HH:MM, Z
-            let timezone: string | null = null;
-            const tzMatch = value.match(/([+-]\d{2}:\d{2}|Z)$/);
-            if (tzMatch) {
-                timezone = tzMatch[1] === 'Z' ? '+00:00' : tzMatch[1];
-                
-                // Extract time in the original timezone context
-                // If we have timezone info, we need to get the time as it appears in that timezone
-                // not converted to local time
-                
-                // Parse the time portion directly from the original string
-                const timeMatch = value.match(/(\d{2}:\d{2}(?::\d{2})?)/);
-                if (timeMatch) {
-                    const time = timeMatch[1].substring(0, 5); // Take only HH:mm part
-                    return { date, time, timezone };
-                }
-            }
-            
-            // No explicit timezone, use the parsed time (local context)
+        if (valueWithoutTimezone.includes(' ') || valueWithoutTimezone.includes('T') || valueWithoutTimezone.match(/\d{2}:\d{2}/)) {
             const time = parsed.format('HH:mm');
             return { date, time, timezone };
         } else {
