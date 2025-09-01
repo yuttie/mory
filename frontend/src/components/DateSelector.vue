@@ -202,21 +202,26 @@ const parseDateTime = (value: string | null | undefined): { date: string | null;
         return { date: null, time: null, timezone: null };
     }
     
-    // Try to parse with dayjs to handle various formats
-    const parsed = dayjs(value);
+    // Check for ISO8601 timezone indicators: +HH:MM, -HH:MM, Z
+    let timezone: string | null = null;
+    let valueWithoutTimezone = value;
+    
+    const tzMatch = value.match(/([+-]\d{2}:\d{2}|Z)$/);
+    if (tzMatch) {
+        timezone = tzMatch[1] === 'Z' ? '+00:00' : tzMatch[1];
+        // Remove timezone part from the string
+        valueWithoutTimezone = value.replace(/([+-]\d{2}:\d{2}|Z)$/, '');
+    }
+    
+    // Parse the string without timezone using dayjs
+    const parsed = dayjs(valueWithoutTimezone);
     if (parsed.isValid()) {
         const date = parsed.format('YYYY-MM-DD');
-        const time = parsed.format('HH:mm');
         
         // Check if the original value contains time information
         // If it's just a date (like "2023-12-25"), don't extract time
-        if (value.includes(' ') || value.includes('T') || value.match(/\d{2}:\d{2}/)) {
-            // Check for ISO8601 timezone indicators: +HH:MM, -HH:MM, Z
-            let timezone: string | null = null;
-            const tzMatch = value.match(/([+-]\d{2}:\d{2}|Z)$/);
-            if (tzMatch) {
-                timezone = tzMatch[1] === 'Z' ? '+00:00' : tzMatch[1];
-            }
+        if (valueWithoutTimezone.includes(' ') || valueWithoutTimezone.includes('T') || valueWithoutTimezone.match(/\d{2}:\d{2}/)) {
+            const time = parsed.format('HH:mm');
             return { date, time, timezone };
         } else {
             return { date, time: null, timezone: null };
