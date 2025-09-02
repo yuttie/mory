@@ -1,91 +1,93 @@
 <template>
   <div id="home">
     <!-- Quick Note/Task Creation Section -->
-    <v-card class="ma-3" outlined>
-      <v-card-title class="pb-2">Quick Create</v-card-title>
-      <v-card-text>
-        <v-tabs v-model="quickCreateTab" class="mb-3">
-          <v-tab>Note</v-tab>
-          <v-tab>Task</v-tab>
-        </v-tabs>
-        <v-tabs-items v-model="quickCreateTab">
-          <v-tab-item>
-            <v-textarea
-              v-model="quickNoteContent"
-              placeholder="Enter note content... First line will be used as title."
-              rows="3"
-              outlined
-              dense
-            ></v-textarea>
-            <v-btn
-              color="primary"
-              v-bind:disabled="!quickNoteContent.trim()"
-              v-on:click="createQuickNote"
-              class="mr-2"
-            >
-              <v-icon left>{{ mdiFileDocumentPlusOutline }}</v-icon>
-              Create Note
-            </v-btn>
-          </v-tab-item>
-          <v-tab-item>
-            <v-text-field
-              v-model="quickTaskName"
-              placeholder="Enter task name..."
-              outlined
-              dense
-              class="mb-2"
-            ></v-text-field>
-            <div class="d-flex gap-2 mb-3">
-              <v-checkbox
-                v-model="quickTaskScheduleToday"
-                label="Schedule for today"
+    <div class="quick-create-section ma-3">
+      <h2 class="mb-3 text-center">Quick Create</h2>
+      <v-card outlined>
+        <v-card-text>
+          <v-tabs v-model="quickCreateTab" class="mb-3">
+            <v-tab>Note</v-tab>
+            <v-tab>Task</v-tab>
+          </v-tabs>
+          <v-tabs-items v-model="quickCreateTab">
+            <v-tab-item>
+              <v-textarea
+                v-model="quickNoteContent"
+                placeholder="Enter note content... First line will be used as title."
+                rows="3"
+                outlined
                 dense
-                class="mt-0"
-              ></v-checkbox>
-              <v-menu
-                ref="dueDateMenu"
-                v-model="dueDateMenu"
-                v-bind:close-on-content-click="false"
-                v-bind:nudge-right="40"
-                transition="scale-transition"
-                offset-y
-                min-width="auto"
+              ></v-textarea>
+              <v-btn
+                color="primary"
+                v-bind:disabled="!quickNoteContent.trim()"
+                v-on:click="createQuickNote"
+                class="mr-2"
               >
-                <template v-slot:activator="{ on, attrs }">
-                  <v-text-field
+                <v-icon left>{{ mdiFileDocumentPlusOutline }}</v-icon>
+                Create Note
+              </v-btn>
+            </v-tab-item>
+            <v-tab-item>
+              <v-text-field
+                v-model="quickTaskName"
+                placeholder="Enter task name..."
+                outlined
+                dense
+                class="mb-2"
+              ></v-text-field>
+              <div class="d-flex gap-2 mb-3">
+                <v-checkbox
+                  v-model="quickTaskScheduleToday"
+                  label="Schedule for today"
+                  dense
+                  class="mt-0"
+                ></v-checkbox>
+                <v-menu
+                  ref="dueDateMenu"
+                  v-model="dueDateMenu"
+                  v-bind:close-on-content-click="false"
+                  v-bind:nudge-right="40"
+                  transition="scale-transition"
+                  offset-y
+                  min-width="auto"
+                >
+                  <template v-slot:activator="{ on, attrs }">
+                    <v-text-field
+                      v-model="quickTaskDeadline"
+                      label="Deadline (optional)"
+                      prepend-icon
+                      readonly
+                      outlined
+                      dense
+                      v-bind="attrs"
+                      v-on="on"
+                    ></v-text-field>
+                  </template>
+                  <v-date-picker
                     v-model="quickTaskDeadline"
-                    label="Deadline (optional)"
-                    prepend-icon
-                    readonly
-                    outlined
-                    dense
-                    v-bind="attrs"
-                    v-on="on"
-                  ></v-text-field>
-                </template>
-                <v-date-picker
-                  v-model="quickTaskDeadline"
-                  v-on:input="dueDateMenu = false"
-                ></v-date-picker>
-              </v-menu>
-            </div>
-            <v-btn
-              color="primary"
-              v-bind:disabled="!quickTaskName.trim()"
-              v-on:click="createQuickTask"
-              class="mr-2"
-            >
-              <v-icon left>{{ mdiCheckboxMarkedCirclePlusOutline }}</v-icon>
-              Create Task
-            </v-btn>
-          </v-tab-item>
-        </v-tabs-items>
-      </v-card-text>
-    </v-card>
+                    v-on:input="dueDateMenu = false"
+                  ></v-date-picker>
+                </v-menu>
+              </div>
+              <v-btn
+                color="primary"
+                v-bind:disabled="!quickTaskName.trim()"
+                v-on:click="createQuickTask"
+                class="mr-2"
+              >
+                <v-icon left>{{ mdiCheckboxMarkedCirclePlusOutline }}</v-icon>
+                Create Task
+              </v-btn>
+            </v-tab-item>
+          </v-tabs-items>
+        </v-card-text>
+      </v-card>
+    </div>
 
     <!-- Events Section -->
     <div class="events-section ma-3">
-      <h2 class="mb-3">Events</h2>
+      <h2 class="mb-3 text-center">Events</h2>
       <div class="events-grid">
         <v-card outlined class="event-column">
           <v-card-title class="pb-2">
@@ -163,7 +165,7 @@
 
     <!-- Tasks Section -->
     <div class="tasks-section ma-3">
-      <h2 class="mb-3">Tasks</h2>
+      <h2 class="mb-3 text-center">Tasks</h2>
       <div class="tasks-grid">
         <v-card outlined class="task-column">
           <v-card-title class="pb-2">
@@ -243,38 +245,39 @@
 
     <!-- Categorized Notes Section (existing) -->
     <div class="notes-section ma-3">
-      <h2 class="mb-3">Notes by Category</h2>
-      <v-card
-        v-for="category of sortedCategorizedEntries.entries()"
-        v-bind:key="category[0]"
-        class="mb-3"
-        outlined
-      >
-        <v-card-title>{{ category[0] }}</v-card-title>
-        <v-card-text>
-          <div class="text-center mb-3">
-            <v-btn
-              text
-              x-small
-              v-on:click="changeSortOrder(category[0], 'title')"
-            ><v-icon x-small v-if="sortOrders.get(category[0])[0] === 'title'">{{ sortOrders.get(category[0])[1] ? mdiSortDescending : mdiSortAscending }}</v-icon>sort by title</v-btn>
-            <v-btn
-              text
-              x-small
-              v-on:click="changeSortOrder(category[0], 'time')"
-            ><v-icon x-small v-if="sortOrders.get(category[0])[0] === 'time'">{{ sortOrders.get(category[0])[1] ? mdiSortDescending : mdiSortAscending }}</v-icon>sort by time</v-btn>
-          </div>
-          <ul>
-            <li
-              v-for="entry of category[1]"
-              v-bind:key="entry.path"
-            >
-              <router-link v-bind:to="{ name: 'Note', params: { path: entry.path } }">{{ entry.title || entry.path }}</router-link>
-              <span class="age ml-1">({{ formatDistanceToNow(parseISO(entry.time)) }})</span>
-            </li>
-          </ul>
-        </v-card-text>
-      </v-card>
+      <h2 class="mb-3 text-center">Notes by Category</h2>
+      <div class="notes-grid">
+        <v-card
+          v-for="category of sortedCategorizedEntries.entries()"
+          v-bind:key="category[0]"
+          outlined
+        >
+          <v-card-title>{{ category[0] }}</v-card-title>
+          <v-card-text>
+            <div class="text-center mb-3">
+              <v-btn
+                text
+                x-small
+                v-on:click="changeSortOrder(category[0], 'title')"
+              ><v-icon x-small v-if="sortOrders.get(category[0])[0] === 'title'">{{ sortOrders.get(category[0])[1] ? mdiSortDescending : mdiSortAscending }}</v-icon>sort by title</v-btn>
+              <v-btn
+                text
+                x-small
+                v-on:click="changeSortOrder(category[0], 'time')"
+              ><v-icon x-small v-if="sortOrders.get(category[0])[0] === 'time'">{{ sortOrders.get(category[0])[1] ? mdiSortDescending : mdiSortAscending }}</v-icon>sort by time</v-btn>
+            </div>
+            <ul>
+              <li
+                v-for="entry of category[1]"
+                v-bind:key="entry.path"
+              >
+                <router-link v-bind:to="{ name: 'Note', params: { path: entry.path } }">{{ entry.title || entry.path }}</router-link>
+                <span class="age ml-1">({{ formatDistanceToNow(parseISO(entry.time)) }})</span>
+              </li>
+            </ul>
+          </v-card-text>
+        </v-card>
+      </div>
     </div>
 
     <v-overlay v-bind:value="isLoading" z-index="10" opacity="0">
@@ -792,6 +795,15 @@ function changeSortOrder(category: string, kind: string) {
 .tasks-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.notes-grid {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 16px;
   margin-bottom: 24px;
 }
