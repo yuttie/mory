@@ -11,11 +11,13 @@
           </v-card-title>
           <v-card-text>
             <v-textarea
+              ref="noteTextarea"
               v-model="quickNoteContent"
               placeholder="Enter note content... First line will be used as title."
               rows="3"
               outlined
               dense
+              v-on:keydown="handleNoteKeydown"
             ></v-textarea>
             <v-btn
               color="primary"
@@ -35,18 +37,22 @@
           </v-card-title>
           <v-card-text>
             <v-text-field
+              ref="taskNameField"
               v-model="quickTaskName"
               placeholder="Enter task name..."
               outlined
               dense
               class="mb-2"
+              v-on:keydown="handleTaskKeydown"
             ></v-text-field>
-            <v-checkbox
-              v-model="quickTaskScheduleToday"
-              label="Schedule for today"
+            <v-select
+              v-model="quickTaskScheduledDay"
+              v-bind:items="scheduledDayOptions"
+              label="Schedule"
+              outlined
               dense
-              class="mt-0 mb-2"
-            ></v-checkbox>
+              class="mb-2"
+            ></v-select>
             <div class="d-flex gap-2 mb-3">
               <v-menu
                 v-model="dueDateMenu"
@@ -368,11 +374,22 @@ const sortOrders: Ref<Map<string, [string, boolean]>> = ref(new Map());
 // Quick create states
 const quickNoteContent = ref('');
 const quickTaskName = ref('');
-const quickTaskScheduleToday = ref(false);
+const quickTaskScheduledDay = ref('none');
 const quickTaskDueBy = ref('');
 const quickTaskDeadline = ref('');
 const dueDateMenu = ref(false);
 const deadlineMenu = ref(false);
+
+// Refs for focusing
+const noteTextarea = ref(null);
+const taskNameField = ref(null);
+
+// Scheduled day options
+const scheduledDayOptions = [
+  { text: 'None', value: 'none' },
+  { text: 'Today', value: 'today' },
+  { text: 'Tomorrow', value: 'tomorrow' }
+];
 
 // Success/error messaging
 const successMessage = ref(false);
@@ -606,6 +623,24 @@ onMounted(() => {
 });
 
 // Methods
+function handleNoteKeydown(event: KeyboardEvent) {
+  if (event.ctrlKey && event.key === 'Enter') {
+    event.preventDefault();
+    if (quickNoteContent.value.trim()) {
+      createQuickNote();
+    }
+  }
+}
+
+function handleTaskKeydown(event: KeyboardEvent) {
+  if (event.ctrlKey && event.key === 'Enter') {
+    event.preventDefault();
+    if (quickTaskName.value.trim()) {
+      createQuickTask();
+    }
+  }
+}
+
 function load() {
   isLoading.value = true;
   api.listNotes()
@@ -661,6 +696,11 @@ async function createQuickNote() {
     successMessage.value = true;
     quickNoteContent.value = '';
     
+    // Focus the textarea for creating another note
+    if (noteTextarea.value) {
+      noteTextarea.value.focus();
+    }
+    
     // Reload notes to show the new one if it has home tags
     load();
   } catch (_err) {
@@ -674,6 +714,14 @@ async function createQuickTask() {
     const taskUuid = crypto.randomUUID();
     const taskPath = `.tasks/${taskUuid}.md`;
     
+    // Determine scheduled dates based on selection
+    let scheduledDates: string[] = [];
+    if (quickTaskScheduledDay.value === 'today') {
+      scheduledDates = [today];
+    } else if (quickTaskScheduledDay.value === 'tomorrow') {
+      scheduledDates = [tomorrow];
+    }
+    
     const newTask: Task = {
       uuid: taskUuid,
       title: quickTaskName.value.trim(),
@@ -684,7 +732,7 @@ async function createQuickTask() {
       urgency: 3,
       due_by: quickTaskDueBy.value || undefined,
       deadline: quickTaskDeadline.value || undefined,
-      scheduled_dates: quickTaskScheduleToday.value ? [today] : [],
+      scheduled_dates: scheduledDates,
       note: '',
     };
 
@@ -696,7 +744,12 @@ async function createQuickTask() {
     quickTaskName.value = '';
     quickTaskDueBy.value = '';
     quickTaskDeadline.value = '';
-    quickTaskScheduleToday.value = false;
+    quickTaskScheduledDay.value = 'none';
+    
+    // Focus the task name field for creating another task
+    if (taskNameField.value) {
+      taskNameField.value.focus();
+    }
     
     // Refresh the task store to show the new task
     await taskStore.refresh();
