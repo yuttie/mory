@@ -45,65 +45,32 @@
               class="mb-2"
               v-on:keydown="handleTaskKeydown"
             ></v-text-field>
-            <v-select
+            <v-radio-group
               v-model="quickTaskScheduledDay"
-              v-bind:items="scheduledDayOptions"
-              label="Schedule"
-              outlined
-              dense
               class="mb-2"
-            ></v-select>
+              dense
+            >
+              <template v-slot:label>
+                <div>Schedule</div>
+              </template>
+              <v-radio
+                v-for="option in scheduledDayOptions"
+                v-bind:key="option.value"
+                v-bind:label="option.text"
+                v-bind:value="option.value"
+              ></v-radio>
+            </v-radio-group>
             <div class="d-flex gap-2 mb-3">
-              <v-menu
-                v-model="dueDateMenu"
-                v-bind:close-on-content-click="false"
-                v-bind:nudge-right="40"
-                transition="scale-transition"
-                offset-y
-                min-width="auto"
-              >
-                <template v-slot:activator="{ on, attrs }">
-                  <v-text-field
-                    v-model="quickTaskDueBy"
-                    label="Due by (optional)"
-                    prepend-icon
-                    readonly
-                    outlined
-                    dense
-                    v-bind="attrs"
-                    v-on="on"
-                  ></v-text-field>
-                </template>
-                <v-date-picker
-                  v-model="quickTaskDueBy"
-                  v-on:input="dueDateMenu = false"
-                ></v-date-picker>
-              </v-menu>
-              <v-menu
-                v-model="deadlineMenu"
-                v-bind:close-on-content-click="false"
-                v-bind:nudge-right="40"
-                transition="scale-transition"
-                offset-y
-                min-width="auto"
-              >
-                <template v-slot:activator="{ on, attrs }">
-                  <v-text-field
-                    v-model="quickTaskDeadline"
-                    label="Deadline (optional)"
-                    prepend-icon
-                    readonly
-                    outlined
-                    dense
-                    v-bind="attrs"
-                    v-on="on"
-                  ></v-text-field>
-                </template>
-                <v-date-picker
-                  v-model="quickTaskDeadline"
-                  v-on:input="deadlineMenu = false"
-                ></v-date-picker>
-              </v-menu>
+              <DateSelector
+                v-model="quickTaskDueBy"
+                label="Due by (optional)"
+                clearable
+              />
+              <DateSelector
+                v-model="quickTaskDeadline"
+                label="Deadline (optional)"
+                clearable
+              />
             </div>
             <v-btn
               color="primary"
@@ -377,8 +344,6 @@ const quickTaskName = ref('');
 const quickTaskScheduledDay = ref('none');
 const quickTaskDueBy = ref('');
 const quickTaskDeadline = ref('');
-const dueDateMenu = ref(false);
-const deadlineMenu = ref(false);
 
 // Refs for focusing
 const noteTextarea = ref(null);
