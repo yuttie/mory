@@ -151,7 +151,7 @@ const props = withDefaults(
     {
         value: undefined,
         label: undefined,
-        rules: [],
+        rules: () => [],
         required: false,
         clearable: true,
         hideDetails: false,
@@ -266,20 +266,30 @@ const timezoneValue = computed<string | null>({
 });
 
 // Display value for the text field
-const displayValue = computed(() => {
-    if (!props.value) return '';
-    
-    if (timeEnabled.value) {
-        const { date, time } = parseDateTime(props.value);
-        if (date && time) {
-            const currentTz = timezoneValue.value || getLocalTimezone();
-            return `${date} ${time}${currentTz}`;
-        } else if (date) {
-            return date;
+const displayValue = computed({
+    get: () => {
+        if (!props.value) return '';
+        
+        if (timeEnabled.value) {
+            const { date, time } = parseDateTime(props.value);
+            if (date && time) {
+                const currentTz = timezoneValue.value || getLocalTimezone();
+                return `${date} ${time}${currentTz}`;
+            } else if (date) {
+                return date;
+            }
         }
-    }
-    
-    return props.value;
+        
+        return props.value;
+    },
+    set: (value: string) => {
+        // Handle clearing the value when the clear button is clicked
+        if (!value || value.trim() === '') {
+            emit('input', null);
+        }
+        // Note: We don't handle direct text input since the field is readonly
+        // The user can only interact through the date/time pickers or clear button
+    },
 });
 
 // Update the combined value
