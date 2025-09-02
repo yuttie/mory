@@ -509,21 +509,21 @@ const todayEvents = computed(() => {
     return events.value.filter(event => {
         const eventDate = dayjs(event.start).format('YYYY-MM-DD');
         return eventDate === today;
-    });
+    }).sort((a, b) => a.start.localeCompare(b.start));
 });
 
 const tomorrowEvents = computed(() => {
     return events.value.filter(event => {
         const eventDate = dayjs(event.start).format('YYYY-MM-DD');
         return eventDate === tomorrow;
-    });
+    }).sort((a, b) => a.start.localeCompare(b.start));
 });
 
 const dayAfterTomorrowEvents = computed(() => {
     return events.value.filter(event => {
         const eventDate = dayjs(event.start).format('YYYY-MM-DD');
         return eventDate === dayAfterTomorrow;
-    });
+    }).sort((a, b) => a.start.localeCompare(b.start));
 });
 
 const todayTasks = computed(() => {
