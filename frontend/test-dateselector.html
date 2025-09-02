@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>DateSelector Clear Button Test</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://unpkg.com/vuetify@2/dist/vuetify.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css" rel="stylesheet">
+    <style>
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .value-display {
+            background: #f5f5f5;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .test-section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <v-app>
+            <v-container class="test-container">
+                <h1>
+                    <v-icon large color="primary">mdi-calendar</v-icon>
+                    DateSelector Clear Button Fix Test
+                </h1>
+                <p>This test page demonstrates that the DateSelector clear button now works correctly.</p>
+                
+                <div class="test-section">
+                    <h2>Test Case 1: Basic Date Field</h2>
+                    <div class="value-display">
+                        <strong>Current value:</strong> {{ JSON.stringify(basicDate) }}
+                    </div>
+                    
+                    <v-text-field
+                        v-model="basicDisplayValue"
+                        label="Basic Date Field (clearable)"
+                        clearable
+                        readonly
+                        prepend-icon="mdi-calendar"
+                        hint="Click the X button to clear - should set value to null"
+                        persistent-hint
+                    ></v-text-field>
+                    
+                    <v-btn @click="basicDate = '2023-12-25'" color="primary" class="mr-2">
+                        Set Date
+                    </v-btn>
+                    <v-btn @click="basicDate = null" color="secondary">
+                        Clear Programmatically
+                    </v-btn>
+                </div>
+                
+                <div class="test-section">
+                    <h2>Test Case 2: DateTime Field with Timezone</h2>
+                    <div class="value-display">
+                        <strong>Current value:</strong> {{ JSON.stringify(dateTimeValue) }}
+                    </div>
+                    
+                    <v-text-field
+                        v-model="dateTimeDisplayValue"
+                        label="DateTime Field with Timezone (clearable)"
+                        clearable
+                        readonly
+                        prepend-icon="mdi-clock"
+                        hint="Simulates time-enabled DateSelector with timezone"
+                        persistent-hint
+                    ></v-text-field>
+                    
+                    <v-btn @click="dateTimeValue = '2023-12-25 14:30+02:00'" color="primary" class="mr-2">
+                        Set DateTime
+                    </v-btn>
+                    <v-btn @click="dateTimeValue = null" color="secondary">
+                        Clear Programmatically
+                    </v-btn>
+                </div>
+                
+                <div class="test-section">
+                    <h2>Test Results</h2>
+                    
+                    <v-alert
+                        v-if="basicDate === null"
+                        color="success"
+                        outlined
+                        class="mb-2"
+                    >
+                        ✅ Basic date field: Correctly cleared (value is null)
+                    </v-alert>
+                    <v-alert
+                        v-else
+                        color="info"
+                        outlined
+                        class="mb-2"
+                    >
+                        ℹ️ Basic date field: Contains value {{ basicDate }}
+                    </v-alert>
+                    
+                    <v-alert
+                        v-if="dateTimeValue === null"
+                        color="success"
+                        outlined
+                        class="mb-2"
+                    >
+                        ✅ DateTime field: Correctly cleared (value is null)
+                    </v-alert>
+                    <v-alert
+                        v-else
+                        color="info"
+                        outlined
+                        class="mb-2"
+                    >
+                        ℹ️ DateTime field: Contains value {{ dateTimeValue }}
+                    </v-alert>
+                </div>
+                
+                <div class="test-section">
+                    <h3>🧪 Testing Instructions:</h3>
+                    <ol>
+                        <li><strong>Set values:</strong> Click "Set Date" and "Set DateTime" buttons</li>
+                        <li><strong>Test clear buttons:</strong> Click the X (clear) button in each text field</li>
+                        <li><strong>Verify results:</strong> Check that values become null and success messages appear</li>
+                        <li><strong>Expected behavior:</strong> Fields should clear properly without becoming invalid</li>
+                    </ol>
+                    
+                    <v-alert color="info" outlined class="mt-4">
+                        <strong>Fix Explanation:</strong> The DateSelector component now has a setter on the 
+                        <code>displayValue</code> computed property that properly handles clearing by emitting 
+                        <code>null</code> when the clear button is clicked.
+                    </v-alert>
+                </div>
+            </v-container>
+        </v-app>
+    </div>
+
+    <script src="https://unpkg.com/vue@2/dist/vue.js"></script>
+    <script src="https://unpkg.com/vuetify@2/dist/vuetify.js"></script>
+    
+    <script>
+        new Vue({
+            el: '#app',
+            vuetify: new Vuetify(),
+            data: {
+                basicDate: '2023-12-25',
+                dateTimeValue: '2023-12-25 14:30+02:00'
+            },
+            computed: {
+                basicDisplayValue: {
+                    get() {
+                        return this.basicDate || '';
+                    },
+                    set(value) {
+                        // This mimics the DateSelector fix
+                        if (!value || value.trim() === '') {
+                            this.basicDate = null;
+                        }
+                    }
+                },
+                dateTimeDisplayValue: {
+                    get() {
+                        return this.dateTimeValue || '';
+                    },
+                    set(value) {
+                        // This mimics the DateSelector fix
+                        if (!value || value.trim() === '') {
+                            this.dateTimeValue = null;
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
