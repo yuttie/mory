@@ -41,15 +41,40 @@
               dense
               class="mb-2"
             ></v-text-field>
+            <v-checkbox
+              v-model="quickTaskScheduleToday"
+              label="Schedule for today"
+              dense
+              class="mt-0 mb-2"
+            ></v-checkbox>
             <div class="d-flex gap-2 mb-3">
-              <v-checkbox
-                v-model="quickTaskScheduleToday"
-                label="Schedule for today"
-                dense
-                class="mt-0"
-              ></v-checkbox>
               <v-menu
                 v-model="dueDateMenu"
+                v-bind:close-on-content-click="false"
+                v-bind:nudge-right="40"
+                transition="scale-transition"
+                offset-y
+                min-width="auto"
+              >
+                <template v-slot:activator="{ on, attrs }">
+                  <v-text-field
+                    v-model="quickTaskDueBy"
+                    label="Due by (optional)"
+                    prepend-icon
+                    readonly
+                    outlined
+                    dense
+                    v-bind="attrs"
+                    v-on="on"
+                  ></v-text-field>
+                </template>
+                <v-date-picker
+                  v-model="quickTaskDueBy"
+                  v-on:input="dueDateMenu = false"
+                ></v-date-picker>
+              </v-menu>
+              <v-menu
+                v-model="deadlineMenu"
                 v-bind:close-on-content-click="false"
                 v-bind:nudge-right="40"
                 transition="scale-transition"
@@ -70,7 +95,7 @@
                 </template>
                 <v-date-picker
                   v-model="quickTaskDeadline"
-                  v-on:input="dueDateMenu = false"
+                  v-on:input="deadlineMenu = false"
                 ></v-date-picker>
               </v-menu>
             </div>
@@ -197,6 +222,9 @@
                     <div class="task-name" v-bind:class="{ 'text-decoration-line-through': task.metadata?.task?.status?.kind === 'done' }">
                       {{ task.title }}
                     </div>
+                    <div v-if="task.metadata?.task?.due_by" class="task-due-by text--secondary caption">
+                      Due by: {{ task.metadata?.task?.due_by }}
+                    </div>
                     <div v-if="task.metadata?.task?.deadline" class="task-deadline text--secondary caption">
                       Deadline: {{ task.metadata?.task?.deadline }}
                     </div>
@@ -234,8 +262,11 @@
                     <div class="task-name" v-bind:class="{ 'text-decoration-line-through': task.metadata?.task?.status?.kind === 'done' }">
                       {{ task.title }}
                     </div>
-                    <div class="task-deadline caption" v-bind:class="getDeadlineClass(task.metadata?.task?.deadline)">
-                      Due: {{ task.metadata?.task?.deadline }}
+                    <div v-if="task.metadata?.task?.due_by" class="task-due-by caption" v-bind:class="getDeadlineClass(task.metadata?.task?.due_by)">
+                      Due by: {{ task.metadata?.task?.due_by }}
+                    </div>
+                    <div v-if="task.metadata?.task?.deadline" class="task-deadline caption" v-bind:class="getDeadlineClass(task.metadata?.task?.deadline)">
+                      Deadline: {{ task.metadata?.task?.deadline }}
                     </div>
                   </div>
                 </div>
@@ -338,8 +369,10 @@ const sortOrders: Ref<Map<string, [string, boolean]>> = ref(new Map());
 const quickNoteContent = ref('');
 const quickTaskName = ref('');
 const quickTaskScheduleToday = ref(false);
+const quickTaskDueBy = ref('');
 const quickTaskDeadline = ref('');
 const dueDateMenu = ref(false);
+const deadlineMenu = ref(false);
 
 // Success/error messaging
 const successMessage = ref(false);
@@ -616,7 +649,14 @@ async function createQuickNote() {
     const title = lines[0] || 'Quick Note';
     const filename = crypto.randomUUID() + '.md';
     
-    await api.addNote(filename, content);
+    // Add metadata with quick-create tag
+    const metadata = {
+      tags: ['quick-create']
+    };
+    const yamlHeader = '---\n' + Object.entries(metadata).map(([key, value]) => `${key}: ${JSON.stringify(value)}`).join('\n') + '\n---\n\n';
+    const noteContent = yamlHeader + content;
+    
+    await api.addNote(filename, noteContent);
     successText.value = `Note "${title}" created successfully!`;
     successMessage.value = true;
     quickNoteContent.value = '';
@@ -637,11 +677,12 @@ async function createQuickTask() {
     const newTask: Task = {
       uuid: taskUuid,
       title: quickTaskName.value.trim(),
-      tags: [],
+      tags: ['quick-create'],
       status: { kind: 'todo' },
       progress: 0,
       importance: 3,
       urgency: 3,
+      due_by: quickTaskDueBy.value || undefined,
       deadline: quickTaskDeadline.value || undefined,
       scheduled_dates: quickTaskScheduleToday.value ? [today] : [],
       note: '',
@@ -653,6 +694,7 @@ async function createQuickTask() {
     successText.value = `Task "${newTask.title}" created successfully!`;
     successMessage.value = true;
     quickTaskName.value = '';
+    quickTaskDueBy.value = '';
     quickTaskDeadline.value = '';
     quickTaskScheduleToday.value = false;
     
