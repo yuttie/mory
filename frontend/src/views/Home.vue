@@ -177,23 +177,23 @@
             <div v-else>
               <div
                 v-for="task in todayTasks"
-                v-bind:key="task.id"
+                v-bind:key="task.uuid"
                 class="task-item mb-2 pa-2"
-                v-bind:class="{ 'task-done': task.done }"
+                v-bind:class="{ 'task-done': task.metadata?.task?.status?.kind === 'done' }"
               >
                 <div class="d-flex align-center">
                   <v-checkbox
-                    v-model="task.done"
-                    v-on:change="updateTask(task)"
+                    v-bind:input-value="task.metadata?.task?.status?.kind === 'done'"
+                    v-on:change="(value) => updateTaskStatus(task, value)"
                     dense
                     class="mt-0 mr-2"
                   ></v-checkbox>
                   <div class="task-content flex-grow-1">
-                    <div class="task-name" v-bind:class="{ 'text-decoration-line-through': task.done }">
-                      {{ task.name }}
+                    <div class="task-name" v-bind:class="{ 'text-decoration-line-through': task.metadata?.task?.status?.kind === 'done' }">
+                      {{ task.title }}
                     </div>
-                    <div v-if="task.deadline" class="task-deadline text--secondary caption">
-                      Deadline: {{ task.deadline }}
+                    <div v-if="task.metadata?.task?.deadline" class="task-deadline text--secondary caption">
+                      Deadline: {{ task.metadata?.task?.deadline }}
                     </div>
                   </div>
                 </div>
@@ -214,23 +214,23 @@
             <div v-else>
               <div
                 v-for="task in upcomingTasks"
-                v-bind:key="task.id"
+                v-bind:key="task.uuid"
                 class="task-item mb-2 pa-2"
-                v-bind:class="{ 'task-done': task.done }"
+                v-bind:class="{ 'task-done': task.metadata?.task?.status?.kind === 'done' }"
               >
                 <div class="d-flex align-center">
                   <v-checkbox
-                    v-model="task.done"
-                    v-on:change="updateTask(task)"
+                    v-bind:input-value="task.metadata?.task?.status?.kind === 'done'"
+                    v-on:change="(value) => updateTaskStatus(task, value)"
                     dense
                     class="mt-0 mr-2"
                   ></v-checkbox>
                   <div class="task-content flex-grow-1">
-                    <div class="task-name" v-bind:class="{ 'text-decoration-line-through': task.done }">
-                      {{ task.name }}
+                    <div class="task-name" v-bind:class="{ 'text-decoration-line-through': task.metadata?.task?.status?.kind === 'done' }">
+                      {{ task.title }}
                     </div>
-                    <div class="task-deadline caption" v-bind:class="getDeadlineClass(task.deadline)">
-                      Due: {{ task.deadline }}
+                    <div class="task-deadline caption" v-bind:class="getDeadlineClass(task.metadata?.task?.deadline)">
+                      Due: {{ task.metadata?.task?.deadline }}
                     </div>
                   </div>
                 </div>
@@ -302,11 +302,13 @@ import {
 } from '@mdi/js';
 
 import * as api from '@/api';
-import type { ListEntry2, Task, TaskData } from '@/api';
+import type { ListEntry2 } from '@/api';
 import { isMetadataEventMultiple, validateEvent } from '@/api';
 import { by } from '@/utils';
 import dayjs from 'dayjs';
-import YAML from 'yaml';
+import { useTaggedTaskForestStore, type TreeNodeRecord } from '@/stores/taggedTaskForest';
+import type { Task } from '@/task';
+import { render } from '@/task';
 
 import { formatDistanceToNow, parseISO } from 'date-fns';
 
@@ -314,6 +316,9 @@ import { formatDistanceToNow, parseISO } from 'date-fns';
 const emit = defineEmits<{
   (e: 'tokenExpired', callback: () => void): void;
 }>();
+
+// Stores
+const taskStore = useTaggedTaskForestStore();
 
 // Reactive states
 const entries: Ref<ListEntry2[]> = ref([]);
@@ -333,10 +338,6 @@ const dueDateMenu = ref(false);
 // Success/error messaging
 const successMessage = ref(false);
 const successText = ref('');
-
-// Tasks data
-const taskData: Ref<TaskData | null> = ref(null);
-const taskETag: Ref<string | null> = ref(null);
 
 // Computed properties
 const sortedCategorizedEntries = computed(() => {
@@ -526,34 +527,35 @@ const dayAfterTomorrowEvents = computed(() => {
 });
 
 const todayTasks = computed(() => {
-    if (!taskData.value) return [];
-    return taskData.value.tasks.scheduled[today] || [];
+    if (!taskStore.allTasks || taskStore.allTasks.length === 0) return [];
+    
+    return taskStore.allTasks.filter(task => {
+        const scheduledDates = task.metadata?.task?.scheduled_dates;
+        return Array.isArray(scheduledDates) && scheduledDates.includes(today);
+    });
 });
 
 const upcomingTasks = computed(() => {
-    if (!taskData.value) return [];
+    if (!taskStore.allTasks || taskStore.allTasks.length === 0) return [];
     
-    const tasks: Task[] = [];
+    const tasks: TreeNodeRecord[] = [];
     const now = dayjs();
     
-    // Collect tasks with deadlines from backlog
-    for (const task of taskData.value.tasks.backlog) {
-        if (task.deadline && dayjs(task.deadline).isAfter(now)) {
+    // Collect tasks with deadlines that are after now
+    for (const task of taskStore.allTasks) {
+        const deadline = task.metadata?.task?.deadline;
+        if (deadline && dayjs(deadline).isAfter(now)) {
             tasks.push(task);
         }
     }
     
-    // Collect tasks with deadlines from scheduled dates
-    for (const [_date, dayTasks] of Object.entries(taskData.value.tasks.scheduled)) {
-        for (const task of dayTasks) {
-            if (task.deadline && dayjs(task.deadline).isAfter(now)) {
-                tasks.push(task);
-            }
-        }
-    }
-    
     // Sort by deadline
-    return tasks.sort((a, b) => dayjs(a.deadline!).diff(dayjs(b.deadline!)));
+    return tasks.sort((a, b) => {
+        const deadlineA = a.metadata?.task?.deadline;
+        const deadlineB = b.metadata?.task?.deadline;
+        if (!deadlineA || !deadlineB) return 0;
+        return dayjs(deadlineA).diff(dayjs(deadlineB));
+    });
 });
 
 // Lifecycle hooks
@@ -595,11 +597,7 @@ function load() {
 
 async function loadTasks() {
   try {
-    const [eTag, data] = await api.getTaskData(taskETag.value);
-    if (data !== null) {
-      taskETag.value = eTag;
-      taskData.value = data;
-    }
+    await taskStore.refresh();
   } catch (_err) {
     console.error('Failed to load tasks:', _err);
   }
@@ -627,42 +625,59 @@ async function createQuickNote() {
 
 async function createQuickTask() {
   try {
+    const taskUuid = crypto.randomUUID();
+    const taskPath = `.tasks/${taskUuid}.md`;
+    
     const newTask: Task = {
-      id: crypto.randomUUID(),
-      name: quickTaskName.value.trim(),
-      deadline: quickTaskDeadline.value || null,
-      schedule: quickTaskScheduleToday.value ? today : null,
-      done: false,
+      uuid: taskUuid,
+      title: quickTaskName.value.trim(),
       tags: [],
+      status: { kind: 'todo' },
+      progress: 0,
+      importance: 3,
+      urgency: 3,
+      deadline: quickTaskDeadline.value || undefined,
+      scheduled_dates: quickTaskScheduleToday.value ? [today] : [],
       note: '',
     };
 
-    // Add to appropriate location
-    if (newTask.schedule) {
-      if (!taskData.value.tasks.scheduled[newTask.schedule]) {
-        taskData.value.tasks.scheduled[newTask.schedule] = [];
-      }
-      taskData.value.tasks.scheduled[newTask.schedule].push(newTask);
-    } else {
-      taskData.value.tasks.backlog.push(newTask);
-    }
-
-    await saveTaskData();
+    const markdown = render(newTask);
+    await api.addNote(taskPath, markdown);
     
-    successText.value = `Task "${newTask.name}" created successfully!`;
+    successText.value = `Task "${newTask.title}" created successfully!`;
     successMessage.value = true;
     quickTaskName.value = '';
     quickTaskDeadline.value = '';
     quickTaskScheduleToday.value = false;
+    
+    // Refresh the task store to show the new task
+    await taskStore.refresh();
   } catch (_err) {
     errorText.value = 'Failed to create task';
     error.value = true;
   }
 }
 
-async function updateTask(_task: Task) {
+async function updateTask(task: TreeNodeRecord) {
   try {
-    await saveTaskData();
+    // Extract task data from metadata
+    const taskData: Task = {
+      uuid: task.uuid,
+      title: task.title || '',
+      tags: task.metadata?.tags || [],
+      status: task.metadata?.task?.status || { kind: 'todo' },
+      progress: task.metadata?.task?.progress || 0,
+      importance: task.metadata?.task?.importance || 3,
+      urgency: task.metadata?.task?.urgency || 3,
+      deadline: task.metadata?.task?.deadline,
+      scheduled_dates: task.metadata?.task?.scheduled_dates || [],
+      note: '', // We don't have the note content in TreeNodeRecord
+    };
+    
+    const markdown = render(taskData);
+    await api.addNote(task.path, markdown);
+    await taskStore.refresh();
+    
     successText.value = 'Task updated!';
     successMessage.value = true;
   } catch (_err) {
@@ -671,17 +686,7 @@ async function updateTask(_task: Task) {
   }
 }
 
-async function saveTaskData() {
-  if (!taskData.value) return;
-  
-  const yaml = YAML.stringify({
-    tasks: taskData.value.tasks,
-    groups: taskData.value.groups || []
-  });
-  await api.addNote('.mory/tasks.yaml', yaml);
-}
-
-function formatEventTime(event: any) {
+function formatEventTime(event: { start: string; end?: string }) {
   const start = dayjs(event.start);
   if (event.end) {
     const end = dayjs(event.end);
@@ -695,7 +700,31 @@ function formatEventTime(event: any) {
   }
 }
 
-function getDeadlineClass(deadline: string) {
+async function updateTaskStatus(task: TreeNodeRecord, isDone: boolean) {
+  try {
+    // Update the task's status
+    const updatedTask = { ...task };
+    if (!updatedTask.metadata) {
+      updatedTask.metadata = {};
+    }
+    if (!updatedTask.metadata.task) {
+      updatedTask.metadata.task = {};
+    }
+    
+    updatedTask.metadata.task.status = isDone 
+      ? { kind: 'done', completed_at: new Date().toISOString() }
+      : { kind: 'todo' };
+    
+    await updateTask(updatedTask);
+  } catch (_err) {
+    errorText.value = 'Failed to update task status';
+    error.value = true;
+  }
+}
+
+function getDeadlineClass(deadline: string | undefined) {
+  if (!deadline) return 'text--secondary';
+  
   const deadlineDate = dayjs(deadline);
   const now = dayjs();
   const diffDays = deadlineDate.diff(now, 'days');
