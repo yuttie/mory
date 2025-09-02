@@ -3,86 +3,89 @@
     <!-- Quick Note/Task Creation Section -->
     <div class="quick-create-section ma-3">
       <h2 class="mb-3 text-center">Quick Create</h2>
-      <v-card outlined>
-        <v-card-text>
-          <v-tabs v-model="quickCreateTab" class="mb-3">
-            <v-tab>Note</v-tab>
-            <v-tab>Task</v-tab>
-          </v-tabs>
-          <v-tabs-items v-model="quickCreateTab">
-            <v-tab-item>
-              <v-textarea
-                v-model="quickNoteContent"
-                placeholder="Enter note content... First line will be used as title."
-                rows="3"
-                outlined
+      <div class="quick-create-grid">
+        <v-card outlined>
+          <v-card-title class="pb-2">
+            <v-icon left>{{ mdiNotePlusOutline }}</v-icon>
+            Note
+          </v-card-title>
+          <v-card-text>
+            <v-textarea
+              v-model="quickNoteContent"
+              placeholder="Enter note content... First line will be used as title."
+              rows="3"
+              outlined
+              dense
+            ></v-textarea>
+            <v-btn
+              color="primary"
+              v-bind:disabled="!quickNoteContent.trim()"
+              v-on:click="createQuickNote"
+              class="mr-2"
+            >
+              <v-icon left>{{ mdiFileDocumentPlusOutline }}</v-icon>
+              Create Note
+            </v-btn>
+          </v-card-text>
+        </v-card>
+        <v-card outlined>
+          <v-card-title class="pb-2">
+            <v-icon left>{{ mdiCheckboxMarkedCirclePlusOutline }}</v-icon>
+            Task
+          </v-card-title>
+          <v-card-text>
+            <v-text-field
+              v-model="quickTaskName"
+              placeholder="Enter task name..."
+              outlined
+              dense
+              class="mb-2"
+            ></v-text-field>
+            <div class="d-flex gap-2 mb-3">
+              <v-checkbox
+                v-model="quickTaskScheduleToday"
+                label="Schedule for today"
                 dense
-              ></v-textarea>
-              <v-btn
-                color="primary"
-                v-bind:disabled="!quickNoteContent.trim()"
-                v-on:click="createQuickNote"
-                class="mr-2"
+                class="mt-0"
+              ></v-checkbox>
+              <v-menu
+                v-model="dueDateMenu"
+                v-bind:close-on-content-click="false"
+                v-bind:nudge-right="40"
+                transition="scale-transition"
+                offset-y
+                min-width="auto"
               >
-                <v-icon left>{{ mdiFileDocumentPlusOutline }}</v-icon>
-                Create Note
-              </v-btn>
-            </v-tab-item>
-            <v-tab-item>
-              <v-text-field
-                v-model="quickTaskName"
-                placeholder="Enter task name..."
-                outlined
-                dense
-                class="mb-2"
-              ></v-text-field>
-              <div class="d-flex gap-2 mb-3">
-                <v-checkbox
-                  v-model="quickTaskScheduleToday"
-                  label="Schedule for today"
-                  dense
-                  class="mt-0"
-                ></v-checkbox>
-                <v-menu
-                  ref="dueDateMenu"
-                  v-model="dueDateMenu"
-                  v-bind:close-on-content-click="false"
-                  v-bind:nudge-right="40"
-                  transition="scale-transition"
-                  offset-y
-                  min-width="auto"
-                >
-                  <template v-slot:activator="{ on, attrs }">
-                    <v-text-field
-                      v-model="quickTaskDeadline"
-                      label="Deadline (optional)"
-                      prepend-icon
-                      readonly
-                      outlined
-                      dense
-                      v-bind="attrs"
-                      v-on="on"
-                    ></v-text-field>
-                  </template>
-                  <v-date-picker
+                <template v-slot:activator="{ on, attrs }">
+                  <v-text-field
                     v-model="quickTaskDeadline"
-                    v-on:input="dueDateMenu = false"
-                  ></v-date-picker>
-                </v-menu>
-              </div>
-              <v-btn
-                color="primary"
-                v-bind:disabled="!quickTaskName.trim()"
-                v-on:click="createQuickTask"
-                class="mr-2"
-              >
-                <v-icon left>{{ mdiCheckboxMarkedCirclePlusOutline }}</v-icon>
-                Create Task
-              </v-btn>
-            </v-tab-item>
-          </v-tabs-items>
-        </v-card-text>
-      </v-card>
+                    label="Deadline (optional)"
+                    prepend-icon
+                    readonly
+                    outlined
+                    dense
+                    v-bind="attrs"
+                    v-on="on"
+                  ></v-text-field>
+                </template>
+                <v-date-picker
+                  v-model="quickTaskDeadline"
+                  v-on:input="dueDateMenu = false"
+                ></v-date-picker>
+              </v-menu>
+            </div>
+            <v-btn
+              color="primary"
+              v-bind:disabled="!quickTaskName.trim()"
+              v-on:click="createQuickTask"
+              class="mr-2"
+            >
+              <v-icon left>{{ mdiCheckboxMarkedCirclePlusOutline }}</v-icon>
+              Create Task
+            </v-btn>
+          </v-card-text>
+        </v-card>
+      </div>
     </div>
 
     <!-- Events Section -->
@@ -302,6 +305,7 @@ import {
     mdiCalendarPlus,
     mdiCheckboxMarkedCircleOutline,
     mdiClockOutline,
+    mdiNotePlusOutline,
 } from '@mdi/js';
 
 import * as api from '@/api';
@@ -331,7 +335,6 @@ const errorText = ref('');
 const sortOrders: Ref<Map<string, [string, boolean]>> = ref(new Map());
 
 // Quick create states
-const quickCreateTab = ref(0);
 const quickNoteContent = ref('');
 const quickTaskName = ref('');
 const quickTaskScheduleToday = ref(false);
@@ -780,9 +783,16 @@ function changeSortOrder(category: string, kind: string) {
   user-select: text;
 }
 
-.events-section, .tasks-section, .notes-section {
+.quick-create-section, .events-section, .tasks-section, .notes-section {
   max-width: 1200px;
   margin: 0 auto;
+}
+
+.quick-create-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
 }
 
 .events-grid {
