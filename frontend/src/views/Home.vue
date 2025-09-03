@@ -103,8 +103,9 @@
               <div
                 v-for="event in todayEvents"
                 v-bind:key="event.name + event.start"
-                class="event-item mb-2 pa-2"
+                class="event-item mb-2 pa-2 clickable-event"
                 v-bind:style="{ 'border-left': `4px solid ${event.color}` }"
+                v-on:click="navigateToEvent(event)"
               >
                 <div class="event-name font-weight-medium">{{ event.name }}</div>
                 <div class="event-time text--secondary caption">{{ formatEventTime(event) }}</div>
@@ -127,8 +128,9 @@
               <div
                 v-for="event in tomorrowEvents"
                 v-bind:key="event.name + event.start"
-                class="event-item mb-2 pa-2"
+                class="event-item mb-2 pa-2 clickable-event"
                 v-bind:style="{ 'border-left': `4px solid ${event.color}` }"
+                v-on:click="navigateToEvent(event)"
               >
                 <div class="event-name font-weight-medium">{{ event.name }}</div>
                 <div class="event-time text--secondary caption">{{ formatEventTime(event) }}</div>
@@ -151,8 +153,9 @@
               <div
                 v-for="event in dayAfterTomorrowEvents"
                 v-bind:key="event.name + event.start"
-                class="event-item mb-2 pa-2"
+                class="event-item mb-2 pa-2 clickable-event"
                 v-bind:style="{ 'border-left': `4px solid ${event.color}` }"
+                v-on:click="navigateToEvent(event)"
               >
                 <div class="event-name font-weight-medium">{{ event.name }}</div>
                 <div class="event-time text--secondary caption">{{ formatEventTime(event) }}</div>
@@ -181,26 +184,19 @@
               <div
                 v-for="task in todayTasks"
                 v-bind:key="task.uuid"
-                class="task-item mb-2 pa-2"
+                class="task-item mb-2 pa-2 clickable-task"
                 v-bind:class="{ 'task-done': task.metadata?.task?.status?.kind === 'done' }"
+                v-on:click="navigateToTask(task)"
               >
-                <div class="d-flex align-center">
-                  <v-checkbox
-                    v-bind:input-value="task.metadata?.task?.status?.kind === 'done'"
-                    v-on:change="(value) => updateTaskStatus(task, value)"
-                    dense
-                    class="mt-0 mr-2"
-                  ></v-checkbox>
-                  <div class="task-content flex-grow-1">
-                    <div class="task-name" v-bind:class="{ 'text-decoration-line-through': task.metadata?.task?.status?.kind === 'done' }">
-                      {{ task.title }}
-                    </div>
-                    <div v-if="task.metadata?.task?.due_by" class="task-due-by text--secondary caption">
-                      Due by: {{ task.metadata?.task?.due_by }}
-                    </div>
-                    <div v-if="task.metadata?.task?.deadline" class="task-deadline text--secondary caption">
-                      Deadline: {{ task.metadata?.task?.deadline }}
-                    </div>
+                <div class="task-content">
+                  <div class="task-name" v-bind:class="{ 'text-decoration-line-through': task.metadata?.task?.status?.kind === 'done' }">
+                    {{ task.title }}
+                  </div>
+                  <div v-if="task.metadata?.task?.due_by" class="task-due-by text--secondary caption">
+                    Due by: {{ task.metadata?.task?.due_by }}
+                  </div>
+                  <div v-if="task.metadata?.task?.deadline" class="task-deadline text--secondary caption">
+                    Deadline: {{ task.metadata?.task?.deadline }}
                   </div>
                 </div>
               </div>
@@ -221,26 +217,19 @@
               <div
                 v-for="task in upcomingTasks"
                 v-bind:key="task.uuid"
-                class="task-item mb-2 pa-2"
+                class="task-item mb-2 pa-2 clickable-task"
                 v-bind:class="{ 'task-done': task.metadata?.task?.status?.kind === 'done' }"
+                v-on:click="navigateToTask(task)"
               >
-                <div class="d-flex align-center">
-                  <v-checkbox
-                    v-bind:input-value="task.metadata?.task?.status?.kind === 'done'"
-                    v-on:change="(value) => updateTaskStatus(task, value)"
-                    dense
-                    class="mt-0 mr-2"
-                  ></v-checkbox>
-                  <div class="task-content flex-grow-1">
-                    <div class="task-name" v-bind:class="{ 'text-decoration-line-through': task.metadata?.task?.status?.kind === 'done' }">
-                      {{ task.title }}
-                    </div>
-                    <div v-if="task.metadata?.task?.due_by" class="task-due-by caption" v-bind:class="getDeadlineClass(task.metadata?.task?.due_by)">
-                      Due by: {{ task.metadata?.task?.due_by }}
-                    </div>
-                    <div v-if="task.metadata?.task?.deadline" class="task-deadline caption" v-bind:class="getDeadlineClass(task.metadata?.task?.deadline)">
-                      Deadline: {{ task.metadata?.task?.deadline }}
-                    </div>
+                <div class="task-content">
+                  <div class="task-name" v-bind:class="{ 'text-decoration-line-through': task.metadata?.task?.status?.kind === 'done' }">
+                    {{ task.title }}
+                  </div>
+                  <div v-if="task.metadata?.task?.due_by" class="task-due-by caption" v-bind:class="getDeadlineClass(task.metadata?.task?.due_by)">
+                    Due by: {{ task.metadata?.task?.due_by }}
+                  </div>
+                  <div v-if="task.metadata?.task?.deadline" class="task-deadline caption" v-bind:class="getDeadlineClass(task.metadata?.task?.deadline)">
+                    Deadline: {{ task.metadata?.task?.deadline }}
                   </div>
                 </div>
               </div>
@@ -298,6 +287,7 @@
 <script lang="ts" setup>
 import { ref, computed, onMounted } from 'vue';
 import type { Ref } from 'vue';
+import { useRouter } from 'vue-router/composables';
 
 import {
     mdiSortAscending,
@@ -330,6 +320,7 @@ const emit = defineEmits<{
 
 // Stores
 const taskStore = useTaggedTaskForestStore();
+const router = useRouter();
 
 // Reactive states
 const entries: Ref<ListEntry2[]> = ref([]);
@@ -722,32 +713,36 @@ async function createQuickTask() {
   }
 }
 
-async function updateTask(task: TreeNodeRecord) {
-  try {
-    // Extract task data from metadata
-    const taskData: Task = {
-      uuid: task.uuid,
-      title: task.title || '',
-      tags: task.metadata?.tags || [],
-      status: task.metadata?.task?.status || { kind: 'todo' },
-      progress: task.metadata?.task?.progress || 0,
-      importance: task.metadata?.task?.importance || 3,
-      urgency: task.metadata?.task?.urgency || 3,
-      deadline: task.metadata?.task?.deadline,
-      scheduled_dates: task.metadata?.task?.scheduled_dates || [],
-      note: '', // We don't have the note content in TreeNodeRecord
-    };
-    
-    const markdown = render(taskData);
-    await api.addNote(task.path, markdown);
-    await taskStore.refresh();
-    
-    successText.value = 'Task updated!';
-    successMessage.value = true;
-  } catch (_err) {
-    errorText.value = 'Failed to update task';
-    error.value = true;
-  }
+function navigateToTask(task: TreeNodeRecord) {
+  // Navigate to the TasksNext view with the selected task
+  router.push({
+    name: 'TasksNextWithParams',
+    params: {
+      selectedNodeId: task.uuid,
+      tab: 'selected',
+      viewMode: 'status'
+    }
+  }).catch(err => {
+    // Ignore navigation duplicated errors
+    if (err.name !== 'NavigationDuplicated') {
+      console.error('Router navigation error:', err);
+    }
+  });
+}
+
+function navigateToEvent(event: { notePath: string }) {
+  // Navigate to the Note view for the event's source note
+  router.push({
+    name: 'Note',
+    params: {
+      path: event.notePath
+    }
+  }).catch(err => {
+    // Ignore navigation duplicated errors
+    if (err.name !== 'NavigationDuplicated') {
+      console.error('Router navigation error:', err);
+    }
+  });
 }
 
 function formatEventTime(event: { start: string; end?: string }) {
@@ -761,28 +756,6 @@ function formatEventTime(event: { start: string; end?: string }) {
     }
   } else {
     return start.format('HH:mm');
-  }
-}
-
-async function updateTaskStatus(task: TreeNodeRecord, isDone: boolean) {
-  try {
-    // Update the task's status
-    const updatedTask = { ...task };
-    if (!updatedTask.metadata) {
-      updatedTask.metadata = {};
-    }
-    if (!updatedTask.metadata.task) {
-      updatedTask.metadata.task = {};
-    }
-    
-    updatedTask.metadata.task.status = isDone 
-      ? { kind: 'done', completed_at: new Date().toISOString() }
-      : { kind: 'in_progress' };
-    
-    await updateTask(updatedTask);
-  } catch (_err) {
-    errorText.value = 'Failed to update task status';
-    error.value = true;
   }
 }
 
@@ -890,6 +863,16 @@ function changeSortOrder(category: string, kind: string) {
   }
 }
 
+.clickable-event {
+  cursor: pointer;
+  
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.08);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+}
+
 .task-item {
   background-color: rgba(0, 0, 0, 0.02);
   border-radius: 4px;
@@ -897,6 +880,17 @@ function changeSortOrder(category: string, kind: string) {
   
   &.task-done {
     opacity: 0.6;
+  }
+}
+
+.clickable-task {
+  cursor: pointer;
+  transition: all 0.2s;
+  
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.08);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 }
 
