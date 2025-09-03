@@ -308,11 +308,8 @@ const localTimeHint = computed(() => {
     if (!date || !time || !timezoneValue.value) return '';
     
     try {
-        // Create a date string with timezone offset that dayjs can parse
-        const dateTimeWithTz = `${date} ${time}${timezoneValue.value}`;
-        
         // Parse the datetime - dayjs automatically converts timezone-aware strings to local time
-        const localDateTime = dayjs(dateTimeWithTz);
+        const localDateTime = dayjs(displayValue.value);
         if (!localDateTime.isValid()) return '';
         
         return `Local time: ${localDateTime.format('YYYY-MM-DD HH:mm')}`;
