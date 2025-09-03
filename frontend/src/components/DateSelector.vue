@@ -14,6 +14,8 @@
                 v-bind:required="required"
                 v-bind:clearable="clearable"
                 v-bind:hide-details="hideDetails"
+                v-bind:hint="localTimeHint"
+                v-bind:persistent-hint="!!localTimeHint"
                 readonly
                 v-on="on"
             >
@@ -91,6 +93,18 @@ const getLocalTimezone = (): string => {
     const offsetMins = Math.abs(offsetMinutes) % 60;
     const sign = offsetMinutes <= 0 ? '+' : '-';
     return `${sign}${offsetHours.toString().padStart(2, '0')}:${offsetMins.toString().padStart(2, '0')}`;
+};
+
+// Convert timezone string (e.g., "+05:00") to offset in minutes
+const getTimezoneOffsetMinutes = (timezone: string): number => {
+    const match = timezone.match(/^([+-])(\d{2}):(\d{2})$/);
+    if (!match) return 0;
+    
+    const sign = match[1] === '+' ? 1 : -1;
+    const hours = parseInt(match[2], 10);
+    const minutes = parseInt(match[3], 10);
+    
+    return sign * (hours * 60 + minutes);
 };
 
 // ISO8601-style timezone options
@@ -290,6 +304,38 @@ const displayValue = computed({
         // Note: We don't handle direct text input since the field is readonly
         // The user can only interact through the date/time pickers or clear button
     },
+});
+
+// Check if the current timezone is different from local timezone
+const isTimezoneLocal = computed(() => {
+    if (!timeEnabled.value || !timezoneValue.value) return true;
+    return timezoneValue.value === getLocalTimezone();
+});
+
+// Generate hint text showing local time when timezone differs
+const localTimeHint = computed(() => {
+    if (!props.value || !timeEnabled.value || isTimezoneLocal.value) return '';
+    
+    const { date, time } = parseDateTime(props.value);
+    if (!date || !time || !timezoneValue.value) return '';
+    
+    try {
+        // Parse the date and time without timezone
+        const baseDateTime = dayjs(`${date} ${time}`);
+        if (!baseDateTime.isValid()) return '';
+        
+        // Calculate timezone offset difference in minutes
+        const selectedOffset = getTimezoneOffsetMinutes(timezoneValue.value);
+        const localOffset = getTimezoneOffsetMinutes(getLocalTimezone());
+        const offsetDiffMinutes = localOffset - selectedOffset;
+        
+        // Convert to local time by adjusting for timezone difference
+        const localDateTime = baseDateTime.add(offsetDiffMinutes, 'minute');
+        
+        return `Local time: ${localDateTime.format('YYYY-MM-DD HH:mm')}`;
+    } catch {
+        return '';
+    }
 });
 
 // Update the combined value
