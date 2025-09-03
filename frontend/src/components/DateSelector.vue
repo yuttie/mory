@@ -14,6 +14,8 @@
                 v-bind:required="required"
                 v-bind:clearable="clearable"
                 v-bind:hide-details="hideDetails"
+                v-bind:hint="localTimeHint"
+                v-bind:persistent-hint="!!localTimeHint"
                 readonly
                 v-on="on"
             >
@@ -290,6 +292,30 @@ const displayValue = computed({
         // Note: We don't handle direct text input since the field is readonly
         // The user can only interact through the date/time pickers or clear button
     },
+});
+
+// Check if the current timezone is different from local timezone
+const isTimezoneLocal = computed(() => {
+    if (!timeEnabled.value || !timezoneValue.value) return true;
+    return timezoneValue.value === getLocalTimezone();
+});
+
+// Generate hint text showing local time when timezone differs
+const localTimeHint = computed(() => {
+    if (!props.value || !timeEnabled.value || isTimezoneLocal.value) return '';
+    
+    const { date, time } = parseDateTime(props.value);
+    if (!date || !time || !timezoneValue.value) return '';
+    
+    try {
+        // Parse the datetime - dayjs automatically converts timezone-aware strings to local time
+        const localDateTime = dayjs(displayValue.value);
+        if (!localDateTime.isValid()) return '';
+        
+        return `Local time: ${localDateTime.format('YYYY-MM-DD HH:mm')}`;
+    } catch {
+        return '';
+    }
 });
 
 // Update the combined value
