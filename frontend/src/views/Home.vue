@@ -777,7 +777,7 @@ async function updateTaskStatus(task: TreeNodeRecord, isDone: boolean) {
     
     updatedTask.metadata.task.status = isDone 
       ? { kind: 'done', completed_at: new Date().toISOString() }
-      : { kind: 'todo' };
+      : { kind: 'in_progress' };
     
     await updateTask(updatedTask);
   } catch (_err) {
