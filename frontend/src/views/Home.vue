@@ -104,7 +104,7 @@
                 v-for="event in todayEvents"
                 v-bind:key="event.name + event.start"
                 class="event-item mb-2 pa-2 clickable-event"
-                v-bind:style="{ 'border-left': `4px solid ${event.color}` }"
+                v-bind:style="{ 'border-left': `8px solid ${getEventColor(event)}` }"
                 v-on:click="navigateToEvent(event)"
               >
                 <div class="event-name font-weight-medium">{{ event.name }}</div>
@@ -129,7 +129,7 @@
                 v-for="event in tomorrowEvents"
                 v-bind:key="event.name + event.start"
                 class="event-item mb-2 pa-2 clickable-event"
-                v-bind:style="{ 'border-left': `4px solid ${event.color}` }"
+                v-bind:style="{ 'border-left': `8px solid ${getEventColor(event)}` }"
                 v-on:click="navigateToEvent(event)"
               >
                 <div class="event-name font-weight-medium">{{ event.name }}</div>
@@ -154,7 +154,7 @@
                 v-for="event in dayAfterTomorrowEvents"
                 v-bind:key="event.name + event.start"
                 class="event-item mb-2 pa-2 clickable-event"
-                v-bind:style="{ 'border-left': `4px solid ${event.color}` }"
+                v-bind:style="{ 'border-left': `8px solid ${getEventColor(event)}` }"
                 v-on:click="navigateToEvent(event)"
               >
                 <div class="event-name font-weight-medium">{{ event.name }}</div>
@@ -311,7 +311,34 @@ import { useTaggedTaskForestStore, type TreeNodeRecord } from '@/stores/taggedTa
 import type { Task } from '@/task';
 import { render } from '@/task';
 
+import Color from 'color';
 import { formatDistanceToNow, parseISO } from 'date-fns';
+import materialColors from 'vuetify/lib/util/colors';
+
+function getEventEndTime(event: any): dayjs.Dayjs {
+    if (typeof event.end !== 'undefined') {
+        return dayjs(event.end);
+    }
+    else {
+        return dayjs(event.start).endOf('day');
+    }
+}
+
+function getEventColor(event: any): string {
+    const toPropName = (s: string) => s.replace(/-./g, (match: string) => match[1].toUpperCase());
+    const color = Object.hasOwn(materialColors, toPropName(event.color))
+                ? Color((materialColors as any)[toPropName(event.color)].base)
+                : Color(event.color);
+
+    const now = dayjs();
+    const time = getEventEndTime(event);
+    if (time < now || event.finished) {
+        return color.fade(0.75).string();
+    }
+    else {
+        return color.string();
+    }
+}
 
 // Emits
 const emit = defineEmits<{
