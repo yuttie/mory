@@ -14,20 +14,23 @@
                             ref="noteTextarea"
                             v-model="quickNoteContent"
                             placeholder="Enter note content..."
-                            rows="3"
+                            rows="5"
                             outlined
                             dense
+                            hide-details="auto"
                             v-on:keydown="handleNoteKeydown"
                         ></v-textarea>
-                        <v-btn
-                            color="primary"
-                            v-bind:disabled="!quickNoteContent.trim()"
-                            v-on:click="createQuickNote"
-                            class="mr-2"
-                        >
-                            <v-icon left>{{ mdiFileDocumentPlusOutline }}</v-icon>
-                            Create Note
-                        </v-btn>
+                        <div class="d-flex mt-3">
+                            <v-spacer />
+                            <v-btn
+                                color="primary"
+                                v-bind:disabled="!quickNoteContent.trim()"
+                                v-on:click="createQuickNote"
+                            >
+                                <v-icon left>{{ mdiFileDocumentPlusOutline }}</v-icon>
+                                Create Note
+                            </v-btn>
+                        </div>
                     </v-card-text>
                 </v-card>
                 <v-card outlined>
@@ -41,13 +44,16 @@
                             v-model="quickTaskName"
                             placeholder="Enter task name..."
                             outlined
+                            hide-details="auto"
                             dense
                             class="mb-2"
                             v-on:keydown="handleTaskKeydown"
                         ></v-text-field>
                         <v-radio-group
                             v-model="quickTaskScheduledDay"
+                            hide-details="auto"
                             class="mb-2"
+                            row
                             dense
                         >
                             <template v-slot:label>
@@ -60,27 +66,28 @@
                                 v-bind:value="option.value"
                             ></v-radio>
                         </v-radio-group>
-                        <div class="d-flex gap-2 mb-3">
-                            <DateSelector
-                                v-model="quickTaskDueBy"
-                                label="Due by (optional)"
-                                clearable
-                            />
-                            <DateSelector
-                                v-model="quickTaskDeadline"
-                                label="Deadline (optional)"
-                                clearable
-                            />
+                        <DateSelector
+                            v-model="quickTaskDueBy"
+                            label="Due by (optional)"
+                            clearable
+                            class="mt-3"
+                        />
+                        <DateSelector
+                            v-model="quickTaskDeadline"
+                            label="Deadline (optional)"
+                            clearable
+                        />
+                        <div class="d-flex mt-3">
+                            <v-spacer />
+                            <v-btn
+                                color="primary"
+                                v-bind:disabled="!quickTaskName.trim()"
+                                v-on:click="createQuickTask"
+                            >
+                                <v-icon left>{{ mdiCheckboxMarkedCirclePlusOutline }}</v-icon>
+                                Create Task
+                            </v-btn>
                         </div>
-                        <v-btn
-                            color="primary"
-                            v-bind:disabled="!quickTaskName.trim()"
-                            v-on:click="createQuickTask"
-                            class="mr-2"
-                        >
-                            <v-icon left>{{ mdiCheckboxMarkedCirclePlusOutline }}</v-icon>
-                            Create Task
-                        </v-btn>
                     </v-card-text>
                 </v-card>
             </div>
