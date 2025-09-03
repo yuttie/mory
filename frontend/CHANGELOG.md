@@ -1,3 +1,19 @@
+## [1.8.0] - 2025-09-03
+
+### 🚀 Features
+
+- *(frontend/components/DateSelector)* Add localtime hint to DateSelector when timezone differs from local #172
+- *(frontend/views/TasksNext)* Sort tasks by due date/deadline in descendants views with proper date handling (#171)
+- *(frontend/views/Home)* Redesign Home view with quick create, events columns, and tasks columns (#155)
+
+### 🐛 Bug Fixes
+
+- *(frontend/components/DateSelector)* Fix DateSelector clear button to properly handle empty values (#168)
+
+### 🚜 Refactor
+
+- *(frontend)* Remove redundant CSS styles from index.html (#170)
+
 ## [1.7.4] - 2025-09-03
 
 ### 🐛 Bug Fixes
