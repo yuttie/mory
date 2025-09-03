@@ -1,3 +1,10 @@
+## [1.7.3] - 2025-09-03
+
+### 🐛 Bug Fixes
+
+- *(frontend/notification)* Add feature detection for Notification API
+- *(pwa)* Use background-color of `.theme--light.v-application` as theme_color and background_color
+
 ## [1.7.2] - 2025-09-01
 
 ### 🐛 Bug Fixes
