@@ -65,6 +65,7 @@ export async function getTask(taskPath: string, eTag?: string): Promise<[string,
             ...(metadata.task.due_by ? { due_by: metadata.task.due_by } : {}),
             ...(metadata.task.deadline ? { deadline: metadata.task.deadline } : {}),
             scheduled_dates: metadata.task.scheduled_dates,
+            ...(metadata.task.efforts ? { efforts: metadata.task.efforts } : {}),
             note: rest,
         };
 
