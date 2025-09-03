@@ -645,8 +645,6 @@ async function loadTasks() {
 async function createQuickNote() {
   try {
     const content = quickNoteContent.value.trim();
-    const lines = content.split('\n');
-    const title = lines[0] || 'Quick Note';
     const filename = crypto.randomUUID() + '.md';
     
     // Add metadata with quick-create tag
@@ -657,7 +655,7 @@ async function createQuickNote() {
     const noteContent = yamlHeader + content;
     
     await api.addNote(filename, noteContent);
-    successText.value = `Note "${title}" created successfully!`;
+    successText.value = 'Note created successfully!';
     successMessage.value = true;
     quickNoteContent.value = '';
     
