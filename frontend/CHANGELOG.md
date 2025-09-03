@@ -1,3 +1,9 @@
+## [1.7.4] - 2025-09-03
+
+### 🐛 Bug Fixes
+
+- *(frontend)* Disable page overscroll
+
 ## [1.7.3] - 2025-09-03
 
 ### 🐛 Bug Fixes
