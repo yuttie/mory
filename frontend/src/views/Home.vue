@@ -13,7 +13,7 @@
                         <v-textarea
                             ref="noteTextarea"
                             v-model="quickNoteContent"
-                            placeholder="Enter note content... First line will be used as title."
+                            placeholder="Enter note content..."
                             rows="3"
                             outlined
                             dense
