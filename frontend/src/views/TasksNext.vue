@@ -312,8 +312,20 @@ function sortTasksByDueDate(tasks: TreeNodeRecord[]): TreeNodeRecord[] {
         
         // If both have dates, sort by earliest first
         if (date1 && date2) {
-            const dayjs1 = dayjs(date1);
-            const dayjs2 = dayjs(date2);
+            // Normalize dates: if no time portion, treat as end of day (23:59:59.999)
+            const normalizeDate = (dateStr: string) => {
+                const parsed = dayjs(dateStr);
+                // Check if the date string contains time information
+                // If it's just a date (YYYY-MM-DD format), set to end of day
+                if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr.trim())) {
+                    return parsed.endOf('day');
+                }
+                return parsed;
+            };
+            
+            const dayjs1 = normalizeDate(date1);
+            const dayjs2 = normalizeDate(date2);
+            
             if (dayjs1.isBefore(dayjs2)) {
                 return -1; // task1 is earlier
             } else if (dayjs1.isAfter(dayjs2)) {
