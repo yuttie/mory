@@ -547,6 +547,15 @@ const todayTasks = computed(() => {
     });
 });
 
+function parseDue(input: string): dayjs.Dayjs {
+    const hasTime = /\d{1,2}:\d{2}/.test(input);
+    if (hasTime) {
+        return dayjs(input);
+    } else {
+        return dayjs(input).endOf('day');
+    }
+}
+
 const upcomingTasks = computed(() => {
     if (!taskStore.allTasks || taskStore.allTasks.length === 0) return [];
     
@@ -563,10 +572,10 @@ const upcomingTasks = computed(() => {
     
     // Sort by deadline
     return tasks.sort((a, b) => {
-        const deadlineA = a.metadata?.task?.deadline;
-        const deadlineB = b.metadata?.task?.deadline;
-        if (!deadlineA || !deadlineB) return 0;
-        return dayjs(deadlineA).diff(dayjs(deadlineB));
+        const dateA = a.metadata?.task?.due_by ?? a.metadata?.task?.deadline;
+        const dateB = b.metadata?.task?.due_by ?? b.metadata?.task?.deadline;
+        if (!dateA || !dateB) return 0;
+        return parseDue(dateA).diff(parseDue(dateB));
     });
 });
 
