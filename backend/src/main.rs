@@ -195,10 +195,19 @@ async fn auth(req: Request<Body>, next: Next) -> Result<Response, StatusCode> {
 fn token_is_valid(header_value: &str) -> bool {
     let token = header_value.split_whitespace().nth(1).unwrap();
 
+    // First, try to validate as API key (for programmatic access)
+    if let Ok(api_key) = env::var("MORIED_API_KEY") {
+        if !api_key.is_empty() && token == api_key {
+            debug!("authorized via API key");
+            return true;
+        }
+    }
+
+    // If not a valid API key, try JWT validation (for web frontend)
     let secret = env::var("MORIED_SECRET").unwrap();
     match jwt::decode::<Claims>(&token, &jwt::DecodingKey::from_secret(secret.as_ref()), &jwt::Validation::default()) {
         Ok(_) => {
-            debug!("authorized");
+            debug!("authorized via JWT");
             true
         },
         Err(e) => {
