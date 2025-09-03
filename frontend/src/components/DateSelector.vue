@@ -79,6 +79,12 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+
+// Extend dayjs with timezone plugins
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 import {
     mdiCalendarOutline,
@@ -86,25 +92,13 @@ import {
     mdiEarth,
 } from '@mdi/js';
 
-// Get local timezone in ISO8601 format
+// Get local timezone in ISO8601 format using dayjs
 const getLocalTimezone = (): string => {
     const offsetMinutes = new Date().getTimezoneOffset();
     const offsetHours = Math.floor(Math.abs(offsetMinutes) / 60);
     const offsetMins = Math.abs(offsetMinutes) % 60;
     const sign = offsetMinutes <= 0 ? '+' : '-';
     return `${sign}${offsetHours.toString().padStart(2, '0')}:${offsetMins.toString().padStart(2, '0')}`;
-};
-
-// Convert timezone string (e.g., "+05:00") to offset in minutes
-const getTimezoneOffsetMinutes = (timezone: string): number => {
-    const match = timezone.match(/^([+-])(\d{2}):(\d{2})$/);
-    if (!match) return 0;
-    
-    const sign = match[1] === '+' ? 1 : -1;
-    const hours = parseInt(match[2], 10);
-    const minutes = parseInt(match[3], 10);
-    
-    return sign * (hours * 60 + minutes);
 };
 
 // ISO8601-style timezone options
@@ -320,17 +314,15 @@ const localTimeHint = computed(() => {
     if (!date || !time || !timezoneValue.value) return '';
     
     try {
-        // Parse the date and time without timezone
-        const baseDateTime = dayjs(`${date} ${time}`);
-        if (!baseDateTime.isValid()) return '';
+        // Create a date string with timezone offset that dayjs can parse
+        const dateTimeWithTz = `${date} ${time}${timezoneValue.value}`;
         
-        // Calculate timezone offset difference in minutes
-        const selectedOffset = getTimezoneOffsetMinutes(timezoneValue.value);
-        const localOffset = getTimezoneOffsetMinutes(getLocalTimezone());
-        const offsetDiffMinutes = localOffset - selectedOffset;
+        // Parse the datetime in the selected timezone and convert to local timezone
+        const selectedDateTime = dayjs(dateTimeWithTz);
+        if (!selectedDateTime.isValid()) return '';
         
-        // Convert to local time by adjusting for timezone difference
-        const localDateTime = baseDateTime.add(offsetDiffMinutes, 'minute');
+        // Convert to local timezone
+        const localDateTime = selectedDateTime.local();
         
         return `Local time: ${localDateTime.format('YYYY-MM-DD HH:mm')}`;
     } catch {
