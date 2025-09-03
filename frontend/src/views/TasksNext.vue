@@ -286,6 +286,56 @@ const selectedTagName = computed<string | null>(() => {
     return null;
 });
 
+// Utility function to sort tasks by due date/deadline
+function sortTasksByDueDate(tasks: TreeNodeRecord[]): TreeNodeRecord[] {
+    return tasks.slice().sort((task1, task2) => {
+        // First sort by completion status (incomplete tasks first)
+        const isDone1 = task1.metadata?.task?.status?.kind === 'done' || task1.metadata?.task?.status?.kind === 'canceled';
+        const isDone2 = task2.metadata?.task?.status?.kind === 'done' || task2.metadata?.task?.status?.kind === 'canceled';
+        
+        if (isDone1 && !isDone2) {
+            return 1; // task1 is done, task2 is not - task2 should come first
+        }
+        if (!isDone1 && isDone2) {
+            return -1; // task2 is done, task1 is not - task1 should come first
+        }
+        
+        // Both tasks have same completion status, sort by dates
+        const dueBy1 = task1.metadata?.task?.due_by;
+        const dueBy2 = task2.metadata?.task?.due_by;
+        const deadline1 = task1.metadata?.task?.deadline;
+        const deadline2 = task2.metadata?.task?.deadline;
+        
+        // Get the earliest relevant date for each task (prioritize due_by over deadline)
+        const date1 = dueBy1 || deadline1;
+        const date2 = dueBy2 || deadline2;
+        
+        // If both have dates, sort by earliest first
+        if (date1 && date2) {
+            const dayjs1 = dayjs(date1);
+            const dayjs2 = dayjs(date2);
+            if (dayjs1.isBefore(dayjs2)) {
+                return -1; // task1 is earlier
+            } else if (dayjs1.isAfter(dayjs2)) {
+                return 1; // task2 is earlier
+            } else {
+                return 0; // same date
+            }
+        }
+        
+        // If only one has a date, prioritize the one with the date
+        if (date1 && !date2) {
+            return -1; // task1 has date, task2 doesn't - task1 comes first
+        }
+        if (!date1 && date2) {
+            return 1; // task2 has date, task1 doesn't - task2 comes first
+        }
+        
+        // Neither has dates, maintain original order
+        return 0;
+    });
+}
+
 const taskStatuses = computed(() => {
     const statuses = {
         todo: [] as TreeNodeRecord[],
@@ -310,7 +360,16 @@ const taskStatuses = computed(() => {
         }
     }
 
-    return statuses;
+    // Sort each status group by due date/deadline
+    return {
+        todo: sortTasksByDueDate(statuses.todo),
+        inProgress: sortTasksByDueDate(statuses.inProgress),
+        waiting: sortTasksByDueDate(statuses.waiting),
+        blocked: sortTasksByDueDate(statuses.blocked),
+        onHold: sortTasksByDueDate(statuses.onHold),
+        done: sortTasksByDueDate(statuses.done),
+        canceled: sortTasksByDueDate(statuses.canceled),
+    };
 });
 
 // Helper function to check if entire subtree should be filtered
@@ -436,6 +495,12 @@ const scheduled = computed<Record<string, TreeNodeRecord[]>>(() => {
             }
         }
     }
+    
+    // Sort tasks within each scheduled date by due date/deadline
+    for (const date in scheduled) {
+        scheduled[date] = sortTasksByDueDate(scheduled[date]);
+    }
+    
     return scheduled;
 });
 
@@ -490,7 +555,13 @@ const eisenhowerQuadrants = computed(() => {
         }
     }
 
-    return quadrants;
+    // Sort tasks within each quadrant by due date/deadline
+    return {
+        doFirst: sortTasksByDueDate(quadrants.doFirst),
+        schedule: sortTasksByDueDate(quadrants.schedule),
+        delegate: sortTasksByDueDate(quadrants.delegate),
+        eliminate: sortTasksByDueDate(quadrants.eliminate),
+    };
 });
 
 const viewModeOptions = computed(() => [
