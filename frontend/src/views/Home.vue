@@ -1,287 +1,287 @@
 <template>
-  <div id="home">
-    <!-- Quick Note/Task Creation Section -->
-    <div class="quick-create-section ma-3">
-      <h2 class="mb-3 text-center">Quick Create</h2>
-      <div class="quick-create-grid">
-        <v-card outlined>
-          <v-card-title class="pb-2">
-            <v-icon left>{{ mdiNotePlusOutline }}</v-icon>
-            Note
-          </v-card-title>
-          <v-card-text>
-            <v-textarea
-              ref="noteTextarea"
-              v-model="quickNoteContent"
-              placeholder="Enter note content... First line will be used as title."
-              rows="3"
-              outlined
-              dense
-              v-on:keydown="handleNoteKeydown"
-            ></v-textarea>
-            <v-btn
-              color="primary"
-              v-bind:disabled="!quickNoteContent.trim()"
-              v-on:click="createQuickNote"
-              class="mr-2"
-            >
-              <v-icon left>{{ mdiFileDocumentPlusOutline }}</v-icon>
-              Create Note
-            </v-btn>
-          </v-card-text>
-        </v-card>
-        <v-card outlined>
-          <v-card-title class="pb-2">
-            <v-icon left>{{ mdiCheckboxMarkedCirclePlusOutline }}</v-icon>
-            Task
-          </v-card-title>
-          <v-card-text>
-            <v-text-field
-              ref="taskNameField"
-              v-model="quickTaskName"
-              placeholder="Enter task name..."
-              outlined
-              dense
-              class="mb-2"
-              v-on:keydown="handleTaskKeydown"
-            ></v-text-field>
-            <v-radio-group
-              v-model="quickTaskScheduledDay"
-              class="mb-2"
-              dense
-            >
-              <template v-slot:label>
-                <div>Schedule</div>
-              </template>
-              <v-radio
-                v-for="option in scheduledDayOptions"
-                v-bind:key="option.value"
-                v-bind:label="option.text"
-                v-bind:value="option.value"
-              ></v-radio>
-            </v-radio-group>
-            <div class="d-flex gap-2 mb-3">
-              <DateSelector
-                v-model="quickTaskDueBy"
-                label="Due by (optional)"
-                clearable
-              />
-              <DateSelector
-                v-model="quickTaskDeadline"
-                label="Deadline (optional)"
-                clearable
-              />
+    <div id="home">
+        <!-- Quick Note/Task Creation Section -->
+        <div class="quick-create-section ma-3">
+            <h2 class="mb-3 text-center">Quick Create</h2>
+            <div class="quick-create-grid">
+                <v-card outlined>
+                    <v-card-title class="pb-2">
+                        <v-icon left>{{ mdiNotePlusOutline }}</v-icon>
+                        Note
+                    </v-card-title>
+                    <v-card-text>
+                        <v-textarea
+                            ref="noteTextarea"
+                            v-model="quickNoteContent"
+                            placeholder="Enter note content... First line will be used as title."
+                            rows="3"
+                            outlined
+                            dense
+                            v-on:keydown="handleNoteKeydown"
+                        ></v-textarea>
+                        <v-btn
+                            color="primary"
+                            v-bind:disabled="!quickNoteContent.trim()"
+                            v-on:click="createQuickNote"
+                            class="mr-2"
+                        >
+                            <v-icon left>{{ mdiFileDocumentPlusOutline }}</v-icon>
+                            Create Note
+                        </v-btn>
+                    </v-card-text>
+                </v-card>
+                <v-card outlined>
+                    <v-card-title class="pb-2">
+                        <v-icon left>{{ mdiCheckboxMarkedCirclePlusOutline }}</v-icon>
+                        Task
+                    </v-card-title>
+                    <v-card-text>
+                        <v-text-field
+                            ref="taskNameField"
+                            v-model="quickTaskName"
+                            placeholder="Enter task name..."
+                            outlined
+                            dense
+                            class="mb-2"
+                            v-on:keydown="handleTaskKeydown"
+                        ></v-text-field>
+                        <v-radio-group
+                            v-model="quickTaskScheduledDay"
+                            class="mb-2"
+                            dense
+                        >
+                            <template v-slot:label>
+                                <div>Schedule</div>
+                            </template>
+                            <v-radio
+                                v-for="option in scheduledDayOptions"
+                                v-bind:key="option.value"
+                                v-bind:label="option.text"
+                                v-bind:value="option.value"
+                            ></v-radio>
+                        </v-radio-group>
+                        <div class="d-flex gap-2 mb-3">
+                            <DateSelector
+                                v-model="quickTaskDueBy"
+                                label="Due by (optional)"
+                                clearable
+                            />
+                            <DateSelector
+                                v-model="quickTaskDeadline"
+                                label="Deadline (optional)"
+                                clearable
+                            />
+                        </div>
+                        <v-btn
+                            color="primary"
+                            v-bind:disabled="!quickTaskName.trim()"
+                            v-on:click="createQuickTask"
+                            class="mr-2"
+                        >
+                            <v-icon left>{{ mdiCheckboxMarkedCirclePlusOutline }}</v-icon>
+                            Create Task
+                        </v-btn>
+                    </v-card-text>
+                </v-card>
             </div>
-            <v-btn
-              color="primary"
-              v-bind:disabled="!quickTaskName.trim()"
-              v-on:click="createQuickTask"
-              class="mr-2"
-            >
-              <v-icon left>{{ mdiCheckboxMarkedCirclePlusOutline }}</v-icon>
-              Create Task
-            </v-btn>
-          </v-card-text>
-        </v-card>
-      </div>
+        </div>
+
+        <!-- Events Section -->
+        <div class="events-section ma-3">
+            <h2 class="mb-3 text-center">Events</h2>
+            <div class="events-grid">
+                <v-card outlined class="event-column">
+                    <v-card-title class="pb-2">
+                        <v-icon left>{{ mdiCalendarToday }}</v-icon>
+                        Today
+                    </v-card-title>
+                    <v-card-text>
+                        <div v-if="todayEvents.length === 0" class="text-center text--secondary">
+                            No events today
+                        </div>
+                        <div v-else>
+                            <div
+                                v-for="event in todayEvents"
+                                v-bind:key="event.name + event.start"
+                                class="event-item mb-2 pa-2 clickable-event"
+                                v-bind:style="{ 'border-left': `8px solid ${getEventColor(event)}` }"
+                                v-on:click="navigateToEvent(event)"
+                            >
+                                <div class="event-name font-weight-medium">{{ event.name }}</div>
+                                <div class="event-time text--secondary caption">{{ formatEventTime(event) }}</div>
+                                <div v-if="event.note" class="event-note caption mt-1">{{ event.note }}</div>
+                            </div>
+                        </div>
+                    </v-card-text>
+                </v-card>
+
+                <v-card outlined class="event-column">
+                    <v-card-title class="pb-2">
+                        <v-icon left>{{ mdiCalendar }}</v-icon>
+                        Tomorrow
+                    </v-card-title>
+                    <v-card-text>
+                        <div v-if="tomorrowEvents.length === 0" class="text-center text--secondary">
+                            No events tomorrow
+                        </div>
+                        <div v-else>
+                            <div
+                                v-for="event in tomorrowEvents"
+                                v-bind:key="event.name + event.start"
+                                class="event-item mb-2 pa-2 clickable-event"
+                                v-bind:style="{ 'border-left': `8px solid ${getEventColor(event)}` }"
+                                v-on:click="navigateToEvent(event)"
+                            >
+                                <div class="event-name font-weight-medium">{{ event.name }}</div>
+                                <div class="event-time text--secondary caption">{{ formatEventTime(event) }}</div>
+                                <div v-if="event.note" class="event-note caption mt-1">{{ event.note }}</div>
+                            </div>
+                        </div>
+                    </v-card-text>
+                </v-card>
+
+                <v-card outlined class="event-column">
+                    <v-card-title class="pb-2">
+                        <v-icon left>{{ mdiCalendarPlus }}</v-icon>
+                        Day After Tomorrow
+                    </v-card-title>
+                    <v-card-text>
+                        <div v-if="dayAfterTomorrowEvents.length === 0" class="text-center text--secondary">
+                            No events
+                        </div>
+                        <div v-else>
+                            <div
+                                v-for="event in dayAfterTomorrowEvents"
+                                v-bind:key="event.name + event.start"
+                                class="event-item mb-2 pa-2 clickable-event"
+                                v-bind:style="{ 'border-left': `8px solid ${getEventColor(event)}` }"
+                                v-on:click="navigateToEvent(event)"
+                            >
+                                <div class="event-name font-weight-medium">{{ event.name }}</div>
+                                <div class="event-time text--secondary caption">{{ formatEventTime(event) }}</div>
+                                <div v-if="event.note" class="event-note caption mt-1">{{ event.note }}</div>
+                            </div>
+                        </div>
+                    </v-card-text>
+                </v-card>
+            </div>
+        </div>
+
+        <!-- Tasks Section -->
+        <div class="tasks-section ma-3">
+            <h2 class="mb-3 text-center">Tasks</h2>
+            <div class="tasks-grid">
+                <v-card outlined class="task-column">
+                    <v-card-title class="pb-2">
+                        <v-icon left>{{ mdiCheckboxMarkedCircleOutline }}</v-icon>
+                        Scheduled Today
+                    </v-card-title>
+                    <v-card-text>
+                        <div v-if="todayTasks.length === 0" class="text-center text--secondary">
+                            No tasks scheduled for today
+                        </div>
+                        <div v-else>
+                            <div
+                                v-for="task in todayTasks"
+                                v-bind:key="task.uuid"
+                                class="task-item mb-2 pa-2 clickable-task"
+                                v-bind:class="{ 'task-done': task.metadata?.task?.status?.kind === 'done' }"
+                                v-on:click="navigateToTask(task)"
+                            >
+                                <div class="task-content">
+                                    <div class="task-name" v-bind:class="{ 'text-decoration-line-through': task.metadata?.task?.status?.kind === 'done' }">
+                                        {{ task.title }}
+                                    </div>
+                                    <div v-if="task.metadata?.task?.due_by" class="task-due-by text--secondary caption">
+                                        Due by: {{ task.metadata?.task?.due_by }}
+                                    </div>
+                                    <div v-if="task.metadata?.task?.deadline" class="task-deadline text--secondary caption">
+                                        Deadline: {{ task.metadata?.task?.deadline }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </v-card-text>
+                </v-card>
+
+                <v-card outlined class="task-column">
+                    <v-card-title class="pb-2">
+                        <v-icon left>{{ mdiClockOutline }}</v-icon>
+                        Upcoming Due Dates
+                    </v-card-title>
+                    <v-card-text>
+                        <div v-if="upcomingTasks.length === 0" class="text-center text--secondary">
+                            No upcoming deadlines
+                        </div>
+                        <div v-else>
+                            <div
+                                v-for="task in upcomingTasks"
+                                v-bind:key="task.uuid"
+                                class="task-item mb-2 pa-2 clickable-task"
+                                v-bind:class="{ 'task-done': task.metadata?.task?.status?.kind === 'done' }"
+                                v-on:click="navigateToTask(task)"
+                            >
+                                <div class="task-content">
+                                    <div class="task-name" v-bind:class="{ 'text-decoration-line-through': task.metadata?.task?.status?.kind === 'done' }">
+                                        {{ task.title }}
+                                    </div>
+                                    <div v-if="task.metadata?.task?.due_by" class="task-due-by caption" v-bind:class="getDeadlineClass(task.metadata?.task?.due_by)">
+                                        Due by: {{ task.metadata?.task?.due_by }}
+                                    </div>
+                                    <div v-if="task.metadata?.task?.deadline" class="task-deadline caption" v-bind:class="getDeadlineClass(task.metadata?.task?.deadline)">
+                                        Deadline: {{ task.metadata?.task?.deadline }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </v-card-text>
+                </v-card>
+            </div>
+        </div>
+
+        <!-- Categorized Notes Section (existing) -->
+        <div class="notes-section ma-3">
+            <h2 class="mb-3 text-center">Notes by Category</h2>
+            <div class="notes-grid">
+                <v-card
+                    v-for="category of sortedCategorizedEntries.entries()"
+                    v-bind:key="category[0]"
+                    outlined
+                >
+                    <v-card-title>{{ category[0] }}</v-card-title>
+                    <v-card-text>
+                        <div class="text-center mb-3">
+                            <v-btn
+                                text
+                                x-small
+                                v-on:click="changeSortOrder(category[0], 'title')"
+                            ><v-icon x-small v-if="sortOrders.get(category[0])[0] === 'title'">{{ sortOrders.get(category[0])[1] ? mdiSortDescending : mdiSortAscending }}</v-icon>sort by title</v-btn>
+                            <v-btn
+                                text
+                                x-small
+                                v-on:click="changeSortOrder(category[0], 'time')"
+                            ><v-icon x-small v-if="sortOrders.get(category[0])[0] === 'time'">{{ sortOrders.get(category[0])[1] ? mdiSortDescending : mdiSortAscending }}</v-icon>sort by time</v-btn>
+                        </div>
+                        <ul>
+                            <li
+                                v-for="entry of category[1]"
+                                v-bind:key="entry.path"
+                            >
+                                <router-link v-bind:to="{ name: 'Note', params: { path: entry.path } }">{{ entry.title || entry.path }}</router-link>
+                                <span class="age ml-1">({{ formatDistanceToNow(parseISO(entry.time)) }})</span>
+                            </li>
+                        </ul>
+                    </v-card-text>
+                </v-card>
+            </div>
+        </div>
+
+        <v-overlay v-bind:value="isLoading" z-index="10" opacity="0">
+            <v-progress-circular indeterminate color="blue-grey lighten-3" size="64"></v-progress-circular>
+        </v-overlay>
+        <v-snackbar v-model="error" color="error" top timeout="5000">{{ errorText }}</v-snackbar>
+        <v-snackbar v-model="successMessage" color="success" top timeout="3000">{{ successText }}</v-snackbar>
     </div>
-
-    <!-- Events Section -->
-    <div class="events-section ma-3">
-      <h2 class="mb-3 text-center">Events</h2>
-      <div class="events-grid">
-        <v-card outlined class="event-column">
-          <v-card-title class="pb-2">
-            <v-icon left>{{ mdiCalendarToday }}</v-icon>
-            Today
-          </v-card-title>
-          <v-card-text>
-            <div v-if="todayEvents.length === 0" class="text-center text--secondary">
-              No events today
-            </div>
-            <div v-else>
-              <div
-                v-for="event in todayEvents"
-                v-bind:key="event.name + event.start"
-                class="event-item mb-2 pa-2 clickable-event"
-                v-bind:style="{ 'border-left': `8px solid ${getEventColor(event)}` }"
-                v-on:click="navigateToEvent(event)"
-              >
-                <div class="event-name font-weight-medium">{{ event.name }}</div>
-                <div class="event-time text--secondary caption">{{ formatEventTime(event) }}</div>
-                <div v-if="event.note" class="event-note caption mt-1">{{ event.note }}</div>
-              </div>
-            </div>
-          </v-card-text>
-        </v-card>
-
-        <v-card outlined class="event-column">
-          <v-card-title class="pb-2">
-            <v-icon left>{{ mdiCalendar }}</v-icon>
-            Tomorrow
-          </v-card-title>
-          <v-card-text>
-            <div v-if="tomorrowEvents.length === 0" class="text-center text--secondary">
-              No events tomorrow
-            </div>
-            <div v-else>
-              <div
-                v-for="event in tomorrowEvents"
-                v-bind:key="event.name + event.start"
-                class="event-item mb-2 pa-2 clickable-event"
-                v-bind:style="{ 'border-left': `8px solid ${getEventColor(event)}` }"
-                v-on:click="navigateToEvent(event)"
-              >
-                <div class="event-name font-weight-medium">{{ event.name }}</div>
-                <div class="event-time text--secondary caption">{{ formatEventTime(event) }}</div>
-                <div v-if="event.note" class="event-note caption mt-1">{{ event.note }}</div>
-              </div>
-            </div>
-          </v-card-text>
-        </v-card>
-
-        <v-card outlined class="event-column">
-          <v-card-title class="pb-2">
-            <v-icon left>{{ mdiCalendarPlus }}</v-icon>
-            Day After Tomorrow
-          </v-card-title>
-          <v-card-text>
-            <div v-if="dayAfterTomorrowEvents.length === 0" class="text-center text--secondary">
-              No events
-            </div>
-            <div v-else>
-              <div
-                v-for="event in dayAfterTomorrowEvents"
-                v-bind:key="event.name + event.start"
-                class="event-item mb-2 pa-2 clickable-event"
-                v-bind:style="{ 'border-left': `8px solid ${getEventColor(event)}` }"
-                v-on:click="navigateToEvent(event)"
-              >
-                <div class="event-name font-weight-medium">{{ event.name }}</div>
-                <div class="event-time text--secondary caption">{{ formatEventTime(event) }}</div>
-                <div v-if="event.note" class="event-note caption mt-1">{{ event.note }}</div>
-              </div>
-            </div>
-          </v-card-text>
-        </v-card>
-      </div>
-    </div>
-
-    <!-- Tasks Section -->
-    <div class="tasks-section ma-3">
-      <h2 class="mb-3 text-center">Tasks</h2>
-      <div class="tasks-grid">
-        <v-card outlined class="task-column">
-          <v-card-title class="pb-2">
-            <v-icon left>{{ mdiCheckboxMarkedCircleOutline }}</v-icon>
-            Scheduled Today
-          </v-card-title>
-          <v-card-text>
-            <div v-if="todayTasks.length === 0" class="text-center text--secondary">
-              No tasks scheduled for today
-            </div>
-            <div v-else>
-              <div
-                v-for="task in todayTasks"
-                v-bind:key="task.uuid"
-                class="task-item mb-2 pa-2 clickable-task"
-                v-bind:class="{ 'task-done': task.metadata?.task?.status?.kind === 'done' }"
-                v-on:click="navigateToTask(task)"
-              >
-                <div class="task-content">
-                  <div class="task-name" v-bind:class="{ 'text-decoration-line-through': task.metadata?.task?.status?.kind === 'done' }">
-                    {{ task.title }}
-                  </div>
-                  <div v-if="task.metadata?.task?.due_by" class="task-due-by text--secondary caption">
-                    Due by: {{ task.metadata?.task?.due_by }}
-                  </div>
-                  <div v-if="task.metadata?.task?.deadline" class="task-deadline text--secondary caption">
-                    Deadline: {{ task.metadata?.task?.deadline }}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </v-card-text>
-        </v-card>
-
-        <v-card outlined class="task-column">
-          <v-card-title class="pb-2">
-            <v-icon left>{{ mdiClockOutline }}</v-icon>
-            Upcoming Due Dates
-          </v-card-title>
-          <v-card-text>
-            <div v-if="upcomingTasks.length === 0" class="text-center text--secondary">
-              No upcoming deadlines
-            </div>
-            <div v-else>
-              <div
-                v-for="task in upcomingTasks"
-                v-bind:key="task.uuid"
-                class="task-item mb-2 pa-2 clickable-task"
-                v-bind:class="{ 'task-done': task.metadata?.task?.status?.kind === 'done' }"
-                v-on:click="navigateToTask(task)"
-              >
-                <div class="task-content">
-                  <div class="task-name" v-bind:class="{ 'text-decoration-line-through': task.metadata?.task?.status?.kind === 'done' }">
-                    {{ task.title }}
-                  </div>
-                  <div v-if="task.metadata?.task?.due_by" class="task-due-by caption" v-bind:class="getDeadlineClass(task.metadata?.task?.due_by)">
-                    Due by: {{ task.metadata?.task?.due_by }}
-                  </div>
-                  <div v-if="task.metadata?.task?.deadline" class="task-deadline caption" v-bind:class="getDeadlineClass(task.metadata?.task?.deadline)">
-                    Deadline: {{ task.metadata?.task?.deadline }}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </v-card-text>
-        </v-card>
-      </div>
-    </div>
-
-    <!-- Categorized Notes Section (existing) -->
-    <div class="notes-section ma-3">
-      <h2 class="mb-3 text-center">Notes by Category</h2>
-      <div class="notes-grid">
-        <v-card
-          v-for="category of sortedCategorizedEntries.entries()"
-          v-bind:key="category[0]"
-          outlined
-        >
-          <v-card-title>{{ category[0] }}</v-card-title>
-          <v-card-text>
-            <div class="text-center mb-3">
-              <v-btn
-                text
-                x-small
-                v-on:click="changeSortOrder(category[0], 'title')"
-              ><v-icon x-small v-if="sortOrders.get(category[0])[0] === 'title'">{{ sortOrders.get(category[0])[1] ? mdiSortDescending : mdiSortAscending }}</v-icon>sort by title</v-btn>
-              <v-btn
-                text
-                x-small
-                v-on:click="changeSortOrder(category[0], 'time')"
-              ><v-icon x-small v-if="sortOrders.get(category[0])[0] === 'time'">{{ sortOrders.get(category[0])[1] ? mdiSortDescending : mdiSortAscending }}</v-icon>sort by time</v-btn>
-            </div>
-            <ul>
-              <li
-                v-for="entry of category[1]"
-                v-bind:key="entry.path"
-              >
-                <router-link v-bind:to="{ name: 'Note', params: { path: entry.path } }">{{ entry.title || entry.path }}</router-link>
-                <span class="age ml-1">({{ formatDistanceToNow(parseISO(entry.time)) }})</span>
-              </li>
-            </ul>
-          </v-card-text>
-        </v-card>
-      </div>
-    </div>
-
-    <v-overlay v-bind:value="isLoading" z-index="10" opacity="0">
-      <v-progress-circular indeterminate color="blue-grey lighten-3" size="64"></v-progress-circular>
-    </v-overlay>
-    <v-snackbar v-model="error" color="error" top timeout="5000">{{ errorText }}</v-snackbar>
-    <v-snackbar v-model="successMessage" color="success" top timeout="3000">{{ successText }}</v-snackbar>
-  </div>
 </template>
 
 <script lang="ts" setup>
@@ -327,8 +327,8 @@ function getEventEndTime(event: any): dayjs.Dayjs {
 function getEventColor(event: any): string {
     const toPropName = (s: string) => s.replace(/-./g, (match: string) => match[1].toUpperCase());
     const color = Object.hasOwn(materialColors, toPropName(event.color))
-                ? Color((materialColors as any)[toPropName(event.color)].base)
-                : Color(event.color);
+        ? Color((materialColors as any)[toPropName(event.color)].base)
+        : Color(event.color);
 
     const now = dayjs();
     const time = getEventEndTime(event);
@@ -342,7 +342,7 @@ function getEventColor(event: any): string {
 
 // Emits
 const emit = defineEmits<{
-  (e: 'tokenExpired', callback: () => void): void;
+    (e: 'tokenExpired', callback: () => void): void;
 }>();
 
 // Stores
@@ -369,9 +369,9 @@ const taskNameField = ref(null);
 
 // Scheduled day options
 const scheduledDayOptions = [
-  { text: 'None', value: 'none' },
-  { text: 'Today', value: 'today' },
-  { text: 'Tomorrow', value: 'tomorrow' }
+    { text: 'None', value: 'none' },
+    { text: 'Today', value: 'today' },
+    { text: 'Tomorrow', value: 'tomorrow' }
 ];
 
 // Success/error messaging
@@ -380,50 +380,50 @@ const successText = ref('');
 
 // Computed properties
 const sortedCategorizedEntries = computed(() => {
-  // Copy the unsorted map
-  const categorized: Map<string, ListEntry2[]> = new Map(
-    Array.from(categorizedEntries.value, ([cat, entries]) => [cat, [...entries]])
-  );
+    // Copy the unsorted map
+    const categorized: Map<string, ListEntry2[]> = new Map(
+        Array.from(categorizedEntries.value, ([cat, entries]) => [cat, [...entries]])
+    );
 
-  for (const [category, entries] of categorized) {
-    // Default value
-    if (!sortOrders.value.has(category)) {
-      sortOrders.value.set(category, ['title', false]);
+    for (const [category, entries] of categorized) {
+        // Default value
+        if (!sortOrders.value.has(category)) {
+            sortOrders.value.set(category, ['title', false]);
+        }
+
+        const [kind, descending] = sortOrders.value.get(category);
+        if (kind === 'title') {
+            sortByTitle(entries, descending);
+        }
+        else if (kind === 'time') {
+            sortByTime(entries, descending);
+        }
     }
 
-    const [kind, descending] = sortOrders.value.get(category);
-    if (kind === 'title') {
-      sortByTitle(entries, descending);
-    }
-    else if (kind === 'time') {
-      sortByTime(entries, descending);
-    }
-  }
-
-  return categorized;
+    return categorized;
 });
 
 const categorizedEntries = computed(() => {
-  // Categorize entries
-  const categorized: Map<string, ListEntry2[]> = new Map();
-  for (const entry of entries.value) {
-    if (entry.metadata !== null) {
-      if (Object.hasOwn(entry.metadata, 'tags') && Array.isArray(entry.metadata.tags)) {
-        for (const tag of entry.metadata.tags.map(String)) {
-          const match = tag.match(/^home:(.+)$/);
-          if (match) {
-            const category = match[1];
-            if (!categorized.has(category)) {
-              categorized.set(category, []);
+    // Categorize entries
+    const categorized: Map<string, ListEntry2[]> = new Map();
+    for (const entry of entries.value) {
+        if (entry.metadata !== null) {
+            if (Object.hasOwn(entry.metadata, 'tags') && Array.isArray(entry.metadata.tags)) {
+                for (const tag of entry.metadata.tags.map(String)) {
+                    const match = tag.match(/^home:(.+)$/);
+                    if (match) {
+                        const category = match[1];
+                        if (!categorized.has(category)) {
+                            categorized.set(category, []);
+                        }
+                        categorized.get(category)!.push(entry);
+                    }
+                }
             }
-            categorized.get(category)!.push(entry);
-          }
         }
-      }
     }
-  }
 
-  return categorized;
+    return categorized;
 });
 
 // Events computation (based on Calendar view)
@@ -567,7 +567,7 @@ const dayAfterTomorrowEvents = computed(() => {
 
 const todayTasks = computed(() => {
     if (!taskStore.allTasks || taskStore.allTasks.length === 0) return [];
-    
+
     return taskStore.allTasks.filter(task => {
         const scheduledDates = task.metadata?.task?.scheduled_dates;
         return Array.isArray(scheduledDates) && scheduledDates.includes(today);
@@ -585,10 +585,10 @@ function parseDue(input: string): dayjs.Dayjs {
 
 const upcomingTasks = computed(() => {
     if (!taskStore.allTasks || taskStore.allTasks.length === 0) return [];
-    
+
     const tasks: TreeNodeRecord[] = [];
     const now = dayjs();
-    
+
     // Collect tasks with deadlines that are after now
     for (const task of taskStore.allTasks) {
         const deadline = task.metadata?.task?.deadline;
@@ -596,7 +596,7 @@ const upcomingTasks = computed(() => {
             tasks.push(task);
         }
     }
-    
+
     // Sort by deadline
     return tasks.sort((a, b) => {
         const dateA = a.metadata?.task?.due_by ?? a.metadata?.task?.deadline;
@@ -608,358 +608,358 @@ const upcomingTasks = computed(() => {
 
 // Lifecycle hooks
 onMounted(() => {
-  document.title = `Home | ${import.meta.env.VITE_APP_NAME}`;
+    document.title = `Home | ${import.meta.env.VITE_APP_NAME}`;
 
-  load();
-  loadTasks();
+    load();
+    loadTasks();
 });
 
 // Methods
 function handleNoteKeydown(event: KeyboardEvent) {
-  if (event.ctrlKey && event.key === 'Enter') {
-    event.preventDefault();
-    if (quickNoteContent.value.trim()) {
-      createQuickNote();
+    if (event.ctrlKey && event.key === 'Enter') {
+        event.preventDefault();
+        if (quickNoteContent.value.trim()) {
+            createQuickNote();
+        }
     }
-  }
 }
 
 function handleTaskKeydown(event: KeyboardEvent) {
-  if (event.ctrlKey && event.key === 'Enter') {
-    event.preventDefault();
-    if (quickTaskName.value.trim()) {
-      createQuickTask();
+    if (event.ctrlKey && event.key === 'Enter') {
+        event.preventDefault();
+        if (quickTaskName.value.trim()) {
+            createQuickTask();
+        }
     }
-  }
 }
 
 function load() {
-  isLoading.value = true;
-  api.listNotes()
-    .then(res => {
-      entries.value = res.data;
-      isLoading.value = false;
-    }).catch(error => {
-      if (error.response) {
-        if (error.response.status === 401) {
-          // Unauthorized
-          emit('tokenExpired', () => load());
-        }
-        else {
-          error.value = true;
-          errorText.value = error.response;
-          isLoading.value = false;
-          throw error;
-        }
-      }
-      else {
-        error.value = true;
-        errorText.value = error.toString();
-        isLoading.value = false;
-        throw error;
-      }
-    });
+    isLoading.value = true;
+    api.listNotes()
+        .then(res => {
+            entries.value = res.data;
+            isLoading.value = false;
+        }).catch(error => {
+            if (error.response) {
+                if (error.response.status === 401) {
+                    // Unauthorized
+                    emit('tokenExpired', () => load());
+                }
+                else {
+                    error.value = true;
+                    errorText.value = error.response;
+                    isLoading.value = false;
+                    throw error;
+                }
+            }
+            else {
+                error.value = true;
+                errorText.value = error.toString();
+                isLoading.value = false;
+                throw error;
+            }
+        });
 }
 
 async function loadTasks() {
-  try {
-    await taskStore.refresh();
-  } catch (_err) {
-    console.error('Failed to load tasks:', _err);
-  }
+    try {
+        await taskStore.refresh();
+    } catch (_err) {
+        console.error('Failed to load tasks:', _err);
+    }
 }
 
 async function createQuickNote() {
-  try {
-    const content = quickNoteContent.value.trim();
-    const filename = crypto.randomUUID() + '.md';
-    
-    // Add metadata with quick-create tag
-    const metadata = {
-      tags: ['quick-create']
-    };
-    const yamlHeader = '---\n' + Object.entries(metadata).map(([key, value]) => `${key}: ${JSON.stringify(value)}`).join('\n') + '\n---\n\n';
-    const noteContent = yamlHeader + content;
-    
-    await api.addNote(filename, noteContent);
-    successText.value = 'Note created successfully!';
-    successMessage.value = true;
-    quickNoteContent.value = '';
-    
-    // Focus the textarea for creating another note
-    if (noteTextarea.value) {
-      noteTextarea.value.focus();
+    try {
+        const content = quickNoteContent.value.trim();
+        const filename = crypto.randomUUID() + '.md';
+
+        // Add metadata with quick-create tag
+        const metadata = {
+            tags: ['quick-create']
+        };
+        const yamlHeader = '---\n' + Object.entries(metadata).map(([key, value]) => `${key}: ${JSON.stringify(value)}`).join('\n') + '\n---\n\n';
+        const noteContent = yamlHeader + content;
+
+        await api.addNote(filename, noteContent);
+        successText.value = 'Note created successfully!';
+        successMessage.value = true;
+        quickNoteContent.value = '';
+
+        // Focus the textarea for creating another note
+        if (noteTextarea.value) {
+            noteTextarea.value.focus();
+        }
+
+        // Reload notes to show the new one if it has home tags
+        load();
+    } catch (_err) {
+        errorText.value = 'Failed to create note';
+        error.value = true;
     }
-    
-    // Reload notes to show the new one if it has home tags
-    load();
-  } catch (_err) {
-    errorText.value = 'Failed to create note';
-    error.value = true;
-  }
 }
 
 async function createQuickTask() {
-  try {
-    const taskUuid = crypto.randomUUID();
-    const taskPath = `.tasks/${taskUuid}.md`;
-    
-    // Determine scheduled dates based on selection
-    let scheduledDates: string[] = [];
-    if (quickTaskScheduledDay.value === 'today') {
-      scheduledDates = [today];
-    } else if (quickTaskScheduledDay.value === 'tomorrow') {
-      scheduledDates = [tomorrow];
-    }
-    
-    const newTask: Task = {
-      uuid: taskUuid,
-      title: quickTaskName.value.trim(),
-      tags: ['quick-create'],
-      status: { kind: 'todo' },
-      progress: 0,
-      importance: 3,
-      urgency: 3,
-      due_by: quickTaskDueBy.value || undefined,
-      deadline: quickTaskDeadline.value || undefined,
-      scheduled_dates: scheduledDates,
-      note: '',
-    };
+    try {
+        const taskUuid = crypto.randomUUID();
+        const taskPath = `.tasks/${taskUuid}.md`;
 
-    const markdown = render(newTask);
-    await api.addNote(taskPath, markdown);
-    
-    successText.value = `Task "${newTask.title}" created successfully!`;
-    successMessage.value = true;
-    quickTaskName.value = '';
-    quickTaskDueBy.value = '';
-    quickTaskDeadline.value = '';
-    quickTaskScheduledDay.value = 'none';
-    
-    // Focus the task name field for creating another task
-    if (taskNameField.value) {
-      taskNameField.value.focus();
+        // Determine scheduled dates based on selection
+        let scheduledDates: string[] = [];
+        if (quickTaskScheduledDay.value === 'today') {
+            scheduledDates = [today];
+        } else if (quickTaskScheduledDay.value === 'tomorrow') {
+            scheduledDates = [tomorrow];
+        }
+
+        const newTask: Task = {
+            uuid: taskUuid,
+            title: quickTaskName.value.trim(),
+            tags: ['quick-create'],
+            status: { kind: 'todo' },
+            progress: 0,
+            importance: 3,
+            urgency: 3,
+            due_by: quickTaskDueBy.value || undefined,
+            deadline: quickTaskDeadline.value || undefined,
+            scheduled_dates: scheduledDates,
+            note: '',
+        };
+
+        const markdown = render(newTask);
+        await api.addNote(taskPath, markdown);
+
+        successText.value = `Task "${newTask.title}" created successfully!`;
+        successMessage.value = true;
+        quickTaskName.value = '';
+        quickTaskDueBy.value = '';
+        quickTaskDeadline.value = '';
+        quickTaskScheduledDay.value = 'none';
+
+        // Focus the task name field for creating another task
+        if (taskNameField.value) {
+            taskNameField.value.focus();
+        }
+
+        // Refresh the task store to show the new task
+        await taskStore.refresh();
+    } catch (_err) {
+        errorText.value = 'Failed to create task';
+        error.value = true;
     }
-    
-    // Refresh the task store to show the new task
-    await taskStore.refresh();
-  } catch (_err) {
-    errorText.value = 'Failed to create task';
-    error.value = true;
-  }
 }
 
 function navigateToTask(task: TreeNodeRecord) {
-  // Navigate to the TasksNext view with the selected task
-  router.push({
-    name: 'TasksNextWithParams',
-    params: {
-      selectedNodeId: task.uuid,
-      tab: 'selected',
-      viewMode: 'status'
-    }
-  }).catch(err => {
-    // Ignore navigation duplicated errors
-    if (err.name !== 'NavigationDuplicated') {
-      console.error('Router navigation error:', err);
-    }
-  });
+    // Navigate to the TasksNext view with the selected task
+    router.push({
+        name: 'TasksNextWithParams',
+        params: {
+            selectedNodeId: task.uuid,
+            tab: 'selected',
+            viewMode: 'status'
+        }
+    }).catch(err => {
+            // Ignore navigation duplicated errors
+            if (err.name !== 'NavigationDuplicated') {
+                console.error('Router navigation error:', err);
+            }
+        });
 }
 
 function navigateToEvent(event: { notePath: string }) {
-  // Navigate to the Note view for the event's source note
-  router.push({
-    name: 'Note',
-    params: {
-      path: event.notePath
-    }
-  }).catch(err => {
-    // Ignore navigation duplicated errors
-    if (err.name !== 'NavigationDuplicated') {
-      console.error('Router navigation error:', err);
-    }
-  });
+    // Navigate to the Note view for the event's source note
+    router.push({
+        name: 'Note',
+        params: {
+            path: event.notePath
+        }
+    }).catch(err => {
+            // Ignore navigation duplicated errors
+            if (err.name !== 'NavigationDuplicated') {
+                console.error('Router navigation error:', err);
+            }
+        });
 }
 
 function formatEventTime(event: { start: string; end?: string }) {
-  const start = dayjs(event.start);
-  if (event.end) {
-    const end = dayjs(event.end);
-    if (start.format('YYYY-MM-DD') === end.format('YYYY-MM-DD')) {
-      return `${start.format('HH:mm')} - ${end.format('HH:mm')}`;
+    const start = dayjs(event.start);
+    if (event.end) {
+        const end = dayjs(event.end);
+        if (start.format('YYYY-MM-DD') === end.format('YYYY-MM-DD')) {
+            return `${start.format('HH:mm')} - ${end.format('HH:mm')}`;
+        } else {
+            return `${start.format('HH:mm')} - ${end.format('MM/DD HH:mm')}`;
+        }
     } else {
-      return `${start.format('HH:mm')} - ${end.format('MM/DD HH:mm')}`;
+        return start.format('HH:mm');
     }
-  } else {
-    return start.format('HH:mm');
-  }
 }
 
 function getDeadlineClass(deadline: string | undefined) {
-  if (!deadline) return 'text--secondary';
-  
-  const deadlineDate = dayjs(deadline);
-  const now = dayjs();
-  const diffDays = deadlineDate.diff(now, 'days');
-  
-  if (diffDays < 0) {
-    return 'error--text';
-  } else if (diffDays <= 3) {
-    return 'warning--text';
-  } else {
-    return 'text--secondary';
-  }
+    if (!deadline) return 'text--secondary';
+
+    const deadlineDate = dayjs(deadline);
+    const now = dayjs();
+    const diffDays = deadlineDate.diff(now, 'days');
+
+    if (diffDays < 0) {
+        return 'error--text';
+    } else if (diffDays <= 3) {
+        return 'warning--text';
+    } else {
+        return 'text--secondary';
+    }
 }
 
 function sortByTitle(entries: ListEntry2[], descending: boolean = false) {
-  if (descending) {
-    entries.sort((a, b) => -by((entry) => entry.title)(a, b));
-  }
-  else {
-    entries.sort(by((entry) => entry.title));
-  }
+    if (descending) {
+        entries.sort((a, b) => -by((entry) => entry.title)(a, b));
+    }
+    else {
+        entries.sort(by((entry) => entry.title));
+    }
 }
 
 function sortByTime(entries: ListEntry2[], descending: boolean = false) {
-  if (descending) {
-    entries.sort((a, b) => -by((entry) => parseISO(entry.time))(a, b));
-  }
-  else {
-    entries.sort(by((entry) => parseISO(entry.time)));
-  }
+    if (descending) {
+        entries.sort((a, b) => -by((entry) => parseISO(entry.time))(a, b));
+    }
+    else {
+        entries.sort(by((entry) => parseISO(entry.time)));
+    }
 }
 
 function changeSortOrder(category: string, kind: string) {
-  // Copy the map
-  const newSortOrders = new Map(sortOrders.value);
+    // Copy the map
+    const newSortOrders = new Map(sortOrders.value);
 
-  const [curKind, curDescending] = newSortOrders.get(category);
-  if (kind === curKind) {
-    newSortOrders.set(category, [kind, !curDescending]);
-  }
-  else {
-    newSortOrders.set(category, [kind, curDescending]);
-  }
+    const [curKind, curDescending] = newSortOrders.get(category);
+    if (kind === curKind) {
+        newSortOrders.set(category, [kind, !curDescending]);
+    }
+    else {
+        newSortOrders.set(category, [kind, curDescending]);
+    }
 
-  sortOrders.value = newSortOrders;
+    sortOrders.value = newSortOrders;
 }
 </script>
 
 <style scoped lang="scss">
 #home {
-  user-select: text;
+    user-select: text;
 }
 
 .quick-create-section, .events-section, .tasks-section, .notes-section {
-  max-width: 1200px;
-  margin: 0 auto;
+    max-width: 1200px;
+    margin: 0 auto;
 }
 
 .quick-create-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
 }
 
 .events-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
 }
 
 .tasks-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
 }
 
 .notes-grid {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 16px;
-  margin-bottom: 24px;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 24px;
 }
 
 .event-column, .task-column {
-  min-height: 200px;
+    min-height: 200px;
 }
 
 .event-item {
-  background-color: rgba(0, 0, 0, 0.02);
-  border-radius: 4px;
-  
-  &:hover {
-    background-color: rgba(0, 0, 0, 0.04);
-  }
+    background-color: rgba(0, 0, 0, 0.02);
+    border-radius: 4px;
+
+    &:hover {
+        background-color: rgba(0, 0, 0, 0.04);
+    }
 }
 
 .clickable-event {
-  cursor: pointer;
-  
-  &:hover {
-    background-color: rgba(0, 0, 0, 0.08);
-  }
+    cursor: pointer;
+
+    &:hover {
+        background-color: rgba(0, 0, 0, 0.08);
+    }
 }
 
 .task-item {
-  background-color: rgba(0, 0, 0, 0.02);
-  border-radius: 4px;
-  
-  &.task-done {
-    opacity: 0.6;
-  }
+    background-color: rgba(0, 0, 0, 0.02);
+    border-radius: 4px;
+
+    &.task-done {
+        opacity: 0.6;
+    }
 }
 
 .clickable-task {
-  cursor: pointer;
-  
-  &:hover {
-    background-color: rgba(0, 0, 0, 0.08);
-  }
+    cursor: pointer;
+
+    &:hover {
+        background-color: rgba(0, 0, 0, 0.08);
+    }
 }
 
 .event-name {
-  font-size: 0.9rem;
-  line-height: 1.2;
+    font-size: 0.9rem;
+    line-height: 1.2;
 }
 
 .event-time {
-  font-size: 0.8rem;
+    font-size: 0.8rem;
 }
 
 .event-note {
-  font-size: 0.8rem;
-  color: rgba(0, 0, 0, 0.6);
+    font-size: 0.8rem;
+    color: rgba(0, 0, 0, 0.6);
 }
 
 .task-name {
-  font-size: 0.9rem;
-  line-height: 1.2;
+    font-size: 0.9rem;
+    line-height: 1.2;
 }
 
 .task-deadline {
-  font-size: 0.8rem;
+    font-size: 0.8rem;
 }
 
 // Responsive adjustments
 @media (max-width: 959px) {
-  .events-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .tasks-grid {
-    grid-template-columns: 1fr;
-  }
+    .events-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .tasks-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 599px) {
-  .events-section, .tasks-section, .notes-section {
-    margin: 0 8px;
-  }
+    .events-section, .tasks-section, .notes-section {
+        margin: 0 8px;
+    }
 }
 </style>
