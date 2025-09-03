@@ -79,12 +79,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import dayjs from 'dayjs';
-import utc from 'dayjs/plugin/utc';
-import timezone from 'dayjs/plugin/timezone';
-
-// Extend dayjs with timezone plugins
-dayjs.extend(utc);
-dayjs.extend(timezone);
 
 import {
     mdiCalendarOutline,
@@ -317,12 +311,9 @@ const localTimeHint = computed(() => {
         // Create a date string with timezone offset that dayjs can parse
         const dateTimeWithTz = `${date} ${time}${timezoneValue.value}`;
         
-        // Parse the datetime in the selected timezone and convert to local timezone
-        const selectedDateTime = dayjs(dateTimeWithTz);
-        if (!selectedDateTime.isValid()) return '';
-        
-        // Convert to local timezone
-        const localDateTime = selectedDateTime.local();
+        // Parse the datetime - dayjs automatically converts timezone-aware strings to local time
+        const localDateTime = dayjs(dateTimeWithTz);
+        if (!localDateTime.isValid()) return '';
         
         return `Local time: ${localDateTime.format('YYYY-MM-DD HH:mm')}`;
     } catch {
