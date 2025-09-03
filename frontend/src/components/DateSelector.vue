@@ -5,7 +5,7 @@
         offset-y
         min-width="auto"
     >
-        <template v-slot:activator="{ on, attrs }">
+        <template #activator="{ on, attrs }">
             <v-text-field
                 v-bind="attrs"
                 v-model="displayValue"
@@ -19,7 +19,7 @@
                 readonly
                 v-on="on"
             >
-                <template v-slot:prepend>
+                <template #prepend>
                     <v-icon>{{ timeEnabled ? mdiClockOutline : mdiCalendarOutline }}</v-icon>
                 </template>
             </v-text-field>
@@ -44,7 +44,10 @@
                         </v-list-item>
                     </v-list>
                 </div>
-                <div v-if="timeEnabled" class="d-flex flex-column">
+                <div
+                    v-if="timeEnabled"
+                    class="d-flex flex-column"
+                >
                     <v-time-picker
                         v-model="timeValue"
                         format="24hr"
@@ -62,7 +65,7 @@
                                 hide-details
                                 v-on:input="onTimezonePick"
                             >
-                                <template v-slot:prepend>
+                                <template #prepend>
                                     <v-icon>{{ mdiEarth }}</v-icon>
                                 </template>
                             </v-select>
