@@ -453,7 +453,7 @@ interface TreeNode {
 const appStore = useAppStore();
 
 // Reactive states
-const notificationPermission = ref(Notification.permission);
+const notificationPermission = ref<'granted'| 'denied' | 'default'>('Notification' in window ? Notification.permission : 'denied');
 const miniMainSidebar = ref(loadConfigValue("mini-main-sidebar", false));
 const mobileDrawer = ref(false);
 const loginUsername = ref("");
@@ -638,6 +638,8 @@ onUnmounted(() => {
 
 // Methods
 async function requestNotificationPermission() {
+    if (!('Notification' in window)) { return; }
+
     const result = await Notification.requestPermission();
     notificationPermission.value = result;
 
