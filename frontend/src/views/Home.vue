@@ -856,7 +856,6 @@ function changeSortOrder(category: string, kind: string) {
 .event-item {
   background-color: rgba(0, 0, 0, 0.02);
   border-radius: 4px;
-  transition: background-color 0.2s;
   
   &:hover {
     background-color: rgba(0, 0, 0, 0.04);
@@ -868,15 +867,12 @@ function changeSortOrder(category: string, kind: string) {
   
   &:hover {
     background-color: rgba(0, 0, 0, 0.08);
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 }
 
 .task-item {
   background-color: rgba(0, 0, 0, 0.02);
   border-radius: 4px;
-  transition: opacity 0.2s;
   
   &.task-done {
     opacity: 0.6;
@@ -885,12 +881,9 @@ function changeSortOrder(category: string, kind: string) {
 
 .clickable-task {
   cursor: pointer;
-  transition: all 0.2s;
   
   &:hover {
     background-color: rgba(0, 0, 0, 0.08);
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 }
 
