@@ -86,7 +86,7 @@ import {
     mdiEarth,
 } from '@mdi/js';
 
-// Get local timezone in ISO8601 format using dayjs
+// Get local timezone in ISO8601 format
 const getLocalTimezone = (): string => {
     const offsetMinutes = new Date().getTimezoneOffset();
     const offsetHours = Math.floor(Math.abs(offsetMinutes) / 60);
