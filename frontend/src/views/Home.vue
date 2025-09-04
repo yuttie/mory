@@ -577,6 +577,13 @@ const todayTasks = computed(() => {
 
     return taskStore.allTasks.filter(task => {
         const scheduledDates = task.metadata?.task?.scheduled_dates;
+        const status = task.metadata?.task?.status?.kind;
+        
+        // Skip done and canceled tasks
+        if (status === 'done' || status === 'canceled') {
+            return false;
+        }
+        
         return Array.isArray(scheduledDates) && scheduledDates.includes(today);
     });
 });
@@ -596,9 +603,16 @@ const upcomingTasks = computed(() => {
     const tasks: TreeNodeRecord[] = [];
     const now = dayjs();
 
-    // Collect tasks with deadlines that are after now
+    // Collect tasks with deadlines that are after now, excluding done/canceled tasks
     for (const task of taskStore.allTasks) {
         const deadline = task.metadata?.task?.deadline;
+        const status = task.metadata?.task?.status?.kind;
+        
+        // Skip done and canceled tasks
+        if (status === 'done' || status === 'canceled') {
+            continue;
+        }
+        
         if (deadline && dayjs(deadline).isAfter(now)) {
             tasks.push(task);
         }
