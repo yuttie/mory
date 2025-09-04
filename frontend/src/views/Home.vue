@@ -871,6 +871,10 @@ function changeSortOrder(category: string, kind: string) {
     user-select: text;
 }
 
+.v-card {
+    width: 100%;
+}
+
 .quick-create-section, .events-section, .tasks-section, .notes-section {
     max-width: 1200px;
     margin: 0 auto;
@@ -979,7 +983,8 @@ function changeSortOrder(category: string, kind: string) {
 }
 
 @media (max-width: 599px) {
-    .events-section, .tasks-section, .notes-section {
+    .quick-create-section, .events-section, .tasks-section, .notes-section {
+        flex-grow: 1;
         margin: 0 8px;
     }
 }
