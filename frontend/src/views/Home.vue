@@ -605,7 +605,7 @@ const upcomingTasks = computed(() => {
 
     // Collect tasks with deadlines, excluding done/canceled tasks
     for (const task of taskStore.allTasks) {
-        const deadline = task.metadata?.task?.deadline;
+        const date = task.metadata?.task?.due_by ?? task.metadata?.task?.deadline;
         const status = task.metadata?.task?.status?.kind;
         
         // Skip done and canceled tasks
@@ -613,7 +613,7 @@ const upcomingTasks = computed(() => {
             continue;
         }
         
-        if (deadline) {
+        if (date) {
             tasks.push(task);
         }
     }
