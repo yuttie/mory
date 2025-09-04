@@ -603,7 +603,7 @@ const upcomingTasks = computed(() => {
     const tasks: TreeNodeRecord[] = [];
     const now = dayjs();
 
-    // Collect tasks with deadlines that are after now, excluding done/canceled tasks
+    // Collect tasks with deadlines, excluding done/canceled tasks
     for (const task of taskStore.allTasks) {
         const deadline = task.metadata?.task?.deadline;
         const status = task.metadata?.task?.status?.kind;
@@ -613,7 +613,7 @@ const upcomingTasks = computed(() => {
             continue;
         }
         
-        if (deadline && dayjs(deadline).isAfter(now)) {
+        if (deadline) {
             tasks.push(task);
         }
     }
