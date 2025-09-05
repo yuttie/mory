@@ -407,8 +407,12 @@ function filterTreeNodes(nodes: any[], hideCompleted: boolean): any[] {
                 if (node.children && node.children.length > 0) {
                     filteredChildren = node.children.filter(child => {
                         const taskStatus = child.metadata?.task?.status?.kind;
-                        const shouldFilterOut =
-                            hideCompleted && (taskStatus === 'done' || taskStatus === 'canceled');
+                        // Always filter out canceled tasks from tag groups
+                        if (taskStatus === 'canceled') {
+                            return false;
+                        }
+                        // Filter out done tasks only when hideCompleted is enabled
+                        const shouldFilterOut = hideCompleted && taskStatus === 'done';
                         return !shouldFilterOut;
                     });
                 }
@@ -433,8 +437,14 @@ function filterTreeNodes(nodes: any[], hideCompleted: boolean): any[] {
             } else {
                 // This is a leaf task without children - apply individual filtering
                 // (This should only happen for tasks under tag groups, as per the logic)
-                const shouldFilterOut =
-                    hideCompleted && (taskStatus === 'done' || taskStatus === 'canceled');
+                
+                // Always filter out canceled tasks
+                if (taskStatus === 'canceled') {
+                    return null;
+                }
+                
+                // Filter out done tasks only when hideCompleted is enabled
+                const shouldFilterOut = hideCompleted && taskStatus === 'done';
 
                 if (shouldFilterOut) {
                     return null; // Filter out this individual task
