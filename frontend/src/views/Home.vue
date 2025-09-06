@@ -929,11 +929,24 @@ function changeSortOrder(category: string, kind: string) {
 
 <style scoped lang="scss">
 #home {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     user-select: text;
 }
 
 .v-card {
-    width: 100%;
+    flex-grow: 1;
+
+    .v-card__title {
+        justify-content: center;
+        font-weight: bold;
+    }
+
+    .age {
+        opacity: 0.5;
+        user-select: none;
+    }
 }
 
 .quick-create-section, .events-section, .tasks-section, .notes-section {
