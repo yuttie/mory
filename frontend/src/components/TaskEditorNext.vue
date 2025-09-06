@@ -22,44 +22,46 @@
                     <v-icon>{{ mdiPencilBoxOutline }}</v-icon>
                 </v-btn>
                 <v-spacer />
-                <v-btn
-                    v-if="!isEdit"
-                    text
-                    class="mr-3"
-                    v-on:click="onCancel"
-                >
-                    <v-icon>{{ mdiClose }}</v-icon>
-                    <span v-if="$vuetify.breakpoint.smAndUp">Cancel</span>
-                </v-btn>
-                <v-btn
-                    v-if="isEdit"
-                    small
-                    outlined
-                    color="primary"
-                    class="mr-3"
-                    v-on:click="onChangeParent"
-                >
-                    <v-icon small class="mr-1">{{ mdiFileTreeOutline }}</v-icon>
-                    <span v-if="$vuetify.breakpoint.smAndUp">Change Parent</span>
-                </v-btn>
-                <v-btn
-                    v-if="isEdit"
-                    color="error"
-                    text
-                    class="mr-3"
-                    v-on:click="onDelete"
-                >
-                    <v-icon>{{ mdiDelete }}</v-icon>
-                    <span v-if="$vuetify.breakpoint.smAndUp">Delete</span>
-                </v-btn>
-                <v-btn
-                    v-bind:disabled="!!statusGateError || !uiValid"
-                    type="submit"
-                    color="primary"
-                >
-                    <v-icon>{{ mdiContentSave }}</v-icon>
-                    <span v-if="$vuetify.breakpoint.smAndUp">{{ isEdit ? 'Save' : 'Create' }}</span>
-                </v-btn>
+                <div class="d-flex flex-row flex-grow-1 align-center">
+                    <v-spacer />
+                    <v-btn
+                        v-if="!isEdit"
+                        text
+                        class="mr-3"
+                        v-on:click="onCancel"
+                    >
+                        <v-icon>{{ mdiClose }}</v-icon>
+                        <span v-if="$vuetify.breakpoint.mdAndUp">Cancel</span>
+                    </v-btn>
+                    <v-btn
+                        v-if="isEdit"
+                        text
+                        color="primary"
+                        class="mr-3"
+                        v-on:click="onChangeParent"
+                    >
+                        <v-icon small class="mr-1">{{ mdiFileTreeOutline }}</v-icon>
+                        <span v-if="$vuetify.breakpoint.mdAndUp">Change Parent</span>
+                    </v-btn>
+                    <v-btn
+                        v-if="isEdit"
+                        color="error"
+                        text
+                        class="mr-3"
+                        v-on:click="onDelete"
+                    >
+                        <v-icon>{{ mdiDelete }}</v-icon>
+                        <span v-if="$vuetify.breakpoint.mdAndUp">Delete</span>
+                    </v-btn>
+                    <v-btn
+                        v-bind:disabled="!!statusGateError || !uiValid"
+                        type="submit"
+                        color="primary"
+                    >
+                        <v-icon>{{ mdiContentSave }}</v-icon>
+                        <span v-if="$vuetify.breakpoint.mdAndUp">{{ isEdit ? 'Save' : 'Create' }}</span>
+                    </v-btn>
+                </div>
             </v-card-title>
             <v-alert
                 v-if="error"
@@ -71,7 +73,7 @@
                 {{ String(error) }}
             </v-alert>
             <v-card-text
-                class="d-flex flex-row"
+                class="controls"
                 style="flex: 1 1 0; min-height: 0;"
             >
                 <div class="props-pane pr-3">
@@ -704,10 +706,29 @@ defineExpose({
     height: 100%;
 }
 
+.controls {
+    display: flex;
+    flex-direction: row;
+}
+
 .props-pane {
-    width: 350px;
+    max-width: 350px;
     box-sizing: content-box;
     overflow-y: auto;
+}
+
+@media (max-width: 1263px) { /* lg breakpoint in Vuetify 2 */
+    .controls {
+        display: block;
+        overflow-y: auto;
+    }
+
+    .props-pane,
+    .note-pane {
+        max-width: unset;
+        overflow: hidden;
+        flex: 1 0 0;
+    }
 }
 
 .date-list {
