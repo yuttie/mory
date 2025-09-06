@@ -565,8 +565,13 @@ const noteTreeRoot = computed(() => {
 });
 
 // Lifecycle hooks
-onMounted(() => {
-    loadCustomCss();
+onMounted(async () => {
+    try {
+        await loadCustomCss();
+    } catch (error) {
+        // Log error but don't break the app initialization
+        console.error('Failed to load custom CSS:', error);
+    }
 
     (fileInputEl.value as HTMLInputElement).addEventListener('change', (e: any) => {
         if (e.target.files.length > 0) {
@@ -677,75 +682,72 @@ function loadTemplates() {
         });
 }
 
-function loadCustomCss() {
-    // Try CSS file first
-    api.getNote('.mory/custom.css')
-        .then(res => {
-            // CSS file exists, use it directly
-            const style = document.createElement('style');
-            style.setAttribute('type', 'text/css');
-            style.setAttribute('id', 'custom-css');
-            style.innerText = res.data;
-            document.head.appendChild(style);
-        }).catch(error => {
-            if (error.response) {
-                if (error.response.status === 401) {
-                    // Unauthorized
-                    tokenExpired(() => loadCustomCss());
-                    return;
-                }
-                else if (error.response.status === 404) {
-                    // CSS file not found, try LESS file
-                    loadCustomLess();
-                    return;
-                }
-                else {
-                    throw error;
-                }
+async function loadCustomCss() {
+    try {
+        // Try CSS file first
+        const res = await api.getNote('.mory/custom.css');
+        // CSS file exists, use it directly
+        const style = document.createElement('style');
+        style.setAttribute('type', 'text/css');
+        style.setAttribute('id', 'custom-css');
+        style.innerText = res.data;
+        document.head.appendChild(style);
+    } catch (error) {
+        if (error.response) {
+            if (error.response.status === 401) {
+                // Unauthorized
+                tokenExpired(async () => await loadCustomCss());
+                return;
+            }
+            else if (error.response.status === 404) {
+                // CSS file not found, try LESS file
+                await loadCustomLess();
+                return;
             }
             else {
                 throw error;
             }
-        });
+        }
+        else {
+            throw error;
+        }
+    }
 }
 
-function loadCustomLess() {
-    api.getNote('.mory/custom.less')
-        .then(async (res) => {
-            // Dynamically import less library
-            const { default: less } = await import('less');
-            
-            return less.render(res.data, {
-                globalVars: {
-                    'nav-height': '64px',
-                },
-            }).then(output => {
-                const style = document.createElement('style');
-                style.setAttribute('type', 'text/css');
-                style.setAttribute('id', 'custom-css');
-                style.innerText = output.css;
-                document.head.appendChild(style);
-            }, error => {
-                // FIXME
-                console.log(error);
-            });
-        }).catch(error => {
-            if (error.response) {
-                if (error.response.status === 401) {
-                    // Unauthorized
-                    tokenExpired(() => loadCustomCss());
-                }
-                else if (error.response.status === 404) {
-                    // We can simply ignore the error
-                }
-                else {
-                    throw error;
-                }
+async function loadCustomLess() {
+    try {
+        const res = await api.getNote('.mory/custom.less');
+        // Dynamically import less library
+        const { default: less } = await import('less');
+        
+        const output = await less.render(res.data, {
+            globalVars: {
+                'nav-height': '64px',
+            },
+        });
+        
+        const style = document.createElement('style');
+        style.setAttribute('type', 'text/css');
+        style.setAttribute('id', 'custom-css');
+        style.innerText = output.css;
+        document.head.appendChild(style);
+    } catch (error) {
+        if (error.response) {
+            if (error.response.status === 401) {
+                // Unauthorized
+                tokenExpired(async () => await loadCustomCss());
+            }
+            else if (error.response.status === 404) {
+                // We can simply ignore the error
             }
             else {
                 throw error;
             }
-        });
+        }
+        else {
+            throw error;
+        }
+    }
 }
 
 function unloadCustomCss() {
