@@ -432,7 +432,10 @@ const renderedContentDiv = ref(null);
 
 // Computed properties
 const editorMode = computed(() => {
-    if (/\.less$/i.test(route.params.path)) {
+    if (/\.css$/i.test(route.params.path)) {
+        return 'css';
+    }
+    else if (/\.less$/i.test(route.params.path)) {
         return 'less';
     }
     else {

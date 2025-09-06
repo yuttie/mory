@@ -67,8 +67,17 @@ onMounted(() => {
   const theme = loadConfigValue('editor-theme', 'default');
   setTheme(theme);
 
+  // WARNING: Do NOT refactor or merge these branches!
+  // Vite relies on explicit static dynamic imports for proper module bundling.
+  // Using a single dynamic import (e.g., `import(\`ace-builds/src-noconflict/mode-${mode}\`)`)
+  // will break build-time processing. These branches must remain as-is.
   if (props.mode === 'markdown') {
     import('ace-builds/src-noconflict/mode-markdown').then(() => {
+      editor.value!.getSession().setMode(`ace/mode/${props.mode}`);
+    });
+  }
+  else if (props.mode === 'css') {
+    import('ace-builds/src-noconflict/mode-css').then(() => {
       editor.value!.getSession().setMode(`ace/mode/${props.mode}`);
     });
   }
@@ -240,8 +249,17 @@ watch(() => props.value, (value: string) => {
 });
 
 watch(() => props.mode, (mode: string) => {
+  // WARNING: Do NOT refactor or merge these branches!
+  // Vite relies on explicit static dynamic imports for proper module bundling.
+  // Using a single dynamic import (e.g., `import(\`ace-builds/src-noconflict/mode-${mode}\`)`)
+  // will break build-time processing. These branches must remain as-is.
   if (mode === 'markdown') {
     import('ace-builds/src-noconflict/mode-markdown').then(() => {
+      editor.value!.getSession().setMode(`ace/mode/${mode}`);
+    });
+  }
+  else if (mode === 'css') {
+    import('ace-builds/src-noconflict/mode-css').then(() => {
       editor.value!.getSession().setMode(`ace/mode/${mode}`);
     });
   }
