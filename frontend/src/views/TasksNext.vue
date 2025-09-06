@@ -1,5 +1,5 @@
 <template>
-    <div id="tasks" class="d-flex" v-bind:class="{ 'flex-column': !$vuetify.breakpoint.mdAndUp, 'flex-row': $vuetify.breakpoint.mdAndUp }">
+    <div id="tasks-next" class="d-flex" v-bind:class="{ 'flex-column': !$vuetify.breakpoint.mdAndUp, 'flex-row': $vuetify.breakpoint.mdAndUp }">
         <template v-if="store.isLoaded">
             <div class="d-flex flex-column task-tree-container"><!-- NOTE: Necessary for <TaskTree> to have vertical scrollbar -->
                 <v-toolbar flat class="flex-grow-0">
@@ -808,14 +808,14 @@ async function load() {
 </script>
 
 <style scoped lang="scss">
-#tasks {
+#tasks-next {
     height: 100%;
     user-select: none;
 }
 
 /* Mobile responsive adjustments for main container */
 @media (max-width: 959px) { /* md breakpoint in Vuetify 2 */
-    #tasks {
+    #tasks-next {
         padding: 4px;
     }
 }
