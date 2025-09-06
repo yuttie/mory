@@ -287,12 +287,24 @@
             <v-progress-circular indeterminate color="blue-grey lighten-3" size="64"></v-progress-circular>
         </v-overlay>
         <v-snackbar v-model="error" color="error" top timeout="5000">{{ errorText }}</v-snackbar>
-        <v-snackbar v-model="successMessage" color="success" top timeout="3000">{{ successText }}</v-snackbar>
+        <v-snackbar v-model="successMessage" color="success" top timeout="5000">
+            {{ successText }}
+            <template v-slot:action="{ attrs }">
+                <v-btn
+                    v-if="createdItemPath"
+                    text
+                    v-bind="attrs"
+                    v-on:click="openCreatedItem"
+                >
+                    Open
+                </v-btn>
+            </template>
+        </v-snackbar>
     </div>
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import type { Ref } from 'vue';
 import { useRouter } from 'vue-router/composables';
 
@@ -384,6 +396,8 @@ const scheduledDayOptions = [
 // Success/error messaging
 const successMessage = ref(false);
 const successText = ref('');
+const createdItemPath = ref('');
+const createdItemType = ref<'note' | 'task' | ''>('');
 
 // Computed properties
 const sortedCategorizedEntries = computed(() => {
@@ -627,6 +641,15 @@ const upcomingTasks = computed(() => {
     });
 });
 
+// Watchers
+watch(successMessage, (newValue) => {
+    // Clear created item info when success message is dismissed
+    if (!newValue) {
+        createdItemPath.value = '';
+        createdItemType.value = '';
+    }
+});
+
 // Lifecycle hooks
 onMounted(() => {
     document.title = `Home | ${import.meta.env.VITE_APP_NAME}`;
@@ -705,6 +728,8 @@ async function createQuickNote() {
         await api.addNote(filename, noteContent);
         successText.value = 'Note created successfully!';
         successMessage.value = true;
+        createdItemPath.value = filename;
+        createdItemType.value = 'note';
         quickNoteContent.value = '';
 
         // Focus the textarea for creating another note
@@ -752,6 +777,8 @@ async function createQuickTask() {
 
         successText.value = `Task "${newTask.title}" created successfully!`;
         successMessage.value = true;
+        createdItemPath.value = taskUuid;
+        createdItemType.value = 'task';
         quickTaskName.value = '';
         quickTaskDueBy.value = '';
         quickTaskDeadline.value = '';
@@ -800,6 +827,40 @@ function navigateToEvent(event: { notePath: string }) {
                 console.error('Router navigation error:', err);
             }
         });
+}
+
+function openCreatedItem() {
+    if (createdItemType.value === 'note') {
+        // Navigate to the Note view for the created note
+        router.push({
+            name: 'Note',
+            params: {
+                path: createdItemPath.value
+            }
+        }).catch(err => {
+            // Ignore navigation duplicated errors
+            if (err.name !== 'NavigationDuplicated') {
+                console.error('Router navigation error:', err);
+            }
+        });
+    } else if (createdItemType.value === 'task') {
+        // Navigate to the TasksNext view for the created task
+        router.push({
+            name: 'TasksNextWithParams',
+            params: {
+                selectedNodeId: createdItemPath.value,
+                tab: 'selected',
+                viewMode: 'status'
+            }
+        }).catch(err => {
+            // Ignore navigation duplicated errors
+            if (err.name !== 'NavigationDuplicated') {
+                console.error('Router navigation error:', err);
+            }
+        });
+    }
+    // Clear the success message after navigation
+    successMessage.value = false;
 }
 
 function formatEventTime(event: { start: string; end?: string }) {
