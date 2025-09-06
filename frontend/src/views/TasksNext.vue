@@ -844,7 +844,6 @@ async function load() {
 
 .item-view {
     flex: 1 1 0;
-    background: #B0BEC5;
 }
 
 /* Mobile responsive adjustments for item view */
