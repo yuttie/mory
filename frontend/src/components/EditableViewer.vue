@@ -381,7 +381,6 @@ import * as api from '@/api';
 import { loadConfigValue } from '@/config';
 import { CliPrettify } from 'markdown-table-prettify';
 import { renderMarkdown } from '@/markdown';
-import less from 'less';
 
 const ajv = new Ajv();
 const validateMetadata = ajv.compile(metadataSchema);
@@ -1040,8 +1039,30 @@ async function updateRendered() {
 }
 
 function loadCustomNoteCss(): Promise<string> {
-    return api.getNote('.mory/custom-note.less')
+    // Try CSS file first
+    return api.getNote('.mory/custom-note.css')
         .then(res => {
+            // CSS file exists, return directly
+            return res.data;
+        })
+        .catch(error => {
+            if (error.response && error.response.status === 404) {
+                // CSS file not found, try LESS file
+                return loadCustomNoteLess();
+            }
+            else {
+                // Re-throw other errors
+                throw error;
+            }
+        });
+}
+
+function loadCustomNoteLess(): Promise<string> {
+    return api.getNote('.mory/custom-note.less')
+        .then(async (res) => {
+            // Dynamically import less library
+            const { default: less } = await import('less');
+            
             return less.render(res.data, {
                 globalVars: {
                     'nav-height': '64px',

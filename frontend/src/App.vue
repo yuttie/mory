@@ -441,7 +441,6 @@ import * as api from '@/api';
 import { loadConfigValue, saveConfigValue } from '@/config';
 import type { Claim, ListEntry2, UploadEntry } from '@/api';
 import { jwtDecode } from 'jwt-decode';
-import less from 'less';
 
 interface TreeNode {
     name: string;
@@ -679,9 +678,44 @@ function loadTemplates() {
 }
 
 function loadCustomCss() {
-    api.getNote('.mory/custom.less')
+    // Try CSS file first
+    api.getNote('.mory/custom.css')
         .then(res => {
-            less.render(res.data, {
+            // CSS file exists, use it directly
+            const style = document.createElement('style');
+            style.setAttribute('type', 'text/css');
+            style.setAttribute('id', 'custom-css');
+            style.innerText = res.data;
+            document.head.appendChild(style);
+        }).catch(error => {
+            if (error.response) {
+                if (error.response.status === 401) {
+                    // Unauthorized
+                    tokenExpired(() => loadCustomCss());
+                    return;
+                }
+                else if (error.response.status === 404) {
+                    // CSS file not found, try LESS file
+                    loadCustomLess();
+                    return;
+                }
+                else {
+                    throw error;
+                }
+            }
+            else {
+                throw error;
+            }
+        });
+}
+
+function loadCustomLess() {
+    api.getNote('.mory/custom.less')
+        .then(async (res) => {
+            // Dynamically import less library
+            const { default: less } = await import('less');
+            
+            return less.render(res.data, {
                 globalVars: {
                     'nav-height': '64px',
                 },
