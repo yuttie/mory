@@ -56,7 +56,7 @@
                         class="mr-2"
                     ></v-img>
                     <v-list-item-content>
-                        <v-list-item-title class="text-h5">
+                        <v-list-item-title class="text-h6 logo-text">
                             mory
                         </v-list-item-title>
                     </v-list-item-content>
@@ -862,6 +862,12 @@ watch(miniMainSidebar, (newMiniMainSidebar: boolean) => {
     background-position: center;
     background-repeat: no-repeat;
     background-image: url("/img/logo.svg");
+}
+
+.logo-text {
+    font-weight: 300 !important;
+    letter-spacing: 0.2em !important;
+    overflow: visible;
 }
 
 .login-overlay {
