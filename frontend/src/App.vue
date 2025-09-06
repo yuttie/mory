@@ -9,7 +9,7 @@
             color="white"
         >
             <v-app-bar-nav-icon v-on:click="mobileDrawer = true" />
-            <v-toolbar-title>{{ $route.name }}</v-toolbar-title>
+            <v-toolbar-title>{{ $route.name.replace(/With.*$/, '') }}</v-toolbar-title>
         </v-app-bar>
 
         <v-main v-if="appStore.serviceWorkerConfigured && appStore.serviceWorkerHasToken">
