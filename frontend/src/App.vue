@@ -1,5 +1,17 @@
 <template>
     <v-app id="app" ref="app">
+        <!-- App bar for mobile -->
+        <v-app-bar
+            v-if="$vuetify.breakpoint.xs"
+            app
+            top
+            elevate-on-scroll
+            color="white"
+        >
+            <v-app-bar-nav-icon v-on:click="mobileDrawer = true" />
+            <v-toolbar-title>{{ $route.name }}</v-toolbar-title>
+        </v-app-bar>
+
         <v-main v-if="appStore.serviceWorkerConfigured && appStore.serviceWorkerHasToken">
             <v-container fluid pa-0 style="height: 100%;">
                 <router-view v-if="!(!appStore.hasToken && !routerViewEl)" v-on:tokenExpired="tokenExpired" class="router-view" ref="routerViewEl"/>
@@ -349,17 +361,6 @@
                 </v-card>
             </v-menu>
         </v-row>
-
-        <!-- App bar for mobile -->
-        <v-app-bar
-            v-if="$vuetify.breakpoint.xs"
-            app
-            bottom
-            color="white"
-        >
-            <v-app-bar-nav-icon v-on:click="mobileDrawer = true" />
-            <v-toolbar-title>{{ $route.name }}</v-toolbar-title>
-        </v-app-bar>
 
         <div v-if="!appStore.hasToken" class="login-overlay">
             <div class="form">
