@@ -24,7 +24,7 @@
                             <v-subheader>Statistics</v-subheader>
                             <v-list-item>
                                 <v-list-item-content>
-                                    <v-list-item-title v-for="[kind, label] of Object.entries(STATUS_LABEL)">
+                                    <v-list-item-title v-for="[kind, label] of Object.entries(STATUS_LABEL)" v-bind:key="kind">
                                         {{ label }}: {{ store.allTasks.filter((t) => [kind].includes(t.metadata?.task?.status?.kind)).length }}
                                     </v-list-item-title>
                                 </v-list-item-content>
@@ -141,7 +141,7 @@
                                     <v-subheader>Descendants statistics</v-subheader>
                                     <v-list-item>
                                         <v-list-item-content>
-                                            <v-list-item-title v-for="[kind, label] of Object.entries(STATUS_LABEL)">
+                                            <v-list-item-title v-for="[kind, label] of Object.entries(STATUS_LABEL)" v-bind:key="kind">
                                                 {{ label }}: {{ selectedNodeDescendants.filter((t) => [kind].includes(t.metadata?.task?.status?.kind)).length }}
                                             </v-list-item-title>
                                         </v-list-item-content>
