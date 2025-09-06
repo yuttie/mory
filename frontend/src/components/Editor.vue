@@ -67,25 +67,11 @@ onMounted(() => {
   const theme = loadConfigValue('editor-theme', 'default');
   setTheme(theme);
 
-  // WARNING: Do NOT refactor or merge these branches!
-  // Vite relies on explicit static dynamic imports for proper module bundling.
-  // Using a single dynamic import (e.g., `import(\`ace-builds/src-noconflict/mode-${mode}\`)`)
-  // will break build-time processing. These branches must remain as-is.
-  if (props.mode === 'markdown') {
-    import('ace-builds/src-noconflict/mode-markdown').then(() => {
-      editor.value!.getSession().setMode(`ace/mode/${props.mode}`);
-    });
-  }
-  else if (props.mode === 'css') {
-    import('ace-builds/src-noconflict/mode-css').then(() => {
-      editor.value!.getSession().setMode(`ace/mode/${props.mode}`);
-    });
-  }
-  else if (props.mode === 'less') {
-    import('ace-builds/src-noconflict/mode-less').then(() => {
-      editor.value!.getSession().setMode(`ace/mode/${props.mode}`);
-    });
-  }
+  const modeModules = import.meta.glob('../../node_modules/ace-builds/src-noconflict/mode-*');
+  const modeModulePath = `../../node_modules/ace-builds/src-noconflict/mode-${props.mode}.js`;
+  modeModules[modeModulePath]().then((_mod) => {
+    editor.value!.getSession().setMode(`ace/mode/${props.mode}`);
+  });
 
   const keybinding = loadConfigValue('editor-keybinding', 'default');
   setKeybinding(keybinding);
@@ -123,47 +109,10 @@ function replaceSelection(newText: string) {
 function setTheme(theme: string) {
   let loading = null;
 
-  if      (theme === 'ambiance')                { loading = import('ace-builds/src-noconflict/theme-ambiance');                }
-  else if (theme === 'chaos')                   { loading = import('ace-builds/src-noconflict/theme-chaos');                   }
-  else if (theme === 'chrome')                  { loading = import('ace-builds/src-noconflict/theme-chrome');                  }
-  else if (theme === 'clouds')                  { loading = import('ace-builds/src-noconflict/theme-clouds');                  }
-  else if (theme === 'clouds_midnight')         { loading = import('ace-builds/src-noconflict/theme-clouds_midnight');         }
-  else if (theme === 'cobalt')                  { loading = import('ace-builds/src-noconflict/theme-cobalt');                  }
-  else if (theme === 'crimson_editor')          { loading = import('ace-builds/src-noconflict/theme-crimson_editor');          }
-  else if (theme === 'dawn')                    { loading = import('ace-builds/src-noconflict/theme-dawn');                    }
-  else if (theme === 'dracula')                 { loading = import('ace-builds/src-noconflict/theme-dracula');                 }
-  else if (theme === 'dreamweaver')             { loading = import('ace-builds/src-noconflict/theme-dreamweaver');             }
-  else if (theme === 'eclipse')                 { loading = import('ace-builds/src-noconflict/theme-eclipse');                 }
-  else if (theme === 'github')                  { loading = import('ace-builds/src-noconflict/theme-github');                  }
-  else if (theme === 'gob')                     { loading = import('ace-builds/src-noconflict/theme-gob');                     }
-  else if (theme === 'gruvbox')                 { loading = import('ace-builds/src-noconflict/theme-gruvbox');                 }
-  else if (theme === 'idle_fingers')            { loading = import('ace-builds/src-noconflict/theme-idle_fingers');            }
-  else if (theme === 'iplastic')                { loading = import('ace-builds/src-noconflict/theme-iplastic');                }
-  else if (theme === 'katzenmilch')             { loading = import('ace-builds/src-noconflict/theme-katzenmilch');             }
-  else if (theme === 'kr_theme')                { loading = import('ace-builds/src-noconflict/theme-kr_theme');                }
-  else if (theme === 'kuroir')                  { loading = import('ace-builds/src-noconflict/theme-kuroir');                  }
-  else if (theme === 'merbivore')               { loading = import('ace-builds/src-noconflict/theme-merbivore');               }
-  else if (theme === 'merbivore_soft')          { loading = import('ace-builds/src-noconflict/theme-merbivore_soft');          }
-  else if (theme === 'mono_industrial')         { loading = import('ace-builds/src-noconflict/theme-mono_industrial');         }
-  else if (theme === 'monokai')                 { loading = import('ace-builds/src-noconflict/theme-monokai');                 }
-  else if (theme === 'nord_dark')               { loading = import('ace-builds/src-noconflict/theme-nord_dark');               }
-  else if (theme === 'pastel_on_dark')          { loading = import('ace-builds/src-noconflict/theme-pastel_on_dark');          }
-  else if (theme === 'solarized_dark')          { loading = import('ace-builds/src-noconflict/theme-solarized_dark');          }
-  else if (theme === 'solarized_light')         { loading = import('ace-builds/src-noconflict/theme-solarized_light');         }
-  else if (theme === 'sqlserver')               { loading = import('ace-builds/src-noconflict/theme-sqlserver');               }
-  else if (theme === 'terminal')                { loading = import('ace-builds/src-noconflict/theme-terminal');                }
-  else if (theme === 'textmate')                { loading = import('ace-builds/src-noconflict/theme-textmate');                }
-  else if (theme === 'tomorrow')                { loading = import('ace-builds/src-noconflict/theme-tomorrow');                }
-  else if (theme === 'tomorrow_night')          { loading = import('ace-builds/src-noconflict/theme-tomorrow_night');          }
-  else if (theme === 'tomorrow_night_blue')     { loading = import('ace-builds/src-noconflict/theme-tomorrow_night_blue');     }
-  else if (theme === 'tomorrow_night_bright')   { loading = import('ace-builds/src-noconflict/theme-tomorrow_night_bright');   }
-  else if (theme === 'tomorrow_night_eighties') { loading = import('ace-builds/src-noconflict/theme-tomorrow_night_eighties'); }
-  else if (theme === 'twilight')                { loading = import('ace-builds/src-noconflict/theme-twilight');                }
-  else if (theme === 'vibrant_ink')             { loading = import('ace-builds/src-noconflict/theme-vibrant_ink');             }
-  else if (theme === 'xcode')                   { loading = import('ace-builds/src-noconflict/theme-xcode');                   }
-
-  if (loading) {
-    loading.then(() => {
+  const modules = import.meta.glob('../../node_modules/ace-builds/src-noconflict/theme-*');
+  const path = `../../node_modules/ace-builds/src-noconflict/theme-${theme}.js`;
+  if (Object.hasOwn(modules, path)) {
+    modules[path]().then((_mod) => {
       editor.value!.setTheme(`ace/theme/${theme}`);
     });
   }
@@ -249,25 +198,11 @@ watch(() => props.value, (value: string) => {
 });
 
 watch(() => props.mode, (mode: string) => {
-  // WARNING: Do NOT refactor or merge these branches!
-  // Vite relies on explicit static dynamic imports for proper module bundling.
-  // Using a single dynamic import (e.g., `import(\`ace-builds/src-noconflict/mode-${mode}\`)`)
-  // will break build-time processing. These branches must remain as-is.
-  if (mode === 'markdown') {
-    import('ace-builds/src-noconflict/mode-markdown').then(() => {
-      editor.value!.getSession().setMode(`ace/mode/${mode}`);
-    });
-  }
-  else if (mode === 'css') {
-    import('ace-builds/src-noconflict/mode-css').then(() => {
-      editor.value!.getSession().setMode(`ace/mode/${mode}`);
-    });
-  }
-  else if (mode === 'less') {
-    import('ace-builds/src-noconflict/mode-less').then(() => {
-      editor.value!.getSession().setMode(`ace/mode/${mode}`);
-    });
-  }
+  const modeModules = import.meta.glob('../../node_modules/ace-builds/src-noconflict/mode-*');
+  const path = `../../node_modules/ace-builds/src-noconflict/mode-${mode}.js`;
+  modeModules[path]().then((_mod) => {
+    editor.value!.getSession().setMode(`ace/mode/${mode}`);
+  });
 });
 
 defineExpose({
