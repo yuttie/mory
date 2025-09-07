@@ -48,13 +48,15 @@
                         </v-list>
                     </v-menu>
                 </v-toolbar>
-                <TaskTree
-                    v-bind:items="filteredForestWithTags"
-                    v-bind:active="activeNodeId"
-                    v-bind:open.sync="openNodes"
-                    v-on:update:active="onTaskSelectionChangeInTree"
-                    style="flex: 1 1 0"
-                />
+                <v-sheet class="flex-grow-1">
+                    <TaskTree
+                        v-bind:items="filteredForestWithTags"
+                        v-bind:active="activeNodeId"
+                        v-bind:open.sync="openNodes"
+                        v-on:update:active="onTaskSelectionChangeInTree"
+                        style="flex: 1 1 0"
+                    />
+                </v-sheet>
             </div>
             <div class="item-view d-flex flex-column">
                 <div class="d-flex flex-row">
