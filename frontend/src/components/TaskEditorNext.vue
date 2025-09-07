@@ -471,7 +471,14 @@ const selectedKind = computed<StatusKind>({
         if (k === form.status.kind) {
             return;
         }
-        form.status = makeDefaultStatus(k);
+        const status = makeDefaultStatus(k);
+        if (k === 'done') {
+            status.completed_at = dayjs().format().replace('T', ' ');
+        }
+        else if (k === 'canceled') {
+            status.canceled_at = dayjs().format().replace('T', ' ');
+        }
+        form.status = status;
     },
 });
 
