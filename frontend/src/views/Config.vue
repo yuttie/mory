@@ -1,75 +1,77 @@
 <template>
   <div id="config">
-    <h1>Config</h1>
-    <v-btn
-      v-on:click="loadDefault"
-      class="mt-4 mb-2"
-    >Load default</v-btn>
-    <v-btn
-      v-on:click="saveAsDefault"
-      class="mt-2 mb-4"
-    >Save as default</v-btn>
-    <v-alert text type="info">
-      The following settings are only applied to the current browser and never be saved in the repository unless saved as default.
-    </v-alert>
-    <v-checkbox
-      v-model="currentUseSimpleEditor"
-      label="Use Simple Editor"
-    ></v-checkbox>
-    <v-checkbox
-      v-model="currentLockScroll"
-      label="Lock Scroll by Default"
-    ></v-checkbox>
-    <v-text-field
-      v-model="currentEditorFontFamily"
-      label="Editor Font Family"
-    >
-    </v-text-field>
-    <v-slider
-      v-model="currentEditorFontSize"
-      label="Editor Font Size"
-      min="1"
-      max="100"
-      thumb-label
-    >
-      <template v-slot:append>
-        <v-text-field
-          v-model="currentEditorFontSize"
-          type="number"
-          class="mt-0 pt-0"
-          style="width: 4em"
-          suffix="px"
-          readonly
-        ></v-text-field>
-      </template>
-    </v-slider>
-    <v-select
-      v-bind:items="editorThemes"
-      v-model="currentEditorTheme"
-      menu-props="auto"
-      label="Editor Theme"
-      item-text="name"
-      item-value="value"
-    >
-    </v-select>
-    <v-select
-      v-bind:items="editorKeybindings"
-      v-model="currentEditorKeybinding"
-      menu-props="auto"
-      label="Editor Keybinding"
-      item-text="name"
-      item-value="value"
-    >
-    </v-select>
-    <v-select
-      v-bind:items="highlightjsThemes"
-      v-model="currentHighlightjsTheme"
-      menu-props="auto"
-      label="Code Block Syntax Highlight Theme"
-      item-text="name"
-      item-value="value"
-    >
-    </v-select>
+    <v-sheet class="d-flex flex-column pa-6" style="max-width: 600px; min-width: 0;">
+      <h1>Config</h1>
+      <v-btn
+        v-on:click="loadDefault"
+        class="mt-4 mb-2"
+      >Load default</v-btn>
+      <v-btn
+        v-on:click="saveAsDefault"
+        class="mt-2 mb-4"
+      >Save as default</v-btn>
+      <v-alert text type="info">
+        The following settings are only applied to the current browser and never be saved in the repository unless saved as default.
+      </v-alert>
+      <v-checkbox
+        v-model="currentUseSimpleEditor"
+        label="Use Simple Editor"
+      ></v-checkbox>
+      <v-checkbox
+        v-model="currentLockScroll"
+        label="Lock Scroll by Default"
+      ></v-checkbox>
+      <v-text-field
+        v-model="currentEditorFontFamily"
+        label="Editor Font Family"
+      >
+      </v-text-field>
+      <v-slider
+        v-model="currentEditorFontSize"
+        label="Editor Font Size"
+        min="1"
+        max="100"
+        thumb-label
+      >
+        <template v-slot:append>
+          <v-text-field
+            v-model="currentEditorFontSize"
+            type="number"
+            class="mt-0 pt-0"
+            style="width: 4em"
+            suffix="px"
+            readonly
+          ></v-text-field>
+        </template>
+      </v-slider>
+      <v-select
+        v-bind:items="editorThemes"
+        v-model="currentEditorTheme"
+        menu-props="auto"
+        label="Editor Theme"
+        item-text="name"
+        item-value="value"
+      >
+      </v-select>
+      <v-select
+        v-bind:items="editorKeybindings"
+        v-model="currentEditorKeybinding"
+        menu-props="auto"
+        label="Editor Keybinding"
+        item-text="name"
+        item-value="value"
+      >
+      </v-select>
+      <v-select
+        v-bind:items="highlightjsThemes"
+        v-model="currentHighlightjsTheme"
+        menu-props="auto"
+        label="Code Block Syntax Highlight Theme"
+        item-text="name"
+        item-value="value"
+      >
+      </v-select>
+    </v-sheet>
   </div>
 </template>
 
@@ -451,20 +453,11 @@ watch(currentHighlightjsTheme, (newHighlightjsTheme: string) => {
 
 <style scoped lang="scss">
 #config {
-  padding: 50px 1em;
+  height: 100%;
 
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  justify-content: center;
   align-items: center;
-
-  & > * {
-    width: 480px;
-    max-width: 100%;
-  }
-
-  &::before, &::after {
-    content: '';
-    flex-grow: 1;
-  }
 }
 </style>

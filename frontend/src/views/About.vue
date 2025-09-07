@@ -1,9 +1,11 @@
 <template>
   <div id="about">
-    <div class="logo"></div>
-    <div class="logo-text">{{ name }}</div>
-    <div class="version">Version {{ version }}</div>
-    <div class="copyright">Copyright © {{ fromYear }}&ndash;{{ buildYear }} {{ author }}</div>
+    <v-sheet class="sheet pa-12">
+      <div class="logo"></div>
+      <div class="logo-text">{{ name }}</div>
+      <div class="version">Version {{ version }}</div>
+      <div class="copyright">Copyright © {{ fromYear }}&ndash;{{ buildYear }} {{ author }}</div>
+    </v-sheet>
   </div>
 </template>
 
@@ -25,18 +27,23 @@ onMounted(() => {
 
 <style scoped lang="scss">
 #about {
-  padding: 50px 1em;
+  height: 100%;
 
   display: flex;
   flex-direction: column;
+  justify-content: center;
   align-items: center;
 
   user-select: text;
+}
 
-  &::before, &::after {
-    content: '';
-    flex-grow: 1;
-  }
+.sheet {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 550px;
+  height: 550px;
 }
 
 .logo {
