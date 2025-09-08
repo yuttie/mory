@@ -565,13 +565,8 @@ const noteTreeRoot = computed(() => {
 });
 
 // Lifecycle hooks
-onMounted(async () => {
-    try {
-        await loadCustomCss();
-    } catch (error) {
-        // Log error but don't break the app initialization
-        console.error('Failed to load custom CSS:', error);
-    }
+onMounted(() => {
+    loadCustomCss();
 
     (fileInputEl.value as HTMLInputElement).addEventListener('change', (e: any) => {
         if (e.target.files.length > 0) {
@@ -716,9 +711,11 @@ async function loadCustomCss() {
 
 async function loadCustomLess() {
     try {
-        const res = await api.getNote('.mory/custom.less');
-        // Dynamically import less library
-        const { default: less } = await import('less');
+        // Start both operations in parallel
+        const [res, { default: less }] = await Promise.all([
+            api.getNote('.mory/custom.less'),
+            import('less')
+        ]);
         
         const output = await less.render(res.data, {
             globalVars: {
