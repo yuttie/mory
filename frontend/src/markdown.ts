@@ -13,7 +13,6 @@ import rehypeUrlInspector from '@jsdevtools/rehype-url-inspector';
 import rehypeSlug from 'rehype-slug';
 import rehypeAutolinkHeadings from 'rehype-autolink-headings';
 import rehypeHighlight from 'rehype-highlight';
-import rehypeKatex from 'rehype-katex';
 import rehypeMermaid from 'rehype-mermaid';
 import rehypeStringify from 'rehype-stringify';
 import { all } from 'lowlight';
@@ -25,55 +24,101 @@ import { toString } from 'mdast-util-to-string';
 
 const apiFilesUrl = new URL('files/', new URL(import.meta.env.VITE_APP_API_URL!, window.location.href)).href;
 
-const processor = unified()
-  .use(remarkParse)
-  .use(remarkFrontmatter)
-  .use(myRemarkYamlFrontmatter)
-  .use(remarkGfm)
-  .use(remarkDefinitionList)
-  .use(remarkMath)
-  .use(remarkRehype, {
-    handlers: {
-      ...defListHastHandlers,
-    },
-    allowDangerousHtml: true,
-  })
-  .use(rehypeRaw)
-  .use(myRehypeEmbedLineNumbers)
-  .use(myRehypeLazyLoadImages)
-  .use(rehypeUrlInspector, {
-    inspectEach: ({ url, propertyName, node }) => {
-      if (node.tagName === 'img' && propertyName === 'src' && node.properties) {
-        if (!/^(\/|https?:\/\/)/.test(url)) {
-          node.properties[propertyName] = apiFilesUrl + url;
-        }
-      }
-    },
-  })
-  .use(rehypeSlug)
-  .use(rehypeAutolinkHeadings, {
-    properties: {
-      ariaHidden: true,
-      tabIndex: -1,
-      class: 'header-anchor mdi mdi-link-variant',
-    },
-  })
-  .use(rehypeHighlight, {
-    languages: all,
-  })
-  .use(rehypeKatex, {
-    macros: {},
-  })
-  .use(rehypeMermaid, {
-    strategy: 'inline-svg',
-  })
-  .use(rehypeStringify, {
-    allowDangerousHtml: true,
-  });
+/**
+ * Detect if markdown contains math expressions
+ */
+export function containsMath(markdown: string): boolean {
+    // Check for LaTeX-style math delimiters
+    // $$ for display math, $...$ for inline math (but not standalone $)
+    // \(...\) for inline math, \[...\] for display math
+    return /\$\$[\s\S]*?\$\$|\$[^$\s][^$]*[^$\s]\$|\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\]/.test(markdown);
+}
+
+let cachedProcessor: ReturnType<typeof unified> | null = null;
+let cachedProcessorWithMath: ReturnType<typeof unified> | null = null;
+
+function createBaseProcessor(): ReturnType<typeof unified> {
+    return unified()
+        .use(remarkParse)
+        .use(remarkFrontmatter)
+        .use(myRemarkYamlFrontmatter)
+        .use(remarkGfm)
+        .use(remarkDefinitionList)
+        .use(remarkMath)
+        .use(remarkRehype, {
+            handlers: {
+                ...defListHastHandlers,
+            },
+            allowDangerousHtml: true,
+        })
+        .use(rehypeRaw)
+        .use(myRehypeEmbedLineNumbers)
+        .use(myRehypeLazyLoadImages)
+        .use(rehypeUrlInspector, {
+            inspectEach: ({ url, propertyName, node }) => {
+                if (node.tagName === 'img' && propertyName === 'src' && node.properties) {
+                    if (!/^(\/|https?:\/\/)/.test(url)) {
+                        node.properties[propertyName] = apiFilesUrl + url;
+                    }
+                }
+            },
+        })
+        .use(rehypeSlug)
+        .use(rehypeAutolinkHeadings, {
+            properties: {
+                ariaHidden: true,
+                tabIndex: -1,
+                class: 'header-anchor mdi mdi-link-variant',
+            },
+        })
+        .use(rehypeHighlight, {
+            languages: all,
+        });
+}
+
+async function createProcessorWithMath(baseProcessor: ReturnType<typeof unified>): Promise<ReturnType<typeof unified>> {
+    const { default: rehypeKatex } = await import('rehype-katex');
+    
+    return baseProcessor
+        .use(rehypeKatex, {
+            macros: {},
+        })
+        .use(rehypeMermaid, {
+            strategy: 'inline-svg',
+        })
+        .use(rehypeStringify, {
+            allowDangerousHtml: true,
+        });
+}
+
+function createProcessorWithoutMath(baseProcessor: ReturnType<typeof unified>): ReturnType<typeof unified> {
+    return baseProcessor
+        .use(rehypeMermaid, {
+            strategy: 'inline-svg',
+        })
+        .use(rehypeStringify, {
+            allowDangerousHtml: true,
+        });
+}
 
 export async function renderMarkdown(markdown: string): Promise<VFile> {
-  const file = await processor.process(markdown);
-  return file;
+    const hasMath = containsMath(markdown);
+    
+    if (hasMath) {
+        if (!cachedProcessorWithMath) {
+            const baseProcessor = createBaseProcessor();
+            cachedProcessorWithMath = await createProcessorWithMath(baseProcessor);
+        }
+        const file = await cachedProcessorWithMath.process(markdown);
+        return file;
+    } else {
+        if (!cachedProcessor) {
+            const baseProcessor = createBaseProcessor();
+            cachedProcessor = createProcessorWithoutMath(baseProcessor);
+        }
+        const file = await cachedProcessor.process(markdown);
+        return file;
+    }
 }
 
 /**
