@@ -126,8 +126,9 @@ function setKeybinding(keybinding: string) {
         editor.value!.setKeyboardHandler(null);
         return;
     }
+    const mapName = (name) => name === 'vim-modified' ? 'vim' : name;
     const modules = import.meta.glob('../../node_modules/ace-builds/src-noconflict/keybinding-*.js');
-    const path = `../../node_modules/ace-builds/src-noconflict/keybinding-${keybinding}.js`;
+    const path = `../../node_modules/ace-builds/src-noconflict/keybinding-${mapName(keybinding)}.js`;
     modules[path]().then(() => {
         if (keybinding === 'vim-modified') {
             const keybinding = ace.require('ace/keyboard/vim');  // NOTE: `ace.require()` does not fetch the module. We need the dynamic import for actual loading.
