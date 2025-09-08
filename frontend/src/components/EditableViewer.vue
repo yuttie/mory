@@ -1060,9 +1060,11 @@ async function loadCustomNoteCss(): Promise<string> {
 }
 
 async function loadCustomNoteLess(): Promise<string> {
-    const res = await api.getNote('.mory/custom-note.less');
-    // Dynamically import less library
-    const { default: less } = await import('less');
+    // Start both operations in parallel
+    const [res, { default: less }] = await Promise.all([
+        api.getNote('.mory/custom-note.less'),
+        import('less'),
+    ]);
     
     const output = await less.render(res.data, {
         globalVars: {
