@@ -380,7 +380,7 @@ import type { DefinedError } from 'ajv';
 import * as api from '@/api';
 import { loadConfigValue } from '@/config';
 import { CliPrettify } from 'markdown-table-prettify';
-import { renderMarkdown } from '@/markdown';
+import { renderMarkdown, containsMath } from '@/markdown';
 
 const ajv = new Ajv();
 const validateMetadata = ajv.compile(metadataSchema);
@@ -418,6 +418,7 @@ const isSaving = ref(false);
 const isRenaming = ref(false);
 const notFound = ref(false);
 const showConfirmationDialog = ref(false);
+const katexLoaded = ref(false);
 const error = ref(false);
 const errorText = ref('');
 const renderTimeoutId = ref(null as null | number);
@@ -573,11 +574,6 @@ onMounted(async () => {
     .catch((err) => {
         console.error(err);
     });
-
-    const linkElement = document.createElement('link');
-    linkElement.rel = 'stylesheet';
-    linkElement.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css';
-    shadowRoot.value.appendChild(linkElement);
 
     // Setup <div> that displays a rendered notes
     renderedContentDiv.value = document.createElement('div');
@@ -956,7 +952,22 @@ function formatTable() {
     }
 }
 
+function loadKatexCss() {
+    if (katexLoaded.value || !shadowRoot.value) return;
+    
+    const linkElement = document.createElement('link');
+    linkElement.rel = 'stylesheet';
+    linkElement.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css';
+    shadowRoot.value.appendChild(linkElement);
+    katexLoaded.value = true;
+}
+
 async function updateRendered() {
+    // Check if we need KaTeX CSS before rendering
+    if (containsMath(text.value)) {
+        loadKatexCss();
+    }
+    
     // Render the body
     const renderedFile = await renderMarkdown(text.value);
     const renderedHtml = String(renderedFile);
