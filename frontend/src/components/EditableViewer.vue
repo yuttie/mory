@@ -1041,40 +1041,38 @@ async function updateRendered() {
     document.title = `${title.value} | ${import.meta.env.VITE_APP_NAME}`;
 }
 
-function loadCustomNoteCss(): Promise<string> {
-    // Try CSS file first
-    return api.getNote('.mory/custom-note.css')
-        .then(res => {
-            // CSS file exists, return directly
-            return res.data;
-        })
-        .catch(error => {
-            if (error.response && error.response.status === 404) {
-                // CSS file not found, try LESS file
-                return loadCustomNoteLess();
-            }
-            else {
-                // Re-throw other errors
-                throw error;
-            }
-        });
+async function loadCustomNoteCss(): Promise<string> {
+    try {
+        // Try CSS file first
+        const res = await api.getNote('.mory/custom-note.css');
+        // CSS file exists, return directly
+        return res.data;
+    } catch (error) {
+        if (error.response && error.response.status === 404) {
+            // CSS file not found, try LESS file
+            return await loadCustomNoteLess();
+        }
+        else {
+            // Re-throw other errors
+            throw error;
+        }
+    }
 }
 
-function loadCustomNoteLess(): Promise<string> {
-    return api.getNote('.mory/custom-note.less')
-        .then(async (res) => {
-            // Dynamically import less library
-            const { default: less } = await import('less');
-            
-            return less.render(res.data, {
-                globalVars: {
-                    'nav-height': '64px',
-                },
-            });
-        })
-        .then(output => {
-            return output.css;
-        });
+async function loadCustomNoteLess(): Promise<string> {
+    // Start both operations in parallel
+    const [res, { default: less }] = await Promise.all([
+        api.getNote('.mory/custom-note.less'),
+        import('less'),
+    ]);
+    
+    const output = await less.render(res.data, {
+        globalVars: {
+            'nav-height': '64px',
+        },
+    });
+    
+    return output.css;
 }
 
 function updateRenderedLazy() {
