@@ -67,7 +67,7 @@ onMounted(() => {
   const theme = loadConfigValue('editor-theme', 'default');
   setTheme(theme);
 
-  const modeModules = import.meta.glob('../../node_modules/ace-builds/src-noconflict/mode-*');
+  const modeModules = import.meta.glob('../../node_modules/ace-builds/src-noconflict/mode-*.js');
   const modeModulePath = `../../node_modules/ace-builds/src-noconflict/mode-${props.mode}.js`;
   modeModules[modeModulePath]().then((_mod) => {
     editor.value!.getSession().setMode(`ace/mode/${props.mode}`);
@@ -109,7 +109,7 @@ function replaceSelection(newText: string) {
 function setTheme(theme: string) {
   let loading = null;
 
-  const modules = import.meta.glob('../../node_modules/ace-builds/src-noconflict/theme-*');
+  const modules = import.meta.glob('../../node_modules/ace-builds/src-noconflict/theme-*.js');
   const path = `../../node_modules/ace-builds/src-noconflict/theme-${theme}.js`;
   if (Object.hasOwn(modules, path)) {
     modules[path]().then((_mod) => {
@@ -198,7 +198,7 @@ watch(() => props.value, (value: string) => {
 });
 
 watch(() => props.mode, (mode: string) => {
-  const modeModules = import.meta.glob('../../node_modules/ace-builds/src-noconflict/mode-*');
+  const modeModules = import.meta.glob('../../node_modules/ace-builds/src-noconflict/mode-*.js');
   const path = `../../node_modules/ace-builds/src-noconflict/mode-${mode}.js`;
   modeModules[path]().then((_mod) => {
     editor.value!.getSession().setMode(`ace/mode/${mode}`);
