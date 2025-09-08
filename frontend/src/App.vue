@@ -714,7 +714,7 @@ async function loadCustomLess() {
         // Start both operations in parallel
         const [res, { default: less }] = await Promise.all([
             api.getNote('.mory/custom.less'),
-            import('less')
+            import('less'),
         ]);
         
         const output = await less.render(res.data, {
