@@ -861,6 +861,20 @@ watch(miniMainSidebar, (newMiniMainSidebar: boolean) => {
 watch(sidebarWidth, (newSidebarWidth: number) => {
   saveConfigValue("sidebar-width", newSidebarWidth);
 });
+
+// Listen for changes to sidebar width from other components (e.g., Config.vue)
+onMounted(() => {
+    const handleStorageChange = (event: StorageEvent) => {
+        if (event.key === 'sidebar-width' && event.newValue) {
+            sidebarWidth.value = JSON.parse(event.newValue);
+        }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    
+    onUnmounted(() => {
+        window.removeEventListener('storage', handleStorageChange);
+    });
+});
 </script>
 
 <style scoped lang="scss">
