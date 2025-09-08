@@ -1,30 +1,34 @@
 <template>
-    <div id="search" class="mt-15 pa-3 d-flex flex-column">
-        <v-form v-on:submit.prevent="search">
-            <v-text-field
-                v-model="queryText"
-                filled
-                rounded
-                single-line
-                clearable
-                block
-                v-on:click:clear="clearQuery"
-                type="text"
-                label="Search"
-                autocomplete="off"
-                hide-details="auto"
-                ref="queryEl"
-                class="flex-grow-1"
-            >
-            </v-text-field>
-        </v-form>
-        <ul style="overflow: auto">
-            <li v-for="item of results">
-                <router-link v-bind:to="{ name: 'Note', params: { path: item.file } }">{{ item.file }}</router-link>
-                <span>{{ item.number }}</span>
-                <span>{{ item.content.slice(0, 100) }}</span>
-            </li>
-        </ul>
+    <div id="search" class="d-flex flex-column">
+        <v-sheet class="pt-13 pb-3">
+            <v-form v-on:submit.prevent="search">
+                <v-text-field
+                    v-model="queryText"
+                    filled
+                    rounded
+                    single-line
+                    clearable
+                    block
+                    v-on:click:clear="clearQuery"
+                    type="text"
+                    label="Search"
+                    autocomplete="off"
+                    hide-details="auto"
+                    ref="queryEl"
+                    class="mx-3 flex-grow-1"
+                >
+                </v-text-field>
+            </v-form>
+        </v-sheet>
+        <v-sheet>
+            <ul style="overflow: auto">
+                <li v-for="item of results">
+                    <router-link v-bind:to="{ name: 'Note', params: { path: item.file } }">{{ item.file }}</router-link>
+                    <span>{{ item.number }}</span>
+                    <span>{{ item.content.slice(0, 100) }}</span>
+                </li>
+            </ul>
+        </v-sheet>
         <v-overlay v-bind:value="isLoading" z-index="10" opacity="0">
             <v-progress-circular indeterminate color="blue-grey lighten-3" size="64"></v-progress-circular>
         </v-overlay>

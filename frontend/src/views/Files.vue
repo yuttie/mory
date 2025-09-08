@@ -1,48 +1,50 @@
 <template>
-    <div id="files" class="d-flex flex-column pt-10">
-        <v-menu
-            v-model="showingTagList"
-            v-bind:close-on-content-click="false"
-            offset-y
-            bottom
-        >
-            <template v-slot:activator="{ on }">
-                <v-text-field
-                    v-model="queryText"
-                    filled
-                    rounded
-                    single-line
-                    clearable
-                    v-on:click:clear="clearQuery"
-                    type="text"
-                    label="Search"
-                    autocomplete="off"
-                    hide-details="auto"
-                    ref="queryEl"
-                    class="mx-3 mt-3 flex-grow-0"
-                >
-                    <template v-slot:prepend-inner>
-                        <v-icon>{{ mdiMagnify }}</v-icon>
-                    </template>
-                    <template v-slot:append>
-                        <v-icon v-on:click="on.click">{{ mdiTag }}</v-icon>
-                    </template>
-                </v-text-field>
-            </template>
-            <v-card>
-                <v-card-text class="all-tags d-flex flex-row align-center flex-wrap">
-                    <v-chip
-                        small
-                        class="ma-1"
-                        v-for="tag of tags"
-                        v-bind:key="tag"
-                        v-bind:color="tagColor(tag)"
-                        v-bind:outlined="tagOutlined(tag)"
-                        v-on:click="handleTagClick(tag, $event)"
-                    >{{ tag }}</v-chip>
-                </v-card-text>
-            </v-card>
-        </v-menu>
+    <div id="files" class="d-flex flex-column">
+        <v-sheet class="pt-13 pb-3">
+            <v-menu
+                v-model="showingTagList"
+                v-bind:close-on-content-click="false"
+                offset-y
+                bottom
+            >
+                <template v-slot:activator="{ on }">
+                    <v-text-field
+                        v-model="queryText"
+                        filled
+                        rounded
+                        single-line
+                        clearable
+                        v-on:click:clear="clearQuery"
+                        type="text"
+                        label="Search"
+                        autocomplete="off"
+                        hide-details="auto"
+                        ref="queryEl"
+                        class="mx-3 flex-grow-0"
+                    >
+                        <template v-slot:prepend-inner>
+                            <v-icon>{{ mdiMagnify }}</v-icon>
+                        </template>
+                        <template v-slot:append>
+                            <v-icon v-on:click="on.click">{{ mdiTag }}</v-icon>
+                        </template>
+                    </v-text-field>
+                </template>
+                <v-card>
+                    <v-card-text class="all-tags d-flex flex-row align-center flex-wrap">
+                        <v-chip
+                            small
+                            class="ma-1"
+                            v-for="tag of tags"
+                            v-bind:key="tag"
+                            v-bind:color="tagColor(tag)"
+                            v-bind:outlined="tagOutlined(tag)"
+                            v-on:click="handleTagClick(tag, $event)"
+                        >{{ tag }}</v-chip>
+                    </v-card-text>
+                </v-card>
+            </v-menu>
+        </v-sheet>
         <v-data-table
             v-bind:headers="headers"
             v-bind:items="matchedEntries"
@@ -55,7 +57,7 @@
             sort-desc
             must-sort
             show-select
-            class="mt-3 flex-grow-1"
+            class="flex-grow-1"
         >
             <template v-slot:top="{ pagination, options, updateOptions }">
                 <v-toolbar flat style="border-bottom: thin solid rgba(0, 0, 0, 0.12);">
