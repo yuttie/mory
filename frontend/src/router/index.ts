@@ -2,8 +2,6 @@ import Vue from 'vue';
 import VueRouter from 'vue-router';
 import type { RouteConfig } from 'vue-router';
 
-import dayjs from 'dayjs';
-
 const Home      = () => import('../views/Home.vue');
 const Calendar  = () => import('../views/Calendar.vue');
 const Tasks     = () => import('../views/Tasks.vue');
@@ -27,7 +25,8 @@ const routes: Array<RouteConfig> = [
   {
     path: '/calendar',
     name: 'Calendar',
-    redirect: to => {
+    redirect: async (to) => {
+      const { default: dayjs } = await import('dayjs');
       const today = dayjs();
       return {
         name: 'CalendarWithDate',
