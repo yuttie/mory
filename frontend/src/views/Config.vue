@@ -44,24 +44,6 @@
           ></v-text-field>
         </template>
       </v-slider>
-      <v-slider
-        v-model="currentSidebarWidth"
-        label="Left Sidebar Width"
-        min="200"
-        max="400"
-        thumb-label
-      >
-        <template v-slot:append>
-          <v-text-field
-            v-model="currentSidebarWidth"
-            type="number"
-            class="mt-0 pt-0"
-            style="width: 4em"
-            suffix="px"
-            readonly
-          ></v-text-field>
-        </template>
-      </v-slider>
       <v-select
         v-bind:items="editorThemes"
         v-model="currentEditorTheme"
@@ -404,7 +386,6 @@ const currentUseSimpleEditor = ref(loadConfigValue('use-simple-editor', false));
 const currentLockScroll = ref(loadConfigValue('lock-scroll', false));
 const currentEditorFontFamily = ref(loadConfigValue('editor-font-family', 'Menlo, monospace'));
 const currentEditorFontSize = ref(loadConfigValue('editor-font-size', 14));
-const currentSidebarWidth = ref(loadConfigValue('sidebar-width', 256));
 const currentEditorTheme = ref(loadConfigValue('editor-theme', 'default'));
 const currentEditorKeybinding = ref(loadConfigValue('editor-keybinding', 'default'));
 const currentHighlightjsTheme = ref(loadConfigValue('highlightjs-theme', 'default'));
@@ -422,7 +403,6 @@ async function loadDefault() {
   currentLockScroll.value = config.lockScroll;
   currentEditorFontFamily.value = config.editorFontFamily;
   currentEditorFontSize.value = config.editorFontSize;
-  currentSidebarWidth.value = config.sidebarWidth || 256;
   currentEditorTheme.value = config.editorTheme;
   currentEditorKeybinding.value = config.editorKeybinding;
   currentHighlightjsTheme.value = config.highlightjsTheme;
@@ -434,7 +414,6 @@ function saveAsDefault() {
     lockScroll: currentLockScroll.value,
     editorFontFamily: currentEditorFontFamily.value,
     editorFontSize: currentEditorFontSize.value,
-    sidebarWidth: currentSidebarWidth.value,
     editorTheme: currentEditorTheme.value,
     editorKeybinding: currentEditorKeybinding.value,
     highlightjsTheme: currentHighlightjsTheme.value,
@@ -457,10 +436,6 @@ watch(currentEditorFontFamily, (newEditorFontFamily: string) => {
 
 watch(currentEditorFontSize, (newEditorFontSize: number) => {
   saveConfigValue('editor-font-size', newEditorFontSize);
-});
-
-watch(currentSidebarWidth, (newSidebarWidth: number) => {
-  saveConfigValue('sidebar-width', newSidebarWidth);
 });
 
 watch(currentEditorTheme, (newEditorTheme: string) => {
