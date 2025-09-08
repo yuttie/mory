@@ -34,6 +34,7 @@
             clipped
             v-bind:mini-variant="miniMainSidebar"
             v-bind:expand-on-hover="miniMainSidebar"
+            v-bind:width="sidebarWidth"
             permanent
         >
             <v-list dense nav>
@@ -455,6 +456,7 @@ const appStore = useAppStore();
 // Reactive states
 const notificationPermission = ref<'granted'| 'denied' | 'default'>('Notification' in window ? Notification.permission : 'denied');
 const miniMainSidebar = ref(loadConfigValue("mini-main-sidebar", false));
+const sidebarWidth = ref(loadConfigValue("sidebar-width", 256));
 const mobileDrawer = ref(false);
 const loginUsername = ref("");
 const loginPassword = ref("");
@@ -854,6 +856,10 @@ async function populateTagChildren(item: TreeNode) {
 // Watchers
 watch(miniMainSidebar, (newMiniMainSidebar: boolean) => {
   saveConfigValue("mini-main-sidebar", newMiniMainSidebar);
+});
+
+watch(sidebarWidth, (newSidebarWidth: number) => {
+  saveConfigValue("sidebar-width", newSidebarWidth);
 });
 </script>
 
