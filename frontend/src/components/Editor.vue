@@ -124,34 +124,20 @@ function setTheme(theme: string) {
 function setKeybinding(keybinding: string) {
     if (keybinding === 'default') {
         editor.value!.setKeyboardHandler(null);
+        return;
     }
-    else if (keybinding === 'emacs') {
-        import('ace-builds/src-noconflict/keybinding-emacs').then(() => {
-            editor.value!.setKeyboardHandler('ace/keyboard/emacs');
-        });
-    }
-    else if (keybinding === 'sublime') {
-        import('ace-builds/src-noconflict/keybinding-sublime').then(() => {
-            editor.value!.setKeyboardHandler('ace/keyboard/sublime');
-        });
-    }
-    else if (keybinding === 'vim') {
-        import('ace-builds/src-noconflict/keybinding-vim').then(() => {
-            editor.value!.setKeyboardHandler('ace/keyboard/vim');
-        });
-    }
-    else if (keybinding === 'vim-modified') {
-        import('ace-builds/src-noconflict/keybinding-vim').then(() => {
+    const modules = import.meta.glob('../../node_modules/ace-builds/src-noconflict/keybinding-*.js');
+    const path = `../../node_modules/ace-builds/src-noconflict/keybinding-${keybinding}.js`;
+    modules[path]().then(() => {
+        if (keybinding === 'vim-modified') {
             const keybinding = ace.require('ace/keyboard/vim');  // NOTE: `ace.require()` does not fetch the module. We need the dynamic import for actual loading.
             adjustKeybindings(keybinding.Vim);
             editor.value!.setKeyboardHandler(keybinding.handler);
-        });
-    }
-    else if (keybinding === 'vscode') {
-        import('ace-builds/src-noconflict/keybinding-vscode').then(() => {
-            editor.value!.setKeyboardHandler('ace/keyboard/vscode');
-        });
-    }
+        }
+        else {
+            editor.value!.setKeyboardHandler(`ace/keyboard/${keybinding}`);
+        }
+    });
 }
 
 function adjustKeybindings(Vim: any) {
