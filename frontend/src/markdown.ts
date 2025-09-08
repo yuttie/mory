@@ -29,7 +29,9 @@ const apiFilesUrl = new URL('files/', new URL(import.meta.env.VITE_APP_API_URL!,
  */
 export function containsMath(markdown: string): boolean {
     // Check for LaTeX-style math delimiters
-    return /\$\$[\s\S]*?\$\$|\$[^\$\n]+?\$|\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\]/.test(markdown);
+    // $$ for display math, $...$ for inline math (but not standalone $)
+    // \(...\) for inline math, \[...\] for display math
+    return /\$\$[\s\S]*?\$\$|\$[^$\s][^$]*[^$\s]\$|\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\]/.test(markdown);
 }
 
 let cachedProcessor: ReturnType<typeof unified> | null = null;
