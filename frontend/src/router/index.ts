@@ -25,12 +25,15 @@ const routes: Array<RouteConfig> = [
     {
         path: '/calendar',
         name: 'Calendar',
-        redirect: async (to) => {
-            const { default: dayjs } = await import('dayjs');
-            const today = dayjs();
+        redirect: (to) => {
+            const today = new Date();
+            const yyyy = today.getFullYear().toString();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+
             return {
                 name: 'CalendarWithDate',
-                params: { type: 'month', date: [today.format('YYYY'), today.format('MM'), today.format('DD')] },
+                params: { type: 'month', date: [yyyy, mm, dd] },
             };
         },
     },
