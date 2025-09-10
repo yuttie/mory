@@ -33,12 +33,12 @@ const routes: Array<RouteConfig> = [
 
             return {
                 name: 'CalendarWithDate',
-                params: { type: 'month', date: [yyyy, mm, dd] },
+                params: { type: 'month', year: yyyy, month: mm, day: dd },
             };
         },
     },
     {
-        path: '/calendar/:type/:date+',
+        path: '/calendar/:type/:year/:month/:day',
         name: 'CalendarWithDate',
         component: Calendar,
     },
