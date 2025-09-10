@@ -30,6 +30,18 @@
                 {{ item.title }}
             </span>
         </template>
+        <template v-slot:append="{ item }">
+            <v-btn
+                v-if="!item.metadata?.tag_group"
+                depressed
+                x-small
+                class="add-child-btn"
+                title="Add child task"
+                v-on:click.stop="$emit('add-child-task', item.uuid)"
+            >
+                <v-icon small>{{ mdiPlus }}</v-icon>
+            </v-btn>
+        </template>
     </v-treeview>
 </template>
 
@@ -44,6 +56,7 @@ import {
     mdiFolder,
     mdiFolderCheck,
     mdiFolderOff,
+    mdiPlus,
     mdiTag,
 } from '@mdi/js';
 
@@ -60,6 +73,7 @@ const props = defineProps<{
 const emit = defineEmits<{
     (e: 'update:open', value: UUID[]): void;
     (e: 'update:active', value: UUID | undefined): void;
+    (e: 'add-child-task', value: UUID): void;
 }>();
 
 // Reactive states
@@ -77,4 +91,11 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="scss">
+.task-tree {
+    :deep(.v-treeview-node__root) {
+        &:not(:hover) .add-child-btn {
+            display: none;
+        }
+    }
+}
 </style>

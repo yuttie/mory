@@ -54,6 +54,7 @@
                         v-bind:active="activeNodeId"
                         v-bind:open.sync="openNodes"
                         v-on:update:active="onTaskSelectionChangeInTree"
+                        v-on:add-child-task="onAddChildTask"
                         style="flex: 1 1 0"
                     />
                 </v-sheet>
@@ -655,6 +656,24 @@ function newTask() {
     // Then generate new UUID and set path for the task
     const taskUuid = crypto.randomUUID();
     newTaskPath.value = getNewTaskPath(taskUuid);
+}
+
+function onAddChildTask(parentUuid: UUID) {
+    // Find the parent node
+    const parentNode = store.node(parentUuid);
+    if (!parentNode) return;
+    
+    // Navigate to the parent node first
+    navigateToState(parentUuid, 'selected', descendantsViewMode.value);
+    // Then generate new UUID and set path for the task under this parent
+    const taskUuid = crypto.randomUUID();
+    newTaskPath.value = getNewTaskPathForParent(taskUuid, parentNode);
+}
+
+function getNewTaskPathForParent(taskUuid: string, parentNode: TreeNodeRecord): string {
+    const idx = parentNode.path.lastIndexOf('/');
+    const parentDir = parentNode.path.slice(0, idx) + '/' + parentNode.uuid;
+    return parentDir + '/' + taskUuid + '.md';
 }
 
 function getNewTaskPath(taskUuid: string): string {
