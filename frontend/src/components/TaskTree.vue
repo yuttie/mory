@@ -93,7 +93,7 @@ onUnmounted(() => {
 <style scoped lang="scss">
 .task-tree {
     :deep(.v-treeview-node__root) {
-        &:not(:hover) .add-child-btn {
+        &:not(:hover) .v-treeview-node__append {
             display: none;
         }
     }
