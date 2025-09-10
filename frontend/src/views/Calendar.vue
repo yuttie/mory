@@ -292,9 +292,9 @@ function onCalendarInput(date: string) {
     const parsedDate = dayjs(date, 'YYYY-MM-DD');
     router.push({
         name: 'CalendarWithDate',
-        params: { 
-            type: calendarType.value, 
-            date: [parsedDate.format('YYYY'), parsedDate.format('MM'), parsedDate.format('DD')] 
+        params: {
+            type: calendarType.value,
+            date: [parsedDate.format('YYYY'), parsedDate.format('MM'), parsedDate.format('DD')]
         },
     });
 }
@@ -302,9 +302,9 @@ function onCalendarInput(date: string) {
 function navigateCalendar(direction: 'prev' | 'next', amount = 1) {
     const currentDate = dayjs(calendarCursor.value, 'YYYY-MM-DD');
     let newDate: dayjs.Dayjs;
-    
+
     if (calendarType.value === 'month') {
-        newDate = direction === 'prev' 
+        newDate = direction === 'prev'
             ? currentDate.subtract(amount, 'month')
             : currentDate.add(amount, 'month');
     } else if (calendarType.value === 'week') {
@@ -321,12 +321,12 @@ function navigateCalendar(direction: 'prev' | 'next', amount = 1) {
             ? currentDate.subtract(amount, 'day')
             : currentDate.add(amount, 'day');
     }
-    
+
     router.push({
         name: 'CalendarWithDate',
-        params: { 
-            type: calendarType.value, 
-            date: [newDate.format('YYYY'), newDate.format('MM'), newDate.format('DD')] 
+        params: {
+            type: calendarType.value,
+            date: [newDate.format('YYYY'), newDate.format('MM'), newDate.format('DD')]
         },
     });
 }
@@ -396,9 +396,9 @@ function viewDay({ date }: { date: string }) {
     const parsedDate = dayjs(date, 'YYYY-MM-DD');
     router.push({
         name: 'CalendarWithDate',
-        params: { 
-            type: 'day', 
-            date: [parsedDate.format('YYYY'), parsedDate.format('MM'), parsedDate.format('DD')] 
+        params: {
+            type: 'day',
+            date: [parsedDate.format('YYYY'), parsedDate.format('MM'), parsedDate.format('DD')]
         },
     });
 }
