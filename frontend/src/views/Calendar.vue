@@ -326,7 +326,9 @@ function navigateCalendar(direction: 'prev' | 'next', amount = 1) {
         name: 'CalendarWithDate',
         params: {
             type: calendarType.value,
-            date: [newDate.format('YYYY'), newDate.format('MM'), newDate.format('DD')]
+            year: newDate.format('YYYY'),
+            month: newDate.format('MM'),
+            day: newDate.format('DD'),
         },
     });
 }
@@ -486,8 +488,9 @@ watch(selectedEvent, async (newValue) => {
 
 watch(route, (newRoute) => {
     if (newRoute.name === 'CalendarWithDate') {
+        const { year, month, day } = newRoute.params;
         calendarType.value = newRoute.params.type as string;
-        calendarCursor.value = dayjs(newRoute.params.date as string, 'YYYY/MM/DD').format('YYYY-MM-DD');
+        calendarCursor.value = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
     }
 }, { immediate: true });
 </script>
