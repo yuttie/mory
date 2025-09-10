@@ -33,7 +33,7 @@
         <template v-slot:append="{ item }">
             <v-btn
                 v-if="!item.metadata?.tag_group"
-                icon
+                depressed
                 x-small
                 class="add-child-btn"
                 title="Add child task"
