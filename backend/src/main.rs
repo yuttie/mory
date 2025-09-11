@@ -38,7 +38,8 @@ use dotenv::dotenv;
 use git2::{Index, IndexEntry, IndexTime, Repository, Oid};
 use jsonwebtoken as jwt;
 use mime_guess;
-use serde::Deserialize;
+use reqwest;
+use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
 use sqlx::sqlite::{
     SqliteConnectOptions,
@@ -142,6 +143,7 @@ async fn main() -> Result<()> {
         .route("/files/*path", get(v2::get_files_path).head(v2::head_files_path))
         .route("/tasks", get(v2::get_tasks))
         .route("/events", get(v2::get_events))
+        .route("/assess-title", post(v2::post_assess_title))
         .with_state(state.clone())
         .route_layer(middleware::from_fn(auth));
     let api_v2 = Router::new()
@@ -987,6 +989,131 @@ pub async fn grep_bare_repo(
 
 mod v2 {
     use super::*;
+    use std::env;
+
+    #[derive(Deserialize)]
+    pub struct AssessmentRequest {
+        pub title: String,
+    }
+
+    #[derive(Serialize, Deserialize)]
+    pub struct AssessmentResponse {
+        pub quality_score: f32,
+        pub suggestions: Vec<String>,
+        pub feedback: String,
+    }
+
+    #[derive(Deserialize)]
+    struct OpenAIResponse {
+        choices: Vec<OpenAIChoice>,
+    }
+
+    #[derive(Deserialize)]
+    struct OpenAIChoice {
+        message: OpenAIMessage,
+    }
+
+    #[derive(Deserialize)]
+    struct OpenAIMessage {
+        content: String,
+    }
+
+    #[derive(Serialize)]
+    struct OpenAIRequest {
+        model: String,
+        messages: Vec<OpenAIRequestMessage>,
+        temperature: f32,
+        max_tokens: u32,
+    }
+
+    #[derive(Serialize)]
+    struct OpenAIRequestMessage {
+        role: String,
+        content: String,
+    }
+
+    pub async fn post_assess_title(
+        extract::State(_state): extract::State<AppState>,
+        Json(request): Json<AssessmentRequest>,
+    ) -> Result<Json<AssessmentResponse>, AppError> {
+        let openai_api_key = env::var("OPENAI_API_KEY")
+            .map_err(|_| anyhow::anyhow!("OPENAI_API_KEY environment variable not set"))?;
+
+        let client = reqwest::Client::new();
+
+        let prompt = format!(
+            "Analyze this task title and provide feedback to help improve it. 
+            Task title: \"{}\"
+
+            Please evaluate the task title based on:
+            1. Clarity and specificity
+            2. Actionability (starts with action verb)
+            3. Completeness (has enough context)
+            4. Brevity (not too long or wordy)
+
+            Respond with a JSON object containing:
+            - quality_score: number from 1-10 (10 being perfect)
+            - suggestions: array of strings with specific improvement suggestions
+            - feedback: string with overall assessment and advice
+
+            Example response:
+            {{
+                \"quality_score\": 7.5,
+                \"suggestions\": [\"Start with an action verb like 'Create' or 'Complete'\", \"Add more specific details about the deliverable\"],
+                \"feedback\": \"Good start, but could be more specific and actionable.\"
+            }}",
+            request.title
+        );
+
+        let openai_request = OpenAIRequest {
+            model: "gpt-3.5-turbo".to_string(),
+            messages: vec![
+                OpenAIRequestMessage {
+                    role: "system".to_string(),
+                    content: "You are a helpful assistant that provides feedback on task titles to improve productivity and clarity. Always respond with valid JSON.".to_string(),
+                },
+                OpenAIRequestMessage {
+                    role: "user".to_string(),
+                    content: prompt,
+                }
+            ],
+            temperature: 0.3,
+            max_tokens: 300,
+        };
+
+        let response = client
+            .post("https://api.openai.com/v1/chat/completions")
+            .header("Authorization", format!("Bearer {}", openai_api_key))
+            .header("Content-Type", "application/json")
+            .json(&openai_request)
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to send request to OpenAI: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("OpenAI API error {}: {}", status, error_text).into());
+        }
+
+        let openai_response: OpenAIResponse = response
+            .json()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to parse OpenAI response: {}", e))?;
+
+        let content = openai_response
+            .choices
+            .first()
+            .and_then(|choice| Some(&choice.message.content))
+            .ok_or_else(|| anyhow::anyhow!("No response from OpenAI"))?;
+
+        // Parse the JSON content from OpenAI response
+        let assessment: AssessmentResponse = serde_json::from_str(content)
+            .map_err(|e| anyhow::anyhow!("Failed to parse OpenAI JSON response: {}", e))?;
+
+        debug!("Task title assessment: {:?}", assessment.feedback);
+        Ok(Json(assessment))
+    }
 
     pub async fn get_commits_head(
         extract::State(state): extract::State<AppState>,

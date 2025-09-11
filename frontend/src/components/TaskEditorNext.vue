@@ -86,11 +86,55 @@
                         auto-grow
                         rows="1"
                         required
+                        v-on:input="onTitleInput"
                     >
                         <template v-slot:prepend>
                             <v-icon>{{ mdiFormatHeader1 }}</v-icon>
                         </template>
                     </v-textarea>
+                    
+                    <!-- Title Assessment -->
+                    <div v-if="titleAssessment && form.title.length > 3" class="title-assessment mb-4">
+                        <v-card outlined class="pa-3">
+                            <v-card-subtitle class="pa-0 pb-2">
+                                <v-icon small class="mr-1">{{ mdiLightbulbOnOutline }}</v-icon>
+                                Title Assessment
+                                <v-progress-circular 
+                                    v-if="assessmentLoading"
+                                    indeterminate
+                                    size="16"
+                                    width="2"
+                                    class="ml-2"
+                                ></v-progress-circular>
+                            </v-card-subtitle>
+                            <div v-if="!assessmentLoading">
+                                <div class="d-flex align-center mb-2">
+                                    <span class="caption mr-2">Quality Score:</span>
+                                    <v-rating
+                                        v-bind:value="titleAssessment.quality_score / 2"
+                                        readonly
+                                        dense
+                                        size="16"
+                                        length="5"
+                                        half-increments
+                                        color="amber"
+                                    ></v-rating>
+                                    <span class="caption ml-1">({{ titleAssessment.quality_score.toFixed(1) }}/10)</span>
+                                </div>
+                                <p class="caption mb-2" v-if="titleAssessment.feedback">
+                                    {{ titleAssessment.feedback }}
+                                </p>
+                                <div v-if="titleAssessment.suggestions.length > 0">
+                                    <p class="caption font-weight-bold mb-1">Suggestions:</p>
+                                    <ul class="caption">
+                                        <li v-for="(suggestion, index) in titleAssessment.suggestions" v-bind:key="index">
+                                            {{ suggestion }}
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </v-card>
+                    </div>
                     <!-- Tags -->
                     <v-combobox
                         v-model.trim="form.tags"
@@ -341,6 +385,7 @@ import {
     mdiFileTreeOutline,
     mdiFormatHeader1,
     mdiHelpCircleOutline,
+    mdiLightbulbOnOutline,
     mdiNoteEditOutline,
     mdiPercentOutline,
     mdiPencilBoxOutline,
@@ -350,6 +395,8 @@ import {
     mdiTimerSand,
     mdiTrafficLightOutline,
 } from '@mdi/js';
+
+import { assessTaskTitle, type TitleAssessmentResponse } from '@/api';
 
 import { extractFileUuid } from '@/api/task';
 import type { UUID, Task, Status, StatusKind, WaitingStatus, BlockedStatus, OnHoldStatus, DoneStatus, CanceledStatus } from '@/task';
@@ -408,6 +455,11 @@ const form = reactive<EditableTask>({
     note: '',
 });
 const uiValid = ref(true);
+
+// Title assessment data
+const titleAssessment = ref<TitleAssessmentResponse | null>(null);
+const assessmentLoading = ref(false);
+let assessmentTimeout: NodeJS.Timeout | null = null;
 
 // Template refs
 const formRef = ref<any>(null);
@@ -567,6 +619,9 @@ onMounted(() => {
 
 onUnmounted(() => {
     window.removeEventListener('beforeunload', onBeforeunload);
+    if (assessmentTimeout) {
+        clearTimeout(assessmentTimeout);
+    }
 });
 
 // Methods
@@ -701,6 +756,38 @@ function statusEqual(a: Status, b: Status): boolean {
     }
 }
 
+// Title assessment functions
+async function assessTitle(title: string) {
+    if (!title || title.length < 3) {
+        titleAssessment.value = null;
+        return;
+    }
+    
+    assessmentLoading.value = true;
+    
+    try {
+        const response = await assessTaskTitle(title);
+        titleAssessment.value = response;
+    } catch (error) {
+        console.warn('Failed to assess task title:', error);
+        titleAssessment.value = null;
+    } finally {
+        assessmentLoading.value = false;
+    }
+}
+
+function onTitleInput() {
+    // Clear existing timeout
+    if (assessmentTimeout) {
+        clearTimeout(assessmentTimeout);
+    }
+    
+    // Set a new timeout to assess after user stops typing
+    assessmentTimeout = setTimeout(() => {
+        assessTitle(form.title);
+    }, 1000);
+}
+
 // Expose
 defineExpose({
   refresh,
@@ -759,5 +846,20 @@ defineExpose({
 
 :deep(.full-height-textarea .v-input__slot) {
     height: 100%;
+}
+
+.title-assessment {
+    .v-card {
+        border-left: 3px solid #1976d2;
+    }
+    
+    .caption {
+        line-height: 1.4;
+    }
+    
+    ul {
+        margin-left: 16px;
+        margin-bottom: 0;
+    }
 }
 </style>

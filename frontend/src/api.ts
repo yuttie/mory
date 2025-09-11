@@ -291,3 +291,17 @@ export async function putTaskData(data: TaskData) {
     // Send
     return await addNote('.mory/tasks.yaml', yaml);
 }
+
+export interface TitleAssessmentResponse {
+    quality_score: number;
+    suggestions: string[];
+    feedback: string;
+}
+
+export async function assessTaskTitle(title: string): Promise<TitleAssessmentResponse> {
+    const axios = await getAxios();
+    const response = await axios.post('/v2/assess-title', {
+        title: title
+    });
+    return response.data;
+}
