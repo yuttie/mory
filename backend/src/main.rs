@@ -1046,7 +1046,7 @@ mod v2 {
         let context_part = if let Some(ref ancestors) = request.ancestor_titles {
             if !ancestors.is_empty() {
                 format!(
-                    "\n\nTask hierarchy context (from top-level to immediate parent):\n{}\n\nConsider this hierarchy when evaluating the task title for clarity and avoiding redundancy.",
+                    "\n\nTask hierarchy context (from top-level to immediate parent):\n{}\n\nConsider the hierarchy context when evaluating the task title. The task title may be short and rely on context, but it should still be understandable within the hierarchy.",
                     ancestors.iter().enumerate()
                         .map(|(i, title)| format!("{}. <task-title>{}</task-title>", i + 1, title))
                         .collect::<Vec<_>>()
@@ -1060,26 +1060,23 @@ mod v2 {
         };
 
         let prompt = format!(
-            "Analyze this task title and provide feedback to help improve it.
+            r#"Analyze the following task title and provide feedback for improving it:
             <task-title>{}</task-title>{}
 
-            Please evaluate the task title based on:
+            Evaluate the title based on:
             1. Clarity and specificity
-            2. Actionability (starts with action verb)
-            3. Completeness (has enough context)
-            4. Brevity (not too long or wordy)
+            2. Actionability
+            3. Completeness
+            4. Brevity
 
-            Respond with a JSON object containing:
-            - quality_score: number from 1-10 (10 being perfect)
-            - suggestions: array of strings with specific improvement suggestions
-            - feedback: string with overall assessment and advice
-
-            Example response:
+            Respond with JSON:
             {{
-                \"quality_score\": 7.5,
-                \"suggestions\": [\"Start with an action verb like 'Create' or 'Complete'\", \"Add more specific details about the deliverable\"],
-                \"feedback\": \"Good start, but could be more specific and actionable.\"
-            }}",
+              "quality_score": <real number between 0 and 10, where 10 = excellent>,
+              "suggestions": ["specific improvement suggestion 1", "suggestion 2", ...],
+              "feedback": "overall assessment emphasizing weaknesses and how to fix them"
+            }}
+
+            Important: Use the same language as the task title."#,
             request.title,
             context_part
         );
