@@ -26,7 +26,7 @@ moried includes OpenAI integration for task assessment. API responses are automa
 
 - **Caching**: Identical requests return cached responses instantly
 - **Expiration**: Cache entries expire after `MORIED_OPENAI_CACHE_HOURS` (default: 24 hours)
-- **Performance**: Cached responses are served in <5ms vs typical API latency of 500ms+
+- **Performance**: Cached responses are served much faster than fresh API calls
 
 Run a container:
 ```shell
