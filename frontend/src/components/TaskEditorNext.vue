@@ -402,7 +402,6 @@ import { extractFileUuid } from '@/api/task';
 import type { UUID, Task, Status, StatusKind, WaitingStatus, BlockedStatus, OnHoldStatus, DoneStatus, CanceledStatus } from '@/task';
 import { STATUS_LABEL, nextOptions, makeDefaultStatus, canTransition } from '@/task';
 import { useFetchTask } from '@/composables/fetchTask';
-import { useTaskForestStore } from '@/stores/taskForest';
 
 import dayjs from 'dayjs';
 
@@ -425,14 +424,13 @@ const props = defineProps<{
     taskPath: string;
     knownTags: [string, number][];
     knownContacts: [string, number][];
-    parentTaskTitle?: string;
+    ancestorTaskTitles?: string[];
     selectedTag?: string;
 }>();
 const pathRef = toRef(props, 'taskPath');
 
 // Composables
 const { task, loading, error, refresh } = useFetchTask(pathRef);
-const taskForestStore = useTaskForestStore();
 
 // Emits
 const emit = defineEmits<{
@@ -630,8 +628,10 @@ onUnmounted(() => {
 function getNewTaskTitle(): string {
     if (props.selectedTag) {
         return `New task with tag "${props.selectedTag}"`;
-    } else if (props.parentTaskTitle) {
-        return `New subtask of "${props.parentTaskTitle}"`;
+    } else if (props.ancestorTaskTitles && props.ancestorTaskTitles.length > 0) {
+        // Use the last ancestor title (immediate parent)
+        const parentTitle = props.ancestorTaskTitles[props.ancestorTaskTitles.length - 1];
+        return `New subtask of "${parentTitle}"`;
     } else {
         return 'New task';
     }
@@ -758,32 +758,6 @@ function statusEqual(a: Status, b: Status): boolean {
     }
 }
 
-// Helper function to get ancestor titles for context
-function getAncestorTitles(): string[] {
-    const ancestors: string[] = [];
-    
-    try {
-        // Get the current task's UUID
-        const currentUuid = uuid.value;
-        if (!currentUuid) return ancestors;
-        
-        // Walk up the parent chain to collect ancestor titles
-        let currentParentId = taskForestStore.parentOf(currentUuid);
-        
-        while (currentParentId) {
-            const parentNode = taskForestStore.node(currentParentId);
-            if (parentNode && parentNode.title) {
-                ancestors.unshift(parentNode.title); // Add to beginning to maintain hierarchy order
-            }
-            currentParentId = taskForestStore.parentOf(currentParentId);
-        }
-    } catch (error) {
-        console.warn('Failed to get ancestor titles:', error);
-    }
-    
-    return ancestors;
-}
-
 // Title assessment functions
 async function assessTaskTitle(title: string) {
     if (!title || title.length < 3) {
@@ -794,7 +768,7 @@ async function assessTaskTitle(title: string) {
     assessmentLoading.value = true;
     
     try {
-        const ancestorTitles = getAncestorTitles();
+        const ancestorTitles = props.ancestorTaskTitles || [];
         const response = await assessTask(title, ancestorTitles);
         titleAssessment.value = response;
     } catch (error) {
