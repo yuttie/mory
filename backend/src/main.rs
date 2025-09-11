@@ -233,7 +233,7 @@ async fn post_login(
 
     if matches {
         let secret = env::var("MORIED_SECRET").unwrap();
-        let duration = env::var("MORIED_SESSION_DURATION").map_or(Duration::hours(6), |v| {
+        let duration = env::var("MORIED_SESSION_EXPIRY_MINUTES").map_or(Duration::hours(6), |v| {
             Duration::minutes(v.parse::<i64>().expect("Session duration in minutes represented as integer value is expected"))
         });
         let now: DateTime<Utc> = Utc::now();
