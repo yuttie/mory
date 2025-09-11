@@ -28,20 +28,14 @@
             style="z-index: 100; margin-bottom: 2px;"
         >{{ error.message }}</v-alert>
         <!-- Navigation drawer for desktop -->
-        <div
+        <v-navigation-drawer
             v-if="!$vuetify.breakpoint.xs"
-            class="sidebar-container"
-            v-bind:style="{ width: sidebarWidth + 'px' }"
+            app
+            clipped
+            v-bind:mini-variant="miniMainSidebar"
+            v-bind:expand-on-hover="miniMainSidebar"
+            permanent
         >
-            <v-navigation-drawer
-                app
-                clipped
-                v-bind:mini-variant="miniMainSidebar"
-                v-bind:expand-on-hover="miniMainSidebar"
-                v-bind:width="sidebarWidth"
-                permanent
-                class="sidebar-drawer"
-            >
             <v-list dense nav>
                 <v-list-item
                     v-if="miniMainSidebar"
@@ -115,15 +109,8 @@
                 </v-treeview>
             </v-list>
         </v-navigation-drawer>
-        
-        <!-- Draggable resize handle -->
-        <div 
-            class="sidebar-resize-handle"
-            v-on:mousedown="startSidebarResize"
-        ></div>
-    </div>
 
-    <!-- Navigation drawer for mobile -->
+        <!-- Navigation drawer for mobile -->
         <v-navigation-drawer
             v-else
             app
@@ -468,7 +455,6 @@ const appStore = useAppStore();
 // Reactive states
 const notificationPermission = ref<'granted'| 'denied' | 'default'>('Notification' in window ? Notification.permission : 'denied');
 const miniMainSidebar = ref(loadConfigValue("mini-main-sidebar", false));
-const sidebarWidth = ref(loadConfigValue("sidebar-width", 256));
 const mobileDrawer = ref(false);
 const loginUsername = ref("");
 const loginPassword = ref("");
@@ -479,7 +465,6 @@ const noteTree = ref([] as TreeNode[]);
 const noteTreeOpen = ref([]);
 const noteTreeActive = ref([]);
 const errors = ref([]);
-const isResizingSidebar = ref(false);
 
 // Template Refs
 const app = ref(null);
@@ -866,47 +851,9 @@ async function populateTagChildren(item: TreeNode) {
     }
 }
 
-// Sidebar resize functions
-function startSidebarResize(event: MouseEvent) {
-    isResizingSidebar.value = true;
-    
-    const startX = event.clientX;
-    const startWidth = sidebarWidth.value;
-    
-    function onMouseMove(event: MouseEvent) {
-        if (!isResizingSidebar.value) return;
-        
-        const deltaX = event.clientX - startX;
-        const newWidth = Math.max(200, Math.min(400, startWidth + deltaX));
-        
-        sidebarWidth.value = newWidth;
-    }
-    
-    function onMouseUp() {
-        isResizingSidebar.value = false;
-        saveConfigValue("sidebar-width", sidebarWidth.value);
-        
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-    }
-    
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-    
-    event.preventDefault();
-}
-
 // Watchers
 watch(miniMainSidebar, (newMiniMainSidebar: boolean) => {
   saveConfigValue("mini-main-sidebar", newMiniMainSidebar);
-});
-
-watch(sidebarWidth, (newSidebarWidth: number) => {
-  saveConfigValue("sidebar-width", newSidebarWidth);
 });
 </script>
 
@@ -1009,34 +956,6 @@ watch(sidebarWidth, (newSidebarWidth: number) => {
         button {
             padding: 0.5em 1em;
         }
-    }
-}
-
-.sidebar-container {
-    position: relative;
-    display: flex;
-    
-    .sidebar-drawer {
-        flex: 1;
-    }
-}
-
-.sidebar-resize-handle {
-    position: absolute;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    width: 4px;
-    cursor: col-resize;
-    background-color: transparent;
-    z-index: 1000;
-    
-    &:hover {
-        background-color: rgba(0, 0, 0, 0.1);
-    }
-    
-    &:active {
-        background-color: rgba(0, 0, 0, 0.2);
     }
 }
 </style>

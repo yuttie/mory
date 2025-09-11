@@ -1,7 +1,7 @@
 <template>
     <div id="tasks-next" class="d-flex" v-bind:class="{ 'flex-column': !$vuetify.breakpoint.smAndUp, 'flex-row': $vuetify.breakpoint.smAndUp }">
         <template v-if="store.isLoaded">
-            <div class="d-flex flex-column task-tree-container"><!-- NOTE: Necessary for <TaskTree> to have vertical scrollbar -->
+            <div class="d-flex flex-column task-tree-container" v-bind:style="{ width: treeViewWidth + 'px' }"><!-- NOTE: Necessary for <TaskTree> to have vertical scrollbar -->
                 <v-toolbar flat class="flex-grow-0">
                     <v-toolbar-title>
                         <span>{{ filteredTasksCount }} tasks left</span>
@@ -58,6 +58,12 @@
                     />
                 </v-sheet>
             </div>
+            <!-- Draggable splitter (desktop only) -->
+            <div 
+                v-if="$vuetify.breakpoint.smAndUp"
+                class="tree-view-splitter"
+                v-on:mousedown="startTreeViewResize"
+            ></div>
             <div class="item-view d-flex flex-column">
                 <div class="d-flex flex-row">
                     <v-tabs
@@ -248,6 +254,8 @@ const error = ref<string | null>(null);
 const hideCompletedInTreeView = useLocalStorage('hide-completed-in-tree-view', false);
 const hideCompletedInItemView = useLocalStorage('hide-completed-in-item-view', false);
 const showParentDialog = ref<boolean>(false);
+const treeViewWidth = useLocalStorage('tasks-next-tree-view-width', 300);
+const isResizingTreeView = ref(false);
 
 // URL-derived state (single source of truth)
 const selectedNode = computed<TreeNodeRecord | undefined>(() => {
@@ -792,6 +800,39 @@ function showChangeParentDialog() {
     }
 }
 
+// Tree view resize functions
+function startTreeViewResize(event: MouseEvent) {
+    isResizingTreeView.value = true;
+    
+    const startX = event.clientX;
+    const startWidth = treeViewWidth.value;
+    
+    function onMouseMove(event: MouseEvent) {
+        if (!isResizingTreeView.value) return;
+        
+        const deltaX = event.clientX - startX;
+        const newWidth = Math.max(200, Math.min(600, startWidth + deltaX));
+        
+        treeViewWidth.value = newWidth;
+    }
+    
+    function onMouseUp() {
+        isResizingTreeView.value = false;
+        
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+    }
+    
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    
+    event.preventDefault();
+}
+
 async function load() {
     error.value = null;
     try {
@@ -823,18 +864,18 @@ async function load() {
 }
 
 .task-tree {
-    width: 300px;
+    width: 100%;
     overflow: hidden auto;
 }
 
 .task-tree-container {
-    width: 300px;
+    /* Width is now dynamic via v-bind:style */
 }
 
 /* Mobile responsive adjustments */
 @media (max-width: 599px) { /* sm breakpoint in Vuetify 2 */
     .task-tree-container {
-        width: 100%;
+        width: 100% !important;
         max-height: 200px;
         min-height: 150px;
     }
@@ -870,5 +911,20 @@ async function load() {
     display: flex;
     flex-direction: column;
     flex: 1 1 0;
+}
+
+.tree-view-splitter {
+    width: 4px;
+    cursor: col-resize;
+    background-color: transparent;
+    position: relative;
+    
+    &:hover {
+        background-color: rgba(0, 0, 0, 0.1);
+    }
+    
+    &:active {
+        background-color: rgba(0, 0, 0, 0.2);
+    }
 }
 </style>

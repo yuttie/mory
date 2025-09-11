@@ -144,7 +144,7 @@
                         no-gutters
                     >
                         <v-col style="overflow: hidden;">
-                            <div class="sidebar-contents" v-bind:style="{ width: sidebarWidth + 'px' }">
+                            <div class="sidebar-contents">
                                 <v-expansion-panels
                                     accordion
                                     multiple
@@ -404,7 +404,6 @@ const showUpstreamState = ref(false);
 const rendered = ref({ metadata: null as null | any, content: '' });
 const useSimpleEditor = ref(loadConfigValue('use-simple-editor', false));
 const lockScroll = ref(loadConfigValue('lock-scroll', false));
-const sidebarWidth = ref(loadConfigValue('sidebar-width', 256));
 const ignoreNext = ref(false);
 const noteHasUpstream = ref(false);
 const editorIsVisible = ref(false);
@@ -1833,7 +1832,7 @@ $navigation-drawer-width: 56px;
 }
 
 .sidebar-contents {
-    /* Keep this in sync with the width of v-navigation-drawer */
+    width: 256px;  /* Keep this in sync with the width of v-navigation-drawer */
 
     /* Correct z-order of right sidebar's border and v-expansion-panels inside this element */
     position: relative;
