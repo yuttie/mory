@@ -87,7 +87,7 @@
                             v-bind:task-path="newTaskPath ?? selectedNode.path"
                             v-bind:known-tags="knownTags"
                             v-bind:known-contacts="knownContacts"
-                            v-bind:parent-task-title="newTaskPath && selectedNode ? selectedNode.title : undefined"
+                            v-bind:ancestor-task-titles="selectedNodeAncestorTitles"
                             v-bind:selected-tag="newTaskPath && selectedNode && isTagGroupSelected ? selectedTagName : undefined"
                             class="ma-4"
                             v-on:save="onSelectedTaskSave"
@@ -287,6 +287,40 @@ const selectedTagName = computed<string | null>(() => {
         return selectedNode.value.uuid.replace('tag-group-', '');
     }
     return null;
+});
+
+// Helper function to get ancestor titles for a task
+function getAncestorTitles(taskUuid: string): string[] {
+    const ancestors: string[] = [];
+    
+    try {
+        // Walk up the parent chain to collect ancestor titles
+        let currentParentId = store.parentOf(taskUuid);
+        
+        while (currentParentId) {
+            const parentNode = store.node(currentParentId);
+            if (parentNode && parentNode.title) {
+                ancestors.unshift(parentNode.title); // Add to beginning to maintain hierarchy order
+            }
+            currentParentId = store.parentOf(currentParentId);
+        }
+    } catch (error) {
+        console.warn('Failed to get ancestor titles:', error);
+    }
+    
+    return ancestors;
+}
+
+// Computed property for ancestor titles of the selected node
+const selectedNodeAncestorTitles = computed<string[]>(() => {
+    if (newTaskPath.value && selectedNode.value && !isTagGroupSelected.value) {
+        // For new tasks, include the selected node as the parent in ancestor chain
+        return [...getAncestorTitles(selectedNode.value.uuid), selectedNode.value.title];
+    } else if (selectedNode.value && !isTagGroupSelected.value && !newTaskPath.value) {
+        // For existing tasks, get their own ancestors (not including themselves)
+        return getAncestorTitles(selectedNode.value.uuid);
+    }
+    return [];
 });
 
 // Utility function to sort tasks by due date/deadline

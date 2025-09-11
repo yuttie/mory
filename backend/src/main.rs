@@ -38,7 +38,8 @@ use dotenv::dotenv;
 use git2::{Index, IndexEntry, IndexTime, Repository, Oid};
 use jsonwebtoken as jwt;
 use mime_guess;
-use serde::Deserialize;
+use reqwest;
+use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
 use sqlx::sqlite::{
     SqliteConnectOptions,
@@ -107,6 +108,7 @@ async fn main() -> Result<()> {
     let state = models::AppState {
         repo: Arc::new(Mutex::new(repo)),
         cache_db: db_pool,
+        http_client: reqwest::Client::new(),
     };
 
     let addr = env::var("MORIED_LISTEN").unwrap();
@@ -142,6 +144,7 @@ async fn main() -> Result<()> {
         .route("/files/*path", get(v2::get_files_path).head(v2::head_files_path))
         .route("/tasks", get(v2::get_tasks))
         .route("/events", get(v2::get_events))
+        .route("/assess-task", post(v2::post_assess_task))
         .with_state(state.clone())
         .route_layer(middleware::from_fn(auth));
     let api_v2 = Router::new()
@@ -987,6 +990,146 @@ pub async fn grep_bare_repo(
 
 mod v2 {
     use super::*;
+    use std::env;
+
+    #[derive(Deserialize)]
+    pub struct AssessmentRequest {
+        pub title: String,
+        pub ancestor_titles: Option<Vec<String>>,
+    }
+
+    #[derive(Serialize, Deserialize)]
+    pub struct AssessmentResponse {
+        pub quality_score: f32,
+        pub suggestions: Vec<String>,
+        pub feedback: String,
+    }
+
+    #[derive(Deserialize)]
+    struct OpenAIResponse {
+        choices: Vec<OpenAIChoice>,
+    }
+
+    #[derive(Deserialize)]
+    struct OpenAIChoice {
+        message: OpenAIMessage,
+    }
+
+    #[derive(Deserialize)]
+    struct OpenAIMessage {
+        content: String,
+    }
+
+    #[derive(Serialize)]
+    struct OpenAIRequest {
+        model: String,
+        messages: Vec<OpenAIRequestMessage>,
+        temperature: f32,
+        max_tokens: u32,
+    }
+
+    #[derive(Serialize)]
+    struct OpenAIRequestMessage {
+        role: String,
+        content: String,
+    }
+
+    pub async fn post_assess_task(
+        extract::State(state): extract::State<AppState>,
+        Json(request): Json<AssessmentRequest>,
+    ) -> Result<Json<AssessmentResponse>, AppError> {
+        let openai_api_key = env::var("MORIED_OPENAI_API_KEY")
+            .map_err(|_| anyhow::anyhow!("MORIED_OPENAI_API_KEY environment variable not set"))?;
+
+        let client = &state.http_client;
+
+        let context_part = if let Some(ref ancestors) = request.ancestor_titles {
+            if !ancestors.is_empty() {
+                format!(
+                    "\n\nTask hierarchy context (from top-level to immediate parent):\n{}\n\nConsider the hierarchy context when evaluating the task title. The task title may be short and rely on context, but it should still be understandable within the hierarchy.",
+                    ancestors.iter().enumerate()
+                        .map(|(i, title)| format!("{}. <task-title>{}</task-title>", i + 1, title))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                )
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
+
+        let prompt = format!(
+            r#"Analyze the following task title and provide feedback for improving it:
+            <task-title>{}</task-title>{}
+
+            Evaluate the title based on:
+            1. Clarity and specificity
+            2. Actionability
+            3. Completeness
+            4. Brevity
+
+            Respond with JSON:
+            {{
+              "quality_score": <real number between 0 and 10, where 10 = excellent>,
+              "suggestions": ["specific improvement suggestion 1", "suggestion 2", ...],
+              "feedback": "overall assessment emphasizing weaknesses and how to fix them"
+            }}
+
+            Important: Use the same language as the task title."#,
+            request.title,
+            context_part
+        );
+
+        let openai_request = OpenAIRequest {
+            model: "gpt-4.1-mini".to_string(),
+            messages: vec![
+                OpenAIRequestMessage {
+                    role: "system".to_string(),
+                    content: "You are a helpful assistant that provides feedback on task titles to improve productivity and clarity. Always respond with valid JSON.".to_string(),
+                },
+                OpenAIRequestMessage {
+                    role: "user".to_string(),
+                    content: prompt,
+                }
+            ],
+            temperature: 0.3,
+            max_tokens: 300,
+        };
+
+        let response = client
+            .post("https://api.openai.com/v1/chat/completions")
+            .header("Authorization", format!("Bearer {}", openai_api_key))
+            .header("Content-Type", "application/json")
+            .json(&openai_request)
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to send request to OpenAI: {}", e))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("OpenAI API error {}: {}", status, error_text).into());
+        }
+
+        let openai_response: OpenAIResponse = response
+            .json()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to parse OpenAI response: {}", e))?;
+
+        let content = openai_response
+            .choices
+            .first()
+            .and_then(|choice| Some(&choice.message.content))
+            .ok_or_else(|| anyhow::anyhow!("No response from OpenAI"))?;
+
+        // Parse the JSON content from OpenAI response
+        let assessment: AssessmentResponse = serde_json::from_str(content)
+            .map_err(|e| anyhow::anyhow!("Failed to parse OpenAI JSON response: {}", e))?;
+
+        debug!("Task title assessment: {:?}", assessment.feedback);
+        Ok(Json(assessment))
+    }
 
     pub async fn get_commits_head(
         extract::State(state): extract::State<AppState>,
@@ -1365,6 +1508,7 @@ mod models {
     pub struct AppState {
         pub repo: Arc<Mutex<Repository>>,
         pub cache_db: SqlitePool,
+        pub http_client: reqwest::Client,
     }
 
     impl AppState {
