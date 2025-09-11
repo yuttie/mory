@@ -50,7 +50,9 @@ const processor = unified()
       }
     },
   })
-  .use(rehypeSlug)
+  .use(rehypeSlug, {
+    prefix: 'h-',
+  })
   .use(rehypeAutolinkHeadings, {
     properties: {
       ariaHidden: true,
