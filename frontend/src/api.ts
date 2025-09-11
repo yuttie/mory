@@ -292,13 +292,13 @@ export async function putTaskData(data: TaskData) {
     return await addNote('.mory/tasks.yaml', yaml);
 }
 
-export interface TitleAssessmentResponse {
+export interface TaskAssessmentResponse {
     quality_score: number;
     suggestions: string[];
     feedback: string;
 }
 
-export async function assessTaskTitle(title: string): Promise<TitleAssessmentResponse> {
+export async function assessTask(title: string): Promise<TaskAssessmentResponse> {
     const axios = await getAxios();
     const response = await axios.post('/v2/assess-task', {
         title: title

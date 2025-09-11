@@ -396,7 +396,7 @@ import {
     mdiTrafficLightOutline,
 } from '@mdi/js';
 
-import { assessTaskTitle, type TitleAssessmentResponse } from '@/api';
+import { assessTask, type TaskAssessmentResponse } from '@/api';
 
 import { extractFileUuid } from '@/api/task';
 import type { UUID, Task, Status, StatusKind, WaitingStatus, BlockedStatus, OnHoldStatus, DoneStatus, CanceledStatus } from '@/task';
@@ -457,7 +457,7 @@ const form = reactive<EditableTask>({
 const uiValid = ref(true);
 
 // Title assessment data
-const titleAssessment = ref<TitleAssessmentResponse | null>(null);
+const titleAssessment = ref<TaskAssessmentResponse | null>(null);
 const assessmentLoading = ref(false);
 let assessmentTimeout: NodeJS.Timeout | null = null;
 
@@ -757,7 +757,7 @@ function statusEqual(a: Status, b: Status): boolean {
 }
 
 // Title assessment functions
-async function assessTitle(title: string) {
+async function assessTaskTitle(title: string) {
     if (!title || title.length < 3) {
         titleAssessment.value = null;
         return;
@@ -766,7 +766,7 @@ async function assessTitle(title: string) {
     assessmentLoading.value = true;
     
     try {
-        const response = await assessTaskTitle(title);
+        const response = await assessTask(title);
         titleAssessment.value = response;
     } catch (error) {
         console.warn('Failed to assess task title:', error);
@@ -784,7 +784,7 @@ function onTitleInput() {
     
     // Set a new timeout to assess after user stops typing
     assessmentTimeout = setTimeout(() => {
-        assessTitle(form.title);
+        assessTaskTitle(form.title);
     }, 1000);
 }
 
