@@ -1036,8 +1036,8 @@ mod v2 {
         extract::State(_state): extract::State<AppState>,
         Json(request): Json<AssessmentRequest>,
     ) -> Result<Json<AssessmentResponse>, AppError> {
-        let openai_api_key = env::var("OPENAI_API_KEY")
-            .map_err(|_| anyhow::anyhow!("OPENAI_API_KEY environment variable not set"))?;
+        let openai_api_key = env::var("MORIED_OPENAI_API_KEY")
+            .map_err(|_| anyhow::anyhow!("MORIED_OPENAI_API_KEY environment variable not set"))?;
 
         let client = reqwest::Client::new();
 
