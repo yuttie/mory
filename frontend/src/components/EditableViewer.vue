@@ -226,13 +226,13 @@
                                         </v-expansion-panel-header>
                                         <v-expansion-panel-content>
                                             <ol class="tree" ref="tocEl">
-                                                <li v-for="h1 of toc" v-bind:key="h1.title" class="level1">
+                                                <li v-for="h1 of toc" v-bind:key="h1.href" class="level1">
                                                     <a v-bind:href="h1.href" v-on:click="jumpTo(h1.href)">{{ h1.title }}</a>
                                                     <ol>
-                                                        <li v-for="h2 of h1.children" v-bind:key="h2.title" class="level2">
+                                                        <li v-for="h2 of h1.children" v-bind:key="h2.href" class="level2">
                                                             <a v-bind:href="h2.href" v-on:click="jumpTo(h2.href)">{{ h2.title }}</a>
                                                             <ol>
-                                                                <li v-for="h3 of h2.children" v-bind:key="h3.title" class="level3">
+                                                                <li v-for="h3 of h2.children" v-bind:key="h3.href" class="level3">
                                                                     <a v-bind:href="h3.href" v-on:click="jumpTo(h3.href)">{{ h3.title }}</a>
                                                                 </li>
                                                             </ol>
