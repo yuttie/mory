@@ -15,6 +15,7 @@ FROM debian:trixie-slim AS production-stage
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
+    ca-certificates \
     imagemagick \
     inkscape \
     && rm -rf /var/lib/apt/lists/*
