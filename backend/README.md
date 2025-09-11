@@ -16,7 +16,17 @@ MORIED_SECRET=SERVERSECRETKEY
 MORIED_USER_NAME=USERNAME
 MORIED_USER_EMAIL=user@example.com
 MORIED_USER_HASH=$argon2i$v=19$m=4096,t=3,p=1$MUZxK1p5Y3RrQmpVazM5SFduelZCakxhV0dqSXJEMy8$XcE1aipcYOUd7gIxh8f2+RRLQmlNT96cLyguIZqE128
+MORIED_OPENAI_API_KEY=sk-your-openai-api-key-here
+MORIED_OPENAI_CACHE_HOURS=24
 ```
+
+### OpenAI Integration
+
+moried includes OpenAI integration for task assessment. API responses are automatically cached in the SQLite database to reduce costs and improve performance:
+
+- **Caching**: Identical requests return cached responses instantly
+- **Expiration**: Cache entries expire after `MORIED_OPENAI_CACHE_HOURS` (default: 24 hours)
+- **Performance**: Cached responses are served much faster than fresh API calls
 
 Run a container:
 ```shell

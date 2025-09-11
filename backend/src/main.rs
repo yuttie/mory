@@ -46,6 +46,7 @@ use sqlx::sqlite::{
     SqlitePoolOptions,
     SqliteTransaction,
 };
+use sqlx::Row;
 use tempfile::tempdir;
 use tokio::process::Command;
 use tower::ServiceBuilder;
@@ -81,6 +82,16 @@ async fn main() -> Result<()> {
                 key    TEXT PRIMARY KEY,
                 value  ANY
             ) STRICT, WITHOUT ROWID;
+        ")
+        .execute(&db_pool)
+        .await?;
+    sqlx::query("
+            CREATE TABLE IF NOT EXISTS openai_cache (
+                request_hash  TEXT PRIMARY KEY,
+                request_data  TEXT NOT NULL,
+                response_data TEXT NOT NULL,
+                created_at    INTEGER NOT NULL
+            ) STRICT;
         ")
         .execute(&db_pool)
         .await?;
@@ -992,7 +1003,7 @@ mod v2 {
     use super::*;
     use std::env;
 
-    #[derive(Deserialize)]
+    #[derive(Deserialize, Serialize)]
     pub struct AssessmentRequest {
         pub title: String,
         pub ancestor_titles: Option<Vec<String>>,
@@ -1038,6 +1049,39 @@ mod v2 {
         extract::State(state): extract::State<AppState>,
         Json(request): Json<AssessmentRequest>,
     ) -> Result<Json<AssessmentResponse>, AppError> {
+        // Create cache key from request data
+        let request_json = serde_json::to_string(&request)
+            .map_err(|e| anyhow::anyhow!("Failed to serialize request: {}", e))?;
+        let mut hasher = Sha1::new();
+        hasher.update(request_json.as_bytes());
+        let request_hash = format!("{:x}", hasher.finalize());
+
+        // Check cache first (cache entries older than 24 hours are considered stale)
+        let cache_expiry_hours = env::var("MORIED_OPENAI_CACHE_HOURS")
+            .unwrap_or_else(|_| "24".to_string())
+            .parse::<i64>()
+            .unwrap_or(24);
+        let cache_expiry_seconds = cache_expiry_hours * 3600;
+        let now = chrono::Utc::now().timestamp();
+        
+        if let Ok(cached_response) = sqlx::query(
+            "SELECT response_data FROM openai_cache WHERE request_hash = ? AND created_at > ?;"
+        )
+        .bind(&request_hash)
+        .bind(now - cache_expiry_seconds)
+        .map(|row: sqlx::sqlite::SqliteRow| -> String {
+            row.get("response_data")
+        })
+        .fetch_one(&state.cache_db)
+        .await
+        {
+            debug!("Returning cached OpenAI response for hash: {}", request_hash);
+            let assessment: AssessmentResponse = serde_json::from_str(&cached_response)
+                .map_err(|e| anyhow::anyhow!("Failed to parse cached response: {}", e))?;
+            return Ok(Json(assessment));
+        }
+
+        // Cache miss or expired - make API call
         let openai_api_key = env::var("MORIED_OPENAI_API_KEY")
             .map_err(|_| anyhow::anyhow!("MORIED_OPENAI_API_KEY environment variable not set"))?;
 
@@ -1126,6 +1170,29 @@ mod v2 {
         // Parse the JSON content from OpenAI response
         let assessment: AssessmentResponse = serde_json::from_str(content)
             .map_err(|e| anyhow::anyhow!("Failed to parse OpenAI JSON response: {}", e))?;
+
+        // Cache the response
+        let response_json = serde_json::to_string(&assessment)
+            .map_err(|e| anyhow::anyhow!("Failed to serialize response for caching: {}", e))?;
+        
+        if let Err(e) = sqlx::query(
+            "INSERT INTO openai_cache (request_hash, request_data, response_data, created_at) VALUES (?, ?, ?, ?)
+             ON CONFLICT(request_hash) DO UPDATE SET 
+                 response_data = excluded.response_data,
+                 created_at = excluded.created_at;"
+        )
+        .bind(&request_hash)
+        .bind(&request_json)
+        .bind(&response_json)
+        .bind(now)
+        .execute(&state.cache_db)
+        .await
+        {
+            debug!("Failed to cache OpenAI response: {}", e);
+            // Don't fail the request if caching fails, just log it
+        } else {
+            debug!("Cached OpenAI response with hash: {}", request_hash);
+        }
 
         debug!("Task title assessment: {:?}", assessment.feedback);
         Ok(Json(assessment))
