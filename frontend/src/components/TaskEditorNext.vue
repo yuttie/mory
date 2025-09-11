@@ -638,6 +638,14 @@ function getNewTaskTitle(): string {
 }
 
 function resetFromTask(t?: Task | undefined | null): void {
+    // Clear title assessment when switching tasks
+    titleAssessment.value = null;
+    assessmentLoading.value = false;
+    if (assessmentTimeout) {
+        clearTimeout(assessmentTimeout);
+        assessmentTimeout = null;
+    }
+
     if (!t) {
         const defaultTags = props.selectedTag ? [props.selectedTag] : [];
         form.title = '';
