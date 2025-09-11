@@ -1051,7 +1051,7 @@ mod v2 {
     ) -> Result<Json<AssessmentResponse>, AppError> {
         // Create cache key from request data
         let request_json = serde_json::to_string(&request)
-            .map_err(|e| anyhow::anyhow!("Failed to serialize request: {}", e))?;
+            .context("Failed to serialize request")?;
         let mut hasher = Sha1::new();
         hasher.update(request_json.as_bytes());
         let request_hash = format!("{:x}", hasher.finalize());
@@ -1077,13 +1077,13 @@ mod v2 {
         {
             debug!("Returning cached OpenAI response for hash: {}", request_hash);
             let assessment: AssessmentResponse = serde_json::from_str(&cached_response)
-                .map_err(|e| anyhow::anyhow!("Failed to parse cached response: {}", e))?;
+                .context("Failed to parse cached response")?;
             return Ok(Json(assessment));
         }
 
         // Cache miss or expired - make API call
         let openai_api_key = env::var("MORIED_OPENAI_API_KEY")
-            .map_err(|_| anyhow::anyhow!("MORIED_OPENAI_API_KEY environment variable not set"))?;
+            .context("MORIED_OPENAI_API_KEY environment variable not set")?;
 
         let client = &state.http_client;
 
@@ -1148,7 +1148,7 @@ mod v2 {
             .json(&openai_request)
             .send()
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to send request to OpenAI: {}", e))?;
+            .context("Failed to send request to OpenAI")?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -1159,7 +1159,7 @@ mod v2 {
         let openai_response: OpenAIResponse = response
             .json()
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to parse OpenAI response: {}", e))?;
+            .context("Failed to parse OpenAI response")?;
 
         let content = openai_response
             .choices
@@ -1169,11 +1169,11 @@ mod v2 {
 
         // Parse the JSON content from OpenAI response
         let assessment: AssessmentResponse = serde_json::from_str(content)
-            .map_err(|e| anyhow::anyhow!("Failed to parse OpenAI JSON response: {}", e))?;
+            .context("Failed to parse OpenAI JSON response")?;
 
         // Cache the response
         let response_json = serde_json::to_string(&assessment)
-            .map_err(|e| anyhow::anyhow!("Failed to serialize response for caching: {}", e))?;
+            .context("Failed to serialize response for caching")?;
         
         if let Err(e) = sqlx::query(
             "INSERT INTO openai_cache (request_hash, request_data, response_data, created_at) VALUES (?, ?, ?, ?)
@@ -1366,6 +1366,7 @@ mod models {
     use serde::{Deserialize, Serialize};
     use serde_yaml;
     use sqlx::{Row, SqlitePool, sqlite::SqliteRow};
+    use tracing::debug;
     use uuid::Uuid;
 
     pub type Metadata = serde_yaml::Value;
@@ -1554,9 +1555,10 @@ mod models {
 
     impl IntoResponse for AppError {
         fn into_response(self) -> Response {
+            debug!("AppError: {:?}", self.0);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Something went wrong: {}", self.0),
+                format!("AppError: {}", self.0),
             )
                 .into_response()
         }
