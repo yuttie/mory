@@ -1,3 +1,11 @@
+## [1.5.0] - 2025-09-11
+
+### 🚀 Features
+
+- [**breaking**] Give better name to env var of session expiry minutes
+- *(backend/OpenAI API)* Add OpenAI API response caching to reduce costs and improve performance (#184)
+- *(views/TasksNext)* Add automatic task title assessment feature with ancestor context using OpenAI API (#183)
+
 ## [1.4.1] - 2025-08-27
 
 ### 🐛 Bug Fixes
