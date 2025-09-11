@@ -55,7 +55,6 @@ use tower_http::{
     sensitive_headers::SetSensitiveHeadersLayer,
     trace::TraceLayer,
 };
-use tracing::debug;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use models::*;
@@ -123,7 +122,7 @@ async fn main() -> Result<()> {
     };
 
     let addr = env::var("MORIED_LISTEN").unwrap();
-    debug!("{:?}", addr);
+    tracing::debug!("{:?}", addr);
 
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
@@ -212,11 +211,11 @@ fn token_is_valid(header_value: &str) -> bool {
     let secret = env::var("MORIED_SECRET").unwrap();
     match jwt::decode::<Claims>(&token, &jwt::DecodingKey::from_secret(secret.as_ref()), &jwt::Validation::default()) {
         Ok(_) => {
-            debug!("authorized");
+            tracing::debug!("authorized");
             true
         },
         Err(e) => {
-            debug!("failed to decode token: {:?}", e);
+            tracing::debug!("failed to decode token: {:?}", e);
             false
         },
     }
@@ -225,7 +224,7 @@ fn token_is_valid(header_value: &str) -> bool {
 async fn post_login(
     Json(login): Json<Login>,
 ) -> Response {
-    debug!("post_login");
+    tracing::debug!("post_login");
     let user_name = env::var("MORIED_USER_NAME").unwrap();
     let user_email = env::var("MORIED_USER_EMAIL").unwrap();
     let user_hash = env::var("MORIED_USER_HASH").unwrap();
@@ -273,7 +272,7 @@ fn collect_recent_file_ops(
     for oid in revwalk {
         let oid = oid.unwrap();
         let commit = repo.find_commit(oid).unwrap();
-        debug!("{:?}", commit);
+        tracing::debug!("{:?}", commit);
 
         let tree = commit.tree().unwrap();
         for parent in commit.parents() {
@@ -351,7 +350,7 @@ async fn rebuild_entries_cache<'c>(
             let oid = oid?;
             let commit = repo.find_commit(oid)?;
             let tree = commit.tree()?;
-            debug!("{:?}", commit);
+            tracing::debug!("{:?}", commit);
 
             for parent in commit.parents() {
                 // FIXME: We assume there were no conflict in the case of multiple parents
@@ -503,7 +502,7 @@ async fn update_entries_cache<'c>(
 async fn get_notes(
     extract::State(state): extract::State<AppState>,
 ) -> Json<Vec<ListEntry>> {
-    debug!("get_notes");
+    tracing::debug!("get_notes");
     Json(state.get_entries(None).await.unwrap().1)
 }
 
@@ -555,7 +554,7 @@ async fn get_notes_path(
     extract::Path(path): extract::Path<String>,
     extract::State(state): extract::State<AppState>,
 ) -> Response {
-    debug!("get_notes_path");
+    tracing::debug!("get_notes_path");
 
     if let Some((_, content)) = find_entry_blob(&state, &path).await {
         content_response(content, path.as_ref())
@@ -570,8 +569,8 @@ async fn put_notes_path(
     extract::State(state): extract::State<AppState>,
     Json(note_save): Json<NoteSave>,
 ) -> Response {
-    debug!("put_notes_path");
-    debug!("{:?}", note_save);
+    tracing::debug!("put_notes_path");
+    tracing::debug!("{:?}", note_save);
 
     match note_save {
         NoteSave::Save { content, message } => {
@@ -669,7 +668,7 @@ async fn delete_notes_path(
     extract::Path(path): extract::Path<String>,
     extract::State(state): extract::State<AppState>,
 ) -> Response {
-    debug!("delete_notes_path");
+    tracing::debug!("delete_notes_path");
 
     let found = {
         let repo = state.repo.lock().unwrap();
@@ -776,7 +775,7 @@ async fn get_files_path(
     extract::Path(path): extract::Path<String>,
     extract::State(state): extract::State<AppState>,
 ) -> Response {
-    debug!("get_files_path");
+    tracing::debug!("get_files_path");
 
     if let Some((_, content)) = find_entry_blob(&state, &path).await {
         match mime_guess::from_path::<&Path>(path.as_ref()).first() {
@@ -795,13 +794,13 @@ async fn post_files(
     extract::State(state): extract::State<AppState>,
     mut multipart: extract::Multipart,
 ) -> Response {
-    debug!("post_files_path");
+    tracing::debug!("post_files_path");
 
     // Create a blob for each part (file) in the form data
     let mut files = Vec::new();
     let mut result = Vec::new();
     while let Some(field) = multipart.next_field().await.unwrap() {
-        debug!("{:?}", field);
+        tracing::debug!("{:?}", field);
 
         let uuid = field.name().unwrap().to_owned();
         let filename = field.file_name().unwrap().as_bytes().to_vec();
@@ -903,11 +902,11 @@ fn extract_metadata(blob: &[u8]) -> (Option<serde_yaml::Value>, Option<String>) 
             let metadata = if let Some(markdown::mdast::Node::Yaml(yaml_node)) = get_frontmatter_node(&node) {
                 match serde_yaml::from_str::<serde_yaml::Value>(&yaml_node.value) {
                     Ok(doc) => {
-                        debug!("parsed YAML metadata: {:?}", &doc);
+                        tracing::debug!("parsed YAML metadata: {:?}", &doc);
                         Some(doc)
                     },
                     Err(err) => {
-                        debug!("failed to parse YAML metadata: {:?}", &err);
+                        tracing::debug!("failed to parse YAML metadata: {:?}", &err);
                         let mut error_object = serde_yaml::Mapping::new();
                         error_object.insert("error".into(), format!("{}", err).into());
                         Some(serde_yaml::Value::Mapping(error_object))
@@ -1075,7 +1074,7 @@ mod v2 {
         .fetch_one(&state.cache_db)
         .await
         {
-            debug!("Returning cached OpenAI response for hash: {}", request_hash);
+            tracing::debug!("Returning cached OpenAI response for hash: {}", request_hash);
             let assessment: AssessmentResponse = serde_json::from_str(&cached_response)
                 .context("Failed to parse cached response")?;
             return Ok(Json(assessment));
@@ -1188,13 +1187,13 @@ mod v2 {
         .execute(&state.cache_db)
         .await
         {
-            debug!("Failed to cache OpenAI response: {}", e);
+            tracing::debug!("Failed to cache OpenAI response: {}", e);
             // Don't fail the request if caching fails, just log it
         } else {
-            debug!("Cached OpenAI response with hash: {}", request_hash);
+            tracing::debug!("Cached OpenAI response with hash: {}", request_hash);
         }
 
-        debug!("Task title assessment: {:?}", assessment.feedback);
+        tracing::debug!("Task title assessment: {:?}", assessment.feedback);
         Ok(Json(assessment))
     }
 
@@ -1264,7 +1263,7 @@ mod v2 {
         extract::State(state): extract::State<AppState>,
         headers: HeaderMap,
     ) -> Response {
-        debug!("v2::get_files_path");
+        tracing::debug!("v2::get_files_path");
         make_files_path_response(path, state, headers).await
     }
 
@@ -1273,7 +1272,7 @@ mod v2 {
         extract::State(state): extract::State<AppState>,
         headers: HeaderMap,
     ) -> Response {
-        debug!("v2::head_files_path");
+        tracing::debug!("v2::head_files_path");
         head_from_full(make_files_path_response(path, state, headers).await)
     }
 
@@ -1287,7 +1286,7 @@ mod v2 {
         extract::State(state): extract::State<AppState>,
         headers: HeaderMap,
     ) -> Response {
-        debug!("v2::get_tasks");
+        tracing::debug!("v2::get_tasks");
 
         // Load task entries
         let (head_commit_id, entries) = state.get_entries(Some(".tasks/*")).await.unwrap();
@@ -1324,7 +1323,7 @@ mod v2 {
         extract::State(state): extract::State<AppState>,
         headers: HeaderMap,
     ) -> Response {
-        debug!("v2::get_events");
+        tracing::debug!("v2::get_events");
 
         // Load event entries
         let (head_commit_id, entries) = state.get_entries(Some(".events/*")).await.unwrap();
