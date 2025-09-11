@@ -1366,7 +1366,6 @@ mod models {
     use serde::{Deserialize, Serialize};
     use serde_yaml;
     use sqlx::{Row, SqlitePool, sqlite::SqliteRow};
-    use tracing::debug;
     use uuid::Uuid;
 
     pub type Metadata = serde_yaml::Value;
@@ -1555,7 +1554,7 @@ mod models {
 
     impl IntoResponse for AppError {
         fn into_response(self) -> Response {
-            debug!("AppError: {:?}", self.0);
+            tracing::error!("AppError: {:?}", self.0);
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("AppError: {}", self.0),
