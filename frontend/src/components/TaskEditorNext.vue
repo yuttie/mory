@@ -94,7 +94,7 @@
                     </v-textarea>
                     
                     <!-- Title Assessment -->
-                    <div v-if="titleAssessment && form.title.length >= 3" class="title-assessment mb-4">
+                    <div v-if="(titleAssessment || assessmentLoading) && form.title.length >= 3" class="title-assessment mb-4">
                         <v-card outlined class="pa-3">
                             <v-card-subtitle class="pa-0 pb-2">
                                 <v-icon small class="mr-1">{{ mdiLightbulbOnOutline }}</v-icon>
