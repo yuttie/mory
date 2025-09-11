@@ -1042,8 +1042,8 @@ mod v2 {
         let client = reqwest::Client::new();
 
         let prompt = format!(
-            "Analyze this task title and provide feedback to help improve it. 
-            Task title: \"{}\"
+            "Analyze this task title and provide feedback to help improve it.
+            <task-title>{}</task-title>
 
             Please evaluate the task title based on:
             1. Clarity and specificity
