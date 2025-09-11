@@ -300,7 +300,7 @@ export interface TitleAssessmentResponse {
 
 export async function assessTaskTitle(title: string): Promise<TitleAssessmentResponse> {
     const axios = await getAxios();
-    const response = await axios.post('/v2/assess-title', {
+    const response = await axios.post('/v2/assess-task', {
         title: title
     });
     return response.data;

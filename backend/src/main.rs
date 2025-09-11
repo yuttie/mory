@@ -143,7 +143,7 @@ async fn main() -> Result<()> {
         .route("/files/*path", get(v2::get_files_path).head(v2::head_files_path))
         .route("/tasks", get(v2::get_tasks))
         .route("/events", get(v2::get_events))
-        .route("/assess-title", post(v2::post_assess_title))
+        .route("/assess-task", post(v2::post_assess_task))
         .with_state(state.clone())
         .route_layer(middleware::from_fn(auth));
     let api_v2 = Router::new()
@@ -1032,7 +1032,7 @@ mod v2 {
         content: String,
     }
 
-    pub async fn post_assess_title(
+    pub async fn post_assess_task(
         extract::State(_state): extract::State<AppState>,
         Json(request): Json<AssessmentRequest>,
     ) -> Result<Json<AssessmentResponse>, AppError> {
