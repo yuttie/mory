@@ -94,7 +94,7 @@
                     </v-textarea>
                     
                     <!-- Title Assessment -->
-                    <div v-if="titleAssessment && form.title.length > 3" class="title-assessment mb-4">
+                    <div v-if="titleAssessment && form.title.length >= 3" class="title-assessment mb-4">
                         <v-card outlined class="pa-3">
                             <v-card-subtitle class="pa-0 pb-2">
                                 <v-icon small class="mr-1">{{ mdiLightbulbOnOutline }}</v-icon>
@@ -402,6 +402,7 @@ import { extractFileUuid } from '@/api/task';
 import type { UUID, Task, Status, StatusKind, WaitingStatus, BlockedStatus, OnHoldStatus, DoneStatus, CanceledStatus } from '@/task';
 import { STATUS_LABEL, nextOptions, makeDefaultStatus, canTransition } from '@/task';
 import { useFetchTask } from '@/composables/fetchTask';
+import { useTaskForestStore } from '@/stores/taskForest';
 
 import dayjs from 'dayjs';
 
@@ -431,6 +432,7 @@ const pathRef = toRef(props, 'taskPath');
 
 // Composables
 const { task, loading, error, refresh } = useFetchTask(pathRef);
+const taskForestStore = useTaskForestStore();
 
 // Emits
 const emit = defineEmits<{
@@ -459,7 +461,7 @@ const uiValid = ref(true);
 // Title assessment data
 const titleAssessment = ref<TaskAssessmentResponse | null>(null);
 const assessmentLoading = ref(false);
-let assessmentTimeout: NodeJS.Timeout | null = null;
+let assessmentTimeout: number | null = null;
 
 // Template refs
 const formRef = ref<any>(null);
@@ -756,6 +758,32 @@ function statusEqual(a: Status, b: Status): boolean {
     }
 }
 
+// Helper function to get ancestor titles for context
+function getAncestorTitles(): string[] {
+    const ancestors: string[] = [];
+    
+    try {
+        // Get the current task's UUID
+        const currentUuid = uuid.value;
+        if (!currentUuid) return ancestors;
+        
+        // Walk up the parent chain to collect ancestor titles
+        let currentParentId = taskForestStore.parentOf(currentUuid);
+        
+        while (currentParentId) {
+            const parentNode = taskForestStore.node(currentParentId);
+            if (parentNode && parentNode.title) {
+                ancestors.unshift(parentNode.title); // Add to beginning to maintain hierarchy order
+            }
+            currentParentId = taskForestStore.parentOf(currentParentId);
+        }
+    } catch (error) {
+        console.warn('Failed to get ancestor titles:', error);
+    }
+    
+    return ancestors;
+}
+
 // Title assessment functions
 async function assessTaskTitle(title: string) {
     if (!title || title.length < 3) {
@@ -766,7 +794,8 @@ async function assessTaskTitle(title: string) {
     assessmentLoading.value = true;
     
     try {
-        const response = await assessTask(title);
+        const ancestorTitles = getAncestorTitles();
+        const response = await assessTask(title, ancestorTitles);
         titleAssessment.value = response;
     } catch (error) {
         console.warn('Failed to assess task title:', error);

@@ -108,6 +108,7 @@ async fn main() -> Result<()> {
     let state = models::AppState {
         repo: Arc::new(Mutex::new(repo)),
         cache_db: db_pool,
+        http_client: reqwest::Client::new(),
     };
 
     let addr = env::var("MORIED_LISTEN").unwrap();
@@ -994,6 +995,7 @@ mod v2 {
     #[derive(Deserialize)]
     pub struct AssessmentRequest {
         pub title: String,
+        pub ancestor_titles: Option<Vec<String>>,
     }
 
     #[derive(Serialize, Deserialize)]
@@ -1033,17 +1035,33 @@ mod v2 {
     }
 
     pub async fn post_assess_task(
-        extract::State(_state): extract::State<AppState>,
+        extract::State(state): extract::State<AppState>,
         Json(request): Json<AssessmentRequest>,
     ) -> Result<Json<AssessmentResponse>, AppError> {
         let openai_api_key = env::var("MORIED_OPENAI_API_KEY")
             .map_err(|_| anyhow::anyhow!("MORIED_OPENAI_API_KEY environment variable not set"))?;
 
-        let client = reqwest::Client::new();
+        let client = &state.http_client;
+
+        let context_part = if let Some(ref ancestors) = request.ancestor_titles {
+            if !ancestors.is_empty() {
+                format!(
+                    "\n\nTask hierarchy context (from top-level to immediate parent):\n{}\n\nConsider this hierarchy when evaluating the task title for clarity and avoiding redundancy.",
+                    ancestors.iter().enumerate()
+                        .map(|(i, title)| format!("{}. {}", i + 1, title))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                )
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
 
         let prompt = format!(
             "Analyze this task title and provide feedback to help improve it.
-            <task-title>{}</task-title>
+            <task-title>{}</task-title>{}
 
             Please evaluate the task title based on:
             1. Clarity and specificity
@@ -1062,7 +1080,8 @@ mod v2 {
                 \"suggestions\": [\"Start with an action verb like 'Create' or 'Complete'\", \"Add more specific details about the deliverable\"],
                 \"feedback\": \"Good start, but could be more specific and actionable.\"
             }}",
-            request.title
+            request.title,
+            context_part
         );
 
         let openai_request = OpenAIRequest {
@@ -1492,6 +1511,7 @@ mod models {
     pub struct AppState {
         pub repo: Arc<Mutex<Repository>>,
         pub cache_db: SqlitePool,
+        pub http_client: reqwest::Client,
     }
 
     impl AppState {
