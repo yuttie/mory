@@ -1048,7 +1048,7 @@ mod v2 {
                 format!(
                     "\n\nTask hierarchy context (from top-level to immediate parent):\n{}\n\nConsider this hierarchy when evaluating the task title for clarity and avoiding redundancy.",
                     ancestors.iter().enumerate()
-                        .map(|(i, title)| format!("{}. {}", i + 1, title))
+                        .map(|(i, title)| format!("{}. <task-title>{}</task-title>", i + 1, title))
                         .collect::<Vec<_>>()
                         .join("\n")
                 )
