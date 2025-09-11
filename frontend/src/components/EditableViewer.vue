@@ -658,8 +658,6 @@ function jumpTo(id: string) {
 async function loadHighlightjsTheme(themeName: string): Promise<string> {
     const modules = import.meta.glob('../../node_modules/highlight.js/styles/**/*.min.css', { query: '?raw' });
     const path = `../../node_modules/highlight.js/styles/${themeName}.min.css`;
-    console.log(modules);
-    console.log(path);
     try {
         const module = await modules[path]();
         return module.default;
