@@ -1082,7 +1082,7 @@ mod v2 {
         );
 
         let openai_request = OpenAIRequest {
-            model: "gpt-3.5-turbo".to_string(),
+            model: "gpt-4.1-mini".to_string(),
             messages: vec![
                 OpenAIRequestMessage {
                     role: "system".to_string(),
