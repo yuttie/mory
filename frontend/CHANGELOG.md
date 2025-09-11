@@ -1,3 +1,65 @@
+## [1.9.0] - 2025-09-11
+
+### 🚀 Features
+
+- *(views/TasksNext)* Add automatic task title assessment feature with ancestor context using OpenAI API (#183)
+- *(frontend/components/TaskTree)* Add hover button to tree items for creating child tasks (#182)
+- *(frontend)* Add background around query text field of Files and Search views
+- *(components/TaskEditorNext)* Auto-fill "Completed at" and "Canceled at" with current time
+- *(frontend/components/EditableViewer)* Support CSS file editing
+- *(frontend)* Add support for plain CSS versions of custom styles with LESS fallback (#178)
+- *(frontend/views/Home)* Add open button to success toast for quick note and task creation (#177)
+
+### 🐛 Bug Fixes
+
+- *(frontend/components/TaskEditorNext)* Clear title assessment when switching to different task (#186)
+- *(frontend/components/TaskEditorNext)* Show loader for task title assessment when triggering it for the first time (#185)
+- *(frontend/components/EditableViewer)* Use heading slugs as keys
+- *(frontend/markdown)* Ensure headings always have non-empty slug (i.e., id attr value)
+- *(frontend/components/DateSelector)* Fix warning: Invalid default value for prop "rules": Props with type Object/Array must use a factory function to return the default value.
+- *(frontend/views/Calendar)* Restore calendar navigation by avoiding browser-dependent behavior
+- *(frontend/router)* Calendar view was blank due to async redirect, use Date instead of dayjs
+- *(frontend/components/Editor)* Canonicalize keybinding names
+- *(frontend/views/TasksNext)* Improve layout in small screens, especially TaskEditorNext
+- *(frontend/views/TasksNext)* Make id attrs of Tasks and TasksNext distinguishable
+- *(frontend/views/TasksNext)* Remove background color
+- *(frontend/views/Home)* Add minimal CSS rules for layout
+- *(frontend/App)* Improve logo text appearance in sidebar
+- *(frontend/views/TasksNext)* Add missing v-bind:key
+- *(frontend/views/Home)* Take due_by into account as well as deadline
+- *(frontend/views/Home)* Include over due tasks in upcoming tasks
+- *(frontend/views/Home)* Improve appearance on small screens
+- *(frontend/views/Home)* Fix canceled tasks with deadlines not being filtered out on Home page (#174)
+
+### 🚜 Refactor
+
+- *(frontend/components/EditableViewer)* Remove debug prints
+- *(frontend/views/Calendar)* Remove trailing spaces
+- *(frontend/router)* Use four-space indent
+- *(frontend/api/task)* Import huge 'markdown' module dynamically
+- *(frontend/router)* Dynamic import 'dayjs'
+- *(frontend/components/Editor)* Use glob import for loading Ace keybinding modules
+- *(frontend/components/EditableViewer)* Use glob import for loading highlight.js themes
+- *(frontend/components/Editor)* Add file extensions to glob import
+- *(frontend)* Rewrite loadCustom*() functions to use async/await instead of callbacks with performance optimizations (#179)
+- *(frontend/components/Editor)* Use import.meta.glob for better handling dynamic imports
+- *(frontend/views/Home)* Use four-space indent
+
+### 🎨 Styling
+
+- *(frontend)* Change primary color to dark color and accent color to previous primary color
+- *(frontend/components/TaskTree)* Show more tree item label by completely hiding "append" slot
+- *(frontend/index.html)* Remove blank line
+- *(frontend)* Improve appearance of some views when #app has background image
+- *(frontend)* Improve contrast ratio of active item in task tree from 1.94 to 3.01 by adjustying primary color
+- *(frontend)* Shorten app bar title
+- *(frontend)* Move app bar to top
+- *(frontend/views/Home)* Adjust quick create UI
+
+### ⚙️ Miscellaneous Tasks
+
+- *(frontend/views/Home)* Correct placeholder text
+
 ## [1.8.0] - 2025-09-03
 
 ### 🚀 Features
