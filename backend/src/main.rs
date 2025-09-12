@@ -1189,34 +1189,35 @@ Task Information Available:
 - Deadline: Hard deadline
 - Existing Note: Any current notes about the task
 
-Primary Focus: Evaluate the TITLE quality and suggest helpful NOTE CONTENT.
+Primary Focus: Evaluate the TASK AS A WHOLE and suggest improvements for overall clarity and completeness.
 
-First, evaluate the title based on:
-1. Clarity and specificity (is it clear what needs to be done?)
-2. Actionability (does it start with an action verb?)
-3. Completeness (enough context to understand the task?)
-4. Brevity (concise but informative?)
+Evaluate the task holistically by considering the combination of title, note, and other task information:
+1. Overall clarity: Is it clear what needs to be done when considering title + note + other information together?
+2. Completeness: Does the combined information provide sufficient context to understand and execute the task?
+3. Actionability: Are the required actions clear from the overall task description?
+4. Information sufficiency: Does the title need to be complete on its own, or does the note provide adequate context?
 
-Second, considering ALL the task information provided, suggest helpful note content blocks that would assist the user in completing this task, including:
-- Key steps or actions needed
-- Materials, tools, or resources required
-- Time estimates or scheduling considerations
-- Potential obstacles and how to overcome them
-- Success criteria or deliverables
-- Context from importance/urgency levels
-- Considerations based on deadlines and scheduling
+The title may be intentionally brief or incomplete if the note provides sufficient detail. Focus on the overall task comprehensibility rather than title completeness alone.
+
+Suggest improvements that enhance overall task clarity, which may include:
+- Title refinements (if needed for clarity)
+- Note content additions or improvements
+- Better organization of existing information
+- Missing critical details that would help task execution
 
 Respond with JSON:
 {{
-  "quality_score": <real number between 0 and 10, where 10 = excellent>,
-  "suggestions": ["specific title improvement suggestion 1", "suggestion 2", ...],
-  "feedback": "overall title assessment emphasizing weaknesses and how to fix them",
-  "note_suggestions": ["helpful note content block suggestion 1", "suggestion 2", "suggestion 3", ...]
+  "quality_score": <real number between 0 and 10, where 10 = excellent overall task clarity>,
+  "suggestions": ["specific improvement suggestion for overall task clarity 1", "suggestion 2", ...],
+  "feedback": "overall task assessment emphasizing how well the combined title+note+info communicates the task",
+  "note_suggestions": ["helpful note content addition or improvement 1", "suggestion 2", "suggestion 3", ...]
 }}
 
 Important:
 - Use the same language as the task title.
-- Keep note suggestions practical and actionable.
+- Evaluate the task as a complete unit (title + note + other fields).
+- Accept brief titles if the note provides adequate context.
+- Keep suggestions practical and actionable.
 - Write note snippets in Markdown format.
 - Consider the complete task context when making suggestions.
             "#,
