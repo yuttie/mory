@@ -424,7 +424,8 @@ const props = defineProps<{
     taskPath: string;
     knownTags: [string, number][];
     knownContacts: [string, number][];
-    ancestorTaskTitles?: string[];
+    parentTaskTitle?: string;
+    ancestorTitlesForAssessment?: string[];
     selectedTag?: string;
 }>();
 const pathRef = toRef(props, 'taskPath');
@@ -628,10 +629,8 @@ onUnmounted(() => {
 function getNewTaskTitle(): string {
     if (props.selectedTag) {
         return `New task with tag "${props.selectedTag}"`;
-    } else if (props.ancestorTaskTitles && props.ancestorTaskTitles.length > 0) {
-        // Use the last ancestor title (immediate parent)
-        const parentTitle = props.ancestorTaskTitles[props.ancestorTaskTitles.length - 1];
-        return `New subtask of "${parentTitle}"`;
+    } else if (props.parentTaskTitle) {
+        return `New subtask of "${props.parentTaskTitle}"`;
     } else {
         return 'New task';
     }
@@ -776,8 +775,9 @@ async function assessTaskTitle(title: string) {
     assessmentLoading.value = true;
     
     try {
-        const ancestorTitles = props.ancestorTaskTitles || [];
-        const response = await assessTask(title, ancestorTitles);
+        const ancestorTitles = props.ancestorTitlesForAssessment || [];
+        const tags = form.tags || [];
+        const response = await assessTask(title, ancestorTitles, tags);
         titleAssessment.value = response;
     } catch (error) {
         console.warn('Failed to assess task title:', error);
