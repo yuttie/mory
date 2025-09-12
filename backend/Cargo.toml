@@ -1,6 +1,6 @@
 [package]
 name = "moried"
-version = "1.5.0"
+version = "1.6.0"
 authors = ["Yuta Taniguchi <yuta.taniguchi.y.t@gmail.com>"]
 edition = "2021"
 
@@ -16,7 +16,7 @@ git2 = { version = "0.19", default-features = false }
 jsonwebtoken = "9"
 markdown = "=1.0.0-alpha.20"
 mime_guess = "2.0.5"
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", features = ["brotli", "gzip", "json", "rustls-tls"] }
 rust-argon2 = "2.1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
