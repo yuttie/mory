@@ -1119,77 +1119,32 @@ mod v2 {
             String::new()
         };
 
-        // Build complete task information for the prompt
-        let mut task_info_parts = vec![format!("<title>{}</title>", request.title)];
-        
-        if let Some(ref tags) = request.tags {
-            if !tags.is_empty() {
-                task_info_parts.push(format!("<tags>{}</tags>", tags.join(", ")));
-            }
-        }
-        
-        if let Some(ref status) = request.status {
-            task_info_parts.push(format!("<status>{}</status>", serde_json::to_string(status).unwrap_or_default()));
-        }
-        
-        if let Some(progress) = request.progress {
-            task_info_parts.push(format!("<progress>{}%</progress>", progress));
-        }
-        
-        if let Some(importance) = request.importance {
-            task_info_parts.push(format!("<importance>{}/5</importance>", importance));
-        }
-        
-        if let Some(urgency) = request.urgency {
-            task_info_parts.push(format!("<urgency>{}/5</urgency>", urgency));
-        }
-        
-        if let Some(ref start_at) = request.start_at {
-            if !start_at.is_empty() {
-                task_info_parts.push(format!("<start-at>{}</start-at>", start_at));
-            }
-        }
-        
-        if let Some(ref due_by) = request.due_by {
-            if !due_by.is_empty() {
-                task_info_parts.push(format!("<due-by>{}</due-by>", due_by));
-            }
-        }
-        
-        if let Some(ref deadline) = request.deadline {
-            if !deadline.is_empty() {
-                task_info_parts.push(format!("<deadline>{}</deadline>", deadline));
-            }
-        }
-        
-        if let Some(ref note) = request.note {
-            if !note.is_empty() {
-                task_info_parts.push(format!("<existing-note>{}</existing-note>", note));
-            }
-        }
-        
-        let task_information = task_info_parts.join("\n");
+        // Build complete task information as JSON for the prompt
+        let task_information = serde_json::to_string_pretty(&request)
+            .context("Failed to serialize task information to JSON")?;
 
         let prompt = format!(
             r#"Analyze the following task and provide comprehensive assistance:
 
 Today's date: {}
 
+Task Information (JSON):
 {}{}
 
-Task Information Available:
-- Title: The main task description
-- Tags: Categories/labels associated with the task
-- Status: Current state of the task (todo, in_progress, waiting, etc.)
-- Progress: Completion percentage (0-100%)
-- Importance: Priority level (1-5, where 5 is most important)
-- Urgency: Time sensitivity (1-5, where 5 is most urgent)
-- Start At: Planned start date/time
-- Due By: Preferred completion date/time
-- Deadline: Hard deadline
-- Existing Note: Any current notes about the task
-
 Primary Focus: Evaluate the TASK AS A WHOLE and suggest improvements for overall clarity and completeness.
+
+The task information is provided as JSON containing:
+- title: The main task description
+- tags: Categories/labels associated with the task
+- status: Current state of the task (todo, in_progress, waiting, etc.)
+- progress: Completion percentage (0-100%)
+- importance: Priority level (1-5, where 5 is most important)
+- urgency: Time sensitivity (1-5, where 5 is most urgent)
+- start_at: Planned start date/time
+- due_by: Preferred completion date/time
+- deadline: Hard deadline
+- note: Any current notes about the task
+- ancestor_titles: Hierarchical context (parent tasks)
 
 Evaluate the task holistically by considering the combination of title, note, and other task information:
 1. Overall clarity: Is it clear what needs to be done when considering title + note + other information together?
