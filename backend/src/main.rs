@@ -1041,7 +1041,6 @@ mod v2 {
         model: String,
         messages: Vec<OpenAIRequestMessage>,
         temperature: f32,
-        max_tokens: u32,
     }
 
     #[derive(Serialize)]
