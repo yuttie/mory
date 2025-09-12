@@ -1294,7 +1294,7 @@ Important:
             tracing::debug!("Cached OpenAI response with hash: {}", request_hash);
         }
 
-        tracing::debug!("Task title assessment: {:?}", assessment.feedback);
+        tracing::debug!("Task assessment: {:?}", assessment.feedback);
         Ok(Json(assessment))
     }
 

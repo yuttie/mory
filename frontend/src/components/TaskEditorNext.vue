@@ -93,12 +93,12 @@
                         </template>
                     </v-textarea>
                     
-                    <!-- Title Assessment -->
-                    <div v-if="(titleAssessment || assessmentLoading) && form.title.length >= 3" class="title-assessment mb-4">
+                    <!-- Task Assessment -->
+                    <div v-if="(taskAssessment || assessmentLoading) && form.title.length >= 3" class="task-assessment mb-4">
                         <v-card outlined class="pa-3">
                             <v-card-subtitle class="pa-0 pb-2">
                                 <v-icon small class="mr-1">{{ mdiLightbulbOnOutline }}</v-icon>
-                                Title Assessment
+                                Task Assessment
                                 <v-progress-circular 
                                     v-if="assessmentLoading"
                                     indeterminate
@@ -111,7 +111,7 @@
                                 <div class="d-flex align-center mb-2">
                                     <span class="caption mr-2">Quality Score:</span>
                                     <v-rating
-                                        v-bind:value="titleAssessment.quality_score / 2"
+                                        v-bind:value="taskAssessment.quality_score / 2"
                                         readonly
                                         dense
                                         size="16"
@@ -119,27 +119,27 @@
                                         half-increments
                                         color="amber"
                                     ></v-rating>
-                                    <span class="caption ml-1">({{ titleAssessment.quality_score.toFixed(1) }}/10)</span>
+                                    <span class="caption ml-1">({{ taskAssessment.quality_score.toFixed(1) }}/10)</span>
                                 </div>
-                                <p class="caption mb-2" v-if="titleAssessment.feedback">
-                                    {{ titleAssessment.feedback }}
+                                <p class="caption mb-2" v-if="taskAssessment.feedback">
+                                    {{ taskAssessment.feedback }}
                                 </p>
-                                <div v-if="titleAssessment.suggestions.length > 0">
-                                    <p class="caption font-weight-bold mb-1">Title Suggestions:</p>
+                                <div v-if="taskAssessment.suggestions.length > 0">
+                                    <p class="caption font-weight-bold mb-1">Suggestions:</p>
                                     <ul class="caption">
-                                        <li v-for="(suggestion, index) in titleAssessment.suggestions" v-bind:key="index">
+                                        <li v-for="(suggestion, index) in taskAssessment.suggestions" v-bind:key="index">
                                             {{ suggestion }}
                                         </li>
                                     </ul>
                                 </div>
-                                <div v-if="titleAssessment.note_suggestions && titleAssessment.note_suggestions.length > 0" class="mt-3">
+                                <div v-if="taskAssessment.note_suggestions && taskAssessment.note_suggestions.length > 0" class="mt-3">
                                     <p class="caption font-weight-bold mb-1">
                                         Note Suggestions:
                                         <span class="font-weight-normal">(click + to add to note)</span>
                                     </p>
                                     <div class="note-suggestions">
                                         <div 
-                                            v-for="(suggestion, index) in titleAssessment.note_suggestions" 
+                                            v-for="(suggestion, index) in taskAssessment.note_suggestions" 
                                             v-bind:key="'note-' + index"
                                             class="note-suggestion-item"
                                         >
@@ -453,7 +453,7 @@ const props = defineProps<{
     knownTags: [string, number][];
     knownContacts: [string, number][];
     parentTaskTitle?: string;
-    ancestorTitlesForAssessment?: string[];
+    ancestorTitlesForTaskAssessment?: string[];
     selectedTag?: string;
 }>();
 const pathRef = toRef(props, 'taskPath');
@@ -485,8 +485,8 @@ const form = reactive<EditableTask>({
 });
 const uiValid = ref(true);
 
-// Title assessment data
-const titleAssessment = ref<TaskAssessmentResponse | null>(null);
+// Task assessment data
+const taskAssessment = ref<TaskAssessmentResponse | null>(null);
 const assessmentLoading = ref(false);
 let assessmentTimeout: number | null = null;
 
@@ -665,8 +665,8 @@ function getNewTaskTitle(): string {
 }
 
 function resetFromTask(t?: Task | undefined | null): void {
-    // Clear title assessment when switching tasks
-    titleAssessment.value = null;
+    // Clear task assessment when switching tasks
+    taskAssessment.value = null;
     assessmentLoading.value = false;
     if (assessmentTimeout) {
         clearTimeout(assessmentTimeout);
@@ -700,9 +700,9 @@ function resetFromTask(t?: Task | undefined | null): void {
         form.scheduled_dates = Array.isArray(t.scheduled_dates) ? [...t.scheduled_dates] : [];
         form.note = t.note ?? '';
         
-        // Automatically assess the title for existing tasks
+        // Automatically assess the task for existing tasks
         if (form.title && form.title.length >= 3) {
-            assessTaskTitle(form.title);
+            performTaskAssessment(form.title);
         }
     }
 }
@@ -798,17 +798,17 @@ function statusEqual(a: Status, b: Status): boolean {
     }
 }
 
-// Title assessment functions
-async function assessTaskTitle(title: string) {
+// Task assessment functions
+async function performTaskAssessment(title: string) {
     if (!title || title.length < 3) {
-        titleAssessment.value = null;
+        taskAssessment.value = null;
         return;
     }
     
     assessmentLoading.value = true;
     
     try {
-        const ancestorTitles = props.ancestorTitlesForAssessment || [];
+        const ancestorTitles = props.ancestorTitlesForTaskAssessment || [];
         const taskForAssessment = {
             title: title,
             tags: (form.tags || []).filter((t) => t !== 'quick-create'),
@@ -822,10 +822,10 @@ async function assessTaskTitle(title: string) {
             note: form.note,
         };
         const response = await assessTask(taskForAssessment, ancestorTitles);
-        titleAssessment.value = response;
+        taskAssessment.value = response;
     } catch (error) {
-        console.warn('Failed to assess task title:', error);
-        titleAssessment.value = null;
+        console.warn('Failed to assess task:', error);
+        taskAssessment.value = null;
     } finally {
         assessmentLoading.value = false;
     }
@@ -839,7 +839,7 @@ function onTitleInput() {
     
     // Set a new timeout to assess after user stops typing
     assessmentTimeout = setTimeout(() => {
-        assessTaskTitle(form.title);
+        performTaskAssessment(form.title);
     }, 1000);
 }
 
@@ -916,7 +916,7 @@ defineExpose({
     height: 100%;
 }
 
-.title-assessment {
+.task-assessment {
     .v-card {
         border-left: 3px solid #1976d2;
     }
