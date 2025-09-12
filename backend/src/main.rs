@@ -1009,8 +1009,8 @@ mod v2 {
 
     #[derive(Deserialize, Serialize)]
     pub struct AssessmentRequest {
-        pub title: String,
         pub ancestor_titles: Option<Vec<String>>,
+        pub title: String,
         pub tags: Option<Vec<String>>,
         pub status: Option<serde_json::Value>,
         pub progress: Option<f32>,

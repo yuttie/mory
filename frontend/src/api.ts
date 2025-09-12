@@ -314,8 +314,8 @@ export async function assessTask(task: {
 }, ancestorTitles: string[] = []): Promise<TaskAssessmentResponse> {
     const axios = await getAxios();
     const response = await axios.post('/v2/assess-task', {
-        title: task.title,
         ancestor_titles: ancestorTitles,
+        title: task.title,
         tags: task.tags,
         status: task.status,
         progress: task.progress,
