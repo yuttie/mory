@@ -1,5 +1,6 @@
 import { getAxios } from '@/axios';
 import YAML from 'yaml';
+import type { Status } from '@/task';
 
 export type JsonValue =
     | { [k: string]: JsonValue }
@@ -302,7 +303,7 @@ export interface TaskAssessmentResponse {
 export async function assessTask(task: { 
     title: string; 
     tags?: string[];
-    status?: any;
+    status?: Status;
     progress?: number;
     importance?: number;
     urgency?: number;
