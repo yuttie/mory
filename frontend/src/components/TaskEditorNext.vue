@@ -133,7 +133,10 @@
                                     </ul>
                                 </div>
                                 <div v-if="titleAssessment.note_suggestions && titleAssessment.note_suggestions.length > 0" class="mt-3">
-                                    <p class="caption font-weight-bold mb-1">Note Suggestions:</p>
+                                    <p class="caption font-weight-bold mb-1">
+                                        Note Suggestions:
+                                        <span class="font-weight-normal">(click + to add to note)</span>
+                                    </p>
                                     <div class="note-suggestions">
                                         <div 
                                             v-for="(suggestion, index) in titleAssessment.note_suggestions" 
@@ -148,6 +151,7 @@
                                                     class="ml-1"
                                                     v-on:click="addNoteContent(suggestion)"
                                                     title="Add to note"
+                                                    color="primary"
                                                 >
                                                     <v-icon x-small>{{ mdiPlus }}</v-icon>
                                                 </v-btn>
