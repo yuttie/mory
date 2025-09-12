@@ -1010,6 +1010,7 @@ mod v2 {
     #[derive(Deserialize, Serialize)]
     pub struct AssessmentRequest {
         pub title: String,
+        pub ancestor_titles: Option<Vec<String>>,
         pub tags: Option<Vec<String>>,
         pub status: Option<serde_json::Value>,
         pub progress: Option<f32>,
@@ -1102,6 +1103,22 @@ mod v2 {
         // Get today's date for context
         let today = Utc::now().format("%Y-%m-%d").to_string();
 
+        let context_part = if let Some(ref ancestors) = request.ancestor_titles {
+            if !ancestors.is_empty() {
+                format!(
+                    "\n\nTask hierarchy context (from top-level to immediate parent):\n{}\n\nConsider the hierarchy context when evaluating the task title. The task title may be short and rely on context, but it should still be understandable within the hierarchy.",
+                    ancestors.iter().enumerate()
+                        .map(|(i, title)| format!("{}. <task-title>{}</task-title>", i + 1, title))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                )
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
+
         // Build complete task information for the prompt
         let mut task_info_parts = vec![format!("<title>{}</title>", request.title)];
         
@@ -1158,7 +1175,7 @@ mod v2 {
 
 Today's date: {}
 
-{}
+{}{}
 
 Task Information Available:
 - Title: The main task description
@@ -1204,7 +1221,8 @@ Important:
 - Consider the complete task context when making suggestions.
             "#,
             today,
-            task_information
+            task_information,
+            context_part
         );
 
         let openai_request = OpenAIRequest {

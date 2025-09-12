@@ -311,10 +311,11 @@ export async function assessTask(task: {
     due_by?: string;
     deadline?: string;
     note?: string;
-}): Promise<TaskAssessmentResponse> {
+}, ancestorTitles: string[] = []): Promise<TaskAssessmentResponse> {
     const axios = await getAxios();
     const response = await axios.post('/v2/assess-task', {
         title: task.title,
+        ancestor_titles: ancestorTitles,
         tags: task.tags,
         status: task.status,
         progress: task.progress,
