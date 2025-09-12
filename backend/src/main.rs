@@ -1011,6 +1011,16 @@ mod v2 {
     pub struct AssessmentRequest {
         pub title: String,
         pub ancestor_titles: Option<Vec<String>>,
+        pub tags: Option<Vec<String>>,
+        pub status: Option<serde_json::Value>,
+        pub progress: Option<f32>,
+        pub importance: Option<i32>,
+        pub urgency: Option<i32>,
+        pub start_at: Option<String>,
+        pub due_by: Option<String>,
+        pub deadline: Option<String>,
+        pub scheduled_dates: Option<Vec<String>>,
+        pub note: Option<String>,
     }
 
     #[derive(Serialize, Deserialize)]
@@ -1107,37 +1117,113 @@ mod v2 {
             String::new()
         };
 
+        // Build complete task information for the prompt
+        let mut task_info_parts = vec![format!("<task-title>{}</task-title>", request.title)];
+        
+        if let Some(ref tags) = request.tags {
+            if !tags.is_empty() {
+                task_info_parts.push(format!("<tags>{}</tags>", tags.join(", ")));
+            }
+        }
+        
+        if let Some(ref status) = request.status {
+            task_info_parts.push(format!("<status>{}</status>", serde_json::to_string(status).unwrap_or_default()));
+        }
+        
+        if let Some(progress) = request.progress {
+            task_info_parts.push(format!("<progress>{}%</progress>", progress));
+        }
+        
+        if let Some(importance) = request.importance {
+            task_info_parts.push(format!("<importance>{}/5</importance>", importance));
+        }
+        
+        if let Some(urgency) = request.urgency {
+            task_info_parts.push(format!("<urgency>{}/5</urgency>", urgency));
+        }
+        
+        if let Some(ref start_at) = request.start_at {
+            if !start_at.is_empty() {
+                task_info_parts.push(format!("<start-at>{}</start-at>", start_at));
+            }
+        }
+        
+        if let Some(ref due_by) = request.due_by {
+            if !due_by.is_empty() {
+                task_info_parts.push(format!("<due-by>{}</due-by>", due_by));
+            }
+        }
+        
+        if let Some(ref deadline) = request.deadline {
+            if !deadline.is_empty() {
+                task_info_parts.push(format!("<deadline>{}</deadline>", deadline));
+            }
+        }
+        
+        if let Some(ref scheduled_dates) = request.scheduled_dates {
+            if !scheduled_dates.is_empty() {
+                task_info_parts.push(format!("<scheduled-dates>{}</scheduled-dates>", scheduled_dates.join(", ")));
+            }
+        }
+        
+        if let Some(ref note) = request.note {
+            if !note.is_empty() {
+                task_info_parts.push(format!("<existing-note>{}</existing-note>", note));
+            }
+        }
+        
+        let task_information = task_info_parts.join("\n");
+
         let prompt = format!(
-            r#"Analyze the following task title and provide comprehensive assistance:
-            <task-title>{}</task-title>{}
+            r#"Analyze the following task and provide comprehensive assistance:
 
-            First, evaluate the title based on:
-            1. Clarity and specificity
-            2. Actionability
-            3. Completeness
-            4. Brevity
+{}{}
 
-            Second, suggest helpful note content blocks that would assist the user in completing this task, including:
-            - Key steps or actions needed
-            - Materials, tools, or resources required
-            - Time estimates or scheduling considerations
-            - Potential obstacles and how to overcome them
-            - Success criteria or deliverables
+Task Information Available:
+- Title: The main task description
+- Tags: Categories/labels associated with the task
+- Status: Current state of the task (todo, in_progress, waiting, etc.)
+- Progress: Completion percentage (0-100%)
+- Importance: Priority level (1-5, where 5 is most important)
+- Urgency: Time sensitivity (1-5, where 5 is most urgent)
+- Start At: Planned start date/time
+- Due By: Preferred completion date/time
+- Deadline: Hard deadline
+- Scheduled Dates: Specific dates when task work is planned
+- Existing Note: Any current notes about the task
 
-            Respond with JSON:
-            {{
-              "quality_score": <real number between 0 and 10, where 10 = excellent>,
-              "suggestions": ["specific title improvement suggestion 1", "suggestion 2", ...],
-              "feedback": "overall title assessment emphasizing weaknesses and how to fix them",
-              "note_suggestions": ["helpful note content block suggestion 1", "suggestion 2", "suggestion 3", ...]
-            }}
+Primary Focus: Evaluate the TITLE quality and suggest helpful NOTE CONTENT.
 
-            Important:
-            - Use the same language as the task title.
-            - Keep note suggestions practical and actionable.
-            - Write note snippets in Markdown format.
+First, evaluate the title based on:
+1. Clarity and specificity (is it clear what needs to be done?)
+2. Actionability (does it start with an action verb?)
+3. Completeness (enough context to understand the task?)
+4. Brevity (concise but informative?)
+
+Second, considering ALL the task information provided, suggest helpful note content blocks that would assist the user in completing this task, including:
+- Key steps or actions needed
+- Materials, tools, or resources required
+- Time estimates or scheduling considerations
+- Potential obstacles and how to overcome them
+- Success criteria or deliverables
+- Context from importance/urgency levels
+- Considerations based on deadlines and scheduling
+
+Respond with JSON:
+{{
+  "quality_score": <real number between 0 and 10, where 10 = excellent>,
+  "suggestions": ["specific title improvement suggestion 1", "suggestion 2", ...],
+  "feedback": "overall title assessment emphasizing weaknesses and how to fix them",
+  "note_suggestions": ["helpful note content block suggestion 1", "suggestion 2", "suggestion 3", ...]
+}}
+
+Important:
+- Use the same language as the task title.
+- Keep note suggestions practical and actionable.
+- Write note snippets in Markdown format.
+- Consider the complete task context when making suggestions.
             "#,
-            request.title,
+            task_information,
             context_part
         );
 

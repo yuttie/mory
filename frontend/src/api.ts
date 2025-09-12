@@ -299,12 +299,33 @@ export interface TaskAssessmentResponse {
     note_suggestions: string[];
 }
 
-export async function assessTask(title: string, ancestorTitles: string[] = [], tags: string[] = []): Promise<TaskAssessmentResponse> {
+export async function assessTask(task: { 
+    title: string; 
+    tags?: string[];
+    status?: any;
+    progress?: number;
+    importance?: number;
+    urgency?: number;
+    start_at?: string;
+    due_by?: string;
+    deadline?: string;
+    scheduled_dates?: string[];
+    note?: string;
+}, ancestorTitles: string[] = []): Promise<TaskAssessmentResponse> {
     const axios = await getAxios();
     const response = await axios.post('/v2/assess-task', {
-        title: title,
+        title: task.title,
         ancestor_titles: ancestorTitles,
-        tags: tags
+        tags: task.tags,
+        status: task.status,
+        progress: task.progress,
+        importance: task.importance,
+        urgency: task.urgency,
+        start_at: task.start_at,
+        due_by: task.due_by,
+        deadline: task.deadline,
+        scheduled_dates: task.scheduled_dates,
+        note: task.note,
     });
     return response.data;
 }
