@@ -826,10 +826,10 @@ function onTitleInput() {
         clearTimeout(assessmentTimeout);
     }
     
-    // Set a new timeout to assess after user stops typing (reduced from 1000ms to 500ms)
+    // Set a new timeout to assess after user stops typing
     assessmentTimeout = setTimeout(() => {
         assessTaskTitle(form.title);
-    }, 500);
+    }, 1000);
 }
 
 function addNoteContent(suggestion: string) {
