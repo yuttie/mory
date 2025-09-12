@@ -1143,7 +1143,7 @@ mod v2 {
 
         let openai_request = OpenAIRequest {
             model: "gpt-4.1-mini".to_string(),
-            messages: vec![
+            input: vec![
                 OpenAIRequestMessage {
                     role: "developer".to_string(),
                     content: "You are a helpful assistant that provides feedback on task titles and suggests practical note content for task completion. Always respond with valid JSON. Be concise but thorough in your suggestions.".to_string(),
