@@ -125,12 +125,39 @@
                                     {{ titleAssessment.feedback }}
                                 </p>
                                 <div v-if="titleAssessment.suggestions.length > 0">
-                                    <p class="caption font-weight-bold mb-1">Suggestions:</p>
+                                    <p class="caption font-weight-bold mb-1">Title Suggestions:</p>
                                     <ul class="caption">
                                         <li v-for="(suggestion, index) in titleAssessment.suggestions" v-bind:key="index">
                                             {{ suggestion }}
                                         </li>
                                     </ul>
+                                </div>
+                                <div v-if="titleAssessment.note_suggestions && titleAssessment.note_suggestions.length > 0" class="mt-3">
+                                    <p class="caption font-weight-bold mb-1">
+                                        Note Suggestions:
+                                        <span class="font-weight-normal">(click + to add to note)</span>
+                                    </p>
+                                    <div class="note-suggestions">
+                                        <div 
+                                            v-for="(suggestion, index) in titleAssessment.note_suggestions" 
+                                            v-bind:key="'note-' + index"
+                                            class="note-suggestion-item"
+                                        >
+                                            <div class="d-flex align-center">
+                                                <span class="caption flex-grow-1">{{ suggestion }}</span>
+                                                <v-btn
+                                                    icon
+                                                    x-small
+                                                    class="ml-1"
+                                                    v-on:click="addNoteContent(suggestion)"
+                                                    title="Add to note"
+                                                    color="primary"
+                                                >
+                                                    <v-icon x-small>{{ mdiPlus }}</v-icon>
+                                                </v-btn>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </v-card>
@@ -389,6 +416,7 @@ import {
     mdiNoteEditOutline,
     mdiPercentOutline,
     mdiPencilBoxOutline,
+    mdiPlus,
     mdiPriorityHigh,
     mdiTagMultipleOutline,
     mdiTarget,
@@ -799,6 +827,19 @@ function onTitleInput() {
     }, 1000);
 }
 
+function addNoteContent(suggestion: string) {
+    let currentNote = form.note;
+    if (currentNote.trim() === '') {
+        form.note = suggestion;
+    } else {
+        // Add suggestion as a new paragraph
+        while (!currentNote.endsWith('\n\n')) {
+            currentNote += '\n';
+        }
+        form.note = currentNote + suggestion;
+    }
+}
+
 // Expose
 defineExpose({
   refresh,
@@ -871,6 +912,21 @@ defineExpose({
     ul {
         margin-left: 16px;
         margin-bottom: 0;
+    }
+    
+    .note-suggestions {
+        .note-suggestion-item {
+            padding: 4px 0;
+            border-bottom: 1px solid #e0e0e0;
+            
+            &:last-child {
+                border-bottom: none;
+            }
+            
+            .caption {
+                line-height: 1.3;
+            }
+        }
     }
 }
 </style>
