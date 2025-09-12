@@ -118,7 +118,12 @@ async fn main() -> Result<()> {
     let state = models::AppState {
         repo: Arc::new(Mutex::new(repo)),
         cache_db: db_pool,
-        http_client: reqwest::Client::new(),
+        http_client: reqwest::Client::builder()
+            .gzip(true)
+            .brotli(true)
+            .build()
+            .context("Failed to build a reqwest client")
+            .unwrap(),
     };
 
     let addr = env::var("MORIED_LISTEN").unwrap();
