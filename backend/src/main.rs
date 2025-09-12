@@ -1139,7 +1139,7 @@ mod v2 {
         );
 
         let openai_request = OpenAIRequest {
-            model: "gpt-4o-mini".to_string(),
+            model: "gpt-4.1-mini".to_string(),
             messages: vec![
                 OpenAIRequestMessage {
                     role: "system".to_string(),
