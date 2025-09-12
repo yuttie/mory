@@ -776,7 +776,7 @@ async function assessTaskTitle(title: string) {
     
     try {
         const ancestorTitles = props.ancestorTitlesForAssessment || [];
-        const tags = form.tags || [];
+        const tags = (form.tags || []).filter((t) => t !== 'quick-create');
         const response = await assessTask(title, ancestorTitles, tags);
         titleAssessment.value = response;
     } catch (error) {
