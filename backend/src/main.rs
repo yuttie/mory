@@ -1151,7 +1151,6 @@ mod v2 {
                 }
             ],
             temperature: 0.3,
-            max_tokens: 500,
         };
 
         let response = client
