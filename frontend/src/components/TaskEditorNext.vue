@@ -699,6 +699,11 @@ function resetFromTask(t?: Task | undefined | null): void {
         form.deadline = t.deadline ?? '';
         form.scheduled_dates = Array.isArray(t.scheduled_dates) ? [...t.scheduled_dates] : [];
         form.note = t.note ?? '';
+        
+        // Automatically assess the title for existing tasks
+        if (form.title && form.title.length >= 3) {
+            assessTaskTitle(form.title);
+        }
     }
 }
 
