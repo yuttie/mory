@@ -699,6 +699,11 @@ function resetFromTask(t?: Task | undefined | null): void {
         form.deadline = t.deadline ?? '';
         form.scheduled_dates = Array.isArray(t.scheduled_dates) ? [...t.scheduled_dates] : [];
         form.note = t.note ?? '';
+        
+        // Automatically assess the title for existing tasks
+        if (form.title && form.title.length >= 3) {
+            assessTaskTitle(form.title);
+        }
     }
 }
 
@@ -821,10 +826,10 @@ function onTitleInput() {
         clearTimeout(assessmentTimeout);
     }
     
-    // Set a new timeout to assess after user stops typing
+    // Set a new timeout to assess after user stops typing (reduced from 1000ms to 500ms)
     assessmentTimeout = setTimeout(() => {
         assessTaskTitle(form.title);
-    }, 1000);
+    }, 500);
 }
 
 function addNoteContent(suggestion: string) {
