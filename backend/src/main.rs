@@ -1103,7 +1103,7 @@ mod v2 {
         let today = Utc::now().format("%Y-%m-%d").to_string();
 
         // Build complete task information for the prompt
-        let mut task_info_parts = vec![format!("<task-title>{}</task-title>", request.title)];
+        let mut task_info_parts = vec![format!("<title>{}</title>", request.title)];
         
         if let Some(ref tags) = request.tags {
             if !tags.is_empty() {
