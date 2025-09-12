@@ -298,11 +298,12 @@ export interface TaskAssessmentResponse {
     feedback: string;
 }
 
-export async function assessTask(title: string, ancestorTitles: string[] = []): Promise<TaskAssessmentResponse> {
+export async function assessTask(title: string, ancestorTitles: string[] = [], tags: string[] = []): Promise<TaskAssessmentResponse> {
     const axios = await getAxios();
     const response = await axios.post('/v2/assess-task', {
         title: title,
-        ancestor_titles: ancestorTitles
+        ancestor_titles: ancestorTitles,
+        tags: tags
     });
     return response.data;
 }

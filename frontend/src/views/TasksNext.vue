@@ -87,7 +87,8 @@
                             v-bind:task-path="newTaskPath ?? selectedNode.path"
                             v-bind:known-tags="knownTags"
                             v-bind:known-contacts="knownContacts"
-                            v-bind:ancestor-task-titles="selectedNodeAncestorTitles"
+                            v-bind:parent-task-title="selectedNodeParentTitle"
+                            v-bind:ancestor-titles-for-assessment="selectedNodeAncestorTitlesForAssessment"
                             v-bind:selected-tag="newTaskPath && selectedNode && isTagGroupSelected ? selectedTagName : undefined"
                             class="ma-4"
                             v-on:save="onSelectedTaskSave"
@@ -298,9 +299,12 @@ function getAncestorTitles(taskUuid: string): string[] {
         let currentParentId = store.parentOf(taskUuid);
         
         while (currentParentId) {
-            const parentNode = store.node(currentParentId);
-            if (parentNode && parentNode.title) {
-                ancestors.unshift(parentNode.title); // Add to beginning to maintain hierarchy order
+            // Skip tag group nodes (virtual nodes used for UI organization)
+            if (!currentParentId.startsWith('tag-group-')) {
+                const parentNode = store.node(currentParentId);
+                if (parentNode && parentNode.title) {
+                    ancestors.unshift(parentNode.title); // Add to beginning to maintain hierarchy order
+                }
             }
             currentParentId = store.parentOf(currentParentId);
         }
@@ -311,11 +315,36 @@ function getAncestorTitles(taskUuid: string): string[] {
     return ancestors;
 }
 
-// Computed property for ancestor titles of the selected node
-const selectedNodeAncestorTitles = computed<string[]>(() => {
+// Computed property for parent task title (for UI display)
+const selectedNodeParentTitle = computed<string | undefined>(() => {
+    if (newTaskPath.value && selectedNode.value && !isTagGroupSelected.value) {
+        // For new tasks, the selected node is the parent (unless it's a tag group)
+        if (selectedNode.value.uuid.startsWith('tag-group-')) {
+            return undefined; // Tag groups don't have meaningful titles for new task context
+        } else {
+            return selectedNode.value.title;
+        }
+    } else if (selectedNode.value && !isTagGroupSelected.value && !newTaskPath.value) {
+        // For existing tasks, get their immediate parent title
+        const parentId = store.parentOf(selectedNode.value.uuid);
+        if (parentId && !parentId.startsWith('tag-group-')) {
+            const parentNode = store.node(parentId);
+            return parentNode?.title;
+        }
+    }
+    return undefined;
+});
+
+// Computed property for ancestor titles of the selected node (for AI assessment)
+const selectedNodeAncestorTitlesForAssessment = computed<string[]>(() => {
     if (newTaskPath.value && selectedNode.value && !isTagGroupSelected.value) {
         // For new tasks, include the selected node as the parent in ancestor chain
-        return [...getAncestorTitles(selectedNode.value.uuid), selectedNode.value.title];
+        // But exclude the selected node itself if it's a tag group
+        if (selectedNode.value.uuid.startsWith('tag-group-')) {
+            return getAncestorTitles(selectedNode.value.uuid);
+        } else {
+            return [...getAncestorTitles(selectedNode.value.uuid), selectedNode.value.title];
+        }
     } else if (selectedNode.value && !isTagGroupSelected.value && !newTaskPath.value) {
         // For existing tasks, get their own ancestors (not including themselves)
         return getAncestorTitles(selectedNode.value.uuid);
