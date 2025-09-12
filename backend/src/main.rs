@@ -1039,7 +1039,7 @@ mod v2 {
     #[derive(Serialize)]
     struct OpenAIRequest {
         model: String,
-        messages: Vec<OpenAIRequestMessage>,
+        input: Vec<OpenAIRequestMessage>,
         temperature: f32,
     }
 
@@ -1157,7 +1157,7 @@ mod v2 {
         };
 
         let response = client
-            .post("https://api.openai.com/v1/chat/completions")
+            .post("https://api.openai.com/v1/responses")
             .header("Authorization", format!("Bearer {}", openai_api_key))
             .header("Content-Type", "application/json")
             .json(&openai_request)
