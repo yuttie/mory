@@ -828,13 +828,15 @@ function onTitleInput() {
 }
 
 function addNoteContent(suggestion: string) {
-    const currentNote = form.note;
+    let currentNote = form.note;
     if (currentNote.trim() === '') {
         form.note = suggestion;
     } else {
-        // Add suggestion as a new line or bullet point
-        const separator = currentNote.endsWith('\n') ? '' : '\n';
-        form.note = currentNote + separator + '• ' + suggestion;
+        // Add suggestion as a new paragraph
+        while (!currentNote.endsWith('\n\n')) {
+            currentNote += '\n';
+        }
+        form.note = currentNote + suggestion;
     }
 }
 
