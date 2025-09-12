@@ -1118,7 +1118,7 @@ mod v2 {
             3. Completeness
             4. Brevity
 
-            Second, suggest helpful note content that would assist the user in completing this task, including:
+            Second, suggest helpful note content blocks that would assist the user in completing this task, including:
             - Key steps or actions needed
             - Materials, tools, or resources required
             - Time estimates or scheduling considerations
@@ -1130,10 +1130,14 @@ mod v2 {
               "quality_score": <real number between 0 and 10, where 10 = excellent>,
               "suggestions": ["specific title improvement suggestion 1", "suggestion 2", ...],
               "feedback": "overall title assessment emphasizing weaknesses and how to fix them",
-              "note_suggestions": ["helpful note content suggestion 1", "suggestion 2", "suggestion 3", ...]
+              "note_suggestions": ["helpful note content block suggestion 1", "suggestion 2", "suggestion 3", ...]
             }}
 
-            Important: Use the same language as the task title. Keep note suggestions practical and actionable."#,
+            Important:
+            - Use the same language as the task title.
+            - Keep note suggestions practical and actionable.
+            - Write note snippets in Markdown format.
+            "#,
             request.title,
             context_part
         );
