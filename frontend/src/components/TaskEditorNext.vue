@@ -808,7 +808,6 @@ async function assessTaskTitle(title: string) {
     assessmentLoading.value = true;
     
     try {
-        const ancestorTitles = props.ancestorTitlesForAssessment || [];
         const taskForAssessment = {
             title: title,
             tags: (form.tags || []).filter((t) => t !== 'quick-create'),
@@ -819,10 +818,9 @@ async function assessTaskTitle(title: string) {
             start_at: form.start_at,
             due_by: form.due_by,
             deadline: form.deadline,
-            scheduled_dates: form.scheduled_dates,
             note: form.note,
         };
-        const response = await assessTask(taskForAssessment, ancestorTitles);
+        const response = await assessTask(taskForAssessment);
         titleAssessment.value = response;
     } catch (error) {
         console.warn('Failed to assess task title:', error);

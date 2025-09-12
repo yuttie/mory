@@ -1010,7 +1010,6 @@ mod v2 {
     #[derive(Deserialize, Serialize)]
     pub struct AssessmentRequest {
         pub title: String,
-        pub ancestor_titles: Option<Vec<String>>,
         pub tags: Option<Vec<String>>,
         pub status: Option<serde_json::Value>,
         pub progress: Option<f32>,
@@ -1019,7 +1018,6 @@ mod v2 {
         pub start_at: Option<String>,
         pub due_by: Option<String>,
         pub deadline: Option<String>,
-        pub scheduled_dates: Option<Vec<String>>,
         pub note: Option<String>,
     }
 
@@ -1101,21 +1099,8 @@ mod v2 {
 
         let client = &state.http_client;
 
-        let context_part = if let Some(ref ancestors) = request.ancestor_titles {
-            if !ancestors.is_empty() {
-                format!(
-                    "\n\nTask hierarchy context (from top-level to immediate parent):\n{}\n\nConsider the hierarchy context when evaluating the task title. The task title may be short and rely on context, but it should still be understandable within the hierarchy.",
-                    ancestors.iter().enumerate()
-                        .map(|(i, title)| format!("{}. <task-title>{}</task-title>", i + 1, title))
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                )
-            } else {
-                String::new()
-            }
-        } else {
-            String::new()
-        };
+        // Get today's date for context
+        let today = Utc::now().format("%Y-%m-%d").to_string();
 
         // Build complete task information for the prompt
         let mut task_info_parts = vec![format!("<task-title>{}</task-title>", request.title)];
@@ -1160,12 +1145,6 @@ mod v2 {
             }
         }
         
-        if let Some(ref scheduled_dates) = request.scheduled_dates {
-            if !scheduled_dates.is_empty() {
-                task_info_parts.push(format!("<scheduled-dates>{}</scheduled-dates>", scheduled_dates.join(", ")));
-            }
-        }
-        
         if let Some(ref note) = request.note {
             if !note.is_empty() {
                 task_info_parts.push(format!("<existing-note>{}</existing-note>", note));
@@ -1177,7 +1156,9 @@ mod v2 {
         let prompt = format!(
             r#"Analyze the following task and provide comprehensive assistance:
 
-{}{}
+Today's date: {}
+
+{}
 
 Task Information Available:
 - Title: The main task description
@@ -1189,7 +1170,6 @@ Task Information Available:
 - Start At: Planned start date/time
 - Due By: Preferred completion date/time
 - Deadline: Hard deadline
-- Scheduled Dates: Specific dates when task work is planned
 - Existing Note: Any current notes about the task
 
 Primary Focus: Evaluate the TITLE quality and suggest helpful NOTE CONTENT.
@@ -1223,8 +1203,8 @@ Important:
 - Write note snippets in Markdown format.
 - Consider the complete task context when making suggestions.
             "#,
-            task_information,
-            context_part
+            today,
+            task_information
         );
 
         let openai_request = OpenAIRequest {
