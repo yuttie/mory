@@ -296,6 +296,7 @@ export interface TaskAssessmentResponse {
     quality_score: number;
     suggestions: string[];
     feedback: string;
+    note_suggestions: string[];
 }
 
 export async function assessTask(title: string, ancestorTitles: string[] = [], tags: string[] = []): Promise<TaskAssessmentResponse> {

@@ -1018,6 +1018,7 @@ mod v2 {
         pub quality_score: f32,
         pub suggestions: Vec<String>,
         pub feedback: String,
+        pub note_suggestions: Vec<String>,
     }
 
     #[derive(Deserialize)]
@@ -1040,7 +1041,6 @@ mod v2 {
         model: String,
         messages: Vec<OpenAIRequestMessage>,
         temperature: f32,
-        max_tokens: u32,
     }
 
     #[derive(Serialize)]
@@ -1108,23 +1108,35 @@ mod v2 {
         };
 
         let prompt = format!(
-            r#"Analyze the following task title and provide feedback for improving it:
+            r#"Analyze the following task title and provide comprehensive assistance:
             <task-title>{}</task-title>{}
 
-            Evaluate the title based on:
+            First, evaluate the title based on:
             1. Clarity and specificity
             2. Actionability
             3. Completeness
             4. Brevity
 
+            Second, suggest helpful note content blocks that would assist the user in completing this task, including:
+            - Key steps or actions needed
+            - Materials, tools, or resources required
+            - Time estimates or scheduling considerations
+            - Potential obstacles and how to overcome them
+            - Success criteria or deliverables
+
             Respond with JSON:
             {{
               "quality_score": <real number between 0 and 10, where 10 = excellent>,
-              "suggestions": ["specific improvement suggestion 1", "suggestion 2", ...],
-              "feedback": "overall assessment emphasizing weaknesses and how to fix them"
+              "suggestions": ["specific title improvement suggestion 1", "suggestion 2", ...],
+              "feedback": "overall title assessment emphasizing weaknesses and how to fix them",
+              "note_suggestions": ["helpful note content block suggestion 1", "suggestion 2", "suggestion 3", ...]
             }}
 
-            Important: Use the same language as the task title."#,
+            Important:
+            - Use the same language as the task title.
+            - Keep note suggestions practical and actionable.
+            - Write note snippets in Markdown format.
+            "#,
             request.title,
             context_part
         );
@@ -1134,7 +1146,7 @@ mod v2 {
             messages: vec![
                 OpenAIRequestMessage {
                     role: "system".to_string(),
-                    content: "You are a helpful assistant that provides feedback on task titles to improve productivity and clarity. Always respond with valid JSON.".to_string(),
+                    content: "You are a helpful assistant that provides feedback on task titles and suggests practical note content for task completion. Always respond with valid JSON. Be concise but thorough in your suggestions.".to_string(),
                 },
                 OpenAIRequestMessage {
                     role: "user".to_string(),
@@ -1142,7 +1154,6 @@ mod v2 {
                 }
             ],
             temperature: 0.3,
-            max_tokens: 300,
         };
 
         let response = client
