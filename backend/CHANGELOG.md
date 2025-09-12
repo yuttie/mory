@@ -1,3 +1,20 @@
+## [1.5.1] - 2025-09-12
+
+### 🐛 Bug Fixes
+
+- *(backend)* Add support for gzip and brotli compression, use rustls for TLS
+- *(backend/Dockerfile)* Add missing "ca-certificates" package
+
+### 🚜 Refactor
+
+- *(backend)* Prefix debug!() with tracing::
+- *(backend)* Use tracing::error! for logging errors instead of tracing::debug!
+- *(backend)* Preserve error chains by replacing .map_err() with .context()
+
+### ⚙️ Miscellaneous Tasks
+
+- *(backend)* Allow all trace verbosity levels at compile time
+
 ## [1.5.0] - 2025-09-11
 
 ### 🚀 Features
