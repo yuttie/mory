@@ -1009,8 +1009,17 @@ mod v2 {
 
     #[derive(Deserialize, Serialize)]
     pub struct AssessmentRequest {
-        pub title: String,
         pub ancestor_titles: Option<Vec<String>>,
+        pub title: String,
+        pub tags: Option<Vec<String>>,
+        pub status: Option<serde_json::Value>,
+        pub progress: Option<f32>,
+        pub importance: Option<i32>,
+        pub urgency: Option<i32>,
+        pub start_at: Option<String>,
+        pub due_by: Option<String>,
+        pub deadline: Option<String>,
+        pub note: Option<String>,
     }
 
     #[derive(Serialize, Deserialize)]
@@ -1091,6 +1100,9 @@ mod v2 {
 
         let client = &state.http_client;
 
+        // Get today's date for context
+        let today = Utc::now().format("%Y-%m-%d").to_string();
+
         let context_part = if let Some(ref ancestors) = request.ancestor_titles {
             if !ancestors.is_empty() {
                 format!(
@@ -1107,37 +1119,65 @@ mod v2 {
             String::new()
         };
 
+        // Build complete task information as JSON for the prompt
+        let task_information = serde_json::to_string_pretty(&request)
+            .context("Failed to serialize task information to JSON")?;
+
         let prompt = format!(
-            r#"Analyze the following task title and provide comprehensive assistance:
-            <task-title>{}</task-title>{}
+            r#"Analyze the following task and provide comprehensive assistance:
 
-            First, evaluate the title based on:
-            1. Clarity and specificity
-            2. Actionability
-            3. Completeness
-            4. Brevity
+Today's date: {}
 
-            Second, suggest helpful note content blocks that would assist the user in completing this task, including:
-            - Key steps or actions needed
-            - Materials, tools, or resources required
-            - Time estimates or scheduling considerations
-            - Potential obstacles and how to overcome them
-            - Success criteria or deliverables
+Task Information (JSON):
+{}{}
 
-            Respond with JSON:
-            {{
-              "quality_score": <real number between 0 and 10, where 10 = excellent>,
-              "suggestions": ["specific title improvement suggestion 1", "suggestion 2", ...],
-              "feedback": "overall title assessment emphasizing weaknesses and how to fix them",
-              "note_suggestions": ["helpful note content block suggestion 1", "suggestion 2", "suggestion 3", ...]
-            }}
+Primary Focus: Evaluate the TASK AS A WHOLE and suggest improvements for overall clarity and completeness.
 
-            Important:
-            - Use the same language as the task title.
-            - Keep note suggestions practical and actionable.
-            - Write note snippets in Markdown format.
+The task information is provided as JSON containing:
+- title: The main task description
+- tags: Categories/labels associated with the task
+- status: Current state of the task (todo, in_progress, waiting, etc.)
+- progress: Completion percentage (0-100%)
+- importance: Priority level (1-5, where 5 is most important)
+- urgency: Time sensitivity (1-5, where 5 is most urgent)
+- start_at: Planned start date/time
+- due_by: Preferred completion date/time
+- deadline: Hard deadline
+- note: Any current notes about the task
+- ancestor_titles: Hierarchical context (parent tasks)
+
+Evaluate the task holistically by considering the combination of title, note, and other task information:
+1. Overall clarity: Is it clear what needs to be done when considering title + note + other information together?
+2. Completeness: Does the combined information provide sufficient context to understand and execute the task?
+3. Actionability: Are the required actions clear from the overall task description?
+4. Information sufficiency: Does the title need to be complete on its own, or does the note provide adequate context?
+
+The title may be intentionally brief or incomplete if the note provides sufficient detail. Focus on the overall task comprehensibility rather than title completeness alone.
+
+Suggest improvements that enhance overall task clarity, which may include:
+- Title refinements (if needed for clarity)
+- Note content additions or improvements
+- Better organization of existing information
+- Missing critical details that would help task execution
+
+Respond with JSON:
+{{
+  "quality_score": <real number between 0 and 10, where 10 = excellent overall task clarity>,
+  "suggestions": ["specific improvement suggestion for overall task clarity 1", "suggestion 2", ...],
+  "feedback": "overall task assessment emphasizing how well the combined title+note+info communicates the task",
+  "note_suggestions": ["helpful note content addition or improvement 1", "suggestion 2", "suggestion 3", ...]
+}}
+
+Important:
+- Use the same language as the task title.
+- Evaluate the task as a complete unit (title + note + other fields).
+- Accept brief titles if the note provides adequate context.
+- Keep suggestions practical and actionable.
+- Write note snippets in Markdown format.
+- Consider the complete task context when making suggestions.
             "#,
-            request.title,
+            today,
+            task_information,
             context_part
         );
 
@@ -1209,7 +1249,7 @@ mod v2 {
             tracing::debug!("Cached OpenAI response with hash: {}", request_hash);
         }
 
-        tracing::debug!("Task title assessment: {:?}", assessment.feedback);
+        tracing::debug!("Task assessment: {:?}", assessment.feedback);
         Ok(Json(assessment))
     }
 

@@ -88,7 +88,7 @@
                             v-bind:known-tags="knownTags"
                             v-bind:known-contacts="knownContacts"
                             v-bind:parent-task-title="selectedNodeParentTitle"
-                            v-bind:ancestor-titles-for-assessment="selectedNodeAncestorTitlesForAssessment"
+                            v-bind:ancestor-titles-for-task-assessment="selectedNodeAncestorTitlesForTaskAssessment"
                             v-bind:selected-tag="newTaskPath && selectedNode && isTagGroupSelected ? selectedTagName : undefined"
                             class="ma-4"
                             v-on:save="onSelectedTaskSave"
@@ -335,8 +335,8 @@ const selectedNodeParentTitle = computed<string | undefined>(() => {
     return undefined;
 });
 
-// Computed property for ancestor titles of the selected node (for AI assessment)
-const selectedNodeAncestorTitlesForAssessment = computed<string[]>(() => {
+// Computed property for ancestor titles of the selected node (for task assessment)
+const selectedNodeAncestorTitlesForTaskAssessment = computed<string[]>(() => {
     if (newTaskPath.value && selectedNode.value && !isTagGroupSelected.value) {
         // For new tasks, include the selected node as the parent in ancestor chain
         // But exclude the selected node itself if it's a tag group

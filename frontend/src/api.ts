@@ -1,5 +1,6 @@
 import { getAxios } from '@/axios';
 import YAML from 'yaml';
+import type { Status } from '@/task';
 
 export type JsonValue =
     | { [k: string]: JsonValue }
@@ -299,12 +300,31 @@ export interface TaskAssessmentResponse {
     note_suggestions: string[];
 }
 
-export async function assessTask(title: string, ancestorTitles: string[] = [], tags: string[] = []): Promise<TaskAssessmentResponse> {
+export async function assessTask(task: { 
+    title: string; 
+    tags?: string[];
+    status?: Status;
+    progress?: number;
+    importance?: number;
+    urgency?: number;
+    start_at?: string;
+    due_by?: string;
+    deadline?: string;
+    note?: string;
+}, ancestorTitles: string[] = []): Promise<TaskAssessmentResponse> {
     const axios = await getAxios();
     const response = await axios.post('/v2/assess-task', {
-        title: title,
         ancestor_titles: ancestorTitles,
-        tags: tags
+        title: task.title,
+        tags: task.tags,
+        status: task.status,
+        progress: task.progress,
+        importance: task.importance,
+        urgency: task.urgency,
+        start_at: task.start_at,
+        due_by: task.due_by,
+        deadline: task.deadline,
+        note: task.note,
     });
     return response.data;
 }
