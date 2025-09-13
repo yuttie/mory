@@ -1049,7 +1049,6 @@ mod v2 {
     struct OpenAIRequest {
         model: String,
         messages: Vec<OpenAIRequestMessage>,
-        temperature: f32,
     }
 
     #[derive(Serialize)]
@@ -1196,7 +1195,6 @@ Important:
                     content: prompt,
                 }
             ],
-            temperature: 0.3,
         };
 
         let response = client
