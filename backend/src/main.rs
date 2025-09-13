@@ -1172,7 +1172,7 @@ Important:
 - Evaluate the task as a complete unit (title + note + other fields).
 - Accept brief titles if the note provides adequate context.
 - Keep suggestions practical and actionable.
-- Write note snippets in Markdown format.
+- Write note snippets in GitHub Flavored Markdown format.
 - Consider the complete task context when making suggestions.
             "#,
             today,
