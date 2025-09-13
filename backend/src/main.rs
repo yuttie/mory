@@ -1181,8 +1181,11 @@ Important:
             context_part
         );
 
+        let model = env::var("MORIED_OPENAI_MODEL")
+            .context("MORIED_OPENAI_MODEL environment variable not set")?;
+
         let openai_request = OpenAIRequest {
-            model: "gpt-4.1-mini".to_string(),
+            model,
             messages: vec![
                 OpenAIRequestMessage {
                     role: "developer".to_string(),
