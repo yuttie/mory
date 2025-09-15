@@ -9,12 +9,18 @@ task:
 tags: []
 ---
 
-# 
+# New Task
 
 ## Context
 
+What is the background or context for this task?
 
 ## Acceptance Criteria
 
+- [ ] Define what needs to be completed
+- [ ] Add specific requirements
+- [ ] Include measurable outcomes
 
 ## Notes
+
+Add any additional notes, links, or references here.
