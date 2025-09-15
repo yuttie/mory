@@ -1,7 +1,7 @@
 <template>
     <div id="tasks-next" class="d-flex" v-bind:class="{ 'flex-column': !$vuetify.breakpoint.smAndUp, 'flex-row': $vuetify.breakpoint.smAndUp }">
         <template v-if="store.isLoaded">
-            <div class="d-flex flex-column task-tree-container"><!-- NOTE: Necessary for <TaskTree> to have vertical scrollbar -->
+            <v-sheet class="d-flex flex-column task-tree-container"><!-- NOTE: Necessary for <TaskTree> to have vertical scrollbar -->
                 <v-toolbar flat class="flex-grow-0">
                     <v-toolbar-title>
                         <span>{{ filteredTasksCount }} tasks left</span>
@@ -48,17 +48,15 @@
                         </v-list>
                     </v-menu>
                 </v-toolbar>
-                <v-sheet class="flex-grow-1">
-                    <TaskTree
-                        v-bind:items="filteredForestWithTags"
-                        v-bind:active="activeNodeId"
-                        v-bind:open.sync="openNodes"
-                        v-on:update:active="onTaskSelectionChangeInTree"
-                        v-on:add-child-task="onAddChildTask"
-                        style="flex: 1 1 0"
-                    />
-                </v-sheet>
-            </div>
+                <TaskTree
+                    v-bind:items="filteredForestWithTags"
+                    v-bind:active="activeNodeId"
+                    v-bind:open.sync="openNodes"
+                    v-on:update:active="onTaskSelectionChangeInTree"
+                    v-on:add-child-task="onAddChildTask"
+                    style="flex: 1 1 0"
+                />
+            </v-sheet>
             <div class="item-view d-flex flex-column">
                 <div class="d-flex flex-row">
                     <v-tabs
