@@ -428,7 +428,7 @@ import { assessTask, type TaskAssessmentResponse, getTaskTemplate } from '@/api'
 
 import { extractFileUuid } from '@/api/task';
 import type { UUID, Task, Status, StatusKind, WaitingStatus, BlockedStatus, OnHoldStatus, DoneStatus, CanceledStatus } from '@/task';
-import { STATUS_LABEL, nextOptions, makeDefaultStatus, canTransition, parseTemplate } from '@/task';
+import { STATUS_LABEL, nextOptions, makeDefaultStatus, canTransition, parseTaskTemplate } from '@/task';
 import { useFetchTask } from '@/composables/fetchTask';
 
 import dayjs from 'dayjs';
@@ -678,7 +678,7 @@ async function resetFromTask(t?: Task | undefined | null): Promise<void> {
         try {
             const templateContent = await getTaskTemplate();
             if (templateContent) {
-                const templateData = parseTemplate(templateContent);
+                const templateData = parseTaskTemplate(templateContent);
                 if (templateData) {
                     // Apply template data with selected tag override
                     const defaultTags = props.selectedTag ? [props.selectedTag] : templateData.metadata.tags || [];

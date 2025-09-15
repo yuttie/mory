@@ -1,6 +1,7 @@
 import YAML from 'yaml';
 
 import type { UUID } from '@/api';
+import { extractFrontmatterH1AndRest } from '@/markdown';
 
 export { UUID };
 
@@ -127,7 +128,7 @@ export function render(task: Task): string {
     return '---\n' + YAML.stringify(metadata, { indent: 4 }) + '---\n' + (task.title ? `\n# ${task.title}\n` : '') + (`\n${task.note}`);
 }
 
-export interface TemplateData {
+export interface ParsedTaskTemplate {
     metadata: {
         task: {
             status: Status;
@@ -145,55 +146,29 @@ export interface TemplateData {
     note: string;
 }
 
-export function parseTemplate(templateContent: string): TemplateData | null {
+export function parseTaskTemplate(templateContent: string): ParsedTaskTemplate | null {
     try {
-        // Split frontmatter and content
-        const lines = templateContent.split('\n');
+        const { frontmatter, heading, rest } = extractFrontmatterH1AndRest(templateContent);
         
-        if (lines[0] !== '---') {
+        if (!frontmatter) {
             return null;
         }
-        
-        let frontmatterEnd = -1;
-        for (let i = 1; i < lines.length; i++) {
-            if (lines[i] === '---') {
-                frontmatterEnd = i;
-                break;
-            }
-        }
-        
-        if (frontmatterEnd === -1) {
-            return null;
-        }
-        
-        const frontmatter = lines.slice(1, frontmatterEnd).join('\n');
-        const content = lines.slice(frontmatterEnd + 1).join('\n');
         
         // Parse YAML frontmatter
         const metadata = YAML.parse(frontmatter);
         
-        // Extract title and note from content
-        let title = '';
-        let note = content;
-        
-        const contentLines = content.split('\n');
-        for (let i = 0; i < contentLines.length; i++) {
-            const line = contentLines[i].trim();
-            if (line.startsWith('# ')) {
-                title = line.substring(2).trim();
-                // Remove title line and join the rest as note
-                note = contentLines.slice(i + 1).join('\n').trim();
-                break;
-            }
+        // Validate that we have the required task structure
+        if (!metadata || !metadata.task) {
+            return null;
         }
         
         return {
             metadata,
-            title,
-            note,
+            title: heading,
+            note: rest,
         };
     } catch (error) {
-        console.warn('Failed to parse template:', error);
+        console.warn('Failed to parse task template:', error);
         return null;
     }
 }
