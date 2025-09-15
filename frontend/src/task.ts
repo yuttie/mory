@@ -126,3 +126,74 @@ export function render(task: Task): string {
     };
     return '---\n' + YAML.stringify(metadata, { indent: 4 }) + '---\n' + (task.title ? `\n# ${task.title}\n` : '') + (`\n${task.note}`);
 }
+
+export interface TemplateData {
+    metadata: {
+        task: {
+            status: Status;
+            progress: number;
+            importance: number;
+            urgency: number;
+            start_at?: string;
+            due_by?: string;
+            deadline?: string;
+            scheduled_dates: string[];
+        };
+        tags: string[];
+    };
+    title: string;
+    note: string;
+}
+
+export function parseTemplate(templateContent: string): TemplateData | null {
+    try {
+        // Split frontmatter and content
+        const lines = templateContent.split('\n');
+        
+        if (lines[0] !== '---') {
+            return null;
+        }
+        
+        let frontmatterEnd = -1;
+        for (let i = 1; i < lines.length; i++) {
+            if (lines[i] === '---') {
+                frontmatterEnd = i;
+                break;
+            }
+        }
+        
+        if (frontmatterEnd === -1) {
+            return null;
+        }
+        
+        const frontmatter = lines.slice(1, frontmatterEnd).join('\n');
+        const content = lines.slice(frontmatterEnd + 1).join('\n');
+        
+        // Parse YAML frontmatter
+        const metadata = YAML.parse(frontmatter);
+        
+        // Extract title and note from content
+        let title = '';
+        let note = content;
+        
+        const contentLines = content.split('\n');
+        for (let i = 0; i < contentLines.length; i++) {
+            const line = contentLines[i].trim();
+            if (line.startsWith('# ')) {
+                title = line.substring(2).trim();
+                // Remove title line and join the rest as note
+                note = contentLines.slice(i + 1).join('\n').trim();
+                break;
+            }
+        }
+        
+        return {
+            metadata,
+            title,
+            note,
+        };
+    } catch (error) {
+        console.warn('Failed to parse template:', error);
+        return null;
+    }
+}
