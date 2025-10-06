@@ -391,6 +391,7 @@ async fn rebuild_entries_cache<'c>(
         .await?;
 
     // Insert entries
+    tracing::debug!("Starting to insert cache entries...");
     for (path, time, blob_id) in path_info_list {
         // Guess the mime type
         let mime_type = guess_mime_from_path(&path);
@@ -414,6 +415,7 @@ async fn rebuild_entries_cache<'c>(
             .execute(&mut **tx)
             .await?;
     }
+    tracing::debug!("Finished inserting cache entries.");
 
     // Record the commit ID
     sqlx::query("INSERT INTO cache_state VALUES ('commit_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;")
