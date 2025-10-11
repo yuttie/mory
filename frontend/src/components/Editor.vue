@@ -6,7 +6,6 @@
 
 <script lang="ts" setup>
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
-import type { Ref } from 'vue';
 
 import { loadConfigValue } from '@/config';
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter } from '@codemirror/view';
@@ -29,10 +28,8 @@ const emit = defineEmits<{
     (e: 'scroll', lineNumber: number): void;
 }>();
 
-// Reactive states
-const editor: Ref<EditorView | null> = ref(null);
-
 // Non-reactive state
+let editor: EditorView | null = null;
 let ignoreNextScrollEvent = false;
 
 // Template Refs
@@ -93,32 +90,32 @@ onMounted(() => {
         extensions,
     });
 
-    editor.value = new EditorView({
+    editor = new EditorView({
         state,
         parent: editorEl.value,
     });
 
     // Apply font settings
-    if (editor.value.dom) {
-        editor.value.dom.style.fontSize = `${fontSize}px`;
-        editor.value.dom.style.fontFamily = fontFamily;
+    if (editor.dom) {
+        editor.dom.style.fontSize = `${fontSize}px`;
+        editor.dom.style.fontFamily = fontFamily;
     }
 });
 
 onBeforeUnmount(() => {
-    if (editor.value) {
-        editor.value.destroy();
+    if (editor) {
+        editor.destroy();
     }
 });
 
 // Methods
 function focus() {
-    editor.value?.focus();
+    editor?.focus();
 }
 
 function blur() {
-    if (editor.value?.contentDOM) {
-        editor.value.contentDOM.blur();
+    if (editor?.contentDOM) {
+        editor.contentDOM.blur();
     }
 }
 
@@ -127,27 +124,27 @@ function resize() {
 }
 
 function scrollTo(lineNumber: number) {
-    if (!editor.value) return;
+    if (!editor) return;
     
     ignoreNextScrollEvent = true;
-    const line = editor.value.state.doc.line(lineNumber + 1);
-    editor.value.dispatch({
+    const line = editor.state.doc.line(lineNumber + 1);
+    editor.dispatch({
         effects: EditorView.scrollIntoView(line.from, { y: 'start' })
     });
 }
 
 function getSelection(): string {
-    if (!editor.value) return '';
+    if (!editor) return '';
     
-    const selection = editor.value.state.selection.main;
-    return editor.value.state.doc.sliceString(selection.from, selection.to);
+    const selection = editor.state.selection.main;
+    return editor.state.doc.sliceString(selection.from, selection.to);
 }
 
 function replaceSelection(newText: string) {
-    if (!editor.value) return;
+    if (!editor) return;
     
-    const selection = editor.value.state.selection.main;
-    editor.value.dispatch({
+    const selection = editor.state.selection.main;
+    editor.dispatch({
         changes: { from: selection.from, to: selection.to, insert: newText },
         selection: { anchor: selection.from + newText.length }
     });
@@ -187,14 +184,14 @@ function getKeybindingExtension(keybinding: string): Extension | null {
 
 // Watchers
 watch(() => props.value, (value: string) => {
-    if (!editor.value) {
+    if (!editor) {
         return;
     }
 
-    const currentValue = editor.value.state.doc.toString();
+    const currentValue = editor.state.doc.toString();
     if (value !== currentValue) {
-        const selection = editor.value.state.selection.main;
-        editor.value.dispatch({
+        const selection = editor.state.selection.main;
+        editor.dispatch({
             changes: { from: 0, to: currentValue.length, insert: value },
             selection: { anchor: Math.min(selection.anchor, value.length) }
         });
