@@ -31,7 +31,9 @@ const emit = defineEmits<{
 
 // Reactive states
 const editor: Ref<EditorView | null> = ref(null);
-const ignoreNextScrollEvent = ref(false);
+
+// Non-reactive state
+let ignoreNextScrollEvent = false;
 
 // Template Refs
 const editorEl = ref<HTMLElement | null>(null);
@@ -56,14 +58,14 @@ onMounted(() => {
                 emit('change', update.state.doc.toString());
             }
             if (update.view.scrollDOM.scrollTop !== update.startState.scrollSnapshot?.top) {
-                if (!ignoreNextScrollEvent.value) {
+                if (!ignoreNextScrollEvent) {
                     const topLine = update.view.viewportLineBlocks[0];
                     if (topLine) {
                         const lineNumber = update.view.state.doc.lineAt(topLine.from).number - 1;
                         emit('scroll', lineNumber);
                     }
                 } else {
-                    ignoreNextScrollEvent.value = false;
+                    ignoreNextScrollEvent = false;
                 }
             }
         }),
@@ -127,7 +129,7 @@ function resize() {
 function scrollTo(lineNumber: number) {
     if (!editor.value) return;
     
-    ignoreNextScrollEvent.value = true;
+    ignoreNextScrollEvent = true;
     const line = editor.value.state.doc.line(lineNumber + 1);
     editor.value.dispatch({
         effects: EditorView.scrollIntoView(line.from, { y: 'start' })
@@ -202,7 +204,7 @@ watch(() => props.value, (value: string) => {
     }
 });
 
-watch(() => props.mode, (mode: string) => {
+watch(() => props.mode, (_mode: string) => {
     // Mode changes are not dynamically supported in this minimal implementation
     // The mode is set during initialization
     // A full implementation would require reconfiguring the editor
