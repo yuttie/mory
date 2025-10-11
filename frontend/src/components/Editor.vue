@@ -8,9 +8,12 @@
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 
 import { loadConfigValue } from '@/config';
-import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter } from '@codemirror/view';
 import { EditorState, Extension } from '@codemirror/state';
-import { defaultKeymap, indentWithTab } from '@codemirror/commands';
+import { EditorView, keymap, highlightSpecialChars, drawSelection, dropCursor, rectangularSelection, crosshairCursor, lineNumbers, highlightActiveLine, highlightActiveLineGutter } from '@codemirror/view';
+import { defaultHighlightStyle, syntaxHighlighting, indentOnInput, bracketMatching, foldGutter, foldKeymap } from '@codemirror/language';
+import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
+import { autocompletion, completionKeymap, closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { markdown } from '@codemirror/lang-markdown';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { vim } from '@replit/codemirror-vim';
@@ -46,9 +49,31 @@ onMounted(() => {
 
     const extensions: Extension[] = [
         lineNumbers(),
+        foldGutter(),
+        highlightSpecialChars(),
+        history(),
+        drawSelection(),
+        dropCursor(),
+        EditorState.allowMultipleSelections.of(true),
+        indentOnInput(),
+        syntaxHighlighting(defaultHighlightStyle),
+        bracketMatching(),
+        closeBrackets(),
+        autocompletion(),
+        rectangularSelection(),
+        crosshairCursor(),
         highlightActiveLine(),
         highlightActiveLineGutter(),
-        keymap.of([...defaultKeymap, indentWithTab]),
+        highlightSelectionMatches(),
+        keymap.of([
+            ...closeBracketsKeymap,
+            ...defaultKeymap,
+            ...searchKeymap,
+            ...historyKeymap,
+            ...foldKeymap,
+            ...completionKeymap,
+            indentWithTab,
+        ]),
         EditorView.lineWrapping,
         EditorView.updateListener.of((update) => {
             if (update.docChanged) {
