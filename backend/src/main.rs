@@ -440,6 +440,57 @@ fn is_ancestor(
     Ok(false)
 }
 
+async fn try_acquire_cache_mutex<'c>(
+    tx: &mut SqliteTransaction<'c>,
+) -> Result<bool> {
+    use sqlx::Row;
+    
+    // Check if a mutex record already exists and is not stale
+    let existing_lock = sqlx::query(
+            "SELECT value FROM cache_state WHERE key = 'update_mutex';",
+        )
+        .fetch_optional(&mut **tx)
+        .await?;
+
+    if let Some(row) = existing_lock {
+        let lock_timestamp: i64 = row.get::<String, _>("value").parse()?;
+        let current_timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_secs() as i64;
+        
+        // If the lock is older than 10 minutes, consider it stale and allow acquisition
+        if current_timestamp - lock_timestamp < 600 {
+            // Lock is held by another thread
+            return Ok(false);
+        }
+    }
+
+    // Acquire the mutex by inserting/updating the timestamp
+    let current_timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_secs();
+    
+    sqlx::query(
+        "INSERT INTO cache_state VALUES ('update_mutex', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;",
+    )
+        .bind(current_timestamp.to_string())
+        .execute(&mut **tx)
+        .await?;
+
+    Ok(true)
+}
+
+async fn release_cache_mutex<'c>(
+    tx: &mut SqliteTransaction<'c>,
+) -> Result<()> {
+    // Remove the mutex record
+    sqlx::query("DELETE FROM cache_state WHERE key = 'update_mutex';")
+        .execute(&mut **tx)
+        .await?;
+    
+    Ok(())
+}
+
 async fn update_entries_cache<'c>(
     tx: &mut SqliteTransaction<'c>,
     repo: Arc<Mutex<Repository>>,
@@ -1692,6 +1743,14 @@ mod models {
             // Start an exclusive transaction
             let mut tx = self.cache_db.begin_with("BEGIN EXCLUSIVE").await?;
 
+            // Try to acquire the cache update mutex
+            let lock_acquired = super::try_acquire_cache_mutex(&mut tx).await?;
+            if !lock_acquired {
+                // Another thread is updating the cache, rollback and return current head
+                tx.rollback().await?;
+                return Ok(head_commit_id);
+            }
+
             let cache_commit_id_opt = sqlx::query(
                     "SELECT value FROM cache_state WHERE key = 'commit_id';",
                 )
@@ -1715,6 +1774,9 @@ mod models {
                     super::rebuild_entries_cache(&mut tx, self.repo.clone(), head_commit_id).await?;
                 },
             }
+
+            // Release the cache update mutex
+            super::release_cache_mutex(&mut tx).await?;
 
             // End the transaction
             tx.commit().await?;
