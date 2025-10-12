@@ -96,7 +96,7 @@ async fn main() -> Result<()> {
         .await?;
     sqlx::query("
             CREATE TABLE IF NOT EXISTS entry (
-                commit     TEXT NOT NULL,
+                commit_id  TEXT NOT NULL,
                 path       TEXT NOT NULL,
                 size       INTEGER NOT NULL,
                 mime_type  TEXT NOT NULL,
@@ -104,7 +104,7 @@ async fn main() -> Result<()> {
                 title      TEXT,
                 time       INTEGER,
                 tz_offset  INTEGER,
-                PRIMARY KEY (commit, path)
+                PRIMARY KEY (commit_id, path)
             ) STRICT;
         ")
         .execute(&db_pool)
@@ -449,10 +449,10 @@ async fn update_entries_cache<'c>(
 
     // Copy all entries from the previous commit to the new commit
     sqlx::query("
-            INSERT INTO entry (commit, path, size, mime_type, metadata, title, time, tz_offset)
+            INSERT INTO entry (commit_id, path, size, mime_type, metadata, title, time, tz_offset)
             SELECT ?, path, size, mime_type, metadata, title, time, tz_offset
             FROM entry
-            WHERE commit = ?;
+            WHERE commit_id = ?;
         ")
         .bind(head_commit_id.to_string())
         .bind(last_commit_id.to_string())
@@ -480,7 +480,7 @@ async fn update_entries_cache<'c>(
                 sqlx::query("
                         INSERT INTO entry
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                            ON CONFLICT(commit, path) DO UPDATE SET
+                            ON CONFLICT(commit_id, path) DO UPDATE SET
                                 size = excluded.size,
                                 mime_type = excluded.mime_type,
                                 metadata = excluded.metadata,
@@ -501,7 +501,7 @@ async fn update_entries_cache<'c>(
             },
             FileOp::Deleted => {
                 // Delete the entry from the new commit
-                sqlx::query("DELETE FROM entry WHERE commit = ? AND path = ?;")
+                sqlx::query("DELETE FROM entry WHERE commit_id = ? AND path = ?;")
                     .bind(head_commit_id.to_string())
                     .bind(path.to_str())
                     .execute(&mut **tx)
@@ -1657,12 +1657,12 @@ mod models {
 
             // Return the entries from the cache for the current commit
             let query = if let Some(pattern) = pattern_opt {
-                sqlx::query("SELECT * FROM entry WHERE commit = ? AND path GLOB ?;")
+                sqlx::query("SELECT * FROM entry WHERE commit_id = ? AND path GLOB ?;")
                     .bind(head_commit_id.to_string())
                     .bind(pattern)
             }
             else {
-                sqlx::query("SELECT * FROM entry WHERE commit = ?;")
+                sqlx::query("SELECT * FROM entry WHERE commit_id = ?;")
                     .bind(head_commit_id.to_string())
             };
             let entries = query
