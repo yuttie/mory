@@ -14,12 +14,6 @@ import { defaultHighlightStyle, syntaxHighlighting, indentOnInput, bracketMatchi
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { autocompletion, completionKeymap, closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
-import { css } from '@codemirror/lang-css';
-import { less } from '@codemirror/lang-less';
-import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
-import { oneDark } from '@codemirror/theme-one-dark';
-import { vim } from '@replit/codemirror-vim';
-import { emacs } from '@replit/codemirror-emacs';
 
 // Props
 const props = defineProps<{
@@ -41,7 +35,7 @@ let ignoreNextScrollEvent = false;
 const editorEl = ref<HTMLElement | null>(null);
 
 // Lifecycle hooks
-onMounted(() => {
+onMounted(async () => {
     if (!editorEl.value) return;
 
     const fontSize = loadConfigValue('editor-font-size', 14);
@@ -97,25 +91,28 @@ onMounted(() => {
 
     // Add language support
     if (props.mode === 'css') {
+        const { css } = await import('@codemirror/lang-css');
         extensions.push(css());
     }
     else if (props.mode === 'less') {
+        const { less } = await import('@codemirror/lang-less');
         extensions.push(less());
     }
     else if (props.mode === 'markdown') {
+        const { markdown, markdownLanguage } = await import('@codemirror/lang-markdown');
         extensions.push(markdown({
             base: markdownLanguage,
         }));
     }
 
     // Add theme
-    const themeExtension = getThemeExtension(theme);
+    const themeExtension = await getThemeExtension(theme);
     if (themeExtension) {
         extensions.push(themeExtension);
     }
 
     // Add keybinding
-    const keybindingExtension = getKeybindingExtension(keybinding);
+    const keybindingExtension = await getKeybindingExtension(keybinding);
     if (keybindingExtension) {
         // Vim and Emacs keybindings must be included before other keymaps
         extensions.unshift(keybindingExtension);
@@ -186,7 +183,7 @@ function replaceSelection(newText: string) {
     });
 }
 
-function getThemeExtension(theme: string): Extension | null {
+async function getThemeExtension(theme: string): Extension | null {
     // Map Ace themes to CodeMirror themes
     // For now, we only support oneDark theme, others will use default
     const darkThemes = [
@@ -199,18 +196,21 @@ function getThemeExtension(theme: string): Extension | null {
     ];
 
     if (darkThemes.includes(theme)) {
+        const { oneDark } = await import('@codemirror/theme-one-dark');
         return oneDark;
     }
 
     return null;
 }
 
-function getKeybindingExtension(keybinding: string): Extension | null {
+async function getKeybindingExtension(keybinding: string): Extension | null {
     if (keybinding === 'vim' || keybinding === 'vim-modified') {
         // For vim-modified, we'll use the standard vim extension
         // CodeMirror's vim extension has good defaults
+        const { vim } = await import('@replit/codemirror-vim');
         return vim();
     } else if (keybinding === 'emacs') {
+        const { emacs } = await import('@replit/codemirror-emacs');
         return emacs();
     }
     // 'sublime' and 'vscode' keybindings are not available in CodeMirror 6
