@@ -1,3 +1,13 @@
+## [Unreleased]
+
+### 🚀 Features
+
+- [**breaking**] Add `commit` column to `entry` table for multi-version support
+  - The `entry` table now uses a composite primary key `(commit, path)` instead of just `path`
+  - This allows multiple versions of entry sets to coexist in the cache database
+  - Enables smaller insertion transactions and atomic switching of entry sets
+  - **Migration required:** Delete `cache.sqlite` to allow it to be recreated with the new schema
+
 ## [1.5.1] - 2025-09-12
 
 ### 🐛 Bug Fixes
