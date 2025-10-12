@@ -204,7 +204,7 @@ async function getThemeExtension(theme: string): Extension | null {
         'twilight', 'vibrant_ink'
     ];
 
-    if (darkThemes.includes(theme)) {
+    if (theme === 'one-dark' || darkThemes.includes(theme)) {
         const { oneDark } = await import('@codemirror/theme-one-dark');
         return oneDark;
     }

@@ -85,7 +85,7 @@ import YAML from 'yaml';
 // Reactive states
 const editorThemes = ref([
   { name: 'Default (Light)',         value: 'default'                 },
-  { name: 'One Dark',                value: 'monokai'                 },
+  { name: 'One Dark',                value: 'one-dark'                },
 ]);
 const editorKeybindings = ref([
   { name: 'Default',                                    value: 'default'      },
