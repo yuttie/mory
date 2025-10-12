@@ -443,6 +443,7 @@ fn is_ancestor(
 
 async fn try_acquire_cache_mutex(
     cache_db: &SqlitePool,
+    commit_id: Oid,
 ) -> Result<bool> {
     use sqlx::Row;
     
@@ -457,28 +458,43 @@ async fn try_acquire_cache_mutex(
         .await?;
 
     if let Some(row) = existing_lock {
-        let lock_timestamp: i64 = row.get::<String, _>("value").parse()?;
+        let lock_data: String = row.get("value");
+        let lock_info: serde_json::Value = serde_json::from_str(&lock_data)?;
+        let lock_timestamp = lock_info["timestamp"].as_i64().unwrap_or(0);
         let current_timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)?
             .as_secs() as i64;
         
-        // If the lock is older than 10 minutes, consider it stale and allow acquisition
+        // If the lock is older than 10 minutes, consider it stale and clean up
         if current_timestamp - lock_timestamp < 600 {
             // Lock is held by another thread
             tx.rollback().await?;
             return Ok(false);
         }
+        
+        // Lock is stale, clean up entries from the stale update
+        if let Some(stale_commit_id) = lock_info["commit_id"].as_str() {
+            sqlx::query("DELETE FROM entry WHERE commit_id = ?;")
+                .bind(stale_commit_id)
+                .execute(&mut *tx)
+                .await?;
+        }
     }
 
-    // Acquire the mutex by inserting/updating the timestamp
+    // Acquire the mutex by inserting/updating the timestamp and commit ID
     let current_timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)?
         .as_secs();
     
+    let lock_data = serde_json::json!({
+        "timestamp": current_timestamp,
+        "commit_id": commit_id.to_string()
+    });
+    
     sqlx::query(
         "INSERT INTO cache_state VALUES ('update_mutex', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;",
     )
-        .bind(current_timestamp.to_string())
+        .bind(lock_data.to_string())
         .execute(&mut *tx)
         .await?;
 
@@ -1751,10 +1767,18 @@ mod models {
             let head_commit_id = self.repo.lock().unwrap().head()?.peel_to_commit()?.id();
 
             // Try to acquire the cache update mutex
-            let lock_acquired = super::try_acquire_cache_mutex(&self.cache_db).await?;
+            let lock_acquired = super::try_acquire_cache_mutex(&self.cache_db, head_commit_id).await?;
             if !lock_acquired {
-                // Another thread is updating the cache, return current head
-                return Ok(head_commit_id);
+                // Another thread is updating the cache, return the cached commit_id
+                let cached_commit_id = sqlx::query(
+                        "SELECT value FROM cache_state WHERE key = 'commit_id';",
+                    )
+                    .map(|row: SqliteRow| {
+                        Oid::from_str(row.get("value")).unwrap()
+                    })
+                    .fetch_one(&self.cache_db)
+                    .await?;
+                return Ok(cached_commit_id);
             }
 
             // Start a regular transaction (mutex provides exclusivity)
