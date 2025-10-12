@@ -478,14 +478,15 @@ async fn update_entries_cache<'c>(
                 };
                 // Update or insert the entry for the new commit
                 sqlx::query("
-                        INSERT INTO entry VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                        ON CONFLICT(commit, path) DO UPDATE SET
-                            size = excluded.size,
-                            mime_type = excluded.mime_type,
-                            metadata = excluded.metadata,
-                            title = excluded.title,
-                            time = excluded.time,
-                            tz_offset = excluded.tz_offset;
+                        INSERT INTO entry
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                            ON CONFLICT(commit, path) DO UPDATE SET
+                                size = excluded.size,
+                                mime_type = excluded.mime_type,
+                                metadata = excluded.metadata,
+                                title = excluded.title,
+                                time = excluded.time,
+                                tz_offset = excluded.tz_offset;
                     ")
                     .bind(head_commit_id.to_string())
                     .bind(path.to_str())
