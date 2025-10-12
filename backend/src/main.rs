@@ -446,7 +446,7 @@ async fn update_entries_cache<'c>(
     last_commit_id: Oid,
 ) -> Result<()> {
     let head_commit_id = repo.lock().unwrap().head()?.peel_to_commit()?.id();
-    
+
     // Copy all entries from the previous commit to the new commit
     sqlx::query("
             INSERT INTO entry (commit, path, size, mime_type, metadata, title, time, tz_offset)
@@ -458,7 +458,7 @@ async fn update_entries_cache<'c>(
         .bind(last_commit_id.to_string())
         .execute(&mut **tx)
         .await?;
-    
+
     // Iterate over recent commit history to collect operations on files
     let recent_ops = collect_recent_file_ops(&*repo.lock().unwrap(), last_commit_id);
 
@@ -1090,7 +1090,7 @@ mod v2 {
             .unwrap_or(24);
         let cache_expiry_seconds = cache_expiry_hours * 3600;
         let now = chrono::Utc::now().timestamp();
-        
+
         if let Ok(cached_response) = sqlx::query(
             "SELECT response_data FROM openai_cache WHERE request_hash = ? AND created_at > ?;"
         )
@@ -1245,10 +1245,10 @@ Important:
         // Cache the response
         let response_json = serde_json::to_string(&assessment)
             .context("Failed to serialize response for caching")?;
-        
+
         if let Err(e) = sqlx::query(
             "INSERT INTO openai_cache (request_hash, request_data, response_data, created_at) VALUES (?, ?, ?, ?)
-             ON CONFLICT(request_hash) DO UPDATE SET 
+             ON CONFLICT(request_hash) DO UPDATE SET
                  response_data = excluded.response_data,
                  created_at = excluded.created_at;"
         )
