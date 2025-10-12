@@ -96,13 +96,15 @@ async fn main() -> Result<()> {
         .await?;
     sqlx::query("
             CREATE TABLE IF NOT EXISTS entry (
-                path       TEXT PRIMARY KEY,
+                commit     TEXT NOT NULL,
+                path       TEXT NOT NULL,
                 size       INTEGER NOT NULL,
                 mime_type  TEXT NOT NULL,
                 metadata   TEXT,
                 title      TEXT,
                 time       INTEGER,
-                tz_offset  INTEGER
+                tz_offset  INTEGER,
+                PRIMARY KEY (commit, path)
             ) STRICT;
         ")
         .execute(&db_pool)
@@ -385,11 +387,6 @@ async fn rebuild_entries_cache<'c>(
         path_info_list
     };
 
-    // Drop the current cache
-    sqlx::query("DELETE FROM entry;")
-        .execute(&mut **tx)
-        .await?;
-
     // Insert entries
     tracing::debug!("Starting to insert cache entries...");
     for (path, time, blob_id) in path_info_list {
@@ -404,7 +401,8 @@ async fn rebuild_entries_cache<'c>(
             (size, metadata, title)
         };
         // Insert the entry
-        sqlx::query("INSERT INTO entry VALUES (?, ?, ?, ?, ?, ?, ?);")
+        sqlx::query("INSERT INTO entry VALUES (?, ?, ?, ?, ?, ?, ?, ?);")
+            .bind(commit_id.to_string())
             .bind(path.to_str())
             .bind(size as i64)
             .bind(mime_type)
@@ -447,10 +445,24 @@ async fn update_entries_cache<'c>(
     repo: Arc<Mutex<Repository>>,
     last_commit_id: Oid,
 ) -> Result<()> {
+    let head_commit_id = repo.lock().unwrap().head()?.peel_to_commit()?.id();
+    
+    // Copy all entries from the previous commit to the new commit
+    sqlx::query("
+            INSERT INTO entry (commit, path, size, mime_type, metadata, title, time, tz_offset)
+            SELECT ?, path, size, mime_type, metadata, title, time, tz_offset
+            FROM entry
+            WHERE commit = ?;
+        ")
+        .bind(head_commit_id.to_string())
+        .bind(last_commit_id.to_string())
+        .execute(&mut **tx)
+        .await?;
+    
     // Iterate over recent commit history to collect operations on files
     let recent_ops = collect_recent_file_ops(&*repo.lock().unwrap(), last_commit_id);
 
-    // Update existing entries in the cache
+    // Update entries based on recent file operations
     for (path, op) in recent_ops {
         match op {
             FileOp::AddedOrModified(time, blob_id) => {
@@ -464,18 +476,18 @@ async fn update_entries_cache<'c>(
                     let (metadata, title) = extract_metadata(blob.content());
                     (size, metadata, title)
                 };
-                // Upsert the entry
+                // Update or insert the entry for the new commit
                 sqlx::query("
-                        INSERT INTO entry
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
-                            ON CONFLICT(path) DO UPDATE SET
-                                size = excluded.size,
-                                mime_type = excluded.mime_type,
-                                metadata = excluded.metadata,
-                                title = excluded.title,
-                                time = excluded.time,
-                                tz_offset = excluded.tz_offset;
+                        INSERT INTO entry VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(commit, path) DO UPDATE SET
+                            size = excluded.size,
+                            mime_type = excluded.mime_type,
+                            metadata = excluded.metadata,
+                            title = excluded.title,
+                            time = excluded.time,
+                            tz_offset = excluded.tz_offset;
                     ")
+                    .bind(head_commit_id.to_string())
                     .bind(path.to_str())
                     .bind(size as i64)
                     .bind(mime_type)
@@ -487,8 +499,9 @@ async fn update_entries_cache<'c>(
                     .await?;
             },
             FileOp::Deleted => {
-                // Delete the entry
-                sqlx::query("DELETE FROM entry WHERE path = ?;")
+                // Delete the entry from the new commit
+                sqlx::query("DELETE FROM entry WHERE commit = ? AND path = ?;")
+                    .bind(head_commit_id.to_string())
                     .bind(path.to_str())
                     .execute(&mut **tx)
                     .await?;
@@ -496,8 +509,7 @@ async fn update_entries_cache<'c>(
         }
     }
 
-    // Update the commit ID
-    let head_commit_id = repo.lock().unwrap().head()?.peel_to_commit()?.id();
+    // Update the commit ID to point to the new commit
     sqlx::query("INSERT INTO cache_state VALUES ('commit_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;")
         .bind(head_commit_id.to_string())
         .execute(&mut **tx)
@@ -1642,13 +1654,15 @@ mod models {
             // Rebuild the cache if it is stale
             let head_commit_id = self.ensure_file_entries_cache_updated().await?;
 
-            // Return the entries from the cache
+            // Return the entries from the cache for the current commit
             let query = if let Some(pattern) = pattern_opt {
-                sqlx::query("SELECT * FROM entry WHERE path GLOB ?;")
+                sqlx::query("SELECT * FROM entry WHERE commit = ? AND path GLOB ?;")
+                    .bind(head_commit_id.to_string())
                     .bind(pattern)
             }
             else {
-                sqlx::query("SELECT * FROM entry;")
+                sqlx::query("SELECT * FROM entry WHERE commit = ?;")
+                    .bind(head_commit_id.to_string())
             };
             let entries = query
                 .map(|row: SqliteRow| {
