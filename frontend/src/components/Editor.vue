@@ -90,19 +90,9 @@ onMounted(async () => {
     ];
 
     // Add language support
-    if (props.mode === 'css') {
-        const { css } = await import('@codemirror/lang-css');
-        extensions.push(css());
-    }
-    else if (props.mode === 'less') {
-        const { less } = await import('@codemirror/lang-less');
-        extensions.push(less());
-    }
-    else if (props.mode === 'markdown') {
-        const { markdown, markdownLanguage } = await import('@codemirror/lang-markdown');
-        extensions.push(markdown({
-            base: markdownLanguage,
-        }));
+    const langExtension = await getLangExtension(props.mode);
+    if (langExtension) {
+        extensions.push(langExtension);
     }
 
     // Add theme
@@ -181,6 +171,25 @@ function replaceSelection(newText: string) {
         changes: { from: selection.from, to: selection.to, insert: newText },
         selection: { anchor: selection.from + newText.length }
     });
+}
+
+async function getLangExtension(lang: string): Extension | null {
+    if (lang === 'css') {
+        const { css } = await import('@codemirror/lang-css');
+        return css();
+    }
+    else if (lang === 'less') {
+        const { less } = await import('@codemirror/lang-less');
+        return less();
+    }
+    else if (lang === 'markdown') {
+        const { markdown, markdownLanguage } = await import('@codemirror/lang-markdown');
+        return markdown({
+            base: markdownLanguage,
+        });
+    }
+
+    return null
 }
 
 async function getThemeExtension(theme: string): Extension | null {
