@@ -43,6 +43,7 @@ use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
 use sqlx::sqlite::{
     SqliteConnectOptions,
+    SqlitePool,
     SqlitePoolOptions,
     SqliteTransaction,
 };
@@ -440,16 +441,19 @@ fn is_ancestor(
     Ok(false)
 }
 
-async fn try_acquire_cache_mutex<'c>(
-    tx: &mut SqliteTransaction<'c>,
+async fn try_acquire_cache_mutex(
+    cache_db: &SqlitePool,
 ) -> Result<bool> {
     use sqlx::Row;
+    
+    // Use an exclusive transaction to check and acquire the mutex atomically
+    let mut tx = cache_db.begin_with("BEGIN EXCLUSIVE").await?;
     
     // Check if a mutex record already exists and is not stale
     let existing_lock = sqlx::query(
             "SELECT value FROM cache_state WHERE key = 'update_mutex';",
         )
-        .fetch_optional(&mut **tx)
+        .fetch_optional(&mut *tx)
         .await?;
 
     if let Some(row) = existing_lock {
@@ -461,6 +465,7 @@ async fn try_acquire_cache_mutex<'c>(
         // If the lock is older than 10 minutes, consider it stale and allow acquisition
         if current_timestamp - lock_timestamp < 600 {
             // Lock is held by another thread
+            tx.rollback().await?;
             return Ok(false);
         }
     }
@@ -474,20 +479,25 @@ async fn try_acquire_cache_mutex<'c>(
         "INSERT INTO cache_state VALUES ('update_mutex', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;",
     )
         .bind(current_timestamp.to_string())
-        .execute(&mut **tx)
+        .execute(&mut *tx)
         .await?;
 
+    tx.commit().await?;
     Ok(true)
 }
 
-async fn release_cache_mutex<'c>(
-    tx: &mut SqliteTransaction<'c>,
+async fn release_cache_mutex(
+    cache_db: &SqlitePool,
 ) -> Result<()> {
+    // Use an exclusive transaction to release the mutex
+    let mut tx = cache_db.begin_with("BEGIN EXCLUSIVE").await?;
+    
     // Remove the mutex record
     sqlx::query("DELETE FROM cache_state WHERE key = 'update_mutex';")
-        .execute(&mut **tx)
+        .execute(&mut *tx)
         .await?;
     
+    tx.commit().await?;
     Ok(())
 }
 
@@ -1740,16 +1750,15 @@ mod models {
         ) -> Result<Oid> {
             let head_commit_id = self.repo.lock().unwrap().head()?.peel_to_commit()?.id();
 
-            // Start an exclusive transaction
-            let mut tx = self.cache_db.begin_with("BEGIN EXCLUSIVE").await?;
-
             // Try to acquire the cache update mutex
-            let lock_acquired = super::try_acquire_cache_mutex(&mut tx).await?;
+            let lock_acquired = super::try_acquire_cache_mutex(&self.cache_db).await?;
             if !lock_acquired {
-                // Another thread is updating the cache, rollback and return current head
-                tx.rollback().await?;
+                // Another thread is updating the cache, return current head
                 return Ok(head_commit_id);
             }
+
+            // Start a regular transaction (mutex provides exclusivity)
+            let mut tx = self.cache_db.begin().await?;
 
             let cache_commit_id_opt = sqlx::query(
                     "SELECT value FROM cache_state WHERE key = 'commit_id';",
@@ -1775,11 +1784,11 @@ mod models {
                 },
             }
 
-            // Release the cache update mutex
-            super::release_cache_mutex(&mut tx).await?;
-
             // End the transaction
             tx.commit().await?;
+
+            // Release the cache update mutex
+            super::release_cache_mutex(&self.cache_db).await?;
 
             Ok(head_commit_id)
         }
