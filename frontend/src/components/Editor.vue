@@ -107,7 +107,8 @@ onMounted(() => {
     // Add keybinding
     const keybindingExtension = getKeybindingExtension(keybinding);
     if (keybindingExtension) {
-        extensions.push(keybindingExtension);
+        // Vim and Emacs keybindings must be included before other keymaps
+        extensions.unshift(keybindingExtension);
     }
 
     const state = EditorState.create({
