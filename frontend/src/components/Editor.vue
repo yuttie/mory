@@ -150,7 +150,7 @@ function resize() {
 
 function scrollTo(lineNumber: number) {
     if (!editor) return;
-    
+
     ignoreNextScrollEvent = true;
     const line = editor.state.doc.line(lineNumber + 1);
     editor.dispatch({
@@ -160,14 +160,14 @@ function scrollTo(lineNumber: number) {
 
 function getSelection(): string {
     if (!editor) return '';
-    
+
     const selection = editor.state.selection.main;
     return editor.state.doc.sliceString(selection.from, selection.to);
 }
 
 function replaceSelection(newText: string) {
     if (!editor) return;
-    
+
     const selection = editor.state.selection.main;
     editor.dispatch({
         changes: { from: selection.from, to: selection.to, insert: newText },
@@ -179,18 +179,18 @@ function getThemeExtension(theme: string): Extension | null {
     // Map Ace themes to CodeMirror themes
     // For now, we only support oneDark theme, others will use default
     const darkThemes = [
-        'ambiance', 'chaos', 'clouds_midnight', 'cobalt', 'dracula', 
-        'gob', 'gruvbox', 'idle_fingers', 'kr_theme', 'merbivore', 
-        'merbivore_soft', 'mono_industrial', 'monokai', 'nord_dark', 
-        'pastel_on_dark', 'solarized_dark', 'terminal', 'tomorrow_night', 
-        'tomorrow_night_blue', 'tomorrow_night_bright', 'tomorrow_night_eighties', 
+        'ambiance', 'chaos', 'clouds_midnight', 'cobalt', 'dracula',
+        'gob', 'gruvbox', 'idle_fingers', 'kr_theme', 'merbivore',
+        'merbivore_soft', 'mono_industrial', 'monokai', 'nord_dark',
+        'pastel_on_dark', 'solarized_dark', 'terminal', 'tomorrow_night',
+        'tomorrow_night_blue', 'tomorrow_night_bright', 'tomorrow_night_eighties',
         'twilight', 'vibrant_ink'
     ];
-    
+
     if (darkThemes.includes(theme)) {
         return oneDark;
     }
-    
+
     return null;
 }
 
