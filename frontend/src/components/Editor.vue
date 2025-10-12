@@ -14,6 +14,8 @@ import { defaultHighlightStyle, syntaxHighlighting, indentOnInput, bracketMatchi
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { autocompletion, completionKeymap, closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
+import { css } from '@codemirror/lang-css';
+import { less } from '@codemirror/lang-less';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { vim } from '@replit/codemirror-vim';
@@ -94,7 +96,13 @@ onMounted(() => {
     ];
 
     // Add language support
-    if (props.mode === 'markdown') {
+    if (props.mode === 'css') {
+        extensions.push(css());
+    }
+    else if (props.mode === 'less') {
+        extensions.push(less());
+    }
+    else if (props.mode === 'markdown') {
         extensions.push(markdown({
             base: markdownLanguage,
         }));
