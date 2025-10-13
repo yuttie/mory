@@ -1736,7 +1736,13 @@ mod models {
     impl AppState {
         pub async fn get_entries(&self, pattern_opt: Option<&str>) -> Result<(Oid, Vec<ListEntry>)> {
             // Rebuild the cache if it is stale
-            let head_commit_id = self.ensure_file_entries_cache_updated().await?;
+            let head_commit_id = match self.ensure_file_entries_cache_updated().await? {
+                Some(x) => x,
+                None => {
+                    // No cache is available at this moment, and another thread is also building a new one
+                    return Ok((Oid::zero(), vec![]));
+                }
+            };
 
             // Return the entries from the cache for the current commit
             let query = if let Some(pattern) = pattern_opt {
@@ -1769,7 +1775,7 @@ mod models {
 
         async fn ensure_file_entries_cache_updated(
             &self,
-        ) -> Result<Oid> {
+        ) -> Result<Option<Oid>> {
             let head_commit_id = self.repo.lock().unwrap().head()?.peel_to_commit()?.id();
 
             // Try to acquire the cache update mutex
@@ -1782,7 +1788,7 @@ mod models {
                     .map(|row: SqliteRow| {
                         Oid::from_str(row.get("value")).unwrap()
                     })
-                    .fetch_one(&self.cache_db)
+                    .fetch_optional(&self.cache_db)
                     .await?;
                 return Ok(cached_commit_id);
             }
@@ -1820,7 +1826,7 @@ mod models {
             // Release the cache update mutex
             super::release_cache_mutex(&self.cache_db).await?;
 
-            Ok(head_commit_id)
+            Ok(Some(head_commit_id))
         }
     }
 
