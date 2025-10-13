@@ -264,7 +264,7 @@ defineExpose({
 .editor {
     position: relative;
     display: flex;
-    height: 100%;
+    overflow: auto;
 
     & > * {
         flex: 1 1 0;
