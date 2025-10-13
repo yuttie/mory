@@ -446,10 +446,10 @@ async fn try_acquire_cache_mutex(
     commit_id: Oid,
 ) -> Result<bool> {
     use sqlx::Row;
-    
+
     // Use an exclusive transaction to check and acquire the mutex atomically
     let mut tx = cache_db.begin_with("BEGIN EXCLUSIVE").await?;
-    
+
     // Check if a mutex record already exists and is not stale
     let existing_lock = sqlx::query(
             "SELECT value FROM cache_state WHERE key = 'update_mutex';",
@@ -464,14 +464,14 @@ async fn try_acquire_cache_mutex(
         let current_timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)?
             .as_secs() as i64;
-        
+
         // If the lock is older than 10 minutes, consider it stale and clean up
         if current_timestamp - lock_timestamp < 600 {
             // Lock is held by another thread
             tx.rollback().await?;
             return Ok(false);
         }
-        
+
         // Lock is stale, clean up entries from the stale update
         if let Some(stale_commit_id) = lock_info["commit_id"].as_str() {
             sqlx::query("DELETE FROM entry WHERE commit_id = ?;")
@@ -485,12 +485,12 @@ async fn try_acquire_cache_mutex(
     let current_timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)?
         .as_secs();
-    
+
     let lock_data = serde_json::json!({
         "timestamp": current_timestamp,
         "commit_id": commit_id.to_string()
     });
-    
+
     sqlx::query(
         "INSERT INTO cache_state VALUES ('update_mutex', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;",
     )
@@ -507,12 +507,12 @@ async fn release_cache_mutex(
 ) -> Result<()> {
     // Use an exclusive transaction to release the mutex
     let mut tx = cache_db.begin_with("BEGIN EXCLUSIVE").await?;
-    
+
     // Remove the mutex record
     sqlx::query("DELETE FROM cache_state WHERE key = 'update_mutex';")
         .execute(&mut *tx)
         .await?;
-    
+
     tx.commit().await?;
     Ok(())
 }
