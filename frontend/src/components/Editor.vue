@@ -78,11 +78,8 @@ onMounted(async () => {
             }
             if (update.view.scrollDOM.scrollTop !== update.startState.scrollSnapshot?.top) {
                 if (!ignoreNextScrollEvent) {
-                    const topLine = update.view.viewportLineBlocks[0];
-                    if (topLine) {
-                        const lineNumber = update.view.state.doc.lineAt(topLine.from).number - 1;
-                        emit('scroll', lineNumber);
-                    }
+                    const lineNumber = update.state.doc.lineAt(update.view.scrollDOM.scrollTop).number;
+                    emit('scroll', lineNumber);
                 } else {
                     ignoreNextScrollEvent = false;
                 }
