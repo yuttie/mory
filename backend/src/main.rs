@@ -412,7 +412,8 @@ async fn rebuild_entries_cache<'c>(
             .bind(time.seconds())
             .bind(time.offset_minutes() * 60)
             .execute(&mut **tx)
-            .await?;
+            .await
+            .context("Failed to insert an cache entry")?;
     }
     tracing::debug!("Finished inserting cache entries.");
 
@@ -420,7 +421,8 @@ async fn rebuild_entries_cache<'c>(
     sqlx::query("INSERT INTO cache_state VALUES ('commit_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;")
         .bind(commit_id.to_string())
         .execute(&mut **tx)
-        .await?;
+        .await
+        .context("Failed to record the latest commit ID of the cache")?;
 
     Ok(())
 }
@@ -534,7 +536,8 @@ async fn update_entries_cache<'c>(
         .bind(head_commit_id.to_string())
         .bind(last_commit_id.to_string())
         .execute(&mut **tx)
-        .await?;
+        .await
+        .context("Failed to copy the last entries with the new commit ID")?;
 
     // Iterate over recent commit history to collect operations on files
     let recent_ops = collect_recent_file_ops(&*repo.lock().unwrap(), last_commit_id);
@@ -574,7 +577,8 @@ async fn update_entries_cache<'c>(
                     .bind(time.seconds())
                     .bind(time.offset_minutes() * 60)
                     .execute(&mut **tx)
-                    .await?;
+                    .await
+                    .context("Failed to upsert an entry")?;
             },
             FileOp::Deleted => {
                 // Delete the entry from the new commit
@@ -582,7 +586,8 @@ async fn update_entries_cache<'c>(
                     .bind(head_commit_id.to_string())
                     .bind(path.to_str())
                     .execute(&mut **tx)
-                    .await?;
+                    .await
+                    .context("Failed to delete an entry")?;
             },
         }
     }
@@ -591,7 +596,8 @@ async fn update_entries_cache<'c>(
     sqlx::query("INSERT INTO cache_state VALUES ('commit_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;")
         .bind(head_commit_id.to_string())
         .execute(&mut **tx)
-        .await?;
+        .await
+        .context("Failed to record the latest commit ID of the cache")?;
 
     Ok(())
 }
