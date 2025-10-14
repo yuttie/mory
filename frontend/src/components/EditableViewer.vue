@@ -380,7 +380,7 @@ import type { DefinedError } from 'ajv';
 import * as api from '@/api';
 import { loadConfigValue } from '@/config';
 import { CliPrettify } from 'markdown-table-prettify';
-import { renderMarkdownChunks, chunkMarkdownByHeadings, renderMarkdown } from '@/markdown';
+import { renderMarkdownChunks, chunkMarkdownByHeadings, renderMarkdown, adjustLineNumbers } from '@/markdown';
 
 const ajv = new Ajv();
 const validateMetadata = ajv.compile(metadataSchema);
@@ -425,7 +425,7 @@ const renderTimeoutId = ref(null as null | number);
 // Non-reactive state for internal rendering control
 let chunkRenderController: AbortController | null = null;
 let renderedChunks: string[] = [];
-let previousMarkdownChunks: string[] = [];
+let previousMarkdownChunks: Array<{ content: string; startLine: number }> = [];
 let chunkElements: HTMLElement[] = [];
 
 // Template Refs
@@ -767,18 +767,24 @@ async function updateRenderedChunked() {
                 return;
             }
 
-            const markdownChunk = newMarkdownChunks[i];
+            const markdownChunkInfo = newMarkdownChunks[i];
             const isLast = i === newMarkdownChunks.length - 1;
             
             // Check if this chunk has changed by comparing with previous markdown
-            const chunkChanged = i >= previousMarkdownChunks.length || markdownChunk !== previousMarkdownChunks[i];
+            const chunkChanged = i >= previousMarkdownChunks.length || 
+                                 markdownChunkInfo.content !== previousMarkdownChunks[i].content;
             
             let chunkHtml: string;
             
             if (chunkChanged) {
                 // Render the changed chunk
-                const renderedFile = await renderMarkdown(markdownChunk);
-                chunkHtml = String(renderedFile);
+                const renderedFile = await renderMarkdown(markdownChunkInfo.content);
+                let html = String(renderedFile);
+                
+                // Adjust line numbers to preserve original positions in the full document
+                html = adjustLineNumbers(html, markdownChunkInfo.startLine);
+                
+                chunkHtml = html;
             } else {
                 // Reuse the previous rendered HTML
                 chunkHtml = previousRenderedChunks[i] || '';

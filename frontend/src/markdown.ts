@@ -79,27 +79,45 @@ export async function renderMarkdown(markdown: string): Promise<VFile> {
 }
 
 /**
- * Split markdown into chunks by top-level headings for progressive rendering.
- * Returns an object with frontmatter and an array of content chunks.
+ * Adjust data-line attributes in rendered HTML by adding a line offset.
+ * This is used when rendering markdown chunks to preserve original line numbers.
  */
-export function chunkMarkdownByHeadings(markdown: string): { frontmatter: string; chunks: string[] } {
+export function adjustLineNumbers(html: string, lineOffset: number): string {
+  if (lineOffset <= 1) {
+    return html; // No adjustment needed if starting from line 1
+  }
+  
+  // Adjust all data-line attributes by adding the offset
+  return html.replace(/data-line="(\d+)"/g, (match, lineNum) => {
+    const adjustedLine = parseInt(lineNum) + lineOffset - 1;
+    return `data-line="${adjustedLine}"`;
+  });
+}
+
+/**
+ * Split markdown into chunks by top-level headings for progressive rendering.
+ * Returns an object with frontmatter and an array of content chunks with their starting line numbers.
+ */
+export function chunkMarkdownByHeadings(markdown: string): { frontmatter: string; chunks: Array<{ content: string; startLine: number }> } {
   const processor = unified()
     .use(remarkParse)
     .use(remarkFrontmatter, ['yaml']);
 
   const tree = processor.parse(markdown) as Root;
-  const chunks: string[] = [];
+  const chunks: Array<{ content: string; startLine: number }> = [];
   
   let frontmatter = '';
   let currentChunkStart = 0;
+  let currentChunkStartLine = 1;
   let contentStart = 0;
 
   // Extract frontmatter if present
   const firstNode = tree.children[0];
   if (firstNode?.type === 'yaml') {
-    if (firstNode.position?.end?.offset != null) {
+    if (firstNode.position?.end?.offset != null && firstNode.position?.end?.line != null) {
       frontmatter = markdown.slice(0, firstNode.position.end.offset);
       currentChunkStart = firstNode.position.end.offset;
+      currentChunkStartLine = firstNode.position.end.line + 1;
       contentStart = firstNode.position.end.offset;
     }
   }
@@ -119,9 +137,10 @@ export function chunkMarkdownByHeadings(markdown: string): { frontmatter: string
         // Add the chunk before this heading
         const chunk = markdown.slice(currentChunkStart, node.position.start.offset).trim();
         if (chunk) {
-          chunks.push(chunk);
+          chunks.push({ content: chunk, startLine: currentChunkStartLine });
         }
         currentChunkStart = node.position.start.offset;
+        currentChunkStartLine = node.position.start.line;
       }
     }
   }
@@ -130,7 +149,7 @@ export function chunkMarkdownByHeadings(markdown: string): { frontmatter: string
   if (currentChunkStart < markdown.length) {
     const lastChunk = markdown.slice(currentChunkStart).trim();
     if (lastChunk) {
-      chunks.push(lastChunk);
+      chunks.push({ content: lastChunk, startLine: currentChunkStartLine });
     }
   }
 
@@ -138,13 +157,13 @@ export function chunkMarkdownByHeadings(markdown: string): { frontmatter: string
   if (chunks.length === 0 && contentStart < markdown.length) {
     const content = markdown.slice(contentStart).trim();
     if (content) {
-      chunks.push(content);
+      chunks.push({ content, startLine: currentChunkStartLine });
     }
   }
 
   // If still no chunks, return entire markdown as one chunk
   if (chunks.length === 0) {
-    chunks.push(markdown.slice(contentStart) || '');
+    chunks.push({ content: markdown.slice(contentStart) || '', startLine: currentChunkStartLine });
   }
 
   return { frontmatter, chunks };
