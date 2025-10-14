@@ -380,7 +380,7 @@ import type { DefinedError } from 'ajv';
 import * as api from '@/api';
 import { loadConfigValue } from '@/config';
 import { CliPrettify } from 'markdown-table-prettify';
-import { renderMarkdown, renderMarkdownChunks } from '@/markdown';
+import { renderMarkdownChunks } from '@/markdown';
 
 const ajv = new Ajv();
 const validateMetadata = ajv.compile(metadataSchema);
@@ -717,36 +717,15 @@ function formatTable() {
 }
 
 async function updateRendered() {
-    const CHUNK_THRESHOLD = 50000; // Use chunked rendering for markdown > 50KB
-    
     // Cancel any ongoing chunked rendering
     if (chunkRenderController.value) {
         chunkRenderController.value.abort();
         chunkRenderController.value = null;
     }
 
-    // Use chunked rendering for large documents
-    if (text.value.length > CHUNK_THRESHOLD) {
-        await updateRenderedChunked();
-    } else {
-        await updateRenderedDirect();
-    }
-}
-
-async function updateRenderedDirect() {
-    // Render the body
-    const renderedFile = await renderMarkdown(text.value);
-    const renderedHtml = String(renderedFile);
-    const metadata = renderedFile.data.matter;
-    const parseError = renderedFile.data.matterParseError;
-
-    // Clear and set chunks array with single chunk
-    renderedChunks.value = [renderedHtml];
-    renderedContentDiv.value.innerHTML = '';
-    addChunkToDisplay(renderedHtml);
-
-    // Update display with metadata
-    updateDisplay(metadata, parseError);
+    // Use chunked rendering for all documents
+    // Short markdown is automatically treated as a single chunk
+    await updateRenderedChunked();
 }
 
 async function updateRenderedChunked() {
