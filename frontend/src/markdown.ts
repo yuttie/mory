@@ -79,6 +79,94 @@ export async function renderMarkdown(markdown: string): Promise<VFile> {
 }
 
 /**
+ * Split markdown into chunks by top-level headings for progressive rendering.
+ * Returns an array of markdown chunks where each chunk starts with a heading (or is the preamble).
+ */
+export function chunkMarkdownByHeadings(markdown: string): string[] {
+  const processor = unified()
+    .use(remarkParse)
+    .use(remarkFrontmatter, ['yaml']);
+
+  const tree = processor.parse(markdown) as Root;
+  const chunks: string[] = [];
+  
+  let currentChunkStart = 0;
+  let afterFrontmatter = false;
+
+  for (let i = 0; i < tree.children.length; i++) {
+    const node = tree.children[i];
+    
+    // Handle frontmatter as first chunk
+    if (i === 0 && node.type === 'yaml') {
+      if (node.position?.end?.offset != null) {
+        const frontmatterChunk = markdown.slice(0, node.position.end.offset);
+        chunks.push(frontmatterChunk);
+        currentChunkStart = node.position.end.offset;
+        afterFrontmatter = true;
+      }
+      continue;
+    }
+
+    // Split at H1 or H2 headings
+    if (node.type === 'heading' && (node.depth === 1 || node.depth === 2)) {
+      if (node.position?.start?.offset != null && currentChunkStart < node.position.start.offset) {
+        // Add the chunk before this heading
+        const chunk = markdown.slice(currentChunkStart, node.position.start.offset).trim();
+        if (chunk) {
+          chunks.push(chunk);
+        }
+        currentChunkStart = node.position.start.offset;
+      }
+    }
+  }
+
+  // Add the remaining content as the last chunk
+  if (currentChunkStart < markdown.length) {
+    const lastChunk = markdown.slice(currentChunkStart).trim();
+    if (lastChunk) {
+      chunks.push(lastChunk);
+    }
+  }
+
+  // If no chunks were created (no headings), return the entire markdown as one chunk
+  if (chunks.length === 0) {
+    chunks.push(markdown);
+  }
+
+  return chunks;
+}
+
+/**
+ * Render markdown chunks progressively for better performance.
+ * Returns an async generator that yields rendered HTML for each chunk.
+ */
+export async function* renderMarkdownChunks(markdown: string): AsyncGenerator<{ html: string; isLast: boolean; metadata?: any; parseError?: any }> {
+  const chunks = chunkMarkdownByHeadings(markdown);
+  
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    const isLast = i === chunks.length - 1;
+    
+    // Render the chunk
+    const renderedFile = await processor.process(chunk);
+    const html = String(renderedFile);
+    
+    // Only include metadata from the first chunk (which contains frontmatter)
+    const result: { html: string; isLast: boolean; metadata?: any; parseError?: any } = {
+      html,
+      isLast,
+    };
+    
+    if (i === 0) {
+      result.metadata = renderedFile.data.matter;
+      result.parseError = renderedFile.data.matterParseError;
+    }
+    
+    yield result;
+  }
+}
+
+/**
  * Parse markdown and return frontmatter (YAML), first H1 text, and the rest after the H1.
  *
  * Behavior:

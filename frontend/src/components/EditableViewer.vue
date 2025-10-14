@@ -380,7 +380,7 @@ import type { DefinedError } from 'ajv';
 import * as api from '@/api';
 import { loadConfigValue } from '@/config';
 import { CliPrettify } from 'markdown-table-prettify';
-import { renderMarkdown } from '@/markdown';
+import { renderMarkdown, renderMarkdownChunks } from '@/markdown';
 
 const ajv = new Ajv();
 const validateMetadata = ajv.compile(metadataSchema);
@@ -421,6 +421,7 @@ const showConfirmationDialog = ref(false);
 const error = ref(false);
 const errorText = ref('');
 const renderTimeoutId = ref(null as null | number);
+const chunkRenderController = ref(null as null | AbortController);
 
 // Template Refs
 const editor = ref(null);
@@ -644,6 +645,12 @@ onUnmounted(() => {
         renderTimeoutId.value = null;
     }
 
+    // Cancel any ongoing chunked rendering
+    if (chunkRenderController.value) {
+        chunkRenderController.value.abort();
+        chunkRenderController.value = null;
+    }
+
     viewer.value.removeEventListener('scroll', handleDocumentScroll);
 });
 
@@ -709,11 +716,168 @@ function formatTable() {
 }
 
 async function updateRendered() {
+    const CHUNK_THRESHOLD = 50000; // Use chunked rendering for markdown > 50KB
+    
+    // Cancel any ongoing chunked rendering
+    if (chunkRenderController.value) {
+        chunkRenderController.value.abort();
+        chunkRenderController.value = null;
+    }
+
+    // Use chunked rendering for large documents
+    if (text.value.length > CHUNK_THRESHOLD) {
+        await updateRenderedChunked();
+    } else {
+        await updateRenderedDirect();
+    }
+}
+
+async function updateRenderedDirect() {
     // Render the body
     const renderedFile = await renderMarkdown(text.value);
     const renderedHtml = String(renderedFile);
     const metadata = renderedFile.data.matter;
     const parseError = renderedFile.data.matterParseError;
+    ignoreNext.value = true;
+
+    // Validate metadata
+    const validationErrors = (() => {
+        if (metadata !== null) {
+            if (validateMetadata(metadata)) {
+                return null;
+            }
+            else {
+                const errors = [];
+                for (const err of validateMetadata.errors as DefinedError[]) {
+                    errors.push(err);
+                }
+                errors.sort((a, b) => {
+                    if (a.instancePath < b.instancePath) {
+                        return -1;
+                    }
+                    else if (a.instancePath > b.instancePath) {
+                        return 1;
+                    }
+                    else {
+                        return 0;
+                    }
+                });
+                return errors;
+            }
+        }
+        else {
+            return null;
+        }
+    })();
+
+    // Set this.rendered
+    if (metadata !== null) {
+        // Metadata could be parsed correctly
+        rendered.value = {
+            metadata: {
+                validationErrors: validationErrors,
+                value: metadata
+            },
+            content: renderedHtml,
+        };
+    }
+    else if (parseError !== null) {
+        // YAML parse error
+        rendered.value = {
+            metadata: {
+                parseError: parseError,
+                value: null,
+            },
+            content: renderedHtml,
+        };
+    }
+    else {
+        // Metadata part does not exist
+        rendered.value = {
+            metadata: null,
+            content: renderedHtml,
+        };
+    }
+
+    // Update HTML
+    renderedContentDiv.value.innerHTML = rendered.value.content;
+
+    // Prevent images on the page from being dragged and dropped within it
+    const images = renderedContentDiv.value.querySelectorAll('img');
+    for (const img of images) {
+        img.addEventListener('dragstart', (event) => {
+            appStore.draggingViewerContent = true;
+        });
+        img.addEventListener('dragend', (event) => {
+            appStore.draggingViewerContent = false;
+        });
+    }
+
+    // Update the page title
+    document.title = `${title.value} | ${import.meta.env.VITE_APP_NAME}`;
+}
+
+async function updateRenderedChunked() {
+    // Create abort controller for this render pass
+    const controller = new AbortController();
+    chunkRenderController.value = controller;
+    
+    let accumulatedHtml = '';
+    let metadata: any = null;
+    let parseError: any = null;
+    let chunkIndex = 0;
+
+    try {
+        for await (const chunk of renderMarkdownChunks(text.value)) {
+            // Check if rendering was aborted
+            if (controller.signal.aborted) {
+                return;
+            }
+
+            accumulatedHtml += chunk.html;
+            
+            // Store metadata from first chunk
+            if (chunkIndex === 0) {
+                metadata = chunk.metadata;
+                parseError = chunk.parseError;
+            }
+            
+            // Update the display progressively
+            if (chunkIndex === 0 || chunk.isLast) {
+                // Update on first chunk and last chunk for immediate feedback
+                await updateDisplay(accumulatedHtml, metadata, parseError);
+            } else {
+                // For intermediate chunks, use requestIdleCallback for non-blocking updates
+                await new Promise<void>((resolve) => {
+                    if ('requestIdleCallback' in window) {
+                        requestIdleCallback(() => {
+                            if (!controller.signal.aborted) {
+                                updateDisplay(accumulatedHtml, metadata, parseError);
+                            }
+                            resolve();
+                        });
+                    } else {
+                        // Fallback for browsers without requestIdleCallback
+                        setTimeout(() => {
+                            if (!controller.signal.aborted) {
+                                updateDisplay(accumulatedHtml, metadata, parseError);
+                            }
+                            resolve();
+                        }, 0);
+                    }
+                });
+            }
+            
+            chunkIndex++;
+        }
+    } finally {
+        if (chunkRenderController.value === controller) {
+            chunkRenderController.value = null;
+        }
+    }
+}
+
+function updateDisplay(renderedHtml: string, metadata: any, parseError: any) {
     ignoreNext.value = true;
 
     // Validate metadata
