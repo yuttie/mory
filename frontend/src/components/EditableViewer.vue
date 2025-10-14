@@ -421,8 +421,10 @@ const showConfirmationDialog = ref(false);
 const error = ref(false);
 const errorText = ref('');
 const renderTimeoutId = ref(null as null | number);
-const chunkRenderController = ref(null as null | AbortController);
-const renderedChunks = ref<string[]>([]);
+
+// Non-reactive state for internal rendering control
+let chunkRenderController: AbortController | null = null;
+let renderedChunks: string[] = [];
 
 // Template Refs
 const editor = ref(null);
@@ -647,9 +649,9 @@ onUnmounted(() => {
     }
 
     // Cancel any ongoing chunked rendering
-    if (chunkRenderController.value) {
-        chunkRenderController.value.abort();
-        chunkRenderController.value = null;
+    if (chunkRenderController) {
+        chunkRenderController.abort();
+        chunkRenderController = null;
     }
 
     viewer.value.removeEventListener('scroll', handleDocumentScroll);
@@ -718,9 +720,9 @@ function formatTable() {
 
 async function updateRendered() {
     // Cancel any ongoing chunked rendering
-    if (chunkRenderController.value) {
-        chunkRenderController.value.abort();
-        chunkRenderController.value = null;
+    if (chunkRenderController) {
+        chunkRenderController.abort();
+        chunkRenderController = null;
     }
 
     // Use chunked rendering for all documents
@@ -731,10 +733,10 @@ async function updateRendered() {
 async function updateRenderedChunked() {
     // Create abort controller for this render pass
     const controller = new AbortController();
-    chunkRenderController.value = controller;
+    chunkRenderController = controller;
     
     // Clear existing chunks and rendered content
-    renderedChunks.value = [];
+    renderedChunks = [];
     renderedContentDiv.value.innerHTML = '';
     
     let metadata: any = null;
@@ -758,7 +760,7 @@ async function updateRenderedChunked() {
             if (chunkIndex === 0 || chunk.isLast) {
                 // Update on first chunk and last chunk for immediate feedback
                 addChunkToDisplay(chunk.html);
-                renderedChunks.value.push(chunk.html);
+                renderedChunks.push(chunk.html);
                 await updateDisplay(metadata, parseError);
             } else {
                 // For intermediate chunks, use requestIdleCallback for non-blocking updates
@@ -767,7 +769,7 @@ async function updateRenderedChunked() {
                         requestIdleCallback(() => {
                             if (!controller.signal.aborted) {
                                 addChunkToDisplay(chunk.html);
-                                renderedChunks.value.push(chunk.html);
+                                renderedChunks.push(chunk.html);
                                 updateDisplay(metadata, parseError);
                             }
                             resolve();
@@ -777,7 +779,7 @@ async function updateRenderedChunked() {
                         setTimeout(() => {
                             if (!controller.signal.aborted) {
                                 addChunkToDisplay(chunk.html);
-                                renderedChunks.value.push(chunk.html);
+                                renderedChunks.push(chunk.html);
                                 updateDisplay(metadata, parseError);
                             }
                             resolve();
@@ -789,8 +791,8 @@ async function updateRenderedChunked() {
             chunkIndex++;
         }
     } finally {
-        if (chunkRenderController.value === controller) {
-            chunkRenderController.value = null;
+        if (chunkRenderController === controller) {
+            chunkRenderController = null;
         }
     }
 }
@@ -839,7 +841,7 @@ function updateDisplay(metadata: any, parseError: any) {
     })();
 
     // Get accumulated HTML from chunks for rendered.value.content (used by TOC and title)
-    const renderedHtml = renderedChunks.value.join('');
+    const renderedHtml = renderedChunks.join('');
 
     // Set this.rendered
     if (metadata !== null) {
