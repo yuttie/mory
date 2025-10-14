@@ -62,6 +62,11 @@
                 item-value="value"
             >
             </v-select>
+            <v-checkbox
+                v-model="editorEnableEmacsStyleBindings"
+                label="Enable Emacs-style bindings for non-Emacs key maps"
+                hide-details="auto"
+            />
             <v-select
                 v-bind:items="highlightjsThemes"
                 v-model="currentHighlightjsTheme"
@@ -348,6 +353,7 @@ const currentEditorFontFamily = ref(loadConfigValue('editor-font-family', 'Menlo
 const currentEditorFontSize = ref(loadConfigValue('editor-font-size', 14));
 const currentEditorTheme = ref(loadConfigValue('editor-theme', 'default'));
 const currentEditorKeybinding = ref(loadConfigValue('editor-keybinding', 'default'));
+const editorEnableEmacsStyleBindings = ref(loadConfigValue('editor-enable-emacs-style-bindings', false));
 const currentHighlightjsTheme = ref(loadConfigValue('highlightjs-theme', 'default'));
 
 // Lifecycle hooks
@@ -365,6 +371,7 @@ async function loadDefault() {
     currentEditorFontSize.value = config.editorFontSize;
     currentEditorTheme.value = config.editorTheme;
     currentEditorKeybinding.value = config.editorKeybinding;
+    editorEnableEmacsStyleBindings.value = config.editorEnableEmacsStyleBindings;
     currentHighlightjsTheme.value = config.highlightjsTheme;
 }
 
@@ -376,6 +383,7 @@ function saveAsDefault() {
         editorFontSize: currentEditorFontSize.value,
         editorTheme: currentEditorTheme.value,
         editorKeybinding: currentEditorKeybinding.value,
+        editorEnableEmacsStyleBindings: editorEnableEmacsStyleBindings.value,
         highlightjsTheme: currentHighlightjsTheme.value,
     };
     api.addNote('.mory/default_config.yaml', YAML.stringify(config));
@@ -404,6 +412,10 @@ watch(currentEditorTheme, (newEditorTheme: string) => {
 
 watch(currentEditorKeybinding, (newEditorKeybinding: string) => {
     saveConfigValue('editor-keybinding', newEditorKeybinding);
+});
+
+watch(editorEnableEmacsStyleBindings, (newEditorEnableEmacsStyleBindings: string) => {
+    saveConfigValue('editor-enable-emacs-style-bindings', newEditorEnableEmacsStyleBindings);
 });
 
 watch(currentHighlightjsTheme, (newHighlightjsTheme: string) => {

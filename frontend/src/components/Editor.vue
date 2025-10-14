@@ -42,6 +42,7 @@ onMounted(async () => {
     const fontFamily = loadConfigValue('editor-font-family', 'Menlo, monospace');
     const theme = loadConfigValue('editor-theme', 'default');
     const keybinding = loadConfigValue('editor-keybinding', 'default');
+    const enableEmacsStyleBindings = loadConfigValue('editor-enable-emacs-style-bindings', false);
 
     const extensions: Extension[] = [
         lineNumbers(),
@@ -100,6 +101,10 @@ onMounted(async () => {
     }
 
     // Add keybinding
+    if (keybinding !== 'emacs' && enableEmacsStyleBindings) {
+        const { emacsStyleKeymap } = await import('@codemirror/commands');
+        extensions.unshift(keymap.of(emacsStyleKeymap));
+    }
     const keybindingExtension = await getKeybindingExtension(keybinding);
     if (keybindingExtension) {
         // Vim and Emacs keybindings must be included before other keymaps
