@@ -422,6 +422,7 @@ const error = ref(false);
 const errorText = ref('');
 const renderTimeoutId = ref(null as null | number);
 const chunkRenderController = ref(null as null | AbortController);
+const renderedChunks = ref<string[]>([]);
 
 // Template Refs
 const editor = ref(null);
@@ -738,83 +739,14 @@ async function updateRenderedDirect() {
     const renderedHtml = String(renderedFile);
     const metadata = renderedFile.data.matter;
     const parseError = renderedFile.data.matterParseError;
-    ignoreNext.value = true;
 
-    // Validate metadata
-    const validationErrors = (() => {
-        if (metadata !== null) {
-            if (validateMetadata(metadata)) {
-                return null;
-            }
-            else {
-                const errors = [];
-                for (const err of validateMetadata.errors as DefinedError[]) {
-                    errors.push(err);
-                }
-                errors.sort((a, b) => {
-                    if (a.instancePath < b.instancePath) {
-                        return -1;
-                    }
-                    else if (a.instancePath > b.instancePath) {
-                        return 1;
-                    }
-                    else {
-                        return 0;
-                    }
-                });
-                return errors;
-            }
-        }
-        else {
-            return null;
-        }
-    })();
+    // Clear and set chunks array with single chunk
+    renderedChunks.value = [renderedHtml];
+    renderedContentDiv.value.innerHTML = '';
+    addChunkToDisplay(renderedHtml);
 
-    // Set this.rendered
-    if (metadata !== null) {
-        // Metadata could be parsed correctly
-        rendered.value = {
-            metadata: {
-                validationErrors: validationErrors,
-                value: metadata
-            },
-            content: renderedHtml,
-        };
-    }
-    else if (parseError !== null) {
-        // YAML parse error
-        rendered.value = {
-            metadata: {
-                parseError: parseError,
-                value: null,
-            },
-            content: renderedHtml,
-        };
-    }
-    else {
-        // Metadata part does not exist
-        rendered.value = {
-            metadata: null,
-            content: renderedHtml,
-        };
-    }
-
-    // Update HTML
-    renderedContentDiv.value.innerHTML = rendered.value.content;
-
-    // Prevent images on the page from being dragged and dropped within it
-    const images = renderedContentDiv.value.querySelectorAll('img');
-    for (const img of images) {
-        img.addEventListener('dragstart', (event) => {
-            appStore.draggingViewerContent = true;
-        });
-        img.addEventListener('dragend', (event) => {
-            appStore.draggingViewerContent = false;
-        });
-    }
-
-    // Update the page title
-    document.title = `${title.value} | ${import.meta.env.VITE_APP_NAME}`;
+    // Update display with metadata
+    updateDisplay(metadata, parseError);
 }
 
 async function updateRenderedChunked() {
@@ -822,7 +754,10 @@ async function updateRenderedChunked() {
     const controller = new AbortController();
     chunkRenderController.value = controller;
     
-    let accumulatedHtml = '';
+    // Clear existing chunks and rendered content
+    renderedChunks.value = [];
+    renderedContentDiv.value.innerHTML = '';
+    
     let metadata: any = null;
     let parseError: any = null;
     let chunkIndex = 0;
@@ -834,25 +769,27 @@ async function updateRenderedChunked() {
                 return;
             }
 
-            accumulatedHtml += chunk.html;
-            
             // Store metadata from first chunk
             if (chunkIndex === 0) {
                 metadata = chunk.metadata;
                 parseError = chunk.parseError;
             }
             
-            // Update the display progressively
+            // Update the display progressively by adding chunks
             if (chunkIndex === 0 || chunk.isLast) {
                 // Update on first chunk and last chunk for immediate feedback
-                await updateDisplay(accumulatedHtml, metadata, parseError);
+                addChunkToDisplay(chunk.html);
+                renderedChunks.value.push(chunk.html);
+                await updateDisplay(metadata, parseError);
             } else {
                 // For intermediate chunks, use requestIdleCallback for non-blocking updates
                 await new Promise<void>((resolve) => {
                     if ('requestIdleCallback' in window) {
                         requestIdleCallback(() => {
                             if (!controller.signal.aborted) {
-                                updateDisplay(accumulatedHtml, metadata, parseError);
+                                addChunkToDisplay(chunk.html);
+                                renderedChunks.value.push(chunk.html);
+                                updateDisplay(metadata, parseError);
                             }
                             resolve();
                         });
@@ -860,7 +797,9 @@ async function updateRenderedChunked() {
                         // Fallback for browsers without requestIdleCallback
                         setTimeout(() => {
                             if (!controller.signal.aborted) {
-                                updateDisplay(accumulatedHtml, metadata, parseError);
+                                addChunkToDisplay(chunk.html);
+                                renderedChunks.value.push(chunk.html);
+                                updateDisplay(metadata, parseError);
                             }
                             resolve();
                         }, 0);
@@ -877,7 +816,17 @@ async function updateRenderedChunked() {
     }
 }
 
-function updateDisplay(renderedHtml: string, metadata: any, parseError: any) {
+function addChunkToDisplay(chunkHtml: string) {
+    // Create a container div for this chunk
+    const chunkDiv = document.createElement('div');
+    chunkDiv.className = 'rendered-chunk';
+    chunkDiv.innerHTML = chunkHtml;
+    
+    // Append to the rendered content div
+    renderedContentDiv.value.appendChild(chunkDiv);
+}
+
+function updateDisplay(metadata: any, parseError: any) {
     ignoreNext.value = true;
 
     // Validate metadata
@@ -910,6 +859,9 @@ function updateDisplay(renderedHtml: string, metadata: any, parseError: any) {
         }
     })();
 
+    // Get accumulated HTML from chunks for rendered.value.content (used by TOC and title)
+    const renderedHtml = renderedChunks.value.join('');
+
     // Set this.rendered
     if (metadata !== null) {
         // Metadata could be parsed correctly
@@ -939,19 +891,19 @@ function updateDisplay(renderedHtml: string, metadata: any, parseError: any) {
         };
     }
 
-    // Update HTML
-    renderedContentDiv.value.innerHTML = rendered.value.content;
-
-    // Prevent images on the page from being dragged and dropped within it
-    const images = renderedContentDiv.value.querySelectorAll('img');
-    for (const img of images) {
-        img.addEventListener('dragstart', (event) => {
-            appStore.draggingViewerContent = true;
-        });
-        img.addEventListener('dragend', (event) => {
-            appStore.draggingViewerContent = false;
-        });
-    }
+    // HTML is now rendered by patching chunks into the DOM
+    // We still need to handle images for drag events
+    nextTick(() => {
+        const images = shadowDomRootElement.value.querySelectorAll('img');
+        for (const img of images) {
+            img.addEventListener('dragstart', (event) => {
+                appStore.draggingViewerContent = true;
+            });
+            img.addEventListener('dragend', (event) => {
+                appStore.draggingViewerContent = false;
+            });
+        }
+    });
 
     // Update the page title
     document.title = `${title.value} | ${import.meta.env.VITE_APP_NAME}`;
