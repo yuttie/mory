@@ -80,9 +80,9 @@ export async function renderMarkdown(markdown: string): Promise<VFile> {
 
 /**
  * Split markdown into chunks by top-level headings for progressive rendering.
- * Returns an array of markdown chunks where each chunk starts with a heading (or is the preamble).
+ * Returns an object with frontmatter and an array of content chunks.
  */
-export function chunkMarkdownByHeadings(markdown: string): string[] {
+export function chunkMarkdownByHeadings(markdown: string): { frontmatter: string; chunks: string[] } {
   const processor = unified()
     .use(remarkParse)
     .use(remarkFrontmatter, ['yaml']);
@@ -90,20 +90,26 @@ export function chunkMarkdownByHeadings(markdown: string): string[] {
   const tree = processor.parse(markdown) as Root;
   const chunks: string[] = [];
   
+  let frontmatter = '';
   let currentChunkStart = 0;
-  let afterFrontmatter = false;
+  let contentStart = 0;
 
+  // Extract frontmatter if present
+  const firstNode = tree.children[0];
+  if (firstNode?.type === 'yaml') {
+    if (firstNode.position?.end?.offset != null) {
+      frontmatter = markdown.slice(0, firstNode.position.end.offset);
+      currentChunkStart = firstNode.position.end.offset;
+      contentStart = firstNode.position.end.offset;
+    }
+  }
+
+  // Split content at H1 or H2 headings
   for (let i = 0; i < tree.children.length; i++) {
     const node = tree.children[i];
     
-    // Handle frontmatter as first chunk
-    if (i === 0 && node.type === 'yaml') {
-      if (node.position?.end?.offset != null) {
-        const frontmatterChunk = markdown.slice(0, node.position.end.offset);
-        chunks.push(frontmatterChunk);
-        currentChunkStart = node.position.end.offset;
-        afterFrontmatter = true;
-      }
+    // Skip frontmatter node
+    if (node.type === 'yaml') {
       continue;
     }
 
@@ -128,12 +134,20 @@ export function chunkMarkdownByHeadings(markdown: string): string[] {
     }
   }
 
-  // If no chunks were created (no headings), return the entire markdown as one chunk
-  if (chunks.length === 0) {
-    chunks.push(markdown);
+  // If no chunks were created (no headings), use all content after frontmatter as one chunk
+  if (chunks.length === 0 && contentStart < markdown.length) {
+    const content = markdown.slice(contentStart).trim();
+    if (content) {
+      chunks.push(content);
+    }
   }
 
-  return chunks;
+  // If still no chunks, return entire markdown as one chunk
+  if (chunks.length === 0) {
+    chunks.push(markdown.slice(contentStart) || '');
+  }
+
+  return { frontmatter, chunks };
 }
 
 /**
@@ -141,25 +155,41 @@ export function chunkMarkdownByHeadings(markdown: string): string[] {
  * Returns an async generator that yields rendered HTML for each chunk.
  */
 export async function* renderMarkdownChunks(markdown: string): AsyncGenerator<{ html: string; isLast: boolean; metadata?: any; parseError?: any }> {
-  const chunks = chunkMarkdownByHeadings(markdown);
+  const { frontmatter, chunks } = chunkMarkdownByHeadings(markdown);
   
+  // Extract metadata from frontmatter
+  let metadata: any = null;
+  let parseError: any = null;
+  
+  if (frontmatter) {
+    try {
+      const frontmatterFile = await processor.process(frontmatter);
+      metadata = frontmatterFile.data.matter;
+      parseError = frontmatterFile.data.matterParseError;
+    } catch (error) {
+      parseError = error;
+    }
+  }
+  
+  // Render each content chunk independently
   for (let i = 0; i < chunks.length; i++) {
     const chunk = chunks[i];
     const isLast = i === chunks.length - 1;
     
-    // Render the chunk
+    // Render just the chunk content (without frontmatter to avoid duplication)
     const renderedFile = await processor.process(chunk);
     const html = String(renderedFile);
     
-    // Only include metadata from the first chunk (which contains frontmatter)
+    // Create result
     const result: { html: string; isLast: boolean; metadata?: any; parseError?: any } = {
       html,
       isLast,
     };
     
+    // Include metadata only in first chunk
     if (i === 0) {
-      result.metadata = renderedFile.data.matter;
-      result.parseError = renderedFile.data.matterParseError;
+      result.metadata = metadata;
+      result.parseError = parseError;
     }
     
     yield result;
