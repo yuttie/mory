@@ -380,7 +380,7 @@ import type { DefinedError } from 'ajv';
 import * as api from '@/api';
 import { loadConfigValue } from '@/config';
 import { CliPrettify } from 'markdown-table-prettify';
-import { renderMarkdownChunks } from '@/markdown';
+import { renderMarkdownChunks, chunkMarkdownByHeadings, renderMarkdown } from '@/markdown';
 
 const ajv = new Ajv();
 const validateMetadata = ajv.compile(metadataSchema);
@@ -425,6 +425,8 @@ const renderTimeoutId = ref(null as null | number);
 // Non-reactive state for internal rendering control
 let chunkRenderController: AbortController | null = null;
 let renderedChunks: string[] = [];
+let previousMarkdownChunks: string[] = [];
+let chunkElements: HTMLElement[] = [];
 
 // Template Refs
 const editor = ref(null);
@@ -735,32 +737,61 @@ async function updateRenderedChunked() {
     const controller = new AbortController();
     chunkRenderController = controller;
     
-    // Clear existing chunks and rendered content
+    // Get new markdown chunks to compare with previous ones
+    const { frontmatter, chunks: newMarkdownChunks } = chunkMarkdownByHeadings(text.value);
+    
+    // Store previous rendered chunks for reuse
+    const previousRenderedChunks = renderedChunks;
     renderedChunks = [];
-    renderedContentDiv.value.innerHTML = '';
     
     let metadata: any = null;
     let parseError: any = null;
     let chunkIndex = 0;
 
     try {
-        for await (const chunk of renderMarkdownChunks(text.value)) {
+        // Extract metadata from frontmatter if present
+        if (frontmatter) {
+            try {
+                const frontmatterFile = await renderMarkdown(frontmatter);
+                metadata = frontmatterFile.data.matter;
+                parseError = frontmatterFile.data.matterParseError;
+            } catch (error) {
+                parseError = error;
+            }
+        }
+
+        // Process each chunk
+        for (let i = 0; i < newMarkdownChunks.length; i++) {
             // Check if rendering was aborted
             if (controller.signal.aborted) {
                 return;
             }
 
-            // Store metadata from first chunk
-            if (chunkIndex === 0) {
-                metadata = chunk.metadata;
-                parseError = chunk.parseError;
+            const markdownChunk = newMarkdownChunks[i];
+            const isLast = i === newMarkdownChunks.length - 1;
+            
+            // Check if this chunk has changed by comparing with previous markdown
+            const chunkChanged = i >= previousMarkdownChunks.length || markdownChunk !== previousMarkdownChunks[i];
+            
+            let chunkHtml: string;
+            
+            if (chunkChanged) {
+                // Render the changed chunk
+                const renderedFile = await renderMarkdown(markdownChunk);
+                chunkHtml = String(renderedFile);
+            } else {
+                // Reuse the previous rendered HTML
+                chunkHtml = previousRenderedChunks[i] || '';
             }
             
-            // Update the display progressively by adding chunks
-            if (chunkIndex === 0 || chunk.isLast) {
+            renderedChunks.push(chunkHtml);
+            
+            // Update the display progressively
+            if (chunkIndex === 0 || isLast) {
                 // Update on first chunk and last chunk for immediate feedback
-                addChunkToDisplay(chunk.html);
-                renderedChunks.push(chunk.html);
+                if (chunkChanged) {
+                    updateChunkInDisplay(i, chunkHtml);
+                }
                 await updateDisplay(metadata, parseError);
             } else {
                 // For intermediate chunks, use requestIdleCallback for non-blocking updates
@@ -768,8 +799,9 @@ async function updateRenderedChunked() {
                     if ('requestIdleCallback' in window) {
                         requestIdleCallback(() => {
                             if (!controller.signal.aborted) {
-                                addChunkToDisplay(chunk.html);
-                                renderedChunks.push(chunk.html);
+                                if (chunkChanged) {
+                                    updateChunkInDisplay(i, chunkHtml);
+                                }
                                 updateDisplay(metadata, parseError);
                             }
                             resolve();
@@ -778,8 +810,9 @@ async function updateRenderedChunked() {
                         // Fallback for browsers without requestIdleCallback
                         setTimeout(() => {
                             if (!controller.signal.aborted) {
-                                addChunkToDisplay(chunk.html);
-                                renderedChunks.push(chunk.html);
+                                if (chunkChanged) {
+                                    updateChunkInDisplay(i, chunkHtml);
+                                }
                                 updateDisplay(metadata, parseError);
                             }
                             resolve();
@@ -790,6 +823,17 @@ async function updateRenderedChunked() {
             
             chunkIndex++;
         }
+        
+        // Remove extra chunk elements if document got shorter
+        while (chunkElements.length > newMarkdownChunks.length) {
+            const extraElement = chunkElements.pop();
+            if (extraElement && extraElement.parentNode) {
+                extraElement.parentNode.removeChild(extraElement);
+            }
+        }
+        
+        // Store current chunks for next comparison
+        previousMarkdownChunks = newMarkdownChunks;
     } finally {
         if (chunkRenderController === controller) {
             chunkRenderController = null;
@@ -797,14 +841,26 @@ async function updateRenderedChunked() {
     }
 }
 
-function addChunkToDisplay(chunkHtml: string) {
-    // Create a container div for this chunk
-    const chunkDiv = document.createElement('div');
-    chunkDiv.className = 'rendered-chunk';
-    chunkDiv.innerHTML = chunkHtml;
+function updateChunkInDisplay(chunkIndex: number, chunkHtml: string) {
+    // Reuse existing chunk element or create new one
+    let chunkDiv = chunkElements[chunkIndex];
     
-    // Append to the rendered content div
-    renderedContentDiv.value.appendChild(chunkDiv);
+    if (!chunkDiv) {
+        // Create a new container div for this chunk
+        chunkDiv = document.createElement('div');
+        chunkDiv.className = 'rendered-chunk';
+        chunkElements[chunkIndex] = chunkDiv;
+        
+        // Insert at the correct position
+        if (chunkIndex < renderedContentDiv.value.children.length) {
+            renderedContentDiv.value.insertBefore(chunkDiv, renderedContentDiv.value.children[chunkIndex]);
+        } else {
+            renderedContentDiv.value.appendChild(chunkDiv);
+        }
+    }
+    
+    // Update the HTML content
+    chunkDiv.innerHTML = chunkHtml;
 }
 
 function updateDisplay(metadata: any, parseError: any) {
