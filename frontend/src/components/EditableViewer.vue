@@ -834,7 +834,7 @@ function updateRenderedLazy() {
     }
     renderTimeoutId.value = window.setTimeout(async () => {
         await updateRendered();
-    }, 500);
+    }, 2000);
 }
 
 function editorScrollTo(lineNumber: number) {
