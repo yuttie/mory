@@ -211,12 +211,11 @@ async function getThemeExtension(theme: string): Extension | null {
 }
 
 async function getKeybindingExtension(keybinding: string): Extension | null {
-    if (keybinding === 'vim' || keybinding === 'vim-modified') {
-        // For vim-modified, we'll use the standard vim extension
-        // CodeMirror's vim extension has good defaults
+    if (keybinding === 'vim') {
         const { vim } = await import('@replit/codemirror-vim');
         return vim();
-    } else if (keybinding === 'emacs') {
+    }
+    else if (keybinding === 'emacs') {
         const { emacs } = await import('@replit/codemirror-emacs');
         return emacs();
     }
