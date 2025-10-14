@@ -861,6 +861,17 @@ function updateChunkInDisplay(chunkIndex: number, chunkHtml: string) {
     
     // Update the HTML content
     chunkDiv.innerHTML = chunkHtml;
+    
+    // Attach drag event listeners to images in this chunk only
+    const images = chunkDiv.querySelectorAll('img');
+    for (const img of images) {
+        img.addEventListener('dragstart', (event) => {
+            appStore.draggingViewerContent = true;
+        });
+        img.addEventListener('dragend', (event) => {
+            appStore.draggingViewerContent = false;
+        });
+    }
 }
 
 function updateDisplay(metadata: any, parseError: any) {
@@ -927,20 +938,6 @@ function updateDisplay(metadata: any, parseError: any) {
             content: renderedHtml,
         };
     }
-
-    // HTML is now rendered by patching chunks into the DOM
-    // We still need to handle images for drag events
-    nextTick(() => {
-        const images = shadowDomRootElement.value.querySelectorAll('img');
-        for (const img of images) {
-            img.addEventListener('dragstart', (event) => {
-                appStore.draggingViewerContent = true;
-            });
-            img.addEventListener('dragend', (event) => {
-                appStore.draggingViewerContent = false;
-            });
-        }
-    });
 
     // Update the page title
     document.title = `${title.value} | ${import.meta.env.VITE_APP_NAME}`;
