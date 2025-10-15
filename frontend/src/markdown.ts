@@ -170,52 +170,6 @@ export function chunkMarkdownByHeadings(markdown: string): { frontmatter: string
 }
 
 /**
- * Render markdown chunks progressively for better performance.
- * Returns an async generator that yields rendered HTML for each chunk.
- */
-export async function* renderMarkdownChunks(markdown: string): AsyncGenerator<{ html: string; isLast: boolean; metadata?: any; parseError?: any }> {
-  const { frontmatter, chunks } = chunkMarkdownByHeadings(markdown);
-  
-  // Extract metadata from frontmatter
-  let metadata: any = null;
-  let parseError: any = null;
-  
-  if (frontmatter) {
-    try {
-      const frontmatterFile = await processor.process(frontmatter);
-      metadata = frontmatterFile.data.matter;
-      parseError = frontmatterFile.data.matterParseError;
-    } catch (error) {
-      parseError = error;
-    }
-  }
-  
-  // Render each content chunk independently
-  for (let i = 0; i < chunks.length; i++) {
-    const chunk = chunks[i];
-    const isLast = i === chunks.length - 1;
-    
-    // Render just the chunk content (without frontmatter to avoid duplication)
-    const renderedFile = await processor.process(chunk);
-    const html = String(renderedFile);
-    
-    // Create result
-    const result: { html: string; isLast: boolean; metadata?: any; parseError?: any } = {
-      html,
-      isLast,
-    };
-    
-    // Include metadata only in first chunk
-    if (i === 0) {
-      result.metadata = metadata;
-      result.parseError = parseError;
-    }
-    
-    yield result;
-  }
-}
-
-/**
  * Parse markdown and return frontmatter (YAML), first H1 text, and the rest after the H1.
  *
  * Behavior:
