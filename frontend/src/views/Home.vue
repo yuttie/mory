@@ -991,6 +991,7 @@ function changeSortOrder(category: string, kind: string) {
 .event-item {
     background-color: rgba(0, 0, 0, 0.02);
     border-radius: 4px;
+    overflow-wrap: anywhere;
 
     &:hover {
         background-color: rgba(0, 0, 0, 0.04);
@@ -1008,6 +1009,7 @@ function changeSortOrder(category: string, kind: string) {
 .task-item {
     background-color: rgba(0, 0, 0, 0.02);
     border-radius: 4px;
+    overflow-wrap: anywhere;
 
     &.task-done {
         opacity: 0.6;
