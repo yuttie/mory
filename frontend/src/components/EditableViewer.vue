@@ -426,6 +426,7 @@ const renderTimeoutId = ref(null as null | number);
 let chunkRenderController: AbortController | null = null;
 let renderedChunks: string[] = [];
 let previousMarkdownChunks: Array<{ content: string; startLine: number }> = [];
+let previousRawRenderedChunks: string[] = []; // Raw HTML before line number adjustment
 let chunkElements: HTMLElement[] = [];
 
 // Template Refs
@@ -760,6 +761,10 @@ async function updateRenderedChunked() {
             }
         }
 
+        // Store previous raw rendered chunks for reuse
+        const previousRawChunks = previousRawRenderedChunks;
+        previousRawRenderedChunks = [];
+        
         // Process each chunk
         for (let i = 0; i < newMarkdownChunks.length; i++) {
             // Check if rendering was aborted
@@ -774,22 +779,23 @@ async function updateRenderedChunked() {
             const chunkChanged = i >= previousMarkdownChunks.length || 
                                  markdownChunkInfo.content !== previousMarkdownChunks[i].content;
             
+            let rawHtml: string;
             let chunkHtml: string;
             
             if (chunkChanged) {
                 // Render the changed chunk
                 const renderedFile = await renderMarkdown(markdownChunkInfo.content);
-                let html = String(renderedFile);
-                
-                // Adjust line numbers to preserve original positions in the full document
-                html = adjustLineNumbers(html, markdownChunkInfo.startLine);
-                
-                chunkHtml = html;
+                rawHtml = String(renderedFile);
             } else {
-                // Reuse the previous rendered HTML
-                chunkHtml = previousRenderedChunks[i] || '';
+                // Reuse the previous raw rendered HTML (before line adjustment)
+                rawHtml = previousRawChunks[i] || '';
             }
             
+            // Always adjust line numbers based on current chunk position
+            // This is necessary even for unchanged chunks, as their position may have shifted
+            chunkHtml = adjustLineNumbers(rawHtml, markdownChunkInfo.startLine);
+            
+            previousRawRenderedChunks.push(rawHtml);
             renderedChunks.push(chunkHtml);
             
             // Update the display progressively
