@@ -380,7 +380,7 @@ import type { DefinedError } from 'ajv';
 import * as api from '@/api';
 import { loadConfigValue } from '@/config';
 import { CliPrettify } from 'markdown-table-prettify';
-import { renderMarkdownChunks, chunkMarkdownByHeadings, renderMarkdown, adjustLineNumbers } from '@/markdown';
+import { chunkMarkdownByHeadings, renderMarkdown, adjustLineNumbers } from '@/markdown';
 
 const ajv = new Ajv();
 const validateMetadata = ajv.compile(metadataSchema);
@@ -741,8 +741,6 @@ async function updateRenderedChunked() {
     // Get new markdown chunks to compare with previous ones
     const { frontmatter, chunks: newMarkdownChunks } = chunkMarkdownByHeadings(text.value);
 
-    // Store previous rendered chunks for reuse
-    const previousRenderedChunks = renderedChunks;
     renderedChunks = [];
 
     let metadata: any = null;
