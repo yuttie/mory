@@ -44,6 +44,24 @@
                     ></v-text-field>
                 </template>
             </v-slider>
+            <v-slider
+                v-model="editorIndentSize"
+                label="Editor Indent Size"
+                min="1"
+                max="64"
+                thumb-label
+            >
+                <template v-slot:append>
+                    <v-text-field
+                        v-model="editorIndentSize"
+                        type="text"
+                        class="mt-0 pt-0"
+                        style="width: 6em"
+                        suffix="spaces"
+                        readonly
+                    ></v-text-field>
+                </template>
+            </v-slider>
             <v-select
                 v-bind:items="editorThemes"
                 v-model="currentEditorTheme"
@@ -351,6 +369,7 @@ const currentUseSimpleEditor = ref(loadConfigValue('use-simple-editor', false));
 const currentLockScroll = ref(loadConfigValue('lock-scroll', false));
 const currentEditorFontFamily = ref(loadConfigValue('editor-font-family', 'Menlo, monospace'));
 const currentEditorFontSize = ref(loadConfigValue('editor-font-size', 14));
+const editorIndentSize = ref(loadConfigValue('editor-indent-size', 2));
 const currentEditorTheme = ref(loadConfigValue('editor-theme', 'default'));
 const currentEditorKeybinding = ref(loadConfigValue('editor-keybinding', 'default'));
 const editorEnableEmacsStyleBindings = ref(loadConfigValue('editor-enable-emacs-style-bindings', false));
@@ -369,6 +388,7 @@ async function loadDefault() {
     currentLockScroll.value = config.lockScroll;
     currentEditorFontFamily.value = config.editorFontFamily;
     currentEditorFontSize.value = config.editorFontSize;
+    editorIndentSize.value = config.editorIndentSize;
     currentEditorTheme.value = config.editorTheme;
     currentEditorKeybinding.value = config.editorKeybinding;
     editorEnableEmacsStyleBindings.value = config.editorEnableEmacsStyleBindings;
@@ -381,6 +401,7 @@ function saveAsDefault() {
         lockScroll: currentLockScroll.value,
         editorFontFamily: currentEditorFontFamily.value,
         editorFontSize: currentEditorFontSize.value,
+        editorIndentSize: editorIndentSize.value,
         editorTheme: currentEditorTheme.value,
         editorKeybinding: currentEditorKeybinding.value,
         editorEnableEmacsStyleBindings: editorEnableEmacsStyleBindings.value,
@@ -404,6 +425,10 @@ watch(currentEditorFontFamily, (newEditorFontFamily: string) => {
 
 watch(currentEditorFontSize, (newEditorFontSize: number) => {
     saveConfigValue('editor-font-size', newEditorFontSize);
+});
+
+watch(editorIndentSize, (newEditorIndentSize: number) => {
+    saveConfigValue('editor-indent-size', newEditorIndentSize);
 });
 
 watch(currentEditorTheme, (newEditorTheme: string) => {

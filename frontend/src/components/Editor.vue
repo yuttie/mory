@@ -10,7 +10,7 @@ import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { loadConfigValue } from '@/config';
 import { EditorState, Extension } from '@codemirror/state';
 import { EditorView, keymap, highlightSpecialChars, drawSelection, dropCursor, rectangularSelection, crosshairCursor, lineNumbers, highlightActiveLine, highlightActiveLineGutter, scrollPastEnd } from '@codemirror/view';
-import { defaultHighlightStyle, syntaxHighlighting, indentOnInput, bracketMatching, foldGutter, foldKeymap } from '@codemirror/language';
+import { defaultHighlightStyle, syntaxHighlighting, indentOnInput, indentUnit, bracketMatching, foldGutter, foldKeymap } from '@codemirror/language';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { autocompletion, completionKeymap, closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
@@ -42,6 +42,7 @@ onMounted(async () => {
     const fontFamily = loadConfigValue('editor-font-family', 'Menlo, monospace');
     const theme = loadConfigValue('editor-theme', 'default');
     const keybinding = loadConfigValue('editor-keybinding', 'default');
+    const indentSize = loadConfigValue('editor-indent-size', 2);
     const enableEmacsStyleBindings = loadConfigValue('editor-enable-emacs-style-bindings', false);
 
     const extensions: Extension[] = [
@@ -53,6 +54,7 @@ onMounted(async () => {
         dropCursor(),
         EditorState.allowMultipleSelections.of(true),
         indentOnInput(),
+        indentUnit.of(" ".repeat(indentSize)),
         syntaxHighlighting(defaultHighlightStyle),
         bracketMatching(),
         closeBrackets(),
