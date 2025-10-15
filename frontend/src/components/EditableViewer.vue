@@ -737,14 +737,14 @@ async function updateRenderedChunked() {
     // Create abort controller for this render pass
     const controller = new AbortController();
     chunkRenderController = controller;
-    
+
     // Get new markdown chunks to compare with previous ones
     const { frontmatter, chunks: newMarkdownChunks } = chunkMarkdownByHeadings(text.value);
-    
+
     // Store previous rendered chunks for reuse
     const previousRenderedChunks = renderedChunks;
     renderedChunks = [];
-    
+
     let metadata: any = null;
     let parseError: any = null;
     let chunkIndex = 0;
@@ -764,7 +764,7 @@ async function updateRenderedChunked() {
         // Store previous raw rendered chunks for reuse
         const previousRawChunks = previousRawRenderedChunks;
         previousRawRenderedChunks = [];
-        
+
         // Process each chunk
         for (let i = 0; i < newMarkdownChunks.length; i++) {
             // Check if rendering was aborted
@@ -774,14 +774,14 @@ async function updateRenderedChunked() {
 
             const markdownChunkInfo = newMarkdownChunks[i];
             const isLast = i === newMarkdownChunks.length - 1;
-            
+
             // Check if this chunk has changed by comparing with previous markdown
-            const chunkChanged = i >= previousMarkdownChunks.length || 
+            const chunkChanged = i >= previousMarkdownChunks.length ||
                                  markdownChunkInfo.content !== previousMarkdownChunks[i].content;
-            
+
             let rawHtml: string;
             let chunkHtml: string;
-            
+
             if (chunkChanged) {
                 // Render the changed chunk
                 const renderedFile = await renderMarkdown(markdownChunkInfo.content);
@@ -790,14 +790,14 @@ async function updateRenderedChunked() {
                 // Reuse the previous raw rendered HTML (before line adjustment)
                 rawHtml = previousRawChunks[i] || '';
             }
-            
+
             // Always adjust line numbers based on current chunk position
             // This is necessary even for unchanged chunks, as their position may have shifted
             chunkHtml = adjustLineNumbers(rawHtml, markdownChunkInfo.startLine);
-            
+
             previousRawRenderedChunks.push(rawHtml);
             renderedChunks.push(chunkHtml);
-            
+
             // Update the display progressively
             if (chunkIndex === 0 || isLast) {
                 // Update on first chunk and last chunk for immediate feedback
@@ -832,10 +832,10 @@ async function updateRenderedChunked() {
                     }
                 });
             }
-            
+
             chunkIndex++;
         }
-        
+
         // Remove extra chunk elements if document got shorter
         while (chunkElements.length > newMarkdownChunks.length) {
             const extraElement = chunkElements.pop();
@@ -843,7 +843,7 @@ async function updateRenderedChunked() {
                 extraElement.parentNode.removeChild(extraElement);
             }
         }
-        
+
         // Store current chunks for next comparison
         previousMarkdownChunks = newMarkdownChunks;
     } finally {
@@ -856,13 +856,13 @@ async function updateRenderedChunked() {
 function updateChunkInDisplay(chunkIndex: number, chunkHtml: string) {
     // Reuse existing chunk element or create new one
     let chunkDiv = chunkElements[chunkIndex];
-    
+
     if (!chunkDiv) {
         // Create a new container div for this chunk
         chunkDiv = document.createElement('div');
         chunkDiv.className = 'rendered-chunk';
         chunkElements[chunkIndex] = chunkDiv;
-        
+
         // Insert at the correct position
         if (chunkIndex < renderedContentDiv.value.children.length) {
             renderedContentDiv.value.insertBefore(chunkDiv, renderedContentDiv.value.children[chunkIndex]);
@@ -870,10 +870,10 @@ function updateChunkInDisplay(chunkIndex: number, chunkHtml: string) {
             renderedContentDiv.value.appendChild(chunkDiv);
         }
     }
-    
+
     // Update the HTML content
     chunkDiv.innerHTML = chunkHtml;
-    
+
     // Attach drag event listeners to images in this chunk only
     const images = chunkDiv.querySelectorAll('img');
     for (const img of images) {
@@ -979,13 +979,13 @@ async function loadCustomNoteLess(): Promise<string> {
         api.getNote('.mory/custom-note.less'),
         import('less'),
     ]);
-    
+
     const output = await less.render(res.data, {
         globalVars: {
             'nav-height': '64px',
         },
     });
-    
+
     return output.css;
 }
 
