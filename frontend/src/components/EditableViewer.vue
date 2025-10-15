@@ -380,7 +380,7 @@ import type { DefinedError } from 'ajv';
 import * as api from '@/api';
 import { loadConfigValue } from '@/config';
 import { CliPrettify } from 'markdown-table-prettify';
-import { chunkMarkdownByHeadings, renderMarkdown, adjustLineNumbers } from '@/markdown';
+import { chunkMarkdownByHeadings, renderMarkdown } from '@/markdown';
 
 const ajv = new Ajv();
 const validateMetadata = ajv.compile(metadataSchema);
@@ -789,18 +789,16 @@ async function updateRenderedChunked() {
                 rawHtml = previousRawChunks[i] || '';
             }
 
-            // Adjust line numbers to match chunk's position in document
-            // Required even for cached chunks if their position shifted
-            chunkHtml = adjustLineNumbers(rawHtml, markdownChunkInfo.startLine);
-
+            // Store raw HTML for caching and reuse
             previousRawRenderedChunks.push(rawHtml);
-            renderedChunks.push(chunkHtml);
+            renderedChunks.push(rawHtml);
+            chunkHtml = rawHtml;
 
             // Display chunks progressively for better perceived performance
             if (chunkIndex === 0 || isLast) {
                 // First and last chunks render immediately for quick feedback
                 if (chunkChanged) {
-                    updateChunkInDisplay(i, chunkHtml);
+                    updateChunkInDisplay(i, chunkHtml, markdownChunkInfo.startLine);
                 }
                 updateDisplay(metadata, parseError);
             } else {
@@ -810,7 +808,7 @@ async function updateRenderedChunked() {
                         requestIdleCallback(() => {
                             if (!controller.signal.aborted) {
                                 if (chunkChanged) {
-                                    updateChunkInDisplay(i, chunkHtml);
+                                    updateChunkInDisplay(i, chunkHtml, markdownChunkInfo.startLine);
                                 }
                                 updateDisplay(metadata, parseError);
                             }
@@ -821,7 +819,7 @@ async function updateRenderedChunked() {
                         setTimeout(() => {
                             if (!controller.signal.aborted) {
                                 if (chunkChanged) {
-                                    updateChunkInDisplay(i, chunkHtml);
+                                    updateChunkInDisplay(i, chunkHtml, markdownChunkInfo.startLine);
                                 }
                                 updateDisplay(metadata, parseError);
                             }
@@ -851,7 +849,7 @@ async function updateRenderedChunked() {
     }
 }
 
-function updateChunkInDisplay(chunkIndex: number, chunkHtml: string) {
+function updateChunkInDisplay(chunkIndex: number, chunkHtml: string, startLine: number) {
     // Reuse existing chunk element or create new one
     let chunkDiv = chunkElements[chunkIndex];
 
@@ -871,6 +869,18 @@ function updateChunkInDisplay(chunkIndex: number, chunkHtml: string) {
 
     // Update chunk content
     chunkDiv.innerHTML = chunkHtml;
+
+    // Adjust line numbers after setting innerHTML (more efficient than parsing HTML string)
+    if (startLine > 1) {
+        const elementsWithDataLine = chunkDiv.querySelectorAll('[data-line]');
+        elementsWithDataLine.forEach((element) => {
+            const lineNum = element.getAttribute('data-line');
+            if (lineNum) {
+                const adjustedLine = parseInt(lineNum) + startLine - 1;
+                element.setAttribute('data-line', adjustedLine.toString());
+            }
+        });
+    }
 
     // Attach drag event listeners to images in this chunk
     const images = chunkDiv.querySelectorAll('img');

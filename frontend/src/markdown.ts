@@ -79,43 +79,6 @@ export async function renderMarkdown(markdown: string): Promise<VFile> {
 }
 
 /**
- * Adjust data-line attributes in rendered HTML to preserve original line numbers.
- * 
- * When markdown is split into chunks and rendered separately, each chunk's AST
- * has line numbers starting from 1. This function adjusts them to match the
- * chunk's actual position in the original document.
- * 
- * Uses DOM parsing to safely modify only HTML attributes, not text content.
- * 
- * @param html - Rendered HTML with data-line attributes
- * @param lineOffset - Starting line number of the chunk in the original document
- * @returns HTML with adjusted line numbers
- */
-export function adjustLineNumbers(html: string, lineOffset: number): string {
-  if (lineOffset <= 1) {
-    return html;
-  }
-  
-  // Parse HTML safely using DOM to avoid modifying content
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, 'text/html');
-  
-  // Find all elements with data-line attribute
-  const elementsWithDataLine = doc.querySelectorAll('[data-line]');
-  
-  elementsWithDataLine.forEach((element) => {
-    const lineNum = element.getAttribute('data-line');
-    if (lineNum) {
-      const adjustedLine = parseInt(lineNum) + lineOffset - 1;
-      element.setAttribute('data-line', adjustedLine.toString());
-    }
-  });
-  
-  // Return the adjusted HTML from body (DOMParser wraps content in html/body tags)
-  return doc.body.innerHTML;
-}
-
-/**
  * Split markdown into chunks by H1 and H2 headings for progressive rendering.
  * 
  * Separates frontmatter (YAML) from content and splits the content at heading
