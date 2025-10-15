@@ -85,6 +85,8 @@ export async function renderMarkdown(markdown: string): Promise<VFile> {
  * has line numbers starting from 1. This function adjusts them to match the
  * chunk's actual position in the original document.
  * 
+ * Uses DOM parsing to safely modify only HTML attributes, not text content.
+ * 
  * @param html - Rendered HTML with data-line attributes
  * @param lineOffset - Starting line number of the chunk in the original document
  * @returns HTML with adjusted line numbers
@@ -94,10 +96,23 @@ export function adjustLineNumbers(html: string, lineOffset: number): string {
     return html;
   }
   
-  return html.replace(/data-line="(\d+)"/g, (match, lineNum) => {
-    const adjustedLine = parseInt(lineNum) + lineOffset - 1;
-    return `data-line="${adjustedLine}"`;
+  // Parse HTML safely using DOM to avoid modifying content
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  
+  // Find all elements with data-line attribute
+  const elementsWithDataLine = doc.querySelectorAll('[data-line]');
+  
+  elementsWithDataLine.forEach((element) => {
+    const lineNum = element.getAttribute('data-line');
+    if (lineNum) {
+      const adjustedLine = parseInt(lineNum) + lineOffset - 1;
+      element.setAttribute('data-line', adjustedLine.toString());
+    }
   });
+  
+  // Return the adjusted HTML from body (DOMParser wraps content in html/body tags)
+  return doc.body.innerHTML;
 }
 
 /**
