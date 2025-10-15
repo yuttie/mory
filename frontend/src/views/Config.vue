@@ -30,7 +30,7 @@
                 v-model="currentEditorFontSize"
                 label="Editor Font Size"
                 min="1"
-                max="100"
+                max="64"
                 thumb-label
             >
                 <template v-slot:append>
@@ -39,7 +39,7 @@
                         type="text"
                         class="mt-0 pt-0"
                         style="width: 3em"
-                        suffix="px"
+                        suffix="pt"
                         readonly
                     ></v-text-field>
                 </template>
