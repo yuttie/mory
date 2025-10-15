@@ -125,7 +125,7 @@ onMounted(async () => {
 
     // Apply font settings
     if (editor.dom) {
-        editor.dom.style.fontSize = `${fontSize}px`;
+        editor.dom.style.fontSize = `${fontSize}pt`;
         editor.dom.style.fontFamily = fontFamily;
     }
 });
