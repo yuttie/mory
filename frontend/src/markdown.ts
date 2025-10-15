@@ -79,15 +79,21 @@ export async function renderMarkdown(markdown: string): Promise<VFile> {
 }
 
 /**
- * Adjust data-line attributes in rendered HTML by adding a line offset.
- * This is used when rendering markdown chunks to preserve original line numbers.
+ * Adjust data-line attributes in rendered HTML to preserve original line numbers.
+ * 
+ * When markdown is split into chunks and rendered separately, each chunk's AST
+ * has line numbers starting from 1. This function adjusts them to match the
+ * chunk's actual position in the original document.
+ * 
+ * @param html - Rendered HTML with data-line attributes
+ * @param lineOffset - Starting line number of the chunk in the original document
+ * @returns HTML with adjusted line numbers
  */
 export function adjustLineNumbers(html: string, lineOffset: number): string {
   if (lineOffset <= 1) {
-    return html; // No adjustment needed if starting from line 1
+    return html;
   }
   
-  // Adjust all data-line attributes by adding the offset
   return html.replace(/data-line="(\d+)"/g, (match, lineNum) => {
     const adjustedLine = parseInt(lineNum) + lineOffset - 1;
     return `data-line="${adjustedLine}"`;
@@ -95,8 +101,13 @@ export function adjustLineNumbers(html: string, lineOffset: number): string {
 }
 
 /**
- * Split markdown into chunks by top-level headings for progressive rendering.
- * Returns an object with frontmatter and an array of content chunks with their starting line numbers.
+ * Split markdown into chunks by H1 and H2 headings for progressive rendering.
+ * 
+ * Separates frontmatter (YAML) from content and splits the content at heading
+ * boundaries. Each chunk includes its starting line number for scroll sync.
+ * 
+ * @param markdown - Full markdown document
+ * @returns Object with frontmatter string and array of chunks with line numbers
  */
 export function chunkMarkdownByHeadings(markdown: string): { frontmatter: string; chunks: Array<{ content: string; startLine: number }> } {
   const processor = unified()

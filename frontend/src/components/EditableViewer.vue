@@ -426,7 +426,7 @@ const renderTimeoutId = ref(null as null | number);
 let chunkRenderController: AbortController | null = null;
 let renderedChunks: string[] = [];
 let previousMarkdownChunks: Array<{ content: string; startLine: number }> = [];
-let previousRawRenderedChunks: string[] = []; // Raw HTML before line number adjustment
+let previousRawRenderedChunks: string[] = []; // Cached HTML before line adjustment for reuse
 let chunkElements: HTMLElement[] = [];
 
 // Template Refs
@@ -734,11 +734,11 @@ async function updateRendered() {
 }
 
 async function updateRenderedChunked() {
-    // Create abort controller for this render pass
+    // Create abort controller to cancel this render if a new one starts
     const controller = new AbortController();
     chunkRenderController = controller;
 
-    // Get new markdown chunks to compare with previous ones
+    // Split markdown into chunks by headings
     const { frontmatter, chunks: newMarkdownChunks } = chunkMarkdownByHeadings(text.value);
 
     renderedChunks = [];
@@ -759,11 +759,11 @@ async function updateRenderedChunked() {
             }
         }
 
-        // Store previous raw rendered chunks for reuse
+        // Save previous raw chunks for potential reuse, then reset
         const previousRawChunks = previousRawRenderedChunks;
         previousRawRenderedChunks = [];
 
-        // Process each chunk
+        // Render each chunk progressively
         for (let i = 0; i < newMarkdownChunks.length; i++) {
             // Check if rendering was aborted
             if (controller.signal.aborted) {
@@ -773,7 +773,7 @@ async function updateRenderedChunked() {
             const markdownChunkInfo = newMarkdownChunks[i];
             const isLast = i === newMarkdownChunks.length - 1;
 
-            // Check if this chunk has changed by comparing with previous markdown
+            // Check if chunk content changed (for caching optimization)
             const chunkChanged = i >= previousMarkdownChunks.length ||
                                  markdownChunkInfo.content !== previousMarkdownChunks[i].content;
 
@@ -781,30 +781,30 @@ async function updateRenderedChunked() {
             let chunkHtml: string;
 
             if (chunkChanged) {
-                // Render the changed chunk
+                // Render changed chunk
                 const renderedFile = await renderMarkdown(markdownChunkInfo.content);
                 rawHtml = String(renderedFile);
             } else {
-                // Reuse the previous raw rendered HTML (before line adjustment)
+                // Reuse cached HTML (before line adjustment)
                 rawHtml = previousRawChunks[i] || '';
             }
 
-            // Always adjust line numbers based on current chunk position
-            // This is necessary even for unchanged chunks, as their position may have shifted
+            // Adjust line numbers to match chunk's position in document
+            // Required even for cached chunks if their position shifted
             chunkHtml = adjustLineNumbers(rawHtml, markdownChunkInfo.startLine);
 
             previousRawRenderedChunks.push(rawHtml);
             renderedChunks.push(chunkHtml);
 
-            // Update the display progressively
+            // Display chunks progressively for better perceived performance
             if (chunkIndex === 0 || isLast) {
-                // Update on first chunk and last chunk for immediate feedback
+                // First and last chunks render immediately for quick feedback
                 if (chunkChanged) {
                     updateChunkInDisplay(i, chunkHtml);
                 }
                 await updateDisplay(metadata, parseError);
             } else {
-                // For intermediate chunks, use requestIdleCallback for non-blocking updates
+                // Intermediate chunks render during idle time to avoid blocking UI
                 await new Promise<void>((resolve) => {
                     if ('requestIdleCallback' in window) {
                         requestIdleCallback(() => {
@@ -856,12 +856,12 @@ function updateChunkInDisplay(chunkIndex: number, chunkHtml: string) {
     let chunkDiv = chunkElements[chunkIndex];
 
     if (!chunkDiv) {
-        // Create a new container div for this chunk
+        // Create container div for this chunk
         chunkDiv = document.createElement('div');
         chunkDiv.className = 'rendered-chunk';
         chunkElements[chunkIndex] = chunkDiv;
 
-        // Insert at the correct position
+        // Insert at correct position in DOM
         if (chunkIndex < renderedContentDiv.value.children.length) {
             renderedContentDiv.value.insertBefore(chunkDiv, renderedContentDiv.value.children[chunkIndex]);
         } else {
@@ -869,10 +869,10 @@ function updateChunkInDisplay(chunkIndex: number, chunkHtml: string) {
         }
     }
 
-    // Update the HTML content
+    // Update chunk content
     chunkDiv.innerHTML = chunkHtml;
 
-    // Attach drag event listeners to images in this chunk only
+    // Attach drag event listeners to images in this chunk
     const images = chunkDiv.querySelectorAll('img');
     for (const img of images) {
         img.addEventListener('dragstart', (event) => {
