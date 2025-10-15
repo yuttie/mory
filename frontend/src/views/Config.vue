@@ -36,9 +36,9 @@
                 <template v-slot:append>
                     <v-text-field
                         v-model="currentEditorFontSize"
-                        type="number"
+                        type="text"
                         class="mt-0 pt-0"
-                        style="width: 4em"
+                        style="width: 3em"
                         suffix="px"
                         readonly
                     ></v-text-field>
