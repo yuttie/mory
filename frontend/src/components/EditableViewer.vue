@@ -802,7 +802,7 @@ async function updateRenderedChunked() {
                 if (chunkChanged) {
                     updateChunkInDisplay(i, chunkHtml);
                 }
-                await updateDisplay(metadata, parseError);
+                updateDisplay(metadata, parseError);
             } else {
                 // Intermediate chunks render during idle time to avoid blocking UI
                 await new Promise<void>((resolve) => {
