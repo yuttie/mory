@@ -14,86 +14,96 @@
                 The following settings are only applied to the current browser and never be saved in the repository unless saved as default.
             </v-alert>
             <v-checkbox
-                v-model="currentUseSimpleEditor"
-                label="Use Simple Editor"
-            ></v-checkbox>
-            <v-checkbox
                 v-model="currentLockScroll"
                 label="Lock Scroll by Default"
             ></v-checkbox>
-            <v-text-field
-                v-model="currentEditorFontFamily"
-                label="Editor Font Family"
-            >
-            </v-text-field>
-            <v-slider
-                v-model="currentEditorFontSize"
-                label="Editor Font Size"
-                min="1"
-                max="64"
-                thumb-label
-            >
-                <template v-slot:append>
+            <v-card>
+                <v-card-text>
+                    <v-card-title>Editor</v-card-title>
+                    <v-checkbox
+                        v-model="currentUseSimpleEditor"
+                        label="Use Simple Editor"
+                    ></v-checkbox>
                     <v-text-field
+                        v-model="currentEditorFontFamily"
+                        label="Font Family"
+                    >
+                    </v-text-field>
+                    <v-slider
                         v-model="currentEditorFontSize"
-                        type="text"
-                        class="mt-0 pt-0"
-                        style="width: 3em"
-                        suffix="pt"
-                        readonly
-                    ></v-text-field>
-                </template>
-            </v-slider>
-            <v-slider
-                v-model="editorIndentSize"
-                label="Editor Indent Size"
-                min="1"
-                max="64"
-                thumb-label
-            >
-                <template v-slot:append>
-                    <v-text-field
+                        label="Font Size"
+                        min="1"
+                        max="64"
+                        thumb-label
+                    >
+                        <template v-slot:append>
+                            <v-text-field
+                                v-model="currentEditorFontSize"
+                                type="text"
+                                class="mt-0 pt-0"
+                                style="width: 3em"
+                                suffix="pt"
+                                readonly
+                            ></v-text-field>
+                        </template>
+                    </v-slider>
+                    <v-slider
                         v-model="editorIndentSize"
-                        type="text"
-                        class="mt-0 pt-0"
-                        style="width: 6em"
-                        suffix="spaces"
-                        readonly
-                    ></v-text-field>
-                </template>
-            </v-slider>
-            <v-select
-                v-bind:items="editorThemes"
-                v-model="currentEditorTheme"
-                menu-props="auto"
-                label="Editor Theme"
-                item-text="name"
-                item-value="value"
-            >
-            </v-select>
-            <v-select
-                v-bind:items="editorKeybindings"
-                v-model="currentEditorKeybinding"
-                menu-props="auto"
-                label="Editor Keybinding"
-                item-text="name"
-                item-value="value"
-            >
-            </v-select>
-            <v-checkbox
-                v-model="editorEnableEmacsStyleBindings"
-                label="Enable Emacs-style bindings for non-Emacs key maps"
-                hide-details="auto"
-            />
-            <v-select
-                v-bind:items="highlightjsThemes"
-                v-model="currentHighlightjsTheme"
-                menu-props="auto"
-                label="Code Block Syntax Highlight Theme"
-                item-text="name"
-                item-value="value"
-            >
-            </v-select>
+                        label="Indent Size"
+                        min="1"
+                        max="64"
+                        thumb-label
+                    >
+                        <template v-slot:append>
+                            <v-text-field
+                                v-model="editorIndentSize"
+                                type="text"
+                                class="mt-0 pt-0"
+                                style="width: 6em"
+                                suffix="spaces"
+                                readonly
+                            ></v-text-field>
+                        </template>
+                    </v-slider>
+                    <v-select
+                        v-bind:items="editorThemes"
+                        v-model="currentEditorTheme"
+                        menu-props="auto"
+                        label="Theme"
+                        item-text="name"
+                        item-value="value"
+                    >
+                    </v-select>
+                    <v-select
+                        v-bind:items="editorKeybindings"
+                        v-model="currentEditorKeybinding"
+                        menu-props="auto"
+                        label="Keybinding"
+                        item-text="name"
+                        item-value="value"
+                    >
+                    </v-select>
+                    <v-checkbox
+                        v-model="editorEnableEmacsStyleBindings"
+                        label="Enable Emacs-style bindings for non-Emacs key maps"
+                        hide-details="auto"
+                    />
+                </v-card-text>
+            </v-card>
+            <v-card class="mt-6">
+                <v-card-text>
+                    <v-card-title>Markdown Rendering</v-card-title>
+                    <v-select
+                        v-bind:items="highlightjsThemes"
+                        v-model="currentHighlightjsTheme"
+                        menu-props="auto"
+                        label="Code Block Syntax Highlight Theme"
+                        item-text="name"
+                        item-value="value"
+                    >
+                    </v-select>
+                </v-card-text>
+            </v-card>
         </v-sheet>
     </div>
 </template>
