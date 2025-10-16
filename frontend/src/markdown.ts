@@ -142,19 +142,6 @@ export function chunkMarkdownByHeadings(markdown: string): { frontmatter: string
     }
   }
 
-  // If no chunks were created (no headings), use all content after frontmatter as one chunk
-  if (chunks.length === 0 && contentStart < markdown.length) {
-    const content = markdown.slice(contentStart).trim();
-    if (content) {
-      chunks.push({ content, startLine: currentChunkStartLine });
-    }
-  }
-
-  // If still no chunks, return entire markdown as one chunk
-  if (chunks.length === 0) {
-    chunks.push({ content: markdown.slice(contentStart) || '', startLine: currentChunkStartLine });
-  }
-
   return { frontmatter, chunks };
 }
 
