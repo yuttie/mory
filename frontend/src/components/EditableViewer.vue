@@ -426,7 +426,7 @@ const renderTimeoutId = ref(null as null | number);
 let chunkRenderController: AbortController | null = null;
 let renderedChunks: string[] = [];
 let previousMarkdownChunks: Array<{ content: string; startLine: number }> = [];
-let previousRawRenderedChunks: string[] = []; // Cached HTML before line adjustment for reuse
+let previousRenderedChunks: string[] = []; // Cached HTML before line adjustment for reuse
 let chunkElements: HTMLElement[] = [];
 
 // Template Refs
@@ -759,7 +759,7 @@ async function updateRenderedChunked() {
         }
 
         // Render each chunk progressively
-        const newRawRenderedChunks = [];
+        const newRenderedChunks = [];
         for (let i = 0; i < newMarkdownChunks.length; i++) {
             // Check if rendering was aborted
             if (controller.signal.aborted) {
@@ -782,11 +782,11 @@ async function updateRenderedChunked() {
                 rawHtml = String(renderedFile);
             } else {
                 // Reuse cached HTML (before line adjustment)
-                rawHtml = previousRawRenderedChunks[i] || '';
+                rawHtml = previousRenderedChunks[i] || '';
             }
 
             // Store raw HTML for caching and reuse
-            newRawRenderedChunks.push(rawHtml);
+            newRenderedChunks.push(rawHtml);
             renderedChunks.push(rawHtml);
             chunkHtml = rawHtml;
 
@@ -825,7 +825,7 @@ async function updateRenderedChunked() {
                 });
             }
         }
-        previousRawRenderedChunks = newRawRenderedChunks;
+        previousRenderedChunks = newRenderedChunks;
 
         // Remove extra chunk elements if document got shorter
         while (chunkElements.length > newMarkdownChunks.length) {
