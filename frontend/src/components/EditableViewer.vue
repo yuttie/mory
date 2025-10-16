@@ -788,7 +788,7 @@ async function updateRenderedChunked() {
                 if (chunkChanged) {
                     updateChunkInDisplay(i, chunkHtml, markdownChunkInfo.startLine);
                 }
-                updateDisplay(metadata, parseError, newRenderedChunks);
+                updateRenderedState(metadata, parseError, newRenderedChunks);
             } else {
                 // Intermediate chunks render during idle time to avoid blocking UI
                 await new Promise<void>((resolve) => {
@@ -798,7 +798,7 @@ async function updateRenderedChunked() {
                                 if (chunkChanged) {
                                     updateChunkInDisplay(i, chunkHtml, markdownChunkInfo.startLine);
                                 }
-                                updateDisplay(metadata, parseError, newRenderedChunks);
+                                updateRenderedState(metadata, parseError, newRenderedChunks);
                             }
                             resolve();
                         });
@@ -809,7 +809,7 @@ async function updateRenderedChunked() {
                                 if (chunkChanged) {
                                     updateChunkInDisplay(i, chunkHtml, markdownChunkInfo.startLine);
                                 }
-                                updateDisplay(metadata, parseError, newRenderedChunks);
+                                updateRenderedState(metadata, parseError, newRenderedChunks);
                             }
                             resolve();
                         }, 0);
@@ -881,7 +881,7 @@ function updateChunkInDisplay(chunkIndex: number, chunkHtml: string, startLine: 
     }
 }
 
-function updateDisplay(metadata: any, parseError: any, chunks: string[]) {
+function updateRenderedState(metadata: any, parseError: any, chunks: string[]) {
     ignoreNext.value = true;
 
     // Validate metadata
