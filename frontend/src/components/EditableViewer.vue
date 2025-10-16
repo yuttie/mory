@@ -380,7 +380,7 @@ import type { DefinedError } from 'ajv';
 import * as api from '@/api';
 import { loadConfigValue } from '@/config';
 import { CliPrettify } from 'markdown-table-prettify';
-import { renderMarkdown } from '@/markdown';
+import { chunkMarkdownByHeadings, renderMarkdown } from '@/markdown';
 
 const ajv = new Ajv();
 const validateMetadata = ajv.compile(metadataSchema);
@@ -421,6 +421,12 @@ const showConfirmationDialog = ref(false);
 const error = ref(false);
 const errorText = ref('');
 const renderTimeoutId = ref(null as null | number);
+
+// Non-reactive state for internal rendering control
+let chunkRenderController: AbortController | null = null;
+let markdownChunks: Array<{ content: string; startLine: number }> = [];
+let renderedChunks: string[] = [];
+let chunkElements: HTMLElement[] = [];
 
 // Template Refs
 const editor = ref(null);
@@ -644,6 +650,12 @@ onUnmounted(() => {
         renderTimeoutId.value = null;
     }
 
+    // Cancel any ongoing chunked rendering
+    if (chunkRenderController) {
+        chunkRenderController.abort();
+        chunkRenderController = null;
+    }
+
     viewer.value.removeEventListener('scroll', handleDocumentScroll);
 });
 
@@ -709,11 +721,167 @@ function formatTable() {
 }
 
 async function updateRendered() {
-    // Render the body
-    const renderedFile = await renderMarkdown(text.value);
-    const renderedHtml = String(renderedFile);
-    const metadata = renderedFile.data.matter;
-    const parseError = renderedFile.data.matterParseError;
+    // Cancel any ongoing chunked rendering
+    if (chunkRenderController) {
+        chunkRenderController.abort();
+        chunkRenderController = null;
+    }
+
+    // Use chunked rendering for all documents
+    // Short markdown is automatically treated as a single chunk
+    await updateRenderedChunked();
+}
+
+async function updateRenderedChunked() {
+    // Create abort controller to cancel this render if a new one starts
+    const controller = new AbortController();
+    chunkRenderController = controller;
+
+    // Split markdown into chunks by headings
+    const { frontmatter, chunks: newMarkdownChunks } = chunkMarkdownByHeadings(text.value);
+
+    let metadata: any = null;
+    let parseError: any = null;
+
+    try {
+        // Extract metadata from frontmatter if present
+        if (frontmatter) {
+            try {
+                const frontmatterFile = await renderMarkdown(frontmatter);
+                metadata = frontmatterFile.data.matter;
+                parseError = frontmatterFile.data.matterParseError;
+            } catch (error) {
+                parseError = error;
+            }
+        }
+
+        // Render each chunk progressively
+        const newRenderedChunks = [];
+        for (let i = 0; i < newMarkdownChunks.length; i++) {
+            // Check if rendering was aborted
+            if (controller.signal.aborted) {
+                return;
+            }
+
+            const markdownChunkInfo = newMarkdownChunks[i];
+
+            // Check if chunk content changed (for caching optimization)
+            const chunkChanged = i >= markdownChunks.length ||
+                                 markdownChunkInfo.content !== markdownChunks[i].content;
+
+            let chunkHtml: string;
+            if (chunkChanged) {
+                // Render changed chunk
+                const renderedFile = await renderMarkdown(markdownChunkInfo.content);
+                chunkHtml = String(renderedFile);
+            } else {
+                // Reuse cached HTML (before line adjustment)
+                chunkHtml = renderedChunks[i] || '';
+            }
+
+            // Store raw HTML for caching and reuse
+            newRenderedChunks.push(chunkHtml);
+
+            // Display chunks progressively for better perceived performance
+            if (i === 0 || i === newMarkdownChunks.length - 1) {
+                // First and last chunks render immediately for quick feedback
+                if (chunkChanged) {
+                    updateChunkInDisplay(i, chunkHtml, markdownChunkInfo.startLine);
+                }
+                updateRenderedState(metadata, parseError, newRenderedChunks);
+            } else {
+                // Intermediate chunks render during idle time to avoid blocking UI
+                await new Promise<void>((resolve) => {
+                    if ('requestIdleCallback' in window) {
+                        requestIdleCallback(() => {
+                            if (!controller.signal.aborted) {
+                                if (chunkChanged) {
+                                    updateChunkInDisplay(i, chunkHtml, markdownChunkInfo.startLine);
+                                }
+                                updateRenderedState(metadata, parseError, newRenderedChunks);
+                            }
+                            resolve();
+                        });
+                    } else {
+                        // Fallback for browsers without requestIdleCallback
+                        setTimeout(() => {
+                            if (!controller.signal.aborted) {
+                                if (chunkChanged) {
+                                    updateChunkInDisplay(i, chunkHtml, markdownChunkInfo.startLine);
+                                }
+                                updateRenderedState(metadata, parseError, newRenderedChunks);
+                            }
+                            resolve();
+                        }, 0);
+                    }
+                });
+            }
+        }
+        renderedChunks = newRenderedChunks;
+
+        // Remove extra chunk elements if document got shorter
+        while (chunkElements.length > newMarkdownChunks.length) {
+            const extraElement = chunkElements.pop();
+            if (extraElement && extraElement.parentNode) {
+                extraElement.parentNode.removeChild(extraElement);
+            }
+        }
+
+        // Store current chunks for next comparison
+        markdownChunks = newMarkdownChunks;
+    } finally {
+        if (chunkRenderController === controller) {
+            chunkRenderController = null;
+        }
+    }
+}
+
+function updateChunkInDisplay(chunkIndex: number, chunkHtml: string, startLine: number) {
+    // Reuse existing chunk element or create new one
+    let chunkDiv = chunkElements[chunkIndex];
+
+    if (!chunkDiv) {
+        // Create container div for this chunk
+        chunkDiv = document.createElement('div');
+        chunkDiv.className = 'rendered-chunk';
+        chunkElements[chunkIndex] = chunkDiv;
+
+        // Insert at correct position in DOM
+        if (chunkIndex < renderedContentDiv.value.children.length) {
+            renderedContentDiv.value.insertBefore(chunkDiv, renderedContentDiv.value.children[chunkIndex]);
+        } else {
+            renderedContentDiv.value.appendChild(chunkDiv);
+        }
+    }
+
+    // Update chunk content
+    chunkDiv.innerHTML = chunkHtml;
+
+    // Adjust line numbers for scroll synchronization
+    if (startLine > 1) {
+        const elementsWithDataLine = chunkDiv.querySelectorAll('[data-line]');
+        elementsWithDataLine.forEach((element) => {
+            const lineNum = element.getAttribute('data-line');
+            if (lineNum) {
+                const adjustedLine = parseInt(lineNum) + startLine - 1;
+                element.setAttribute('data-line', adjustedLine.toString());
+            }
+        });
+    }
+
+    // Prevent images from being dragged and dropped within the page
+    const images = chunkDiv.querySelectorAll('img');
+    for (const img of images) {
+        img.addEventListener('dragstart', (event) => {
+            appStore.draggingViewerContent = true;
+        });
+        img.addEventListener('dragend', (event) => {
+            appStore.draggingViewerContent = false;
+        });
+    }
+}
+
+function updateRenderedState(metadata: any, parseError: any, chunks: string[]) {
     ignoreNext.value = true;
 
     // Validate metadata
@@ -746,6 +914,9 @@ async function updateRendered() {
         }
     })();
 
+    // Get accumulated HTML from chunks for rendered.value.content (used by TOC and title)
+    const renderedHtml = chunks.join('');
+
     // Set this.rendered
     if (metadata !== null) {
         // Metadata could be parsed correctly
@@ -773,20 +944,6 @@ async function updateRendered() {
             metadata: null,
             content: renderedHtml,
         };
-    }
-
-    // Update HTML
-    renderedContentDiv.value.innerHTML = rendered.value.content;
-
-    // Prevent images on the page from being dragged and dropped within it
-    const images = renderedContentDiv.value.querySelectorAll('img');
-    for (const img of images) {
-        img.addEventListener('dragstart', (event) => {
-            appStore.draggingViewerContent = true;
-        });
-        img.addEventListener('dragend', (event) => {
-            appStore.draggingViewerContent = false;
-        });
     }
 
     // Update the page title
@@ -817,13 +974,13 @@ async function loadCustomNoteLess(): Promise<string> {
         api.getNote('.mory/custom-note.less'),
         import('less'),
     ]);
-    
+
     const output = await less.render(res.data, {
         globalVars: {
             'nav-height': '64px',
         },
     });
-    
+
     return output.css;
 }
 
