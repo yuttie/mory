@@ -788,7 +788,7 @@ async function updateRenderedChunked() {
                 if (chunkChanged) {
                     updateChunkInDisplay(i, chunkHtml, markdownChunkInfo.startLine);
                 }
-                updateDisplay(metadata, parseError);
+                updateDisplay(metadata, parseError, newRenderedChunks);
             } else {
                 // Intermediate chunks render during idle time to avoid blocking UI
                 await new Promise<void>((resolve) => {
@@ -798,7 +798,7 @@ async function updateRenderedChunked() {
                                 if (chunkChanged) {
                                     updateChunkInDisplay(i, chunkHtml, markdownChunkInfo.startLine);
                                 }
-                                updateDisplay(metadata, parseError);
+                                updateDisplay(metadata, parseError, newRenderedChunks);
                             }
                             resolve();
                         });
@@ -809,7 +809,7 @@ async function updateRenderedChunked() {
                                 if (chunkChanged) {
                                     updateChunkInDisplay(i, chunkHtml, markdownChunkInfo.startLine);
                                 }
-                                updateDisplay(metadata, parseError);
+                                updateDisplay(metadata, parseError, newRenderedChunks);
                             }
                             resolve();
                         }, 0);
@@ -881,7 +881,7 @@ function updateChunkInDisplay(chunkIndex: number, chunkHtml: string, startLine: 
     }
 }
 
-function updateDisplay(metadata: any, parseError: any) {
+function updateDisplay(metadata: any, parseError: any, chunks: string[]) {
     ignoreNext.value = true;
 
     // Validate metadata
@@ -915,7 +915,7 @@ function updateDisplay(metadata: any, parseError: any) {
     })();
 
     // Get accumulated HTML from chunks for rendered.value.content (used by TOC and title)
-    const renderedHtml = renderedChunks.join('');
+    const renderedHtml = chunks.join('');
 
     // Set this.rendered
     if (metadata !== null) {
