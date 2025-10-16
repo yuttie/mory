@@ -869,7 +869,7 @@ function updateChunkInDisplay(chunkIndex: number, chunkHtml: string, startLine: 
         });
     }
 
-    // Attach drag event listeners to images in this chunk
+    // Prevent images from being dragged
     const images = chunkDiv.querySelectorAll('img');
     for (const img of images) {
         img.addEventListener('dragstart', (event) => {
