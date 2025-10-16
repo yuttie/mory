@@ -425,7 +425,7 @@ const renderTimeoutId = ref(null as null | number);
 // Non-reactive state for internal rendering control
 let chunkRenderController: AbortController | null = null;
 let renderedChunks: string[] = [];
-let previousMarkdownChunks: Array<{ content: string; startLine: number }> = [];
+let markdownChunks: Array<{ content: string; startLine: number }> = [];
 let previousRenderedChunks: string[] = []; // Cached HTML before line adjustment for reuse
 let chunkElements: HTMLElement[] = [];
 
@@ -770,8 +770,8 @@ async function updateRenderedChunked() {
             const isLast = i === newMarkdownChunks.length - 1;
 
             // Check if chunk content changed (for caching optimization)
-            const chunkChanged = i >= previousMarkdownChunks.length ||
-                                 markdownChunkInfo.content !== previousMarkdownChunks[i].content;
+            const chunkChanged = i >= markdownChunks.length ||
+                                 markdownChunkInfo.content !== markdownChunks[i].content;
 
             let rawHtml: string;
             let chunkHtml: string;
@@ -836,7 +836,7 @@ async function updateRenderedChunked() {
         }
 
         // Store current chunks for next comparison
-        previousMarkdownChunks = newMarkdownChunks;
+        markdownChunks = newMarkdownChunks;
     } finally {
         if (chunkRenderController === controller) {
             chunkRenderController = null;
