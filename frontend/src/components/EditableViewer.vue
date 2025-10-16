@@ -764,7 +764,6 @@ async function updateRenderedChunked() {
             }
 
             const markdownChunkInfo = newMarkdownChunks[i];
-            const isLast = i === newMarkdownChunks.length - 1;
 
             // Check if chunk content changed (for caching optimization)
             const chunkChanged = i >= markdownChunks.length ||
@@ -787,7 +786,7 @@ async function updateRenderedChunked() {
             chunkHtml = rawHtml;
 
             // Display chunks progressively for better perceived performance
-            if (i === 0 || isLast) {
+            if (i === 0 || i === newMarkdownChunks.length - 1) {
                 // First and last chunks render immediately for quick feedback
                 if (chunkChanged) {
                     updateChunkInDisplay(i, chunkHtml, markdownChunkInfo.startLine);
