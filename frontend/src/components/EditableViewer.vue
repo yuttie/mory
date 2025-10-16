@@ -769,21 +769,18 @@ async function updateRenderedChunked() {
             const chunkChanged = i >= markdownChunks.length ||
                                  markdownChunkInfo.content !== markdownChunks[i].content;
 
-            let rawHtml: string;
             let chunkHtml: string;
-
             if (chunkChanged) {
                 // Render changed chunk
                 const renderedFile = await renderMarkdown(markdownChunkInfo.content);
-                rawHtml = String(renderedFile);
+                chunkHtml = String(renderedFile);
             } else {
                 // Reuse cached HTML (before line adjustment)
-                rawHtml = renderedChunks[i] || '';
+                chunkHtml = renderedChunks[i] || '';
             }
 
             // Store raw HTML for caching and reuse
-            newRenderedChunks.push(rawHtml);
-            chunkHtml = rawHtml;
+            newRenderedChunks.push(chunkHtml);
 
             // Display chunks progressively for better perceived performance
             if (i === 0 || i === newMarkdownChunks.length - 1) {
