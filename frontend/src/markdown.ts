@@ -80,10 +80,10 @@ export async function renderMarkdown(markdown: string): Promise<VFile> {
 
 /**
  * Split markdown into chunks by H1 and H2 headings for progressive rendering.
- * 
+ *
  * Separates frontmatter (YAML) from content and splits the content at heading
  * boundaries. Each chunk includes its starting line number for scroll sync.
- * 
+ *
  * @param markdown - Full markdown document
  * @returns Object with frontmatter string and array of chunks with line numbers
  */
@@ -94,7 +94,7 @@ export function chunkMarkdownByHeadings(markdown: string): { frontmatter: string
 
   const tree = processor.parse(markdown) as Root;
   const chunks: Array<{ content: string; startLine: number }> = [];
-  
+
   let frontmatter = '';
   let currentChunkStart = 0;
   let currentChunkStartLine = 1;
@@ -114,7 +114,7 @@ export function chunkMarkdownByHeadings(markdown: string): { frontmatter: string
   // Split content at H1 or H2 headings
   for (let i = 0; i < tree.children.length; i++) {
     const node = tree.children[i];
-    
+
     // Skip frontmatter node
     if (node.type === 'yaml') {
       continue;
