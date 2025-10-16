@@ -869,7 +869,7 @@ function updateChunkInDisplay(chunkIndex: number, chunkHtml: string, startLine: 
         });
     }
 
-    // Prevent images from being dragged
+    // Prevent images from being dragged and dropped within the page
     const images = chunkDiv.querySelectorAll('img');
     for (const img of images) {
         img.addEventListener('dragstart', (event) => {
