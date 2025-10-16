@@ -105,7 +105,7 @@ onMounted(async () => {
     // Add keybinding
     if (keybinding !== 'emacs' && enableEmacsStyleBindings) {
         const { emacsStyleKeymap } = await import('@codemirror/commands');
-        extensions.unshift(keymap.of(emacsStyleKeymap));
+        extensions.unshift(keymap.of(emacsStyleKeymap.filter(({ key }) => /^Ctrl-(b|f|p|n|a|e|d|h)$/.test(key))));
     }
     const keybindingExtension = await getKeybindingExtension(keybinding);
     if (keybindingExtension) {
