@@ -857,7 +857,7 @@ function updateChunkInDisplay(chunkIndex: number, chunkHtml: string, startLine: 
     // Update chunk content
     chunkDiv.innerHTML = chunkHtml;
 
-    // Adjust line numbers
+    // Adjust line numbers for scroll synchronization
     if (startLine > 1) {
         const elementsWithDataLine = chunkDiv.querySelectorAll('[data-line]');
         elementsWithDataLine.forEach((element) => {
