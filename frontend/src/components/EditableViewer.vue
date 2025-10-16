@@ -745,7 +745,6 @@ async function updateRenderedChunked() {
 
     let metadata: any = null;
     let parseError: any = null;
-    let chunkIndex = 0;
 
     try {
         // Extract metadata from frontmatter if present
@@ -795,7 +794,7 @@ async function updateRenderedChunked() {
             chunkHtml = rawHtml;
 
             // Display chunks progressively for better perceived performance
-            if (chunkIndex === 0 || isLast) {
+            if (i === 0 || isLast) {
                 // First and last chunks render immediately for quick feedback
                 if (chunkChanged) {
                     updateChunkInDisplay(i, chunkHtml, markdownChunkInfo.startLine);
