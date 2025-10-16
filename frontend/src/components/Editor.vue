@@ -44,6 +44,7 @@ onMounted(async () => {
     const keybinding = loadConfigValue('editor-keybinding', 'default');
     const indentSize = loadConfigValue('editor-indent-size', 2);
     const enableEmacsStyleBindings = loadConfigValue('editor-enable-emacs-style-bindings', false);
+    const vimInsertUnmapCtCd = loadConfigValue('editor-vim-insert-unmap-ct-cd', false);
 
     const extensions: Extension[] = [
         lineNumbers(),
@@ -111,6 +112,12 @@ onMounted(async () => {
     if (keybindingExtension) {
         // Vim and Emacs keybindings must be included before other keymaps
         extensions.unshift(keybindingExtension);
+    }
+
+    if (keybinding === 'vim' && vimInsertUnmapCtCd) {
+        const { Vim } = await import('@replit/codemirror-vim');
+        Vim.unmap('<C-t>', 'insert');
+        Vim.unmap('<C-d>', 'insert');
     }
 
     const state = EditorState.create({

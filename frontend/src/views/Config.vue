@@ -88,6 +88,11 @@
                         label="Enable Emacs-style bindings for non-Emacs key maps"
                         hide-details="auto"
                     />
+                    <v-checkbox
+                        v-model="editorVimInsertUnmapCtCd"
+                        label="Unmap <C-t>/<C-d> in Vim insert mode"
+                        hide-details="auto"
+                    />
                 </v-card-text>
             </v-card>
             <v-card class="mt-6">
@@ -383,6 +388,7 @@ const editorIndentSize = ref(loadConfigValue('editor-indent-size', 2));
 const currentEditorTheme = ref(loadConfigValue('editor-theme', 'default'));
 const currentEditorKeybinding = ref(loadConfigValue('editor-keybinding', 'default'));
 const editorEnableEmacsStyleBindings = ref(loadConfigValue('editor-enable-emacs-style-bindings', false));
+const editorVimInsertUnmapCtCd = ref(loadConfigValue('editor-vim-insert-unmap-ct-cd', false));
 const currentHighlightjsTheme = ref(loadConfigValue('highlightjs-theme', 'default'));
 
 // Lifecycle hooks
@@ -402,6 +408,7 @@ async function loadDefault() {
     currentEditorTheme.value = config.editorTheme;
     currentEditorKeybinding.value = config.editorKeybinding;
     editorEnableEmacsStyleBindings.value = config.editorEnableEmacsStyleBindings;
+    editorVimInsertUnmapCtCd.value = config.editorVimInsertUnmapCtCd;
     currentHighlightjsTheme.value = config.highlightjsTheme;
 }
 
@@ -415,6 +422,7 @@ function saveAsDefault() {
         editorTheme: currentEditorTheme.value,
         editorKeybinding: currentEditorKeybinding.value,
         editorEnableEmacsStyleBindings: editorEnableEmacsStyleBindings.value,
+        editorVimInsertUnmapCtCd: editorVimInsertUnmapCtCd.value,
         highlightjsTheme: currentHighlightjsTheme.value,
     };
     api.addNote('.mory/default_config.yaml', YAML.stringify(config));
@@ -451,6 +459,10 @@ watch(currentEditorKeybinding, (newEditorKeybinding: string) => {
 
 watch(editorEnableEmacsStyleBindings, (newEditorEnableEmacsStyleBindings: string) => {
     saveConfigValue('editor-enable-emacs-style-bindings', newEditorEnableEmacsStyleBindings);
+});
+
+watch(editorVimInsertUnmapCtCd, (newEditorVimInsertUnmapCtCd: string) => {
+    saveConfigValue('editor-vim-insert-unmap-ct-cd', newEditorVimInsertUnmapCtCd);
 });
 
 watch(currentHighlightjsTheme, (newHighlightjsTheme: string) => {
