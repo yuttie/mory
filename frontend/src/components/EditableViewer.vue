@@ -424,9 +424,8 @@ const renderTimeoutId = ref(null as null | number);
 
 // Non-reactive state for internal rendering control
 let chunkRenderController: AbortController | null = null;
-let renderedChunks: string[] = [];
 let markdownChunks: Array<{ content: string; startLine: number }> = [];
-let previousRenderedChunks: string[] = []; // Cached HTML before line adjustment for reuse
+let renderedChunks: string[] = [];
 let chunkElements: HTMLElement[] = [];
 
 // Template Refs
@@ -741,8 +740,6 @@ async function updateRenderedChunked() {
     // Split markdown into chunks by headings
     const { frontmatter, chunks: newMarkdownChunks } = chunkMarkdownByHeadings(text.value);
 
-    renderedChunks = [];
-
     let metadata: any = null;
     let parseError: any = null;
 
@@ -782,12 +779,11 @@ async function updateRenderedChunked() {
                 rawHtml = String(renderedFile);
             } else {
                 // Reuse cached HTML (before line adjustment)
-                rawHtml = previousRenderedChunks[i] || '';
+                rawHtml = renderedChunks[i] || '';
             }
 
             // Store raw HTML for caching and reuse
             newRenderedChunks.push(rawHtml);
-            renderedChunks.push(rawHtml);
             chunkHtml = rawHtml;
 
             // Display chunks progressively for better perceived performance
@@ -825,7 +821,7 @@ async function updateRenderedChunked() {
                 });
             }
         }
-        previousRenderedChunks = newRenderedChunks;
+        renderedChunks = newRenderedChunks;
 
         // Remove extra chunk elements if document got shorter
         while (chunkElements.length > newMarkdownChunks.length) {
