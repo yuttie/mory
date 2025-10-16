@@ -758,11 +758,8 @@ async function updateRenderedChunked() {
             }
         }
 
-        // Save previous raw chunks for potential reuse, then reset
-        const previousRawChunks = previousRawRenderedChunks;
-        previousRawRenderedChunks = [];
-
         // Render each chunk progressively
+        const newRawRenderedChunks = [];
         for (let i = 0; i < newMarkdownChunks.length; i++) {
             // Check if rendering was aborted
             if (controller.signal.aborted) {
@@ -785,11 +782,11 @@ async function updateRenderedChunked() {
                 rawHtml = String(renderedFile);
             } else {
                 // Reuse cached HTML (before line adjustment)
-                rawHtml = previousRawChunks[i] || '';
+                rawHtml = previousRawRenderedChunks[i] || '';
             }
 
             // Store raw HTML for caching and reuse
-            previousRawRenderedChunks.push(rawHtml);
+            newRawRenderedChunks.push(rawHtml);
             renderedChunks.push(rawHtml);
             chunkHtml = rawHtml;
 
@@ -828,6 +825,7 @@ async function updateRenderedChunked() {
                 });
             }
         }
+        previousRawRenderedChunks = newRawRenderedChunks;
 
         // Remove extra chunk elements if document got shorter
         while (chunkElements.length > newMarkdownChunks.length) {
