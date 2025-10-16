@@ -827,8 +827,6 @@ async function updateRenderedChunked() {
                     }
                 });
             }
-
-            chunkIndex++;
         }
 
         // Remove extra chunk elements if document got shorter
