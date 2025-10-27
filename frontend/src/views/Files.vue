@@ -239,7 +239,8 @@ const matchedEntries = computed(() => {
         if (queryTags.some(tag => !entryTags.some(entryTag => entryTag.includes(tag)))) {
             continue;
         }
-        if (queryAny.some(kw => !entryPath.includes(kw) && !entryTags.some(entryTag => entryTag.includes(kw)))) {
+        const entryTitle = (entry.title || '').toLowerCase();
+        if (queryAny.some(kw => !entryPath.includes(kw) && !entryTags.some(entryTag => entryTag.includes(kw)) && !entryTitle.includes(kw))) {
             continue;
         }
         // OK, this entry matches all the queries
