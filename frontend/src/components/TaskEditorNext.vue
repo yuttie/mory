@@ -92,14 +92,14 @@
                             <v-icon>{{ mdiFormatHeader1 }}</v-icon>
                         </template>
                     </v-textarea>
-                    
+
                     <!-- Task Assessment -->
                     <div v-if="(taskAssessment || assessmentLoading) && form.title.length >= 3" class="task-assessment mb-4">
                         <v-card outlined class="pa-3">
                             <v-card-subtitle class="pa-0 pb-2">
                                 <v-icon small class="mr-1">{{ mdiLightbulbOnOutline }}</v-icon>
                                 Task Assessment
-                                <v-progress-circular 
+                                <v-progress-circular
                                     v-if="assessmentLoading"
                                     indeterminate
                                     size="16"
@@ -138,8 +138,8 @@
                                         <span class="font-weight-normal">(click + to add to note)</span>
                                     </p>
                                     <div class="note-suggestions">
-                                        <div 
-                                            v-for="(suggestion, index) in taskAssessment.note_suggestions" 
+                                        <div
+                                            v-for="(suggestion, index) in taskAssessment.note_suggestions"
                                             v-bind:key="'note-' + index"
                                             class="note-suggestion-item"
                                         >
@@ -699,7 +699,7 @@ function resetFromTask(t?: Task | undefined | null): void {
         form.deadline = t.deadline ?? '';
         form.scheduled_dates = Array.isArray(t.scheduled_dates) ? [...t.scheduled_dates] : [];
         form.note = t.note ?? '';
-        
+
         // Automatically assess the task for existing tasks
         if (form.title && form.title.length >= 3) {
             performTaskAssessment(form.title);
@@ -804,9 +804,9 @@ async function performTaskAssessment(title: string) {
         taskAssessment.value = null;
         return;
     }
-    
+
     assessmentLoading.value = true;
-    
+
     try {
         const ancestorTitles = props.ancestorTitlesForTaskAssessment || [];
         const taskForAssessment = {
@@ -836,7 +836,7 @@ function onTitleInput() {
     if (assessmentTimeout) {
         clearTimeout(assessmentTimeout);
     }
-    
+
     // Set a new timeout to assess after user stops typing
     assessmentTimeout = setTimeout(() => {
         performTaskAssessment(form.title);
@@ -920,25 +920,25 @@ defineExpose({
     .v-card {
         border-left: 3px solid #1976d2;
     }
-    
+
     .caption {
         line-height: 1.4;
     }
-    
+
     ul {
         margin-left: 16px;
         margin-bottom: 0;
     }
-    
+
     .note-suggestions {
         .note-suggestion-item {
             padding: 4px 0;
             border-bottom: 1px solid #e0e0e0;
-            
+
             &:last-child {
                 border-bottom: none;
             }
-            
+
             .caption {
                 line-height: 1.3;
             }
