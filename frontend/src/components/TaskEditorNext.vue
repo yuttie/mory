@@ -190,18 +190,29 @@
                         </template>
                     </v-combobox>
                     <!-- Status -->
-                    <v-select
-                        v-model="selectedKind"
-                        v-bind:items="statusOptions"
-                        v-bind:error-messages="statusGateError ? [statusGateError] : []"
-                        label="Status"
-                        item-text="label"
-                        item-value="kind"
-                    >
-                        <template v-slot:prepend>
-                            <v-icon>{{ mdiTrafficLightOutline }}</v-icon>
-                        </template>
-                    </v-select>
+                    <div class="d-flex align-center">
+                        <v-select
+                            v-model="selectedKind"
+                            v-bind:items="statusOptions"
+                            v-bind:error-messages="statusGateError ? [statusGateError] : []"
+                            label="Status"
+                            item-text="label"
+                            item-value="kind"
+                        >
+                            <template v-slot:prepend>
+                                <v-icon>{{ mdiTrafficLightOutline }}</v-icon>
+                            </template>
+                        </v-select>
+                        <v-btn
+                            icon
+                            small
+                            v-on:click="statusOptionRestricted = !statusOptionRestricted"
+                            title="Show all statuses"
+                            color="primary"
+                        >
+                            <v-icon small>{{ statusOptionRestricted ? mdiLock : mdiLockOpenVariant }}</v-icon>
+                        </v-btn>
+                    </div>
                     <!-- Status-specific fields -->
                     <div v-if="form.status.kind === 'waiting'" class="ml-10">
                         <v-text-field
@@ -413,6 +424,8 @@ import {
     mdiFormatHeader1,
     mdiHelpCircleOutline,
     mdiLightbulbOnOutline,
+    mdiLock,
+    mdiLockOpenVariant,
     mdiNoteEditOutline,
     mdiPercentOutline,
     mdiPencilBoxOutline,
@@ -484,6 +497,7 @@ const form = reactive<EditableTask>({
     note: '',
 });
 const uiValid = ref(true);
+const statusOptionRestricted = ref(true);
 
 // Task assessment data
 const taskAssessment = ref<TaskAssessmentResponse | null>(null);
@@ -539,7 +553,7 @@ const progress = computed<number>({
 });
 
 const statusOptions = computed<{ kind: StatusKind, label: string }[]>(() => {
-    const allowed = nextOptions(initialForm.value.status);
+    const allowed = statusOptionRestricted.value ? nextOptions(initialForm.value.status) : [...Object.keys(STATUS_LABEL)];
     const opts = [initialForm.value.status.kind, ...allowed] as StatusKind[];
     const items = Array.from(new Set(opts))
         .map((k) => { return { kind: k, label: STATUS_LABEL[k] }; });
