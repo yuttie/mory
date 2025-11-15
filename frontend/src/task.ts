@@ -64,7 +64,7 @@ export const STATUS_LABEL: Record<StatusKind, string> = {
     canceled: 'Canceled',
 };
 
-export const STATUS_FLOW = {
+export const STATUS_TRANSITION = {
     todo: ['in_progress', 'waiting', 'blocked', 'canceled'],
     in_progress: ['waiting', 'blocked', 'on_hold', 'done', 'canceled'],
     waiting: ['in_progress', 'done', 'canceled'],
@@ -90,7 +90,7 @@ export interface Task {
 }
 
 export function nextOptions(from: Status): readonly StatusKind[] {
-    return STATUS_FLOW[from.kind] ?? [];
+    return STATUS_TRANSITION[from.kind] ?? [];
 }
 
 export function makeDefaultStatus(kind: StatusKind): Status {
