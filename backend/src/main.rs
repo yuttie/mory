@@ -130,6 +130,7 @@ async fn main() -> Result<()> {
             .context("Failed to build a reqwest client")
             .unwrap(),
     };
+    state.ensure_file_entries_cache_updated().await?;
 
     let addr = env::var("MORIED_LISTEN").unwrap();
     tracing::debug!("{:?}", addr);
@@ -1775,7 +1776,7 @@ mod models {
             Ok((head_commit_id, entries))
         }
 
-        async fn ensure_file_entries_cache_updated(
+        pub async fn ensure_file_entries_cache_updated(
             &self,
         ) -> Result<Option<Oid>> {
             let head_commit_id = self.repo.lock().unwrap().head()?.peel_to_commit()?.id();
