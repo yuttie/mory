@@ -523,15 +523,11 @@ async fn try_acquire_cache_mutex(
 async fn release_cache_mutex(
     cache_db: &SqlitePool,
 ) -> Result<()> {
-    // Use an exclusive transaction to release the mutex
-    let mut tx = cache_db.begin_with("BEGIN IMMEDIATE").await?;
-
     // Remove the mutex record
     sqlx::query("DELETE FROM cache_state WHERE key = 'update_mutex';")
-        .execute(&mut *tx)
+        .execute(cache_db)
         .await?;
 
-    tx.commit().await?;
     Ok(())
 }
 
