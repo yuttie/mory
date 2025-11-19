@@ -339,6 +339,7 @@ async fn rebuild_entries_cache<'c>(
     repo: Arc<Mutex<Repository>>,
     commit_id: Oid,
 ) -> Result<()> {
+    tracing::info!("Rebuilding file entries cache...");
     // Collect minimum necessary information for each file path
     let path_info_list: Vec<(PathBuf, git2::Time, Oid)> = {
         let repo = repo.lock().unwrap();
@@ -353,15 +354,25 @@ async fn rebuild_entries_cache<'c>(
             .map(|entry| PathBuf::from(OsStr::from_bytes(&entry.path)))
             .collect();
         // Iterate over commit history until last modified times of all the files are determined
+        let total_commits = {
+            let mut revwalk = repo.revwalk()?;
+            revwalk.set_sorting(git2::Sort::TOPOLOGICAL)?;
+            revwalk.push(commit_id)?;
+            revwalk.count()
+        };
         let mut path_info_list: Vec<(PathBuf, git2::Time, Oid)> = Vec::with_capacity(files.len());
         let mut revwalk = repo.revwalk()?;
         revwalk.set_sorting(git2::Sort::TOPOLOGICAL)?;
         revwalk.push(commit_id)?;
-        'revwalk: for oid in revwalk {
+        'revwalk: for (i, oid) in revwalk.enumerate() {
             let oid = oid?;
             let commit = repo.find_commit(oid)?;
             let tree = commit.tree()?;
-            tracing::debug!("{:?}", commit);
+
+            // Show the progress
+            if (i + 1) % 1000 == 0 {
+                tracing::info!("Processing commits: {}/{}", i + 1, total_commits);
+            }
 
             for parent in commit.parents() {
                 // FIXME: We assume there were no conflict in the case of multiple parents
@@ -426,6 +437,8 @@ async fn rebuild_entries_cache<'c>(
         .execute(&mut **tx)
         .await
         .context("Failed to record the latest commit ID of the cache")?;
+
+    tracing::info!("Finished rebuilding file entries cache.");
 
     Ok(())
 }
