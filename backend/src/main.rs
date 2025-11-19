@@ -466,7 +466,7 @@ async fn try_acquire_cache_mutex(
     use sqlx::Row;
 
     // Use an exclusive transaction to check and acquire the mutex atomically
-    let mut tx = cache_db.begin_with("BEGIN EXCLUSIVE").await?;
+    let mut tx = cache_db.begin_with("BEGIN IMMEDIATE").await?;
 
     // Check if a mutex record already exists and is not stale
     let existing_lock = sqlx::query(
@@ -524,7 +524,7 @@ async fn release_cache_mutex(
     cache_db: &SqlitePool,
 ) -> Result<()> {
     // Use an exclusive transaction to release the mutex
-    let mut tx = cache_db.begin_with("BEGIN EXCLUSIVE").await?;
+    let mut tx = cache_db.begin_with("BEGIN IMMEDIATE").await?;
 
     // Remove the mutex record
     sqlx::query("DELETE FROM cache_state WHERE key = 'update_mutex';")
