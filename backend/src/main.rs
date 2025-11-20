@@ -73,8 +73,7 @@ async fn main() -> Result<()> {
     // Cache database
     let options = SqliteConnectOptions::from_str("sqlite://cache.sqlite")?
         .create_if_missing(true)
-        .journal_mode(SqliteJournalMode::Wal)
-        .busy_timeout(std::time::Duration::from_secs(5 * 60));
+        .journal_mode(SqliteJournalMode::Wal);
     let db_pool = SqlitePoolOptions::new()
         .max_connections(4)
         .connect_with(options)
@@ -459,6 +458,13 @@ fn is_ancestor(
     Ok(false)
 }
 
+fn is_sqlite_busy(e: &sqlx::Error) -> bool {
+    match e.as_database_error().and_then(|db_err| db_err.code()) {
+        Some(code) => code == "5",  // SQLITE_BUSY
+        None => false,
+    }
+}
+
 async fn try_acquire_cache_mutex(
     cache_db: &SqlitePool,
     commit_id: Oid,
@@ -466,7 +472,11 @@ async fn try_acquire_cache_mutex(
     use sqlx::Row;
 
     // Use an exclusive transaction to check and acquire the mutex atomically
-    let mut tx = cache_db.begin_with("BEGIN IMMEDIATE").await?;
+    let mut tx = match cache_db.begin_with("BEGIN IMMEDIATE").await {
+        Ok(tx) => tx,
+        Err(e) if is_sqlite_busy(&e) => return Ok(false),
+        Err(e) => return Err(e.into()),
+    };
 
     // Check if a mutex record already exists and is not stale
     let existing_lock = sqlx::query(
@@ -1532,6 +1542,7 @@ mod models {
     use serde::{Deserialize, Serialize};
     use serde_yaml;
     use sqlx::{Row, SqlitePool, sqlite::SqliteRow};
+    use tokio::time::{Duration, sleep};
     use uuid::Uuid;
 
     pub type Metadata = serde_yaml::Value;
@@ -1791,19 +1802,13 @@ mod models {
             let head_commit_id = self.repo.lock().unwrap().head()?.peel_to_commit()?.id();
 
             // Try to acquire the cache update mutex
-            let lock_acquired = super::try_acquire_cache_mutex(&self.cache_db, head_commit_id).await?;
-            if !lock_acquired {
-                // Another thread is updating the cache, return the cached commit_id
-                let cached_commit_id = sqlx::query(
-                        "SELECT value FROM cache_state WHERE key = 'commit_id';",
-                    )
-                    .map(|row: SqliteRow| {
-                        Oid::from_str(row.get("value")).unwrap()
-                    })
-                    .fetch_optional(&self.cache_db)
-                    .await?;
-                return Ok(cached_commit_id);
+            let retry_interval = Duration::from_secs(3);
+            tracing::debug!("Trying to acquire cache mutex...");
+            while !super::try_acquire_cache_mutex(&self.cache_db, head_commit_id).await? {
+                tracing::debug!("Retry in {} seconds...", retry_interval.as_secs());
+                sleep(retry_interval).await;
             }
+            tracing::debug!("Acquired cache mutex.");
 
             // Start a regular transaction (mutex provides exclusivity)
             let mut tx = self.cache_db.begin().await?;
