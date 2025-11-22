@@ -1,6 +1,7 @@
 import Vue from 'vue';
 import VueRouter from 'vue-router';
 import type { RouteConfig } from 'vue-router';
+import { faviconService } from '../services/faviconService';
 
 const Home      = () => import('../views/Home.vue');
 const Calendar  = () => import('../views/Calendar.vue');
@@ -122,6 +123,14 @@ const router = new VueRouter({
             return { x: 0, y: 0 };
         }
     },
+});
+
+// Add navigation guard to update favicon on route changes
+router.afterEach((to) => {
+  // Update favicon based on the route name
+  if (to.name) {
+    faviconService.updateFavicon(to.name);
+  }
 });
 
 export default router;
