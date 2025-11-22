@@ -179,6 +179,8 @@
                                 v-else-if="descendantsViewMode === 'schedule'"
                                 v-bind:scheduled="scheduled"
                                 v-on:task-click="onTaskListItemClick"
+                                v-on:task-done="onTaskDone"
+                                v-on:task-effort="onTaskEffort"
                             />
                             <!-- Eisenhower Matrix view -->
                             <TaskEisenhowerView
@@ -224,7 +226,8 @@ import { type TreeNodeRecord } from '@/stores/taskForest';
 import { useTaggedTaskForestStore } from '@/stores/taggedTaskForest';
 
 import * as api from '@/api';
-import { type UUID, type StatusKind, type Task, STATUS_LABEL, render } from '@/task';
+import { getTask } from '@/api/task';
+import { type UUID, type StatusKind, type Task, type Effort, STATUS_LABEL, render } from '@/task';
 import axios from 'axios';
 import dayjs from 'dayjs';
 
@@ -842,6 +845,67 @@ async function onSelectedTaskDelete(path: string) {
     }
     // Refresh the store
     await store.refresh();
+}
+
+async function onTaskDone(taskUuid: UUID) {
+    // Load the task, update status to done, and save
+    const node = store.node(taskUuid);
+    if (!node) {
+        return;
+    }
+    
+    try {
+        const [_, task] = await getTask(node.path);
+        if (!task) {
+            return;
+        }
+        
+        const updatedTask: Task = {
+            ...task,
+            status: {
+                kind: 'done',
+                completed_at: new Date().toISOString(),
+            }
+        };
+        
+        await saveNote(node.path, render(updatedTask));
+        await store.refresh();
+        
+        // Show success message
+        showSuccess(`Task "${task.title}" marked as done`);
+    } catch (error) {
+        console.error('Error marking task as done:', error);
+        showError('Failed to mark task as done');
+    }
+}
+
+async function onTaskEffort(taskUuid: UUID, effort: Effort) {
+    // Load the task, add the effort, and save
+    const node = store.node(taskUuid);
+    if (!node) {
+        return;
+    }
+    
+    try {
+        const [_, task] = await getTask(node.path);
+        if (!task) {
+            return;
+        }
+        
+        const updatedTask: Task = {
+            ...task,
+            efforts: [...(task.efforts || []), effort]
+        };
+        
+        await saveNote(node.path, render(updatedTask));
+        await store.refresh();
+        
+        // Show success message
+        showSuccess(`Effort logged for "${task.title}"`);
+    } catch (error) {
+        console.error('Error logging effort:', error);
+        showError('Failed to log effort');
+    }
 }
 
 function onNewTaskCancel() {
