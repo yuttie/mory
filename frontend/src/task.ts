@@ -65,11 +65,11 @@ export const STATUS_LABEL: Record<StatusKind, string> = {
 };
 
 export const STATUS_TRANSITION = {
-    todo: ['in_progress', 'waiting', 'blocked', 'canceled'],
+    todo: ['in_progress', 'waiting', 'blocked', 'on_hold', 'done', 'canceled'],
     in_progress: ['waiting', 'blocked', 'on_hold', 'done', 'canceled'],
-    waiting: ['in_progress', 'done', 'canceled'],
-    blocked: ['in_progress', 'waiting', 'canceled'],
-    on_hold: ['in_progress', 'canceled'],
+    waiting: ['in_progress', 'blocked', 'on_hold', 'done', 'canceled'],
+    blocked: ['in_progress', 'waiting', 'on_hold', 'done', 'canceled'],
+    on_hold: ['in_progress', 'waiting', 'blocked', 'done', 'canceled'],
     done: [],
     canceled: [],
 } as const satisfies Record<StatusKind, readonly StatusKind[]>;
