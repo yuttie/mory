@@ -111,6 +111,17 @@ async fn main() -> Result<()> {
         ")
         .execute(&db_pool)
         .await?;
+    sqlx::query("
+            CREATE TABLE IF NOT EXISTS refresh_tokens (
+                id             TEXT PRIMARY KEY,
+                user_id        TEXT NOT NULL,
+                token_hash     TEXT NOT NULL,
+                expires_at     INTEGER NOT NULL,
+                created_at     INTEGER NOT NULL
+            ) STRICT;
+        ")
+        .execute(&db_pool)
+        .await?;
 
     let repo = {
         let git_dir = env::var("MORIED_GIT_DIR").unwrap();
@@ -149,6 +160,8 @@ async fn main() -> Result<()> {
         .route_layer(middleware::from_fn(auth));
     let login_api = Router::new()
         .route("/login", post(post_login))
+        .route("/refresh", post(post_refresh))
+        .with_state(state.clone())
         .route_layer(
             ServiceBuilder::new()
                 .layer(HandleErrorLayer::new(|_: BoxError| async {
@@ -232,6 +245,7 @@ fn token_is_valid(header_value: &str) -> bool {
 }
 
 async fn post_login(
+    extract::State(state): extract::State<AppState>,
     Json(login): Json<Login>,
 ) -> Response {
     tracing::debug!("post_login");
@@ -242,24 +256,113 @@ async fn post_login(
 
     if matches {
         let secret = env::var("MORIED_SECRET").unwrap();
-        let duration = env::var("MORIED_SESSION_EXPIRY_MINUTES").map_or(Duration::hours(6), |v| {
-            Duration::minutes(v.parse::<i64>().expect("Session duration in minutes represented as integer value is expected"))
-        });
+        
+        // Create short-lived access token (15 minutes)
+        let access_token_duration = Duration::minutes(15);
         let now: DateTime<Utc> = Utc::now();
-        let my_claims = Claims {
+        let access_claims = Claims {
             sub: login.user.to_owned(),
-            exp: (now + duration).timestamp() as usize,
-            email: user_email,
+            exp: (now + access_token_duration).timestamp() as usize,
+            email: user_email.clone(),
         };
-        let token = jwt::encode(
+        let access_token = jwt::encode(
             &jwt::Header::default(),
-            &my_claims,
+            &access_claims,
             &jwt::EncodingKey::from_secret(secret.as_ref())
         ).unwrap();
-        token.into_response()
+        
+        // Create long-lived refresh token (7 days)
+        let refresh_token_id = uuid::Uuid::new_v4().to_string();
+        let refresh_token_raw = uuid::Uuid::new_v4().to_string();
+        let refresh_token_hash = format!("{:x}", sha1::Sha1::digest(refresh_token_raw.as_bytes()));
+        let refresh_expires_at = (now + Duration::days(7)).timestamp();
+        
+        // Store refresh token in database
+        if let Err(e) = sqlx::query("
+                INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at, created_at) 
+                VALUES (?, ?, ?, ?, ?)
+            ")
+            .bind(&refresh_token_id)
+            .bind(&login.user)
+            .bind(&refresh_token_hash)
+            .bind(refresh_expires_at)
+            .bind(now.timestamp())
+            .execute(&state.cache_db)
+            .await
+        {
+            debug!("Failed to store refresh token: {:?}", e);
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+        
+        let response = LoginResponse {
+            access_token,
+            refresh_token: refresh_token_raw,
+            expires_in: access_token_duration.num_seconds() as u64,
+        };
+        
+        Json(response).into_response()
     }
     else {
         StatusCode::UNAUTHORIZED.into_response()
+    }
+}
+
+async fn post_refresh(
+    extract::State(state): extract::State<AppState>,
+    Json(refresh_request): Json<RefreshRequest>,
+) -> Response {
+    debug!("post_refresh");
+    
+    let refresh_token_hash = format!("{:x}", sha1::Sha1::digest(refresh_request.refresh_token.as_bytes()));
+    let now = Utc::now().timestamp();
+    
+    // Find and validate refresh token
+    let token_record = sqlx::query("
+            SELECT user_id, expires_at FROM refresh_tokens 
+            WHERE token_hash = ? AND expires_at > ?
+        ")
+        .bind(&refresh_token_hash)
+        .bind(now)
+        .map(|row: sqlx::sqlite::SqliteRow| -> (String, i64) {
+            (row.get("user_id"), row.get("expires_at"))
+        })
+        .fetch_optional(&state.cache_db)
+        .await;
+        
+    match token_record {
+        Ok(Some((user_id, _expires_at))) => {
+            let secret = env::var("MORIED_SECRET").unwrap();
+            let user_email = env::var("MORIED_USER_EMAIL").unwrap();
+            
+            // Create new short-lived access token
+            let access_token_duration = Duration::minutes(15);
+            let now_dt: DateTime<Utc> = Utc::now();
+            let access_claims = Claims {
+                sub: user_id,
+                exp: (now_dt + access_token_duration).timestamp() as usize,
+                email: user_email,
+            };
+            let access_token = jwt::encode(
+                &jwt::Header::default(),
+                &access_claims,
+                &jwt::EncodingKey::from_secret(secret.as_ref())
+            ).unwrap();
+            
+            let response = RefreshResponse {
+                access_token,
+                expires_in: access_token_duration.num_seconds() as u64,
+            };
+            
+            Json(response).into_response()
+        },
+        Ok(None) => {
+            debug!("Invalid or expired refresh token");
+            StatusCode::UNAUTHORIZED.into_response()
+        },
+        Err(e) => {
+            debug!("Database error during refresh: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
     }
 }
 
@@ -1851,6 +1954,24 @@ mod models {
     pub struct Login {
         pub user: String,
         pub password: String,
+    }
+
+    #[derive(Debug, Deserialize, Serialize, Clone)]
+    pub struct LoginResponse {
+        pub access_token: String,
+        pub refresh_token: String,
+        pub expires_in: u64,
+    }
+
+    #[derive(Debug, Deserialize, Serialize, Clone)]
+    pub struct RefreshRequest {
+        pub refresh_token: String,
+    }
+
+    #[derive(Debug, Deserialize, Serialize, Clone)]
+    pub struct RefreshResponse {
+        pub access_token: String,
+        pub expires_in: u64,
     }
 
     #[derive(Debug, Deserialize, Serialize, Clone)]

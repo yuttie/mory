@@ -19,6 +19,17 @@ export interface Claim {
     email: string;
 }
 
+export interface LoginResponse {
+    access_token: string;
+    refresh_token: string;
+    expires_in: number;
+}
+
+export interface RefreshResponse {
+    access_token: string;
+    expires_in: number;
+}
+
 export interface UploadEntry {
     uuid: string;
     filename: string;
@@ -132,6 +143,12 @@ export function login(user: string, password: string) {
   return getAxios().post(`/login`, {
     user: user,
     password: password,
+  });
+}
+
+export function refreshToken(refreshToken: string) {
+  return getAxios().post(`/refresh`, {
+    refresh_token: refreshToken,
   });
 }
 
