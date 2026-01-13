@@ -92,76 +92,6 @@
                             <v-icon>{{ mdiFormatHeader1 }}</v-icon>
                         </template>
                     </v-textarea>
-
-                    <!-- Task Assessment -->
-                    <div v-if="(taskAssessment || assessmentLoading) && form.title.length >= 3" class="task-assessment mb-4">
-                        <v-card outlined class="pa-3">
-                            <v-card-subtitle class="pa-0 pb-2">
-                                <v-icon small class="mr-1">{{ mdiLightbulbOnOutline }}</v-icon>
-                                Task Assessment
-                                <v-progress-circular
-                                    v-if="assessmentLoading"
-                                    indeterminate
-                                    size="16"
-                                    width="2"
-                                    class="ml-2"
-                                ></v-progress-circular>
-                            </v-card-subtitle>
-                            <div v-if="!assessmentLoading">
-                                <div class="d-flex align-center mb-2">
-                                    <span class="caption mr-2">Quality Score:</span>
-                                    <v-rating
-                                        v-bind:value="taskAssessment.quality_score / 2"
-                                        readonly
-                                        dense
-                                        size="16"
-                                        length="5"
-                                        half-increments
-                                        color="amber"
-                                    ></v-rating>
-                                    <span class="caption ml-1">({{ taskAssessment.quality_score.toFixed(1) }}/10)</span>
-                                </div>
-                                <p class="caption mb-2" v-if="taskAssessment.feedback">
-                                    {{ taskAssessment.feedback }}
-                                </p>
-                                <div v-if="taskAssessment.suggestions.length > 0">
-                                    <p class="caption font-weight-bold mb-1">Suggestions:</p>
-                                    <ul class="caption">
-                                        <li v-for="(suggestion, index) in taskAssessment.suggestions" v-bind:key="index">
-                                            {{ suggestion }}
-                                        </li>
-                                    </ul>
-                                </div>
-                                <div v-if="taskAssessment.note_suggestions && taskAssessment.note_suggestions.length > 0" class="mt-3">
-                                    <p class="caption font-weight-bold mb-1">
-                                        Note Suggestions:
-                                        <span class="font-weight-normal">(click + to add to note)</span>
-                                    </p>
-                                    <div class="note-suggestions">
-                                        <div
-                                            v-for="(suggestion, index) in taskAssessment.note_suggestions"
-                                            v-bind:key="'note-' + index"
-                                            class="note-suggestion-item"
-                                        >
-                                            <div class="d-flex align-center">
-                                                <span class="caption flex-grow-1">{{ suggestion }}</span>
-                                                <v-btn
-                                                    icon
-                                                    x-small
-                                                    class="ml-1"
-                                                    v-on:click="addNoteContent(suggestion)"
-                                                    title="Add to note"
-                                                    color="primary"
-                                                >
-                                                    <v-icon x-small>{{ mdiPlus }}</v-icon>
-                                                </v-btn>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </v-card>
-                    </div>
                     <!-- Tags -->
                     <v-combobox
                         v-model.trim="form.tags"
@@ -403,6 +333,75 @@
                         no-resize
                         class="full-height-textarea"
                     />
+                </div>
+                <div v-if="(taskAssessment || assessmentLoading) && form.title.length >= 3" class="assessment-pane pl-3">
+                    <!-- Task Assessment -->
+                    <v-card outlined class="pa-3">
+                        <v-card-subtitle class="pa-0 pb-2">
+                            <v-icon small class="mr-1">{{ mdiLightbulbOnOutline }}</v-icon>
+                            Task Assessment
+                            <v-progress-circular
+                                v-if="assessmentLoading"
+                                indeterminate
+                                size="16"
+                                width="2"
+                                class="ml-2"
+                            ></v-progress-circular>
+                        </v-card-subtitle>
+                        <div v-if="!assessmentLoading">
+                            <div class="d-flex align-center mb-2">
+                                <span class="caption mr-2">Quality Score:</span>
+                                <v-rating
+                                    v-bind:value="taskAssessment.quality_score / 2"
+                                    readonly
+                                    dense
+                                    size="16"
+                                    length="5"
+                                    half-increments
+                                    color="amber"
+                                ></v-rating>
+                                <span class="caption ml-1">({{ taskAssessment.quality_score.toFixed(1) }}/10)</span>
+                            </div>
+                            <p class="caption mb-2" v-if="taskAssessment.feedback">
+                                {{ taskAssessment.feedback }}
+                            </p>
+                            <div v-if="taskAssessment.suggestions.length > 0">
+                                <p class="caption font-weight-bold mb-1">Suggestions:</p>
+                                <ul class="caption">
+                                    <li v-for="(suggestion, index) in taskAssessment.suggestions" v-bind:key="index">
+                                        {{ suggestion }}
+                                    </li>
+                                </ul>
+                            </div>
+                            <div v-if="taskAssessment.note_suggestions && taskAssessment.note_suggestions.length > 0" class="mt-3">
+                                <p class="caption font-weight-bold mb-1">
+                                    Note Suggestions:
+                                    <span class="font-weight-normal">(click + to add to note)</span>
+                                </p>
+                                <div class="note-suggestions">
+                                    <div
+                                        v-for="(suggestion, index) in taskAssessment.note_suggestions"
+                                        v-bind:key="'note-' + index"
+                                        class="note-suggestion-item"
+                                    >
+                                        <div class="d-flex align-center">
+                                            <span class="caption flex-grow-1">{{ suggestion }}</span>
+                                            <v-btn
+                                                icon
+                                                x-small
+                                                class="ml-1"
+                                                v-on:click="addNoteContent(suggestion)"
+                                                title="Add to note"
+                                                color="primary"
+                                            >
+                                                <v-icon x-small>{{ mdiPlus }}</v-icon>
+                                            </v-btn>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </v-card>
                 </div>
             </v-card-text>
         </v-form>
@@ -930,7 +929,11 @@ defineExpose({
     height: 100%;
 }
 
-.task-assessment {
+.assessment-pane {
+    max-width: 300px;
+    box-sizing: content-box;
+    overflow-y: auto;
+
     .v-card {
         border-left: 3px solid #1976d2;
     }
