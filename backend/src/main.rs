@@ -1786,7 +1786,9 @@ mod models {
                 });
             }
 
-            // Return old cache content (or current if already updated)
+            // Return old cache content (or empty if no cache exists yet)
+            // When cache_commit_id_opt is None, we query for head_commit_id which won't exist yet,
+            // resulting in an empty vector until the background update completes
             let commit_id_to_use = cache_commit_id_opt.unwrap_or(head_commit_id);
 
             // Return the entries from the cache for the commit
