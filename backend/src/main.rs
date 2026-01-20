@@ -1542,7 +1542,6 @@ mod models {
     use serde::{Deserialize, Serialize};
     use serde_yaml;
     use sqlx::{Row, SqlitePool, sqlite::SqliteRow};
-    use tokio::time::{Duration, sleep};
     use uuid::Uuid;
 
     pub type Metadata = serde_yaml::Value;
@@ -1758,24 +1757,47 @@ mod models {
 
     impl AppState {
         pub async fn get_entries(&self, pattern_opt: Option<&str>) -> Result<(Oid, Vec<ListEntry>)> {
-            // Rebuild the cache if it is stale
-            let head_commit_id = match self.ensure_file_entries_cache_updated().await? {
-                Some(x) => x,
-                None => {
-                    // No cache is available at this moment, and another thread is also building a new one
-                    return Ok((Oid::zero(), vec![]));
-                }
+            let head_commit_id = self.repo.lock().unwrap().head()?.peel_to_commit()?.id();
+
+            // Check if cache needs update and trigger background update if needed
+            let cache_commit_id_opt = sqlx::query(
+                    "SELECT value FROM cache_state WHERE key = 'commit_id';",
+                )
+                .map(|row: SqliteRow| {
+                    Oid::from_str(row.get("value")).unwrap()
+                })
+                .fetch_optional(&self.cache_db)
+                .await?;
+
+            // If cache is stale, trigger background update
+            let needs_update = match cache_commit_id_opt {
+                Some(cache_commit_id) if cache_commit_id == head_commit_id => false,
+                Some(_) => true,
+                None => true,
             };
 
-            // Return the entries from the cache for the current commit
+            if needs_update {
+                // Spawn background cache update task
+                let state = self.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = state.ensure_file_entries_cache_updated().await {
+                        tracing::error!("Background cache update failed: {:?}", e);
+                    }
+                });
+            }
+
+            // Return old cache content (or current if already updated)
+            let commit_id_to_use = cache_commit_id_opt.unwrap_or(head_commit_id);
+
+            // Return the entries from the cache for the commit
             let query = if let Some(pattern) = pattern_opt {
                 sqlx::query("SELECT * FROM entry WHERE commit_id = ? AND path GLOB ?;")
-                    .bind(head_commit_id.to_string())
+                    .bind(commit_id_to_use.to_string())
                     .bind(pattern)
             }
             else {
                 sqlx::query("SELECT * FROM entry WHERE commit_id = ?;")
-                    .bind(head_commit_id.to_string())
+                    .bind(commit_id_to_use.to_string())
             };
             let entries = query
                 .map(|row: SqliteRow| {
@@ -1793,20 +1815,19 @@ mod models {
                 .fetch_all(&self.cache_db)
                 .await?;
 
-            Ok((head_commit_id, entries))
+            Ok((commit_id_to_use, entries))
         }
 
         pub async fn ensure_file_entries_cache_updated(
             &self,
-        ) -> Result<Option<Oid>> {
+        ) -> Result<()> {
             let head_commit_id = self.repo.lock().unwrap().head()?.peel_to_commit()?.id();
 
-            // Try to acquire the cache update mutex
-            let retry_interval = Duration::from_secs(3);
+            // Try to acquire the cache update mutex (non-blocking)
             tracing::debug!("Trying to acquire cache mutex...");
-            while !super::try_acquire_cache_mutex(&self.cache_db, head_commit_id).await? {
-                tracing::debug!("Retry in {} seconds...", retry_interval.as_secs());
-                sleep(retry_interval).await;
+            if !super::try_acquire_cache_mutex(&self.cache_db, head_commit_id).await? {
+                tracing::debug!("Cache mutex already held, another update is in progress");
+                return Ok(());
             }
             tracing::debug!("Acquired cache mutex.");
 
@@ -1843,7 +1864,7 @@ mod models {
             // Release the cache update mutex
             super::release_cache_mutex(&self.cache_db).await?;
 
-            Ok(Some(head_commit_id))
+            Ok(())
         }
     }
 
