@@ -15,10 +15,10 @@
             <v-icon v-if="item.metadata?.tag_group" dense>
                 {{ mdiTag }}
             </v-icon>
-            <v-icon v-else-if="item.children" dense>
+            <v-icon v-else-if="item.children" dense v-bind:color="getTaskColor(item)">
                 {{ item.metadata?.task?.status?.kind === 'done' ? mdiFolderCheck : item.metadata?.task?.status?.kind === 'canceled' ? mdiFolderOff : mdiFolder }}
             </v-icon>
-            <v-icon v-else dense>
+            <v-icon v-else dense v-bind:color="getTaskColor(item)">
                 {{ item.metadata?.task?.status?.kind === 'done' ? mdiCheckboxMarkedOutline : item.metadata?.task?.status?.kind === 'canceled' ? mdiCheckboxBlankOffOutline : mdiCheckboxBlankOutline }}
             </v-icon>
         </template>
@@ -61,6 +61,25 @@ import {
 } from '@mdi/js';
 
 import type { UUID, ApiTreeNode } from '@/api/task';
+
+function getTaskColor(item): string {
+    switch (item.metadata?.task?.status?.kind) {
+        case "todo":
+            return "blue-grey";
+        case "in_progress":
+            return "blue";
+        case "waiting":
+            return "orange";
+        case "blocked":
+            return "red";
+        case "on_hold":
+            return "purple";
+        case "done":
+            return "green";
+        case "canceled":
+            return "grey";
+    }
+}
 
 // Props
 const props = defineProps<{
