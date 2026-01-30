@@ -1727,6 +1727,14 @@ mod models {
         pub email: String,
     }
 
+    #[derive(Debug)]
+    pub enum CacheState {
+        Fresh(Oid),
+        Stale { cache_commit_id: Oid, head_commit_id: Oid },
+        Diverged { cache_commit_id: Oid, head_commit_id: Oid },
+        Empty(Oid),
+    }
+
     pub struct AppError(anyhow::Error);
 
     impl IntoResponse for AppError {
@@ -1794,6 +1802,36 @@ mod models {
                 .await?;
 
             Ok((head_commit_id, entries))
+        }
+
+        pub async fn check_cache_state(
+            &self,
+        ) -> Result<CacheState> {
+            let head_commit_id = self.repo.lock().unwrap().head()?.peel_to_commit()?.id();
+
+            let cache_commit_id_opt = sqlx::query(
+                    "SELECT value FROM cache_state WHERE key = 'commit_id';",
+                )
+                .map(|row: SqliteRow| {
+                    Oid::from_str(row.get("value")).unwrap()
+                })
+                .fetch_optional(&self.cache_db)
+                .await?;
+
+            match cache_commit_id_opt {
+                Some(cache_commit_id) if cache_commit_id == head_commit_id => {
+                    Ok(CacheState::Fresh(head_commit_id))
+                },
+                Some(cache_commit_id) if super::is_ancestor(&*self.repo.lock().unwrap(), cache_commit_id, head_commit_id)? => {
+                    Ok(CacheState::Stale { cache_commit_id: cache_commit_id, head_commit_id: head_commit_id })
+                },
+                Some(cache_commit_id) => {
+                    Ok(CacheState::Diverged { cache_commit_id: cache_commit_id, head_commit_id: head_commit_id })
+                },
+                None => {
+                    Ok(CacheState::Empty(head_commit_id))
+                },
+            }
         }
 
         pub async fn ensure_file_entries_cache_updated(
