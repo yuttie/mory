@@ -42,15 +42,18 @@ use reqwest;
 use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
 use sqlx::sqlite::{
+    SqliteConnection,
     SqliteConnectOptions,
     SqliteJournalMode,
     SqlitePool,
     SqlitePoolOptions,
-    SqliteTransaction,
 };
-use sqlx::Row;
+use sqlx::{Connection, Row};
 use tempfile::tempdir;
-use tokio::process::Command;
+use tokio::{
+    process::Command,
+    sync::mpsc,
+};
 use tower::ServiceBuilder;
 use tower_http::{
     cors::CorsLayer,
@@ -71,12 +74,15 @@ async fn main() -> Result<()> {
     dotenv().ok();
 
     // Cache database
-    let options = SqliteConnectOptions::from_str("sqlite://cache.sqlite")?
+    let cache_db_url = "sqlite://cache.sqlite";
+    let cache_db_opts = SqliteConnectOptions::from_str(cache_db_url)?
         .create_if_missing(true)
         .journal_mode(SqliteJournalMode::Wal);
-    let db_pool = SqlitePoolOptions::new()
+    let mut cache_writer_conn = SqliteConnection::connect_with(&cache_db_opts.clone().read_only(false))
+        .await?;
+    let cache_reader_pool = SqlitePoolOptions::new()
         .max_connections(4)
-        .connect_with(options)
+        .connect_with(cache_db_opts.read_only(true))
         .await?;
     sqlx::query("
             CREATE TABLE IF NOT EXISTS cache_state (
@@ -84,7 +90,7 @@ async fn main() -> Result<()> {
                 value  ANY
             ) STRICT, WITHOUT ROWID;
         ")
-        .execute(&db_pool)
+        .execute(&mut cache_writer_conn)
         .await?;
     sqlx::query("
             CREATE TABLE IF NOT EXISTS openai_cache (
@@ -94,7 +100,7 @@ async fn main() -> Result<()> {
                 created_at    INTEGER NOT NULL
             ) STRICT;
         ")
-        .execute(&db_pool)
+        .execute(&mut cache_writer_conn)
         .await?;
     sqlx::query("
             CREATE TABLE IF NOT EXISTS entry (
@@ -109,19 +115,23 @@ async fn main() -> Result<()> {
                 PRIMARY KEY (commit_id, path)
             ) STRICT;
         ")
-        .execute(&db_pool)
+        .execute(&mut cache_writer_conn)
         .await?;
 
-    let repo = {
+    let repo: Arc<Mutex<Repository>> = {
         let git_dir = env::var("MORIED_GIT_DIR").unwrap();
         match Repository::open(git_dir) {
-            Ok(repo) => repo,
+            Ok(repo) => Arc::new(Mutex::new(repo)),
             Err(e) => panic!("failed to open: {}", e),
         }
     };
+
+    let (refresh_tx, refresh_rx) = mpsc::channel::<RefreshRequest>(1024);
+
     let state = models::AppState {
-        repo: Arc::new(Mutex::new(repo)),
-        cache_db: db_pool,
+        repo: repo.clone(),
+        cache_db: cache_reader_pool,
+        tx: refresh_tx,
         http_client: reqwest::Client::builder()
             .gzip(true)
             .brotli(true)
@@ -129,7 +139,27 @@ async fn main() -> Result<()> {
             .context("Failed to build a reqwest client")
             .unwrap(),
     };
-    state.ensure_file_entries_cache_updated().await?;
+    match state.check_cache_state().await? {
+        CacheState::Stale { cache_commit_id, .. } => {
+            // Perform delta update
+            update_entries_cache(&mut cache_writer_conn, state.repo.clone(), cache_commit_id).await?;
+        },
+        CacheState::Diverged { head_commit_id, .. } => {
+            // Rebuild from scratch
+            rebuild_entries_cache(&mut cache_writer_conn, state.repo.clone(), head_commit_id).await?;
+        },
+        CacheState::Empty(head_commit_id) => {
+            // Build new one
+            rebuild_entries_cache(&mut cache_writer_conn, state.repo.clone(), head_commit_id).await?;
+        },
+        _ => (),
+    }
+
+    tokio::spawn(cache_manager_task(
+        repo.clone(),
+        refresh_rx,
+        cache_writer_conn,
+    ));
 
     let addr = env::var("MORIED_LISTEN").unwrap();
     tracing::debug!("{:?}", addr);
@@ -199,6 +229,27 @@ async fn main() -> Result<()> {
         .unwrap();
 
     Ok(())
+}
+
+async fn cache_manager_task(
+    repo: Arc<Mutex<Repository>>,
+    mut rx: mpsc::Receiver<RefreshRequest>,
+    mut conn: SqliteConnection,
+) {
+    while let Some(req) = rx.recv().await {
+        match req {
+            RefreshRequest::Update { cache_commit_id, head_commit_id } => {
+                if let Err(e) = update_entries_cache(&mut conn, repo.clone(), cache_commit_id).await {
+                    tracing::error!("update_entries_cache() failed: {:?}", e);
+                }
+            }
+            RefreshRequest::Rebuild { commit_id } => {
+                if let Err(e) = rebuild_entries_cache(&mut conn, repo.clone(), commit_id).await {
+                    tracing::error!("rebuild_entries_cache() failed: {:?}", e);
+                }
+            }
+        }
+    }
 }
 
 async fn auth(req: Request<Body>, next: Next) -> Result<Response, StatusCode> {
@@ -333,8 +384,8 @@ fn guess_mime_from_path<P: AsRef<Path>>(path: P) -> String {
     }
 }
 
-async fn rebuild_entries_cache<'c>(
-    tx: &mut SqliteTransaction<'c>,
+async fn rebuild_entries_cache(
+    conn: &mut SqliteConnection,
     repo: Arc<Mutex<Repository>>,
     commit_id: Oid,
 ) -> Result<()> {
@@ -401,6 +452,8 @@ async fn rebuild_entries_cache<'c>(
         path_info_list
     };
 
+    let mut tx = conn.begin().await?;
+
     // Insert entries
     tracing::debug!("Starting to insert cache entries...");
     for (path, time, blob_id) in path_info_list {
@@ -424,7 +477,7 @@ async fn rebuild_entries_cache<'c>(
             .bind(title)
             .bind(time.seconds())
             .bind(time.offset_minutes() * 60)
-            .execute(&mut **tx)
+            .execute(&mut *tx)
             .await
             .context("Failed to insert an cache entry")?;
     }
@@ -433,9 +486,11 @@ async fn rebuild_entries_cache<'c>(
     // Record the commit ID
     sqlx::query("INSERT INTO cache_state VALUES ('commit_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;")
         .bind(commit_id.to_string())
-        .execute(&mut **tx)
+        .execute(&mut *tx)
         .await
         .context("Failed to record the latest commit ID of the cache")?;
+
+    tx.commit().await.expect("COMMIT should succeed");
 
     tracing::info!("Finished rebuilding file entries cache.");
 
@@ -541,12 +596,14 @@ async fn release_cache_mutex(
     Ok(())
 }
 
-async fn update_entries_cache<'c>(
-    tx: &mut SqliteTransaction<'c>,
+async fn update_entries_cache(
+    conn: &mut SqliteConnection,
     repo: Arc<Mutex<Repository>>,
     last_commit_id: Oid,
 ) -> Result<()> {
     let head_commit_id = repo.lock().unwrap().head()?.peel_to_commit()?.id();
+
+    let mut tx = conn.begin().await?;
 
     // Copy all entries from the previous commit to the new commit
     sqlx::query("
@@ -557,7 +614,7 @@ async fn update_entries_cache<'c>(
         ")
         .bind(head_commit_id.to_string())
         .bind(last_commit_id.to_string())
-        .execute(&mut **tx)
+        .execute(&mut *tx)
         .await
         .context("Failed to copy the last entries with the new commit ID")?;
 
@@ -598,7 +655,7 @@ async fn update_entries_cache<'c>(
                     .bind(title)
                     .bind(time.seconds())
                     .bind(time.offset_minutes() * 60)
-                    .execute(&mut **tx)
+                    .execute(&mut *tx)
                     .await
                     .context("Failed to upsert an entry")?;
             },
@@ -607,7 +664,7 @@ async fn update_entries_cache<'c>(
                 sqlx::query("DELETE FROM entry WHERE commit_id = ? AND path = ?;")
                     .bind(head_commit_id.to_string())
                     .bind(path.to_str())
-                    .execute(&mut **tx)
+                    .execute(&mut *tx)
                     .await
                     .context("Failed to delete an entry")?;
             },
@@ -617,9 +674,11 @@ async fn update_entries_cache<'c>(
     // Update the commit ID to point to the new commit
     sqlx::query("INSERT INTO cache_state VALUES ('commit_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;")
         .bind(head_commit_id.to_string())
-        .execute(&mut **tx)
+        .execute(&mut *tx)
         .await
         .context("Failed to record the latest commit ID of the cache")?;
+
+    tx.commit().await.expect("COMMIT should succeed");
 
     Ok(())
 }
@@ -1542,7 +1601,10 @@ mod models {
     use serde::{Deserialize, Serialize};
     use serde_yaml;
     use sqlx::{Row, SqlitePool, sqlite::SqliteRow};
-    use tokio::time::{Duration, sleep};
+    use tokio::{
+        sync::mpsc,
+        time::{Duration, sleep},
+    };
     use uuid::Uuid;
 
     pub type Metadata = serde_yaml::Value;
@@ -1735,6 +1797,17 @@ mod models {
         Empty(Oid),
     }
 
+    #[derive(Debug)]
+    pub enum RefreshRequest {
+        Update {
+            cache_commit_id: Oid,
+            head_commit_id: Oid,
+        },
+        Rebuild {
+            commit_id: Oid,
+        },
+    }
+
     pub struct AppError(anyhow::Error);
 
     impl IntoResponse for AppError {
@@ -1761,29 +1834,43 @@ mod models {
     pub struct AppState {
         pub repo: Arc<Mutex<Repository>>,
         pub cache_db: SqlitePool,
+        pub tx: mpsc::Sender<RefreshRequest>,
         pub http_client: reqwest::Client,
     }
 
     impl AppState {
         pub async fn get_entries(&self, pattern_opt: Option<&str>) -> Result<(Oid, Vec<ListEntry>)> {
-            // Rebuild the cache if it is stale
-            let head_commit_id = match self.ensure_file_entries_cache_updated().await? {
-                Some(x) => x,
-                None => {
-                    // No cache is available at this moment, and another thread is also building a new one
+            let cache_commit_id = match self.check_cache_state().await? {
+                CacheState::Fresh(cache_commit_id) => {
+                    // No update is needed
+                    cache_commit_id
+                },
+                CacheState::Stale { cache_commit_id, head_commit_id } => {
+                    // Perform delta update
+                    let _ = self.tx.try_send(RefreshRequest::Update { cache_commit_id, head_commit_id });
+                    cache_commit_id
+                },
+                CacheState::Diverged { cache_commit_id, head_commit_id } => {
+                    // Rebuild from scratch
+                    let _ = self.tx.try_send(RefreshRequest::Rebuild { commit_id: head_commit_id });
+                    cache_commit_id
+                },
+                CacheState::Empty(head_commit_id) => {
+                    // No cache is available at this moment
+                    let _ = self.tx.try_send(RefreshRequest::Rebuild { commit_id: head_commit_id });
                     return Ok((Oid::zero(), vec![]));
-                }
+                },
             };
 
-            // Return the entries from the cache for the current commit
+            // Return the latest version of cached entries
             let query = if let Some(pattern) = pattern_opt {
                 sqlx::query("SELECT * FROM entry WHERE commit_id = ? AND path GLOB ?;")
-                    .bind(head_commit_id.to_string())
+                    .bind(cache_commit_id.to_string())
                     .bind(pattern)
             }
             else {
                 sqlx::query("SELECT * FROM entry WHERE commit_id = ?;")
-                    .bind(head_commit_id.to_string())
+                    .bind(cache_commit_id.to_string())
             };
             let entries = query
                 .map(|row: SqliteRow| {
@@ -1801,7 +1888,7 @@ mod models {
                 .fetch_all(&self.cache_db)
                 .await?;
 
-            Ok((head_commit_id, entries))
+            Ok((cache_commit_id, entries))
         }
 
         pub async fn check_cache_state(
@@ -1832,56 +1919,6 @@ mod models {
                     Ok(CacheState::Empty(head_commit_id))
                 },
             }
-        }
-
-        pub async fn ensure_file_entries_cache_updated(
-            &self,
-        ) -> Result<Option<Oid>> {
-            let head_commit_id = self.repo.lock().unwrap().head()?.peel_to_commit()?.id();
-
-            // Try to acquire the cache update mutex
-            let retry_interval = Duration::from_secs(3);
-            tracing::debug!("Trying to acquire cache mutex...");
-            while !super::try_acquire_cache_mutex(&self.cache_db, head_commit_id).await? {
-                tracing::debug!("Retry in {} seconds...", retry_interval.as_secs());
-                sleep(retry_interval).await;
-            }
-            tracing::debug!("Acquired cache mutex.");
-
-            // Start a regular transaction (mutex provides exclusivity)
-            let mut tx = self.cache_db.begin().await?;
-
-            let cache_commit_id_opt = sqlx::query(
-                    "SELECT value FROM cache_state WHERE key = 'commit_id';",
-                )
-                .map(|row: SqliteRow| {
-                    Oid::from_str(row.get("value")).unwrap()
-                })
-                .fetch_optional(&mut *tx)
-                .await?;
-
-            match cache_commit_id_opt {
-                Some(cache_commit_id) if cache_commit_id == head_commit_id => {
-                    // No update is needed
-                    ()
-                },
-                Some(cache_commit_id) if super::is_ancestor(&*self.repo.lock().unwrap(), cache_commit_id, head_commit_id)? => {
-                    // Perform delta update
-                    super::update_entries_cache(&mut tx, self.repo.clone(), cache_commit_id).await?;
-                },
-                _ => {
-                    // Rebuild from scratch
-                    super::rebuild_entries_cache(&mut tx, self.repo.clone(), head_commit_id).await?;
-                },
-            }
-
-            // End the transaction
-            tx.commit().await?;
-
-            // Release the cache update mutex
-            super::release_cache_mutex(&self.cache_db).await?;
-
-            Ok(Some(head_commit_id))
         }
     }
 
