@@ -244,7 +244,7 @@ async fn cache_manager_task(
     mut conn: SqliteConnection,
 ) {
     while rx.changed().await.is_ok() {
-        let cache_state = rx.borrow().clone();
+        let cache_state = rx.borrow_and_update().clone();
         match cache_state {
             CacheState::Stale { cache_commit_id, .. } => {
                 // Perform delta update
