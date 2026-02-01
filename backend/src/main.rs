@@ -84,39 +84,7 @@ async fn main() -> Result<()> {
         .max_connections(4)
         .connect_with(cache_db_opts.read_only(true))
         .await?;
-    sqlx::query("
-            CREATE TABLE IF NOT EXISTS cache_state (
-                key    TEXT PRIMARY KEY,
-                value  ANY
-            ) STRICT, WITHOUT ROWID;
-        ")
-        .execute(&mut cache_writer_conn)
-        .await?;
-    sqlx::query("
-            CREATE TABLE IF NOT EXISTS openai_cache (
-                request_hash  TEXT PRIMARY KEY,
-                request_data  TEXT NOT NULL,
-                response_data TEXT NOT NULL,
-                created_at    INTEGER NOT NULL
-            ) STRICT;
-        ")
-        .execute(&mut cache_writer_conn)
-        .await?;
-    sqlx::query("
-            CREATE TABLE IF NOT EXISTS entry (
-                commit_id  TEXT NOT NULL,
-                path       TEXT NOT NULL,
-                size       INTEGER NOT NULL,
-                mime_type  TEXT NOT NULL,
-                metadata   TEXT,
-                title      TEXT,
-                time       INTEGER,
-                tz_offset  INTEGER,
-                PRIMARY KEY (commit_id, path)
-            ) STRICT;
-        ")
-        .execute(&mut cache_writer_conn)
-        .await?;
+    init_cache_database(&mut cache_writer_conn).await?;
 
     let repo: Arc<Mutex<Repository>> = {
         let git_dir = env::var("MORIED_GIT_DIR").unwrap();
@@ -228,6 +196,45 @@ async fn main() -> Result<()> {
         .await
         .unwrap();
 
+    Ok(())
+}
+
+async fn init_cache_database(
+    conn: &mut SqliteConnection,
+) -> Result<()> {
+    sqlx::query("
+            CREATE TABLE IF NOT EXISTS cache_state (
+                key    TEXT PRIMARY KEY,
+                value  ANY
+            ) STRICT, WITHOUT ROWID;
+        ")
+        .execute(&mut *conn)
+        .await?;
+    sqlx::query("
+            CREATE TABLE IF NOT EXISTS openai_cache (
+                request_hash  TEXT PRIMARY KEY,
+                request_data  TEXT NOT NULL,
+                response_data TEXT NOT NULL,
+                created_at    INTEGER NOT NULL
+            ) STRICT;
+        ")
+        .execute(&mut *conn)
+        .await?;
+    sqlx::query("
+            CREATE TABLE IF NOT EXISTS entry (
+                commit_id  TEXT NOT NULL,
+                path       TEXT NOT NULL,
+                size       INTEGER NOT NULL,
+                mime_type  TEXT NOT NULL,
+                metadata   TEXT,
+                title      TEXT,
+                time       INTEGER,
+                tz_offset  INTEGER,
+                PRIMARY KEY (commit_id, path)
+            ) STRICT;
+        ")
+        .execute(&mut *conn)
+        .await?;
     Ok(())
 }
 
