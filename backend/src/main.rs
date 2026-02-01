@@ -1768,15 +1768,15 @@ mod models {
                     // No update is needed
                     cache_commit_id
                 },
-                CacheState::Stale { cache_commit_id, head_commit_id } => {
+                CacheState::Stale { cache_commit_id, .. } => {
                     // Perform delta update
                     cache_commit_id
                 },
-                CacheState::Diverged { cache_commit_id, head_commit_id } => {
+                CacheState::Diverged { cache_commit_id, .. } => {
                     // Rebuild from scratch
                     cache_commit_id
                 },
-                CacheState::Empty(head_commit_id) => {
+                CacheState::Empty(_) => {
                     // No cache is available at this moment
                     return Ok((Oid::zero(), vec![]));
                 },
