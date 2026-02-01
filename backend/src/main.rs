@@ -52,7 +52,7 @@ use sqlx::{Connection, Row};
 use tempfile::tempdir;
 use tokio::{
     process::Command,
-    sync::mpsc,
+    sync::watch,
 };
 use tower::ServiceBuilder;
 use tower_http::{
@@ -126,7 +126,7 @@ async fn main() -> Result<()> {
         }
     };
 
-    let (refresh_tx, refresh_rx) = mpsc::channel::<RefreshRequest>(1024);
+    let (refresh_tx, refresh_rx) = watch::channel(CacheState::Fresh(Oid::zero()));
 
     let state = models::AppState {
         repo: repo.clone(),
@@ -233,21 +233,31 @@ async fn main() -> Result<()> {
 
 async fn cache_manager_task(
     repo: Arc<Mutex<Repository>>,
-    mut rx: mpsc::Receiver<RefreshRequest>,
+    mut rx: watch::Receiver<CacheState>,
     mut conn: SqliteConnection,
 ) {
-    while let Some(req) = rx.recv().await {
-        match req {
-            RefreshRequest::Update { cache_commit_id, head_commit_id } => {
+    while rx.changed().await.is_ok() {
+        let cache_state = rx.borrow().clone();
+        match cache_state {
+            CacheState::Stale { cache_commit_id, .. } => {
+                // Perform delta update
                 if let Err(e) = update_entries_cache(&mut conn, repo.clone(), cache_commit_id).await {
                     tracing::error!("update_entries_cache() failed: {:?}", e);
                 }
-            }
-            RefreshRequest::Rebuild { commit_id } => {
-                if let Err(e) = rebuild_entries_cache(&mut conn, repo.clone(), commit_id).await {
+            },
+            CacheState::Diverged { head_commit_id, .. } => {
+                // Rebuild from scratch
+                if let Err(e) = rebuild_entries_cache(&mut conn, repo.clone(), head_commit_id).await {
                     tracing::error!("rebuild_entries_cache() failed: {:?}", e);
                 }
-            }
+            },
+            CacheState::Empty(head_commit_id) => {
+                // Build new one
+                if let Err(e) = rebuild_entries_cache(&mut conn, repo.clone(), head_commit_id).await {
+                    tracing::error!("rebuild_entries_cache() failed: {:?}", e);
+                }
+            },
+            _ => (),
         }
     }
 }
@@ -1602,7 +1612,7 @@ mod models {
     use serde_yaml;
     use sqlx::{Row, SqlitePool, sqlite::SqliteRow};
     use tokio::{
-        sync::mpsc,
+        sync::watch,
         time::{Duration, sleep},
     };
     use uuid::Uuid;
@@ -1789,7 +1799,7 @@ mod models {
         pub email: String,
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub enum CacheState {
         Fresh(Oid),
         Stale { cache_commit_id: Oid, head_commit_id: Oid },
@@ -1834,30 +1844,29 @@ mod models {
     pub struct AppState {
         pub repo: Arc<Mutex<Repository>>,
         pub cache_db: SqlitePool,
-        pub tx: mpsc::Sender<RefreshRequest>,
+        pub tx: watch::Sender<CacheState>,
         pub http_client: reqwest::Client,
     }
 
     impl AppState {
         pub async fn get_entries(&self, pattern_opt: Option<&str>) -> Result<(Oid, Vec<ListEntry>)> {
-            let cache_commit_id = match self.check_cache_state().await? {
+            let cache_state = self.check_cache_state().await?;
+            let _ = self.tx.send(cache_state.clone());
+            let cache_commit_id = match cache_state {
                 CacheState::Fresh(cache_commit_id) => {
                     // No update is needed
                     cache_commit_id
                 },
                 CacheState::Stale { cache_commit_id, head_commit_id } => {
                     // Perform delta update
-                    let _ = self.tx.try_send(RefreshRequest::Update { cache_commit_id, head_commit_id });
                     cache_commit_id
                 },
                 CacheState::Diverged { cache_commit_id, head_commit_id } => {
                     // Rebuild from scratch
-                    let _ = self.tx.try_send(RefreshRequest::Rebuild { commit_id: head_commit_id });
                     cache_commit_id
                 },
                 CacheState::Empty(head_commit_id) => {
                     // No cache is available at this moment
-                    let _ = self.tx.try_send(RefreshRequest::Rebuild { commit_id: head_commit_id });
                     return Ok((Oid::zero(), vec![]));
                 },
             };
