@@ -45,7 +45,6 @@ use sqlx::sqlite::{
     SqliteConnection,
     SqliteConnectOptions,
     SqliteJournalMode,
-    SqlitePool,
     SqlitePoolOptions,
 };
 use sqlx::{Connection, Row};
@@ -528,89 +527,6 @@ fn is_ancestor(
         }
     }
     Ok(false)
-}
-
-fn is_sqlite_busy(e: &sqlx::Error) -> bool {
-    match e.as_database_error().and_then(|db_err| db_err.code()) {
-        Some(code) => code == "5",  // SQLITE_BUSY
-        None => false,
-    }
-}
-
-async fn try_acquire_cache_mutex(
-    cache_db: &SqlitePool,
-    commit_id: Oid,
-) -> Result<bool> {
-    use sqlx::Row;
-
-    // Use an exclusive transaction to check and acquire the mutex atomically
-    let mut tx = match cache_db.begin_with("BEGIN IMMEDIATE").await {
-        Ok(tx) => tx,
-        Err(e) if is_sqlite_busy(&e) => return Ok(false),
-        Err(e) => return Err(e.into()),
-    };
-
-    // Check if a mutex record already exists and is not stale
-    let existing_lock = sqlx::query(
-            "SELECT value FROM cache_state WHERE key = 'update_mutex';",
-        )
-        .fetch_optional(&mut *tx)
-        .await?;
-
-    if let Some(row) = existing_lock {
-        let lock_data: String = row.get("value");
-        let lock_info: serde_json::Value = serde_json::from_str(&lock_data)?;
-        let lock_timestamp = lock_info["timestamp"].as_i64().unwrap_or(0);
-        let current_timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_secs() as i64;
-
-        // If the lock is older than 10 minutes, consider it stale and clean up
-        if current_timestamp - lock_timestamp < 600 {
-            // Lock is held by another thread
-            tx.rollback().await?;
-            return Ok(false);
-        }
-
-        // Lock is stale, clean up entries from the stale update
-        if let Some(stale_commit_id) = lock_info["commit_id"].as_str() {
-            sqlx::query("DELETE FROM entry WHERE commit_id = ?;")
-                .bind(stale_commit_id)
-                .execute(&mut *tx)
-                .await?;
-        }
-    }
-
-    // Acquire the mutex by inserting/updating the timestamp and commit ID
-    let current_timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)?
-        .as_secs();
-
-    let lock_data = serde_json::json!({
-        "timestamp": current_timestamp,
-        "commit_id": commit_id.to_string()
-    });
-
-    sqlx::query(
-        "INSERT INTO cache_state VALUES ('update_mutex', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;",
-    )
-        .bind(lock_data.to_string())
-        .execute(&mut *tx)
-        .await?;
-
-    tx.commit().await?;
-    Ok(true)
-}
-
-async fn release_cache_mutex(
-    cache_db: &SqlitePool,
-) -> Result<()> {
-    // Remove the mutex record
-    sqlx::query("DELETE FROM cache_state WHERE key = 'update_mutex';")
-        .execute(cache_db)
-        .await?;
-
-    Ok(())
 }
 
 async fn update_entries_cache(
@@ -1620,7 +1536,6 @@ mod models {
     use sqlx::{Row, SqlitePool, sqlite::SqliteRow};
     use tokio::{
         sync::watch,
-        time::{Duration, sleep},
     };
     use uuid::Uuid;
 
@@ -1812,17 +1727,6 @@ mod models {
         Stale { cache_commit_id: Oid, head_commit_id: Oid },
         Diverged { cache_commit_id: Oid, head_commit_id: Oid },
         Empty(Oid),
-    }
-
-    #[derive(Debug)]
-    pub enum RefreshRequest {
-        Update {
-            cache_commit_id: Oid,
-            head_commit_id: Oid,
-        },
-        Rebuild {
-            commit_id: Oid,
-        },
     }
 
     pub struct AppError(anyhow::Error);
