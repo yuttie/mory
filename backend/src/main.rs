@@ -330,12 +330,12 @@ async fn post_login(
     }
 }
 
-enum FileOp {
+pub enum FileOp {
     AddedOrModified(git2::Time, Oid),
     Deleted,
 }
 
-fn collect_recent_file_ops(
+pub fn collect_recent_file_ops(
     repo: &Repository,
     last_commit_id: Oid,
 ) -> HashMap<PathBuf, FileOp> {
@@ -513,7 +513,7 @@ async fn rebuild_entries_cache(
     Ok(())
 }
 
-fn is_ancestor(
+pub fn is_ancestor(
     repo: &Repository,
     ancestor: Oid,
     descendant: Oid,
@@ -1869,5 +1869,463 @@ mod models {
         pub file: String,
         pub line: usize,
         pub content: String,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+    use git2::Repository;
+
+    #[test]
+    fn test_guess_mime_from_path() {
+        // Test common file types
+        assert_eq!(guess_mime_from_path("test.txt"), "text/plain");
+        assert_eq!(guess_mime_from_path("test.md"), "text/markdown");
+        assert_eq!(guess_mime_from_path("test.html"), "text/html");
+        assert_eq!(guess_mime_from_path("test.json"), "application/json");
+        assert_eq!(guess_mime_from_path("test.css"), "text/css");
+        assert_eq!(guess_mime_from_path("test.js"), "text/javascript");
+        assert_eq!(guess_mime_from_path("test.png"), "image/png");
+        assert_eq!(guess_mime_from_path("test.jpg"), "image/jpeg");
+        assert_eq!(guess_mime_from_path("test.jpeg"), "image/jpeg");
+        assert_eq!(guess_mime_from_path("test.gif"), "image/gif");
+        assert_eq!(guess_mime_from_path("test.pdf"), "application/pdf");
+        
+        // Test with path components
+        assert_eq!(guess_mime_from_path("/path/to/file.txt"), "text/plain");
+        assert_eq!(guess_mime_from_path("./relative/path/file.md"), "text/markdown");
+        
+        // Test unknown extension
+        assert_eq!(guess_mime_from_path("test.unknown"), "application/octet-stream");
+        
+        // Test no extension
+        assert_eq!(guess_mime_from_path("README"), "application/octet-stream");
+        
+        // Test empty path
+        assert_eq!(guess_mime_from_path(""), "application/octet-stream");
+    }
+
+    #[test]
+    fn test_extract_metadata_with_yaml_frontmatter() {
+        let content = r#"---
+title: "Test Document"
+author: "Test Author"
+tags: ["test", "markdown"]
+---
+
+# Test Heading
+
+This is the content of the document.
+"#;
+        
+        let (metadata, title) = extract_metadata(content.as_bytes());
+        
+        assert!(metadata.is_some());
+        let metadata = metadata.unwrap();
+        
+        // Check that we can access the YAML fields
+        assert!(metadata.get("title").is_some());
+        assert!(metadata.get("author").is_some());
+        assert!(metadata.get("tags").is_some());
+        
+        // Check the title extraction from the heading
+        assert!(title.is_some());
+        let title = title.unwrap();
+        assert!(title.contains("Test Heading"));
+    }
+
+    #[test]
+    fn test_extract_metadata_no_frontmatter() {
+        let content = r#"# Test Heading
+
+This is just content without frontmatter.
+"#;
+        
+        let (metadata, title) = extract_metadata(content.as_bytes());
+        
+        assert!(metadata.is_none());
+        assert!(title.is_some());
+        let title = title.unwrap();
+        assert!(title.contains("Test Heading"));
+    }
+
+    #[test]
+    fn test_extract_metadata_invalid_yaml() {
+        let content = r#"---
+title: "Test Document
+invalid: yaml: content:
+---
+
+# Test Heading
+"#;
+        
+        let (metadata, title) = extract_metadata(content.as_bytes());
+        
+        // Should return an error object for invalid YAML
+        assert!(metadata.is_some());
+        let metadata = metadata.unwrap();
+        assert!(metadata.get("error").is_some());
+        
+        assert!(title.is_some());
+    }
+
+    #[test]
+    fn test_extract_metadata_no_heading() {
+        let content = r#"---
+title: "Test Document"
+---
+
+Just some content without any headings.
+"#;
+        
+        let (metadata, title) = extract_metadata(content.as_bytes());
+        
+        assert!(metadata.is_some());
+        assert!(title.is_none());
+    }
+
+    #[test]
+    fn test_extract_metadata_binary_content() {
+        let binary_content = vec![0u8, 1, 2, 3, 255, 254, 253];
+        
+        let (metadata, title) = extract_metadata(&binary_content);
+        
+        assert!(metadata.is_none());
+        assert!(title.is_none());
+    }
+
+    #[test]
+    fn test_extract_metadata_empty_content() {
+        let (metadata, title) = extract_metadata(b"");
+        
+        assert!(metadata.is_none());
+        assert!(title.is_none());
+    }
+
+    #[test]
+    fn test_is_ancestor_with_temp_repo() {
+        // Create a temporary git repository for testing
+        let temp_dir = tempdir().expect("Failed to create temp directory");
+        let repo = Repository::init(&temp_dir.path()).expect("Failed to initialize git repo");
+        
+        // Create an initial commit
+        let sig = git2::Signature::new("Test User", "test@example.com", &git2::Time::new(0, 0))
+            .expect("Failed to create signature");
+        
+        let tree_id = {
+            let mut index = repo.index().expect("Failed to get index");
+            index.write_tree().expect("Failed to write tree")
+        };
+        let tree = repo.find_tree(tree_id).expect("Failed to find tree");
+        
+        let first_commit_id = repo.commit(
+            Some("HEAD"),
+            &sig,
+            &sig,
+            "Initial commit",
+            &tree,
+            &[],
+        ).expect("Failed to create first commit");
+        
+        // Create a second commit
+        let second_commit_id = repo.commit(
+            Some("HEAD"),
+            &sig,
+            &sig,
+            "Second commit",
+            &tree,
+            &[&repo.find_commit(first_commit_id).expect("Failed to find first commit")],
+        ).expect("Failed to create second commit");
+        
+        // Test that first commit is ancestor of second commit
+        assert!(is_ancestor(&repo, first_commit_id, second_commit_id).expect("is_ancestor failed"));
+        
+        // Test that second commit is not ancestor of first commit
+        assert!(!is_ancestor(&repo, second_commit_id, first_commit_id).expect("is_ancestor failed"));
+        
+        // Test that a commit is considered its own ancestor
+        assert!(is_ancestor(&repo, first_commit_id, first_commit_id).expect("is_ancestor failed"));
+    }
+
+    #[test]
+    fn test_token_is_valid_with_mock_env() {
+        // Note: This test requires setting up environment variables
+        // Since token_is_valid depends on MORIED_SECRET env var, we can't easily test it
+        // without environment setup. This would be better as an integration test.
+        // For now, let's test the basic structure
+        
+        // Test invalid header format
+        std::env::set_var("MORIED_SECRET", "test_secret_key_for_testing");
+        
+        // Test malformed bearer token (should not panic)
+        let result = std::panic::catch_unwind(|| {
+            token_is_valid("Bearer")
+        });
+        assert!(result.is_err()); // Should panic due to unwrap() on split
+        
+        // Clean up
+        std::env::remove_var("MORIED_SECRET");
+    }
+
+    #[tokio::test]
+    async fn test_grep_bare_repo_basic() {
+        // This test would require setting up a real git repository with content
+        // For now, let's test error handling with non-existent repo
+        let result = grep_bare_repo("/nonexistent/path", "test", "HEAD").await;
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_collect_recent_file_ops_empty_repo() {
+        // Create a temporary git repository for testing
+        let temp_dir = tempdir().expect("Failed to create temp directory");
+        let repo = Repository::init(&temp_dir.path()).expect("Failed to initialize git repo");
+        
+        // Create an initial commit
+        let sig = git2::Signature::new("Test User", "test@example.com", &git2::Time::new(0, 0))
+            .expect("Failed to create signature");
+        
+        let tree_id = {
+            let mut index = repo.index().expect("Failed to get index");
+            index.write_tree().expect("Failed to write tree")
+        };
+        let tree = repo.find_tree(tree_id).expect("Failed to find tree");
+        
+        let commit_id = repo.commit(
+            Some("HEAD"),
+            &sig,
+            &sig,
+            "Initial commit",
+            &tree,
+            &[],
+        ).expect("Failed to create commit");
+        
+        // Test with the same commit (should return empty map)
+        let ops = collect_recent_file_ops(&repo, commit_id);
+        assert!(ops.is_empty());
+    }
+
+    #[test]
+    fn test_get_frontmatter_node() {
+        // Test with YAML frontmatter
+        let content = r#"---
+title: "Test"
+---
+# Heading"#;
+        
+        let mut opts = markdown::ParseOptions::gfm();
+        opts.constructs.frontmatter = true;
+        let node = markdown::to_mdast(content, &opts).expect("Failed to parse markdown");
+        
+        let frontmatter = get_frontmatter_node(&node);
+        assert!(frontmatter.is_some());
+        
+        // Test without frontmatter
+        let content_no_fm = "# Just a heading";
+        let node_no_fm = markdown::to_mdast(content_no_fm, &opts).expect("Failed to parse markdown");
+        
+        let frontmatter_none = get_frontmatter_node(&node_no_fm);
+        assert!(frontmatter_none.is_none());
+    }
+
+    #[test]
+    fn test_get_first_toplevel_rank1_heading() {
+        // Test with rank 1 heading
+        let content = r#"# First Heading
+## Second Heading
+# Another First Heading"#;
+        
+        let node = markdown::to_mdast(content, &markdown::ParseOptions::gfm())
+            .expect("Failed to parse markdown");
+        
+        let heading = get_first_toplevel_rank1_heading(&node);
+        assert!(heading.is_some());
+        
+        // Test without rank 1 heading
+        let content_no_h1 = r#"## Second Heading
+### Third Heading"#;
+        
+        let node_no_h1 = markdown::to_mdast(content_no_h1, &markdown::ParseOptions::gfm())
+            .expect("Failed to parse markdown");
+        
+        let heading_none = get_first_toplevel_rank1_heading(&node_no_h1);
+        assert!(heading_none.is_none());
+        
+        // Test with empty content
+        let node_empty = markdown::to_mdast("", &markdown::ParseOptions::gfm())
+            .expect("Failed to parse markdown");
+        
+        let heading_empty = get_first_toplevel_rank1_heading(&node_empty);
+        assert!(heading_empty.is_none());
+    }
+
+    #[test]
+    fn test_models_structs() {
+        // Test that our model structs can be created and serialized
+        use models::*;
+        
+        // Test Login struct
+        let login = Login {
+            user: "testuser".to_string(),
+            password: "testpass".to_string(),
+        };
+        assert_eq!(login.user, "testuser");
+        assert_eq!(login.password, "testpass");
+        
+        // Test GrepQuery struct
+        let query = GrepQuery {
+            pattern: "test pattern".to_string(),
+        };
+        assert_eq!(query.pattern, "test pattern");
+        
+        // Test GrepMatch struct
+        let grep_match = GrepMatch {
+            file: "test.txt".to_string(),
+            line: 42,
+            content: "matched content".to_string(),
+        };
+        assert_eq!(grep_match.file, "test.txt");
+        assert_eq!(grep_match.line, 42);
+        assert_eq!(grep_match.content, "matched content");
+        
+        // Test NoteSave enum
+        let note_save = NoteSave::Save {
+            content: "note content".to_string(),
+            message: "commit message".to_string(),
+        };
+        match note_save {
+            NoteSave::Save { content, message } => {
+                assert_eq!(content, "note content");
+                assert_eq!(message, "commit message");
+            }
+            _ => panic!("Expected Save variant"),
+        }
+        
+        let note_rename = NoteSave::Rename {
+            from: "old_name.md".to_string(),
+        };
+        match note_rename {
+            NoteSave::Rename { from } => {
+                assert_eq!(from, "old_name.md");
+            }
+            _ => panic!("Expected Rename variant"),
+        }
+    }
+
+    #[test]
+    fn test_extract_metadata_edge_cases() {
+        // Test with only frontmatter, no content
+        let content = r#"---
+title: "Only frontmatter"
+---"#;
+        
+        let (metadata, title) = extract_metadata(content.as_bytes());
+        assert!(metadata.is_some());
+        assert!(title.is_none());
+        
+        // Test with multiple headings
+        let content_multi = r#"# First Heading
+Some content here.
+# Second Heading
+More content."#;
+        
+        let (metadata_multi, title_multi) = extract_metadata(content_multi.as_bytes());
+        assert!(metadata_multi.is_none());
+        assert!(title_multi.is_some());
+        let title = title_multi.unwrap();
+        // Should get the first heading
+        assert!(title.contains("First Heading"));
+        
+        // Test with heading that's not level 1
+        let content_h2 = r#"## Second Level Heading
+Content here."#;
+        
+        let (metadata_h2, title_h2) = extract_metadata(content_h2.as_bytes());
+        assert!(metadata_h2.is_none());
+        assert!(title_h2.is_none());
+    }
+
+    #[test]
+    fn test_error_handling_edge_cases() {
+        // Test git functions with invalid OIDs
+        let temp_dir = tempdir().expect("Failed to create temp directory");
+        let repo = Repository::init(&temp_dir.path()).expect("Failed to initialize git repo");
+        
+        // Create a valid commit first
+        let sig = git2::Signature::new("Test User", "test@example.com", &git2::Time::new(0, 0))
+            .expect("Failed to create signature");
+        
+        let tree_id = {
+            let mut index = repo.index().expect("Failed to get index");
+            index.write_tree().expect("Failed to write tree")
+        };
+        let tree = repo.find_tree(tree_id).expect("Failed to find tree");
+        
+        let valid_commit_id = repo.commit(
+            Some("HEAD"),
+            &sig,
+            &sig,
+            "Valid commit",
+            &tree,
+            &[],
+        ).expect("Failed to create commit");
+        
+        // Test is_ancestor with completely non-existent OID as descendant
+        let nonexistent_oid = git2::Oid::from_str("abcdef1234567890abcdef1234567890abcdef12")
+            .expect("Failed to create nonexistent OID");
+        
+        // This should return an error when trying to push the nonexistent descendant
+        let result = is_ancestor(&repo, valid_commit_id, nonexistent_oid);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_frontmatter_variations() {
+        // Test with TOML frontmatter (if supported)
+        let content_toml = r#"+++
+title = "TOML Document"
++++
+# Heading"#;
+        
+        let mut opts = markdown::ParseOptions::gfm();
+        opts.constructs.frontmatter = true;
+        
+        if let Ok(node) = markdown::to_mdast(content_toml, &opts) {
+            let frontmatter = get_frontmatter_node(&node);
+            // TOML frontmatter should be detected
+            assert!(frontmatter.is_some());
+        }
+        
+        // Test with malformed frontmatter delimiters
+        let content_malformed = r#"--
+title: "Malformed"
+--
+# Heading"#;
+        
+        if let Ok(node) = markdown::to_mdast(content_malformed, &opts) {
+            let frontmatter = get_frontmatter_node(&node);
+            // Should not detect frontmatter with wrong delimiters
+            assert!(frontmatter.is_none());
+        }
+    }
+
+    #[test]
+    fn test_mime_type_edge_cases() {
+        // Test with various extensions and edge cases
+        assert_eq!(guess_mime_from_path("file."), "application/octet-stream");
+        assert_eq!(guess_mime_from_path(".hidden"), "application/octet-stream");
+        assert_eq!(guess_mime_from_path("file.unknown_ext"), "application/octet-stream");
+        assert_eq!(guess_mime_from_path("path/to/file.txt"), "text/plain");
+        assert_eq!(guess_mime_from_path("./file.md"), "text/markdown");
+        
+        // Test with uppercase extensions
+        assert_eq!(guess_mime_from_path("file.TXT"), "text/plain");
+        assert_eq!(guess_mime_from_path("file.JPG"), "image/jpeg");
+        
+        // Test with multiple dots
+        assert_eq!(guess_mime_from_path("file.backup.txt"), "text/plain");
+        assert_eq!(guess_mime_from_path("archive.tar.gz"), "application/gzip");
     }
 }
