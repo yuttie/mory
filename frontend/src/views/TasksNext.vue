@@ -186,6 +186,12 @@
                                 v-bind:eisenhower-quadrants="eisenhowerQuadrants"
                                 v-on:task-click="onTaskListItemClick"
                             />
+                            <!-- Stack view -->
+                            <TaskStackView
+                                v-else-if="descendantsViewMode === 'stack'"
+                                v-bind:stack-tracks="stackTracks"
+                                v-on:task-click="onTaskListItemClick"
+                            />
                         </div>
                     </v-tab-item>
                 </v-tabs-items>
@@ -214,6 +220,7 @@ import { useLocalStorage } from '@/composables/localStorage';
 
 import {
     mdiCalendarMultiselectOutline,
+    mdiChartBoxMultipleOutline,
     mdiDotsVertical,
     mdiGridLarge,
     mdiPlus,
@@ -640,10 +647,90 @@ const eisenhowerQuadrants = computed(() => {
     };
 });
 
+// Stack view computed properties
+const stackTracks = computed(() => {
+    interface FlameLevel {
+        depth: number;
+        tasks: TreeNodeRecord[];
+    }
+
+    interface StackTrack {
+        rootId: UUID;
+        rootTask: TreeNodeRecord;
+        levels: FlameLevel[];
+    }
+
+    const tracks: StackTrack[] = [];
+
+    // Get root tasks - tasks that are either actual roots or children of selected node
+    const targetTasks = filteredSelectedNodeDescendants.value;
+    
+    // If we have a selected node, start from its children, otherwise use all root tasks
+    let rootTasks: TreeNodeRecord[];
+    if (selectedNode.value && !isTagGroupSelected.value) {
+        // Show children of selected node as separate tracks
+        rootTasks = store.childrenOf(selectedNode.value.uuid);
+    } else {
+        // Show all root level tasks
+        rootTasks = targetTasks.filter(task => {
+            const parent = store.parentOf(task.uuid);
+            return parent === null || !targetTasks.some(t => t.uuid === parent);
+        });
+    }
+
+    for (const rootTask of rootTasks) {
+        const track: StackTrack = {
+            rootId: rootTask.uuid,
+            rootTask,
+            levels: []
+        };
+
+        // Build hierarchy levels for this track
+        const visited = new Set<UUID>();
+        const levels = new Map<number, TreeNodeRecord[]>();
+
+        function buildLevels(task: TreeNodeRecord, depth: number) {
+            if (visited.has(task.uuid)) return;
+            visited.add(task.uuid);
+
+            if (!levels.has(depth)) {
+                levels.set(depth, []);
+            }
+            levels.get(depth)!.push(task);
+
+            // Add children at next level
+            const children = store.childrenOf(task.uuid).filter(child => 
+                targetTasks.some(t => t.uuid === child.uuid)
+            );
+            for (const child of children) {
+                buildLevels(child, depth + 1);
+            }
+        }
+
+        buildLevels(rootTask, 0);
+
+        // Convert to flame levels
+        for (const [depth, tasks] of levels.entries()) {
+            track.levels.push({
+                depth,
+                tasks
+            });
+        }
+
+        // Sort levels by depth
+        track.levels.sort((a, b) => a.depth - b.depth);
+
+        tracks.push(track);
+    }
+
+    return tracks;
+});
+
 const viewModeOptions = computed(() => [
     { text: 'Status', icon: mdiTrafficLightOutline, value: 'status' },
     { text: 'Schedule', icon: mdiCalendarMultiselectOutline, value: 'schedule' },
     { text: 'Eisenhower Matrix', icon: mdiGridLarge, value: 'eisenhower' },
+    { text: 'Stack', icon: mdiChartBoxMultipleOutline, value: 'stack' },
 ]);
 
 // URL management functions
