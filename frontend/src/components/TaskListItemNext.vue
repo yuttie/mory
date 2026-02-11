@@ -1,9 +1,12 @@
 <template>
     <div
-        v-on:click="$emit('click', $event)"
+        v-on:click="onItemClick"
         class="task-list-item"
     >
-        <v-icon class="mr-1">
+        <v-icon 
+            class="mr-1"
+            v-on:click.stop="onCheckboxClick"
+        >
             {{ done ? mdiCheckboxMarkedOutline : canceled ? mdiCheckboxBlankOffOutline : mdiCheckboxBlankOutline }}
         </v-icon>
         <div>
@@ -109,7 +112,17 @@ const props = defineProps<{
 // Emits
 const emit = defineEmits<{
     (e: 'click', event: Event): void;
+    (e: 'checkbox-click', event: Event): void;
 }>();
+
+// Methods
+function onItemClick(event: Event) {
+    emit('click', event);
+}
+
+function onCheckboxClick(event: Event) {
+    emit('checkbox-click', event);
+}
 
 // Computed properties
 const done = computed<boolean>(() => {
