@@ -328,3 +328,13 @@ export async function assessTask(task: {
     });
     return response.data;
 }
+
+export async function getTaskTemplate(): Promise<string | null> {
+  try {
+    const response = await getNote('.mory/default_task.template');
+    return response.data;
+  } catch (error) {
+    // Template file doesn't exist or can't be read
+    return null;
+  }
+}

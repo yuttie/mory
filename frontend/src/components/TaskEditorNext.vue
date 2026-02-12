@@ -436,11 +436,11 @@ import {
     mdiTrafficLightOutline,
 } from '@mdi/js';
 
-import { assessTask, type TaskAssessmentResponse } from '@/api';
+import { assessTask, type TaskAssessmentResponse, getTaskTemplate } from '@/api';
 
 import { extractFileUuid } from '@/api/task';
 import type { UUID, Task, Status, StatusKind, WaitingStatus, BlockedStatus, OnHoldStatus, DoneStatus, CanceledStatus } from '@/task';
-import { STATUS_LABEL, nextOptions, makeDefaultStatus, canTransition } from '@/task';
+import { STATUS_LABEL, nextOptions, makeDefaultStatus, canTransition, parseTaskTemplate } from '@/task';
 import { useFetchTask } from '@/composables/fetchTask';
 
 import dayjs from 'dayjs';
@@ -624,7 +624,7 @@ const isModified = computed<boolean>(() => {
 // Watchers
 watch(
     task,
-    (newTask, oldTask) => {
+    async (newTask, oldTask) => {
         // If both old and new task values are undefined/null,
         // we're switching parents during new task creation - preserve form
         if ((newTask === null || newTask === undefined) &&
@@ -632,7 +632,7 @@ watch(
             return; // Don't reset the form
         }
 
-        resetFromTask(newTask);
+        await resetFromTask(newTask);
     },
     { immediate: true },
 );
@@ -677,7 +677,7 @@ function getNewTaskTitle(): string {
     }
 }
 
-function resetFromTask(t?: Task | undefined | null): void {
+async function resetFromTask(t?: Task | undefined | null): Promise<void> {
     // Clear task assessment when switching tasks
     taskAssessment.value = null;
     assessmentLoading.value = false;
@@ -687,6 +687,33 @@ function resetFromTask(t?: Task | undefined | null): void {
     }
 
     if (!t) {
+        // Load template for new tasks
+        try {
+            const templateContent = await getTaskTemplate();
+            if (templateContent) {
+                const templateData = parseTaskTemplate(templateContent);
+                if (templateData) {
+                    // Apply template data with selected tag override
+                    const defaultTags = props.selectedTag ? [props.selectedTag] : templateData.metadata.tags || [];
+                    form.title = templateData.title;
+                    form.tags = defaultTags;
+                    form.status = templateData.metadata.task.status || { kind: 'todo' };
+                    form.progress = templateData.metadata.task.progress || 0;
+                    form.importance = templateData.metadata.task.importance || 3;
+                    form.urgency = templateData.metadata.task.urgency || 3;
+                    form.start_at = templateData.metadata.task.start_at || '';
+                    form.due_by = templateData.metadata.task.due_by || '';
+                    form.deadline = templateData.metadata.task.deadline || '';
+                    form.scheduled_dates = templateData.metadata.task.scheduled_dates || [];
+                    form.note = templateData.note;
+                    return;
+                }
+            }
+        } catch (error) {
+            console.warn('Failed to load task template, using defaults:', error);
+        }
+        
+        // Fallback to defaults if template loading failed
         const defaultTags = props.selectedTag ? [props.selectedTag] : [];
         form.title = '';
         form.tags = defaultTags;

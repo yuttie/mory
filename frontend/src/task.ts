@@ -1,6 +1,7 @@
 import YAML from 'yaml';
 
 import type { UUID } from '@/api';
+import { extractFrontmatterH1AndRest } from '@/markdown';
 
 export { UUID };
 
@@ -125,4 +126,49 @@ export function render(task: Task): string {
         tags: task.tags,
     };
     return '---\n' + YAML.stringify(metadata, { indent: 4 }) + '---\n' + (task.title ? `\n# ${task.title}\n` : '') + (`\n${task.note}`);
+}
+
+export interface ParsedTaskTemplate {
+    metadata: {
+        task: {
+            status: Status;
+            progress: number;
+            importance: number;
+            urgency: number;
+            start_at?: string;
+            due_by?: string;
+            deadline?: string;
+            scheduled_dates: string[];
+        };
+        tags: string[];
+    };
+    title: string;
+    note: string;
+}
+
+export function parseTaskTemplate(templateContent: string): ParsedTaskTemplate | null {
+    try {
+        const { frontmatter, heading, rest } = extractFrontmatterH1AndRest(templateContent);
+        
+        if (!frontmatter) {
+            return null;
+        }
+        
+        // Parse YAML frontmatter
+        const metadata = YAML.parse(frontmatter);
+        
+        // Validate that we have the required task structure
+        if (!metadata || !metadata.task) {
+            return null;
+        }
+        
+        return {
+            metadata,
+            title: heading,
+            note: rest,
+        };
+    } catch (error) {
+        console.warn('Failed to parse task template:', error);
+        return null;
+    }
 }
