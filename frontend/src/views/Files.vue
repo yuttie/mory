@@ -232,7 +232,7 @@ const matchedEntries = computed(() => {
                 return entry.metadata.tags.map((tag: any) => String(tag).toLowerCase());
             }
         })();
-        // Check if all conditions are met or notl
+        // Check if all conditions are met or not
         if (queryPaths.some(kw => !entryPath.includes(kw))) {
             continue;
         }
