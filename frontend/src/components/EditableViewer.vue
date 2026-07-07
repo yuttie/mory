@@ -256,9 +256,9 @@
                                     color="primary"
                                     v-bind:value="selectedMode"
                                 >
-                                    <v-list-item v-on:click="editorIsVisible = false; viewerIsVisible = true; "><v-list-item-icon><v-icon dense>{{ mdiFileDocument     }}</v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
-                                    <v-list-item v-on:click="editorIsVisible = true;  viewerIsVisible = true; "><v-list-item-icon><v-icon dense>{{ mdiFileDocumentEdit }}</v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
-                                    <v-list-item v-on:click="editorIsVisible = true;  viewerIsVisible = false;"><v-list-item-icon><v-icon dense>{{ mdiPencil           }}</v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
+                                    <v-list-item v-on:click="switchToViewerOnlyMode"><v-list-item-icon><v-icon dense>{{ mdiFileDocument     }}</v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
+                                    <v-list-item v-on:click="switchToBothMode"><v-list-item-icon><v-icon dense>{{ mdiFileDocumentEdit }}</v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
+                                    <v-list-item v-on:click="switchToEditorOnlyMode"><v-list-item-icon><v-icon dense>{{ mdiPencil           }}</v-icon></v-list-item-icon><v-list-item-content><!-- Necessary for proper alignment and layout of v-list-item when only an icon is present --></v-list-item-content></v-list-item>
                                 </v-list-item-group>
                             </v-list>
 
@@ -421,6 +421,7 @@ const showConfirmationDialog = ref(false);
 const error = ref(false);
 const errorText = ref('');
 const renderTimeoutId = ref(null as null | number);
+const savedScrollPosition = ref({ editorLineNumber: 0, viewerScrollTop: 0 });
 
 // Non-reactive state for internal rendering control
 let chunkRenderController: AbortController | null = null;
@@ -1081,18 +1082,11 @@ function highlightVisibleTOCItems() {
     }
 }
 
-function handleDocumentScroll() {
-    highlightVisibleTOCItems();
-
-    if (!lockScroll.value) {
-        return;
-    }
-    if (ignoreNext.value) {
-        ignoreNext.value = false;
-        return;
+function buildScrollMap(): [number, number][] {
+    if (!renderedContentDiv.value) {
+        return [];
     }
 
-    // Build scroll map
     const scrollMap: [number, number][] = [...renderedContentDiv.value.querySelectorAll<HTMLElement>('[data-line]')]
         .map((el) => {
             const lineNumber = parseInt(el.dataset['line'] as string);
@@ -1122,6 +1116,107 @@ function handleDocumentScroll() {
             }
         }
     }
+
+    return scrollMap;
+}
+
+function captureCurrentScrollPosition() {
+    if (editorIsVisible.value && !useSimpleEditor.value && editor.value) {
+        // Capture editor scroll position
+        savedScrollPosition.value.editorLineNumber = (editor.value as any).renderer.getFirstFullyVisibleRow();
+    }
+    if (viewerIsVisible.value && viewer.value) {
+        // Capture viewer scroll position
+        savedScrollPosition.value.viewerScrollTop = viewer.value.scrollTop;
+    }
+}
+
+function restoreScrollPosition() {
+    nextTick(() => {
+        if (editorIsVisible.value && !viewerIsVisible.value) {
+            // Editor only mode - restore editor position from saved viewer position if available
+            if (savedScrollPosition.value.viewerScrollTop > 0) {
+                convertViewerScrollToEditor(savedScrollPosition.value.viewerScrollTop);
+            } else if (savedScrollPosition.value.editorLineNumber > 0) {
+                editorScrollTo(savedScrollPosition.value.editorLineNumber);
+            }
+        } else if (!editorIsVisible.value && viewerIsVisible.value) {
+            // Viewer only mode - restore viewer position from saved editor position if available
+            if (savedScrollPosition.value.editorLineNumber > 0) {
+                convertEditorScrollToViewer(savedScrollPosition.value.editorLineNumber);
+            } else if (savedScrollPosition.value.viewerScrollTop > 0) {
+                viewer.value.scrollTo({ top: savedScrollPosition.value.viewerScrollTop, left: 0, behavior: 'auto' });
+            }
+        } else if (editorIsVisible.value && viewerIsVisible.value) {
+            // Both visible - restore based on which was previously visible
+            if (savedScrollPosition.value.editorLineNumber > 0) {
+                editorScrollTo(savedScrollPosition.value.editorLineNumber);
+            }
+            if (savedScrollPosition.value.viewerScrollTop > 0) {
+                viewer.value.scrollTo({ top: savedScrollPosition.value.viewerScrollTop, left: 0, behavior: 'auto' });
+            }
+        }
+    });
+}
+
+function convertViewerScrollToEditor(viewerScrollTop: number) {
+    const scrollMap = buildScrollMap();
+    if (scrollMap.length < 2) return;
+
+    // Find the interval where the viewer scroll position belongs to
+    let intervalIndex = null;
+    for (let i = 0; i < scrollMap.length - 1; ++i) {
+        if (scrollMap[i][1] <= viewerScrollTop && viewerScrollTop < scrollMap[i + 1][1]) {
+            intervalIndex = i;
+            break;
+        }
+    }
+    if (intervalIndex !== null) {
+        const [lineNumber1, offset1] = scrollMap[intervalIndex];
+        const [lineNumber2, offset2] = scrollMap[intervalIndex + 1];
+
+        // Calculate corresponding line number
+        const lineNumber = lineNumber1 + (lineNumber2 - lineNumber1) * (viewerScrollTop - offset1) / (offset2 - offset1);
+        editorScrollTo(lineNumber);
+    }
+}
+
+function convertEditorScrollToViewer(editorLineNumber: number) {
+    const scrollMap = buildScrollMap();
+    if (scrollMap.length < 2) return;
+
+    // Find the interval where the editor line number belongs to
+    let intervalIndex = null;
+    for (let i = 0; i < scrollMap.length - 1; ++i) {
+        if (scrollMap[i][0] <= editorLineNumber && editorLineNumber < scrollMap[i + 1][0]) {
+            intervalIndex = i;
+            break;
+        }
+    }
+    if (intervalIndex !== null) {
+        const [lineNumber1, offset1] = scrollMap[intervalIndex];
+        const [lineNumber2, offset2] = scrollMap[intervalIndex + 1];
+
+        // Calculate corresponding viewer offset
+        const offset = offset1 + (offset2 - offset1) * (editorLineNumber - lineNumber1) / (lineNumber2 - lineNumber1);
+        viewer.value.scrollTo({ top: offset, left: 0, behavior: 'auto' });
+    }
+}
+
+function handleDocumentScroll() {
+    highlightVisibleTOCItems();
+
+    if (!lockScroll.value) {
+        return;
+    }
+    if (ignoreNext.value) {
+        ignoreNext.value = false;
+        return;
+    }
+
+    // Build scroll map
+    const scrollMap = buildScrollMap();
+    if (scrollMap.length < 2) return;
 
     // Find the interval where the `scrollTop` belongs to
     const scrollTop = viewer.value.scrollTop;
@@ -1166,35 +1261,8 @@ function onEditorScroll(lineNumber: number) {
     }
 
     // Build scroll map
-    const scrollMap: [number, number][] = [...renderedContentDiv.value.querySelectorAll<HTMLElement>('[data-line]')]
-        .map((el) => {
-            const lineNumber = parseInt(el.dataset['line'] as string);
-            const offset = computeOffset(el);
-            return [lineNumber, offset];
-        })
-        .sort((a, b) => {
-            if (a[0] < b[0]) {
-                return -1;
-            }
-            if (a[0] > b[0]) {
-                return 1;
-            }
-            return 0;
-        }) as [number, number][];
-
-    // Remove non-monotonically increasing entries
-    {
-        let i = 0;
-        while (i < scrollMap.length - 1) {
-            if (scrollMap[i][1] > scrollMap[i + 1][1]) {
-                // Delete the (i + 1)-th element
-                scrollMap.splice(i + 1, 1);
-            }
-            else {
-                ++i;
-            }
-        }
-    }
+    const scrollMap = buildScrollMap();
+    if (scrollMap.length < 2) return;
 
     // Find the interval where the given line number belongs to
     let intervalIndex = null;
@@ -1342,7 +1410,30 @@ async function reload() {
     await load(route.params.path);
 }
 
+function switchToViewerOnlyMode() {
+    captureCurrentScrollPosition();
+    editorIsVisible.value = false;
+    viewerIsVisible.value = true;
+    restoreScrollPosition();
+}
+
+function switchToBothMode() {
+    captureCurrentScrollPosition();
+    editorIsVisible.value = true;
+    viewerIsVisible.value = true;
+    restoreScrollPosition();
+}
+
+function switchToEditorOnlyMode() {
+    captureCurrentScrollPosition();
+    editorIsVisible.value = true;
+    viewerIsVisible.value = false;
+    restoreScrollPosition();
+}
+
 function toggleEditor() {
+    captureCurrentScrollPosition();
+    
     if (viewerIsVisible.value) {
         if (editorIsVisible.value) {
             editorIsVisible.value = false;
@@ -1367,10 +1458,13 @@ function toggleEditor() {
     nextTick(() => {
         onEditorPaneResize();
         onViewerPaneResize();
+        restoreScrollPosition();
     });
 }
 
 function toggleViewer() {
+    captureCurrentScrollPosition();
+    
     if (editorIsVisible.value) {
         if (viewerIsVisible.value) {
             viewerIsVisible.value = false;
@@ -1395,6 +1489,7 @@ function toggleViewer() {
     nextTick(() => {
         onEditorPaneResize();
         onViewerPaneResize();
+        restoreScrollPosition();
     });
 }
 
