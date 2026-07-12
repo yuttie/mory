@@ -98,7 +98,6 @@ export function chunkMarkdownByHeadings(markdown: string): { frontmatter: string
   let frontmatter = '';
   let currentChunkStart = 0;
   let currentChunkStartLine = 1;
-  let contentStart = 0;
 
   // Extract frontmatter if present
   const firstNode = tree.children[0];
@@ -107,7 +106,6 @@ export function chunkMarkdownByHeadings(markdown: string): { frontmatter: string
       frontmatter = markdown.slice(0, firstNode.position.end.offset);
       currentChunkStart = firstNode.position.end.offset;
       currentChunkStartLine = firstNode.position.end.line + 1;
-      contentStart = firstNode.position.end.offset;
     }
   }
 
