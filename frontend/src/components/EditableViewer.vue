@@ -380,7 +380,8 @@ import type { DefinedError } from 'ajv';
 import * as api from '@/api';
 import { loadConfigValue } from '@/config';
 import { CliPrettify } from 'markdown-table-prettify';
-import { chunkMarkdownByHeadings, renderMarkdown } from '@/markdown';
+import { chunkMarkdownByHeadings } from '@/markdown-utils';
+import { renderMarkdown } from '@/markdown';
 
 const ajv = new Ajv();
 const validateMetadata = ajv.compile(metadataSchema);

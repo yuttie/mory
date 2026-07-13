@@ -48,7 +48,7 @@ export async function getTask(taskPath: string, eTag?: string): Promise<[string,
         return [res.headers.etag, null];
     }
     else {
-        const { extractFrontmatterH1AndRest } = await import('@/markdown');
+        const { extractFrontmatterH1AndRest } = await import('@/markdown-utils');
         const md = res.data as string;
         const { frontmatter, heading: title, rest } = extractFrontmatterH1AndRest(md);
         const metadata = YAML.parse(frontmatter);
