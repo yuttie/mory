@@ -14,7 +14,8 @@ import rehypeSlug from 'rehype-slug';
 import rehypeAutolinkHeadings from 'rehype-autolink-headings';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeStringify from 'rehype-stringify';
-import { all } from 'lowlight';
+import type { LanguageFn } from 'highlight.js';
+import { hljsLanguageMap } from '@/hljs-language-map';
 import type { VFile } from 'vfile';
 
 const apiFilesUrl = new URL('files/', new URL(import.meta.env.VITE_APP_API_URL!, window.location.href)).href;
@@ -27,6 +28,7 @@ const apiFilesUrl = new URL('files/', new URL(import.meta.env.VITE_APP_API_URL!,
 interface PipelineFeatures {
   math: boolean;
   mermaid: boolean;
+  languages: string[];  // Canonical highlight.js grammar names used by the document, sorted.
 }
 
 function detectFeatures(markdown: string): PipelineFeatures {
@@ -38,7 +40,41 @@ function detectFeatures(markdown: string): PipelineFeatures {
     // Fenced code blocks (``` or ~~~) with the mermaid language, or raw HTML
     // using mermaid classes.
     mermaid: /^[ \t]*(?:`{3,}|~{3,})[ \t]*mermaid|class="(?:[^"]*\s)?mermaid/m.test(markdown),
+    languages: detectLanguages(markdown),
   };
+}
+
+function detectLanguages(markdown: string): string[] {
+  const found = new Set<string>();
+  // Fenced code blocks: the first word of the info string (```js, ~~~python).
+  for (const match of markdown.matchAll(/^[ \t]*(?:`{3,}|~{3,})[ \t]*([^\s`~{]+)/gm)) {
+    found.add(match[1].toLowerCase());
+  }
+  // Raw HTML code blocks with a language-x class.
+  for (const match of markdown.matchAll(/class="(?:[^"]*\s)?language-([^\s"]+)/g)) {
+    found.add(match[1].toLowerCase());
+  }
+  const canonical = new Set<string>();
+  for (const name of found) {
+    const grammar = hljsLanguageMap[name];
+    // Unknown languages (including mermaid, handled by rehype-mermaid) are
+    // simply left unhighlighted, matching rehype-highlight's own behavior.
+    if (grammar) {
+      canonical.add(grammar);
+    }
+  }
+  return [...canonical].sort();
+}
+
+// Grammar modules under highlight.js/es/languages/, bundled as lazy chunks.
+// The *.js.js files are deprecation stubs, not grammars.
+const grammarLoaders = import.meta.glob<{ default: LanguageFn }>([
+  '../node_modules/highlight.js/es/languages/*.js',
+  '!../node_modules/highlight.js/es/languages/*.js.js',
+]);
+
+function loadGrammar(name: string): Promise<LanguageFn> {
+  return grammarLoaders[`../node_modules/highlight.js/es/languages/${name}.js`]().then((m) => m.default);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -49,7 +85,7 @@ type AnyProcessor = Processor<any, any, any, any, string>;
 const processorCache = new Map<string, Promise<AnyProcessor>>();
 
 async function getProcessor(features: PipelineFeatures): Promise<AnyProcessor> {
-  const key = `${features.math ? 'm' : ''}${features.mermaid ? 'd' : ''}`;
+  const key = `${features.math ? 'm' : ''}${features.mermaid ? 'd' : ''}:${features.languages.join(',')}`;
   let cached = processorCache.get(key);
   if (!cached) {
     cached = buildProcessor(features);
@@ -59,11 +95,16 @@ async function getProcessor(features: PipelineFeatures): Promise<AnyProcessor> {
 }
 
 async function buildProcessor(features: PipelineFeatures): Promise<AnyProcessor> {
-  // Load heavyweight plugins in parallel, only when needed.
-  const [rehypeKatex, rehypeMermaid] = await Promise.all([
+  // Load heavyweight plugins and highlight.js grammars in parallel, only
+  // when needed.
+  const [rehypeKatex, rehypeMermaid, grammars] = await Promise.all([
     features.math ? import('rehype-katex').then((m) => m.default) : undefined,
     features.mermaid ? import('rehype-mermaid').then((m) => m.default) : undefined,
+    Promise.all(features.languages.map(loadGrammar)),
   ]);
+  // Registering a grammar under its canonical name also registers its
+  // aliases (js, ts, ...), so language-js classes still resolve.
+  const languages = Object.fromEntries(features.languages.map((name, i) => [name, grammars[i]]));
 
   let processor = unified()
     .use(remarkParse)
@@ -101,7 +142,7 @@ async function buildProcessor(features: PipelineFeatures): Promise<AnyProcessor>
       },
     })
     .use(rehypeHighlight, {
-      languages: all,
+      languages,
     }) as AnyProcessor;
 
   if (rehypeKatex) {

@@ -11,6 +11,16 @@ export default ts.config(
   js.configs.recommended,
   ...ts.configs.recommended,
   ...eslintPluginVue.configs['flat/vue2-recommended'],
+  // Node.js build/maintenance scripts
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+      },
+    },
+  },
   // Enable TypeScript parser in *.vue files
   {
     files: ['*.vue', '**/*.vue'],
