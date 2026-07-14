@@ -429,6 +429,10 @@ let markdownChunks: Array<{ content: string; startLine: number }> = [];
 let renderedChunks: string[] = [];
 let chunkElements: HTMLElement[] = [];
 
+// Set right before a route.params.path change that we've already handled locally
+// (e.g. after a rename), so the route watcher below doesn't reload the note again.
+let skipNextPathWatch = false;
+
 // Template Refs
 const editor = ref(null);
 const viewer = ref(null);
@@ -555,6 +559,57 @@ const newPathValidationResult = computed((): boolean | string => {
     }
 });
 
+// Load (or initialize, in create mode) the note pointed to by the current route.
+// Vue Router reuses this component instance when navigating between two routes
+// that resolve to the same 'Note' route record (e.g. clicking "New note" while
+// already viewing a note), so this must be re-run on route changes, not just on mount.
+async function loadNoteFromRoute() {
+    error.value = false;
+    errorText.value = '';
+
+    if (route.query.mode === 'create') {
+        // A newly created note has no saved copy on the server yet, so the
+        // save button must stay enabled regardless of leftover state from
+        // whatever note was previously open in this component instance.
+        noteHasUpstream.value = false;
+        notFound.value = false;
+
+        if (route.query.template) {
+            await loadTemplate(route.query.template as string);
+        }
+        else {
+            text.value = `---
+tags:
+events:
+---
+
+# ${route.params.path}`;
+            initialText.value = text.value;
+            editorIsVisible.value = true;
+            (editor.value as Editor | HTMLTextAreaElement).focus();
+
+            // Update immediately
+            updateRendered();
+        }
+        editorIsVisible.value = true;
+        viewerIsVisible.value = true;
+    }
+    else {
+        await load(route.params.path);
+        if (/\.(md|markdown)$/i.test(route.params.path)) {
+            // Show only viewer for files with rendering support
+            editorIsVisible.value = false;
+            viewerIsVisible.value = true;
+        }
+        else {
+            // Otherwise, show only editor
+            editorIsVisible.value = true;
+            viewerIsVisible.value = false;
+        }
+    }
+    focusOrBlurEditor();
+}
+
 // Lifecycle hooks
 onMounted(async () => {
     // Attach a shadow DOM
@@ -600,41 +655,7 @@ onMounted(async () => {
 
     window.addEventListener('keydown', handleKeydown);
 
-    if (route.query.mode === 'create') {
-        if (route.query.template) {
-            await loadTemplate(route.query.template as string);
-        }
-        else {
-            text.value = `---
-tags:
-events:
----
-
-# ${route.params.path}`;
-            initialText.value = text.value;
-            editorIsVisible.value = true;
-            (editor.value as Editor | HTMLTextAreaElement).focus();
-
-            // Update immediately
-            updateRendered();
-        }
-        editorIsVisible.value = true;
-        viewerIsVisible.value = true;
-    }
-    else {
-        await load(route.params.path);
-        if (/\.(md|markdown)$/i.test(route.params.path)) {
-            // Show only viewer for files with rendering support
-            editorIsVisible.value = false;
-            viewerIsVisible.value = true;
-        }
-        else {
-            // Otherwise, show only editor
-            editorIsVisible.value = true;
-            viewerIsVisible.value = false;
-        }
-    }
-    focusOrBlurEditor();
+    await loadNoteFromRoute();
 
     viewer.value.addEventListener('scroll', handleDocumentScroll);
 });
@@ -1605,6 +1626,7 @@ function rename() {
             oldPath,
             newPath.value,
         ).then(_res => {
+                skipNextPathWatch = true;
                 router.replace({
                     path: `/note/${newPath.value}`,
                 });
@@ -1651,6 +1673,16 @@ watch(renameMenuIsVisible, (isVisible: boolean) => {
 
 watch(toc, () => {
     highlightVisibleTOCItems();
+});
+
+watch(() => route.params.path, async (newPath, oldPath) => {
+    if (skipNextPathWatch) {
+        skipNextPathWatch = false;
+        return;
+    }
+    if (newPath !== oldPath) {
+        await loadNoteFromRoute();
+    }
 });
 </script>
 
