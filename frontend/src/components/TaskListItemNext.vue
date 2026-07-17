@@ -17,9 +17,9 @@
                 class="additional-info"
                 v-if="value.note"
             >
-                <v-tooltip bottom>
-                    <template v-slot:activator="{ on, attrs }">
-                        <v-icon small v-bind="attrs" v-on="on">{{ mdiNoteTextOutline }}</v-icon>
+                <v-tooltip location="bottom">
+                    <template v-slot:activator="{ props: tooltipProps }">
+                        <v-icon size="small" v-bind="tooltipProps">{{ mdiNoteTextOutline }}</v-icon>
                     </template>
                     <div class="note-tooltip">{{ value.note }}</div>
                 </v-tooltip>
@@ -29,10 +29,10 @@
                 v-if="startAt"
                 v-bind:style="startAtStyle"
             >
-                <v-tooltip bottom>
-                    <template v-slot:activator="{ on, attrs }">
-                        <span v-bind="attrs" v-on="on">
-                            <v-icon small v-bind:style="startAtStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ startAtText }}
+                <v-tooltip location="bottom">
+                    <template v-slot:activator="{ props: tooltipProps }">
+                        <span v-bind="tooltipProps">
+                            <v-icon size="small" v-bind:style="startAtStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ startAtText }}
                         </span>
                     </template>
                     <div>{{ startAt }}</div>
@@ -43,10 +43,10 @@
                 v-if="dueBy"
                 v-bind:style="dueByStyle"
             >
-                <v-tooltip bottom>
-                    <template v-slot:activator="{ on, attrs }">
-                        <span v-bind="attrs" v-on="on">
-                            <v-icon small v-bind:style="dueByStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ dueByText }}
+                <v-tooltip location="bottom">
+                    <template v-slot:activator="{ props: tooltipProps }">
+                        <span v-bind="tooltipProps">
+                            <v-icon size="small" v-bind:style="dueByStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ dueByText }}
                         </span>
                     </template>
                     <div>{{ dueBy }}</div>
@@ -57,10 +57,10 @@
                 v-if="deadline"
                 v-bind:style="deadlineStyle"
             >
-                <v-tooltip bottom>
-                    <template v-slot:activator="{ on, attrs }">
-                        <span v-bind="attrs" v-on="on">
-                            <v-icon small v-bind:style="deadlineStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ deadlineText }}
+                <v-tooltip location="bottom">
+                    <template v-slot:activator="{ props: tooltipProps }">
+                        <span v-bind="tooltipProps">
+                            <v-icon size="small" v-bind:style="deadlineStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ deadlineText }}
                         </span>
                     </template>
                     <div>{{ deadline }}</div>
