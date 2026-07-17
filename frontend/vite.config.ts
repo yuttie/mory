@@ -1,8 +1,8 @@
 import { defineConfig, loadEnv } from 'vite';
-import vue from '@vitejs/plugin-vue2';
+import vue from '@vitejs/plugin-vue';
+import vuetify from 'vite-plugin-vuetify';
 import { visualizer } from "rollup-plugin-visualizer";
 import Components from 'unplugin-vue-components/vite';
-import { VuetifyResolver } from 'unplugin-vue-components/resolvers';
 import { name as appName, version as appVersion, author as appAuthor } from './package.json';
 
 export default defineConfig(({ mode }) => {
@@ -21,12 +21,10 @@ export default defineConfig(({ mode }) => {
     plugins: [
       visualizer(),
       vue(),
-      // Automatically import components as needed
-      Components({
-        resolvers: [
-          VuetifyResolver(),
-        ],
-      }),
+      // Automatically import Vuetify components and directives as needed
+      vuetify({ autoImport: true }),
+      // Automatically import our own components as needed
+      Components(),
     ],
     resolve: {
       alias: {
