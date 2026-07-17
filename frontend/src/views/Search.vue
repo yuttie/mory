@@ -4,11 +4,10 @@
             <v-form v-on:submit.prevent="search">
                 <v-text-field
                     v-model="queryText"
-                    filled
+                    variant="filled"
                     rounded
                     single-line
                     clearable
-                    block
                     v-on:click:clear="clearQuery"
                     type="text"
                     label="Search"
@@ -29,10 +28,10 @@
                 </li>
             </ul>
         </v-sheet>
-        <v-overlay v-bind:value="isLoading" z-index="10" opacity="0">
-            <v-progress-circular indeterminate color="blue-grey lighten-3" size="64"></v-progress-circular>
+        <v-overlay v-bind:model-value="isLoading" z-index="10" scrim="transparent" class="align-center justify-center">
+            <v-progress-circular indeterminate color="blue-grey-lighten-3" size="64"></v-progress-circular>
         </v-overlay>
-        <v-snackbar v-model="error" color="error" top timeout="5000">{{ errorText }}</v-snackbar>
+        <v-snackbar v-model="error" color="error" location="top" timeout="5000">{{ errorText }}</v-snackbar>
     </div>
 </template>
 
@@ -40,7 +39,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import type { Ref } from 'vue';
 
-import { useRoute, useRouter } from 'vue-router/composables';
+import { useRoute, useRouter } from 'vue-router';
 
 import {
 } from '@mdi/js';
@@ -114,7 +113,7 @@ function search() {
 
 function handleKeydown(e: KeyboardEvent) {
     if (e.key === '/') {
-        (queryEl as HTMLInputElement).focus();
+        queryEl.value?.focus();
         e.preventDefault();
     }
 }
