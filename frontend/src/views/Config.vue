@@ -10,7 +10,7 @@
                 v-on:click="saveAsDefault"
                 class="mt-2 mb-4"
             >Save as default</v-btn>
-            <v-alert text type="info">
+            <v-alert variant="tonal" type="info">
                 The following settings are only applied to the current browser and never be saved in the repository unless saved as default.
             </v-alert>
             <v-checkbox
@@ -68,18 +68,16 @@
                     <v-select
                         v-bind:items="editorThemes"
                         v-model="currentEditorTheme"
-                        menu-props="auto"
                         label="Theme"
-                        item-text="name"
+                        item-title="name"
                         item-value="value"
                     >
                     </v-select>
                     <v-select
                         v-bind:items="editorKeybindings"
                         v-model="currentEditorKeybinding"
-                        menu-props="auto"
                         label="Keybinding"
-                        item-text="name"
+                        item-title="name"
                         item-value="value"
                     >
                     </v-select>
@@ -101,9 +99,8 @@
                     <v-select
                         v-bind:items="highlightjsThemes"
                         v-model="currentHighlightjsTheme"
-                        menu-props="auto"
                         label="Code Block Syntax Highlight Theme"
-                        item-text="name"
+                        item-title="name"
                         item-value="value"
                     >
                     </v-select>

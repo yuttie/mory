@@ -4,7 +4,6 @@
             ref="formRef"
             v-model="uiValid"
             v-bind:disabled="loading"
-            lazy-validation
             style="display: contents"
             v-on:submit.prevent="onSave"
         >
@@ -16,7 +15,7 @@
                     target="_blank"
                     title="Open as note"
                     class="ml-1"
-                    plain
+                    variant="plain"
                     icon
                 >
                     <v-icon>{{ mdiPencilBoxOutline }}</v-icon>
@@ -26,32 +25,32 @@
                     <v-spacer />
                     <v-btn
                         v-if="!isEdit"
-                        text
+                        variant="text"
                         class="mr-3"
                         v-on:click="onCancel"
                     >
                         <v-icon>{{ mdiClose }}</v-icon>
-                        <span v-if="$vuetify.breakpoint.mdAndUp">Cancel</span>
+                        <span v-if="$vuetify.display.mdAndUp">Cancel</span>
                     </v-btn>
                     <v-btn
                         v-if="isEdit"
-                        text
+                        variant="text"
                         color="primary"
                         class="mr-3"
                         v-on:click="onChangeParent"
                     >
-                        <v-icon small class="mr-1">{{ mdiFileTreeOutline }}</v-icon>
-                        <span v-if="$vuetify.breakpoint.mdAndUp">Change Parent</span>
+                        <v-icon size="small" class="mr-1">{{ mdiFileTreeOutline }}</v-icon>
+                        <span v-if="$vuetify.display.mdAndUp">Change Parent</span>
                     </v-btn>
                     <v-btn
                         v-if="isEdit"
                         color="error"
-                        text
+                        variant="text"
                         class="mr-3"
                         v-on:click="onDelete"
                     >
                         <v-icon>{{ mdiDelete }}</v-icon>
-                        <span v-if="$vuetify.breakpoint.mdAndUp">Delete</span>
+                        <span v-if="$vuetify.display.mdAndUp">Delete</span>
                     </v-btn>
                     <v-btn
                         v-bind:disabled="!!statusGateError || !uiValid"
@@ -59,15 +58,15 @@
                         color="primary"
                     >
                         <v-icon>{{ mdiContentSave }}</v-icon>
-                        <span v-if="$vuetify.breakpoint.mdAndUp">{{ isEdit ? 'Save' : 'Create' }}</span>
+                        <span v-if="$vuetify.display.mdAndUp">{{ isEdit ? 'Save' : 'Create' }}</span>
                     </v-btn>
                 </div>
             </v-card-title>
             <v-alert
                 v-if="error"
                 type="error"
-                dense
-                outlined
+                density="compact"
+                variant="outlined"
                 class="mx-4"
             >
                 {{ String(error) }}
@@ -79,14 +78,14 @@
                 <div class="props-pane pr-3">
                     <!-- Title -->
                     <v-textarea
-                        v-model.trim="form.title"
+                        v-model="form.title"
                         v-bind:rules="[required('Title is required.')]"
                         label="Title"
                         autofocus
                         auto-grow
                         rows="1"
                         required
-                        v-on:input="onTitleInput"
+                        v-on:update:model-value="onTitleInput"
                     >
                         <template v-slot:prepend>
                             <v-icon>{{ mdiFormatHeader1 }}</v-icon>
@@ -94,7 +93,7 @@
                     </v-textarea>
                     <!-- Tags -->
                     <v-combobox
-                        v-model.trim="form.tags"
+                        v-model="form.tags"
                         v-bind:items="tagItems"
                         v-bind:return-object="false"
                         label="Tags"
@@ -103,16 +102,15 @@
                         clearable
                         hide-selected
                     >
-                        <template v-slot:selection="{ attrs, item, parent, selected }">
+                        <template v-slot:chip="{ item, props: chipProps }">
                             <v-chip
-                                v-bind="attrs"
-                                v-bind:input-value="selected"
+                                v-bind="chipProps"
                                 label
-                                small
-                                close
-                                v-on:click:close="parent.selectItem(item)"
+                                size="small"
+                                closable
+                                v-on:click:close="form.tags = form.tags.filter((t) => t !== item.value)"
                             >
-                                <span>{{ item }}</span>
+                                <span>{{ item.value }}</span>
                             </v-chip>
                         </template>
                         <template v-slot:prepend>
@@ -126,7 +124,7 @@
                             v-bind:items="statusOptions"
                             v-bind:error-messages="statusGateError ? [statusGateError] : []"
                             label="Status"
-                            item-text="label"
+                            item-title="label"
                             item-value="kind"
                         >
                             <template v-slot:prepend>
@@ -135,18 +133,19 @@
                         </v-select>
                         <v-btn
                             icon
-                            small
+                            variant="text"
+                            size="small"
                             v-on:click="statusOptionRestricted = !statusOptionRestricted"
                             title="Show all statuses"
                             color="primary"
                         >
-                            <v-icon small>{{ statusOptionRestricted ? mdiLock : mdiLockOpenVariant }}</v-icon>
+                            <v-icon size="small">{{ statusOptionRestricted ? mdiLock : mdiLockOpenVariant }}</v-icon>
                         </v-btn>
                     </div>
                     <!-- Status-specific fields -->
                     <div v-if="form.status.kind === 'waiting'" class="ml-10">
                         <v-text-field
-                            v-model.trim="form.status.waiting_for"
+                            v-model="form.status.waiting_for"
                             v-bind:rules="[required('Waiting for is required.')]"
                             label="Waiting for"
                             required
@@ -161,7 +160,7 @@
                             label="Expected by (optional)"
                         />
                         <v-combobox
-                            v-model.trim="form.status.contact"
+                            v-model="form.status.contact"
                             v-bind:items="contactItems"
                             v-bind:return-object="false"
                             label="Contact (optional)"
@@ -180,7 +179,7 @@
                     </div>
                     <div v-if="form.status.kind === 'blocked'" class="ml-10">
                         <v-text-field
-                            v-model.trim="form.status.blocked_by"
+                            v-model="form.status.blocked_by"
                             v-bind:rules="[required('Blocked by is required.')]"
                             label="Blocked by"
                             required
@@ -192,7 +191,7 @@
                     </div>
                     <div v-if="form.status.kind === 'on_hold'" class="ml-10">
                         <v-text-field
-                            v-model.trim="form.status.hold_reason"
+                            v-model="form.status.hold_reason"
                             v-bind:rules="[required('Hold reason is required.')]"
                             label="Hold reason"
                             required
@@ -215,7 +214,7 @@
                             required
                         />
                         <v-text-field
-                            v-model.trim="form.status.completion_note"
+                            v-model="form.status.completion_note"
                             label="Completion note (optional)"
                         >
                             <template v-slot:prepend>
@@ -231,7 +230,7 @@
                             required
                         />
                         <v-text-field
-                            v-model.trim="form.status.cancel_reason"
+                            v-model="form.status.cancel_reason"
                             v-bind:rules="[required('Cancel reason is required.')]"
                             label="Cancel reason"
                             required
@@ -310,13 +309,14 @@
                         Scheduled dates
                     </v-label>
                     <v-date-picker
-                        v-model="form.scheduled_dates"
+                        v-bind:model-value="scheduledDatesAsDates"
+                        v-on:update:model-value="onScheduledDatesChange"
                         multiple
-                        no-title
-                        full-width
+                        hide-header
+                        width="100%"
                     />
                     <template v-if="form.scheduled_dates.length > 0">
-                        <v-subheader>All selected dates</v-subheader>
+                        <v-list-subheader>All selected dates</v-list-subheader>
                         <ul class="date-list">
                             <li v-for="date of form.scheduled_dates.toSorted()">
                                 {{ date }}
@@ -329,16 +329,16 @@
                     <v-textarea
                         v-model="form.note"
                         label="Note"
-                        outlined
+                        variant="outlined"
                         no-resize
                         class="full-height-textarea"
                     />
                 </div>
                 <div v-if="(taskAssessment || assessmentLoading) && form.title.length >= 3" class="assessment-pane pl-3">
                     <!-- Task Assessment -->
-                    <v-card outlined class="pa-3">
+                    <v-card variant="outlined" class="pa-3">
                         <v-card-subtitle class="pa-0 pb-2">
-                            <v-icon small class="mr-1">{{ mdiLightbulbOnOutline }}</v-icon>
+                            <v-icon size="small" class="mr-1">{{ mdiLightbulbOnOutline }}</v-icon>
                             Task Assessment
                             <v-progress-circular
                                 v-if="assessmentLoading"
@@ -350,31 +350,31 @@
                         </v-card-subtitle>
                         <div v-if="!assessmentLoading">
                             <div class="d-flex align-center mb-2">
-                                <span class="caption mr-2">Quality Score:</span>
+                                <span class="text-caption mr-2">Quality Score:</span>
                                 <v-rating
-                                    v-bind:value="taskAssessment.quality_score / 2"
+                                    v-bind:model-value="taskAssessment.quality_score / 2"
                                     readonly
-                                    dense
+                                    density="compact"
                                     size="16"
                                     length="5"
                                     half-increments
                                     color="amber"
                                 ></v-rating>
-                                <span class="caption ml-1">({{ taskAssessment.quality_score.toFixed(1) }}/10)</span>
+                                <span class="text-caption ml-1">({{ taskAssessment.quality_score.toFixed(1) }}/10)</span>
                             </div>
-                            <p class="caption mb-2" v-if="taskAssessment.feedback">
+                            <p class="text-caption mb-2" v-if="taskAssessment.feedback">
                                 {{ taskAssessment.feedback }}
                             </p>
                             <div v-if="taskAssessment.suggestions.length > 0">
-                                <p class="caption font-weight-bold mb-1">Suggestions:</p>
-                                <ul class="caption">
+                                <p class="text-caption font-weight-bold mb-1">Suggestions:</p>
+                                <ul class="text-caption">
                                     <li v-for="(suggestion, index) in taskAssessment.suggestions" v-bind:key="index">
                                         {{ suggestion }}
                                     </li>
                                 </ul>
                             </div>
                             <div v-if="taskAssessment.note_suggestions && taskAssessment.note_suggestions.length > 0" class="mt-3">
-                                <p class="caption font-weight-bold mb-1">
+                                <p class="text-caption font-weight-bold mb-1">
                                     Note Suggestions:
                                     <span class="font-weight-normal">(click + to add to note)</span>
                                 </p>
@@ -385,16 +385,17 @@
                                         class="note-suggestion-item"
                                     >
                                         <div class="d-flex align-center">
-                                            <span class="caption flex-grow-1">{{ suggestion }}</span>
+                                            <span class="text-caption flex-grow-1">{{ suggestion }}</span>
                                             <v-btn
                                                 icon
-                                                x-small
+                                                variant="text"
+                                                size="x-small"
                                                 class="ml-1"
                                                 v-on:click="addNoteContent(suggestion)"
                                                 title="Add to note"
                                                 color="primary"
                                             >
-                                                <v-icon x-small>{{ mdiPlus }}</v-icon>
+                                                <v-icon size="x-small">{{ mdiPlus }}</v-icon>
                                             </v-btn>
                                         </div>
                                     </div>
@@ -587,23 +588,32 @@ const statusGateError = computed<string | undefined>(() => {
     }
 });
 
-const tagItems = computed<{ text: string; value: string; }[]>(() =>
+const tagItems = computed<{ title: string; value: string; }[]>(() =>
     props.knownTags.map(([tag, count]) => {
         return {
-            text: `${tag} (${count})`,
+            title: `${tag} (${count})`,
             value: tag,
         };
     })
 );
 
-const contactItems = computed<{ text: string; value: string; }[]>(() =>
+const contactItems = computed<{ title: string; value: string; }[]>(() =>
     props.knownContacts.map(([contact, count]) => {
         return {
-            text: `${contact} (${count})`,
+            title: `${contact} (${count})`,
             value: contact,
         };
     })
 );
+
+// v3 <v-date-picker multiple> works with Date objects rather than formatted strings
+const scheduledDatesAsDates = computed<Date[]>(() =>
+    form.scheduled_dates.map((date) => dayjs(date).toDate())
+);
+
+function onScheduledDatesChange(dates: unknown) {
+    form.scheduled_dates = (dates as Date[]).map((date) => dayjs(date).format('YYYY-MM-DD'));
+}
 
 const isModified = computed<boolean>(() => {
     return (
@@ -738,16 +748,16 @@ const range = (min: number, max: number, msg: string) => (v: any) =>
     (typeof v === 'number' && v >= min && v <= max) || msg;
 
 // Save/Delete
-function onSave(): void {
-    // Check validation results
-    const ok = formRef.value?.validate?.();  // Runs Vuetify rules
-    if (!ok || statusGateError.value) {
+async function onSave(): Promise<void> {
+    // Check validation results (async and returns { valid } in Vuetify 3)
+    const result = await formRef.value?.validate?.();  // Runs Vuetify rules
+    if (!result?.valid || statusGateError.value) {
         return;
     }
     // Create a Task value
     const task = {
         uuid: uuid.value,
-        title: form.title,
+        title: form.title.trim(),
         tags: [...form.tags],
         status: { ...form.status },
         progress: form.progress,
@@ -925,7 +935,7 @@ defineExpose({
     height: 100%;
 }
 
-:deep(.full-height-textarea .v-input__slot) {
+:deep(.full-height-textarea .v-field) {
     height: 100%;
 }
 
@@ -938,7 +948,7 @@ defineExpose({
         border-left: 3px solid #1976d2;
     }
 
-    .caption {
+    .text-caption {
         line-height: 1.4;
     }
 
@@ -956,7 +966,7 @@ defineExpose({
                 border-bottom: none;
             }
 
-            .caption {
+            .text-caption {
                 line-height: 1.3;
             }
         }
