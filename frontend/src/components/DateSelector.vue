@@ -342,11 +342,11 @@ function onDatePick(date: unknown) {
     updateValue(dayjs(date as Date).format('YYYY-MM-DD'), timeValue.value, timezoneValue.value);
 }
 
-function onTimePick(time: string) {
+function onTimePick(time: string | null) {
     updateValue(dateValue.value, time, timezoneValue.value);
 }
 
-function onTimezonePick(timezone: string) {
+function onTimezonePick(timezone: string | null) {
     updateValue(dateValue.value, timeValue.value, timezone);
 }
 

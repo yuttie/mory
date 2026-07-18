@@ -13,11 +13,11 @@
 import { ref, onMounted } from 'vue';
 
 // Reactive states
-const name: string = ref(import.meta.env.VITE_APP_NAME!);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
-const version: string = ref(import.meta.env.VITE_APP_VERSION!);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
-const author: string = ref(import.meta.env.VITE_APP_AUTHOR!);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+const name = ref(import.meta.env.VITE_APP_NAME!);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+const version = ref(import.meta.env.VITE_APP_VERSION!);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+const author = ref(import.meta.env.VITE_APP_AUTHOR!);  // eslint-disable-line @typescript-eslint/no-non-null-assertion
 const fromYear = ref(2020);
-const buildYear: number = ref(parseInt(import.meta.env.VITE_APP_BUILD_YEAR!));  // eslint-disable-line @typescript-eslint/no-non-null-assertion
+const buildYear = ref(parseInt(import.meta.env.VITE_APP_BUILD_YEAR!));  // eslint-disable-line @typescript-eslint/no-non-null-assertion
 
 // Lifecycle hooks
 onMounted(() => {

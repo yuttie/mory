@@ -114,7 +114,7 @@
                     <v-checkbox
                         label="Done"
                         v-bind:model-value="modelValue.done"
-                        v-on:update:model-value="$emit('update:modelValue', { ...modelValue, done: $event })"
+                        v-on:update:model-value="$emit('update:modelValue', { ...modelValue, done: $event ?? false })"
                     ></v-checkbox>
                 </v-col>
             </v-row>

@@ -51,7 +51,7 @@
             v-bind:items-per-page="100"
             v-bind:items-per-page-options="[100, 200, 500, 1000, -1]"
             items-per-page-text=""
-            mobile-breakpoint="0"
+            v-bind:mobile-breakpoint="0"
             item-value="path"
             v-bind:sort-by="[{ key: 'time', order: 'desc' }]"
             must-sort
@@ -149,7 +149,7 @@ const selected = ref([] as string[]);
 const showingTagList = ref(false);
 
 // Template Refs
-const queryEl = ref(null);
+const queryEl = ref<any>(null);
 
 // Computed properties
 const headers = computed(() => {
@@ -330,7 +330,7 @@ function clearQuery(_e: MouseEvent) {
     queryText.value = '';
 }
 
-function handleTagClick(tag: string, e: MouseEvent) {
+function handleTagClick(tag: string, e: MouseEvent | KeyboardEvent) {
     if (e.ctrlKey) {
         toggleTag(tag);
     }

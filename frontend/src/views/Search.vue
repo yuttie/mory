@@ -63,7 +63,7 @@ const error = ref(false);
 const errorText = ref('');
 
 // Template Refs
-const queryEl = ref(null);
+const queryEl = ref<any>(null);
 
 // Lifecycle hooks
 onMounted(() => {
