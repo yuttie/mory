@@ -817,7 +817,8 @@ async function onSelectedTaskSave(task: Task) {
         await store.refresh();
     }
     // Refresh task editor manually because its task-path prop retains the same value
-    taskEditorRef.value.refresh();
+    // (the ref may be momentarily null while the window transition remounts the editor)
+    taskEditorRef.value?.refresh();
 }
 
 async function onSelectedTaskDelete(path: string) {

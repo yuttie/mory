@@ -1,6 +1,34 @@
+import { toRaw } from 'vue';
 import { getAxios } from '@/axios';
 import YAML from 'yaml';
 import type { Status } from '@/task';
+
+// Deep-clone a data tree while unwrapping Vue reactive proxies and preserving shared
+// references (so YAML.stringify can still emit anchors/aliases for shared objects).
+// structuredClone cannot be used directly because it throws on reactive proxies.
+function deepCloneRaw<T>(value: T, seen = new Map<object, unknown>()): T {
+    const raw = (typeof value === 'object' && value !== null ? toRaw(value) : value) as T;
+    if (raw === null || typeof raw !== 'object') {
+        return raw;
+    }
+    if (seen.has(raw)) {
+        return seen.get(raw) as T;
+    }
+    if (Array.isArray(raw)) {
+        const copy: unknown[] = [];
+        seen.set(raw, copy);
+        for (const item of raw) {
+            copy.push(deepCloneRaw(item, seen));
+        }
+        return copy as T;
+    }
+    const copy: Record<string, unknown> = {};
+    seen.set(raw, copy);
+    for (const [key, item] of Object.entries(raw)) {
+        copy[key] = deepCloneRaw(item, seen);
+    }
+    return copy as T;
+}
 
 export type JsonValue =
     | { [k: string]: JsonValue }
@@ -204,7 +232,7 @@ export async function getTaskData(eTag?: string): Promise<[string, TaskData | nu
 
 export async function putTaskData(data: TaskData) {
     // Clean up
-    data = structuredClone(data);
+    data = deepCloneRaw(data);
     for (const task of data.tasks.backlog) {
         for (const [prop, value] of Object.entries(task)) {
             if (value === null) {
