@@ -4,9 +4,9 @@
         <div class="quick-create-section ma-3">
             <h2 class="mb-3 text-center">Quick Create</h2>
             <div class="quick-create-grid">
-                <v-card outlined>
+                <v-card variant="outlined">
                     <v-card-title class="pb-2">
-                        <v-icon left>{{ mdiNotePlusOutline }}</v-icon>
+                        <v-icon start>{{ mdiNotePlusOutline }}</v-icon>
                         Note
                     </v-card-title>
                     <v-card-text>
@@ -15,8 +15,8 @@
                             v-model="quickNoteContent"
                             placeholder="Enter note content..."
                             rows="5"
-                            outlined
-                            dense
+                            variant="outlined"
+                            density="compact"
                             hide-details="auto"
                             v-on:keydown="handleNoteKeydown"
                         ></v-textarea>
@@ -27,15 +27,15 @@
                                 v-bind:disabled="!quickNoteContent.trim()"
                                 v-on:click="createQuickNote"
                             >
-                                <v-icon left>{{ mdiFileDocumentPlusOutline }}</v-icon>
+                                <v-icon start>{{ mdiFileDocumentPlusOutline }}</v-icon>
                                 Create Note
                             </v-btn>
                         </div>
                     </v-card-text>
                 </v-card>
-                <v-card outlined>
+                <v-card variant="outlined">
                     <v-card-title class="pb-2">
-                        <v-icon left>{{ mdiCheckboxMarkedCirclePlusOutline }}</v-icon>
+                        <v-icon start>{{ mdiCheckboxMarkedCirclePlusOutline }}</v-icon>
                         Task
                     </v-card-title>
                     <v-card-text>
@@ -43,9 +43,9 @@
                             ref="taskNameField"
                             v-model="quickTaskName"
                             placeholder="Enter task name..."
-                            outlined
+                            variant="outlined"
                             hide-details="auto"
-                            dense
+                            density="compact"
                             class="mb-2"
                             v-on:keydown="handleTaskKeydown"
                         ></v-text-field>
@@ -53,8 +53,8 @@
                             v-model="quickTaskScheduledDay"
                             hide-details="auto"
                             class="mb-2"
-                            row
-                            dense
+                            inline
+                            density="compact"
                         >
                             <template v-slot:label>
                                 <div>Schedule</div>
@@ -84,7 +84,7 @@
                                 v-bind:disabled="!quickTaskName.trim()"
                                 v-on:click="createQuickTask"
                             >
-                                <v-icon left>{{ mdiCheckboxMarkedCirclePlusOutline }}</v-icon>
+                                <v-icon start>{{ mdiCheckboxMarkedCirclePlusOutline }}</v-icon>
                                 Create Task
                             </v-btn>
                         </div>
@@ -97,13 +97,13 @@
         <div class="events-section ma-3">
             <h2 class="mb-3 text-center">Events</h2>
             <div class="events-grid">
-                <v-card outlined class="event-column">
+                <v-card variant="outlined" class="event-column">
                     <v-card-title class="pb-2">
-                        <v-icon left>{{ mdiCalendarToday }}</v-icon>
+                        <v-icon start>{{ mdiCalendarToday }}</v-icon>
                         Today
                     </v-card-title>
                     <v-card-text>
-                        <div v-if="todayEvents.length === 0" class="text-center text--secondary">
+                        <div v-if="todayEvents.length === 0" class="text-center text-medium-emphasis">
                             No events today
                         </div>
                         <div v-else>
@@ -115,20 +115,20 @@
                                 v-on:click="navigateToEvent(event)"
                             >
                                 <div class="event-name font-weight-medium">{{ event.name }}</div>
-                                <div class="event-time text--secondary caption">{{ formatEventTime(event) }}</div>
-                                <div v-if="event.note" class="event-note caption mt-1">{{ event.note }}</div>
+                                <div class="event-time text-medium-emphasis text-caption">{{ formatEventTime(event) }}</div>
+                                <div v-if="event.note" class="event-note text-caption mt-1">{{ event.note }}</div>
                             </div>
                         </div>
                     </v-card-text>
                 </v-card>
 
-                <v-card outlined class="event-column">
+                <v-card variant="outlined" class="event-column">
                     <v-card-title class="pb-2">
-                        <v-icon left>{{ mdiCalendar }}</v-icon>
+                        <v-icon start>{{ mdiCalendar }}</v-icon>
                         Tomorrow
                     </v-card-title>
                     <v-card-text>
-                        <div v-if="tomorrowEvents.length === 0" class="text-center text--secondary">
+                        <div v-if="tomorrowEvents.length === 0" class="text-center text-medium-emphasis">
                             No events tomorrow
                         </div>
                         <div v-else>
@@ -140,20 +140,20 @@
                                 v-on:click="navigateToEvent(event)"
                             >
                                 <div class="event-name font-weight-medium">{{ event.name }}</div>
-                                <div class="event-time text--secondary caption">{{ formatEventTime(event) }}</div>
-                                <div v-if="event.note" class="event-note caption mt-1">{{ event.note }}</div>
+                                <div class="event-time text-medium-emphasis text-caption">{{ formatEventTime(event) }}</div>
+                                <div v-if="event.note" class="event-note text-caption mt-1">{{ event.note }}</div>
                             </div>
                         </div>
                     </v-card-text>
                 </v-card>
 
-                <v-card outlined class="event-column">
+                <v-card variant="outlined" class="event-column">
                     <v-card-title class="pb-2">
-                        <v-icon left>{{ mdiCalendarPlus }}</v-icon>
+                        <v-icon start>{{ mdiCalendarPlus }}</v-icon>
                         Day After Tomorrow
                     </v-card-title>
                     <v-card-text>
-                        <div v-if="dayAfterTomorrowEvents.length === 0" class="text-center text--secondary">
+                        <div v-if="dayAfterTomorrowEvents.length === 0" class="text-center text-medium-emphasis">
                             No events
                         </div>
                         <div v-else>
@@ -165,8 +165,8 @@
                                 v-on:click="navigateToEvent(event)"
                             >
                                 <div class="event-name font-weight-medium">{{ event.name }}</div>
-                                <div class="event-time text--secondary caption">{{ formatEventTime(event) }}</div>
-                                <div v-if="event.note" class="event-note caption mt-1">{{ event.note }}</div>
+                                <div class="event-time text-medium-emphasis text-caption">{{ formatEventTime(event) }}</div>
+                                <div v-if="event.note" class="event-note text-caption mt-1">{{ event.note }}</div>
                             </div>
                         </div>
                     </v-card-text>
@@ -178,13 +178,13 @@
         <div class="tasks-section ma-3">
             <h2 class="mb-3 text-center">Tasks</h2>
             <div class="tasks-grid">
-                <v-card outlined class="task-column">
+                <v-card variant="outlined" class="task-column">
                     <v-card-title class="pb-2">
-                        <v-icon left>{{ mdiCheckboxMarkedCircleOutline }}</v-icon>
+                        <v-icon start>{{ mdiCheckboxMarkedCircleOutline }}</v-icon>
                         Scheduled Today
                     </v-card-title>
                     <v-card-text>
-                        <div v-if="todayTasks.length === 0" class="text-center text--secondary">
+                        <div v-if="todayTasks.length === 0" class="text-center text-medium-emphasis">
                             No tasks scheduled for today
                         </div>
                         <div v-else>
@@ -199,10 +199,10 @@
                                     <div class="task-name" v-bind:class="{ 'text-decoration-line-through': task.metadata?.task?.status?.kind === 'done' }">
                                         {{ task.title }}
                                     </div>
-                                    <div v-if="task.metadata?.task?.due_by" class="task-due-by text--secondary caption">
+                                    <div v-if="task.metadata?.task?.due_by" class="task-due-by text-medium-emphasis text-caption">
                                         Due by: {{ task.metadata?.task?.due_by }}
                                     </div>
-                                    <div v-if="task.metadata?.task?.deadline" class="task-deadline text--secondary caption">
+                                    <div v-if="task.metadata?.task?.deadline" class="task-deadline text-medium-emphasis text-caption">
                                         Deadline: {{ task.metadata?.task?.deadline }}
                                     </div>
                                 </div>
@@ -211,13 +211,13 @@
                     </v-card-text>
                 </v-card>
 
-                <v-card outlined class="task-column">
+                <v-card variant="outlined" class="task-column">
                     <v-card-title class="pb-2">
-                        <v-icon left>{{ mdiClockOutline }}</v-icon>
+                        <v-icon start>{{ mdiClockOutline }}</v-icon>
                         Upcoming Due Dates
                     </v-card-title>
                     <v-card-text>
-                        <div v-if="upcomingTasks.length === 0" class="text-center text--secondary">
+                        <div v-if="upcomingTasks.length === 0" class="text-center text-medium-emphasis">
                             No upcoming deadlines
                         </div>
                         <div v-else>
@@ -232,10 +232,10 @@
                                     <div class="task-name" v-bind:class="{ 'text-decoration-line-through': task.metadata?.task?.status?.kind === 'done' }">
                                         {{ task.title }}
                                     </div>
-                                    <div v-if="task.metadata?.task?.due_by" class="task-due-by caption" v-bind:class="getDeadlineClass(task.metadata?.task?.due_by)">
+                                    <div v-if="task.metadata?.task?.due_by" class="task-due-by text-caption" v-bind:class="getDeadlineClass(task.metadata?.task?.due_by)">
                                         Due by: {{ task.metadata?.task?.due_by }}
                                     </div>
-                                    <div v-if="task.metadata?.task?.deadline" class="task-deadline caption" v-bind:class="getDeadlineClass(task.metadata?.task?.deadline)">
+                                    <div v-if="task.metadata?.task?.deadline" class="task-deadline text-caption" v-bind:class="getDeadlineClass(task.metadata?.task?.deadline)">
                                         Deadline: {{ task.metadata?.task?.deadline }}
                                     </div>
                                 </div>
@@ -253,21 +253,21 @@
                 <v-card
                     v-for="category of sortedCategorizedEntries.entries()"
                     v-bind:key="category[0]"
-                    outlined
+                    variant="outlined"
                 >
                     <v-card-title>{{ category[0] }}</v-card-title>
                     <v-card-text>
                         <div class="text-center mb-3">
                             <v-btn
-                                text
-                                x-small
+                                variant="text"
+                                size="x-small"
                                 v-on:click="changeSortOrder(category[0], 'title')"
-                            ><v-icon x-small v-if="sortOrders.get(category[0])[0] === 'title'">{{ sortOrders.get(category[0])[1] ? mdiSortDescending : mdiSortAscending }}</v-icon>sort by title</v-btn>
+                            ><v-icon size="x-small" v-if="sortOrders.get(category[0])[0] === 'title'">{{ sortOrders.get(category[0])[1] ? mdiSortDescending : mdiSortAscending }}</v-icon>sort by title</v-btn>
                             <v-btn
-                                text
-                                x-small
+                                variant="text"
+                                size="x-small"
                                 v-on:click="changeSortOrder(category[0], 'time')"
-                            ><v-icon x-small v-if="sortOrders.get(category[0])[0] === 'time'">{{ sortOrders.get(category[0])[1] ? mdiSortDescending : mdiSortAscending }}</v-icon>sort by time</v-btn>
+                            ><v-icon size="x-small" v-if="sortOrders.get(category[0])[0] === 'time'">{{ sortOrders.get(category[0])[1] ? mdiSortDescending : mdiSortAscending }}</v-icon>sort by time</v-btn>
                         </div>
                         <ul>
                             <li
@@ -283,17 +283,16 @@
             </div>
         </div>
 
-        <v-overlay v-bind:value="isLoading" z-index="10" opacity="0">
-            <v-progress-circular indeterminate color="blue-grey lighten-3" size="64"></v-progress-circular>
+        <v-overlay v-bind:model-value="isLoading" z-index="10" scrim="transparent" class="align-center justify-center">
+            <v-progress-circular indeterminate color="blue-grey-lighten-3" size="64"></v-progress-circular>
         </v-overlay>
-        <v-snackbar v-model="error" color="error" top timeout="5000">{{ errorText }}</v-snackbar>
-        <v-snackbar v-model="successMessage" color="success" top timeout="5000">
+        <v-snackbar v-model="error" color="error" location="top" timeout="5000">{{ errorText }}</v-snackbar>
+        <v-snackbar v-model="successMessage" color="success" location="top" timeout="5000">
             {{ successText }}
-            <template v-slot:action="{ attrs }">
+            <template v-slot:actions>
                 <v-btn
                     v-if="createdItemPath"
-                    text
-                    v-bind="attrs"
+                    variant="text"
                     v-on:click="openCreatedItem"
                 >
                     Open
@@ -306,7 +305,7 @@
 <script lang="ts" setup>
 import { ref, computed, watch, onMounted } from 'vue';
 import type { Ref } from 'vue';
-import { useRouter } from 'vue-router/composables';
+import { useRouter } from 'vue-router';
 
 import {
     mdiSortAscending,
@@ -332,7 +331,7 @@ import { render } from '@/task';
 
 import Color from 'color';
 import { formatDistanceToNow, parseISO } from 'date-fns';
-import materialColors from 'vuetify/lib/util/colors';
+import materialColors from 'vuetify/util/colors';
 
 function getEventEndTime(event: any): dayjs.Dayjs {
     if (typeof event.end !== 'undefined') {
@@ -878,18 +877,18 @@ function formatEventTime(event: { start: string; end?: string }) {
 }
 
 function getDeadlineClass(deadline: string | undefined) {
-    if (!deadline) return 'text--secondary';
+    if (!deadline) return 'text-medium-emphasis';
 
     const deadlineDate = dayjs(deadline);
     const now = dayjs();
     const diffDays = deadlineDate.diff(now, 'days');
 
     if (diffDays < 0) {
-        return 'error--text';
+        return 'text-error';
     } else if (diffDays <= 3) {
-        return 'warning--text';
+        return 'text-warning';
     } else {
-        return 'text--secondary';
+        return 'text-medium-emphasis';
     }
 }
 
@@ -938,7 +937,7 @@ function changeSortOrder(category: string, kind: string) {
 .v-card {
     flex-grow: 1;
 
-    .v-card__title {
+    .v-card-title {
         justify-content: center;
         font-weight: bold;
     }
