@@ -214,7 +214,7 @@
                     </v-list-item>
                     <v-list-item
                         v-if="$route.name === 'Note'"
-                        v-bind:to="{ name: 'Create', query: { from: $route.params.path } }"
+                        v-bind:to="{ name: 'Create', query: { from: Array.isArray($route.params.path) ? $route.params.path.join('/') : $route.params.path } }"
                     >
                         <template v-slot:prepend>
                             <v-icon size="small">{{ mdiFileMultipleOutline }}</v-icon>
@@ -239,7 +239,7 @@
                                         size="x-small"
                                         variant="text"
                                         v-bind="props"
-                                        v-bind:to="{ name: 'Note', params: { path: path } }"
+                                        v-bind:to="{ name: 'Note', params: { path: path.split('/') } }"
                                     >
                                         <v-icon>{{ mdiPencil }}</v-icon>
                                     </v-btn>

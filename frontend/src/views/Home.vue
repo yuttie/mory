@@ -818,7 +818,7 @@ function navigateToEvent(event: { notePath: string }) {
     router.push({
         name: 'Note',
         params: {
-            path: event.notePath
+            path: event.notePath.split('/')
         }
     }).catch(err => {
             // Ignore navigation duplicated errors
@@ -834,7 +834,7 @@ function openCreatedItem() {
         router.push({
             name: 'Note',
             params: {
-                path: createdItemPath.value
+                path: createdItemPath.value.split('/')
             }
         }).catch(err => {
             // Ignore navigation duplicated errors
