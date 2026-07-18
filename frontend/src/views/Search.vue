@@ -22,7 +22,7 @@
         <v-sheet>
             <ul style="overflow: auto">
                 <li v-for="item of results">
-                    <router-link v-bind:to="{ name: 'Note', params: { path: item.file } }">{{ item.file }}</router-link>
+                    <router-link v-bind:to="{ name: 'Note', params: { path: item.file.split('/') } }">{{ item.file }}</router-link>
                     <span>{{ item.number }}</span>
                     <span>{{ item.content.slice(0, 100) }}</span>
                 </li>

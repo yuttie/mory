@@ -65,7 +65,7 @@ const routes: Array<RouteRecordRaw> = [
         redirect: to => {
             return {
                 name: 'Note',
-                params: { path: crypto.randomUUID() + '.md' },
+                params: { path: [crypto.randomUUID() + '.md'] },
                 query: { mode: 'create', template: to.query.from },
             };
         },
