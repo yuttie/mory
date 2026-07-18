@@ -61,7 +61,7 @@ import {
 
 import type { UUID, ApiTreeNode } from '@/api/task';
 
-function getTaskColor(item): string {
+function getTaskColor(item: any): string | undefined {
     switch (item.metadata?.task?.status?.kind) {
         case "todo":
             return "blue-grey";

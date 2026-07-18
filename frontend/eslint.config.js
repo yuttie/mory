@@ -10,7 +10,7 @@ export default ts.config(
   },
   js.configs.recommended,
   ...ts.configs.recommended,
-  ...eslintPluginVue.configs['flat/vue2-recommended'],
+  ...eslintPluginVue.configs['flat/recommended'],
   // Node.js build/maintenance scripts
   {
     files: ['scripts/**/*.mjs'],

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { computed, ref, watch } from 'vue';
+import { computed, ref, shallowRef, watch } from 'vue';
 import { useTaskForestStore, type TreeNodeRecord } from './taskForest';
 import type { ApiTreeNode, UUID } from '@/api/task';
 
@@ -17,7 +17,9 @@ export const useTaggedTaskForestStore = defineStore('taggedTaskForest', () => {
     const tagGroups = ref<Map<string, UUID[]>>(new Map());
     const sortedTags = ref<string[]>([]);
     const parentNodeIds = ref<UUID[]>([]);
-    const tagGroupNodeCache = ref<Map<string, TreeNodeRecord>>(new Map());
+    // shallowRef avoids deep ref-unwrapping of the recursive TreeNodeRecord type (and the cache is
+    // only ever replaced wholesale, never mutated in place)
+    const tagGroupNodeCache = shallowRef<Map<string, TreeNodeRecord>>(new Map());
 
     // Preprocess tag groups whenever the forest changes
     const preprocessTagGroups = () => {
