@@ -140,6 +140,7 @@
                     </v-list>
                     <v-row
                         no-gutters
+                        class="flex-nowrap"
                     >
                         <v-col style="overflow: hidden;">
                             <div class="sidebar-contents">
@@ -242,11 +243,10 @@
                                 </v-expansion-panels>
                             </div>
                         </v-col>
-                        <v-navigation-drawer
-                            rail
-                            permanent
-                            location="end"
-                        >
+                        <!-- Plain element rather than a nested <v-navigation-drawer>: in Vuetify 3+
+                             drawers register with the application layout, so nesting one inside
+                             another drawer would break both out of the sidebar. -->
+                        <div class="mode-rail">
                             <v-list
                                 density="compact"
                                 nav
@@ -280,7 +280,7 @@
                                 <v-list-item color="pink" v-bind:active="needSave" v-bind:disabled="!needSave"        v-bind:style="!needSave ? { opacity: '0.3' } : {}" v-on:click.stop="saveIfNeeded"><template v-slot:prepend><v-icon size="small">{{ mdiContentSave }}</v-icon></template></v-list-item>
                                 <v-list-item link         id="rename-toggle"       v-bind:disabled="!noteHasUpstream" v-bind:style="!noteHasUpstream ? { opacity: '0.3' } : {}"                      ><template v-slot:prepend><v-icon size="small">{{ mdiRenameBox   }}</v-icon></template></v-list-item>
                             </v-list>
-                        </v-navigation-drawer>
+                        </div>
                     </v-row>
                 </v-navigation-drawer>
             </div>
@@ -1776,6 +1776,15 @@ $navigation-drawer-width: 56px;
 }
 
 .sidebar {
+}
+
+/* Icon rail on the inner edge of the right sidebar; sized to match the collapsed
+   (rail) width of the sidebar so that only this column is visible when collapsed */
+.mode-rail {
+    /* Allow shrinking by the drawer's border width so the row never overflows */
+    flex: 0 1 $navigation-drawer-width;
+    width: $navigation-drawer-width;
+    border-left: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 
 .sidebar-contents {
