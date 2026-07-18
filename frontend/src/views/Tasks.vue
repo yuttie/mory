@@ -337,7 +337,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, toRaw } from 'vue';
 import type { Ref } from 'vue';
 import { useLocalStorage } from '@/composables/localStorage';
 
@@ -599,7 +599,7 @@ function select(date: string | null, index: number | null, task: Task | null) {
     }
     selectedTask.value = task;
     if (task !== null) {
-        editTarget.value = structuredClone(task);
+        editTarget.value = structuredClone(toRaw(task));
         editTarget.value.name     ??= '';
         editTarget.value.deadline ??= null;
         editTarget.value.schedule ??= null;
@@ -661,7 +661,7 @@ function closeEditTaskDialog() {
 }
 
 function openNewTaskDialogWithSelection() {
-    newTask.value = structuredClone(editTarget.value);
+    newTask.value = structuredClone(toRaw(editTarget.value));
     newTask.id = crypto.randomUUID();
     newTask.value.name += ' (copy)';
     newTaskDialog.value = true;
@@ -839,7 +839,7 @@ async function save() {
 
 async function add(closeDialog = true) {
     // Insert a new task
-    const task: Task = structuredClone(newTask.value);
+    const task: Task = structuredClone(toRaw(newTask.value));
     if (task.schedule !== null) {
         tasks.value.scheduled[task.schedule] ??= [];
         tasks.value.scheduled[task.schedule].unshift(task);
@@ -857,7 +857,7 @@ async function add(closeDialog = true) {
     }
     else {
         // Inherit values from the previous task except for id, name, and tags
-        newTask.value = structuredClone(newTask.value);
+        newTask.value = structuredClone(toRaw(newTask.value));
         newTask.value.id = crypto.randomUUID();
         newTask.value.name = '';
         newTask.value.tags = [...newTask.value.tags];

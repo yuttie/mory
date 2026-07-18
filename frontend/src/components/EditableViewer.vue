@@ -1076,6 +1076,12 @@ function computeSectionRange(heading: { level: number, href: string }): [number,
 }
 
 function highlightVisibleTOCItems() {
+    // The TOC list only exists once its expansion panel has been opened, because
+    // <v-expansion-panel-text> renders its content lazily
+    if (tocEl.value === null || viewer.value === null) {
+        return;
+    }
+
     // Heading coverages
     const ranges = [];
     for (const l1Heading of toc.value) {
