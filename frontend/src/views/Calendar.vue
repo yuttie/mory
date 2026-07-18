@@ -474,11 +474,11 @@ function getEventTextColor(event: any): string {
 
 // Watchers
 watch(selectedEvent, async (newValue) => {
-    if (newValue === null) {
+    if (newValue === null || newValue.note == null) {
         selectedEventRenderedNote.value = null;
     }
     else {
-        const renderedFile = await renderMarkdown(selectedEvent.value?.note);
+        const renderedFile = await renderMarkdown(newValue.note);
         const renderedHtml = String(renderedFile);
         selectedEventRenderedNote.value = renderedHtml;
     }
