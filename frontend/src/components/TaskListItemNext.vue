@@ -223,9 +223,6 @@ const deadlineStyle = computed<Record<string, string>>(() => {
         vertical-align: middle;
     }
 }
-.v-simple-checkbox {
-    align-self: unset;  /* Override default value of 'center' */
-}
 .additional-info {
     display: inline-block;
     margin-left: 4px;
