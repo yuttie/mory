@@ -1,43 +1,43 @@
 <template>
     <div id="tasks" class="d-flex flex-column">
-        <v-toolbar flat outlined dense class="flex-grow-0">
+        <v-toolbar flat border density="compact" color="transparent" class="flex-grow-0">
             <!-- New task button -->
             <v-dialog
                 max-width="600px"
                 persistent
                 v-model="newTaskDialog"
             >
-                <template v-slot:activator="{ on, attrs }">
+                <template v-slot:activator="{ props: dialogProps }">
                     <v-btn
-                        text
+                        variant="text"
                         title="Add task"
-                        v-bind="{ ...attrs, class: { 'pa-0': !$vuetify.breakpoint.mdAndUp } }"
-                        v-on="on"
+                        v-bind="dialogProps"
+                        v-bind:class="{ 'pa-0': !$vuetify.display.mdAndUp }"
                     >
                         <v-icon>{{ mdiCheckboxMarkedCirclePlusOutline }}</v-icon>
-                        <span v-if="$vuetify.breakpoint.mdAndUp">Task</span>
+                        <span v-if="$vuetify.display.mdAndUp">Task</span>
                     </v-btn>
                 </template>
                 <v-card>
                     <v-card-actions>
                         <v-spacer></v-spacer>
                         <v-btn
-                            text
+                            variant="text"
                             color="primary"
                             v-on:click="add(false)"
                             v-bind:disabled="newTask.name.length === 0"
                         >
                             <v-icon>{{ mdiPlusBoxMultipleOutline }}</v-icon>
-                            <span v-if="$vuetify.breakpoint.smAndUp">Add & New</span>
+                            <span v-if="$vuetify.display.smAndUp">Add & New</span>
                         </v-btn>
                         <v-btn
-                            text
+                            variant="text"
                             color="primary"
                             v-on:click="add"
                             v-bind:disabled="newTask.name.length === 0"
                         >
                             <v-icon>{{ mdiPlusBoxOutline }}</v-icon>
-                            <span v-if="$vuetify.breakpoint.smAndUp">Add</span>
+                            <span v-if="$vuetify.display.smAndUp">Add</span>
                         </v-btn>
                         <v-btn
                             icon
@@ -56,28 +56,28 @@
                 persistent
                 v-model="newGroupDialog"
             >
-                <template v-slot:activator="{ on, attrs }">
+                <template v-slot:activator="{ props: dialogProps }">
                     <v-btn
-                        text
+                        variant="text"
                         title="Add group"
-                        v-bind="{ ...attrs, class: { 'pa-0': !$vuetify.breakpoint.mdAndUp } }"
-                        v-on="on"
+                        v-bind="dialogProps"
+                        v-bind:class="{ 'pa-0': !$vuetify.display.mdAndUp }"
                     >
                         <v-icon>{{ mdiFormatListGroupPlus }}</v-icon>
-                        <span v-if="$vuetify.breakpoint.mdAndUp">Group</span>
+                        <span v-if="$vuetify.display.mdAndUp">Group</span>
                     </v-btn>
                 </template>
                 <v-card>
                     <v-card-actions>
                         <v-spacer></v-spacer>
                         <v-btn
-                            text
+                            variant="text"
                             color="primary"
                             v-on:click="addGroup"
                             v-bind:disabled="newGroupName.length === 0 || newGroupFilter.length === 0"
                         >
                             <v-icon>{{ mdiPlusBoxOutline }}</v-icon>
-                            <span v-if="$vuetify.breakpoint.smAndUp">Add</span>
+                            <span v-if="$vuetify.display.smAndUp">Add</span>
                         </v-btn>
                         <v-btn
                             icon
@@ -108,36 +108,36 @@
 
             <!-- Collect undone button -->
             <v-btn
-                text
+                variant="text"
                 title="Collect undone"
-                v-bind:class="{ 'pa-0': !$vuetify.breakpoint.mdAndUp }"
+                v-bind:class="{ 'pa-0': !$vuetify.display.mdAndUp }"
                 v-on:click="collectUndone"
             >
                 <v-icon>{{ mdiCheckboxMultipleBlankOutline }}</v-icon>
-                <span v-if="$vuetify.breakpoint.mdAndUp">Collect Undone</span>
+                <span v-if="$vuetify.display.mdAndUp">Collect Undone</span>
             </v-btn>
 
             <!-- Hide done toggle -->
             <v-switch
                 v-model="hideDone"
-                v-bind:label="$vuetify.breakpoint.mdAndUp ? 'Hide done' : null"
+                v-bind:label="$vuetify.display.mdAndUp ? 'Hide done' : null"
                 hide-details
             ></v-switch>
 
             <!-- Reload button -->
             <v-btn
-                text
+                variant="text"
                 title="Reload"
-                v-bind:class="{ 'pa-0': !$vuetify.breakpoint.mdAndUp }"
+                v-bind:class="{ 'pa-0': !$vuetify.display.mdAndUp }"
                 v-on:click="loadIfNotEditing"
             >
                 <v-icon>{{ mdiReload }}</v-icon>
-                <span v-if="$vuetify.breakpoint.mdAndUp">Reload</span>
+                <span v-if="$vuetify.display.mdAndUp">Reload</span>
             </v-btn>
 
             <!-- Search text box -->
             <v-text-field
-                dense
+                density="compact"
                 label="Search"
                 clearable
                 v-model="searchQuery"
@@ -147,7 +147,7 @@
             <!-- Progress bar for loading data -->
             <v-progress-linear
                 absolute
-                bottom
+                location="bottom"
                 indeterminate
                 color="primary"
                 v-bind:active="isLoading"
@@ -164,28 +164,28 @@
                 <v-card-actions>
                     <v-spacer></v-spacer>
                     <v-btn
-                        text
+                        variant="text"
                         v-on:click="openNewTaskDialogWithSelection"
                     >
                         <v-icon>{{ mdiPlusBoxOutline }}</v-icon>
-                        <span v-if="$vuetify.breakpoint.smAndUp">Add similar...</span>
+                        <span v-if="$vuetify.display.smAndUp">Add similar...</span>
                     </v-btn>
                     <v-btn
-                        text
+                        variant="text"
                         color="error"
                         v-on:click="removeSelected"
                     >
                         <v-icon>{{ mdiDelete }}</v-icon>
-                        <span v-if="$vuetify.breakpoint.smAndUp">Delete</span>
+                        <span v-if="$vuetify.display.smAndUp">Delete</span>
                     </v-btn>
                     <v-btn
-                        text
+                        variant="text"
                         color="primary"
                         v-on:click="updateSelected"
                         v-bind:disabled="editTarget.name.length === 0"
                     >
                         <v-icon>{{ mdiContentSave }}</v-icon>
-                        <span v-if="$vuetify.breakpoint.smAndUp">Save</span>
+                        <span v-if="$vuetify.display.smAndUp">Save</span>
                     </v-btn>
                     <v-btn
                         icon
@@ -211,43 +211,44 @@
                                 <span>{{ isToday(date) ? `Today (${date})` : isTomorrow(date) ? `Tomorrow (${date})` : date }}</span>
                                 <v-spacer></v-spacer>
                                 <v-btn
-                                    text
-                                    small
+                                    variant="text"
+                                    size="small"
                                     title="Sort"
                                     style="min-width: unset;"
                                     class="px-2"
                                     v-on:click="sortDailyTasks(date)"
                                 >
-                                    <v-icon small>{{ mdiSortBoolAscendingVariant }}</v-icon>
+                                    <v-icon size="small">{{ mdiSortBoolAscendingVariant }}</v-icon>
                                 </v-btn>
                                 <v-btn
-                                    text
-                                    small
+                                    variant="text"
+                                    size="small"
                                     title="Move to today"
                                     style="min-width: unset;"
                                     class="px-2"
                                     v-on:click="moveUndoneToToday(date)"
                                 >
-                                    <v-icon small>{{ mdiInboxArrowDown }}</v-icon>
+                                    <v-icon size="small">{{ mdiInboxArrowDown }}</v-icon>
                                 </v-btn>
                             </div>
                             <draggable
                                 group="tasks"
-                                v-bind:value="dayTasks"
-                                v-on:input="onDraggableInput(date, $event)"
+                                item-key="id"
+                                v-bind:model-value="dayTasks"
+                                v-on:update:model-value="onDraggableInput(date, $event)"
                                 v-bind:delay="500"
                                 v-bind:delay-on-touch-only="true"
                                 v-on:end="save"
                             >
-                                <TaskListItem
-                                    v-for="(task, index) of dayTasks"
-                                    v-bind:key="task.id"
-                                    v-bind:value="task"
-                                    v-bind:migrated="store.node(task.id) !== undefined"
-                                    v-on:migrate="onTaskMigrate"
-                                    v-on:click="showEditTaskDialog(date, index, task, $event);"
-                                    v-on:done-toggle="$set(task, 'done', $event); save();"
-                                ></TaskListItem>
+                                <template v-slot:item="{ element: task, index }">
+                                    <TaskListItem
+                                        v-bind:value="task"
+                                        v-bind:migrated="store.node(task.id) !== undefined"
+                                        v-on:migrate="onTaskMigrate"
+                                        v-on:click="showEditTaskDialog(date, index, task, $event);"
+                                        v-on:done-toggle="task.done = $event; save();"
+                                    ></TaskListItem>
+                                </template>
                             </draggable>
                         </div>
                     </div>
@@ -262,7 +263,7 @@
                             v-bind:migrated="store.node(task.id) !== undefined"
                             v-on:migrate="onTaskMigrate"
                             v-on:click="showEditTaskDialog(date, index, task, $event);"
-                            v-on:done-toggle="$set(task, 'done', $event); save();"
+                            v-on:done-toggle="task.done = $event; save();"
                         ></TaskListItem>
                     </div>
                 </v-card>
@@ -271,71 +272,72 @@
                     <draggable
                         class="task-list"
                         group="tasks"
+                        item-key="id"
                         v-model="filteredTasks.backlog"
                         v-bind:delay="500"
                         v-bind:delay-on-touch-only="true"
                         v-on:end="save"
                     >
-                        <TaskListItem
-                            v-for="(task, index) of filteredTasks.backlog"
-                            v-bind:key="task.id"
-                            v-bind:value="task"
-                            v-bind:migrated="store.node(task.id) !== undefined"
-                            v-on:migrate="onTaskMigrate"
-                            v-on:click="showEditTaskDialog(null, index, task, $event);"
-                            v-on:done-toggle="$set(task, 'done', $event); save();"
-                        ></TaskListItem>
+                        <template v-slot:item="{ element: task, index }">
+                            <TaskListItem
+                                v-bind:value="task"
+                                v-bind:migrated="store.node(task.id) !== undefined"
+                                v-on:migrate="onTaskMigrate"
+                                v-on:click="showEditTaskDialog(null, index, task, $event);"
+                                v-on:done-toggle="task.done = $event; save();"
+                            ></TaskListItem>
+                        </template>
                     </draggable>
                 </v-card>
 
                 <div class="separator"><!-- Horizontal margin --></div>
 
-                <draggable class="custom-groups" v-model="groups" group="groups" v-bind:delay="500" v-bind:delay-on-touch-only="true" handle=".handle" v-on:end="save">
-                    <v-card v-for="group of groups" v-bind:key="group.name" class="group">
+                <draggable class="custom-groups" v-model="groups" group="groups" item-key="name" v-bind:delay="500" v-bind:delay-on-touch-only="true" handle=".handle" v-on:end="save">
+                    <template v-slot:item="{ element: group }">
+                    <v-card class="group">
                         <v-card-title class="handle">
                             <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ group.name }}</span>
                         </v-card-title>
                         <div class="task-list">
                             <div v-for="date of Object.keys(groupedTasks[group.name].scheduled).sort((a, b) => a < b ? 1 : a > b ? -1 : 0)" v-bind:key="date">
                                 <div class="date-header">{{ date }}</div>
-                                <template v-for="[index, task] of groupedTasks[group.name].scheduled[date]">
+                                <template v-for="[index, task] of groupedTasks[group.name].scheduled[date]" v-bind:key="task.id">
                                     <TaskListItem
-                                        v-bind:key="task.id"
                                         v-bind:value="task"
                                         v-bind:migrated="store.node(task.id) !== undefined"
                                         v-on:migrate="onTaskMigrate"
                                         v-on:click="showEditTaskDialog(date, index, task, $event);"
-                                        v-on:done-toggle="$set(task, 'done', $event); save();"
+                                        v-on:done-toggle="task.done = $event; save();"
                                     ></TaskListItem>
                                 </template>
                             </div>
                             <div v-if="groupedTasks[group.name].backlog.length !== 0">
                                 <div class="date-header">Backlog</div>
-                                <template v-for="[index, task] of groupedTasks[group.name].backlog">
+                                <template v-for="[index, task] of groupedTasks[group.name].backlog" v-bind:key="task.id">
                                     <TaskListItem
-                                        v-bind:key="task.id"
                                         v-bind:value="task"
                                         v-bind:migrated="store.node(task.id) !== undefined"
                                         v-on:migrate="onTaskMigrate"
                                         v-on:click="showEditTaskDialog(null, index, task, $event);"
-                                        v-on:done-toggle="$set(task, 'done', $event); save();"
+                                        v-on:done-toggle="task.done = $event; save();"
                                     ></TaskListItem>
                                 </template>
                             </div>
                         </div>
                     </v-card>
+                    </template>
                 </draggable>
             </div>
         </div>
-        <v-overlay v-bind:value="isLoading" z-index="10" opacity="0">
-            <v-progress-circular indeterminate color="blue-grey lighten-3" size="64"></v-progress-circular>
+        <v-overlay v-bind:model-value="isLoading" z-index="10" scrim="transparent" class="align-center justify-center">
+            <v-progress-circular indeterminate color="blue-grey-lighten-3" size="64"></v-progress-circular>
         </v-overlay>
-        <v-snackbar v-model="errorNotification" color="error" top timeout="5000">{{ errorNotificationText }}</v-snackbar>
+        <v-snackbar v-model="errorNotification" color="error" location="top" timeout="5000">{{ errorNotificationText }}</v-snackbar>
     </div>
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onMounted, onUnmounted, set, del } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import type { Ref } from 'vue';
 import { useLocalStorage } from '@/composables/localStorage';
 
@@ -579,7 +581,7 @@ async function onTaskMigrate(t: Task) {
 }
 
 function onDraggableInput(date: string, newTasks: Task[]) {
-    set(tasks.value.scheduled, date, newTasks);
+    tasks.value.scheduled[date] = newTasks;
 }
 
 function isToday(date: string) {
@@ -785,9 +787,11 @@ async function load() {
 
             // Replace with the data
             tasks.value.backlog.splice(0, tasks.value.backlog.length, ...data.tasks.backlog);
-            Object.keys(tasks.value.scheduled).forEach(key => del(tasks.value.scheduled, key));
+            Object.keys(tasks.value.scheduled).forEach(key => {
+                delete tasks.value.scheduled[key];
+            });
             Object.entries(data.tasks.scheduled).forEach(([key, value]) => {
-                set(tasks.value.scheduled, key, value);
+                tasks.value.scheduled[key] = value;
             });
             groups.value.splice(0, groups.value.length, ...data.groups);
         }
