@@ -1,5 +1,5 @@
-# build stage
-FROM node:20-alpine AS build-stage
+# build stage (always runs natively on the build machine)
+FROM --platform=$BUILDPLATFORM node:20-alpine AS build-stage
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm install
@@ -8,7 +8,7 @@ RUN VITE_APP_APPLICATION_ROOT="VITE_APP_APPLICATION_ROOT_VALUE_TO_BE_REPLACED_LA
     VITE_APP_API_URL="VITE_APP_API_URL_VALUE_TO_BE_REPLACED_LATER" \
     npm run build
 
-# production stage
+# production stage (per-target-architecture)
 FROM nginx:stable-alpine AS production-stage
 RUN rm /etc/nginx/conf.d/default.conf
 COPY docker/nginx-default.conf /etc/nginx/conf.d/default.conf
