@@ -1,31 +1,27 @@
-import Vue from 'vue';
-import Vuetify from 'vuetify/lib';
-import { Touch } from 'vuetify/lib/directives';
+import 'vuetify/styles';
+import { createVuetify } from 'vuetify';
+import { aliases, mdi } from 'vuetify/iconsets/mdi-svg';
 
-Vue.use(Vuetify, {
-  // We need this because unplugin-vue-components's "auto import for directives" feature requires Babel for Vue 2, and we don't want to install Babel.
-  directives: {
-    Touch,
-  },
-});
-
-export default new Vuetify({
+export default createVuetify({
   icons: {
-    iconfont: 'mdiSvg',
+    defaultSet: 'mdi',
+    aliases,
+    sets: {
+      mdi,
+    },
   },
   theme: {
-    options: {
-      customProperties: true,
-    },
     themes: {
       light: {
-        primary: '#1f2626',
-        secondary: '#424242',
-        accent: '#0099a1',
-        error: '#FF5252',
-        info: '#2196F3',
-        success: '#4CAF50',
-        warning: '#FFC107'
+        colors: {
+          primary: '#1f2626',
+          secondary: '#424242',
+          accent: '#0099a1',
+          error: '#FF5252',
+          info: '#2196F3',
+          success: '#4CAF50',
+          warning: '#FFC107'
+        },
       },
     },
   },

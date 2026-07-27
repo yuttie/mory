@@ -1,6 +1,5 @@
-import Vue from 'vue';
-import VueRouter from 'vue-router';
-import type { RouteConfig } from 'vue-router';
+import { createRouter, createWebHistory } from 'vue-router';
+import type { RouteRecordRaw } from 'vue-router';
 
 const Home      = () => import('../views/Home.vue');
 const Calendar  = () => import('../views/Calendar.vue');
@@ -14,9 +13,7 @@ const Config    = () => import('../views/Config.vue');
 const About     = () => import('../views/About.vue');
 
 
-Vue.use(VueRouter);
-
-const routes: Array<RouteConfig> = [
+const routes: Array<RouteRecordRaw> = [
     {
         path: '/',
         name: 'Home',
@@ -68,7 +65,7 @@ const routes: Array<RouteConfig> = [
         redirect: to => {
             return {
                 name: 'Note',
-                params: { path: crypto.randomUUID() + '.md' },
+                params: { path: [crypto.randomUUID() + '.md'] },
                 query: { mode: 'create', template: to.query.from },
             };
         },
@@ -108,18 +105,17 @@ const routes: Array<RouteConfig> = [
     },
 ];
 
-const router = new VueRouter({
-    mode: 'history',
-    base: import.meta.env.BASE_URL,
+const router = createRouter({
+    history: createWebHistory(import.meta.env.BASE_URL),
     routes,
     scrollBehavior(to, _from, savedPosition) {
         if (to.hash) {
-            return { selector: decodeURIComponent(to.hash) };
+            return { el: decodeURIComponent(to.hash) };
         }
         else if (savedPosition) {
             return savedPosition;
         } else {
-            return { x: 0, y: 0 };
+            return { left: 0, top: 0 };
         }
     },
 });

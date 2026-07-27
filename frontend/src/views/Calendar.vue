@@ -1,19 +1,19 @@
 <template>
     <div id="calendar" class="d-flex flex-column">
-        <v-toolbar flat outlined dense class="flex-grow-0">
-            <v-btn outlined v-on:click="setToday" class="mr-3">Today</v-btn>
-            <v-btn icon small v-on:click="navigateCalendar('prev')">
+        <v-toolbar flat border density="compact" color="transparent" class="flex-grow-0">
+            <v-btn variant="outlined" v-on:click="setToday" class="mr-3">Today</v-btn>
+            <v-btn icon variant="text" size="small" v-on:click="navigateCalendar('prev')">
                 <v-icon>{{ mdiChevronLeft }}</v-icon>
             </v-btn>
-            <v-btn icon small v-on:click="navigateCalendar('next')" class="mr-3">
+            <v-btn icon variant="text" size="small" v-on:click="navigateCalendar('next')" class="mr-3">
                 <v-icon>{{ mdiChevronRight }}</v-icon>
             </v-btn>
-            <v-toolbar-title v-if="$refs.calendar" class="mr-3">
-                {{ $refs.calendar.title }}
+            <v-toolbar-title v-if="calendar" class="mr-3">
+                {{ calendar.title }}
             </v-toolbar-title>
             <v-progress-linear
                 absolute
-                bottom
+                location="bottom"
                 indeterminate
                 color="primary"
                 v-bind:active="isLoading"
@@ -22,11 +22,11 @@
         <v-calendar
             ref="calendar"
             v-bind:type="calendarType"
-            v-bind:value="calendarCursor"
+            v-bind:model-value="calendarCursor"
             v-bind:events="events"
             v-bind:event-color="getEventColor"
             v-bind:event-text-color="getEventTextColor"
-            v-on:input="onCalendarInput"
+            v-on:update:model-value="onCalendarInput"
             v-on:click:event="showEvent"
             v-on:click:more="viewDay"
             v-on:click:date="viewDay"
@@ -41,45 +41,38 @@
             v-model="selectedOpen"
             v-bind:close-on-content-click="false"
             v-bind:activator="selectedElement"
-            offset-x
-            offset-y
+            location="bottom"
             max-width="30em"
         >
             <v-card v-if="selectedEvent" flat class="event-card">
                 <v-toolbar
                     v-bind:color="selectedEvent.color"
-                    dark
+                    theme="dark"
                     flat
                 >
                     <v-toolbar-title>{{ selectedEvent.name }}</v-toolbar-title>
                     <v-spacer></v-spacer>
-                    <v-icon v-if="selectedEvent.finished">{{ mdiCheck }}</v-icon>
+                    <v-icon v-if="selectedEvent.finished" class="mr-4">{{ mdiCheck }}</v-icon>
                 </v-toolbar>
                 <v-card-text>
-                    <v-list dense>
+                    <v-list density="compact">
                         <v-list-item>
-                            <v-list-item-icon>
+                            <template v-slot:prepend>
                                 <v-icon>{{ mdiClockStart }}</v-icon>
-                            </v-list-item-icon>
-                            <v-list-item-content>
-                                {{ selectedEvent.start }}
-                            </v-list-item-content>
+                            </template>
+                            {{ selectedEvent.start }}
                         </v-list-item>
                         <v-list-item v-if="selectedEvent.end">
-                            <v-list-item-icon>
+                            <template v-slot:prepend>
                                 <v-icon>{{ mdiClockEnd }}</v-icon>
-                            </v-list-item-icon>
-                            <v-list-item-content>
-                                {{ selectedEvent.end }}
-                            </v-list-item-content>
+                            </template>
+                            {{ selectedEvent.end }}
                         </v-list-item>
                         <v-list-item>
-                            <v-list-item-icon>
+                            <template v-slot:prepend>
                                 <v-icon>{{ mdiFileDocumentOutline }}</v-icon>
-                            </v-list-item-icon>
-                            <v-list-item-content>
-                                <router-link v-bind:to="{ name: 'Note', params: { path: selectedEvent.notePath } }">{{ selectedEvent.notePath }}</router-link>
-                            </v-list-item-content>
+                            </template>
+                            <router-link v-bind:to="{ name: 'Note', params: { path: selectedEvent.notePath.split('/') } }">{{ selectedEvent.notePath }}</router-link>
                         </v-list-item>
                     </v-list>
                     <template v-if="selectedEvent.note">
@@ -89,7 +82,7 @@
                 </v-card-text>
             </v-card>
         </v-menu>
-        <v-snackbar v-model="error" color="error" top timeout="5000">{{ errorText }}</v-snackbar>
+        <v-snackbar v-model="error" color="error" location="top" timeout="5000">{{ errorText }}</v-snackbar>
         <v-alert type="error" v-if="eventErrors.length > 0">
             <ul>
                 <li
@@ -104,7 +97,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import type { Ref } from 'vue';
 
-import { useRoute, useRouter } from 'vue-router/composables';
+import { useRoute, useRouter } from 'vue-router';
 
 import {
     mdiCheck,
@@ -119,7 +112,7 @@ import * as api from '@/api';
 import { isMetadataEventMultiple, validateEvent } from '@/api';
 import type { ListEntry } from '@/api';
 import Color from 'color';
-import materialColors from 'vuetify/lib/util/colors';
+import materialColors from 'vuetify/util/colors';
 import dayjs from 'dayjs';
 import { renderMarkdown } from '@/markdown';
 
@@ -138,15 +131,15 @@ const isLoading = ref(false);
 const error = ref(false);
 const errorText = ref('');
 const eventErrors: Ref<[string, any, string, string, string][]> = ref([]);
-const calendarType = ref('month');
+const calendarType = ref<'month' | 'week' | 'day'>('month');
 const calendarCursor = ref(dayjs().format('YYYY-MM-DD'));
-const selectedEvent = ref(null);
-const selectedEventRenderedNote = ref(null);
-const selectedElement = ref(null);
+const selectedEvent = ref<any>(null);
+const selectedEventRenderedNote = ref<string | null>(null);
+const selectedElement = ref<Element | undefined>(undefined);
 const selectedOpen = ref(false);
 
 // Template Refs
-const calendar = ref(null);
+const calendar = ref<any>(null);
 
 // Computed properties
 const events = computed(() => {
@@ -288,13 +281,15 @@ onUnmounted(() => {
 });
 
 // Methods
-function onCalendarInput(date: string) {
-    const parsedDate = dayjs(date, 'YYYY-MM-DD');
+function onCalendarInput(date: unknown) {
+    const parsedDate = dayjs(date as string, 'YYYY-MM-DD');
     router.push({
         name: 'CalendarWithDate',
         params: {
             type: calendarType.value,
-            date: [parsedDate.format('YYYY'), parsedDate.format('MM'), parsedDate.format('DD')]
+            year: parsedDate.format('YYYY'),
+            month: parsedDate.format('MM'),
+            day: parsedDate.format('DD'),
         },
     });
 }
@@ -394,21 +389,24 @@ function setToday() {
     });
 }
 
-function viewDay({ date }: { date: string }) {
+// Vuetify 4's calendar invokes click:date / click:more handlers with (nativeEvent, payload)
+function viewDay(_nativeEvent: Event, { date }: { date: string }) {
     const parsedDate = dayjs(date, 'YYYY-MM-DD');
     router.push({
         name: 'CalendarWithDate',
         params: {
             type: 'day',
-            date: [parsedDate.format('YYYY'), parsedDate.format('MM'), parsedDate.format('DD')]
+            year: parsedDate.format('YYYY'),
+            month: parsedDate.format('MM'),
+            day: parsedDate.format('DD'),
         },
     });
 }
 
-function showEvent ({ nativeEvent, event }: { nativeEvent: any, event: any }) {
+function showEvent (nativeEvent: Event, { event }: { event: any }) {
     const open = () => {
         selectedEvent.value = event;
-        selectedElement.value = nativeEvent.target;
+        selectedElement.value = nativeEvent.target as Element;
         setTimeout(() => {
             selectedOpen.value = true;
         }, 10);
@@ -476,11 +474,11 @@ function getEventTextColor(event: any): string {
 
 // Watchers
 watch(selectedEvent, async (newValue) => {
-    if (newValue === null) {
+    if (newValue === null || newValue.note == null) {
         selectedEventRenderedNote.value = null;
     }
     else {
-        const renderedFile = await renderMarkdown(selectedEvent.value.note);
+        const renderedFile = await renderMarkdown(newValue.note);
         const renderedHtml = String(renderedFile);
         selectedEventRenderedNote.value = renderedHtml;
     }
@@ -488,7 +486,7 @@ watch(selectedEvent, async (newValue) => {
 
 watch(route, (newRoute) => {
     if (newRoute.name === 'CalendarWithDate') {
-        const { year, month, day } = newRoute.params;
+        const { year, month, day } = newRoute.params as { year: string, month: string, day: string };
         calendarType.value = newRoute.params.type as string;
         calendarCursor.value = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
     }

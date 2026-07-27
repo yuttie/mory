@@ -3,12 +3,14 @@
     v-on:click="$emit('click', $event)"
     class="task-list-item"
   >
-    <v-simple-checkbox
+    <v-checkbox-btn
       color="primary"
+      density="compact"
       v-bind:ripple="false"
-      v-bind:value="value.done"
-      v-on:input="$emit('done-toggle', $event)"
-    ></v-simple-checkbox>
+      v-bind:model-value="value.done"
+      v-on:update:model-value="$emit('done-toggle', $event)"
+      v-on:click.stop
+    ></v-checkbox-btn>
     <span
       class="tag"
       v-for="tag of value.tags"
@@ -19,9 +21,9 @@
       class="additional-info"
       v-if="value.note"
     >
-      <v-tooltip bottom>
-        <template v-slot:activator="{ on, attrs }">
-          <v-icon small v-bind="attrs" v-on="on">{{ mdiNoteTextOutline }}</v-icon>
+      <v-tooltip location="bottom">
+        <template v-slot:activator="{ props: tooltipProps }">
+          <v-icon size="small" v-bind="tooltipProps">{{ mdiNoteTextOutline }}</v-icon>
         </template>
         <div class="note-tooltip">{{ value.note }}</div>
       </v-tooltip>
@@ -31,16 +33,16 @@
       v-if="value.deadline"
       v-bind:style="deadlineStyle"
     >
-      <v-tooltip bottom>
-        <template v-slot:activator="{ on, attrs }">
-          <span v-bind="attrs" v-on="on">
-            <v-icon small v-bind:style="deadlineStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ deadlineText }}
+      <v-tooltip location="bottom">
+        <template v-slot:activator="{ props: tooltipProps }">
+          <span v-bind="tooltipProps">
+            <v-icon size="small" v-bind:style="deadlineStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ deadlineText }}
           </span>
         </template>
         <div>{{ value.deadline }}</div>
       </v-tooltip>
     </span>
-    <v-btn v-if="!migrated" x-small outlined v-on:click.stop="onMigrate">Migrate</v-btn>
+    <v-btn v-if="!migrated" size="x-small" variant="outlined" v-on:click.stop="onMigrate">Migrate</v-btn>
   </div>
 </template>
 

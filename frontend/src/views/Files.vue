@@ -4,13 +4,12 @@
             <v-menu
                 v-model="showingTagList"
                 v-bind:close-on-content-click="false"
-                offset-y
-                bottom
+                location="bottom"
             >
-                <template v-slot:activator="{ on }">
+                <template v-slot:activator="{ props: menuProps }">
                     <v-text-field
                         v-model="queryText"
-                        filled
+                        variant="filled"
                         rounded
                         single-line
                         clearable
@@ -26,19 +25,19 @@
                             <v-icon>{{ mdiMagnify }}</v-icon>
                         </template>
                         <template v-slot:append>
-                            <v-icon v-on:click="on.click">{{ mdiTag }}</v-icon>
+                            <v-icon v-bind="menuProps">{{ mdiTag }}</v-icon>
                         </template>
                     </v-text-field>
                 </template>
                 <v-card>
                     <v-card-text class="all-tags d-flex flex-row align-center flex-wrap">
                         <v-chip
-                            small
+                            size="small"
                             class="ma-1"
                             v-for="tag of tags"
                             v-bind:key="tag"
                             v-bind:color="tagColor(tag)"
-                            v-bind:outlined="tagOutlined(tag)"
+                            v-bind:variant="tagOutlined(tag) ? 'outlined' : 'flat'"
                             v-on:click="handleTagClick(tag, $event)"
                         >{{ tag }}</v-chip>
                     </v-card-text>
@@ -50,17 +49,17 @@
             v-bind:items="matchedEntries"
             v-model="selected"
             v-bind:items-per-page="100"
-            mobile-breakpoint="0"
-            item-key="path"
-            hide-default-footer
-            sortBy="time"
-            sort-desc
+            v-bind:items-per-page-options="[100, 200, 500, 1000, -1]"
+            items-per-page-text=""
+            v-bind:mobile-breakpoint="0"
+            item-value="path"
+            v-bind:sort-by="[{ key: 'time', order: 'desc' }]"
             must-sort
             show-select
             class="flex-grow-1"
         >
-            <template v-slot:top="{ pagination, options, updateOptions }">
-                <v-toolbar flat style="border-bottom: thin solid rgba(0, 0, 0, 0.12);">
+            <template v-slot:top>
+                <v-toolbar flat color="transparent" style="border-bottom: thin solid rgba(0, 0, 0, 0.12);">
                     <v-btn
                         v-bind:disabled="selected.length === 0"
                         v-on:click="deleteSelected"
@@ -70,14 +69,6 @@
                         <v-icon>{{ mdiDelete }}</v-icon>
                     </v-btn>
                     <v-spacer></v-spacer>
-                    <v-data-footer
-                        v-bind:items-per-page-options="[100, 200, 500, 1000, -1]"
-                        v-bind:pagination="pagination"
-                        v-bind:options="options"
-                        v-on:update:options="updateOptions"
-                        items-per-page-text=""
-                        style="border: none; flex-wrap: nowrap;"
-                    ></v-data-footer>
                 </v-toolbar>
             </template>
             <template v-slot:item.path="{ item }">
@@ -98,21 +89,21 @@
             <template v-slot:item.tags="{ item }">
                 <div class="tags">
                     <v-chip
-                        small
+                        size="small"
                         class="ma-1"
                         v-for="tag of item.tags"
                         v-bind:key="tag"
                         v-bind:color="tagColor(tag)"
-                        v-bind:outlined="tagOutlined(tag)"
+                        v-bind:variant="tagOutlined(tag) ? 'outlined' : 'flat'"
                         v-on:click="handleTagClick(tag, $event)"
                     >{{ tag }}</v-chip>
                 </div>
             </template>
         </v-data-table>
-        <v-overlay v-bind:value="isLoading" z-index="10" opacity="0">
-            <v-progress-circular indeterminate color="blue-grey lighten-3" size="64"></v-progress-circular>
+        <v-overlay v-bind:model-value="isLoading" z-index="10" scrim="transparent" class="align-center justify-center">
+            <v-progress-circular indeterminate color="blue-grey-lighten-3" size="64"></v-progress-circular>
         </v-overlay>
-        <v-snackbar v-model="error" color="error" top timeout="5000">{{ errorText }}</v-snackbar>
+        <v-snackbar v-model="error" color="error" location="top" timeout="5000">{{ errorText }}</v-snackbar>
     </div>
 </template>
 
@@ -120,7 +111,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import type { Ref } from 'vue';
 
-import { useRoute, useRouter } from 'vue-router/composables';
+import { useRoute, useRouter } from 'vue-router';
 
 import {
     mdiCalendarClock,
@@ -154,20 +145,20 @@ const queryText = ref('');
 const isLoading = ref(false);
 const error = ref(false);
 const errorText = ref('');
-const selected = ref([] as any[]);
+const selected = ref([] as string[]);
 const showingTagList = ref(false);
 
 // Template Refs
-const queryEl = ref(null);
+const queryEl = ref<any>(null);
 
 // Computed properties
 const headers = computed(() => {
     return [
-        { text: 'Title or Path', value: 'path' },
-        { text: 'Modified', value: 'time', sort: (a: any, b: any) => a - b },
-        { text: 'Size', value: 'size' },
-        { text: 'Type', value: 'mimeType' },
-        { text: 'Tags', value: 'tags', sortable: false },
+        { title: 'Title or Path', key: 'path' },
+        { title: 'Modified', key: 'time', sort: (a: any, b: any) => a - b },
+        { title: 'Size', key: 'size' },
+        { title: 'Type', key: 'mimeType' },
+        { title: 'Tags', key: 'tags', sortable: false },
     ];
 });
 
@@ -330,7 +321,7 @@ function load() {
 
 function handleKeydown(e: KeyboardEvent) {
     if (e.key === '/') {
-        (queryEl as HTMLInputElement).focus();
+        queryEl.value?.focus();
         e.preventDefault();
     }
 }
@@ -339,7 +330,7 @@ function clearQuery(_e: MouseEvent) {
     queryText.value = '';
 }
 
-function handleTagClick(tag: string, e: MouseEvent) {
+function handleTagClick(tag: string, e: MouseEvent | KeyboardEvent) {
     if (e.ctrlKey) {
         toggleTag(tag);
     }
@@ -440,16 +431,16 @@ function formatFileSize(size: number) {
 }
 
 function deleteSelected() {
-    for (const item of selected.value) {
-        api.deleteNote(item.path)
+    for (const path of selected.value) {
+        api.deleteNote(path)
             .then(res => {
                 if (res.data === true) {
-                    const i = entries.value.findIndex(e => e.path === item.path);
+                    const i = entries.value.findIndex(e => e.path === path);
                     entries.value.splice(i, 1);
                 }
                 else {
                     error.value = true;
-                    errorText.value = `Something wrong happened when deleting ${item.path}`;
+                    errorText.value = `Something wrong happened when deleting ${path}`;
                 }
             }).catch(error => {
                 if (error.response) {
@@ -517,7 +508,7 @@ watch(queryText, (q: string | null) => {
         text-decoration: none;
 
         &:hover {
-            color: var(--v-anchor-base);
+            color: rgb(var(--v-theme-primary));
             text-decoration: underline;
         }
     }

@@ -94,7 +94,7 @@
 
 <script lang="ts" setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { useRoute } from 'vue-router/composables';
+import { useRoute } from 'vue-router';
 import * as api from '@/api';
 import { getAxios } from '@/axios';
 
@@ -118,9 +118,9 @@ const pdfBlobUrl = ref('');
 
 // Computed properties
 const filename = computed(() => {
-  // In Vue Router 3, :path* creates route.params.path as an array or string
-  // For /media/:path*, the parameter will be available as route.params.path
-  return route.params.path || 'unknown';
+  // In Vue Router 4, the repeatable :path* parameter is an array of path segments
+  const path = route.params.path;
+  return (Array.isArray(path) ? path.join('/') : path) || 'unknown';
 });
 
 const mediaUrl = computed(() => {
