@@ -2,12 +2,11 @@
     <v-menu
         v-model="menu"
         v-bind:close-on-content-click="false"
-        offset-y
         min-width="auto"
     >
-        <template v-slot:activator="{ on, attrs }">
+        <template v-slot:activator="{ props: menuProps }">
             <v-text-field
-                v-bind="attrs"
+                v-bind="menuProps"
                 v-model="displayValue"
                 v-bind:label="label"
                 v-bind:rules="rules"
@@ -17,7 +16,6 @@
                 v-bind:hint="localTimeHint"
                 v-bind:persistent-hint="!!localTimeHint"
                 readonly
-                v-on="on"
             >
                 <template v-slot:prepend>
                     <v-icon>{{ timeEnabled ? mdiClockOutline : mdiCalendarOutline }}</v-icon>
@@ -29,38 +27,36 @@
             <div class="d-flex flex-row align-start">
                 <div class="d-flex flex-column">
                     <v-date-picker
-                        v-model="dateValue"
-                        scrollable
+                        v-bind:model-value="datePickerValue"
                         show-adjacent-months
-                        v-on:input="onDatePick"
+                        v-on:update:model-value="onDatePick"
                     />
                     <v-list v-if="showTimeToggle">
                         <v-list-item>
                             <v-switch
                                 v-model="timeEnabled"
                                 label="Include time"
-                                v-on:change="onTimeToggle"
+                                v-on:update:model-value="onTimeToggle"
                             />
                         </v-list-item>
                     </v-list>
                 </div>
                 <div v-if="timeEnabled" class="d-flex flex-column">
                     <v-time-picker
-                        v-model="timeValue"
+                        v-bind:model-value="timeValue ?? undefined"
                         format="24hr"
-                        scrollable
-                        v-on:input="onTimePick"
+                        v-on:update:model-value="onTimePick"
                     />
                     <v-list>
                         <v-list-item>
                             <v-select
-                                v-model="timezoneValue"
+                                v-bind:model-value="timezoneValue"
                                 v-bind:items="timezoneOptions"
                                 label="Timezone"
-                                item-text="text"
+                                item-title="text"
                                 item-value="value"
                                 hide-details
-                                v-on:input="onTimezonePick"
+                                v-on:update:model-value="onTimezonePick"
                             >
                                 <template v-slot:prepend>
                                     <v-icon>{{ mdiEarth }}</v-icon>
@@ -142,7 +138,7 @@ type HideDetails = boolean | 'auto';
 // Props
 const props = withDefaults(
     defineProps<{
-        value?: string | null | undefined;
+        modelValue?: string | null | undefined;
         label?: string | undefined;
         rules?: Array<(value: string) => boolean | string>;
         required?: boolean;
@@ -151,7 +147,7 @@ const props = withDefaults(
         includeTime?: boolean;
     }>(),
     {
-        value: undefined,
+        modelValue: undefined,
         label: undefined,
         rules: () => [],
         required: false,
@@ -163,7 +159,7 @@ const props = withDefaults(
 
 // Emits
 const emit = defineEmits<{
-    (e: 'input', value: string | null): void;
+    (e: 'update:modelValue', value: string | null): void;
 }>();
 
 // Reactive states
@@ -183,9 +179,9 @@ const initializeTimeEnabled = () => {
     if (includeTimeExplicitlyProvided) {
         // If includeTime prop is explicitly provided, use that value
         timeEnabled.value = props.includeTime!;
-    } else if (props.value) {
+    } else if (props.modelValue) {
         // If no explicit includeTime prop, determine from current value
-        const { time } = parseDateTime(props.value);
+        const { time } = parseDateTime(props.modelValue);
         timeEnabled.value = time !== null;
     } else {
         // Default to false if no value and no explicit includeTime prop
@@ -194,7 +190,7 @@ const initializeTimeEnabled = () => {
 };
 
 // Watch for changes to the value prop and re-initialize timeEnabled
-watch(() => props.value, () => {
+watch(() => props.modelValue, () => {
     initializeTimeEnabled();
 }, { immediate: true });
 
@@ -236,7 +232,7 @@ const parseDateTime = (value: string | null | undefined): { date: string | null;
 // Computed properties for date and time values
 const dateValue = computed<string | null>({
     get: () => {
-        const { date } = parseDateTime(props.value);
+        const { date } = parseDateTime(props.modelValue);
         return date;
     },
     set: (v) => {
@@ -244,10 +240,15 @@ const dateValue = computed<string | null>({
     },
 });
 
+// v3 <v-date-picker> works with Date objects rather than formatted strings
+const datePickerValue = computed<Date | null>(() => {
+    return dateValue.value ? dayjs(dateValue.value).toDate() : null;
+});
+
 const timeValue = computed<string | null>({
     get: () => {
         if (!timeEnabled.value) return null;
-        const { time } = parseDateTime(props.value);
+        const { time } = parseDateTime(props.modelValue);
         return time;
     },
     set: (v) => {
@@ -259,7 +260,7 @@ const timeValue = computed<string | null>({
 const timezoneValue = computed<string | null>({
     get: () => {
         if (!timeEnabled.value) return null;
-        const { timezone } = parseDateTime(props.value);
+        const { timezone } = parseDateTime(props.modelValue);
         return timezone || getLocalTimezone();
     },
     set: (v) => {
@@ -270,10 +271,10 @@ const timezoneValue = computed<string | null>({
 // Display value for the text field
 const displayValue = computed({
     get: () => {
-        if (!props.value) return '';
+        if (!props.modelValue) return '';
         
         if (timeEnabled.value) {
-            const { date, time } = parseDateTime(props.value);
+            const { date, time } = parseDateTime(props.modelValue);
             if (date && time) {
                 const currentTz = timezoneValue.value || getLocalTimezone();
                 return `${date} ${time}${currentTz}`;
@@ -282,12 +283,12 @@ const displayValue = computed({
             }
         }
         
-        return props.value;
+        return props.modelValue;
     },
     set: (value: string) => {
         // Handle clearing the value when the clear button is clicked
         if (!value || value.trim() === '') {
-            emit('input', null);
+            emit('update:modelValue', null);
         }
         // Note: We don't handle direct text input since the field is readonly
         // The user can only interact through the date/time pickers or clear button
@@ -302,9 +303,9 @@ const isTimezoneLocal = computed(() => {
 
 // Generate hint text showing local time when timezone differs
 const localTimeHint = computed(() => {
-    if (!props.value || !timeEnabled.value || isTimezoneLocal.value) return '';
+    if (!props.modelValue || !timeEnabled.value || isTimezoneLocal.value) return '';
     
-    const { date, time } = parseDateTime(props.value);
+    const { date, time } = parseDateTime(props.modelValue);
     if (!date || !time || !timezoneValue.value) return '';
     
     try {
@@ -321,7 +322,7 @@ const localTimeHint = computed(() => {
 // Update the combined value
 const updateValue = (date: string | null, time: string | null, timezone: string | null) => {
     if (!date) {
-        emit('input', null);
+        emit('update:modelValue', null);
         return;
     }
     
@@ -330,22 +331,22 @@ const updateValue = (date: string | null, time: string | null, timezone: string 
         // Always include timezone when time is enabled
         const tz = timezone || getLocalTimezone();
         value += tz;
-        emit('input', value);
+        emit('update:modelValue', value);
     } else {
-        emit('input', date);
+        emit('update:modelValue', date);
     }
 };
 
 // Methods
-function onDatePick(date: string) {
-    updateValue(date, timeValue.value, timezoneValue.value);
+function onDatePick(date: unknown) {
+    updateValue(dayjs(date as Date).format('YYYY-MM-DD'), timeValue.value, timezoneValue.value);
 }
 
-function onTimePick(time: string) {
+function onTimePick(time: string | null) {
     updateValue(dateValue.value, time, timezoneValue.value);
 }
 
-function onTimezonePick(timezone: string) {
+function onTimezonePick(timezone: string | null) {
     updateValue(dateValue.value, timeValue.value, timezone);
 }
 
@@ -365,9 +366,6 @@ function onTimeToggle() {
 </script>
 
 <style scoped lang="scss">
-:deep(.v-date-picker-title) {
-    height: 70px;
-}
 :deep(.v-picker) {
     border-radius: 0;
 }

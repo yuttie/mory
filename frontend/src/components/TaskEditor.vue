@@ -7,8 +7,8 @@
                         label="Name"
                         autofocus
                         hide-details="auto"
-                        v-bind:value="value.name"
-                        v-on:input="$emit('input', { ...value, name: $event })"
+                        v-bind:model-value="modelValue.name"
+                        v-on:update:model-value="$emit('update:modelValue', { ...modelValue, name: $event })"
                         auto-grow
                         rows="1"
                     >
@@ -21,8 +21,8 @@
             <v-row>
                 <v-col>
                     <v-combobox
-                        v-bind:value="value.tags"
-                        v-on:input="$emit('input', { ...value, tags: $event })"
+                        v-bind:model-value="modelValue.tags"
+                        v-on:update:model-value="$emit('update:modelValue', { ...modelValue, tags: $event })"
                         v-bind:items="tagItems"
                         v-bind:return-object="false"
                         chips
@@ -34,16 +34,14 @@
                         <template v-slot:prepend>
                             <v-icon>{{ mdiTagMultipleOutline }}</v-icon>
                         </template>
-                        <template v-slot:selection="{ attrs, item, select, selected }">
+                        <template v-slot:chip="{ item, props: chipProps }">
                             <v-chip
-                                v-bind="attrs"
-                                v-bind:input-value="selected"
-                                close
-                                small
-                                v-on:click="select"
-                                v-on:click:close="removeTag(item)"
+                                v-bind="chipProps"
+                                closable
+                                size="small"
+                                v-on:click:close="removeTag(item.value)"
                             >
-                                <span>{{ item }}</span>
+                                <span>{{ item.value }}</span>
                             </v-chip>
                         </template>
                     </v-combobox>
@@ -54,20 +52,17 @@
                     <v-menu
                         v-model="scheduleMenu"
                         v-bind:close-on-content-click="false"
-                        v-bind:nudge-right="40"
-                        offset-y
                         min-width="auto"
                     >
-                        <template v-slot:activator="{ on, attrs }">
+                        <template v-slot:activator="{ props: menuProps }">
                             <v-text-field
-                                v-bind:value="value.schedule"
-                                v-on:input="$emit('input', { ...value, schedule: $event })"
+                                v-bind:model-value="modelValue.schedule"
+                                v-on:update:model-value="$emit('update:modelValue', { ...modelValue, schedule: $event })"
                                 label="Schedule on"
                                 readonly
                                 clearable
                                 hide-details="auto"
-                                v-bind="attrs"
-                                v-on="on"
+                                v-bind="menuProps"
                             >
                                 <template v-slot:prepend>
                                     <v-icon>{{ mdiCalendar }}</v-icon>
@@ -75,14 +70,14 @@
                             </v-text-field>
                         </template>
                         <v-date-picker
-                            v-bind:value="value.schedule"
-                            v-on:input="$emit('input', { ...value, schedule: $event }); scheduleMenu = false;"
+                            v-bind:model-value="toDate(modelValue.schedule)"
+                            v-on:update:model-value="$emit('update:modelValue', { ...modelValue, schedule: fromDate($event) }); scheduleMenu = false;"
                         ></v-date-picker>
                     </v-menu>
                 </v-col>
                 <v-col cols="auto">
                     <v-btn
-                        text
+                        variant="text"
                         v-on:click="setScheduleToday"
                     >Today</v-btn>
                 </v-col>
@@ -92,20 +87,17 @@
                     <v-menu
                         v-model="deadlineMenu"
                         v-bind:close-on-content-click="false"
-                        v-bind:nudge-right="40"
-                        offset-y
                         min-width="auto"
                     >
-                        <template v-slot:activator="{ on, attrs }">
+                        <template v-slot:activator="{ props: menuProps }">
                             <v-text-field
-                                v-bind:value="value.deadline"
-                                v-on:input="$emit('input', { ...value, deadline: $event })"
+                                v-bind:model-value="modelValue.deadline"
+                                v-on:update:model-value="$emit('update:modelValue', { ...modelValue, deadline: $event })"
                                 label="Deadline"
                                 readonly
                                 clearable
                                 hide-details="auto"
-                                v-bind="attrs"
-                                v-on="on"
+                                v-bind="menuProps"
                             >
                                 <template v-slot:prepend>
                                     <v-icon>{{ mdiCalendar }}</v-icon>
@@ -113,17 +105,16 @@
                             </v-text-field>
                         </template>
                         <v-date-picker
-                            v-bind:value="value.deadline"
-                            v-on:input="$emit('input', { ...value, deadline: $event }); deadlineMenu = false;"
+                            v-bind:model-value="toDate(modelValue.deadline)"
+                            v-on:update:model-value="$emit('update:modelValue', { ...modelValue, deadline: fromDate($event) }); deadlineMenu = false;"
                         ></v-date-picker>
                     </v-menu>
                 </v-col>
                 <v-col cols="auto">
                     <v-checkbox
                         label="Done"
-                        v-bind:input-value="value.done"
-                        v-bind:value="value.done"
-                        v-on:change="$emit('input', { ...value, done: $event })"
+                        v-bind:model-value="modelValue.done"
+                        v-on:update:model-value="$emit('update:modelValue', { ...modelValue, done: $event ?? false })"
                     ></v-checkbox>
                 </v-col>
             </v-row>
@@ -132,8 +123,8 @@
                     <v-textarea
                         label="Note"
                         hide-details="auto"
-                        v-bind:value="value.note"
-                        v-on:input="$emit('input', { ...value, note: $event })"
+                        v-bind:model-value="modelValue.note"
+                        v-on:update:model-value="$emit('update:modelValue', { ...modelValue, note: $event })"
                     >
                         <template v-slot:prepend>
                             <v-icon>{{ mdiText }}</v-icon>
@@ -160,13 +151,13 @@ import dayjs from 'dayjs';
 
 // Props
 const props = defineProps<{
-    value: Task;
+    modelValue: Task;
     knownTags: [string, number][];
 }>();
 
 // Emits
 const emit = defineEmits<{
-    (e: 'input', task: Task): void;
+    (e: 'update:modelValue', task: Task): void;
 }>();
 
 // Reactive states
@@ -174,24 +165,32 @@ const deadlineMenu = ref(false);
 const scheduleMenu = ref(false);
 
 // Computed properties
-const tagItems = computed((): { text: string; value: string; }[] => {
+const tagItems = computed((): { title: string; value: string; }[] => {
     return props.knownTags.map(([tag, count]) => {
         return {
-            text: `${tag} (${count})`,
+            title: `${tag} (${count})`,
             value: tag,
         };
     });
 });
 
 // Methods
+function toDate(date: string | null | undefined): Date | null {
+    return date ? dayjs(date).toDate() : null;
+}
+
+function fromDate(date: unknown): string {
+    return dayjs(date as Date).format('YYYY-MM-DD');
+}
+
 function setScheduleToday() {
     // FIXME We should emit an event instead like we do in template for bidirectional binding
-    props.value.schedule = dayjs().format('YYYY-MM-DD');  // eslint-disable-line vue/no-mutating-props
+    props.modelValue.schedule = dayjs().format('YYYY-MM-DD');  // eslint-disable-line vue/no-mutating-props
 }
 
 function removeTag(tag: string) {
     // FIXME We should emit an event instead like we do in template for bidirectional binding
-    props.value.tags.splice(props.value.tags.indexOf(tag), 1);  // eslint-disable-line vue/no-mutating-props
+    props.modelValue.tags.splice(props.modelValue.tags.indexOf(tag), 1);  // eslint-disable-line vue/no-mutating-props
 }
 </script>
 

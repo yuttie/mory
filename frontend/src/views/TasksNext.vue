@@ -1,5 +1,5 @@
 <template>
-    <div id="tasks-next" class="d-flex" v-bind:class="{ 'flex-column': !$vuetify.breakpoint.smAndUp, 'flex-row': $vuetify.breakpoint.smAndUp }">
+    <div id="tasks-next" class="d-flex" v-bind:class="{ 'flex-column': !$vuetify.display.smAndUp, 'flex-row': $vuetify.display.smAndUp }">
         <template v-if="store.isLoaded">
             <v-sheet class="d-flex flex-column task-tree-container"><!-- NOTE: Necessary for <TaskTree> to have vertical scrollbar -->
                 <v-toolbar flat class="flex-grow-0">
@@ -8,39 +8,36 @@
                     </v-toolbar-title>
                     <v-spacer />
                     <v-menu
-                        offset-y
                         v-bind:close-on-content-click="false"
                     >
-                        <template v-slot:activator="{ on, attrs }">
+                        <template v-slot:activator="{ props: menuProps }">
                             <v-btn
                                 icon
-                                v-bind="attrs"
-                                v-on="on"
+                                variant="text"
+                                v-bind="menuProps"
                             >
                                 <v-icon>{{ mdiDotsVertical }}</v-icon>
                             </v-btn>
                         </template>
                         <v-list>
-                            <v-subheader>Statistics</v-subheader>
+                            <v-list-subheader>Statistics</v-list-subheader>
                             <v-list-item>
-                                <v-list-item-content>
-                                    <v-list-item-title v-for="[kind, label] of Object.entries(STATUS_LABEL)" v-bind:key="kind">
-                                        {{ label }}: {{ store.allTasks.filter((t) => [kind].includes(t.metadata?.task?.status?.kind)).length }}
-                                    </v-list-item-title>
-                                </v-list-item-content>
+                                <v-list-item-title v-for="[kind, label] of Object.entries(STATUS_LABEL)" v-bind:key="kind">
+                                    {{ label }}: {{ store.allTasks.filter((t) => [kind].includes(t.metadata?.task?.status?.kind)).length }}
+                                </v-list-item-title>
                             </v-list-item>
                         </v-list>
                         <v-divider></v-divider>
                         <v-list>
-                            <v-subheader>Config</v-subheader>
+                            <v-list-subheader>Config</v-list-subheader>
                             <v-list-item>
-                                <v-list-item-action>
+                                <template v-slot:prepend>
                                     <v-switch
                                         v-model="hideCompletedInTreeView"
                                         hide-details
-                                        class="mt-0"
+                                        class="mt-0 mr-2"
                                     ></v-switch>
-                                </v-list-item-action>
+                                </template>
                                 <v-list-item-title>
                                     Hide completed tasks in tree view
                                 </v-list-item-title>
@@ -51,7 +48,7 @@
                 <TaskTree
                     v-bind:items="filteredForestWithTags"
                     v-bind:active="activeNodeId"
-                    v-bind:open.sync="openNodes"
+                    v-model:open="openNodes"
                     v-on:update:active="onTaskSelectionChangeInTree"
                     v-on:add-child-task="onAddChildTask"
                     style="flex: 1 1 0"
@@ -60,26 +57,26 @@
             <div class="item-view d-flex flex-column">
                 <div class="d-flex flex-row">
                     <v-tabs
-                        v-bind:value="itemViewTab"
-                        v-on:change="onTabChange"
+                        v-bind:model-value="itemViewTab"
+                        v-on:update:model-value="onTabChange"
                     >
                         <v-tab
                             v-if="newTaskPath || selectedNode && !isTagGroupSelected"
-                            tab-value="selected"
+                            value="selected"
                         >
                             {{ newTaskPath ? 'New' : 'Selected' }}
                         </v-tab>
-                        <v-tab tab-value="descendants">
+                        <v-tab value="descendants">
                             {{ isTagGroupSelected ? 'Tagged Tasks' : selectedNode ? 'Descendants' : 'All tasks' }}
                         </v-tab>
                     </v-tabs>
                 </div>
-                <v-tabs-items
-                    v-bind:value="itemViewTab"
+                <v-window
+                    v-bind:model-value="itemViewTab"
                     class="d-flex flex-column"
                     style="flex: 1 1 0; background: transparent;"
                 >
-                    <v-tab-item v-if="newTaskPath || selectedNode && !isTagGroupSelected" value="selected">
+                    <v-window-item v-if="newTaskPath || selectedNode && !isTagGroupSelected" value="selected">
                         <TaskEditorNext
                             ref="taskEditorRef"
                             v-bind:task-path="newTaskPath ?? selectedNode.path"
@@ -94,14 +91,14 @@
                             v-on:cancel="onNewTaskCancel"
                             v-on:change-parent="showChangeParentDialog"
                         />
-                    </v-tab-item>
-                    <v-tab-item value="descendants">
-                        <v-toolbar flat outlined dense class="flex-grow-0">
+                    </v-window-item>
+                    <v-window-item value="descendants">
+                        <v-toolbar flat border density="compact" color="transparent" class="flex-grow-0">
                             <!-- View mode selector -->
                             <v-btn-toggle
-                                v-bind:value="descendantsViewMode"
-                                v-on:change="onViewModeChange"
-                                dense
+                                v-bind:model-value="descendantsViewMode"
+                                v-on:update:model-value="onViewModeChange"
+                                density="compact"
                                 mandatory
                             >
                                 <v-btn
@@ -110,56 +107,53 @@
                                     v-bind:value="value"
                                 >
                                     <v-icon>{{ icon }}</v-icon>
-                                    <span v-if="$vuetify.breakpoint.mdAndUp">{{ text }}</span>
+                                    <span v-if="$vuetify.display.mdAndUp">{{ text }}</span>
                                 </v-btn>
                             </v-btn-toggle>
                             <!-- New task button -->
                             <v-btn
                                 title="Add"
                                 color="primary"
-                                outlined
+                                variant="outlined"
                                 class="ml-3"
-                                v-bind:class="{ 'pa-0': !$vuetify.breakpoint.mdAndUp }"
+                                v-bind:class="{ 'pa-0': !$vuetify.display.mdAndUp }"
                                 v-on:click="newTask"
                             >
                                 <v-icon>{{ mdiPlus }}</v-icon>
-                                <span v-if="$vuetify.breakpoint.mdAndUp">Add</span>
+                                <span v-if="$vuetify.display.mdAndUp">Add</span>
                             </v-btn>
                             <v-spacer />
                             <v-menu
-                                offset-y
                                 v-bind:close-on-content-click="false"
                             >
-                                <template v-slot:activator="{ on, attrs }">
+                                <template v-slot:activator="{ props: menuProps }">
                                     <v-btn
                                         icon
-                                        v-bind="attrs"
-                                        v-on="on"
+                                        variant="text"
+                                        v-bind="menuProps"
                                     >
                                         <v-icon>{{ mdiDotsVertical }}</v-icon>
                                     </v-btn>
                                 </template>
                                 <v-list>
-                                    <v-subheader>Descendants statistics</v-subheader>
+                                    <v-list-subheader>Descendants statistics</v-list-subheader>
                                     <v-list-item>
-                                        <v-list-item-content>
-                                            <v-list-item-title v-for="[kind, label] of Object.entries(STATUS_LABEL)" v-bind:key="kind">
-                                                {{ label }}: {{ selectedNodeDescendants.filter((t) => [kind].includes(t.metadata?.task?.status?.kind)).length }}
-                                            </v-list-item-title>
-                                        </v-list-item-content>
+                                        <v-list-item-title v-for="[kind, label] of Object.entries(STATUS_LABEL)" v-bind:key="kind">
+                                            {{ label }}: {{ selectedNodeDescendants.filter((t) => [kind].includes(t.metadata?.task?.status?.kind)).length }}
+                                        </v-list-item-title>
                                     </v-list-item>
                                 </v-list>
                                 <v-divider></v-divider>
                                 <v-list>
-                                    <v-subheader>Config</v-subheader>
+                                    <v-list-subheader>Config</v-list-subheader>
                                     <v-list-item>
-                                        <v-list-item-action>
+                                        <template v-slot:prepend>
                                             <v-switch
                                                 v-model="hideCompletedInItemView"
                                                 hide-details
-                                                class="mt-0"
+                                                class="mt-0 mr-2"
                                             ></v-switch>
-                                        </v-list-item-action>
+                                        </template>
                                         <v-list-item-title>
                                             Hide completed tasks in item view
                                         </v-list-item-title>
@@ -187,14 +181,14 @@
                                 v-on:task-click="onTaskListItemClick"
                             />
                         </div>
-                    </v-tab-item>
-                </v-tabs-items>
+                    </v-window-item>
+                </v-window>
             </div>
         </template>
-        <v-overlay v-bind:value="store.isLoading" z-index="20">
+        <v-overlay v-bind:model-value="store.isLoading" z-index="20" class="align-center justify-center">
             <v-progress-circular indeterminate size="64" />
         </v-overlay>
-        <v-snackbar v-model="error" color="error" top timeout="5000">{{ error }}</v-snackbar>
+        <v-snackbar v-model="error" color="error" location="top" timeout="5000">{{ error }}</v-snackbar>
         
         <!-- Parent Selection Dialog -->
         <ParentSelectionDialog
@@ -209,7 +203,7 @@
 
 <script lang="ts" setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
-import { useRoute, useRouter } from 'vue-router/composables';
+import { useRoute, useRouter } from 'vue-router';
 import { useLocalStorage } from '@/composables/localStorage';
 
 import {
@@ -252,7 +246,7 @@ const showParentDialog = ref<boolean>(false);
 // URL-derived state (single source of truth)
 const selectedNode = computed<TreeNodeRecord | undefined>(() => {
     if (route.name === 'TasksNextWithParams' && route.params.selectedNodeId) {
-        const nodeId = route.params.selectedNodeId === '_' ? undefined : route.params.selectedNodeId;
+        const nodeId = route.params.selectedNodeId === '_' ? undefined : route.params.selectedNodeId as string;
         return nodeId ? store.node(nodeId) : undefined;
     }
     return undefined;
@@ -260,7 +254,7 @@ const selectedNode = computed<TreeNodeRecord | undefined>(() => {
 
 const itemViewTab = computed<string>(() => {
     if (route.name === 'TasksNextWithParams' && route.params.tab) {
-        return route.params.tab;
+        return route.params.tab as string;
     }
     return 'descendants';
 });
@@ -823,7 +817,8 @@ async function onSelectedTaskSave(task: Task) {
         await store.refresh();
     }
     // Refresh task editor manually because its task-path prop retains the same value
-    taskEditorRef.value.refresh();
+    // (the ref may be momentarily null while the window transition remounts the editor)
+    taskEditorRef.value?.refresh();
 }
 
 async function onSelectedTaskDelete(path: string) {

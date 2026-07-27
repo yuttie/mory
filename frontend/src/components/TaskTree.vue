@@ -1,28 +1,28 @@
 <template>
     <v-treeview
         v-bind:items="items"
-        v-on:update:open="$emit('update:open', $event)"
-        v-on:update:active="$emit('update:active', $event[0])"
-        v-bind:open="open"
-        v-bind:active="(active ?? '') !== '' ? [active] : []"
-        item-key="uuid"
-        item-text="title"
+        v-on:update:opened="$emit('update:open', $event)"
+        v-on:update:activated="$emit('update:active', $event[0])"
+        v-bind:opened="open"
+        v-bind:activated="(active ?? '') !== '' ? [active] : []"
+        item-value="uuid"
+        item-title="title"
         activatable
-        dense
+        density="compact"
         class="task-tree"
     >
-        <template v-slot:prepend="{ item, open }">
-            <v-icon v-if="item.metadata?.tag_group" dense>
+        <template v-slot:prepend="{ item }">
+            <v-icon v-if="item.metadata?.tag_group" size="small">
                 {{ mdiTag }}
             </v-icon>
-            <v-icon v-else-if="item.children" dense v-bind:color="getTaskColor(item)">
+            <v-icon v-else-if="item.children" size="small" v-bind:color="getTaskColor(item)">
                 {{ item.metadata?.task?.status?.kind === 'done' ? mdiFolderCheck : item.metadata?.task?.status?.kind === 'canceled' ? mdiFolderOff : mdiFolder }}
             </v-icon>
-            <v-icon v-else dense v-bind:color="getTaskColor(item)">
+            <v-icon v-else size="small" v-bind:color="getTaskColor(item)">
                 {{ item.metadata?.task?.status?.kind === 'done' ? mdiCheckboxMarkedOutline : item.metadata?.task?.status?.kind === 'canceled' ? mdiCheckboxBlankOffOutline : mdiCheckboxBlankOutline }}
             </v-icon>
         </template>
-        <template v-slot:label="{ item, open }">
+        <template v-slot:title="{ item }">
             <span
                 v-bind:title="item.title"
                 v-bind:style="{ textDecorationLine: item.metadata?.task?.status?.kind === 'canceled' ? 'line-through' : 'none' }"
@@ -33,21 +33,20 @@
         <template v-slot:append="{ item }">
             <v-btn
                 v-if="!item.metadata?.tag_group"
-                depressed
-                x-small
+                variant="flat"
+                size="x-small"
                 class="add-child-btn"
                 title="Add child task"
                 v-on:click.stop="$emit('add-child-task', item.uuid)"
             >
-                <v-icon small>{{ mdiPlus }}</v-icon>
+                <v-icon size="small">{{ mdiPlus }}</v-icon>
             </v-btn>
         </template>
     </v-treeview>
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onMounted, onUnmounted, set, del } from 'vue';
-import type { Ref } from 'vue';
+import { onMounted, onUnmounted } from 'vue';
 
 import {
     mdiCheckboxBlankOffOutline,
@@ -62,7 +61,7 @@ import {
 
 import type { UUID, ApiTreeNode } from '@/api/task';
 
-function getTaskColor(item): string {
+function getTaskColor(item: any): string | undefined {
     switch (item.metadata?.task?.status?.kind) {
         case "todo":
             return "blue-grey";
@@ -111,8 +110,8 @@ onUnmounted(() => {
 
 <style scoped lang="scss">
 .task-tree {
-    :deep(.v-treeview-node__root) {
-        &:not(:hover) .v-treeview-node__append {
+    :deep(.v-treeview-item) {
+        &:not(:hover) .v-list-item__append {
             display: none;
         }
     }

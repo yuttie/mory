@@ -1,7 +1,7 @@
 <template>
     <v-dialog
-        v-bind:value="value"
-        v-on:input="$emit('input', $event)"
+        v-bind:model-value="modelValue"
+        v-on:update:model-value="$emit('update:modelValue', $event)"
         max-width="600px"
         persistent
     >
@@ -12,16 +12,16 @@
             <v-card-text>
                 <div class="mb-3">
                     <p>Select a new parent for <strong>{{ taskTitle }}</strong>:</p>
-                    <p class="text-caption text--secondary">
+                    <p class="text-caption text-medium-emphasis">
                         The task and all its subtasks will be moved under the selected parent.
                     </p>
                 </div>
                 
                 <!-- Root option -->
                 <v-card
-                    outlined
+                    variant="outlined"
                     class="mb-3 pa-2 d-flex align-center"
-                    v-bind:class="{ 'blue lighten-5': selectedParent === null }"
+                    v-bind:class="{ 'bg-blue-lighten-5': selectedParent === null }"
                     style="cursor: pointer"
                     v-on:click="selectParent(null)"
                 >
@@ -46,8 +46,8 @@
             <v-card-actions>
                 <v-spacer />
                 <v-btn
-                    text
-                    v-on:click="$emit('input', false)"
+                    variant="text"
+                    v-on:click="$emit('update:modelValue', false)"
                 >
                     Cancel
                 </v-btn>
@@ -72,7 +72,7 @@ import type { UUID, ApiTreeNode } from '@/api/task';
 
 // Props
 const props = defineProps<{
-    value: boolean;
+    modelValue: boolean;
     taskUuid: UUID | null;
     taskTitle?: string;
     items: ApiTreeNode[];
@@ -80,7 +80,7 @@ const props = defineProps<{
 
 // Emits
 const emit = defineEmits<{
-    (e: 'input', value: boolean): void;
+    (e: 'update:modelValue', value: boolean): void;
     (e: 'move', targetParent: UUID | null): void;
 }>();
 
@@ -129,12 +129,12 @@ function selectParent(parentUuid: UUID | null | undefined): void {
 function confirmMove(): void {
     if (canMove.value) {
         emit('move', selectedParent.value);
-        emit('input', false);
+        emit('update:modelValue', false);
     }
 }
 
 // Watch for dialog open to reset state
-watch(() => props.value, (isOpen) => {
+watch(() => props.modelValue, (isOpen) => {
     if (isOpen) {
         selectedParent.value = null;
         // Open all root nodes by default for better visibility
