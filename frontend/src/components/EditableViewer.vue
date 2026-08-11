@@ -406,7 +406,6 @@ const showUpstreamState = ref(false);
 const rendered = ref({ metadata: null as null | any, content: '' });
 const useSimpleEditor = ref(loadConfigValue('use-simple-editor', false));
 const lockScroll = ref(loadConfigValue('lock-scroll', false));
-const ignoreNext = ref(false);
 const noteHasUpstream = ref(false);
 const editorIsVisible = ref(false);
 const viewerIsVisible = ref(true);
@@ -429,6 +428,7 @@ let chunkRenderController: AbortController | null = null;
 let markdownChunks: Array<{ content: string; startLine: number }> = [];
 let renderedChunks: string[] = [];
 let chunkElements: HTMLElement[] = [];
+let pendingProgrammaticViewerScrollPosition: { top: number; left: number } | null = null;
 
 // Set right before a note path change that we've already handled locally
 // (e.g. after a rename), so the route watcher below doesn't reload the note again.
@@ -905,8 +905,6 @@ function updateChunkInDisplay(chunkIndex: number, chunkHtml: string, startLine: 
 }
 
 function updateRenderedState(metadata: any, parseError: any, chunks: string[]) {
-    ignoreNext.value = true;
-
     // Validate metadata
     const validationErrors = (() => {
         if (metadata !== null) {
@@ -1113,11 +1111,15 @@ function highlightVisibleTOCItems() {
 function handleDocumentScroll() {
     highlightVisibleTOCItems();
 
+    const programmaticScrollPosition = pendingProgrammaticViewerScrollPosition;
+    pendingProgrammaticViewerScrollPosition = null;
+
     if (!lockScroll.value) {
         return;
     }
-    if (ignoreNext.value) {
-        ignoreNext.value = false;
+    if (programmaticScrollPosition !== null
+        && viewer.value.scrollTop === programmaticScrollPosition.top
+        && viewer.value.scrollLeft === programmaticScrollPosition.left) {
         return;
     }
 
@@ -1168,7 +1170,6 @@ function handleDocumentScroll() {
         // Scroll to the line
         const lineNumber = lineNumber1 + (lineNumber2 - lineNumber1) * (scrollTop - offset1) / (offset2 - offset1);
         editorScrollTo(lineNumber);
-        ignoreNext.value = true;
     }
 }
 
@@ -1187,10 +1188,6 @@ function onEditorScroll(lineNumber: number) {
         return;
     }
     if (!lockScroll.value) {
-        return;
-    }
-    if (ignoreNext.value) {
-        ignoreNext.value = false;
         return;
     }
 
@@ -1239,8 +1236,19 @@ function onEditorScroll(lineNumber: number) {
 
         // Scroll by an offset
         const offset = offset1 + (offset2 - offset1) * (lineNumber - lineNumber1) / (lineNumber2 - lineNumber1);
+        const previousScrollTop = viewer.value.scrollTop;
+        const previousScrollLeft = viewer.value.scrollLeft;
         viewer.value.scrollTo({ top: offset, left: 0, behavior: 'auto' });
-        ignoreNext.value = true;
+        if (viewer.value.scrollTop === previousScrollTop && viewer.value.scrollLeft === previousScrollLeft) {
+            pendingProgrammaticViewerScrollPosition = null;
+        }
+        else {
+            // Use the browser's actual position in case the requested offset was clamped.
+            pendingProgrammaticViewerScrollPosition = {
+                top: viewer.value.scrollTop,
+                left: viewer.value.scrollLeft,
+            };
+        }
     }
 }
 
