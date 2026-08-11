@@ -29,7 +29,16 @@ const emit = defineEmits<{
 
 // Non-reactive state
 let editor: EditorView | null = null;
-let ignoreNextScrollEvent = false;
+let lastKnownScrollTop = 0;
+
+// `scrollTo()` applies its scroll asynchronously over one or more measure
+// cycles, and a scroll that moves nothing never produces an event at all, so a
+// one-shot guard would either miss the scroll it meant to suppress or linger.
+// Suppress by deadline instead: long enough to cover the measure cycles the
+// programmatic scroll settles over, short enough that it cannot swallow a scroll
+// the user makes afterwards.
+const PROGRAMMATIC_SCROLL_SUPPRESSION_MS = 100;
+let suppressScrollEventsUntil = 0;
 
 // Template Refs
 const editorEl = ref<HTMLElement | null>(null);
@@ -80,12 +89,18 @@ onMounted(async () => {
             if (update.docChanged) {
                 emit('change', update.state.doc.toString());
             }
-            if (update.view.scrollDOM.scrollTop !== update.startState.scrollSnapshot?.top) {
-                if (!ignoreNextScrollEvent) {
-                    const lineNumber = update.state.doc.lineAt(update.view.scrollDOM.scrollTop).number;
+            // Only updates that actually moved the scroller count as scrolling.
+            // A `scrollTo()` dispatch produces an update before its scroll effect
+            // has been applied, and that update must not consume the guard below.
+            const scrollTop = update.view.scrollDOM.scrollTop;
+            if (scrollTop !== lastKnownScrollTop) {
+                lastKnownScrollTop = scrollTop;
+                // One `scrollTo()` can settle over several measure passes in a
+                // long document, so suppress the whole window rather than only
+                // the first update it produces.
+                if (performance.now() >= suppressScrollEventsUntil) {
+                    const lineNumber = update.state.doc.lineAt(scrollTop).number;
                     emit('scroll', lineNumber);
-                } else {
-                    ignoreNextScrollEvent = false;
                 }
             }
         }),
@@ -129,6 +144,7 @@ onMounted(async () => {
         state,
         parent: editorEl.value,
     });
+    lastKnownScrollTop = editor.scrollDOM.scrollTop;
 
     // Apply font settings
     if (editor.dom) {
@@ -161,7 +177,7 @@ function resize() {
 function scrollTo(lineNumber: number) {
     if (!editor) return;
 
-    ignoreNextScrollEvent = true;
+    suppressScrollEventsUntil = performance.now() + PROGRAMMATIC_SCROLL_SUPPRESSION_MS;
     const line = editor.state.doc.line(lineNumber + 1);
     editor.dispatch({
         effects: EditorView.scrollIntoView(line.from, { y: 'start' })
