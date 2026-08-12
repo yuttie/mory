@@ -40,6 +40,34 @@ let lastKnownScrollTop = 0;
 const PROGRAMMATIC_SCROLL_SUPPRESSION_MS = 100;
 let suppressScrollEventsUntil = 0;
 
+// Report the first line visible at the top of the scroller, as a 1-based
+// document line number.
+function emitScroll(view: EditorView) {
+    // The scroll handler also runs for intersection changes, which move
+    // nothing, so only an actual change of position counts as scrolling.
+    const scrollTop = view.scrollDOM.scrollTop;
+    if (scrollTop === lastKnownScrollTop) {
+        return;
+    }
+    lastKnownScrollTop = scrollTop;
+
+    // One `scrollTo()` can settle over several measure passes in a long
+    // document, so suppress the whole window rather than only the first
+    // scroll event it produces.
+    if (performance.now() < suppressScrollEventsUntil) {
+        return;
+    }
+
+    // `scrollTop` is a distance within the scroller, while `lineBlockAtHeight()`
+    // takes a height relative to `documentTop` (the top of the first line, in
+    // screen coordinates). The two share neither an origin nor, once the editor
+    // has top padding, a zero point, so convert through screen coordinates
+    // rather than passing `scrollTop` in directly.
+    const viewportTop = view.scrollDOM.getBoundingClientRect().top;
+    const block = view.lineBlockAtHeight(viewportTop - view.documentTop);
+    emit('scroll', view.state.doc.lineAt(block.from).number);
+}
+
 // Template Refs
 const editorEl = ref<HTMLElement | null>(null);
 
@@ -89,28 +117,15 @@ onMounted(async () => {
             if (update.docChanged) {
                 emit('change', update.state.doc.toString());
             }
-            // Only updates that actually moved the scroller count as scrolling.
-            // A `scrollTo()` dispatch produces an update before its scroll effect
-            // has been applied, and that update must not consume the guard below.
-            const scrollTop = update.view.scrollDOM.scrollTop;
-            if (scrollTop !== lastKnownScrollTop) {
-                lastKnownScrollTop = scrollTop;
-                // One `scrollTo()` can settle over several measure passes in a
-                // long document, so suppress the whole window rather than only
-                // the first update it produces.
-                if (performance.now() >= suppressScrollEventsUntil) {
-                    // `scrollTop` is a distance within the scroller, while
-                    // `lineBlockAtHeight()` takes a height relative to
-                    // `documentTop` (the top of the first line, in screen
-                    // coordinates). The two share neither an origin nor, once
-                    // the editor has top padding, a zero point, so convert
-                    // through screen coordinates rather than passing `scrollTop`
-                    // in directly.
-                    const viewportTop = update.view.scrollDOM.getBoundingClientRect().top;
-                    const block = update.view.lineBlockAtHeight(viewportTop - update.view.documentTop);
-                    emit('scroll', update.state.doc.lineAt(block.from).number);
-                }
-            }
+        }),
+        // Report scrolling from the DOM event rather than from the update
+        // listener: CodeMirror only produces an update when a scroll moves its
+        // viewport, so updates miss most scrolls, and reading the layout from
+        // within an update listener forces a synchronous measure.
+        EditorView.domEventHandlers({
+            scroll: (_event, view) => {
+                emitScroll(view);
+            },
         }),
     ];
 
