@@ -201,7 +201,11 @@ function scrollTo(lineNumber: number) {
     if (!editor) return;
 
     suppressScrollEventsUntil = performance.now() + PROGRAMMATIC_SCROLL_SUPPRESSION_MS;
-    const line = editor.state.doc.line(lineNumber + 1);
+    // `lineNumber` is a 1-based document line interpolated between two rendered
+    // elements, so it is usually fractional, and `doc.line()` rejects anything
+    // past the end of the document.
+    const targetLine = Math.min(Math.max(Math.round(lineNumber), 1), editor.state.doc.lines);
+    const line = editor.state.doc.line(targetLine);
     editor.dispatch({
         effects: EditorView.scrollIntoView(line.from, { y: 'start' })
     });
