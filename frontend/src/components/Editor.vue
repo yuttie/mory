@@ -99,8 +99,16 @@ onMounted(async () => {
                 // long document, so suppress the whole window rather than only
                 // the first update it produces.
                 if (performance.now() >= suppressScrollEventsUntil) {
-                    const lineNumber = update.state.doc.lineAt(scrollTop).number;
-                    emit('scroll', lineNumber);
+                    // `scrollTop` is a distance within the scroller, while
+                    // `lineBlockAtHeight()` takes a height relative to
+                    // `documentTop` (the top of the first line, in screen
+                    // coordinates). The two share neither an origin nor, once
+                    // the editor has top padding, a zero point, so convert
+                    // through screen coordinates rather than passing `scrollTop`
+                    // in directly.
+                    const viewportTop = update.view.scrollDOM.getBoundingClientRect().top;
+                    const block = update.view.lineBlockAtHeight(viewportTop - update.view.documentTop);
+                    emit('scroll', update.state.doc.lineAt(block.from).number);
                 }
             }
         }),
