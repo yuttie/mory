@@ -1182,11 +1182,6 @@ function onEditorChange(newText: string) {
 }
 
 function onEditorScroll(lineNumber: number) {
-    if (lineNumber === 0) {
-        // The first scroll invokes this event with line number being 0
-        // Just ignore
-        return;
-    }
     if (!lockScroll.value) {
         return;
     }
