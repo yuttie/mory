@@ -105,8 +105,7 @@
                     Really delete this AI Action?
                 </v-card-title>
                 <v-card-text>
-                    <strong>{{ deletingAction?.name }}</strong> will be removed from
-                    {{ AI_ACTIONS_PATH }}.
+                    <strong>{{ deletingAction?.name }}</strong> will be removed.
                 </v-card-text>
                 <v-card-actions>
                     <v-spacer></v-spacer>
