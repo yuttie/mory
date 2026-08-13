@@ -162,6 +162,7 @@ async fn main() -> Result<()> {
         .route("/tasks", get(v2::get_tasks))
         .route("/events", get(v2::get_events))
         .route("/assess-task", post(v2::post_assess_task))
+        .route("/ai-action", post(v2::post_ai_action))
         .with_state(state.clone())
         .route_layer(middleware::from_fn(auth));
     let api_v2 = Router::new()
@@ -1375,6 +1376,42 @@ Important:
 
         tracing::debug!("Task assessment: {:?}", assessment.feedback);
         Ok(Json(assessment))
+    }
+
+    #[derive(Deserialize)]
+    pub struct AiActionRequest {
+        pub prompt: String,
+    }
+
+    #[derive(Serialize)]
+    pub struct AiActionResponse {
+        pub text: String,
+    }
+
+    /// Run a user-defined prompt through the provider and return the result as-is.
+    ///
+    /// Deliberately uncached: re-running an action on the same input is allowed to
+    /// produce a different result.
+    pub async fn post_ai_action(
+        extract::State(state): extract::State<AppState>,
+        Json(request): Json<AiActionRequest>,
+    ) -> Result<Json<AiActionResponse>, AppError> {
+        let text = chat_completion(&state.http_client, vec![
+            ChatMessage {
+                role: "developer".to_string(),
+                content: "You are a text-processing assistant embedded in a Markdown note editor. \
+                          Output only the resulting text: no preamble, no explanation, no commentary, \
+                          and no surrounding code fences unless the result is itself meant to be a code block. \
+                          Format the output as GitHub Flavored Markdown. \
+                          Reply in the same language as the input unless the instruction says otherwise.".to_string(),
+            },
+            ChatMessage {
+                role: "user".to_string(),
+                content: request.prompt,
+            },
+        ]).await?;
+
+        Ok(Json(AiActionResponse { text }))
     }
 
     pub async fn get_commits_head(
