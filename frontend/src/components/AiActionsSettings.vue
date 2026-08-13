@@ -211,14 +211,18 @@ async function reload() {
     }
 }
 
-async function persist(newActions: AiAction[]) {
+// Returns whether the write succeeded, so callers can keep their dialog open
+// rather than dismissing it over a failure.
+async function persist(newActions: AiAction[]): Promise<boolean> {
     try {
         await saveAiActions(newActions);
         actions.value = newActions;
+        return true;
     }
     catch (err) {
         error.value = true;
         errorText.value = `Failed to save AI Actions: ${err}`;
+        return false;
     }
 }
 
@@ -260,16 +264,21 @@ async function saveDraft() {
         ? [...actions.value, draft]
         : actions.value.map((action) => action.id === edited.id ? draft : action);
 
-    editDialogIsVisible.value = false;
-    await persist(newActions);
+    // Only dismissed once the write is safely in the repository: the dialog holds
+    // the only copy of what was typed, and the snackbar alone is easy to miss.
+    if (await persist(newActions)) {
+        editDialogIsVisible.value = false;
+    }
 }
 
 async function confirmDelete() {
     const deleted = deletingAction.value;
-    deleteDialogIsVisible.value = false;
     if (deleted === null) {
+        deleteDialogIsVisible.value = false;
         return;
     }
-    await persist(actions.value.filter((action) => action.id !== deleted.id));
+    if (await persist(actions.value.filter((action) => action.id !== deleted.id))) {
+        deleteDialogIsVisible.value = false;
+    }
 }
 </script>
