@@ -228,6 +228,29 @@ function replaceSelection(newText: string) {
     });
 }
 
+function getSelectionRange(): { from: number, to: number } {
+    if (!editor) return { from: 0, to: 0 };
+
+    const selection = editor.state.selection.main;
+    return { from: selection.from, to: selection.to };
+}
+
+// Replace an explicitly given range rather than the current selection, for
+// callers that captured a range before an await and must not act on wherever
+// the user has since moved the cursor.
+function replaceRange(from: number, to: number, newText: string) {
+    if (!editor) return;
+
+    // The document may have been edited since the range was captured.
+    const length = editor.state.doc.length;
+    const start = Math.min(from, length);
+    const end = Math.min(Math.max(to, start), length);
+    editor.dispatch({
+        changes: { from: start, to: end, insert: newText },
+        selection: { anchor: start + newText.length }
+    });
+}
+
 async function getLangExtension(lang: string): Extension | null {
     if (lang === 'css') {
         const { css } = await import('@codemirror/lang-css');
@@ -312,6 +335,8 @@ defineExpose({
     resize,
     getSelection,
     replaceSelection,
+    getSelectionRange,
+    replaceRange,
     scrollTo,
 });
 </script>

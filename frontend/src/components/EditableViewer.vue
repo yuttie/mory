@@ -702,6 +702,12 @@ async function loadHighlightjsTheme(themeName: string): Promise<string> {
     }
 }
 
+// TODO (known issue, tracked separately): in Simple Editor mode the textarea
+// branches of `insertText`, `encloseText` and `formatTable` assign to
+// `textArea.value` directly and never call `onEditorChange`, so `text` keeps
+// the old content: the edit never reaches the viewer and is lost on save. The
+// fix is to route the new value through `onEditorChange`, as
+// `replaceEditorRange` below already does.
 function insertText(newText: string) {
     if (useSimpleEditor.value) {
         const textArea = editor.value as HTMLTextAreaElement;
@@ -740,6 +746,42 @@ function formatTable() {
         const selectedText = editorComponent.getSelection();
         const formattedText = CliPrettify.prettify(selectedText);
         editorComponent.replaceSelection(formattedText);
+    }
+}
+
+function getEditorSelection(): { from: number, to: number, text: string } {
+    if (useSimpleEditor.value) {
+        const textArea = editor.value as HTMLTextAreaElement;
+        return {
+            from: textArea.selectionStart,
+            to: textArea.selectionEnd,
+            text: textArea.value.slice(textArea.selectionStart, textArea.selectionEnd),
+        };
+    }
+    else {
+        const editorComponent = editor.value as Editor;
+        const range = editorComponent.getSelectionRange();
+        return { ...range, text: editorComponent.getSelection() };
+    }
+}
+
+function replaceEditorRange(from: number, to: number, newText: string) {
+    if (useSimpleEditor.value) {
+        const textArea = editor.value as HTMLTextAreaElement;
+        // The document may have been edited since the range was captured.
+        const start = Math.min(from, textArea.value.length);
+        const end = Math.min(Math.max(to, start), textArea.value.length);
+        // Through `onEditorChange`, so `text` and the rendered viewer follow the
+        // edit; assigning to `textArea.value` alone would not reach either.
+        onEditorChange(textArea.value.slice(0, start) + newText + textArea.value.slice(end));
+        nextTick(() => {
+            textArea.selectionStart = start + newText.length;
+            textArea.selectionEnd = start + newText.length;
+        });
+    }
+    else {
+        const editorComponent = editor.value as Editor;
+        editorComponent.replaceRange(from, to, newText);
     }
 }
 
