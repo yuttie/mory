@@ -17,16 +17,27 @@ MORIED_USER_NAME=USERNAME
 MORIED_USER_EMAIL=user@example.com
 MORIED_USER_HASH=$argon2i$v=19$m=4096,t=3,p=1$MUZxK1p5Y3RrQmpVazM5SFduelZCakxhV0dqSXJEMy8$XcE1aipcYOUd7gIxh8f2+RRLQmlNT96cLyguIZqE128
 MORIED_OPENAI_API_KEY=sk-your-openai-api-key-here
+MORIED_OPENAI_MODEL=gpt-4o-mini
 MORIED_OPENAI_CACHE_HOURS=24
 ```
 
 ### OpenAI Integration
 
-moried includes OpenAI integration for task assessment. API responses are automatically cached in the SQLite database to reduce costs and improve performance:
+moried talks to OpenAI's chat-completions API from two endpoints. Both require
+`MORIED_OPENAI_API_KEY` and `MORIED_OPENAI_MODEL`; neither has a default, and a
+request fails if either is unset.
+
+`POST /v2/assess-task` assesses a task. Its responses are cached in the SQLite
+database to reduce costs and improve performance:
 
 - **Caching**: Identical requests return cached responses instantly
 - **Expiration**: Cache entries expire after `MORIED_OPENAI_CACHE_HOURS` (default: 24 hours)
 - **Performance**: Cached responses are served much faster than fresh API calls
+
+`POST /v2/ai-action` runs an **AI Action**: it takes `{"prompt": "..."}`, sends
+the prompt as-is, and returns `{"text": "..."}` with the model's reply verbatim.
+This endpoint is **not** cached — re-running an action on the same input is meant
+to be able to produce a different result.
 
 Run a container:
 ```shell
