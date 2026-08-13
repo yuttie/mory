@@ -23,6 +23,22 @@ export function hasInputPlaceholder(prompt: string): boolean {
     return inputPlaceholderRegExp().test(prompt);
 }
 
+// The canonical spelling the UI writes. `hasInputPlaceholder` additionally
+// accepts `{{ input }}` and `{{INPUT}}`, so this is what we produce, not what we
+// require.
+export const INPUT_PLACEHOLDER = '{{input}}';
+
+// Put the placeholder at the end of a prompt that does not already position it,
+// so the common "run this instruction over my selection" case needs no
+// placeholder typed by hand.
+export function appendInputPlaceholder(prompt: string): string {
+    if (hasInputPlaceholder(prompt)) {
+        // Already positioned; a second copy would duplicate the input.
+        return prompt;
+    }
+    return `${prompt.trimEnd()}\n\n${INPUT_PLACEHOLDER}`;
+}
+
 export function fillPrompt(prompt: string, input: string): string {
     // The replacement must be a function: passing `input` directly would make
     // `$&`, `` $` `` and `$'` inside the user's selection act as replacement

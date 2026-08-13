@@ -92,7 +92,7 @@
                             v-bind:actions="aiActions"
                             v-bind:running="aiActionRunning"
                             v-on:open="reloadAiActions"
-                            v-on:ad-hoc="adHocDialogIsVisible = true"
+                            v-on:ad-hoc="openAdHocDialog"
                             v-on:run="runAiAction"
                         ></AiActionMenu>
                     </v-sheet>
@@ -331,6 +331,7 @@
             <AiActionAdHocDialog
                 v-model="adHocDialogIsVisible"
                 v-bind:existing-ids="aiActions.map((action) => action.id)"
+                v-bind:has-selection="adHocHasSelection"
                 v-on:run="runAdHocAiAction"
             ></AiActionAdHocDialog>
             <AiActionInputDialog
@@ -451,6 +452,9 @@ const renderTimeoutId = ref(null as null | number);
 const aiActions = ref([] as AiAction[]);
 const aiActionRunning = ref(false);
 const adHocDialogIsVisible = ref(false);
+// Captured when the ad-hoc dialog opens, so the dialog can offer its "use the
+// selected text" checkbox and the run afterwards acts on the very same range.
+const adHocSelection = ref(null as null | { from: number, to: number, text: string });
 const inputDialogIsVisible = ref(false);
 const inputDialogActionName = ref('');
 
@@ -551,6 +555,10 @@ const toc = computed(() => {
     }
 
     return toc;
+});
+
+const adHocHasSelection = computed((): boolean => {
+    return adHocSelection.value !== null && adHocSelection.value.text !== '';
 });
 
 const isModified = computed((): boolean => {
@@ -858,6 +866,13 @@ function onInputDialogToggle(isOpen: boolean) {
     }
 }
 
+function openAdHocDialog() {
+    // Captured before the dialog opens rather than when it is confirmed: the
+    // checkbox it shows depends on there being a selection.
+    adHocSelection.value = getEditorSelection();
+    adHocDialogIsVisible.value = true;
+}
+
 function runAiAction(action: AiAction) {
     // The selection is captured before any await: the user is free to move the
     // cursor while the input dialog is open and while the request is in flight.
@@ -894,7 +909,7 @@ async function executeAiAction(
 }
 
 async function runAdHocAiAction(prompt: string, preset: { id: string, name: string } | null) {
-    const selection = getEditorSelection();
+    const selection = adHocSelection.value ?? getEditorSelection();
     if (preset) {
         // Persisted before the run, so a failing request does not discard the
         // prompt the user just wrote.

@@ -19,6 +19,16 @@
                     v-bind:hint="promptHint"
                     persistent-hint
                 ></v-textarea>
+                <!-- Only when there is something for it to decide: no selection
+                     means no input to append, and a prompt that already spells the
+                     placeholder out positions the input itself. -->
+                <v-checkbox
+                    v-if="hasSelection && !promptPlacesInputItself"
+                    v-model="useSelectionAsInput"
+                    label="Use the selected text as input"
+                    hide-details="auto"
+                    class="mt-2"
+                ></v-checkbox>
                 <v-checkbox
                     v-model="save"
                     label="Save as a predefined AI Action"
@@ -67,10 +77,13 @@
 <script lang="ts" setup>
 import { ref, computed, watch } from 'vue';
 
+import { appendInputPlaceholder, hasInputPlaceholder } from '@/ai-actions';
+
 // Props
 const props = defineProps<{
     modelValue: boolean;
     existingIds: string[];
+    hasSelection: boolean;
 }>();
 
 // Emits
@@ -84,15 +97,20 @@ const emit = defineEmits<{
 
 // Bound rather than written inline in the template, so the placeholder's own
 // braces cannot be read as an interpolation.
-const promptHint = '{{input}} is replaced by the selected text. Without it, the prompt is sent as-is and the result is inserted at the cursor.';
+const promptHint = 'Type {{input}} to choose where the input goes; otherwise it is appended to the end.';
 
 // Reactive state
 const prompt = ref('');
+const useSelectionAsInput = ref(true);
 const save = ref(false);
 const id = ref('');
 const name = ref('');
 
 // Computed properties
+const promptPlacesInputItself = computed((): boolean => {
+    return hasInputPlaceholder(prompt.value);
+});
+
 const idValidationResult = computed((): boolean | string => {
     if (id.value === '') {
         return 'Required';
@@ -132,7 +150,13 @@ function run(): void {
     if (!canRun.value) {
         return;
     }
-    emit('run', prompt.value, save.value ? { id: id.value, name: name.value.trim() } : null);
+    // Appended to the emitted prompt rather than only to the one that is sent, so
+    // a prompt saved as a predefined action carries the placeholder too and keeps
+    // consuming the selection when it is re-run from the menu.
+    const finalPrompt = props.hasSelection && useSelectionAsInput.value
+        ? appendInputPlaceholder(prompt.value)
+        : prompt.value;
+    emit('run', finalPrompt, save.value ? { id: id.value, name: name.value.trim() } : null);
     emit('update:modelValue', false);
 }
 
@@ -140,6 +164,7 @@ function run(): void {
 watch(() => props.modelValue, (isOpen: boolean) => {
     if (isOpen) {
         prompt.value = '';
+        useSelectionAsInput.value = true;
         save.value = false;
         id.value = '';
         name.value = '';
