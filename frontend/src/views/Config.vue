@@ -106,6 +106,7 @@
                     </v-select>
                 </v-card-text>
             </v-card>
+            <AiActionsSettings></AiActionsSettings>
         </v-sheet>
     </div>
 </template>
@@ -113,6 +114,7 @@
 <script lang="ts" setup>
 import { ref, watch, onMounted } from 'vue';
 
+import AiActionsSettings from '@/components/AiActionsSettings.vue';
 import * as api from '@/api';
 import { loadConfigValue, saveConfigValue } from '@/config';
 import YAML from 'yaml';
