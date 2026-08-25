@@ -63,28 +63,28 @@
                     <!-- Laid out as a flex row so the vertical divider before the
                          AI Actions menu can stretch to the toolbar's height. -->
                     <v-sheet border class="d-flex flex-wrap align-center flex-grow-0">
-                        <v-btn icon variant="text" rounded="0" v-on:click="insertText('## ')">
+                        <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="insertText('## ')">
                             <v-icon>{{ mdiFormatHeader2 }}</v-icon>
                         </v-btn>
-                        <v-btn icon variant="text" rounded="0" v-on:click="insertText('* ')">
+                        <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="insertText('* ')">
                             <v-icon>{{ mdiFormatListBulleted }}</v-icon>
                         </v-btn>
-                        <v-btn icon variant="text" rounded="0" v-on:click="encloseText('*', '*')">
+                        <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="encloseText('*', '*')">
                             <v-icon>{{ mdiFormatItalic }}</v-icon>
                         </v-btn>
-                        <v-btn icon variant="text" rounded="0" v-on:click="encloseText('**', '**')">
+                        <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="encloseText('**', '**')">
                             <v-icon>{{ mdiFormatBold }}</v-icon>
                         </v-btn>
-                        <v-btn icon variant="text" rounded="0" v-on:click="encloseText('`', '`')">
+                        <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="encloseText('`', '`')">
                             <v-icon>{{ mdiXml }}</v-icon>
                         </v-btn>
-                        <v-btn icon variant="text" rounded="0" v-on:click="encloseText('> ', '')">
+                        <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="encloseText('> ', '')">
                             <v-icon>{{ mdiFormatQuoteClose }}</v-icon>
                         </v-btn>
-                        <v-btn icon variant="text" rounded="0" v-on:click="encloseText('[', ']()')">
+                        <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="encloseText('[', ']()')">
                             <v-icon>{{ mdiLinkVariant }}</v-icon>
                         </v-btn>
-                        <v-btn icon variant="text" rounded="0" v-on:click="formatTable">
+                        <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="formatTable">
                             <v-icon>{{ mdiTableCheck }}</v-icon>
                         </v-btn>
                         <v-divider vertical></v-divider>
@@ -99,6 +99,7 @@
                     <template v-if="useSimpleEditor">
                         <textarea
                             v-bind:value="text"
+                            v-bind:readonly="aiActionRunning"
                             v-on:input="onEditorChange($event.target.value)"
                             class="editor simple-editor"
                             ref="editor"
@@ -108,6 +109,7 @@
                         <Editor
                             v-bind:value="text"
                             v-bind:mode="editorMode"
+                            v-bind:readonly="aiActionRunning"
                             v-on:change="onEditorChange"
                             v-on:scroll="onEditorScroll"
                             ref="editor"
