@@ -60,35 +60,46 @@
                 <div class="editor-pane"
                     v-on:transitionend="onEditorPaneResize"
                 >
-                    <v-sheet border class="flex-grow-0">
-                        <v-btn icon variant="text" rounded="0" v-on:click="insertText('## ')">
+                    <!-- Laid out as a flex row so the vertical divider before the
+                         AI Actions menu can stretch to the toolbar's height. -->
+                    <v-sheet border class="d-flex flex-wrap align-center flex-grow-0">
+                        <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="insertText('## ')">
                             <v-icon>{{ mdiFormatHeader2 }}</v-icon>
                         </v-btn>
-                        <v-btn icon variant="text" rounded="0" v-on:click="insertText('* ')">
+                        <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="insertText('* ')">
                             <v-icon>{{ mdiFormatListBulleted }}</v-icon>
                         </v-btn>
-                        <v-btn icon variant="text" rounded="0" v-on:click="encloseText('*', '*')">
+                        <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="encloseText('*', '*')">
                             <v-icon>{{ mdiFormatItalic }}</v-icon>
                         </v-btn>
-                        <v-btn icon variant="text" rounded="0" v-on:click="encloseText('**', '**')">
+                        <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="encloseText('**', '**')">
                             <v-icon>{{ mdiFormatBold }}</v-icon>
                         </v-btn>
-                        <v-btn icon variant="text" rounded="0" v-on:click="encloseText('`', '`')">
+                        <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="encloseText('`', '`')">
                             <v-icon>{{ mdiXml }}</v-icon>
                         </v-btn>
-                        <v-btn icon variant="text" rounded="0" v-on:click="encloseText('> ', '')">
+                        <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="encloseText('> ', '')">
                             <v-icon>{{ mdiFormatQuoteClose }}</v-icon>
                         </v-btn>
-                        <v-btn icon variant="text" rounded="0" v-on:click="encloseText('[', ']()')">
+                        <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="encloseText('[', ']()')">
                             <v-icon>{{ mdiLinkVariant }}</v-icon>
                         </v-btn>
-                        <v-btn icon variant="text" rounded="0" v-on:click="formatTable">
+                        <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="formatTable">
                             <v-icon>{{ mdiTableCheck }}</v-icon>
                         </v-btn>
+                        <v-divider vertical></v-divider>
+                        <AiActionMenu
+                            v-bind:actions="aiActions"
+                            v-bind:running="aiActionRunning"
+                            v-on:open="reloadAiActions"
+                            v-on:ad-hoc="openAdHocDialog"
+                            v-on:run="runAiAction"
+                        ></AiActionMenu>
                     </v-sheet>
                     <template v-if="useSimpleEditor">
                         <textarea
                             v-bind:value="text"
+                            v-bind:readonly="aiActionRunning"
                             v-on:input="onEditorChange($event.target.value)"
                             class="editor simple-editor"
                             ref="editor"
@@ -98,6 +109,7 @@
                         <Editor
                             v-bind:value="text"
                             v-bind:mode="editorMode"
+                            v-bind:readonly="aiActionRunning"
                             v-on:change="onEditorChange"
                             v-on:scroll="onEditorScroll"
                             ref="editor"
@@ -318,6 +330,18 @@
                     </v-card-actions>
                 </v-card>
             </v-menu>
+            <AiActionAdHocDialog
+                v-model="adHocDialogIsVisible"
+                v-bind:existing-ids="aiActions.map((action) => action.id)"
+                v-bind:has-selection="adHocHasSelection"
+                v-on:run="runAdHocAiAction"
+            ></AiActionAdHocDialog>
+            <AiActionInputDialog
+                v-model="inputDialogIsVisible"
+                v-bind:action-name="inputDialogActionName"
+                v-on:resolve="resolveInputDialog"
+                v-on:update:model-value="onInputDialogToggle"
+            ></AiActionInputDialog>
             <v-overlay v-bind:model-value="isLoading" z-index="10" scrim="transparent" class="align-center justify-center">
                 <v-progress-circular indeterminate color="blue-grey-lighten-3" size="64"></v-progress-circular>
             </v-overlay>
@@ -372,7 +396,12 @@ import metadataSchema from '@/metadata-schema.json';
 
 import Ajv from 'ajv';
 import type { DefinedError } from 'ajv';
+import AiActionAdHocDialog from './AiActionAdHocDialog.vue';
+import AiActionInputDialog from './AiActionInputDialog.vue';
+import AiActionMenu from './AiActionMenu.vue';
 import * as api from '@/api';
+import { fillPrompt, hasInputPlaceholder, loadAiActions, saveAiActions } from '@/ai-actions';
+import type { AiAction } from '@/ai-actions';
 import { loadConfigValue } from '@/config';
 import { CliPrettify } from 'markdown-table-prettify';
 import { chunkMarkdownByHeadings } from '@/markdown-utils';
@@ -422,6 +451,14 @@ const showConfirmationDialog = ref(false);
 const error = ref(false);
 const errorText = ref('');
 const renderTimeoutId = ref(null as null | number);
+const aiActions = ref([] as AiAction[]);
+const aiActionRunning = ref(false);
+const adHocDialogIsVisible = ref(false);
+// Captured when the ad-hoc dialog opens, so the dialog can offer its "use the
+// selected text" checkbox and the run afterwards acts on the very same range.
+const adHocSelection = ref(null as null | { from: number, to: number, text: string });
+const inputDialogIsVisible = ref(false);
+const inputDialogActionName = ref('');
 
 // Non-reactive state for internal rendering control
 let chunkRenderController: AbortController | null = null;
@@ -429,6 +466,10 @@ let markdownChunks: Array<{ content: string; startLine: number }> = [];
 let renderedChunks: string[] = [];
 let chunkElements: HTMLElement[] = [];
 let pendingProgrammaticViewerScrollPosition: { top: number; left: number } | null = null;
+
+// Resolver of the promise `askForInput()` is waiting on, held while the input
+// dialog is open.
+let pendingInputResolve: ((input: string | null) => void) | null = null;
 
 // Set right before a note path change that we've already handled locally
 // (e.g. after a rename), so the route watcher below doesn't reload the note again.
@@ -516,6 +557,10 @@ const toc = computed(() => {
     }
 
     return toc;
+});
+
+const adHocHasSelection = computed((): boolean => {
+    return adHocSelection.value !== null && adHocSelection.value.text !== '';
 });
 
 const isModified = computed((): boolean => {
@@ -658,6 +703,8 @@ onMounted(async () => {
 
     await loadNoteFromRoute();
 
+    reloadAiActions();
+
     viewer.value.addEventListener('scroll', handleDocumentScroll);
 });
 
@@ -702,6 +749,12 @@ async function loadHighlightjsTheme(themeName: string): Promise<string> {
     }
 }
 
+// TODO (known issue, tracked separately): in Simple Editor mode the textarea
+// branches of `insertText`, `encloseText` and `formatTable` assign to
+// `textArea.value` directly and never call `onEditorChange`, so `text` keeps
+// the old content: the edit never reaches the viewer and is lost on save. The
+// fix is to route the new value through `onEditorChange`, as
+// `replaceEditorRange` below already does.
 function insertText(newText: string) {
     if (useSimpleEditor.value) {
         const textArea = editor.value as HTMLTextAreaElement;
@@ -741,6 +794,138 @@ function formatTable() {
         const formattedText = CliPrettify.prettify(selectedText);
         editorComponent.replaceSelection(formattedText);
     }
+}
+
+function getEditorSelection(): { from: number, to: number, text: string } {
+    if (useSimpleEditor.value) {
+        const textArea = editor.value as HTMLTextAreaElement;
+        return {
+            from: textArea.selectionStart,
+            to: textArea.selectionEnd,
+            text: textArea.value.slice(textArea.selectionStart, textArea.selectionEnd),
+        };
+    }
+    else {
+        const editorComponent = editor.value as Editor;
+        const range = editorComponent.getSelectionRange();
+        return { ...range, text: editorComponent.getSelection() };
+    }
+}
+
+function replaceEditorRange(from: number, to: number, newText: string) {
+    if (useSimpleEditor.value) {
+        const textArea = editor.value as HTMLTextAreaElement;
+        // The document may have been edited since the range was captured.
+        const start = Math.min(from, textArea.value.length);
+        const end = Math.min(Math.max(to, start), textArea.value.length);
+        // Through `onEditorChange`, so `text` and the rendered viewer follow the
+        // edit; assigning to `textArea.value` alone would not reach either.
+        onEditorChange(textArea.value.slice(0, start) + newText + textArea.value.slice(end));
+        nextTick(() => {
+            textArea.selectionStart = start + newText.length;
+            textArea.selectionEnd = start + newText.length;
+        });
+    }
+    else {
+        const editorComponent = editor.value as Editor;
+        editorComponent.replaceRange(from, to, newText);
+    }
+}
+
+async function reloadAiActions() {
+    try {
+        aiActions.value = await loadAiActions();
+    }
+    catch (err) {
+        error.value = true;
+        errorText.value = `Failed to load AI Actions: ${err}`;
+    }
+}
+
+// Resolves to `null` on cancellation. An empty string is a valid input, so the
+// two must not be conflated.
+function askForInput(actionName: string): Promise<string | null> {
+    inputDialogActionName.value = actionName;
+    inputDialogIsVisible.value = true;
+    return new Promise((resolve) => {
+        pendingInputResolve = resolve;
+    });
+}
+
+function resolveInputDialog(input: string | null) {
+    const resolve = pendingInputResolve;
+    pendingInputResolve = null;
+    if (resolve) {
+        resolve(input);
+    }
+}
+
+function onInputDialogToggle(isOpen: boolean) {
+    if (!isOpen) {
+        // Closing by any route other than the dialog's own buttons still has to
+        // settle the promise, or the action would hang forever.
+        resolveInputDialog(null);
+    }
+}
+
+function openAdHocDialog() {
+    // Captured before the dialog opens rather than when it is confirmed: the
+    // checkbox it shows depends on there being a selection.
+    adHocSelection.value = getEditorSelection();
+    adHocDialogIsVisible.value = true;
+}
+
+function runAiAction(action: AiAction) {
+    // The selection is captured before any await: the user is free to move the
+    // cursor while the input dialog is open and while the request is in flight.
+    return executeAiAction(action, getEditorSelection());
+}
+
+async function executeAiAction(
+    action: { name?: string, prompt: string },
+    selection: { from: number, to: number, text: string },
+) {
+    let prompt = action.prompt;
+    if (hasInputPlaceholder(action.prompt)) {
+        const input = selection.text !== '' ? selection.text : await askForInput(action.name ?? 'AI Action');
+        if (input === null) {
+            return;
+        }
+        prompt = fillPrompt(action.prompt, input);
+    }
+
+    aiActionRunning.value = true;
+    try {
+        const result = await api.runAiAction(prompt);
+        // An empty range is an insertion at the cursor, so this covers both
+        // replacing a selection and generating at the cursor.
+        replaceEditorRange(selection.from, selection.to, result);
+    }
+    catch (err) {
+        error.value = true;
+        errorText.value = `AI Action failed: ${err}`;
+    }
+    finally {
+        aiActionRunning.value = false;
+    }
+}
+
+async function runAdHocAiAction(prompt: string, preset: { id: string, name: string } | null) {
+    const selection = adHocSelection.value ?? getEditorSelection();
+    if (preset) {
+        // Persisted before the run, so a failing request does not discard the
+        // prompt the user just wrote.
+        const saved = [...aiActions.value, { id: preset.id, name: preset.name, prompt: prompt }];
+        try {
+            await saveAiActions(saved);
+            aiActions.value = saved;
+        }
+        catch (err) {
+            error.value = true;
+            errorText.value = `Failed to save the AI Action: ${err}`;
+        }
+    }
+    await executeAiAction({ name: preset?.name, prompt: prompt }, selection);
 }
 
 async function updateRendered() {
