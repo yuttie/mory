@@ -328,6 +328,12 @@ export interface TaskAssessmentResponse {
     note_suggestions: string[];
 }
 
+export async function runAiAction(prompt: string): Promise<string> {
+    const axios = await getAxios();
+    const response = await axios.post('/v2/ai-action', { prompt: prompt });
+    return response.data.text;
+}
+
 export async function assessTask(task: { 
     title: string; 
     tags?: string[];

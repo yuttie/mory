@@ -162,6 +162,7 @@ async fn main() -> Result<()> {
         .route("/tasks", get(v2::get_tasks))
         .route("/events", get(v2::get_events))
         .route("/assess-task", post(v2::post_assess_task))
+        .route("/ai-action", post(v2::post_ai_action))
         .with_state(state.clone())
         .route_layer(middleware::from_fn(auth));
     let api_v2 = Router::new()
@@ -1160,13 +1161,59 @@ mod v2 {
     #[derive(Serialize)]
     struct OpenAIRequest {
         model: String,
-        messages: Vec<OpenAIRequestMessage>,
+        messages: Vec<ChatMessage>,
     }
 
     #[derive(Serialize)]
-    struct OpenAIRequestMessage {
-        role: String,
-        content: String,
+    pub struct ChatMessage {
+        pub role: String,
+        pub content: String,
+    }
+
+    /// Send a chat completion request to the provider and return the assistant's
+    /// message content verbatim.
+    async fn chat_completion(client: &reqwest::Client, messages: Vec<ChatMessage>) -> Result<String> {
+        let openai_api_key = env::var("MORIED_OPENAI_API_KEY")
+            .context("MORIED_OPENAI_API_KEY environment variable not set")?;
+        let model = env::var("MORIED_OPENAI_MODEL")
+            .context("MORIED_OPENAI_MODEL environment variable not set")?;
+
+        let openai_request = OpenAIRequest {
+            model,
+            messages,
+        };
+
+        let response = client
+            .post("https://api.openai.com/v1/chat/completions")
+            .header("Authorization", format!("Bearer {}", openai_api_key))
+            .header("Content-Type", "application/json")
+            // The shared client has no timeout, so bound this request only: a hung
+            // provider call must not pin a connection forever.
+            .timeout(time::Duration::from_secs(120))
+            .json(&openai_request)
+            .send()
+            .await
+            .context("Failed to send request to OpenAI")?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("OpenAI API error {}: {}", status, error_text));
+        }
+
+        let openai_response: OpenAIResponse = response
+            .json()
+            .await
+            .context("Failed to parse OpenAI response")?;
+
+        let content = openai_response
+            .choices
+            .into_iter()
+            .next()
+            .map(|choice| choice.message.content)
+            .ok_or_else(|| anyhow::anyhow!("No response from OpenAI"))?;
+
+        Ok(content)
     }
 
     pub async fn post_assess_task(
@@ -1206,9 +1253,6 @@ mod v2 {
         }
 
         // Cache miss or expired - make API call
-        let openai_api_key = env::var("MORIED_OPENAI_API_KEY")
-            .context("MORIED_OPENAI_API_KEY environment variable not set")?;
-
         let client = &state.http_client;
 
         // Get today's date for context
@@ -1292,51 +1336,19 @@ Important:
             context_part
         );
 
-        let model = env::var("MORIED_OPENAI_MODEL")
-            .context("MORIED_OPENAI_MODEL environment variable not set")?;
-
-        let openai_request = OpenAIRequest {
-            model,
-            messages: vec![
-                OpenAIRequestMessage {
-                    role: "developer".to_string(),
-                    content: "You are a helpful assistant that provides feedback on task titles and suggests practical note content for task completion. Always respond with valid JSON. Be concise but thorough in your suggestions.".to_string(),
-                },
-                OpenAIRequestMessage {
-                    role: "user".to_string(),
-                    content: prompt,
-                }
-            ],
-        };
-
-        let response = client
-            .post("https://api.openai.com/v1/chat/completions")
-            .header("Authorization", format!("Bearer {}", openai_api_key))
-            .header("Content-Type", "application/json")
-            .json(&openai_request)
-            .send()
-            .await
-            .context("Failed to send request to OpenAI")?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_default();
-            return Err(anyhow::anyhow!("OpenAI API error {}: {}", status, error_text).into());
-        }
-
-        let openai_response: OpenAIResponse = response
-            .json()
-            .await
-            .context("Failed to parse OpenAI response")?;
-
-        let content = openai_response
-            .choices
-            .first()
-            .and_then(|choice| Some(&choice.message.content))
-            .ok_or_else(|| anyhow::anyhow!("No response from OpenAI"))?;
+        let content = chat_completion(client, vec![
+            ChatMessage {
+                role: "developer".to_string(),
+                content: "You are a helpful assistant that provides feedback on task titles and suggests practical note content for task completion. Always respond with valid JSON. Be concise but thorough in your suggestions.".to_string(),
+            },
+            ChatMessage {
+                role: "user".to_string(),
+                content: prompt,
+            },
+        ]).await?;
 
         // Parse the JSON content from OpenAI response
-        let assessment: AssessmentResponse = serde_json::from_str(content)
+        let assessment: AssessmentResponse = serde_json::from_str(&content)
             .context("Failed to parse OpenAI JSON response")?;
 
         // Cache the response
@@ -1364,6 +1376,42 @@ Important:
 
         tracing::debug!("Task assessment: {:?}", assessment.feedback);
         Ok(Json(assessment))
+    }
+
+    #[derive(Deserialize)]
+    pub struct AiActionRequest {
+        pub prompt: String,
+    }
+
+    #[derive(Serialize)]
+    pub struct AiActionResponse {
+        pub text: String,
+    }
+
+    /// Run a user-defined prompt through the provider and return the result as-is.
+    ///
+    /// Deliberately uncached: re-running an action on the same input is allowed to
+    /// produce a different result.
+    pub async fn post_ai_action(
+        extract::State(state): extract::State<AppState>,
+        Json(request): Json<AiActionRequest>,
+    ) -> Result<Json<AiActionResponse>, AppError> {
+        let text = chat_completion(&state.http_client, vec![
+            ChatMessage {
+                role: "developer".to_string(),
+                content: "You are a text-processing assistant embedded in a Markdown note editor. \
+                          Output only the resulting text: no preamble, no explanation, no commentary, \
+                          and no surrounding code fences unless the result is itself meant to be a code block. \
+                          Format the output as GitHub Flavored Markdown. \
+                          Reply in the same language as the input unless the instruction says otherwise.".to_string(),
+            },
+            ChatMessage {
+                role: "user".to_string(),
+                content: request.prompt,
+            },
+        ]).await?;
+
+        Ok(Json(AiActionResponse { text }))
     }
 
     pub async fn get_commits_head(
