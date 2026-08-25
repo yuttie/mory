@@ -8,7 +8,7 @@
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 
 import { loadConfigValue } from '@/config';
-import { EditorState, Extension } from '@codemirror/state';
+import { Compartment, EditorState, Extension } from '@codemirror/state';
 import { EditorView, keymap, highlightSpecialChars, drawSelection, dropCursor, rectangularSelection, crosshairCursor, lineNumbers, highlightActiveLine, highlightActiveLineGutter, scrollPastEnd } from '@codemirror/view';
 import { defaultHighlightStyle, syntaxHighlighting, indentOnInput, indentUnit, bracketMatching, foldGutter, foldKeymap } from '@codemirror/language';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
@@ -19,6 +19,7 @@ import { autocompletion, completionKeymap, closeBrackets, closeBracketsKeymap } 
 const props = defineProps<{
     value: string;
     mode: string;
+    readonly?: boolean;
 }>();
 
 // Emits
@@ -39,6 +40,20 @@ let lastKnownScrollTop = 0;
 // the user makes afterwards.
 const PROGRAMMATIC_SCROLL_SUPPRESSION_MS = 100;
 let suppressScrollEventsUntil = 0;
+
+// Lets the buffer be locked and unlocked without rebuilding the editor, which
+// would lose the undo history, the scroll position and the selection.
+const editableCompartment = new Compartment();
+
+// `readOnly` stops the editing commands, including the Vim and Emacs ones, and
+// `editable` stops typing and pasting straight into the DOM. Neither blocks the
+// transactions this component dispatches on a caller's behalf, so a locked
+// editor still accepts `replaceRange()`.
+function editableExtension(isReadonly: boolean): Extension {
+    return isReadonly
+        ? [EditorState.readOnly.of(true), EditorView.editable.of(false)]
+        : [];
+}
 
 // Report the first line visible at the top of the scroller, as a 1-based
 // document line number.
@@ -157,6 +172,10 @@ onMounted(async () => {
         Vim.unmap('<C-t>', 'insert');
         Vim.unmap('<C-d>', 'insert');
     }
+
+    // Pushed after the awaits above rather than declared with the rest, so the
+    // editor starts in whatever lock state holds once it is actually created.
+    extensions.push(editableCompartment.of(editableExtension(props.readonly === true)));
 
     const state = EditorState.create({
         doc: props.value,
@@ -321,6 +340,16 @@ watch(() => props.value, (value: string) => {
         // Note: Metadata folding can be added later with CodeMirror's folding extension
         // For now, we'll skip this feature to keep the migration minimal
     }
+});
+
+watch(() => props.readonly, (isReadonly?: boolean) => {
+    if (!editor) {
+        return;
+    }
+
+    editor.dispatch({
+        effects: editableCompartment.reconfigure(editableExtension(isReadonly === true)),
+    });
 });
 
 watch(() => props.mode, (_mode: string) => {
