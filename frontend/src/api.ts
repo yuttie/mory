@@ -247,7 +247,12 @@ export async function getTaskData(eTag?: string): Promise<[string, TaskData | nu
     }
 }
 
-export async function putTaskData(data: TaskData) {
+export const TASK_DATA_PATH = '.mory/tasks.yaml';
+
+// Serializes task data to the YAML stored at `TASK_DATA_PATH`. Writing it is a file
+// mutation, so it goes through the files store rather than straight to the API — that is
+// what keeps the cached listing from surviving the commit this write produces.
+export function serializeTaskData(data: TaskData): string {
     // Clean up
     data = deepCloneRaw(data);
     for (const task of data.tasks.backlog) {
@@ -334,8 +339,7 @@ export async function putTaskData(data: TaskData) {
         },
     });
 
-    // Send
-    return await addNote('.mory/tasks.yaml', yaml);
+    return yaml;
 }
 
 export interface TaskAssessmentResponse {

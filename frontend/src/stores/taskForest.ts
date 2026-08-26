@@ -434,17 +434,18 @@ export const useTaskForestStore = defineStore('taskForest', () => {
             return; // No move needed
         }
 
-        const { renameNote } = await import('@/api');
+        const { useFiles } = await import('@/composables/files');
         
         // Move the task itself first
-        await renameNote(oldPath, newPath);
+        await useFiles().rename(oldPath, newPath);
         
         // Recursively move all descendants using manual path calculation
         await moveDescendantFiles(taskUuid, oldPath, newPath);
     }
 
     async function moveDescendantFiles(parentUuid: UUID, oldParentPath: string, newParentPath: string): Promise<void> {
-        const { renameNote } = await import('@/api');
+        const { useFiles } = await import('@/composables/files');
+        const files = useFiles();
         const children = childrenOf(parentUuid);
         
         for (const child of children) {
@@ -458,7 +459,7 @@ export const useTaskForestStore = defineStore('taskForest', () => {
                 const childNewPath = `${newParentDir}/${child.uuid}.md`;
                 
                 // Move the child file
-                await renameNote(childOldPath, childNewPath);
+                await files.rename(childOldPath, childNewPath);
                 
                 // Recursively move the child's descendants
                 await moveDescendantFiles(child.uuid, childOldPath, childNewPath);
