@@ -1,6 +1,6 @@
 import * as TOML from 'smol-toml';
 
-import { useFiles } from '@/composables/files';
+import { useFilesStore } from '@/stores/files';
 
 export interface AiAction {
     id: string;
@@ -49,7 +49,7 @@ export function fillPrompt(prompt: string, input: string): string {
 export async function loadAiActions(): Promise<AiAction[]> {
     let content: string;
     try {
-        content = await useFiles().read(AI_ACTIONS_PATH);
+        content = await useFilesStore().read(AI_ACTIONS_PATH);
     }
     catch (error) {
         if ((error as { response?: { status?: number } }).response?.status === 404) {
@@ -117,7 +117,7 @@ export async function saveAiActions(actions: AiAction[]): Promise<void> {
         const name = TOML.stringify({ name: action.name }).trimEnd();
         return `${header}\n${name}\nprompt = ${toMultilineBasicString(action.prompt)}\n`;
     });
-    await useFiles().write(AI_ACTIONS_PATH, tables.join('\n'));
+    await useFilesStore().write(AI_ACTIONS_PATH, tables.join('\n'));
 }
 
 export interface AiActionNode {

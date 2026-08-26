@@ -125,7 +125,7 @@ import {
 
 import { compareTags } from '@/api';
 
-import { useFiles } from '@/composables/files';
+import { useFilesStore } from '@/stores/files';
 
 import dayjs from 'dayjs';
 
@@ -137,11 +137,9 @@ const emit = defineEmits<{
 // Composables
 const router = useRouter();
 const route = useRoute();
-const files = useFiles();
+const files = useFilesStore();
 
 // Reactive states
-// The file list itself lives in the files store, shared with every other consumer.
-const entries = files.entries;
 const queryText = ref('');
 const isLoading = ref(false);
 const error = ref(false);
@@ -165,7 +163,7 @@ const headers = computed(() => {
 
 const tags = computed(() => {
     const tags = new Set();
-    for (const entry of entries.value) {
+    for (const entry of files.entries) {
         if (entry.metadata !== null) {
             if (Object.hasOwn(entry.metadata, 'tags') && Array.isArray(entry.metadata.tags)) {
                 for (const tag of entry.metadata.tags.map(String)) {
@@ -208,7 +206,7 @@ const matchedEntries = computed(() => {
     const queryTags: string[] = [...query.value.tags].map(x => x.toLowerCase());
     const queryAny: string[] = [...query.value.any].map(x => x.toLowerCase());
 
-    for (const entry of entries.value) {
+    for (const entry of files.entries) {
         const entryPath = entry.path.toLowerCase();
         const entryTitle = entry.title?.toLowerCase() ?? "";
         const entryTags = (() => {

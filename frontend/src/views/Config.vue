@@ -115,12 +115,12 @@
 import { ref, watch, onMounted } from 'vue';
 
 import AiActionsSettings from '@/components/AiActionsSettings.vue';
-import { useFiles } from '@/composables/files';
+import { useFilesStore } from '@/stores/files';
 import { loadConfigValue, saveConfigValue } from '@/config';
 import YAML from 'yaml';
 
 // Composables
-const files = useFiles();
+const files = useFilesStore();
 
 // Reactive states
 const editorThemes = ref([

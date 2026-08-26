@@ -425,7 +425,7 @@ import { useAppStore } from '@/stores/app';
 
 import { loadConfigValue, saveConfigValue } from '@/config';
 import type { Claim, ListEntry2, UploadEntry } from '@/api';
-import { useFiles } from '@/composables/files';
+import { useFilesStore } from '@/stores/files';
 import { jwtDecode } from 'jwt-decode';
 
 interface TreeNode {
@@ -437,7 +437,7 @@ interface TreeNode {
 
 // Composables
 const appStore = useAppStore();
-const fileStore = useFiles();
+const fileStore = useFilesStore();
 
 // Reactive states
 const notificationPermission = ref<'granted'| 'denied' | 'default'>('Notification' in window ? Notification.permission : 'denied');

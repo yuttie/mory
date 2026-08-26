@@ -360,7 +360,7 @@ import {
 import { useTaskForestStore } from '@/stores/taskForest';
 
 import * as api from '@/api';
-import { useFiles } from '@/composables/files';
+import { useFilesStore } from '@/stores/files';
 import axios from 'axios';
 import type { Task } from '@/api';
 import { type Task as Taskv2, render as renderTaskv2 } from '@/task';
@@ -373,7 +373,7 @@ dayjs.extend(isSameOrAfter);
 
 // Composables
 const store = useTaskForestStore();
-const files = useFiles();
+const files = useFilesStore();
 
 // Emits
 const emit = defineEmits<{

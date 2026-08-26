@@ -323,7 +323,7 @@ import {
 import { isMetadataEventMultiple, validateEvent } from '@/api';
 import type { ListEntry2 } from '@/api';
 
-import { useFiles } from '@/composables/files';
+import { useFilesStore } from '@/stores/files';
 import { by } from '@/utils';
 import dayjs from 'dayjs';
 import { useTaggedTaskForestStore, type TreeNodeRecord } from '@/stores/taggedTaskForest';
@@ -367,11 +367,9 @@ const emit = defineEmits<{
 // Stores
 const taskStore = useTaggedTaskForestStore();
 const router = useRouter();
-const files = useFiles();
+const files = useFilesStore();
 
 // Reactive states
-// The file list itself lives in the files store, shared with every other consumer.
-const entries = files.entries;
 const isLoading = ref(false);
 const error = ref(false);
 const errorText = ref('');
@@ -429,7 +427,7 @@ const sortedCategorizedEntries = computed(() => {
 const categorizedEntries = computed(() => {
     // Categorize entries
     const categorized: Map<string, ListEntry2[]> = new Map();
-    for (const entry of entries.value) {
+    for (const entry of files.entries) {
         if (entry.metadata !== null) {
             if (Object.hasOwn(entry.metadata, 'tags') && Array.isArray(entry.metadata.tags)) {
                 for (const tag of entry.metadata.tags.map(String)) {
@@ -503,7 +501,7 @@ const events = computed(() => {
     }
 
     const events = [];
-    for (const entry of entries.value) {
+    for (const entry of files.entries) {
         if (entry.metadata !== null) {
             let defaultColor = "#666666";
             if (Object.hasOwn(entry.metadata, 'events') && typeof entry.metadata.events === 'object' && entry.metadata.events !== null) {

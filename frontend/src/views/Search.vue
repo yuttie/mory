@@ -44,7 +44,7 @@ import { useRoute, useRouter } from 'vue-router';
 import {
 } from '@mdi/js';
 
-import { useFiles } from '@/composables/files';
+import { useFilesStore } from '@/stores/files';
 
 // Emits
 const emit = defineEmits<{
@@ -54,7 +54,7 @@ const emit = defineEmits<{
 // Composables
 const router = useRouter();
 const route = useRoute();
-const files = useFiles();
+const files = useFilesStore();
 
 // Reactive states
 const results: Ref<{ file: string, line: number, content: string }[]> = ref([]);

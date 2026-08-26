@@ -400,7 +400,7 @@ import AiActionAdHocDialog from './AiActionAdHocDialog.vue';
 import AiActionInputDialog from './AiActionInputDialog.vue';
 import AiActionMenu from './AiActionMenu.vue';
 import { runAiAction as runAiActionRequest } from '@/api';
-import { useFiles } from '@/composables/files';
+import { useFilesStore } from '@/stores/files';
 import { fillPrompt, hasInputPlaceholder, loadAiActions, saveAiActions } from '@/ai-actions';
 import type { AiAction } from '@/ai-actions';
 import { loadConfigValue } from '@/config';
@@ -421,7 +421,7 @@ const router = useRouter();
 const route = useRoute();
 const { smAndUp, mdAndUp, lgAndUp } = useDisplay();
 const appStore = useAppStore();
-const files = useFiles();
+const files = useFilesStore();
 
 // The repeatable :path* route parameter is an array of path segments in Vue Router 4
 const notePath = computed<string>(() => {

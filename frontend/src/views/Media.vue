@@ -96,7 +96,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { getAxios } from '@/axios';
-import { useFiles } from '@/composables/files';
+import { useFilesStore } from '@/stores/files';
 
 const apiFilesUrl = new URL('files/', new URL(import.meta.env.VITE_APP_API_URL!, window.location.href)).href;
 
@@ -107,7 +107,7 @@ const emit = defineEmits<{
 
 // Composables
 const route = useRoute();
-const files = useFiles();
+const files = useFilesStore();
 
 // Reactive state
 const isLoading = ref(true);
