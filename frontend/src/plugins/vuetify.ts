@@ -3,6 +3,11 @@ import { createVuetify } from 'vuetify';
 import { aliases, mdi } from 'vuetify/iconsets/mdi-svg';
 
 export default createVuetify({
+  defaults: {
+    global: {
+      density: "compact",
+    },
+  },
   icons: {
     defaultSet: 'mdi',
     aliases,
