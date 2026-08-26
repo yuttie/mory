@@ -4,7 +4,7 @@ import type { Ref } from 'vue';
 import { defineStore } from 'pinia'
 
 import { useLocalStorage } from '@/composables/localStorage';
-import { useFiles } from '@/composables/files';
+import { useFilesStore } from '@/stores/files';
 
 import * as api from '@/api';
 
@@ -60,7 +60,7 @@ export const useAppStore = defineStore('app', () => {
 
     // The cached listing describes a private repository, so it must not outlive the
     // session that fetched it.
-    useFiles().clear();
+    useFilesStore().clear();
 
     // Let service worker know it
     if (serviceWorker.value) {  // FIXME This should be executed after service worker get ready

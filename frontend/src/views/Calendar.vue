@@ -110,7 +110,7 @@ import {
 
 import { isMetadataEventMultiple, validateEvent } from '@/api';
 
-import { useFiles } from '@/composables/files';
+import { useFilesStore } from '@/stores/files';
 import Color from 'color';
 import materialColors from 'vuetify/util/colors';
 import dayjs from 'dayjs';
@@ -124,11 +124,9 @@ const emit = defineEmits<{
 // Composables
 const router = useRouter();
 const route = useRoute();
-const files = useFiles();
+const files = useFilesStore();
 
 // Reactive states
-// The file list itself lives in the files store, shared with every other consumer.
-const entries = files.entries;
 const isLoading = ref(false);
 const error = ref(false);
 const errorText = ref('');
@@ -198,7 +196,7 @@ const events = computed(() => {
     }
     const events = [];
     const newEventErrors: [string, unknown, string, string, string | null][] = [];
-    for (const entry of entries.value) {
+    for (const entry of files.entries) {
         if (entry.metadata !== null) {
             // Choose a default color for the note based on its path
             let defaultColor = "#666666";

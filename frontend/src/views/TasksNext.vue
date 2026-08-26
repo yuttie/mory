@@ -217,14 +217,14 @@ import {
 import { type TreeNodeRecord } from '@/stores/taskForest';
 import { useTaggedTaskForestStore } from '@/stores/taggedTaskForest';
 
-import { useFiles } from '@/composables/files';
+import { useFilesStore } from '@/stores/files';
 import { type UUID, type StatusKind, type Task, STATUS_LABEL, render } from '@/task';
 import axios from 'axios';
 import dayjs from 'dayjs';
 
 // Stores
 const store = useTaggedTaskForestStore();
-const files = useFiles();
+const files = useFilesStore();
 
 // Router
 const router = useRouter();
