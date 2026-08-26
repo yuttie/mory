@@ -138,7 +138,7 @@ export interface ListEntry2 {
   path: string;
   size: number;
   mime_type: string;
-  metadata: { tags: string[] } | null;
+  metadata: { tags: string[], events?: { [key: string]: MetadataEvent } } | null;
   title: string | null;
   time: string;
 }
