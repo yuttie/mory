@@ -95,8 +95,8 @@
 <script lang="ts" setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
-import * as api from '@/api';
 import { getAxios } from '@/axios';
+import { useFiles } from '@/composables/files';
 
 const apiFilesUrl = new URL('files/', new URL(import.meta.env.VITE_APP_API_URL!, window.location.href)).href;
 
@@ -107,6 +107,7 @@ const emit = defineEmits<{
 
 // Composables
 const route = useRoute();
+const files = useFiles();
 
 // Reactive state
 const isLoading = ref(true);
@@ -167,9 +168,9 @@ async function loadMediaInfo() {
         error.value = false;
         notFound.value = false;
 
-        // First, get the file list to find MIME type information
-        const listResponse = await api.listNotes();
-        const fileEntry = listResponse.data.find((entry: any) => entry.path === filename.value); // eslint-disable-line @typescript-eslint/no-explicit-any
+        // The MIME type comes from the file listing, which the store serves from its
+        // cache when the repository has not moved since it was taken.
+        const fileEntry = await files.entry(filename.value);
 
         if (!fileEntry) {
             notFound.value = true;
