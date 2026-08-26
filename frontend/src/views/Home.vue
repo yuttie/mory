@@ -320,9 +320,10 @@ import {
     mdiNotePlusOutline,
 } from '@mdi/js';
 
-import * as api from '@/api';
-import type { ListEntry2 } from '@/api';
 import { isMetadataEventMultiple, validateEvent } from '@/api';
+import type { ListEntry2 } from '@/api';
+
+import { useFiles } from '@/composables/files';
 import { by } from '@/utils';
 import dayjs from 'dayjs';
 import { useTaggedTaskForestStore, type TreeNodeRecord } from '@/stores/taggedTaskForest';
@@ -366,9 +367,11 @@ const emit = defineEmits<{
 // Stores
 const taskStore = useTaggedTaskForestStore();
 const router = useRouter();
+const files = useFiles();
 
 // Reactive states
-const entries: Ref<ListEntry2[]> = ref([]);
+// The file list itself lives in the files store, shared with every other consumer.
+const entries = files.entries;
 const isLoading = ref(false);
 const error = ref(false);
 const errorText = ref('');
@@ -678,9 +681,8 @@ function handleTaskKeydown(event: KeyboardEvent) {
 
 function load() {
     isLoading.value = true;
-    api.listNotes()
-        .then(res => {
-            entries.value = res.data;
+    files.refresh()
+        .then(() => {
             isLoading.value = false;
         }).catch(error => {
             if (error.response) {
@@ -724,7 +726,7 @@ async function createQuickNote() {
         const yamlHeader = '---\n' + Object.entries(metadata).map(([key, value]) => `${key}: ${JSON.stringify(value)}`).join('\n') + '\n---\n\n';
         const noteContent = yamlHeader + content;
 
-        await api.addNote(filename, noteContent);
+        await files.write(filename, noteContent);
         successText.value = 'Note created successfully!';
         successMessage.value = true;
         createdItemPath.value = filename;
@@ -772,7 +774,7 @@ async function createQuickTask() {
         };
 
         const markdown = render(newTask);
-        await api.addNote(taskPath, markdown);
+        await files.write(taskPath, markdown);
 
         successText.value = `Task "${newTask.title}" created successfully!`;
         successMessage.value = true;

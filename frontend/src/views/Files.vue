@@ -109,7 +109,6 @@
 
 <script lang="ts" setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
-import type { Ref } from 'vue';
 
 import { useRoute, useRouter } from 'vue-router';
 
@@ -124,9 +123,9 @@ import {
     mdiTag,
 } from '@mdi/js';
 
-import * as api from '@/api';
 import { compareTags } from '@/api';
-import type { ListEntry2 } from '@/api';
+
+import { useFiles } from '@/composables/files';
 
 import dayjs from 'dayjs';
 
@@ -138,9 +137,11 @@ const emit = defineEmits<{
 // Composables
 const router = useRouter();
 const route = useRoute();
+const files = useFiles();
 
 // Reactive states
-const entries: Ref<ListEntry2[]> = ref([]);
+// The file list itself lives in the files store, shared with every other consumer.
+const entries = files.entries;
 const queryText = ref('');
 const isLoading = ref(false);
 const error = ref(false);
@@ -285,13 +286,12 @@ onUnmounted(() => {
 // Methods
 function load() {
     isLoading.value = true;
-    api.listNotes()
-        .then(res => {
-            entries.value = res.data;
+    files.refresh()
+        .then(loaded => {
             isLoading.value = false;
 
             // Check if metadata parse errors exist
-            for (const entry of entries.value) {
+            for (const entry of loaded) {
                 if (entry.metadata !== null && Object.hasOwn(entry.metadata, 'error')) {
                     console.log(`Failed to parse metadata of ${entry.path}!`);
                     console.log(entry);
@@ -432,13 +432,10 @@ function formatFileSize(size: number) {
 
 function deleteSelected() {
     for (const path of selected.value) {
-        api.deleteNote(path)
-            .then(res => {
-                if (res.data === true) {
-                    const i = entries.value.findIndex(e => e.path === path);
-                    entries.value.splice(i, 1);
-                }
-                else {
+        // The store drops the entry from the shared list and invalidates its cache.
+        files.remove(path)
+            .then(deleted => {
+                if (!deleted) {
                     error.value = true;
                     errorText.value = `Something wrong happened when deleting ${path}`;
                 }

@@ -423,9 +423,9 @@ import {
 
 import { useAppStore } from '@/stores/app';
 
-import * as api from '@/api';
 import { loadConfigValue, saveConfigValue } from '@/config';
 import type { Claim, ListEntry2, UploadEntry } from '@/api';
+import { useFiles } from '@/composables/files';
 import { jwtDecode } from 'jwt-decode';
 
 interface TreeNode {
@@ -437,6 +437,7 @@ interface TreeNode {
 
 // Composables
 const appStore = useAppStore();
+const fileStore = useFiles();
 
 // Reactive states
 const notificationPermission = ref<'granted'| 'denied' | 'default'>('Notification' in window ? Notification.permission : 'denied');
@@ -642,9 +643,9 @@ function tokenExpired(callback: () => void) {
 }
 
 function loadTemplates() {
-    api.listNotes()
-        .then(res => {
-            templates.value = res.data
+    fileStore.list()
+        .then(entries => {
+            templates.value = entries
                 .map((entry: ListEntry2) => entry.path)
                 .filter((path: string) => path.match(/\.template$/i));
         }).catch(error => {
@@ -666,12 +667,12 @@ function loadTemplates() {
 async function loadCustomCss() {
     try {
         // Try CSS file first
-        const res = await api.getNote('.mory/custom.css');
+        const css = await fileStore.read('.mory/custom.css');
         // CSS file exists, use it directly
         const style = document.createElement('style');
         style.setAttribute('type', 'text/css');
         style.setAttribute('id', 'custom-css');
-        style.innerText = res.data;
+        style.innerText = css;
         document.head.appendChild(style);
     } catch (error) {
         if (error.response) {
@@ -698,12 +699,12 @@ async function loadCustomCss() {
 async function loadCustomLess() {
     try {
         // Start both operations in parallel
-        const [res, { default: less }] = await Promise.all([
-            api.getNote('.mory/custom.less'),
+        const [source, { default: less }] = await Promise.all([
+            fileStore.read('.mory/custom.less'),
             import('less'),
         ]);
         
-        const output = await less.render(res.data, {
+        const output = await less.render(source, {
             globalVars: {
                 'nav-height': '64px',
             },
@@ -784,8 +785,8 @@ function uploadFiles(files: File[]) {
     }
 
     // POST the FormData
-    api.uploadFiles(fd).then(res => {
-        for (const [uuid, result] of res.data) {
+    fileStore.upload(fd).then(results => {
+        for (const [uuid, result] of results) {
             const entry = uploadList.value.find(e => e.uuid === uuid);
             if (entry) {
                 entry.status = result;
@@ -808,17 +809,17 @@ function copyToClipboard(text: string) {
 }
 
 async function populateTagChildren(item: TreeNode) {
-    const entries = await api.listNotes().then(res => res.data);
+    const entries = await fileStore.list();
 
     const tags: Map<string, number> = new Map();
     for (const entry of entries) {
-        if ('metadata' in entry && entry.metadata !== null) {
-            if ('tags' in entry.metadata && entry.metadata.tags !== null) {
-                if (item.context.every((t) => entry.metadata.tags.includes(t))) {
-                    for (const tag of entry.metadata.tags) {
-                        tags.set(tag, (tags.get(tag) || 0) + 1);
-                    }
-                }
+        const entryTags = entry.metadata?.tags;
+        if (!entryTags) {
+            continue;
+        }
+        if (item.context.every((t) => entryTags.includes(t))) {
+            for (const tag of entryTags) {
+                tags.set(tag, (tags.get(tag) || 0) + 1);
             }
         }
     }
