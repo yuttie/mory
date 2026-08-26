@@ -44,7 +44,7 @@ import { useRoute, useRouter } from 'vue-router';
 import {
 } from '@mdi/js';
 
-import * as api from '@/api';
+import { useFiles } from '@/composables/files';
 
 // Emits
 const emit = defineEmits<{
@@ -54,6 +54,7 @@ const emit = defineEmits<{
 // Composables
 const router = useRouter();
 const route = useRoute();
+const files = useFiles();
 
 // Reactive states
 const results: Ref<{ file: string, line: number, content: string }[]> = ref([]);
@@ -84,10 +85,9 @@ onUnmounted(() => {
 function search() {
     isLoading.value = true;
     results.value = [];
-    api.searchNotes(queryText.value)
-        .then(res => {
-            console.log(res);
-            results.value = res.data;
+    files.search(queryText.value)
+        .then(found => {
+            results.value = found;
             isLoading.value = false;
         }).catch(error => {
             if (error.response) {
