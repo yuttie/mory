@@ -54,6 +54,13 @@ export type Status =
 
 export type StatusKind = Status['kind'];
 
+export interface Effort {
+    date: string; // YYYY-MM-DD format
+    description: string;
+    hours?: number;
+    created_at: string; // ISO datetime
+}
+
 export const STATUS_LABEL: Record<StatusKind, string> = {
     todo: 'To do',
     in_progress: 'In progress',
@@ -86,6 +93,7 @@ export interface Task {
     due_by?: string;
     deadline?: string;
     scheduled_dates: string[];
+    efforts?: Effort[];
     note: string;
 }
 
@@ -121,6 +129,7 @@ export function render(task: Task): string {
             ...(task.due_by ? { due_by: task.due_by } : {}),
             ...(task.deadline ? { deadline: task.deadline } : {}),
             scheduled_dates: task.scheduled_dates,
+            ...(task.efforts && task.efforts.length > 0 ? { efforts: task.efforts } : {}),
         },
         tags: task.tags,
     };
