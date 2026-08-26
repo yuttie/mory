@@ -8,7 +8,7 @@
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 
 import { loadConfigValue } from '@/config';
-import { Compartment, EditorState, Extension } from '@codemirror/state';
+import { Compartment, EditorState, Extension, Prec } from '@codemirror/state';
 import { EditorView, keymap, highlightSpecialChars, drawSelection, dropCursor, rectangularSelection, crosshairCursor, lineNumbers, highlightActiveLine, highlightActiveLineGutter, scrollPastEnd } from '@codemirror/view';
 import { defaultHighlightStyle, syntaxHighlighting, indentOnInput, indentUnit, bracketMatching, foldGutter, foldKeymap } from '@codemirror/language';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
@@ -44,6 +44,19 @@ let suppressScrollEventsUntil = 0;
 // Lets the buffer be locked and unlocked without rebuilding the editor, which
 // would lose the undo history, the scroll position and the selection.
 const editableCompartment = new Compartment();
+
+// Ctrl+Enter and Shift+Enter toggle the editor and the viewer panes, and that
+// is decided by a window-level handler in the parent. CodeMirror runs its own
+// keymaps first, though, so without claiming these keys here both of them reach
+// the default `Enter` binding and insert a newline before the pane ever
+// toggles. Claiming them makes CodeMirror do nothing and call
+// `preventDefault()`; the event still bubbles to the window handler, which is
+// what performs the toggle. Highest precedence so the Vim and Emacs keymaps,
+// which are prepended to the extensions, cannot take these first.
+const shortcutKeymap = Prec.highest(keymap.of([
+    { key: 'Ctrl-Enter', run: () => true },
+    { key: 'Shift-Enter', run: () => true },
+]));
 
 // `readOnly` stops the editing commands, including the Vim and Emacs ones, and
 // `editable` stops typing and pasting straight into the DOM. Neither blocks the
@@ -99,6 +112,7 @@ onMounted(async () => {
     const vimInsertUnmapCtCd = loadConfigValue('editor-vim-insert-unmap-ct-cd', false);
 
     const extensions: Extension[] = [
+        shortcutKeymap,
         lineNumbers(),
         foldGutter(),
         highlightSpecialChars(),

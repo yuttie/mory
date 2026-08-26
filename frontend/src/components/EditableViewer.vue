@@ -1698,9 +1698,14 @@ function handleKeydown(e: KeyboardEvent) {
     }
     else if (e.ctrlKey && e.key === 'Enter') {
         toggleEditor();
+        // Otherwise the textarea of the Simple Editor also inserts a newline.
+        // The rich editor swallows the key itself, see `shortcutKeymap` in
+        // Editor.vue.
+        e.preventDefault();
     }
     else if (e.shiftKey && e.key === 'Enter') {
         toggleViewer();
+        e.preventDefault();
     }
     else if (e.ctrlKey && e.key === 's') {
         saveIfNeeded();
