@@ -217,13 +217,14 @@ import {
 import { type TreeNodeRecord } from '@/stores/taskForest';
 import { useTaggedTaskForestStore } from '@/stores/taggedTaskForest';
 
-import * as api from '@/api';
+import { useFiles } from '@/composables/files';
 import { type UUID, type StatusKind, type Task, STATUS_LABEL, render } from '@/task';
 import axios from 'axios';
 import dayjs from 'dayjs';
 
 // Stores
 const store = useTaggedTaskForestStore();
+const files = useFiles();
 
 // Router
 const router = useRouter();
@@ -795,7 +796,7 @@ async function onSelectedTaskSave(task: Task) {
     const markdown = render(task);
     if (newTaskPath.value) {
         // Create a new one
-        await api.addNote(newTaskPath.value, markdown);
+        await files.write(newTaskPath.value, markdown);
         // Update the store locally for immediate update
         const i = newTaskPath.value.lastIndexOf('/');
         const parentPath = newTaskPath.value.slice(0, i);
@@ -810,7 +811,7 @@ async function onSelectedTaskSave(task: Task) {
     }
     else if (selectedNode.value) {
         // Update the existing one
-        await api.addNote(selectedNode.value.path, markdown);
+        await files.write(selectedNode.value.path, markdown);
         // Update the store locally for immediate update
         store.replaceNodeLocal(node);
         // Refresh the store
@@ -828,7 +829,7 @@ async function onSelectedTaskDelete(path: string) {
         return;
     }
     // Delete the task
-    await api.deleteNote(path);
+    await files.remove(path);
     // Update the store locally for immediate update
     store.deleteLeafLocal(uuid);
     // Unselect by navigating to no selection
