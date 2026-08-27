@@ -527,8 +527,7 @@ async fn attributed_times(head: Oid, fixture: &RepoFixture) -> Vec<(String, i64)
 }
 
 /// What each candidate rule attributes, so the choice is made against timestamps rather than
-/// prose. Only one of these is asserted as current behaviour; the others record what adopting
-/// them would change.
+/// prose. Rule (B) is asserted below; the other columns record what the rejected rules give.
 ///
 /// | path              | (A) any parent | (B) all parents | (C) first parent |
 /// |-------------------|----------------|-----------------|------------------|
@@ -536,27 +535,31 @@ async fn attributed_times(head: Oid, fixture: &RepoFixture) -> Vec<(String, i64)
 /// | `only-on-side.md` | 4000 (merge)   | 3000 (commit B) | 4000 (merge)     |
 /// | `conflict.md`     | 4000 (merge)   | 4000 (merge)    | 4000 (merge)     |
 ///
-/// (A) is today's behaviour: a merge is diffed against *every* parent, so anything changed on
-/// either side differs from at least one of them and is attributed to the merge. Merging a
-/// year-old branch would stamp today's date on every file it touched.
+/// (B) is what this cache implements: git's TREESAME rule, and what `git log -- <path>` reports.
+/// The merge is skipped for a path it did not actually author, and attribution falls through to
+/// the commit that did. `conflict.md` stays at the merge -- that resolution really was authored
+/// there, which is what separates (B) from simply ignoring merges.
 ///
-/// (B) is git's TREESAME rule and what `git log -- <path>` reports: the merge is skipped for a
-/// path it did not actually author, and attribution falls through to the commit that did. Note
-/// `conflict.md` stays at the merge under (B) -- that resolution really was authored there,
-/// which is what separates (B) from simply ignoring merges.
+/// (A) was the previous behaviour: diffed against *every* parent, so anything changed on either
+/// side differed from at least one of them and was attributed to the merge. Merging a year-old
+/// branch stamped today's date on every file it touched -- including files it never touched, as
+/// `shared.md` shows.
 #[tokio::test]
-async fn merge_attribution_matches_rule_a_today() {
+async fn merge_attribution_follows_the_treesame_rule() {
     let (fixture, head) = merge_fixture();
     let times = attributed_times(head, &fixture).await;
 
     assert_eq!(
         times,
         vec![
+            // The merge resolved this into content matching neither parent, so it did author it.
             ("conflict.md".to_string(), 4_000),
-            ("only-on-side.md".to_string(), 4_000),
-            ("shared.md".to_string(), 4_000),
+            // Authored on the side branch; the merge is TREESAME to it here.
+            ("only-on-side.md".to_string(), 3_000),
+            // Authored on main; the merge never touched it.
+            ("shared.md".to_string(), 2_000),
         ],
-        "rule (A): the merge absorbs every path touched on either side",
+        "rule (B): a merge authors only what differs from every parent",
     );
 }
 

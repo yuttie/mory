@@ -439,45 +439,57 @@ async fn rebuild_entries_cache(
             let tree = commit.tree()?;
             commits_scanned += 1;
 
+            // A commit authors a path only when its content there differs from the content in
+            // *every* parent -- git's TREESAME rule, and what `git log -- <path>` reports. A
+            // merge that merely combines two branches is TREESAME to one parent at each path it
+            // carries, so it authors nothing and attribution falls through to the commit that
+            // really wrote the content. A merge that resolved a conflict into something matching
+            // neither parent did author it, and is attributed.
+            let parents: Vec<git2::Commit> = commit.parents().collect();
+
+            // Identical to some parent's tree, so nothing here differs from every parent.
+            if parents.iter().any(|parent| parent.tree_id() == tree.id()) {
+                continue;
+            }
+
             // A root commit has no parent to diff against, so its whole tree is an addition.
             // Without this it contributes no deltas at all, and any file introduced there and
             // never touched again is never attributed -- and so never inserted.
-            let parent_trees: Vec<Option<git2::Tree>> = if commit.parent_count() == 0 {
-                vec![None]
-            }
-            else {
-                let mut trees = Vec::with_capacity(commit.parent_count());
-                for parent in commit.parents() {
-                    // An empty commit changes nothing, so there is nothing to attribute to it.
-                    if parent.tree_id() == tree.id() {
-                        continue;
-                    }
-                    trees.push(Some(parent.tree()?));
-                }
-                trees
+            let base_tree = match parents.first() {
+                Some(parent) => Some(parent.tree()?),
+                None => None,
             };
+            let mut other_trees = Vec::with_capacity(parents.len().saturating_sub(1));
+            for parent in parents.iter().skip(1) {
+                other_trees.push(parent.tree()?);
+            }
 
-            for parent_tree in parent_trees {
-                // FIXME: We assume there were no conflict in the case of multiple parents
-                let diff = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), None)?;
-                for delta in diff.deltas() {
-                    use git2::Delta;
-                    match delta.status() {
-                        Delta::Added | Delta::Modified | Delta::Renamed | Delta::Copied => {
-                            let file = delta.new_file();
-                            let path = file.path().unwrap().to_owned();
-                            // If this is the most recent commit that touches the file
-                            if files.remove(&path) {
-                                // Add an entry
-                                path_info_list.push((path, commit.time(), file.id()));
-                                // Finish if all the files have been processed
-                                if files.is_empty() {
-                                    break 'revwalk;
-                                }
+            let diff = repo.diff_tree_to_tree(base_tree.as_ref(), Some(&tree), None)?;
+            for delta in diff.deltas() {
+                use git2::Delta;
+                match delta.status() {
+                    Delta::Added | Delta::Modified | Delta::Renamed | Delta::Copied => {
+                        let file = delta.new_file();
+                        let path = file.path().unwrap().to_owned();
+                        // Present with the same content in another parent, so that parent
+                        // already had it and this commit did not author it.
+                        let treesame_elsewhere = other_trees.iter().any(|other| {
+                            other.get_path(&path).map(|entry| entry.id()).ok() == Some(file.id())
+                        });
+                        if treesame_elsewhere {
+                            continue;
+                        }
+                        // If this is the most recent commit that touches the file
+                        if files.remove(&path) {
+                            // Add an entry
+                            path_info_list.push((path, commit.time(), file.id()));
+                            // Finish if all the files have been processed
+                            if files.is_empty() {
+                                break 'revwalk;
                             }
-                        },
-                        _ => (),
-                    }
+                        }
+                    },
+                    _ => (),
                 }
             }
         }
