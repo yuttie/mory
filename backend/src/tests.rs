@@ -456,3 +456,125 @@ async fn rebuild_attributes_the_root_commit_time_to_its_files() {
         ],
     );
 }
+
+// ---------------------------------------------------------------------------
+// T3 — merge attribution
+// ---------------------------------------------------------------------------
+
+/// Build the merge fixture the three candidate rules are distinguished by.
+///
+/// ```text
+///        A ──────── M      A: main, touches `shared.md`          (t=2000)
+///       /          /       B: side, touches `only-on-side.md`    (t=3000)
+///  base           /        M: the merge itself touches nothing   (t=4000)
+///       \        /            but resolves `conflict.md` to a
+///        B ──────             value matching neither parent
+/// ```
+fn merge_fixture() -> (RepoFixture, Oid) {
+    let fixture = RepoFixture::new();
+
+    let base = fixture.commit_at(
+        "refs/heads/main",
+        &[],
+        &[
+            ("shared.md", Some("v0")),
+            ("only-on-side.md", Some("v0")),
+            ("conflict.md", Some("base")),
+        ],
+        1_000,
+        0,
+        "base",
+    );
+    let a = fixture.commit_at(
+        "refs/heads/main",
+        &[base],
+        &[("shared.md", Some("v1")), ("conflict.md", Some("a"))],
+        2_000,
+        0,
+        "main side",
+    );
+    let b = fixture.commit_at(
+        "refs/heads/side",
+        &[base],
+        &[("only-on-side.md", Some("v1")), ("conflict.md", Some("b"))],
+        3_000,
+        0,
+        "branch side",
+    );
+    // The merge result: main's `shared.md`, side's `only-on-side.md`, and a `conflict.md`
+    // resolution that matches neither parent.
+    let m = fixture.commit_at(
+        "refs/heads/main",
+        &[a, b],
+        &[("only-on-side.md", Some("v1")), ("conflict.md", Some("merged"))],
+        4_000,
+        0,
+        "merge side",
+    );
+    fixture.set_head("refs/heads/main");
+    (fixture, m)
+}
+
+async fn attributed_times(head: Oid, fixture: &RepoFixture) -> Vec<(String, i64)> {
+    let mut conn = test_cache_db().await;
+    crate::rebuild_entries_cache(&mut conn, fixture.handle(), head)
+        .await
+        .expect("rebuild failed");
+    sqlx::query_as("SELECT path, time FROM entry ORDER BY path;")
+        .fetch_all(&mut conn)
+        .await
+        .expect("failed to read entries")
+}
+
+/// What each candidate rule attributes, so the choice is made against timestamps rather than
+/// prose. Only one of these is asserted as current behaviour; the others record what adopting
+/// them would change.
+///
+/// | path              | (A) any parent | (B) all parents | (C) first parent |
+/// |-------------------|----------------|-----------------|------------------|
+/// | `shared.md`       | 4000 (merge)   | 2000 (commit A) | 2000 (commit A)  |
+/// | `only-on-side.md` | 4000 (merge)   | 3000 (commit B) | 4000 (merge)     |
+/// | `conflict.md`     | 4000 (merge)   | 4000 (merge)    | 4000 (merge)     |
+///
+/// (A) is today's behaviour: a merge is diffed against *every* parent, so anything changed on
+/// either side differs from at least one of them and is attributed to the merge. Merging a
+/// year-old branch would stamp today's date on every file it touched.
+///
+/// (B) is git's TREESAME rule and what `git log -- <path>` reports: the merge is skipped for a
+/// path it did not actually author, and attribution falls through to the commit that did. Note
+/// `conflict.md` stays at the merge under (B) -- that resolution really was authored there,
+/// which is what separates (B) from simply ignoring merges.
+#[tokio::test]
+async fn merge_attribution_matches_rule_a_today() {
+    let (fixture, head) = merge_fixture();
+    let times = attributed_times(head, &fixture).await;
+
+    assert_eq!(
+        times,
+        vec![
+            ("conflict.md".to_string(), 4_000),
+            ("only-on-side.md".to_string(), 4_000),
+            ("shared.md".to_string(), 4_000),
+        ],
+        "rule (A): the merge absorbs every path touched on either side",
+    );
+}
+
+/// A merge that is TREESAME to one parent at a path is where the rules diverge, so pin the
+/// fixture's shape rather than trusting the diagram above.
+#[test]
+fn merge_fixture_has_the_shape_the_rules_are_distinguished_by() {
+    let (fixture, m) = merge_fixture();
+    let commit = fixture.repo.find_commit(m).unwrap();
+    let (a, b) = (commit.parent_id(0).unwrap(), commit.parent_id(1).unwrap());
+
+    // TREESAME to A at `shared.md`, and to B at `only-on-side.md`.
+    assert_eq!(fixture.blob_at(m, "shared.md"), fixture.blob_at(a, "shared.md"));
+    assert_eq!(fixture.blob_at(m, "only-on-side.md"), fixture.blob_at(b, "only-on-side.md"));
+    // But different from the *other* parent in each case, which is why rule (A) claims both.
+    assert_ne!(fixture.blob_at(m, "shared.md"), fixture.blob_at(b, "shared.md"));
+    assert_ne!(fixture.blob_at(m, "only-on-side.md"), fixture.blob_at(a, "only-on-side.md"));
+    // And TREESAME to neither at `conflict.md`: the merge genuinely authored that content.
+    assert_ne!(fixture.blob_at(m, "conflict.md"), fixture.blob_at(a, "conflict.md"));
+    assert_ne!(fixture.blob_at(m, "conflict.md"), fixture.blob_at(b, "conflict.md"));
+}
