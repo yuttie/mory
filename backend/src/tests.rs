@@ -581,3 +581,124 @@ fn merge_fixture_has_the_shape_the_rules_are_distinguished_by() {
     assert_ne!(fixture.blob_at(m, "conflict.md"), fixture.blob_at(a, "conflict.md"));
     assert_ne!(fixture.blob_at(m, "conflict.md"), fixture.blob_at(b, "conflict.md"));
 }
+
+// ---------------------------------------------------------------------------
+// T5 — the single-generation schema
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn the_entry_table_holds_one_row_per_path() {
+    // The previous schema keyed rows by (commit_id, path) and copied every row forward on each
+    // commit, so the table grew without bound -- 75,873 rows for a 2,170-entry listing. `path`
+    // is now the primary key, so a second rebuild cannot accumulate anything.
+    let fixture = RepoFixture::new();
+    let first = fixture.commit_at(
+        "refs/heads/main",
+        &[],
+        &[("a.md", Some("a0")), ("b.md", Some("b0"))],
+        1_000,
+        0,
+        "base",
+    );
+    fixture.set_head("refs/heads/main");
+
+    let mut conn = test_cache_db().await;
+    crate::rebuild_entries_cache(&mut conn, fixture.handle(), first)
+        .await
+        .expect("first rebuild failed");
+    assert_eq!(cached_paths(&mut conn).await, vec!["a.md", "b.md"]);
+
+    // A second commit, then a full rebuild over the same table.
+    let second = fixture.commit_at(
+        "refs/heads/main",
+        &[first],
+        &[("a.md", Some("a1")), ("c.md", Some("c0"))],
+        2_000,
+        0,
+        "more",
+    );
+    crate::rebuild_entries_cache(&mut conn, fixture.handle(), second)
+        .await
+        .expect("second rebuild failed");
+
+    assert_eq!(cached_paths(&mut conn).await, vec!["a.md", "b.md", "c.md"]);
+    let rows: i64 = sqlx::query_scalar("SELECT count(*) FROM entry;")
+        .fetch_one(&mut conn)
+        .await
+        .unwrap();
+    assert_eq!(rows, 3, "a rebuild must replace the generation, not add one");
+}
+
+#[tokio::test]
+async fn a_rebuild_drops_paths_that_no_longer_exist() {
+    let fixture = RepoFixture::new();
+    let first = fixture.commit_at(
+        "refs/heads/main",
+        &[],
+        &[("keep.md", Some("k")), ("gone.md", Some("g"))],
+        1_000,
+        0,
+        "base",
+    );
+    let second = fixture.commit_at("refs/heads/main", &[first], &[("gone.md", None)], 2_000, 0, "rm");
+    fixture.set_head("refs/heads/main");
+
+    let mut conn = test_cache_db().await;
+    crate::rebuild_entries_cache(&mut conn, fixture.handle(), first).await.unwrap();
+    assert_eq!(cached_paths(&mut conn).await, vec!["gone.md", "keep.md"]);
+
+    crate::rebuild_entries_cache(&mut conn, fixture.handle(), second).await.unwrap();
+    assert_eq!(cached_paths(&mut conn).await, vec!["keep.md"]);
+}
+
+#[tokio::test]
+async fn cached_rows_carry_the_blob_id_and_never_a_null_metadata() {
+    let fixture = RepoFixture::new();
+    let head = fixture.commit_at(
+        "refs/heads/main",
+        &[],
+        &[
+            ("with-meta.md", Some("---\ntags: [x]\n---\n\n# Titled\n")),
+            ("plain.md", Some("no frontmatter, no heading\n")),
+        ],
+        1_000,
+        0,
+        "base",
+    );
+    fixture.set_head("refs/heads/main");
+
+    let mut conn = test_cache_db().await;
+    crate::rebuild_entries_cache(&mut conn, fixture.handle(), head).await.unwrap();
+
+    let rows: Vec<(String, String, String, Option<String>)> =
+        sqlx::query_as("SELECT path, blob_id, metadata, title FROM entry ORDER BY path;")
+            .fetch_all(&mut conn)
+            .await
+            .unwrap();
+    assert_eq!(rows.len(), 2);
+
+    for (path, blob_id, metadata, _) in &rows {
+        // The blob id must be the one actually in HEAD's tree: it is what lets a cold sync tell
+        // an unchanged path from a changed one without any commit to diff against.
+        let entry = fixture
+            .repo
+            .find_commit(head)
+            .unwrap()
+            .tree()
+            .unwrap()
+            .get_path(Path::new(path))
+            .unwrap();
+        assert_eq!(blob_id, &entry.id().to_string(), "{path} has the wrong blob id");
+
+        // `metadata` is declared NOT NULL and absent metadata is stored as the JSON text "null",
+        // which is what the row mapper's `serde_json::from_str` expects. A SQL NULL here would
+        // panic it.
+        assert!(!metadata.is_empty());
+        serde_json::from_str::<Option<serde_yaml::Value>>(metadata)
+            .expect("metadata must be valid JSON");
+    }
+
+    let (_, _, plain_meta, plain_title) = &rows[0];
+    assert_eq!(plain_meta, "null");
+    assert_eq!(plain_title.as_deref(), None);
+}

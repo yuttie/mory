@@ -202,6 +202,9 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+/// Bumping this drops and refills the `entry` table on the next start.
+const ENTRY_SCHEMA_VERSION: i64 = 2;
+
 async fn init_cache_database(
     conn: &mut SqliteConnection,
 ) -> Result<()> {
@@ -223,19 +226,46 @@ async fn init_cache_database(
         ")
         .execute(&mut *conn)
         .await?;
+    // The `entry` table holds exactly one generation: the listing at the commit recorded in
+    // `cache_state.commit_id`. There is no migration mechanism, so a schema change is applied by
+    // dropping the table and letting the next sync refill it. `openai_cache` is left alone --
+    // it is expensive to refill and its schema is unrelated.
+    let schema_version: Option<i64> =
+        sqlx::query_scalar("SELECT value FROM cache_state WHERE key = 'schema_version';")
+            .fetch_optional(&mut *conn)
+            .await
+            .unwrap_or(None);
+    if schema_version != Some(ENTRY_SCHEMA_VERSION) {
+        tracing::info!(
+            "Entry cache schema is {:?}, expected {}: rebuilding it from scratch.",
+            schema_version,
+            ENTRY_SCHEMA_VERSION,
+        );
+        sqlx::query("DROP TABLE IF EXISTS entry;").execute(&mut *conn).await?;
+        sqlx::query("DELETE FROM cache_state WHERE key = 'commit_id';")
+            .execute(&mut *conn)
+            .await?;
+        // Dropping the table frees pages but does not shrink the file, and the generation-keyed
+        // schema this replaces left 29 MB behind for a listing worth under 1 MB. Reclaim it once,
+        // here, where the cost is already being paid.
+        sqlx::query("VACUUM;").execute(&mut *conn).await?;
+    }
     sqlx::query("
             CREATE TABLE IF NOT EXISTS entry (
-                commit_id  TEXT NOT NULL,
-                path       TEXT NOT NULL,
+                path       TEXT NOT NULL PRIMARY KEY,
+                blob_id    TEXT NOT NULL,
                 size       INTEGER NOT NULL,
                 mime_type  TEXT NOT NULL,
-                metadata   TEXT,
+                metadata   TEXT NOT NULL,
                 title      TEXT,
-                time       INTEGER,
-                tz_offset  INTEGER,
-                PRIMARY KEY (commit_id, path)
+                time       INTEGER NOT NULL,
+                tz_offset  INTEGER NOT NULL
             ) STRICT;
         ")
+        .execute(&mut *conn)
+        .await?;
+    sqlx::query("INSERT INTO cache_state VALUES ('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;")
+        .bind(ENTRY_SCHEMA_VERSION)
         .execute(&mut *conn)
         .await?;
     Ok(())
@@ -505,6 +535,12 @@ async fn rebuild_entries_cache(
     let insert_started = time::Instant::now();
     let mut tx = conn.begin().await?;
 
+    // The table holds one generation, so a rebuild replaces it outright.
+    sqlx::query("DELETE FROM entry;")
+        .execute(&mut *tx)
+        .await
+        .context("Failed to clear the entry cache")?;
+
     // Insert entries
     tracing::debug!("Starting to insert cache entries...");
     let entry_count = path_info_list.len();
@@ -521,8 +557,8 @@ async fn rebuild_entries_cache(
         };
         // Insert the entry
         sqlx::query("INSERT INTO entry VALUES (?, ?, ?, ?, ?, ?, ?, ?);")
-            .bind(commit_id.to_string())
             .bind(path.to_str())
+            .bind(blob_id.to_string())
             .bind(size as i64)
             .bind(mime_type)
             .bind(serde_json::to_string(&metadata).unwrap())
@@ -582,18 +618,9 @@ async fn update_entries_cache(
 
     let mut tx = conn.begin().await?;
 
-    // Copy all entries from the previous commit to the new commit
-    sqlx::query("
-            INSERT INTO entry (commit_id, path, size, mime_type, metadata, title, time, tz_offset)
-            SELECT ?, path, size, mime_type, metadata, title, time, tz_offset
-            FROM entry
-            WHERE commit_id = ?;
-        ")
-        .bind(head_commit_id.to_string())
-        .bind(last_commit_id.to_string())
-        .execute(&mut *tx)
-        .await
-        .context("Failed to copy the last entries with the new commit ID")?;
+    // The table holds one generation and is updated in place, so there is nothing to copy
+    // forward. Copying every row per commit is what grew the cache to 75,873 rows / 29 MB for a
+    // 2,170-entry listing.
 
     // Iterate over recent commit history to collect operations on files
     let recent_ops = collect_recent_file_ops(&*repo.lock().unwrap(), last_commit_id);
@@ -616,7 +643,8 @@ async fn update_entries_cache(
                 sqlx::query("
                         INSERT INTO entry
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                            ON CONFLICT(commit_id, path) DO UPDATE SET
+                            ON CONFLICT(path) DO UPDATE SET
+                                blob_id = excluded.blob_id,
                                 size = excluded.size,
                                 mime_type = excluded.mime_type,
                                 metadata = excluded.metadata,
@@ -624,8 +652,8 @@ async fn update_entries_cache(
                                 time = excluded.time,
                                 tz_offset = excluded.tz_offset;
                     ")
-                    .bind(head_commit_id.to_string())
                     .bind(path.to_str())
+                    .bind(blob_id.to_string())
                     .bind(size as i64)
                     .bind(mime_type)
                     .bind(serde_json::to_string(&metadata).unwrap())
@@ -638,8 +666,7 @@ async fn update_entries_cache(
             },
             FileOp::Deleted => {
                 // Delete the entry from the new commit
-                sqlx::query("DELETE FROM entry WHERE commit_id = ? AND path = ?;")
-                    .bind(head_commit_id.to_string())
+                sqlx::query("DELETE FROM entry WHERE path = ?;")
                     .bind(path.to_str())
                     .execute(&mut *tx)
                     .await
@@ -1885,13 +1912,11 @@ mod models {
 
             // Return the latest version of cached entries
             let query = if let Some(pattern) = pattern_opt {
-                sqlx::query("SELECT * FROM entry WHERE commit_id = ? AND path GLOB ?;")
-                    .bind(cache_commit_id.to_string())
+                sqlx::query("SELECT * FROM entry WHERE path GLOB ?;")
                     .bind(pattern)
             }
             else {
-                sqlx::query("SELECT * FROM entry WHERE commit_id = ?;")
-                    .bind(cache_commit_id.to_string())
+                sqlx::query("SELECT * FROM entry;")
             };
             let entries = query
                 .map(|row: SqliteRow| {
