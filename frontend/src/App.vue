@@ -41,7 +41,7 @@
             v-bind:expand-on-hover="miniMainSidebar"
             permanent
         >
-            <v-list density="compact" nav>
+            <v-list>
                 <v-list-item
                     v-if="miniMainSidebar"
                     v-on:click="miniMainSidebar = false"
@@ -50,7 +50,7 @@
                         <v-icon>{{ mdiChevronDoubleRight }}</v-icon>
                     </template>
                 </v-list-item>
-                <v-list-item>
+                <v-list-item title="mory">
                     <template v-slot:prepend>
                         <v-img
                             src="/img/logo.svg"
@@ -61,9 +61,6 @@
                             class="mr-2"
                         ></v-img>
                     </template>
-                    <v-list-item-title class="text-h6 logo-text">
-                        mory
-                    </v-list-item-title>
                     <template v-slot:append v-if="!miniMainSidebar">
                         <v-btn
                             icon
@@ -74,6 +71,8 @@
                     </template>
                 </v-list-item>
             </v-list>
+
+            <v-divider></v-divider>
 
             <v-list
                 dense
