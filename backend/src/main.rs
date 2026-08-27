@@ -1689,7 +1689,30 @@ Important:
     ) -> Result<Json<EntriesResponse>, AppError> {
         tracing::debug!("v2::get_entries");
 
-        let (commit, entries) = state.get_entries(None).await?;
+        state.ensure_cache().await?;
+
+        // Serve a delta when the client names a commit still present in the object database.
+        // Ancestry is deliberately not required: a client whose commit was force-pushed away
+        // still gets a delta rather than a 660 KB refetch, because a tree diff is valid between
+        // any two commits.
+        if let Some(since) = query.since.as_deref().and_then(|s| Oid::from_str(s).ok()) {
+            if let Some((base, changed_paths, deleted)) = state.entry_delta_since(since)? {
+                let (commit, changed) = state.read_entries_at(&changed_paths).await?;
+                // Past roughly a quarter of the listing a full response is cheaper than a large
+                // `changed` array plus the client's merge, so fall through to it.
+                let total = state.entry_count().await?;
+                if total == 0 || changed.len() * 4 < total {
+                    return Ok(Json(EntriesResponse::Delta {
+                        commit: commit.to_string(),
+                        base: base.to_string(),
+                        changed,
+                        deleted,
+                    }));
+                }
+            }
+        }
+
+        let (commit, entries) = state.read_entries(None).await?;
         Ok(Json(EntriesResponse::Full {
             commit: commit.to_string(),
             entries,
@@ -2020,6 +2043,19 @@ mod models {
         }
     }
 
+    fn row_to_list_entry(row: SqliteRow) -> ListEntry {
+        let tz = FixedOffset::east_opt(row.get("tz_offset")).unwrap();
+        let time = tz.timestamp_opt(row.get("time"), 0).unwrap();
+        ListEntry {
+            path: row.get::<String, _>("path").into(),
+            size: row.get::<i64, _>("size") as usize,
+            mime_type: row.get("mime_type"),
+            metadata: serde_json::from_str(&row.get::<String, _>("metadata")).unwrap(),
+            title: row.get("title"),
+            time: time,
+        }
+    }
+
     /// Requests cache syncs and lets a reader wait for one to land.
     ///
     /// `request` collapses a burst of nudges to the latest state; `done` carries the commit the
@@ -2085,7 +2121,11 @@ mod models {
 
         pub async fn get_entries(&self, pattern_opt: Option<&str>) -> Result<(Oid, Vec<ListEntry>)> {
             self.ensure_cache().await?;
+            self.read_entries(pattern_opt).await
+        }
 
+        /// Read the cache as it stands, without waiting for a sync.
+        pub async fn read_entries(&self, pattern_opt: Option<&str>) -> Result<(Oid, Vec<ListEntry>)> {
             // Read the rows and the commit they describe in one transaction. Under WAL that is a
             // single snapshot, so the label can never belong to a different generation than the
             // rows -- the bug this replaces, where the listing was served at the *old* commit
@@ -2108,21 +2148,92 @@ mod models {
                 sqlx::query("SELECT * FROM entry;")
             };
             let entries = query
-                .map(|row: SqliteRow| {
-                    let tz = FixedOffset::east_opt(row.get("tz_offset")).unwrap();
-                    let time = tz.timestamp_opt(row.get("time"), 0).unwrap();
-                    ListEntry {
-                        path: row.get::<String, _>("path").into(),
-                        size: row.get::<i64, _>("size") as usize,
-                        mime_type: row.get("mime_type"),
-                        metadata: serde_json::from_str(&row.get::<String, _>("metadata")).unwrap(),
-                        title: row.get("title"),
-                        time: time,
-                    }
-                })
+                .map(row_to_list_entry)
                 .fetch_all(&mut *txn)
                 .await?;
 
+            Ok((cache_commit_id, entries))
+        }
+
+        /// How many rows the cache holds.
+        pub async fn entry_count(&self) -> Result<usize> {
+            let count: i64 = sqlx::query_scalar("SELECT count(*) FROM entry;")
+                .fetch_one(&self.cache_db)
+                .await?;
+            Ok(count as usize)
+        }
+
+        /// What changed between `since` and the commit the cache currently describes.
+        ///
+        /// `None` when no delta can be computed -- either commit missing from the object
+        /// database, or the cache has no commit at all -- in which case the caller serves a full
+        /// listing rather than an error.
+        pub fn entry_delta_since(
+            &self,
+            since: Oid,
+        ) -> Result<Option<(Oid, Vec<PathBuf>, Vec<PathBuf>)>> {
+            let repo = self.repo.lock().unwrap();
+            let Ok(since_tree) = repo.find_commit(since).and_then(|c| c.tree()) else {
+                return Ok(None);
+            };
+            let head = match repo.head().and_then(|h| h.peel_to_commit()) {
+                Ok(commit) => commit,
+                Err(_) => return Ok(None),
+            };
+            let head_tree = head.tree()?;
+
+            let diff = repo.diff_tree_to_tree(Some(&since_tree), Some(&head_tree), None)?;
+            let mut changed = Vec::new();
+            let mut deleted = Vec::new();
+            for delta in diff.deltas() {
+                use git2::Delta;
+                match delta.status() {
+                    Delta::Added | Delta::Modified | Delta::Copied => {
+                        changed.push(delta.new_file().path().unwrap().to_owned());
+                    },
+                    Delta::Renamed => {
+                        changed.push(delta.new_file().path().unwrap().to_owned());
+                        deleted.push(delta.old_file().path().unwrap().to_owned());
+                    },
+                    Delta::Deleted => {
+                        deleted.push(delta.old_file().path().unwrap().to_owned());
+                    },
+                    _ => (),
+                }
+            }
+            Ok(Some((since, changed, deleted)))
+        }
+
+        /// The rows for `paths` only, with the commit the cache describes.
+        ///
+        /// Used to answer a delta without materialising -- or JSON-encoding -- the other 2,100
+        /// entries. Reads in one transaction for the same reason `get_entries` does.
+        pub async fn read_entries_at(
+            &self,
+            paths: &[PathBuf],
+        ) -> Result<(Oid, Vec<ListEntry>)> {
+            let mut txn = self.cache_db.begin().await?;
+            let cache_commit_id = sqlx::query_scalar::<_, String>(
+                    "SELECT value FROM cache_state WHERE key = 'commit_id';",
+                )
+                .fetch_optional(&mut *txn)
+                .await?
+                .and_then(|value| Oid::from_str(&value).ok())
+                .unwrap_or_else(Oid::zero);
+
+            let mut entries = Vec::with_capacity(paths.len());
+            for path in paths {
+                let entry = sqlx::query("SELECT * FROM entry WHERE path = ?;")
+                    .bind(path.to_str())
+                    .map(row_to_list_entry)
+                    .fetch_optional(&mut *txn)
+                    .await?;
+                // A path can be absent when the cache is behind the commit the delta was computed
+                // against; the client simply does not learn about it this round.
+                if let Some(entry) = entry {
+                    entries.push(entry);
+                }
+            }
             Ok((cache_commit_id, entries))
         }
 
