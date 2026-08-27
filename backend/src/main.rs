@@ -153,6 +153,7 @@ async fn main() -> Result<()> {
     let protected_api_v2 = Router::new()
         .route("/commits/head", get(v2::get_commits_head))
         .route("/files/*path", get(v2::get_files_path).head(v2::head_files_path))
+        .route("/entries", get(v2::get_entries))
         .route("/tasks", get(v2::get_tasks))
         .route("/events", get(v2::get_events))
         .route("/assess-task", post(v2::post_assess_task))
@@ -1651,6 +1652,48 @@ Important:
     #[derive(Deserialize)]
     pub struct TaskQuery {
         format: Option<String>,
+    }
+
+    #[derive(Deserialize)]
+    pub struct EntriesQuery {
+        /// The commit the client's cached listing describes, if it has one.
+        pub since: Option<String>,
+    }
+
+    /// The file listing, or just what changed since a commit the client already has.
+    ///
+    /// One tagged shape so a client handles either uniformly.
+    #[derive(Serialize)]
+    #[serde(tag = "kind", rename_all = "lowercase")]
+    pub enum EntriesResponse {
+        Full {
+            commit: String,
+            entries: Vec<ListEntry>,
+        },
+        Delta {
+            commit: String,
+            base: String,
+            changed: Vec<ListEntry>,
+            deleted: Vec<PathBuf>,
+        },
+    }
+
+    /// `GET /v2/entries[?since=<oid>]`
+    ///
+    /// `commit` is the commit the returned rows actually describe, which may lag HEAD when a sync
+    /// is still running. That is deliberate and honest: the client stores what it got under the
+    /// commit it belongs to, and converges on its next read.
+    pub async fn get_entries(
+        extract::Query(query): extract::Query<EntriesQuery>,
+        extract::State(state): extract::State<AppState>,
+    ) -> Result<Json<EntriesResponse>, AppError> {
+        tracing::debug!("v2::get_entries");
+
+        let (commit, entries) = state.get_entries(None).await?;
+        Ok(Json(EntriesResponse::Full {
+            commit: commit.to_string(),
+            entries,
+        }))
     }
 
     pub async fn get_tasks(
