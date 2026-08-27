@@ -914,7 +914,12 @@ async fn a_cold_sync_reuses_rows_whose_blob_is_unchanged() {
         .await
         .unwrap();
 
-    // Force the cold path even though the base is still present, which is what a gc would cause.
+    // Forget which commit the rows describe, which is what losing the base object to a gc looks
+    // like: the rows survive, but there is no commit left to diff against.
+    sqlx::query("DELETE FROM cache_state WHERE key = 'commit_id';")
+        .execute(&mut conn)
+        .await
+        .unwrap();
     crate::sync_cache_to(&mut conn, fixture.handle(), crate::CacheState::Cold(head))
         .await
         .unwrap();
@@ -944,6 +949,10 @@ async fn a_cold_sync_drops_rows_that_are_no_longer_in_head() {
     .execute(&mut conn)
     .await
     .unwrap();
+    sqlx::query("DELETE FROM cache_state WHERE key = 'commit_id';")
+        .execute(&mut conn)
+        .await
+        .unwrap();
 
     crate::sync_cache_to(&mut conn, fixture.handle(), crate::CacheState::Cold(head))
         .await
@@ -1019,4 +1028,30 @@ async fn a_file_added_then_deleted_within_the_window_is_not_resurrected() {
     sync_to(&mut conn, &fixture, removed).await.unwrap();
 
     assert_eq!(cached_paths(&mut conn).await, vec!["keep.md"]);
+}
+
+#[tokio::test]
+async fn syncing_to_a_commit_the_cache_already_describes_does_nothing() {
+    // A mutation nudges the writer, and the read that follows nudges again from the same reading
+    // taken before the first sync landed. Both name a commit the cache has since reached, so the
+    // second must be a no-op rather than redoing the diff and rewriting rows.
+    let fixture = RepoFixture::new();
+    let head = fixture.commit_at("refs/heads/main", &[], &[("a.md", Some("a"))], 1_000, 0, "base");
+    fixture.set_head("refs/heads/main");
+
+    let mut conn = test_cache_db().await;
+    sync_to(&mut conn, &fixture, head).await.unwrap();
+
+    // A marker that a redundant sync would overwrite.
+    sqlx::query("UPDATE entry SET time = 424242 WHERE path = 'a.md';")
+        .execute(&mut conn)
+        .await
+        .unwrap();
+
+    // Replay a stale request naming a commit already reached.
+    crate::sync_cache_to(&mut conn, fixture.handle(), crate::CacheState::Cold(head))
+        .await
+        .unwrap();
+
+    assert_eq!(time_of(&mut conn, "a.md").await, 424_242);
 }
