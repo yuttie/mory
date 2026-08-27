@@ -163,8 +163,32 @@ export function login(user: string, password: string) {
   });
 }
 
-export function listNotes() {
-  return getAxios().get('/notes');
+// The listing, or just what changed since a commit the client already holds.
+//
+// One tagged shape so the caller handles either uniformly. `commit` is the commit the returned
+// rows actually describe, which may lag HEAD while the backend is still syncing; storing rows
+// under that commit rather than under HEAD is what keeps the cache honest.
+// `commit` is what the returned rows describe; `head` is where the repository actually is. They
+// differ only while the backend is still syncing, and reporting both means the client can tell
+// without spending a second request on `/v2/commits/head`.
+export type EntriesResponse =
+  | { kind: 'full'; commit: string; head: string; entries: ListEntry2[] }
+  | {
+      kind: 'delta';
+      commit: string;
+      head: string;
+      base: string;
+      changed: ListEntry2[];
+      deleted: string[];
+    };
+
+// Pass `since` to receive only what changed since that commit. The backend falls back to a full
+// listing whenever a delta cannot be computed or would not pay, so a caller never has to handle
+// a rejection -- only the two shapes above.
+export async function getEntries(since?: string): Promise<EntriesResponse> {
+  const params = since === undefined ? undefined : { since };
+  const res = await getAxios().get('/v2/entries', { params });
+  return res.data as EntriesResponse;
 }
 
 // The ID of the repository's HEAD commit. Notes are files in a Git repository, so this
