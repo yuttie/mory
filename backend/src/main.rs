@@ -491,7 +491,7 @@ async fn rebuild_entries_cache(
             let repo = repo.lock().unwrap();
             let blob = repo.find_blob(blob_id)?;
             let size = blob.size();
-            let (metadata, title) = extract_metadata(blob.content());
+            let (metadata, title) = extract_metadata(blob.content(), &mime_type);
             (size, metadata, title)
         };
         // Insert the entry
@@ -584,7 +584,7 @@ async fn update_entries_cache(
                     let repo = repo.lock().unwrap();
                     let blob = repo.find_blob(blob_id).unwrap();
                     let size = blob.size();
-                    let (metadata, title) = extract_metadata(blob.content());
+                    let (metadata, title) = extract_metadata(blob.content(), &mime_type);
                     (size, metadata, title)
                 };
                 // Update or insert the entry for the new commit
@@ -1030,7 +1030,17 @@ fn get_first_toplevel_rank1_heading(node: &markdown::mdast::Node) -> Option<&mar
     }
 }
 
-fn extract_metadata(blob: &[u8]) -> (Option<serde_yaml::Value>, Option<String>) {
+/// Extract YAML frontmatter and the first top-level `#` heading from a blob.
+///
+/// `mime_type` gates the markdown parse. Images are skipped even when their bytes are valid
+/// UTF-8, which SVG's are: parsing a multi-megabyte SVG as GFM markdown costs seconds and can
+/// never yield frontmatter or a heading. On the real repository this is the difference between
+/// 5.85 s and 0.77 s of a cold rebuild, and all 385 image entries are unaffected — none carried
+/// a title or metadata before.
+fn extract_metadata(blob: &[u8], mime_type: &str) -> (Option<serde_yaml::Value>, Option<String>) {
+    if mime_type.starts_with("image/") {
+        return (None, None);
+    }
     if let Ok(text) = std::str::from_utf8(blob) {
         let mut opts = markdown::ParseOptions::gfm();
         opts.constructs.frontmatter = true;

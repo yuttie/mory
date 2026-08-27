@@ -285,9 +285,7 @@ async fn cache_schema_applies_to_an_in_memory_database() {
 
 #[test]
 fn extract_metadata_reads_frontmatter_and_title() {
-    let (metadata, title) = crate::extract_metadata(
-        b"---\ntags:\n  - one\n  - two\n---\n\n# The Title\n\nBody text.\n",
-    );
+    let (metadata, title) = crate::extract_metadata(b"---\ntags:\n  - one\n  - two\n---\n\n# The Title\n\nBody text.\n", "text/markdown");
 
     let metadata = metadata.expect("expected frontmatter to be parsed");
     let tags = metadata
@@ -302,14 +300,14 @@ fn extract_metadata_reads_frontmatter_and_title() {
 
 #[test]
 fn extract_metadata_returns_none_without_frontmatter() {
-    let (metadata, title) = crate::extract_metadata(b"# Just a heading\n\nNo frontmatter here.\n");
+    let (metadata, title) = crate::extract_metadata(b"# Just a heading\n\nNo frontmatter here.\n", "text/markdown");
     assert!(metadata.is_none());
     assert_eq!(title.as_deref(), Some("Just a heading"));
 }
 
 #[test]
 fn extract_metadata_takes_the_first_top_level_h1_only() {
-    let (_, title) = crate::extract_metadata(b"## Sub first\n\n# First H1\n\n# Second H1\n");
+    let (_, title) = crate::extract_metadata(b"## Sub first\n\n# First H1\n\n# Second H1\n", "text/markdown");
     assert_eq!(title.as_deref(), Some("First H1"));
 }
 
@@ -317,7 +315,7 @@ fn extract_metadata_takes_the_first_top_level_h1_only() {
 fn extract_metadata_reports_malformed_yaml_as_an_error_object() {
     // Malformed frontmatter must not fail the whole entry: it is recorded as `{error: ...}` so
     // the file still appears in the listing.
-    let (metadata, _) = crate::extract_metadata(b"---\ntags: [unclosed\n---\n\n# Title\n");
+    let (metadata, _) = crate::extract_metadata(b"---\ntags: [unclosed\n---\n\n# Title\n", "text/markdown");
     let metadata = metadata.expect("expected an error object rather than None");
     assert!(
         metadata.get("error").and_then(|e| e.as_str()).is_some(),
@@ -329,14 +327,34 @@ fn extract_metadata_reports_malformed_yaml_as_an_error_object() {
 #[test]
 fn extract_metadata_bails_out_on_non_utf8_content() {
     // A JPEG header: not UTF-8, so neither metadata nor a title can be extracted.
-    let (metadata, title) = crate::extract_metadata(&[0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10]);
+    let (metadata, title) = crate::extract_metadata(&[0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10], "application/octet-stream");
     assert!(metadata.is_none());
     assert!(title.is_none());
 }
 
 #[test]
 fn extract_metadata_handles_an_empty_blob() {
-    let (metadata, title) = crate::extract_metadata(b"");
+    let (metadata, title) = crate::extract_metadata(b"", "text/markdown");
     assert!(metadata.is_none());
     assert!(title.is_none());
+}
+
+#[test]
+fn extract_metadata_skips_image_blobs_even_when_they_are_valid_utf8() {
+    // SVG is an image whose bytes are text, so the UTF-8 guard alone does not stop it. Parsing a
+    // multi-megabyte SVG as markdown costs seconds and can never yield anything useful.
+    let svg = b"<svg xmlns=\"http://www.w3.org/2000/svg\"><title># Not a heading</title></svg>";
+
+    let (metadata, title) = crate::extract_metadata(svg, "image/svg+xml");
+    assert!(metadata.is_none());
+    assert!(title.is_none());
+
+    // The gate is the mime type, not the content: the same bytes under a text type are parsed.
+    let markdownish = b"---\ntags: [x]\n---\n\n# Heading\n";
+    let (metadata, title) = crate::extract_metadata(markdownish, "image/png");
+    assert!(metadata.is_none(), "an image must never be parsed as markdown");
+    assert!(title.is_none());
+    let (metadata, title) = crate::extract_metadata(markdownish, "text/markdown");
+    assert!(metadata.is_some());
+    assert_eq!(title.as_deref(), Some("Heading"));
 }
