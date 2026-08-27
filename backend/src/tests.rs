@@ -365,6 +365,33 @@ fn extract_metadata_skips_image_blobs_even_when_they_are_valid_utf8() {
     assert_eq!(title.as_deref(), Some("Heading"));
 }
 
+/// Sync the cache to `head` from whatever it currently holds, the way the server would.
+async fn sync_to(
+    conn: &mut SqliteConnection,
+    fixture: &RepoFixture,
+    head: Oid,
+) -> anyhow::Result<()> {
+    let base: Option<String> = sqlx::query_scalar("SELECT value FROM cache_state WHERE key = 'commit_id';")
+        .fetch_optional(&mut *conn)
+        .await
+        .unwrap_or(None);
+    let state = match base.and_then(|id| Oid::from_str(&id).ok()) {
+        Some(base) if base == head => crate::CacheState::Fresh(head),
+        Some(base) if fixture.repo.find_commit(base).is_ok() => {
+            crate::CacheState::Behind { base, head }
+        }
+        _ => crate::CacheState::Cold(head),
+    };
+    crate::sync_cache_to(conn, fixture.handle(), state).await
+}
+
+/// Sync from an empty cache, the full-rebuild path.
+async fn cold_sync(conn: &mut SqliteConnection, fixture: &RepoFixture, head: Oid) {
+    crate::sync_cache_to(conn, fixture.handle(), crate::CacheState::Cold(head))
+        .await
+        .expect("cold sync failed");
+}
+
 /// The paths the cache holds, sorted.
 async fn cached_paths(conn: &mut SqliteConnection) -> Vec<String> {
     let mut paths: Vec<String> = sqlx::query_scalar("SELECT path FROM entry;")
@@ -406,9 +433,7 @@ async fn rebuild_includes_a_file_introduced_by_the_root_commit() {
     fixture.set_head("refs/heads/main");
 
     let mut conn = test_cache_db().await;
-    crate::rebuild_entries_cache(&mut conn, fixture.handle(), head)
-        .await
-        .expect("rebuild failed");
+    cold_sync(&mut conn, &fixture, head).await;
 
     assert_eq!(
         cached_paths(&mut conn).await,
@@ -438,9 +463,7 @@ async fn rebuild_attributes_the_root_commit_time_to_its_files() {
     fixture.set_head("refs/heads/main");
 
     let mut conn = test_cache_db().await;
-    crate::rebuild_entries_cache(&mut conn, fixture.handle(), head)
-        .await
-        .expect("rebuild failed");
+    cold_sync(&mut conn, &fixture, head).await;
 
     let rows: Vec<(String, i64, i64)> =
         sqlx::query_as("SELECT path, time, tz_offset FROM entry ORDER BY path;")
@@ -517,9 +540,7 @@ fn merge_fixture() -> (RepoFixture, Oid) {
 
 async fn attributed_times(head: Oid, fixture: &RepoFixture) -> Vec<(String, i64)> {
     let mut conn = test_cache_db().await;
-    crate::rebuild_entries_cache(&mut conn, fixture.handle(), head)
-        .await
-        .expect("rebuild failed");
+    cold_sync(&mut conn, &fixture, head).await;
     sqlx::query_as("SELECT path, time FROM entry ORDER BY path;")
         .fetch_all(&mut conn)
         .await
@@ -603,9 +624,7 @@ async fn the_entry_table_holds_one_row_per_path() {
     fixture.set_head("refs/heads/main");
 
     let mut conn = test_cache_db().await;
-    crate::rebuild_entries_cache(&mut conn, fixture.handle(), first)
-        .await
-        .expect("first rebuild failed");
+    sync_to(&mut conn, &fixture, first).await.expect("first rebuild failed");
     assert_eq!(cached_paths(&mut conn).await, vec!["a.md", "b.md"]);
 
     // A second commit, then a full rebuild over the same table.
@@ -617,9 +636,7 @@ async fn the_entry_table_holds_one_row_per_path() {
         0,
         "more",
     );
-    crate::rebuild_entries_cache(&mut conn, fixture.handle(), second)
-        .await
-        .expect("second rebuild failed");
+    sync_to(&mut conn, &fixture, second).await.expect("second rebuild failed");
 
     assert_eq!(cached_paths(&mut conn).await, vec!["a.md", "b.md", "c.md"]);
     let rows: i64 = sqlx::query_scalar("SELECT count(*) FROM entry;")
@@ -644,10 +661,10 @@ async fn a_rebuild_drops_paths_that_no_longer_exist() {
     fixture.set_head("refs/heads/main");
 
     let mut conn = test_cache_db().await;
-    crate::rebuild_entries_cache(&mut conn, fixture.handle(), first).await.unwrap();
+    sync_to(&mut conn, &fixture, first).await.unwrap();
     assert_eq!(cached_paths(&mut conn).await, vec!["gone.md", "keep.md"]);
 
-    crate::rebuild_entries_cache(&mut conn, fixture.handle(), second).await.unwrap();
+    sync_to(&mut conn, &fixture, second).await.unwrap();
     assert_eq!(cached_paths(&mut conn).await, vec!["keep.md"]);
 }
 
@@ -668,7 +685,7 @@ async fn cached_rows_carry_the_blob_id_and_never_a_null_metadata() {
     fixture.set_head("refs/heads/main");
 
     let mut conn = test_cache_db().await;
-    crate::rebuild_entries_cache(&mut conn, fixture.handle(), head).await.unwrap();
+    sync_to(&mut conn, &fixture, head).await.unwrap();
 
     let rows: Vec<(String, String, String, Option<String>)> =
         sqlx::query_as("SELECT path, blob_id, metadata, title FROM entry ORDER BY path;")
@@ -701,4 +718,305 @@ async fn cached_rows_carry_the_blob_id_and_never_a_null_metadata() {
     let (_, _, plain_meta, plain_title) = &rows[0];
     assert_eq!(plain_meta, "null");
     assert_eq!(plain_title.as_deref(), None);
+}
+
+// ---------------------------------------------------------------------------
+// T4 — sync change sets
+// ---------------------------------------------------------------------------
+
+async fn cached_commit(conn: &mut SqliteConnection) -> Option<String> {
+    sqlx::query_scalar("SELECT value FROM cache_state WHERE key = 'commit_id';")
+        .fetch_optional(&mut *conn)
+        .await
+        .unwrap()
+}
+
+async fn time_of(conn: &mut SqliteConnection, path: &str) -> i64 {
+    sqlx::query_scalar("SELECT time FROM entry WHERE path = ?;")
+        .bind(path)
+        .fetch_one(&mut *conn)
+        .await
+        .unwrap_or_else(|_| panic!("{path} is not in the cache"))
+}
+
+#[tokio::test]
+async fn a_fast_forward_touches_only_what_changed() {
+    let fixture = RepoFixture::new();
+    let first = fixture.commit_at(
+        "refs/heads/main",
+        &[],
+        &[("a.md", Some("a0")), ("b.md", Some("b0"))],
+        1_000,
+        0,
+        "base",
+    );
+    fixture.set_head("refs/heads/main");
+    let mut conn = test_cache_db().await;
+    sync_to(&mut conn, &fixture, first).await.unwrap();
+
+    let second = fixture.commit_at(
+        "refs/heads/main",
+        &[first],
+        &[("a.md", Some("a1")), ("c.md", Some("c0"))],
+        2_000,
+        0,
+        "edit a, add c",
+    );
+    sync_to(&mut conn, &fixture, second).await.unwrap();
+
+    assert_eq!(cached_paths(&mut conn).await, vec!["a.md", "b.md", "c.md"]);
+    assert_eq!(time_of(&mut conn, "a.md").await, 2_000);
+    assert_eq!(time_of(&mut conn, "c.md").await, 2_000);
+    // Untouched, so it keeps the time it was authored at.
+    assert_eq!(time_of(&mut conn, "b.md").await, 1_000);
+    assert_eq!(cached_commit(&mut conn).await.as_deref(), Some(second.to_string().as_str()));
+}
+
+#[tokio::test]
+async fn a_deletion_drops_the_row() {
+    let fixture = RepoFixture::new();
+    let first = fixture.commit_at(
+        "refs/heads/main",
+        &[],
+        &[("keep.md", Some("k")), ("gone.md", Some("g"))],
+        1_000,
+        0,
+        "base",
+    );
+    fixture.set_head("refs/heads/main");
+    let mut conn = test_cache_db().await;
+    sync_to(&mut conn, &fixture, first).await.unwrap();
+
+    let second =
+        fixture.commit_at("refs/heads/main", &[first], &[("gone.md", None)], 2_000, 0, "rm");
+    sync_to(&mut conn, &fixture, second).await.unwrap();
+
+    assert_eq!(cached_paths(&mut conn).await, vec!["keep.md"]);
+}
+
+#[tokio::test]
+async fn a_rewritten_history_with_the_same_tree_is_free() {
+    // This is the property the whole force-push argument rests on. `diff_tree_to_tree` does not
+    // care whether two commits share history, so a rewrite that preserves the tree -- a squash, a
+    // reworded amend, a rebase that changed nothing -- produces an empty change set and costs one
+    // tree comparison, not a rebuild.
+    let fixture = RepoFixture::new();
+    let base = fixture.commit_at("refs/heads/main", &[], &[("a.md", Some("a0"))], 1_000, 0, "base");
+    let a = fixture.commit_at("refs/heads/main", &[base], &[("a.md", Some("a1"))], 2_000, 0, "edit");
+    let head = fixture.commit_at("refs/heads/main", &[a], &[("b.md", Some("b0"))], 3_000, 0, "add b");
+    fixture.set_head("refs/heads/main");
+
+    let mut conn = test_cache_db().await;
+    sync_to(&mut conn, &fixture, head).await.unwrap();
+    let times_before = (time_of(&mut conn, "a.md").await, time_of(&mut conn, "b.md").await);
+
+    // Squash the same content onto `base`: a different commit, unreachable from the old head,
+    // with a byte-identical tree.
+    let squashed = fixture.commit_at(
+        "refs/heads/rewritten",
+        &[base],
+        &[("a.md", Some("a1")), ("b.md", Some("b0"))],
+        9_000,
+        0,
+        "squashed",
+    );
+    assert_eq!(
+        fixture.repo.find_commit(squashed).unwrap().tree_id(),
+        fixture.repo.find_commit(head).unwrap().tree_id(),
+        "the fixture must produce an identical tree for this test to mean anything",
+    );
+
+    sync_to(&mut conn, &fixture, squashed).await.unwrap();
+
+    // The label moved; nothing else did. The squash commit carries `a.md` and `b.md`, so on a
+    // fast-forward they would be re-attributed -- but a rewritten history authored no content
+    // here, and stamping the rewrite's time on every file it happened to carry is exactly the
+    // churn the TREESAME rule exists to avoid.
+    assert_eq!(cached_commit(&mut conn).await.as_deref(), Some(squashed.to_string().as_str()));
+    assert_eq!(cached_paths(&mut conn).await, vec!["a.md", "b.md"]);
+    assert_eq!(
+        (time_of(&mut conn, "a.md").await, time_of(&mut conn, "b.md").await),
+        times_before,
+    );
+}
+
+#[tokio::test]
+async fn a_rewritten_history_with_a_different_tree_syncs_by_tree_diff() {
+    let fixture = RepoFixture::new();
+    let base = fixture.commit_at(
+        "refs/heads/main",
+        &[],
+        &[("a.md", Some("a0")), ("b.md", Some("b0"))],
+        1_000,
+        0,
+        "base",
+    );
+    let head = fixture.commit_at(
+        "refs/heads/main",
+        &[base],
+        &[("a.md", Some("a1")), ("c.md", Some("c0"))],
+        2_000,
+        0,
+        "edit",
+    );
+    fixture.set_head("refs/heads/main");
+    let mut conn = test_cache_db().await;
+    sync_to(&mut conn, &fixture, head).await.unwrap();
+    assert_eq!(cached_paths(&mut conn).await, vec!["a.md", "b.md", "c.md"]);
+
+    // A diverged branch: `c.md` never existed there, `a.md` has different content.
+    let other = fixture.commit_at(
+        "refs/heads/other",
+        &[base],
+        &[("a.md", Some("a2"))],
+        3_000,
+        0,
+        "diverged",
+    );
+    sync_to(&mut conn, &fixture, other).await.unwrap();
+
+    assert_eq!(cached_paths(&mut conn).await, vec!["a.md", "b.md"]);
+    assert_eq!(time_of(&mut conn, "a.md").await, 3_000);
+    assert_eq!(time_of(&mut conn, "b.md").await, 1_000);
+}
+
+#[tokio::test]
+async fn a_cold_sync_reuses_rows_whose_blob_is_unchanged() {
+    // When the cached commit's object is gone -- force-push then gc -- there is no tree to diff
+    // against, so the sync reconciles HEAD's tree against the stored blob ids instead. Rows whose
+    // content is unchanged must be left completely alone, which is what makes a cold sync cheap
+    // rather than a full rebuild.
+    let fixture = RepoFixture::new();
+    let base = fixture.commit_at(
+        "refs/heads/main",
+        &[],
+        &[("stable.md", Some("s")), ("edited.md", Some("e0"))],
+        1_000,
+        0,
+        "base",
+    );
+    let head = fixture.commit_at(
+        "refs/heads/main",
+        &[base],
+        &[("edited.md", Some("e1"))],
+        2_000,
+        0,
+        "edit",
+    );
+    fixture.set_head("refs/heads/main");
+
+    let mut conn = test_cache_db().await;
+    sync_to(&mut conn, &fixture, head).await.unwrap();
+
+    // Mark the untouched row so it is possible to tell whether the sync rewrote it.
+    sqlx::query("UPDATE entry SET time = 424242 WHERE path = 'stable.md';")
+        .execute(&mut conn)
+        .await
+        .unwrap();
+
+    // Force the cold path even though the base is still present, which is what a gc would cause.
+    crate::sync_cache_to(&mut conn, fixture.handle(), crate::CacheState::Cold(head))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        time_of(&mut conn, "stable.md").await,
+        424_242,
+        "an unchanged blob must not be re-read, re-parsed or re-attributed",
+    );
+    assert_eq!(time_of(&mut conn, "edited.md").await, 2_000);
+    assert_eq!(cached_commit(&mut conn).await.as_deref(), Some(head.to_string().as_str()));
+}
+
+#[tokio::test]
+async fn a_cold_sync_drops_rows_that_are_no_longer_in_head() {
+    let fixture = RepoFixture::new();
+    let head = fixture.commit_at("refs/heads/main", &[], &[("a.md", Some("a"))], 1_000, 0, "base");
+    fixture.set_head("refs/heads/main");
+
+    let mut conn = test_cache_db().await;
+    sync_to(&mut conn, &fixture, head).await.unwrap();
+
+    // A row for a path that HEAD does not contain, as a force-push to an older state would leave.
+    sqlx::query(
+        "INSERT INTO entry VALUES ('stale.md', 'deadbeef', 1, 'text/markdown', 'null', NULL, 1, 0);",
+    )
+    .execute(&mut conn)
+    .await
+    .unwrap();
+
+    crate::sync_cache_to(&mut conn, fixture.handle(), crate::CacheState::Cold(head))
+        .await
+        .unwrap();
+
+    assert_eq!(cached_paths(&mut conn).await, vec!["a.md"]);
+}
+
+#[tokio::test]
+async fn a_file_reverted_to_earlier_content_still_gets_the_newer_time() {
+    // Found by comparing an incremental sync against a full rebuild on the real repository: one
+    // row out of 2,170 disagreed. The blob was byte-identical at both endpoints, so the tree diff
+    // reported nothing, but the file had been edited and reverted in between and its recorded
+    // time stayed at the older edit. `git log -1 -- <path>` reports the revert's time, and so
+    // must the cache.
+    let fixture = RepoFixture::new();
+    let base = fixture.commit_at(
+        "refs/heads/main",
+        &[],
+        &[("note.md", Some("original")), ("other.md", Some("x"))],
+        1_000,
+        0,
+        "base",
+    );
+    fixture.set_head("refs/heads/main");
+
+    let mut conn = test_cache_db().await;
+    sync_to(&mut conn, &fixture, base).await.unwrap();
+    assert_eq!(time_of(&mut conn, "note.md").await, 1_000);
+
+    // Edit it, then put the original content back.
+    let edited =
+        fixture.commit_at("refs/heads/main", &[base], &[("note.md", Some("edited"))], 2_000, 0, "edit");
+    let reverted = fixture.commit_at(
+        "refs/heads/main",
+        &[edited],
+        &[("note.md", Some("original"))],
+        3_000,
+        0,
+        "revert",
+    );
+    assert_eq!(
+        fixture.blob_at(reverted, "note.md"),
+        fixture.blob_at(base, "note.md"),
+        "the point of this test is that the endpoints are identical",
+    );
+
+    sync_to(&mut conn, &fixture, reverted).await.unwrap();
+
+    assert_eq!(
+        time_of(&mut conn, "note.md").await,
+        3_000,
+        "the revert authored this content and must own its time",
+    );
+    // A file untouched across the window keeps its original time, as before.
+    assert_eq!(time_of(&mut conn, "other.md").await, 1_000);
+}
+
+#[tokio::test]
+async fn a_file_added_then_deleted_within_the_window_is_not_resurrected() {
+    // `paths_touched_since` is deliberately liberal, so a path that came and went inside the
+    // window is in the touched set but absent from HEAD. It must not be inserted.
+    let fixture = RepoFixture::new();
+    let base = fixture.commit_at("refs/heads/main", &[], &[("keep.md", Some("k"))], 1_000, 0, "base");
+    fixture.set_head("refs/heads/main");
+    let mut conn = test_cache_db().await;
+    sync_to(&mut conn, &fixture, base).await.unwrap();
+
+    let added =
+        fixture.commit_at("refs/heads/main", &[base], &[("temp.md", Some("t"))], 2_000, 0, "add");
+    let removed =
+        fixture.commit_at("refs/heads/main", &[added], &[("temp.md", None)], 3_000, 0, "rm");
+    sync_to(&mut conn, &fixture, removed).await.unwrap();
+
+    assert_eq!(cached_paths(&mut conn).await, vec!["keep.md"]);
 }

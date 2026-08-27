@@ -109,21 +109,10 @@ async fn main() -> Result<()> {
             .context("Failed to build a reqwest client")
             .unwrap(),
     };
-    match state.check_cache_state().await? {
-        CacheState::Stale { cache_commit_id, .. } => {
-            // Perform delta update
-            update_entries_cache(&mut cache_writer_conn, state.repo.clone(), cache_commit_id).await?;
-        },
-        CacheState::Diverged { head_commit_id, .. } => {
-            // Rebuild from scratch
-            rebuild_entries_cache(&mut cache_writer_conn, state.repo.clone(), head_commit_id).await?;
-        },
-        CacheState::Empty(head_commit_id) => {
-            // Build new one
-            rebuild_entries_cache(&mut cache_writer_conn, state.repo.clone(), head_commit_id).await?;
-        },
-        _ => (),
-    }
+    // Sync before binding the listener, so the server never starts up serving a listing it knows
+    // to be behind.
+    let cache_state = state.check_cache_state().await?;
+    sync_cache_to(&mut cache_writer_conn, state.repo.clone(), cache_state).await?;
 
     tokio::spawn(cache_manager_task(
         repo.clone(),
@@ -277,27 +266,9 @@ async fn cache_manager_task(
     mut conn: SqliteConnection,
 ) {
     while rx.changed().await.is_ok() {
-        let cache_state = rx.borrow_and_update().clone();
-        match cache_state {
-            CacheState::Stale { cache_commit_id, .. } => {
-                // Perform delta update
-                if let Err(e) = update_entries_cache(&mut conn, repo.clone(), cache_commit_id).await {
-                    tracing::error!("update_entries_cache() failed: {:?}", e);
-                }
-            },
-            CacheState::Diverged { head_commit_id, .. } => {
-                // Rebuild from scratch
-                if let Err(e) = rebuild_entries_cache(&mut conn, repo.clone(), head_commit_id).await {
-                    tracing::error!("rebuild_entries_cache() failed: {:?}", e);
-                }
-            },
-            CacheState::Empty(head_commit_id) => {
-                // Build new one
-                if let Err(e) = rebuild_entries_cache(&mut conn, repo.clone(), head_commit_id).await {
-                    tracing::error!("rebuild_entries_cache() failed: {:?}", e);
-                }
-            },
-            _ => (),
+        let cache_state = *rx.borrow_and_update();
+        if let Err(e) = sync_cache_to(&mut conn, repo.clone(), cache_state).await {
+            tracing::error!("sync_cache_to() failed: {:?}", e);
         }
     }
 }
@@ -364,66 +335,6 @@ async fn post_login(
     }
 }
 
-enum FileOp {
-    AddedOrModified(git2::Time, Oid),
-    Deleted,
-}
-
-fn collect_recent_file_ops(
-    repo: &Repository,
-    last_commit_id: Oid,
-) -> HashMap<PathBuf, FileOp> {
-    use git2::Delta;
-
-    // Iterate over commit history after `last_commit_id` to collect recent file operations
-    let mut recent_ops: HashMap<PathBuf, FileOp> = HashMap::new();
-    let mut revwalk = repo.revwalk().unwrap();
-    revwalk.set_sorting(git2::Sort::TOPOLOGICAL).unwrap();
-    revwalk.push_range(&format!("{}..HEAD", last_commit_id)).unwrap();
-    for oid in revwalk {
-        let oid = oid.unwrap();
-        let commit = repo.find_commit(oid).unwrap();
-        tracing::debug!("{:?}", commit);
-
-        let tree = commit.tree().unwrap();
-        for parent in commit.parents() {
-            let parent_tree = parent.tree().unwrap();
-            let diff = repo.diff_tree_to_tree(Some(&parent_tree), Some(&tree), None).unwrap();
-            for delta in diff.deltas() {
-                match delta.status() {
-                    Delta::Added | Delta::Modified | Delta::Copied => {
-                        let file = delta.new_file();
-                        let path = file.path().unwrap().to_owned();
-                        recent_ops.entry(path).or_insert(FileOp::AddedOrModified(
-                            commit.time(),
-                            file.id(),
-                        ));
-                    },
-                    Delta::Renamed => {
-                        let file = delta.new_file();
-                        let path = file.path().unwrap().to_owned();
-                        recent_ops.entry(path).or_insert(FileOp::AddedOrModified(
-                            commit.time(),
-                            file.id(),
-                        ));
-                        let file = delta.old_file();
-                        let path = file.path().unwrap().to_owned();
-                        recent_ops.entry(path).or_insert(FileOp::Deleted);
-                    },
-                    Delta::Deleted => {
-                        let file = delta.old_file();
-                        let path = file.path().unwrap().to_owned();
-                        recent_ops.entry(path).or_insert(FileOp::Deleted);
-                    },
-                    _ => (),
-                }
-            }
-        }
-    }
-
-    recent_ops
-}
-
 fn guess_mime_from_path<P: AsRef<Path>>(path: P) -> String {
     let guess = mime_guess::from_path(path);
     if let Some(mime) = guess.first() {
@@ -434,256 +345,357 @@ fn guess_mime_from_path<P: AsRef<Path>>(path: P) -> String {
     }
 }
 
-async fn rebuild_entries_cache(
-    conn: &mut SqliteConnection,
-    repo: Arc<Mutex<Repository>>,
-    commit_id: Oid,
-) -> Result<()> {
-    tracing::info!("Rebuilding file entries cache...");
-    let walk_started = time::Instant::now();
-    // Collect minimum necessary information for each file path
-    let mut commits_scanned = 0usize;
-    let path_info_list: Vec<(PathBuf, git2::Time, Oid)> = {
-        let repo = repo.lock().unwrap();
-        // Find the commit and its tree
-        let commit = repo.find_commit(commit_id).unwrap();
-        let tree = commit.tree().unwrap();
-        // Load the tree into an index
-        let mut index = Index::new().unwrap();
-        index.read_tree(&tree).unwrap();
-        // Populate the target file set
-        let mut files: HashSet<PathBuf> = index.iter()
-            .map(|entry| PathBuf::from(OsStr::from_bytes(&entry.path)))
-            .collect();
-        // Iterate over commit history until last modified times of all the files are determined
-        let mut path_info_list: Vec<(PathBuf, git2::Time, Oid)> = Vec::with_capacity(files.len());
-        let mut revwalk = repo.revwalk()?;
-        // Topological order guarantees a descendant is never visited after its ancestor,
-        // which is the property this "first hit wins" attribution relies on once merges exist.
-        // Measured against Sort::TIME and the default: all within noise, so it is free.
-        revwalk.set_sorting(git2::Sort::TOPOLOGICAL)?;
-        revwalk.push(commit_id)?;
-        'revwalk: for oid in revwalk {
-            let oid = oid?;
-            let commit = repo.find_commit(oid)?;
-            let tree = commit.tree()?;
-            commits_scanned += 1;
-
-            // A commit authors a path only when its content there differs from the content in
-            // *every* parent -- git's TREESAME rule, and what `git log -- <path>` reports. A
-            // merge that merely combines two branches is TREESAME to one parent at each path it
-            // carries, so it authors nothing and attribution falls through to the commit that
-            // really wrote the content. A merge that resolved a conflict into something matching
-            // neither parent did author it, and is attributed.
-            let parents: Vec<git2::Commit> = commit.parents().collect();
-
-            // Identical to some parent's tree, so nothing here differs from every parent.
-            if parents.iter().any(|parent| parent.tree_id() == tree.id()) {
-                continue;
+/// Every path touched by a commit reachable from `head` but not from `base`.
+///
+/// The endpoint tree diff is not enough on its own: a file edited and then reverted within the
+/// window has byte-identical blobs at both ends, so the diff reports nothing, yet it really was
+/// modified and its recorded time would stay at the older edit. Walking the range catches that.
+///
+/// Bounded by the number of commits since `base` -- one or two for an ordinary save -- and empty
+/// when `head` is an ancestor of `base`, as a rollback makes it.
+fn paths_touched_since(repo: &Repository, base: Oid, head: Oid) -> Result<HashSet<PathBuf>> {
+    let mut touched = HashSet::new();
+    let mut revwalk = repo.revwalk()?;
+    revwalk.push(head)?;
+    // `hide` prunes everything reachable from the cached commit, so a rewritten history walks
+    // only the commits genuinely unique to HEAD.
+    if revwalk.hide(base).is_err() {
+        return Ok(touched);
+    }
+    for oid in revwalk {
+        let commit = repo.find_commit(oid?)?;
+        let tree = commit.tree()?;
+        let parent_tree = match commit.parents().next() {
+            Some(parent) => Some(parent.tree()?),
+            None => None,
+        };
+        if parent_tree.as_ref().is_some_and(|parent| parent.id() == tree.id()) {
+            continue;
+        }
+        let diff = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), None)?;
+        for delta in diff.deltas() {
+            if let Some(path) = delta.new_file().path() {
+                touched.insert(path.to_owned());
             }
-
-            // A root commit has no parent to diff against, so its whole tree is an addition.
-            // Without this it contributes no deltas at all, and any file introduced there and
-            // never touched again is never attributed -- and so never inserted.
-            let base_tree = match parents.first() {
-                Some(parent) => Some(parent.tree()?),
-                None => None,
-            };
-            let mut other_trees = Vec::with_capacity(parents.len().saturating_sub(1));
-            for parent in parents.iter().skip(1) {
-                other_trees.push(parent.tree()?);
-            }
-
-            let diff = repo.diff_tree_to_tree(base_tree.as_ref(), Some(&tree), None)?;
-            for delta in diff.deltas() {
-                use git2::Delta;
-                match delta.status() {
-                    Delta::Added | Delta::Modified | Delta::Renamed | Delta::Copied => {
-                        let file = delta.new_file();
-                        let path = file.path().unwrap().to_owned();
-                        // Present with the same content in another parent, so that parent
-                        // already had it and this commit did not author it.
-                        let treesame_elsewhere = other_trees.iter().any(|other| {
-                            other.get_path(&path).map(|entry| entry.id()).ok() == Some(file.id())
-                        });
-                        if treesame_elsewhere {
-                            continue;
-                        }
-                        // If this is the most recent commit that touches the file
-                        if files.remove(&path) {
-                            // Add an entry
-                            path_info_list.push((path, commit.time(), file.id()));
-                            // Finish if all the files have been processed
-                            if files.is_empty() {
-                                break 'revwalk;
-                            }
-                        }
-                    },
-                    _ => (),
-                }
+            if let Some(path) = delta.old_file().path() {
+                touched.insert(path.to_owned());
             }
         }
-        path_info_list
-    };
+    }
+    Ok(touched)
+}
+
+/// The newest commit reachable from `head` that authored each of `wanted`.
+///
+/// "Authored" is git's TREESAME rule: a commit authors a path only when its content there differs
+/// from the content in *every* parent. A merge that merely combines two branches is TREESAME to
+/// one parent at each path it carries, so attribution falls through to the commit that really
+/// wrote the content; a merge that resolved a conflict into something matching neither parent did
+/// author it, and is attributed.
+///
+/// The walk stops as soon as every wanted path is attributed, so an ordinary save costs a commit
+/// or two. Only a cold cache, where every path is wanted, pays for the whole history.
+fn attribute_times(
+    repo: &Repository,
+    head: Oid,
+    wanted: &HashSet<PathBuf>,
+) -> Result<HashMap<PathBuf, git2::Time>> {
+    let mut times: HashMap<PathBuf, git2::Time> = HashMap::with_capacity(wanted.len());
+    if wanted.is_empty() {
+        return Ok(times);
+    }
+
+    let started = time::Instant::now();
+    let mut remaining = wanted.clone();
+    let mut commits_scanned = 0usize;
+
+    let mut revwalk = repo.revwalk()?;
+    // Topological order guarantees a descendant is never visited after its ancestor, which is the
+    // property this "first hit wins" attribution relies on once merges exist. Measured against
+    // Sort::TIME and the default: all within noise, so it is free.
+    revwalk.set_sorting(git2::Sort::TOPOLOGICAL)?;
+    revwalk.push(head)?;
+    'revwalk: for oid in revwalk {
+        let oid = oid?;
+        let commit = repo.find_commit(oid)?;
+        let tree = commit.tree()?;
+        commits_scanned += 1;
+
+        let parents: Vec<git2::Commit> = commit.parents().collect();
+        // Identical to some parent's tree, so nothing here differs from every parent.
+        if parents.iter().any(|parent| parent.tree_id() == tree.id()) {
+            continue;
+        }
+
+        // A root commit has no parent to diff against, so its whole tree is an addition. Without
+        // this it contributes no deltas at all, and any file introduced there and never touched
+        // again is never attributed.
+        let base_tree = match parents.first() {
+            Some(parent) => Some(parent.tree()?),
+            None => None,
+        };
+        let mut other_trees = Vec::with_capacity(parents.len().saturating_sub(1));
+        for parent in parents.iter().skip(1) {
+            other_trees.push(parent.tree()?);
+        }
+
+        let diff = repo.diff_tree_to_tree(base_tree.as_ref(), Some(&tree), None)?;
+        for delta in diff.deltas() {
+            use git2::Delta;
+            match delta.status() {
+                Delta::Added | Delta::Modified | Delta::Renamed | Delta::Copied => {
+                    let file = delta.new_file();
+                    let path = file.path().unwrap();
+                    if !remaining.contains(path) {
+                        continue;
+                    }
+                    // Present with the same content in another parent, so that parent already had
+                    // it and this commit did not author it.
+                    let treesame_elsewhere = other_trees.iter().any(|other| {
+                        other.get_path(path).map(|entry| entry.id()).ok() == Some(file.id())
+                    });
+                    if treesame_elsewhere {
+                        continue;
+                    }
+                    let path = path.to_owned();
+                    remaining.remove(&path);
+                    times.insert(path, commit.time());
+                    if remaining.is_empty() {
+                        break 'revwalk;
+                    }
+                },
+                _ => (),
+            }
+        }
+    }
+
     tracing::info!(
-        "Attributed {} paths over {} commits in {:.2?}",
-        path_info_list.len(),
+        "Attributed {}/{} paths over {} commits in {:.2?}",
+        times.len(),
+        wanted.len(),
         commits_scanned,
-        walk_started.elapsed(),
+        started.elapsed(),
     );
+    Ok(times)
+}
 
-    let insert_started = time::Instant::now();
-    let mut tx = conn.begin().await?;
+/// The paths that differ between the cache's current contents and `head`.
+struct CacheDelta {
+    /// Paths to insert or refresh, with their blob at `head`.
+    changed: Vec<(PathBuf, Oid)>,
+    /// Paths to drop.
+    deleted: Vec<PathBuf>,
+}
 
-    // The table holds one generation, so a rebuild replaces it outright.
-    sqlx::query("DELETE FROM entry;")
-        .execute(&mut *tx)
-        .await
-        .context("Failed to clear the entry cache")?;
+/// Bring the entry cache to the commit `state` names.
+///
+/// Both transitions are a *tree* comparison, never a history walk:
+///
+/// - `Behind` diffs the cached commit's tree against HEAD's. `diff_tree_to_tree` does not care
+///   whether the two commits share history, so a force-push costs exactly what an ordinary push
+///   costs -- a rewrite that leaves the tree untouched produces an empty delta and is free.
+/// - `Cold` has no commit to diff against (the cache is empty, or the base was garbage collected
+///   after a force-push), so it reconciles HEAD's tree against the rows directly: a path whose
+///   stored `blob_id` already matches HEAD needs no work at all. Only a genuinely empty table
+///   makes every path changed, and so pays for a full attribution walk.
+async fn sync_cache_to(
+    conn: &mut SqliteConnection,
+    repo: Arc<Mutex<Repository>>,
+    state: CacheState,
+) -> Result<()> {
+    let (base, head) = match state {
+        CacheState::Fresh(_) => return Ok(()),
+        CacheState::Behind { base, head } => (Some(base), head),
+        CacheState::Cold(head) => (None, head),
+    };
+    let started = time::Instant::now();
 
-    // Insert entries
-    tracing::debug!("Starting to insert cache entries...");
-    let entry_count = path_info_list.len();
-    for (path, time, blob_id) in path_info_list {
-        // Guess the mime type
-        let mime_type = guess_mime_from_path(&path);
-        // Get the file size and extract metadata
+    // Only the cold path needs the current rows; the tree diff already knows what moved.
+    let existing: HashMap<PathBuf, String> = if base.is_none() {
+        sqlx::query("SELECT path, blob_id FROM entry;")
+            .map(|row: sqlx::sqlite::SqliteRow| {
+                (PathBuf::from(row.get::<String, _>("path")), row.get::<String, _>("blob_id"))
+            })
+            .fetch_all(&mut *conn)
+            .await
+            .context("Failed to read the current entry rows")?
+            .into_iter()
+            .collect()
+    }
+    else {
+        HashMap::new()
+    };
+
+    let (delta, head_time) = {
+        let repo = repo.lock().unwrap();
+        let head_commit = repo.find_commit(head)?;
+        let head_tree = head_commit.tree()?;
+
+        let delta = match base {
+            Some(base) => {
+                let base_tree = repo.find_commit(base)?.tree()?;
+                let diff = repo.diff_tree_to_tree(Some(&base_tree), Some(&head_tree), None)?;
+                let mut changed_paths: HashSet<PathBuf> = HashSet::new();
+                let mut deleted = Vec::new();
+                for delta in diff.deltas() {
+                    use git2::Delta;
+                    match delta.status() {
+                        Delta::Added | Delta::Modified | Delta::Copied => {
+                            changed_paths.insert(delta.new_file().path().unwrap().to_owned());
+                        },
+                        Delta::Renamed => {
+                            changed_paths.insert(delta.new_file().path().unwrap().to_owned());
+                            deleted.push(delta.old_file().path().unwrap().to_owned());
+                        },
+                        Delta::Deleted => {
+                            deleted.push(delta.old_file().path().unwrap().to_owned());
+                        },
+                        _ => (),
+                    }
+                }
+                // On a fast-forward, union in everything touched along the way, so a revert
+                // back to identical content still refreshes the recorded time.
+                //
+                // Deliberately not done when the history was rewritten. There, the commits in
+                // the range are new objects that did not author the content they carry -- a
+                // rebase or squash of unchanged files would stamp the rewrite's time on every
+                // one of them. Keeping the recorded time is both cheaper and truer, and it is
+                // the same principle as the TREESAME rule in `attribute_times`: a history
+                // operation that changed no content authored nothing.
+                if repo.graph_descendant_of(head, base).unwrap_or(false) {
+                    changed_paths.extend(paths_touched_since(&repo, base, head)?);
+                }
+
+                // Resolve each against HEAD's tree; a touched path that HEAD does not contain is
+                // a deletion the tree diff already recorded.
+                let mut changed = Vec::with_capacity(changed_paths.len());
+                for path in changed_paths {
+                    if let Ok(entry) = head_tree.get_path(&path) {
+                        let blob_id = entry.id();
+                        changed.push((path, blob_id));
+                    }
+                }
+                CacheDelta { changed, deleted }
+            },
+            None => {
+                let mut index = Index::new()?;
+                index.read_tree(&head_tree)?;
+                let mut changed = Vec::new();
+                let mut present: HashSet<PathBuf> = HashSet::with_capacity(existing.len());
+                for entry in index.iter() {
+                    let path = PathBuf::from(OsStr::from_bytes(&entry.path));
+                    let unchanged = existing
+                        .get(&path)
+                        .is_some_and(|cached| cached.as_str() == entry.id.to_string());
+                    if !unchanged {
+                        changed.push((path.clone(), entry.id));
+                    }
+                    present.insert(path);
+                }
+                let deleted = existing
+                    .keys()
+                    .filter(|path| !present.contains(*path))
+                    .cloned()
+                    .collect();
+                CacheDelta { changed, deleted }
+            },
+        };
+
+        (delta, head_commit.time())
+    };
+
+    if delta.changed.is_empty() && delta.deleted.is_empty() {
+        // The trees agree, so only the label moves. A history rewrite that preserved the tree
+        // lands here.
+        record_cache_commit(conn, head).await?;
+        tracing::info!("Entry cache moved to {} with no content change.", head);
+        return Ok(());
+    }
+
+    let wanted: HashSet<PathBuf> = delta.changed.iter().map(|(path, _)| path.clone()).collect();
+    let times = {
+        let repo = repo.lock().unwrap();
+        attribute_times(&repo, head, &wanted)?
+    };
+
+    // Read blobs and extract metadata before opening the write transaction: this is the slow,
+    // CPU-bound part and nothing else needs to observe it.
+    let mut rows = Vec::with_capacity(delta.changed.len());
+    for (path, blob_id) in &delta.changed {
+        let mime_type = guess_mime_from_path(path);
         let (size, metadata, title) = {
             let repo = repo.lock().unwrap();
-            let blob = repo.find_blob(blob_id)?;
+            let blob = repo.find_blob(*blob_id)?;
             let size = blob.size();
             let (metadata, title) = extract_metadata(blob.content(), &mime_type);
             (size, metadata, title)
         };
-        // Insert the entry
-        sqlx::query("INSERT INTO entry VALUES (?, ?, ?, ?, ?, ?, ?, ?);")
+        // Every changed path should have been attributed; fall back to HEAD's own time rather
+        // than dropping the entry from the listing if some path was not.
+        let when = times.get(path).copied().unwrap_or_else(|| {
+            tracing::warn!("No commit attributed {:?}; using HEAD's time.", path);
+            head_time
+        });
+        rows.push((path.clone(), *blob_id, size, mime_type, metadata, title, when));
+    }
+
+    let mut tx = conn.begin().await?;
+    for path in &delta.deleted {
+        sqlx::query("DELETE FROM entry WHERE path = ?;")
+            .bind(path.to_str())
+            .execute(&mut *tx)
+            .await
+            .context("Failed to delete an entry")?;
+    }
+    for (path, blob_id, size, mime_type, metadata, title, when) in rows {
+        sqlx::query("
+                INSERT INTO entry VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(path) DO UPDATE SET
+                        blob_id = excluded.blob_id,
+                        size = excluded.size,
+                        mime_type = excluded.mime_type,
+                        metadata = excluded.metadata,
+                        title = excluded.title,
+                        time = excluded.time,
+                        tz_offset = excluded.tz_offset;
+            ")
             .bind(path.to_str())
             .bind(blob_id.to_string())
             .bind(size as i64)
             .bind(mime_type)
             .bind(serde_json::to_string(&metadata).unwrap())
             .bind(title)
-            .bind(time.seconds())
-            .bind(time.offset_minutes() * 60)
+            .bind(when.seconds())
+            .bind(when.offset_minutes() * 60)
             .execute(&mut *tx)
             .await
-            .context("Failed to insert an cache entry")?;
+            .context("Failed to upsert an entry")?;
     }
-    tracing::debug!("Finished inserting cache entries.");
-
-    // Record the commit ID
+    // The commit id moves in the same transaction as the rows, so the cache never describes a
+    // commit its contents do not match.
     sqlx::query("INSERT INTO cache_state VALUES ('commit_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;")
-        .bind(commit_id.to_string())
+        .bind(head.to_string())
         .execute(&mut *tx)
         .await
         .context("Failed to record the latest commit ID of the cache")?;
-
-    tx.commit().await.expect("COMMIT should succeed");
+    tx.commit().await.context("COMMIT should succeed")?;
 
     tracing::info!(
-        "Read and inserted {} entries in {:.2?}",
-        entry_count,
-        insert_started.elapsed(),
+        "Entry cache synced to {}: {} changed, {} deleted, in {:.2?}",
+        head,
+        delta.changed.len(),
+        delta.deleted.len(),
+        started.elapsed(),
     );
-    tracing::info!(
-        "Finished rebuilding file entries cache in {:.2?}.",
-        walk_started.elapsed(),
-    );
-
     Ok(())
 }
 
-fn is_ancestor(
-    repo: &Repository,
-    ancestor: Oid,
-    descendant: Oid,
-) -> Result<bool> {
-    let mut revwalk = repo.revwalk()?;
-    revwalk.push(descendant)?;
-    for oid_result in revwalk {
-        let oid = oid_result?;
-        if oid == ancestor {
-            return Ok(true);
-        }
-    }
-    Ok(false)
-}
-
-async fn update_entries_cache(
-    conn: &mut SqliteConnection,
-    repo: Arc<Mutex<Repository>>,
-    last_commit_id: Oid,
-) -> Result<()> {
-    let head_commit_id = repo.lock().unwrap().head()?.peel_to_commit()?.id();
-
-    let mut tx = conn.begin().await?;
-
-    // The table holds one generation and is updated in place, so there is nothing to copy
-    // forward. Copying every row per commit is what grew the cache to 75,873 rows / 29 MB for a
-    // 2,170-entry listing.
-
-    // Iterate over recent commit history to collect operations on files
-    let recent_ops = collect_recent_file_ops(&*repo.lock().unwrap(), last_commit_id);
-
-    // Update entries based on recent file operations
-    for (path, op) in recent_ops {
-        match op {
-            FileOp::AddedOrModified(time, blob_id) => {
-                // Guess the mime type
-                let mime_type = guess_mime_from_path(&path);
-                // Get the file size and extract metadata
-                let (size, metadata, title) = {
-                    let repo = repo.lock().unwrap();
-                    let blob = repo.find_blob(blob_id).unwrap();
-                    let size = blob.size();
-                    let (metadata, title) = extract_metadata(blob.content(), &mime_type);
-                    (size, metadata, title)
-                };
-                // Update or insert the entry for the new commit
-                sqlx::query("
-                        INSERT INTO entry
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                            ON CONFLICT(path) DO UPDATE SET
-                                blob_id = excluded.blob_id,
-                                size = excluded.size,
-                                mime_type = excluded.mime_type,
-                                metadata = excluded.metadata,
-                                title = excluded.title,
-                                time = excluded.time,
-                                tz_offset = excluded.tz_offset;
-                    ")
-                    .bind(path.to_str())
-                    .bind(blob_id.to_string())
-                    .bind(size as i64)
-                    .bind(mime_type)
-                    .bind(serde_json::to_string(&metadata).unwrap())
-                    .bind(title)
-                    .bind(time.seconds())
-                    .bind(time.offset_minutes() * 60)
-                    .execute(&mut *tx)
-                    .await
-                    .context("Failed to upsert an entry")?;
-            },
-            FileOp::Deleted => {
-                // Delete the entry from the new commit
-                sqlx::query("DELETE FROM entry WHERE path = ?;")
-                    .bind(path.to_str())
-                    .execute(&mut *tx)
-                    .await
-                    .context("Failed to delete an entry")?;
-            },
-        }
-    }
-
-    // Update the commit ID to point to the new commit
+async fn record_cache_commit(conn: &mut SqliteConnection, head: Oid) -> Result<()> {
     sqlx::query("INSERT INTO cache_state VALUES ('commit_id', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;")
-        .bind(head_commit_id.to_string())
-        .execute(&mut *tx)
+        .bind(head.to_string())
+        .execute(&mut *conn)
         .await
         .context("Failed to record the latest commit ID of the cache")?;
-
-    tx.commit().await.expect("COMMIT should succeed");
-
     Ok(())
 }
 
@@ -1849,12 +1861,35 @@ mod models {
         pub email: String,
     }
 
-    #[derive(Debug, Clone)]
+    /// How the cache stands relative to HEAD.
+    ///
+    /// Ancestry deliberately plays no part in classification. Syncing is a tree comparison, which
+    /// is valid between any two commits, so "the cache is behind" and "the history was rewritten"
+    /// are the same case and cost the same. What matters here is only whether the cached commit is
+    /// still *reachable in the object database*, since that is what a tree diff needs.
+    ///
+    /// (The sync itself does ask whether HEAD descends from the cached commit, to decide how to
+    /// treat content reverted within the window -- but via merge-base machinery, not the linear
+    /// revwalk this classification used to run on every request.)
+    #[derive(Debug, Clone, Copy)]
     pub enum CacheState {
         Fresh(Oid),
-        Stale { cache_commit_id: Oid, head_commit_id: Oid },
-        Diverged { cache_commit_id: Oid, head_commit_id: Oid },
-        Empty(Oid),
+        /// The cached commit differs from HEAD but its object is still present, so HEAD can be
+        /// reached by diffing two trees.
+        Behind { base: Oid, head: Oid },
+        /// No cached commit, or its object is gone -- typically a force-push followed by a gc.
+        Cold(Oid),
+    }
+
+    impl CacheState {
+        /// The commit the cache should end up describing.
+        pub fn head(&self) -> Oid {
+            match *self {
+                CacheState::Fresh(head) => head,
+                CacheState::Behind { head, .. } => head,
+                CacheState::Cold(head) => head,
+            }
+        }
     }
 
     pub struct AppError(anyhow::Error);
@@ -1892,22 +1927,9 @@ mod models {
             let cache_state = self.check_cache_state().await?;
             let _ = self.tx.send(cache_state.clone());
             let cache_commit_id = match cache_state {
-                CacheState::Fresh(cache_commit_id) => {
-                    // No update is needed
-                    cache_commit_id
-                },
-                CacheState::Stale { cache_commit_id, .. } => {
-                    // Perform delta update
-                    cache_commit_id
-                },
-                CacheState::Diverged { cache_commit_id, .. } => {
-                    // Rebuild from scratch
-                    cache_commit_id
-                },
-                CacheState::Empty(_) => {
-                    // No cache is available at this moment
-                    return Ok((Oid::zero(), vec![]));
-                },
+                CacheState::Fresh(head) => head,
+                CacheState::Behind { base, .. } => base,
+                CacheState::Cold(_) => Oid::zero(),
             };
 
             // Return the latest version of cached entries
@@ -1955,14 +1977,16 @@ mod models {
                 Some(cache_commit_id) if cache_commit_id == head_commit_id => {
                     Ok(CacheState::Fresh(head_commit_id))
                 },
-                Some(cache_commit_id) if super::is_ancestor(&*self.repo.lock().unwrap(), cache_commit_id, head_commit_id)? => {
-                    Ok(CacheState::Stale { cache_commit_id: cache_commit_id, head_commit_id: head_commit_id })
+                // Two hash lookups, where the old ancestry probe was a linear revwalk that, in
+                // exactly the rewritten-history case, walked the entire history to completion
+                // before returning false -- on the request path.
+                Some(cache_commit_id)
+                    if self.repo.lock().unwrap().find_commit(cache_commit_id).is_ok() =>
+                {
+                    Ok(CacheState::Behind { base: cache_commit_id, head: head_commit_id })
                 },
-                Some(cache_commit_id) => {
-                    Ok(CacheState::Diverged { cache_commit_id: cache_commit_id, head_commit_id: head_commit_id })
-                },
-                None => {
-                    Ok(CacheState::Empty(head_commit_id))
+                _ => {
+                    Ok(CacheState::Cold(head_commit_id))
                 },
             }
         }
