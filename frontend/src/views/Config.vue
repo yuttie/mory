@@ -115,9 +115,12 @@
 import { ref, watch, onMounted } from 'vue';
 
 import AiActionsSettings from '@/components/AiActionsSettings.vue';
-import * as api from '@/api';
+import { useFilesStore } from '@/stores/files';
 import { loadConfigValue, saveConfigValue } from '@/config';
 import YAML from 'yaml';
+
+// Composables
+const files = useFilesStore();
 
 // Reactive states
 const editorThemes = ref([
@@ -397,8 +400,7 @@ onMounted(() => {
 
 // Methods
 async function loadDefault() {
-    const res = await api.getNote('.mory/default_config.yaml');
-    const config = YAML.parse(res.data);
+    const config = YAML.parse(await files.read('.mory/default_config.yaml'));
     currentUseSimpleEditor.value = config.useSimpleEditor;
     currentLockScroll.value = config.lockScroll;
     currentEditorFontFamily.value = config.editorFontFamily;
@@ -424,7 +426,7 @@ function saveAsDefault() {
         editorVimInsertUnmapCtCd: editorVimInsertUnmapCtCd.value,
         highlightjsTheme: currentHighlightjsTheme.value,
     };
-    api.addNote('.mory/default_config.yaml', YAML.stringify(config));
+    files.write('.mory/default_config.yaml', YAML.stringify(config));
 }
 
 // Watchers

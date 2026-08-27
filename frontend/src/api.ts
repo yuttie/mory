@@ -138,7 +138,7 @@ export interface ListEntry2 {
   path: string;
   size: number;
   mime_type: string;
-  metadata: { tags: string[] } | null;
+  metadata: { tags: string[], events?: { [key: string]: MetadataEvent } } | null;
   title: string | null;
   time: string;
 }
@@ -167,6 +167,14 @@ export function listNotes() {
   return getAxios().get('/notes');
 }
 
+// The ID of the repository's HEAD commit. Notes are files in a Git repository, so this
+// identifies the exact state every other file API call observes, and is what the
+// frontend's cache is validated against.
+export async function getHeadCommitId(): Promise<string> {
+  const res = await getAxios().get('/v2/commits/head');
+  return res.data;
+}
+
 export function addNote(path: string, content: string) {
   return getAxios().put(`/notes/${path}`, {
     Save: {
@@ -186,6 +194,15 @@ export function renameNote(oldPath: string, newPath: string) {
 
 export function getNote(path: string) {
   return getAxios().get(`/notes/${path}`);
+}
+
+// Whether a path exists, without transferring its content. Used for the rename dialog's
+// conflict check, which runs on every keystroke.
+export async function noteExists(path: string): Promise<boolean> {
+  const res = await getAxios().head(`/v2/files/${path}`, {
+    validateStatus: (status) => (status >= 200 && status < 300) || status === 404,
+  });
+  return res.status !== 404;
 }
 
 export function deleteNote(path: string) {
@@ -230,7 +247,12 @@ export async function getTaskData(eTag?: string): Promise<[string, TaskData | nu
     }
 }
 
-export async function putTaskData(data: TaskData) {
+export const TASK_DATA_PATH = '.mory/tasks.yaml';
+
+// Serializes task data to the YAML stored at `TASK_DATA_PATH`. Writing it is a file
+// mutation, so it goes through the files store rather than straight to the API — that is
+// what keeps the cached listing from surviving the commit this write produces.
+export function serializeTaskData(data: TaskData): string {
     // Clean up
     data = deepCloneRaw(data);
     for (const task of data.tasks.backlog) {
@@ -317,8 +339,7 @@ export async function putTaskData(data: TaskData) {
         },
     });
 
-    // Send
-    return await addNote('.mory/tasks.yaml', yaml);
+    return yaml;
 }
 
 export interface TaskAssessmentResponse {

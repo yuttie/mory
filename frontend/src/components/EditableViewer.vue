@@ -399,7 +399,8 @@ import type { DefinedError } from 'ajv';
 import AiActionAdHocDialog from './AiActionAdHocDialog.vue';
 import AiActionInputDialog from './AiActionInputDialog.vue';
 import AiActionMenu from './AiActionMenu.vue';
-import * as api from '@/api';
+import { runAiAction as runAiActionRequest } from '@/api';
+import { useFilesStore } from '@/stores/files';
 import { fillPrompt, hasInputPlaceholder, loadAiActions, saveAiActions } from '@/ai-actions';
 import type { AiAction } from '@/ai-actions';
 import { loadConfigValue } from '@/config';
@@ -420,6 +421,7 @@ const router = useRouter();
 const route = useRoute();
 const { smAndUp, mdAndUp, lgAndUp } = useDisplay();
 const appStore = useAppStore();
+const files = useFilesStore();
 
 // The repeatable :path* route parameter is an array of path segments in Vue Router 4
 const notePath = computed<string>(() => {
@@ -896,7 +898,7 @@ async function executeAiAction(
 
     aiActionRunning.value = true;
     try {
-        const result = await api.runAiAction(prompt);
+        const result = await runAiActionRequest(prompt);
         // An empty range is an insertion at the cursor, so this covers both
         // replacing a selection and generating at the cursor.
         replaceEditorRange(selection.from, selection.to, result);
@@ -1159,9 +1161,8 @@ function updateRenderedState(metadata: any, parseError: any, chunks: string[]) {
 async function loadCustomNoteCss(): Promise<string> {
     try {
         // Try CSS file first
-        const res = await api.getNote('.mory/custom-note.css');
         // CSS file exists, return directly
-        return res.data;
+        return await files.read('.mory/custom-note.css');
     } catch (error) {
         if (error.response && error.response.status === 404) {
             // CSS file not found, try LESS file
@@ -1176,12 +1177,12 @@ async function loadCustomNoteCss(): Promise<string> {
 
 async function loadCustomNoteLess(): Promise<string> {
     // Start both operations in parallel
-    const [res, { default: less }] = await Promise.all([
-        api.getNote('.mory/custom-note.less'),
+    const [source, { default: less }] = await Promise.all([
+        files.read('.mory/custom-note.less'),
         import('less'),
     ]);
 
-    const output = await less.render(res.data, {
+    const output = await less.render(source, {
         globalVars: {
             'nav-height': '64px',
         },
@@ -1434,9 +1435,9 @@ function onEditorScroll(lineNumber: number) {
 
 function checkUpstreamState() {
     const path = notePath.value;
-    return api.getNote(path)
-        .then(res => {
-            if (res.data === initialText.value) {
+    return files.read(path)
+        .then(content => {
+            if (content === initialText.value) {
                 return 'same';
             }
             else {
@@ -1461,9 +1462,9 @@ function checkUpstreamState() {
 
 async function load(path: string) {
     isLoading.value = true;
-    await api.getNote(path)
-    .then(async res => {
-        text.value = res.data;
+    await files.read(path)
+    .then(async content => {
+        text.value = content;
         initialText.value = text.value;
         upstreamState.value = 'same';
         noteHasUpstream.value = true;
@@ -1513,9 +1514,9 @@ async function load(path: string) {
 
 async function loadTemplate(path: string) {
     isLoading.value = true;
-    await api.getNote(path)
-    .then(async res => {
-        text.value = res.data;
+    await files.read(path)
+    .then(async content => {
+        text.value = content;
         initialText.value = text.value;
         editorIsVisible.value = true;
         (editor.value as Editor | HTMLTextAreaElement).focus();
@@ -1763,10 +1764,10 @@ function save() {
     isSaving.value = true;
     const path = notePath.value;
     const content = text.value;
-    api.addNote(
+    files.write(
         path,
         content
-    ).then(_res => {
+    ).then(() => {
             initialText.value = content;
             noteHasUpstream.value = true;
             isSaving.value = false;
@@ -1809,10 +1810,9 @@ function onNewPathKeydown(e: KeyboardEvent) {
 }
 
 function onNewPathInput(path: string) {
-    api.getNote(path).then(() => {
-        newPathConflicting.value = true;
+    files.exists(path).then(taken => {
+        newPathConflicting.value = taken;
     }).catch(() => {
-            // FIXME Status code should be checked.
             newPathConflicting.value = false;
         });
 }
@@ -1822,10 +1822,10 @@ function rename() {
 
     if (newPath.value !== null && newPath.value !== oldPath) {
         isRenaming.value = true;
-        api.renameNote(
+        files.rename(
             oldPath,
             newPath.value,
-        ).then(_res => {
+        ).then(() => {
                 skipNextPathWatch = true;
                 router.replace({
                     path: `/note/${newPath.value}`,

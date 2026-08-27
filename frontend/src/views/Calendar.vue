@@ -108,9 +108,9 @@ import {
     mdiFileDocumentOutline,
 } from '@mdi/js';
 
-import * as api from '@/api';
 import { isMetadataEventMultiple, validateEvent } from '@/api';
-import type { ListEntry } from '@/api';
+
+import { useFilesStore } from '@/stores/files';
 import Color from 'color';
 import materialColors from 'vuetify/util/colors';
 import dayjs from 'dayjs';
@@ -124,13 +124,13 @@ const emit = defineEmits<{
 // Composables
 const router = useRouter();
 const route = useRoute();
+const files = useFilesStore();
 
 // Reactive states
-const entries: Ref<ListEntry[]> = ref([]);
 const isLoading = ref(false);
 const error = ref(false);
 const errorText = ref('');
-const eventErrors: Ref<[string, any, string, string, string][]> = ref([]);
+const eventErrors: Ref<[string, unknown, string, string, string | null][]> = ref([]);
 const calendarType = ref<'month' | 'week' | 'day'>('month');
 const calendarCursor = ref(dayjs().format('YYYY-MM-DD'));
 const selectedEvent = ref<any>(null);
@@ -195,8 +195,8 @@ const events = computed(() => {
         }
     }
     const events = [];
-    const newEventErrors = [];
-    for (const entry of entries.value) {
+    const newEventErrors: [string, unknown, string, string, string | null][] = [];
+    for (const entry of files.entries) {
         if (entry.metadata !== null) {
             // Choose a default color for the note based on its path
             let defaultColor = "#666666";
@@ -357,9 +357,8 @@ function onWheel(e: WheelEvent) {
 
 function load() {
     isLoading.value = true;
-    api.listNotes()
-        .then(res => {
-            entries.value = res.data;
+    files.refresh()
+        .then(() => {
             isLoading.value = false;
         }).catch(err => {
             if (err.response) {
