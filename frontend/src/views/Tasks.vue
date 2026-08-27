@@ -360,6 +360,7 @@ import {
 import { useTaskForestStore } from '@/stores/taskForest';
 
 import * as api from '@/api';
+import { useFilesStore } from '@/stores/files';
 import axios from 'axios';
 import type { Task } from '@/api';
 import { type Task as Taskv2, render as renderTaskv2 } from '@/task';
@@ -372,6 +373,7 @@ dayjs.extend(isSameOrAfter);
 
 // Composables
 const store = useTaskForestStore();
+const files = useFilesStore();
 
 // Emits
 const emit = defineEmits<{
@@ -576,7 +578,7 @@ async function onTaskMigrate(t: Task) {
     };
     const markdown = renderTaskv2(task);
     const path = `.tasks/${task.uuid}.md`;
-    api.addNote(path, markdown);
+    files.write(path, markdown);
     store.refresh();
 }
 
@@ -807,13 +809,13 @@ async function load() {
                 }
                 else if (error.response.status === 404) {
                     // Create a new one
-                    await api.putTaskData({
+                    await files.write(api.TASK_DATA_PATH, api.serializeTaskData({
                         tasks: {
                             backlog: [],
                             scheduled: {},
                         },
                         groups: [],
-                    });
+                    }));
                     load();
                 }
                 else {
@@ -834,7 +836,10 @@ async function load() {
 }
 
 async function save() {
-    return await api.putTaskData({ tasks: tasks.value, groups: groups.value });
+    return await files.write(
+        api.TASK_DATA_PATH,
+        api.serializeTaskData({ tasks: tasks.value, groups: groups.value }),
+    );
 }
 
 async function add(closeDialog = true) {
