@@ -163,10 +163,6 @@ export function login(user: string, password: string) {
   });
 }
 
-export function listNotes() {
-  return getAxios().get('/notes');
-}
-
 // The listing, or just what changed since a commit the client already holds.
 //
 // One tagged shape so the caller handles either uniformly. `commit` is the commit the returned
