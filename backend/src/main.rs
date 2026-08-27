@@ -410,7 +410,9 @@ async fn rebuild_entries_cache(
     commit_id: Oid,
 ) -> Result<()> {
     tracing::info!("Rebuilding file entries cache...");
+    let walk_started = time::Instant::now();
     // Collect minimum necessary information for each file path
+    let mut commits_scanned = 0usize;
     let path_info_list: Vec<(PathBuf, git2::Time, Oid)> = {
         let repo = repo.lock().unwrap();
         // Find the commit and its tree
@@ -424,27 +426,24 @@ async fn rebuild_entries_cache(
             .map(|entry| PathBuf::from(OsStr::from_bytes(&entry.path)))
             .collect();
         // Iterate over commit history until last modified times of all the files are determined
-        let total_commits = {
-            let mut revwalk = repo.revwalk()?;
-            revwalk.set_sorting(git2::Sort::TOPOLOGICAL)?;
-            revwalk.push(commit_id)?;
-            revwalk.count()
-        };
         let mut path_info_list: Vec<(PathBuf, git2::Time, Oid)> = Vec::with_capacity(files.len());
         let mut revwalk = repo.revwalk()?;
+        // Topological order guarantees a descendant is never visited after its ancestor,
+        // which is the property this "first hit wins" attribution relies on once merges exist.
+        // Measured against Sort::TIME and the default: all within noise, so it is free.
         revwalk.set_sorting(git2::Sort::TOPOLOGICAL)?;
         revwalk.push(commit_id)?;
-        'revwalk: for (i, oid) in revwalk.enumerate() {
+        'revwalk: for oid in revwalk {
             let oid = oid?;
             let commit = repo.find_commit(oid)?;
             let tree = commit.tree()?;
-
-            // Show the progress
-            if (i + 1) % 1000 == 0 {
-                tracing::info!("Processing commits: {}/{}", i + 1, total_commits);
-            }
+            commits_scanned += 1;
 
             for parent in commit.parents() {
+                // An empty commit changes nothing, so there is nothing to attribute to it.
+                if parent.tree_id() == tree.id() {
+                    continue;
+                }
                 // FIXME: We assume there were no conflict in the case of multiple parents
                 let parent_tree = parent.tree()?;
                 let diff = repo.diff_tree_to_tree(Some(&parent_tree), Some(&tree), None)?;
@@ -471,11 +470,19 @@ async fn rebuild_entries_cache(
         }
         path_info_list
     };
+    tracing::info!(
+        "Attributed {} paths over {} commits in {:.2?}",
+        path_info_list.len(),
+        commits_scanned,
+        walk_started.elapsed(),
+    );
 
+    let insert_started = time::Instant::now();
     let mut tx = conn.begin().await?;
 
     // Insert entries
     tracing::debug!("Starting to insert cache entries...");
+    let entry_count = path_info_list.len();
     for (path, time, blob_id) in path_info_list {
         // Guess the mime type
         let mime_type = guess_mime_from_path(&path);
@@ -512,7 +519,15 @@ async fn rebuild_entries_cache(
 
     tx.commit().await.expect("COMMIT should succeed");
 
-    tracing::info!("Finished rebuilding file entries cache.");
+    tracing::info!(
+        "Read and inserted {} entries in {:.2?}",
+        entry_count,
+        insert_started.elapsed(),
+    );
+    tracing::info!(
+        "Finished rebuilding file entries cache in {:.2?}.",
+        walk_started.elapsed(),
+    );
 
     Ok(())
 }
