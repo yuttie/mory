@@ -1668,10 +1668,12 @@ Important:
     pub enum EntriesResponse {
         Full {
             commit: String,
+            head: String,
             entries: Vec<ListEntry>,
         },
         Delta {
             commit: String,
+            head: String,
             base: String,
             changed: Vec<ListEntry>,
             deleted: Vec<PathBuf>,
@@ -1680,9 +1682,9 @@ Important:
 
     /// `GET /v2/entries[?since=<oid>]`
     ///
-    /// `commit` is the commit the returned rows actually describe, which may lag HEAD when a sync
-    /// is still running. That is deliberate and honest: the client stores what it got under the
-    /// commit it belongs to, and converges on its next read.
+    /// `commit` is the commit the returned rows actually describe; `head` is where the repository
+    /// actually is. They differ only while a sync is still running, and reporting both means the
+    /// client can tell without spending a second request on `/v2/commits/head`.
     pub async fn get_entries(
         extract::Query(query): extract::Query<EntriesQuery>,
         extract::State(state): extract::State<AppState>,
@@ -1690,6 +1692,7 @@ Important:
         tracing::debug!("v2::get_entries");
 
         state.ensure_cache().await?;
+        let head = state.head_commit_id()?.to_string();
 
         // Serve a delta when the client names a commit still present in the object database.
         // Ancestry is deliberately not required: a client whose commit was force-pushed away
@@ -1704,6 +1707,7 @@ Important:
                 if total == 0 || changed.len() * 4 < total {
                     return Ok(Json(EntriesResponse::Delta {
                         commit: commit.to_string(),
+                        head,
                         base: base.to_string(),
                         changed,
                         deleted,
@@ -1715,6 +1719,7 @@ Important:
         let (commit, entries) = state.read_entries(None).await?;
         Ok(Json(EntriesResponse::Full {
             commit: commit.to_string(),
+            head,
             entries,
         }))
     }
@@ -2153,6 +2158,11 @@ mod models {
                 .await?;
 
             Ok((cache_commit_id, entries))
+        }
+
+        /// Where the repository actually is.
+        pub fn head_commit_id(&self) -> Result<Oid> {
+            Ok(self.repo.lock().unwrap().head()?.peel_to_commit()?.id())
         }
 
         /// How many rows the cache holds.
