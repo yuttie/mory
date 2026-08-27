@@ -97,11 +97,12 @@ async fn main() -> Result<()> {
     };
 
     let (refresh_tx, refresh_rx) = watch::channel(CacheState::Fresh(Oid::zero()));
+    let (done_tx, done_rx) = watch::channel(None);
 
     let state = models::AppState {
         repo: repo.clone(),
         cache_db: cache_reader_pool,
-        tx: refresh_tx,
+        cache_sync: Arc::new(CacheSync { request: refresh_tx, done: done_rx }),
         http_client: reqwest::Client::builder()
             .gzip(true)
             .brotli(true)
@@ -117,6 +118,7 @@ async fn main() -> Result<()> {
     tokio::spawn(cache_manager_task(
         repo.clone(),
         refresh_rx,
+        done_tx,
         cache_writer_conn,
     ));
 
@@ -263,6 +265,7 @@ async fn init_cache_database(
 async fn cache_manager_task(
     repo: Arc<Mutex<Repository>>,
     mut rx: watch::Receiver<CacheState>,
+    done: watch::Sender<Option<Oid>>,
     mut conn: SqliteConnection,
 ) {
     while rx.changed().await.is_ok() {
@@ -270,7 +273,31 @@ async fn cache_manager_task(
         if let Err(e) = sync_cache_to(&mut conn, repo.clone(), cache_state).await {
             tracing::error!("sync_cache_to() failed: {:?}", e);
         }
+        // Publish what the cache describes now, successful or not, so that anyone waiting on this
+        // sync wakes rather than sitting out their whole deadline.
+        let current = sqlx::query_scalar::<_, String>(
+                "SELECT value FROM cache_state WHERE key = 'commit_id';",
+            )
+            .fetch_optional(&mut conn)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|value| Oid::from_str(&value).ok());
+        let _ = done.send(current);
     }
+}
+
+/// How long a read waits for the cache to reach HEAD before serving what is there.
+///
+/// After the tree-diff sync an ordinary save lands in milliseconds, so this only matters when a
+/// full rebuild is genuinely required -- an empty table, or a cached commit that has been garbage
+/// collected. Startup syncs before binding the listener, so those never reach a request at all.
+fn cache_sync_deadline() -> time::Duration {
+    let ms = env::var("MORIED_CACHE_SYNC_DEADLINE_MS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(3000);
+    time::Duration::from_millis(ms)
 }
 
 async fn auth(req: Request<Body>, next: Next) -> Result<Response, StatusCode> {
@@ -508,6 +535,20 @@ async fn sync_cache_to(
         CacheState::Behind { base, head } => (Some(base), head),
         CacheState::Cold(head) => (None, head),
     };
+
+    // The state was observed by whoever asked, which may have been before an earlier sync landed:
+    // a mutation nudges, and the read that follows nudges again from the same stale reading. Both
+    // then name a commit the cache has already reached, so check before doing the work again.
+    let current = sqlx::query_scalar::<_, String>(
+            "SELECT value FROM cache_state WHERE key = 'commit_id';",
+        )
+        .fetch_optional(&mut *conn)
+        .await?
+        .and_then(|value| Oid::from_str(&value).ok());
+    if current == Some(head) {
+        return Ok(());
+    }
+
     let started = time::Instant::now();
 
     // Only the cold path needs the current rows; the tree diff already knows what moved.
@@ -772,7 +813,7 @@ async fn put_notes_path(
     tracing::debug!("put_notes_path");
     tracing::debug!("{:?}", note_save);
 
-    match note_save {
+    let response = match note_save {
         NoteSave::Save { content, message } => {
             let repo = state.repo.lock().unwrap();
 
@@ -861,7 +902,13 @@ async fn put_notes_path(
                 StatusCode::NOT_FOUND.into_response()
             }
         },
-    }
+    };
+
+    // Let the writer start on the new HEAD now, rather than leaving the next read to discover
+    // it. Unconditional: when HEAD did not move the sync sees a fresh cache and returns at once,
+    // which is cheaper than working out whether this particular branch changed anything.
+    state.nudge_cache().await;
+    response
 }
 
 async fn delete_notes_path(
@@ -870,16 +917,17 @@ async fn delete_notes_path(
 ) -> Response {
     tracing::debug!("delete_notes_path");
 
-    let found = {
-        let repo = state.repo.lock().unwrap();
+    let response = {
+        let found = {
+            let repo = state.repo.lock().unwrap();
 
-        let head = repo.head().unwrap();
-        let head_tree = head.peel_to_tree().unwrap();
+            let head = repo.head().unwrap();
+            let head_tree = head.peel_to_tree().unwrap();
 
-        let mut index = Index::new().unwrap();
-        index.read_tree(&head_tree).unwrap();
+            let mut index = Index::new().unwrap();
+            index.read_tree(&head_tree).unwrap();
 
-        index.iter().find(|entry| std::str::from_utf8(&entry.path).unwrap() == path)
+            index.iter().find(|entry| std::str::from_utf8(&entry.path).unwrap() == path)
     };
     if let Some(entry) = found {
         let repo = state.repo.lock().unwrap();
@@ -911,6 +959,13 @@ async fn delete_notes_path(
     else {
         StatusCode::NOT_FOUND.into_response()
     }
+    };
+
+    // Let the writer start on the new HEAD now, rather than leaving the next read to discover
+    // it. Unconditional: when HEAD did not move the sync sees a fresh cache and returns at once,
+    // which is cheaper than working out whether this particular branch changed anything.
+    state.nudge_cache().await;
+    response
 }
 
 async fn serve_image_content(content: Vec<u8>, path: &Path) -> Response {
@@ -1018,33 +1073,35 @@ async fn post_files(
         result.push((uuid, "success"));
     }
 
-    // Commit
-    let repo = state.repo.lock().unwrap();
+    // Commit. Scoped so the repository guard and everything borrowing from it are released
+    // before the cache is nudged, which re-locks it.
+    {
+        let repo = state.repo.lock().unwrap();
 
-    let head = repo.head().unwrap();
-    let head_tree = head.peel_to_tree().unwrap();
-    let head_commit = head.peel_to_commit().unwrap();
+        let head = repo.head().unwrap();
+        let head_tree = head.peel_to_tree().unwrap();
+        let head_commit = head.peel_to_commit().unwrap();
 
-    let mut index = Index::new().unwrap();
-    index.read_tree(&head_tree).unwrap();
+        let mut index = Index::new().unwrap();
+        index.read_tree(&head_tree).unwrap();
 
-    let count = files.len();
-    for (path, blob_oid) in files {
-        let entry = IndexEntry {
-            ctime: IndexTime::new(0, 0),
-            mtime: IndexTime::new(0, 0),
-            dev: 0,
-            ino: 0,
-            mode: 0o100644,
-            uid: 0,
-            gid: 0,
-            file_size: 0,
-            id: blob_oid,
-            flags: 0,
-            flags_extended: 0,
-            path: path,
-        };
-        index.add(&entry).unwrap();
+        let count = files.len();
+        for (path, blob_oid) in files {
+            let entry = IndexEntry {
+                ctime: IndexTime::new(0, 0),
+                mtime: IndexTime::new(0, 0),
+                dev: 0,
+                ino: 0,
+                mode: 0o100644,
+                uid: 0,
+                gid: 0,
+                file_size: 0,
+                id: blob_oid,
+                flags: 0,
+                flags_extended: 0,
+                path: path,
+            };
+            index.add(&entry).unwrap();
     }
 
     let tree_oid = index.write_tree_to(&repo).unwrap();
@@ -1059,6 +1116,12 @@ async fn post_files(
         &tree,
         &[&head_commit],
     ).unwrap();
+    }
+
+    // Let the writer start on the new HEAD now, rather than leaving the next read to discover
+    // it. Unconditional: when HEAD did not move the sync sees a fresh cache and returns at once,
+    // which is cheaper than working out whether this particular branch changed anything.
+    state.nudge_cache().await;
 
     Json(result).into_response()
 }
@@ -1914,23 +1977,84 @@ mod models {
         }
     }
 
+    /// Requests cache syncs and lets a reader wait for one to land.
+    ///
+    /// `request` collapses a burst of nudges to the latest state; `done` carries the commit the
+    /// cache describes after each attempt -- published even when the sync failed, so a waiter
+    /// always wakes rather than sitting out its whole deadline.
+    pub struct CacheSync {
+        pub request: watch::Sender<CacheState>,
+        pub done: watch::Receiver<Option<Oid>>,
+    }
+
     #[derive(Clone, extract::FromRef)]
     pub struct AppState {
         pub repo: Arc<Mutex<Repository>>,
         pub cache_db: SqlitePool,
-        pub tx: watch::Sender<CacheState>,
+        pub cache_sync: Arc<CacheSync>,
         pub http_client: reqwest::Client,
     }
 
     impl AppState {
-        pub async fn get_entries(&self, pattern_opt: Option<&str>) -> Result<(Oid, Vec<ListEntry>)> {
+        /// Ask for a sync to HEAD and wait for it, up to a deadline.
+        ///
+        /// Expiry is not an error. The caller then serves whatever the cache holds, labelled with
+        /// the commit that content actually describes -- which is honest, and lets the client
+        /// converge on its next read. Blocking until a cold rebuild finishes would be worse for
+        /// everyone, and lying about the commit is what this whole change exists to stop.
+        pub async fn ensure_cache(&self) -> Result<()> {
             let cache_state = self.check_cache_state().await?;
-            let _ = self.tx.send(cache_state.clone());
-            let cache_commit_id = match cache_state {
-                CacheState::Fresh(head) => head,
-                CacheState::Behind { base, .. } => base,
-                CacheState::Cold(_) => Oid::zero(),
-            };
+            if let CacheState::Fresh(_) = cache_state {
+                return Ok(());
+            }
+            let head = cache_state.head();
+
+            // Subscribe before requesting, so a sync that finishes immediately is not missed.
+            let mut done = self.cache_sync.done.clone();
+            done.mark_unchanged();
+            let _ = self.cache_sync.request.send(cache_state);
+
+            let _ = tokio::time::timeout(super::cache_sync_deadline(), async {
+                loop {
+                    if *done.borrow_and_update() == Some(head) {
+                        return;
+                    }
+                    if done.changed().await.is_err() {
+                        return;
+                    }
+                }
+            })
+            .await;
+            Ok(())
+        }
+
+        /// Nudge the writer without waiting, after a mutation has moved HEAD.
+        pub async fn nudge_cache(&self) {
+            match self.check_cache_state().await {
+                Ok(cache_state) => {
+                    let _ = self.cache_sync.request.send(cache_state);
+                },
+                Err(e) => {
+                    tracing::warn!("Failed to inspect the cache state after a mutation: {:?}", e);
+                },
+            }
+        }
+
+        pub async fn get_entries(&self, pattern_opt: Option<&str>) -> Result<(Oid, Vec<ListEntry>)> {
+            self.ensure_cache().await?;
+
+            // Read the rows and the commit they describe in one transaction. Under WAL that is a
+            // single snapshot, so the label can never belong to a different generation than the
+            // rows -- the bug this replaces, where the listing was served at the *old* commit
+            // while `/v2/commits/head` already reported the new one.
+            let mut txn = self.cache_db.begin().await?;
+            let cache_commit_id = sqlx::query_scalar::<_, String>(
+                    "SELECT value FROM cache_state WHERE key = 'commit_id';",
+                )
+                .fetch_optional(&mut *txn)
+                .await?
+                .and_then(|value| Oid::from_str(&value).ok())
+                .unwrap_or_else(Oid::zero);
 
             // Return the latest version of cached entries
             let query = if let Some(pattern) = pattern_opt {
@@ -1953,7 +2077,7 @@ mod models {
                         time: time,
                     }
                 })
-                .fetch_all(&self.cache_db)
+                .fetch_all(&mut *txn)
                 .await?;
 
             Ok((cache_commit_id, entries))
