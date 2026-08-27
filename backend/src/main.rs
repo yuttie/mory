@@ -439,14 +439,27 @@ async fn rebuild_entries_cache(
             let tree = commit.tree()?;
             commits_scanned += 1;
 
-            for parent in commit.parents() {
-                // An empty commit changes nothing, so there is nothing to attribute to it.
-                if parent.tree_id() == tree.id() {
-                    continue;
+            // A root commit has no parent to diff against, so its whole tree is an addition.
+            // Without this it contributes no deltas at all, and any file introduced there and
+            // never touched again is never attributed -- and so never inserted.
+            let parent_trees: Vec<Option<git2::Tree>> = if commit.parent_count() == 0 {
+                vec![None]
+            }
+            else {
+                let mut trees = Vec::with_capacity(commit.parent_count());
+                for parent in commit.parents() {
+                    // An empty commit changes nothing, so there is nothing to attribute to it.
+                    if parent.tree_id() == tree.id() {
+                        continue;
+                    }
+                    trees.push(Some(parent.tree()?));
                 }
+                trees
+            };
+
+            for parent_tree in parent_trees {
                 // FIXME: We assume there were no conflict in the case of multiple parents
-                let parent_tree = parent.tree()?;
-                let diff = repo.diff_tree_to_tree(Some(&parent_tree), Some(&tree), None)?;
+                let diff = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(&tree), None)?;
                 for delta in diff.deltas() {
                     use git2::Delta;
                     match delta.status() {

@@ -115,6 +115,12 @@ impl RepoFixture {
             .expect("failed to commit")
     }
 
+    /// A second handle on the same repository, shaped the way the cache functions take it.
+    pub fn handle(&self) -> std::sync::Arc<std::sync::Mutex<Repository>> {
+        let repo = Repository::open(self.repo.path()).expect("failed to reopen the fixture repo");
+        std::sync::Arc::new(std::sync::Mutex::new(repo))
+    }
+
     /// Point HEAD at `ref_name`, so code under test that reads `repo.head()` sees it.
     pub fn set_head(&self, ref_name: &str) {
         self.repo.set_head(ref_name).expect("failed to set HEAD");
@@ -357,4 +363,96 @@ fn extract_metadata_skips_image_blobs_even_when_they_are_valid_utf8() {
     let (metadata, title) = crate::extract_metadata(markdownish, "text/markdown");
     assert!(metadata.is_some());
     assert_eq!(title.as_deref(), Some("Heading"));
+}
+
+/// The paths the cache holds, sorted.
+async fn cached_paths(conn: &mut SqliteConnection) -> Vec<String> {
+    let mut paths: Vec<String> = sqlx::query_scalar("SELECT path FROM entry;")
+        .fetch_all(&mut *conn)
+        .await
+        .expect("failed to read cached paths");
+    paths.sort();
+    paths
+}
+
+// ---------------------------------------------------------------------------
+// T2 — files introduced by the root commit
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn rebuild_includes_a_file_introduced_by_the_root_commit() {
+    // The walk attributes a file to the newest commit whose tree differs from a parent's. The
+    // root commit has no parents, so a file added there and never touched again was never
+    // attributed, and silently never inserted. On the real repository this is why the listing
+    // held 2,169 rows for 2,170 files at HEAD.
+    let fixture = RepoFixture::new();
+
+    let root = fixture.commit_at(
+        "refs/heads/main",
+        &[],
+        &[("root-only.md", Some("# Only ever in the root commit\n"))],
+        1_000,
+        0,
+        "root",
+    );
+    let head = fixture.commit_at(
+        "refs/heads/main",
+        &[root],
+        &[("later.md", Some("# Added later\n"))],
+        2_000,
+        0,
+        "later",
+    );
+    fixture.set_head("refs/heads/main");
+
+    let mut conn = test_cache_db().await;
+    crate::rebuild_entries_cache(&mut conn, fixture.handle(), head)
+        .await
+        .expect("rebuild failed");
+
+    assert_eq!(
+        cached_paths(&mut conn).await,
+        vec!["later.md".to_string(), "root-only.md".to_string()],
+    );
+}
+
+#[tokio::test]
+async fn rebuild_attributes_the_root_commit_time_to_its_files() {
+    let fixture = RepoFixture::new();
+    let root = fixture.commit_at(
+        "refs/heads/main",
+        &[],
+        &[("root-only.md", Some("a")), ("touched.md", Some("v0"))],
+        1_000,
+        540,
+        "root",
+    );
+    let head = fixture.commit_at(
+        "refs/heads/main",
+        &[root],
+        &[("touched.md", Some("v1"))],
+        2_000,
+        540,
+        "touch",
+    );
+    fixture.set_head("refs/heads/main");
+
+    let mut conn = test_cache_db().await;
+    crate::rebuild_entries_cache(&mut conn, fixture.handle(), head)
+        .await
+        .expect("rebuild failed");
+
+    let rows: Vec<(String, i64, i64)> =
+        sqlx::query_as("SELECT path, time, tz_offset FROM entry ORDER BY path;")
+            .fetch_all(&mut conn)
+            .await
+            .expect("failed to read entries");
+
+    assert_eq!(
+        rows,
+        vec![
+            ("root-only.md".to_string(), 1_000, 540 * 60),
+            ("touched.md".to_string(), 2_000, 540 * 60),
+        ],
+    );
 }
