@@ -4,7 +4,14 @@ import { defineStore } from 'pinia';
 
 import * as api from '@/api';
 import type { ListEntry2 } from '@/api';
-import { deleteRecord, readRecord, writeRecord } from '@/idb';
+import {
+    applyEntryDelta,
+    clearEntries,
+    readAllEntries,
+    readCacheCommitId,
+    readEntry,
+    replaceEntries,
+} from '@/idb';
 
 // The single frontend entry point for file-related operations.
 //
@@ -15,8 +22,11 @@ import { deleteRecord, readRecord, writeRecord } from '@/idb';
 //
 // The listing lives here once and every consumer reads the same array, which is what
 // keeps the app affordable on mobile.
-
-const CACHE_KEY = 'entries';
+//
+// Persisted rows are the source of truth for syncing, and always describe exactly one commit.
+// A sync sends that commit as `since`, so the backend can reply with just what changed instead
+// of the whole listing. In-memory optimistic patches never reach IndexedDB: they would corrupt
+// that base.
 
 export interface SearchHit {
     file: string;
@@ -24,22 +34,10 @@ export interface SearchHit {
     content: string;
 }
 
-interface CachedListing {
-    commitId: string;
-    entries: ListEntry2[];
-}
-
-async function readCache(): Promise<CachedListing | null> {
-    const cached = await readRecord<CachedListing>(CACHE_KEY);
-    if (cached === null || cached === undefined) {
-        return null;
-    }
-    if (typeof cached.commitId !== 'string' || !Array.isArray(cached.entries)) {
-        // Written by an older or broken version; treat it as a miss.
-        return null;
-    }
-    return cached;
-}
+// How long to wait before asking again after the backend served a listing older than HEAD,
+// which it does while a cold rebuild is still running. Without this, a component calling
+// `list()` in a loop would spin against a warming cache.
+const LAGGING_RETRY_MS = 1000;
 
 export const useFilesStore = defineStore('files', () => {
     // A `shallowRef` rather than a `ref`: the list can hold thousands of entries, and deep
@@ -47,6 +45,25 @@ export const useFilesStore = defineStore('files', () => {
     // derive from them, so replacing the array wholesale is enough to drive updates — and it
     // keeps the array structured-cloneable for IndexedDB.
     const entriesRef: ShallowRef<ListEntry2[]> = shallowRef([]);
+
+    // The primary structure. A delta names paths, so applying one has to be a keyed update;
+    // rebuilding `entriesRef` from this once per sync keeps the shared-array contract every
+    // consumer already reads through.
+    let entryMap: Map<string, ListEntry2> = new Map();
+
+    // Whether `entryMap` still matches the persisted rows exactly. An optimistic patch clears it:
+    // a delta is computed by the backend against the persisted commit, so applying one to a
+    // locally-patched map would compound the patch instead of replacing it.
+    let mapIsPersisted = false;
+
+    // When the last sync returned a commit older than HEAD, so `list()` does not spin while the
+    // backend finishes a rebuild.
+    let laggingUntil = 0;
+
+    function publish(): ListEntry2[] {
+        entriesRef.value = Array.from(entryMap.values());
+        return entriesRef.value;
+    }
 
     // The commit ID the in-memory list is known to be correct for, or `null` when the list is
     // absent, unvalidated, or invalidated by a mutation. Nothing is ever persisted or served
@@ -64,53 +81,82 @@ export const useFilesStore = defineStore('files', () => {
     // longer describes the repository and would resurrect a cache under a stale commit ID.
     let epoch = 0;
 
-    // Validate the cache against HEAD and, if it is stale or missing, refetch through the API.
+    // Bring the store up to date in a single request.
+    //
+    // The persisted rows and their commit ID are the delta base: sending that commit as `since`
+    // lets the backend reply with only what changed. The response's `commit` is authoritative --
+    // the client can no longer label a listing with a commit it did not come from, which is what
+    // let a pre-save listing be cached as valid for a post-save commit.
+    //
     // Only ever called through `sync()`, which serializes concurrent callers onto one run.
     async function syncOnce(): Promise<ListEntry2[]> {
         const startEpoch = epoch;
-        const headCommitId = await api.getHeadCommitId();
 
-        // Already correct in memory: no I/O at all.
-        if (epoch === startEpoch && validatedCommitIdRef.value === headCommitId) {
-            return entriesRef.value;
-        }
-
-        const cached = await readCache();
-        if (epoch === startEpoch && cached !== null && cached.commitId === headCommitId) {
-            entriesRef.value = cached.entries;
-            validatedCommitIdRef.value = headCommitId;
-            return cached.entries;
-        }
-
-        // Cache missing or stale: go to the API.
-        const listed = await api.listNotes();
-        const entries = listed.data as ListEntry2[];
-
-        // A commit may have landed while the listing was in flight, in which case the listing
-        // belongs to an unknown state. Re-reading HEAD tells us whether `headCommitId` still
-        // describes it.
-        const headCommitIdAfter = await api.getHeadCommitId();
+        // Only the commit ID is needed to ask; the rows themselves are read only if a delta
+        // actually comes back. A cache that fails to open yields no base, and the backend then
+        // answers with a full listing.
+        const base = await readCacheCommitId();
+        const response = await api.getEntries(base ?? undefined);
 
         if (epoch !== startEpoch) {
             // A mutation invalidated the cache while this ran. Its optimistic patch to the
-            // in-memory list is newer than what we fetched, so leave both alone and let the
-            // next sync fetch a listing that accounts for the mutation.
+            // in-memory list is newer than what we fetched, so leave both alone and let the next
+            // sync fetch a listing that accounts for the mutation.
             return entriesRef.value;
         }
 
-        entriesRef.value = entries;
-        if (headCommitIdAfter === headCommitId) {
-            validatedCommitIdRef.value = headCommitId;
-            await writeRecord(CACHE_KEY, { commitId: headCommitId, entries } satisfies CachedListing);
+        if (response.kind === 'full') {
+            entryMap = new Map(response.entries.map((entry) => [entry.path, entry]));
+            await replaceEntries(response.commit, response.entries);
         }
         else {
-            // Usable for display, but not attributable to a commit: never persisted, and
-            // re-validated on the next call.
-            validatedCommitIdRef.value = null;
-            await deleteRecord(CACHE_KEY);
-        }
+            // A delta is computed against the persisted rows, so it has to be applied to them --
+            // never to a map an optimistic patch has already touched, which would compound the
+            // patch rather than replace it.
+            let next: Map<string, ListEntry2>;
+            if (mapIsPersisted) {
+                next = new Map(entryMap);
+            }
+            else {
+                const rows = await readAllEntries<ListEntry2>();
+                if (rows === null) {
+                    // No readable base to apply to. Ask again without one, and take the full
+                    // listing.
+                    validatedCommitIdRef.value = null;
+                    return publish();
+                }
+                next = new Map(rows.map((entry) => [entry.path, entry]));
+            }
 
-        return entries;
+            // The delta applies to the base we sent. If the backend answered against a different
+            // one -- another tab synced in between -- the rows we hold are not that base, so drop
+            // them and take a full listing next time.
+            if (response.base !== base) {
+                validatedCommitIdRef.value = null;
+                return publish();
+            }
+            for (const path of response.deleted) {
+                next.delete(path);
+            }
+            for (const entry of response.changed) {
+                next.set(entry.path, entry);
+            }
+            entryMap = next;
+            await applyEntryDelta(response.commit, response.changed, response.deleted);
+        }
+        mapIsPersisted = true;
+
+        if (response.commit === response.head) {
+            validatedCommitIdRef.value = response.commit;
+        }
+        else {
+            // The backend served the commit its cache actually describes, which lags HEAD while
+            // it is still syncing. Honest rather than wrong, but not current: hold the rows
+            // without claiming they are, and back off before asking again.
+            validatedCommitIdRef.value = null;
+            laggingUntil = Date.now() + LAGGING_RETRY_MS;
+        }
+        return publish();
     }
 
     function sync(): Promise<ListEntry2[]> {
@@ -154,36 +200,57 @@ export const useFilesStore = defineStore('files', () => {
         if (validatedCommitIdRef.value !== null) {
             return Promise.resolve(entriesRef.value);
         }
+        if (Date.now() < laggingUntil && entryMap.size > 0) {
+            // The backend last answered with a commit older than HEAD, so it is still syncing.
+            // Serve what we have rather than hammering it; the next call past the backoff picks
+            // up the rest.
+            return Promise.resolve(entriesRef.value);
+        }
         return syncValidated();
     }
 
-    // Re-validate against HEAD. Costs one small request when nothing has changed, and
-    // refetches the listing only when the commit ID has actually moved.
+    // Re-validate against HEAD. With a delta base in hand this costs one small request when
+    // nothing has changed, and sends only what moved when something has.
     function refresh(): Promise<ListEntry2[]> {
         return syncValidated();
     }
 
-    // Drop the cached listing after a mutation. HEAD has moved, so neither the persisted copy
-    // nor the in-memory one may be served as current any more.
-    async function invalidate(): Promise<void> {
+    // Mark the store stale after a mutation. HEAD has moved, so the in-memory list may no longer
+    // be served as current.
+    //
+    // The persisted rows and their commit ID deliberately stay: they are the delta base for the
+    // next sync. Deleting them is exactly what forced the full refetch this change exists to
+    // avoid -- every save cost the whole listing again.
+    function invalidate(): void {
         epoch += 1;
         validatedCommitIdRef.value = null;
-        await deleteRecord(CACHE_KEY);
+        laggingUntil = 0;
     }
 
-    // Apply a mutation's known effect to the in-memory list so the UI updates immediately,
-    // while still marking the cache stale: the authoritative listing arrives on the next sync.
+    // Apply a mutation's known effect to the in-memory list so the UI updates immediately, while
+    // marking the store stale: the authoritative listing arrives on the next sync.
+    //
+    // In memory only. The persisted rows must keep describing exactly the commit recorded beside
+    // them, or the next delta would be applied to a base the backend never saw.
     async function patchEntries(patch: (entries: ListEntry2[]) => ListEntry2[]): Promise<void> {
-        entriesRef.value = patch(entriesRef.value);
-        await invalidate();
+        const patched = patch(Array.from(entryMap.values()));
+        entryMap = new Map(patched.map((entry) => [entry.path, entry]));
+        mapIsPersisted = false;
+        publish();
+        invalidate();
     }
 
     // Forget everything, in memory and on disk. Used on logout: the listing describes a
     // private repository and must not outlive the session that fetched it.
     async function clear(): Promise<void> {
+        entryMap = new Map();
+        mapIsPersisted = false;
         entriesRef.value = [];
         errorRef.value = null;
-        await invalidate();
+        invalidate();
+        // Rows and commit ID together: the listing describes a private repository and must not
+        // outlive the session that fetched it.
+        await clearEntries();
     }
 
     async function read(path: string): Promise<string> {
@@ -196,7 +263,7 @@ export const useFilesStore = defineStore('files', () => {
         await api.addNote(path, content);
         // The new entry's size, MIME type and metadata are decided by the backend, so the
         // listing cannot be patched locally: invalidate and let the next sync fetch it.
-        await invalidate();
+        invalidate();
     }
 
     async function rename(oldPath: string, newPath: string): Promise<void> {
@@ -217,12 +284,32 @@ export const useFilesStore = defineStore('files', () => {
 
     async function upload(formData: FormData): Promise<[string, string][]> {
         const res = await api.uploadFiles(formData);
-        await invalidate();
+        invalidate();
         return res.data;
     }
 
     // A single file's listing entry, without the caller having to hold the whole list.
+    //
+    // Rendering one image should not cost 2,170 entries. When the persisted rows already describe
+    // HEAD, one row answers it; only a genuinely stale cache falls back to the full listing.
     async function entry(path: string): Promise<ListEntry2 | undefined> {
+        if (validatedCommitIdRef.value !== null) {
+            return entryMap.get(path);
+        }
+
+        const [head, cachedCommitId] = await Promise.all([
+            api.getHeadCommitId().catch(() => null),
+            readCacheCommitId(),
+        ]);
+        if (head !== null && cachedCommitId === head) {
+            const cached = await readEntry<ListEntry2>(path);
+            if (cached !== null) {
+                return cached;
+            }
+            // Absent from a cache that is current means the file does not exist, but fall
+            // through rather than assert it: a cache that failed to open reads the same way.
+        }
+
         const entries = await list();
         return entries.find((candidate) => candidate.path === path);
     }
