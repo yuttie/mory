@@ -357,13 +357,13 @@ import {
     mdiTagOutline,
 } from '@mdi/js';
 
-import { useTaskForestStore } from '@/stores/taskForest';
+import { useTasksStore } from '@/stores/tasks';
 
 import * as api from '@/api';
 import { useFilesStore } from '@/stores/files';
 import axios from 'axios';
 import type { Task } from '@/api';
-import { type Task as Taskv2, render as renderTaskv2 } from '@/task';
+import { type Task as Taskv2 } from '@/task';
 import draggable from 'vuedraggable';
 import dayjs from 'dayjs';
 import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
@@ -372,7 +372,7 @@ import YAML from 'yaml';
 dayjs.extend(isSameOrAfter);
 
 // Composables
-const store = useTaskForestStore();
+const store = useTasksStore();
 const files = useFilesStore();
 
 // Emits
@@ -576,10 +576,8 @@ async function onTaskMigrate(t: Task) {
         scheduled_dates: [t.schedule],
         note: t.note,
     };
-    const markdown = renderTaskv2(task);
     const path = `.tasks/${task.uuid}.md`;
-    files.write(path, markdown);
-    store.refresh();
+    await store.save(task, path);
 }
 
 function onDraggableInput(date: string, newTasks: Task[]) {
