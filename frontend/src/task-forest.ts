@@ -104,12 +104,21 @@ export function taskUuidOf(path: string): UUID | null {
 }
 
 // Newest first, as `sort_forest` served it.
+//
+// By instant rather than by string: `time` is RFC3339 carrying the committer's UTC offset, and
+// the backend compares `DateTime` values, so `09:00+09:00` precedes `01:00Z` however the two
+// sort as text. An unparseable time sorts oldest rather than poisoning the comparison.
 export function compareByMtimeDesc(a: TaskNode, b: TaskNode): number {
-    if (a.mtime === b.mtime) {
-        // Ties would otherwise reorder between renders, which makes the tree jump.
-        return a.uuid.localeCompare(b.uuid);
+    const at = Date.parse(a.mtime);
+    const bt = Date.parse(b.mtime);
+    if (Number.isNaN(at) !== Number.isNaN(bt)) {
+        return Number.isNaN(at) ? 1 : -1;
     }
-    return a.mtime < b.mtime ? 1 : -1;
+    if (!Number.isNaN(at) && at !== bt) {
+        return bt - at;
+    }
+    // Ties would otherwise reorder between renders, which makes the tree jump.
+    return a.uuid.localeCompare(b.uuid);
 }
 
 export const taskPolicy: PathForestPolicy<TaskNode> = {
