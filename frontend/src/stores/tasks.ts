@@ -37,8 +37,13 @@ export function isTagGroupId(id: string): boolean {
     return id.startsWith(TAG_GROUP_PREFIX);
 }
 
-function tagGroupId(tag: string): string {
+export function tagGroupId(tag: string): string {
     return TAG_GROUP_PREFIX + tag;
+}
+
+// The tag a group node stands for. Only meaningful for an id `isTagGroupId` accepts.
+export function tagNameOf(id: string): string {
+    return id.slice(TAG_GROUP_PREFIX.length);
 }
 
 function firstTagOf(node: TaskNode): string {

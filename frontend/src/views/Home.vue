@@ -326,9 +326,9 @@ import type { ListEntry2 } from '@/api';
 import { useFilesStore } from '@/stores/files';
 import { by } from '@/utils';
 import dayjs from 'dayjs';
-import { useTaggedTaskForestStore, type TreeNodeRecord } from '@/stores/taggedTaskForest';
+import { useTasksStore } from '@/stores/tasks';
+import { type TaskNode } from '@/task-forest';
 import type { Task } from '@/task';
-import { render } from '@/task';
 
 import Color from 'color';
 import { formatDistanceToNow, parseISO } from 'date-fns';
@@ -365,7 +365,7 @@ const emit = defineEmits<{
 }>();
 
 // Stores
-const taskStore = useTaggedTaskForestStore();
+const taskStore = useTasksStore();
 const router = useRouter();
 const files = useFilesStore();
 
@@ -614,7 +614,7 @@ function parseDue(input: string): dayjs.Dayjs {
 const upcomingTasks = computed(() => {
     if (!taskStore.allTasks || taskStore.allTasks.length === 0) return [];
 
-    const tasks: TreeNodeRecord[] = [];
+    const tasks: TaskNode[] = [];
     const now = dayjs();
 
     // Collect tasks with deadlines, excluding done/canceled tasks
@@ -771,8 +771,7 @@ async function createQuickTask() {
             note: '',
         };
 
-        const markdown = render(newTask);
-        await files.write(taskPath, markdown);
+        await taskStore.save(newTask, taskPath);
 
         successText.value = `Task "${newTask.title}" created successfully!`;
         successMessage.value = true;
@@ -788,15 +787,13 @@ async function createQuickTask() {
             taskNameField.value.focus();
         }
 
-        // Refresh the task store to show the new task
-        await taskStore.refresh();
     } catch (_err) {
         errorText.value = 'Failed to create task';
         error.value = true;
     }
 }
 
-function navigateToTask(task: TreeNodeRecord) {
+function navigateToTask(task: TaskNode) {
     // Navigate to the TasksNext view with the selected task
     router.push({
         name: 'TasksNextWithParams',

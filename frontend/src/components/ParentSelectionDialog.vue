@@ -68,14 +68,15 @@ import { ref, computed, watch } from 'vue';
 import { mdiFolder, mdiCheck } from '@mdi/js';
 
 import TaskTree from './TaskTree.vue';
-import type { UUID, ApiTreeNode } from '@/api/task';
+import type { UUID } from '@/api';
+import type { TaskTreeItem } from '@/task-forest';
 
 // Props
 const props = defineProps<{
     modelValue: boolean;
     taskUuid: UUID | null;
     taskTitle?: string;
-    items: ApiTreeNode[];
+    items: TaskTreeItem[];
 }>();
 
 // Emits
@@ -89,18 +90,18 @@ const selectedParent = ref<UUID | null>(null);
 const openNodes = ref<UUID[]>([]);
 
 // Computed properties
-const filteredItems = computed<ApiTreeNode[]>(() => {
+const filteredItems = computed<TaskTreeItem[]>(() => {
     if (!props.taskUuid) return props.items;
     
     // Filter out the task being moved (descendants are automatically excluded)
-    function filterNode(node: ApiTreeNode): ApiTreeNode | null {
+    function filterNode(node: TaskTreeItem): TaskTreeItem | null {
         if (node.uuid === props.taskUuid) {
             return null; // Exclude the task being moved
         }
 
         const filteredChildren = node.children
             ?.map(filterNode)
-            .filter((child): child is ApiTreeNode => child !== null) || [];
+            .filter((child): child is TaskTreeItem => child !== null) || [];
 
         return {
             ...node,
@@ -111,7 +112,7 @@ const filteredItems = computed<ApiTreeNode[]>(() => {
     // Apply circular reference filtering to all items
     return props.items
         .map(filterNode)
-        .filter((item): item is ApiTreeNode => item !== null);
+        .filter((item): item is TaskTreeItem => item !== null);
 });
 
 

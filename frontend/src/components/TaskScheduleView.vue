@@ -25,13 +25,13 @@
 
 <script lang="ts" setup>
 import { computed } from 'vue';
-import { type TreeNodeRecord } from '@/stores/taskForest';
+import { type TaskNode } from '@/task-forest';
 import { type UUID } from '@/task';
 import dayjs from 'dayjs';
 
 // Props
 const props = defineProps<{
-    scheduled: Record<string, TreeNodeRecord[]>;
+    scheduled: Record<string, TaskNode[]>;
 }>();
 
 // Emits

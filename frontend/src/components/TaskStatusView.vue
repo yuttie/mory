@@ -81,19 +81,19 @@
 </template>
 
 <script lang="ts" setup>
-import { type TreeNodeRecord } from '@/stores/taskForest';
+import { type TaskNode } from '@/task-forest';
 import { type UUID } from '@/task';
 
 // Props
 const props = defineProps<{
     taskStatuses: {
-        todo: TreeNodeRecord[];
-        inProgress: TreeNodeRecord[];
-        waiting: TreeNodeRecord[];
-        blocked: TreeNodeRecord[];
-        onHold: TreeNodeRecord[];
-        done: TreeNodeRecord[];
-        canceled: TreeNodeRecord[];
+        todo: TaskNode[];
+        inProgress: TaskNode[];
+        waiting: TaskNode[];
+        blocked: TaskNode[];
+        onHold: TaskNode[];
+        done: TaskNode[];
+        canceled: TaskNode[];
     };
 }>();
 

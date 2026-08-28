@@ -1,15 +1,11 @@
 <template>
-    <v-treeview
+    <EntryTree
         v-bind:items="items"
-        v-on:update:opened="$emit('update:open', $event)"
-        v-on:update:activated="$emit('update:active', $event[0])"
-        v-bind:opened="open"
-        v-bind:activated="(active ?? '') !== '' ? [active] : []"
+        v-bind:open="open"
+        v-bind:active="active"
         item-value="uuid"
-        item-title="title"
-        activatable
-        density="compact"
-        class="task-tree"
+        v-on:update:open="$emit('update:open', $event)"
+        v-on:update:active="$emit('update:active', $event)"
     >
         <template v-slot:prepend="{ item }">
             <v-icon v-if="item.metadata?.tag_group" size="small">
@@ -24,7 +20,7 @@
         </template>
         <template v-slot:title="{ item }">
             <span
-                v-bind:title="item.title"
+                v-bind:title="item.title ?? undefined"
                 v-bind:style="{ textDecorationLine: item.metadata?.task?.status?.kind === 'canceled' ? 'line-through' : 'none' }"
             >
                 {{ item.title }}
@@ -42,12 +38,10 @@
                 <v-icon size="small">{{ mdiPlus }}</v-icon>
             </v-btn>
         </template>
-    </v-treeview>
+    </EntryTree>
 </template>
 
 <script lang="ts" setup>
-import { onMounted, onUnmounted } from 'vue';
-
 import {
     mdiCheckboxBlankOffOutline,
     mdiCheckboxBlankOutline,
@@ -59,9 +53,11 @@ import {
     mdiTag,
 } from '@mdi/js';
 
-import type { UUID, ApiTreeNode } from '@/api/task';
+import EntryTree from '@/components/EntryTree.vue';
+import type { UUID } from '@/api';
+import type { TaskTreeItem } from '@/task-forest';
 
-function getTaskColor(item: any): string | undefined {
+function getTaskColor(item: TaskTreeItem): string | undefined {
     switch (item.metadata?.task?.status?.kind) {
         case "todo":
             return "blue-grey";
@@ -81,39 +77,16 @@ function getTaskColor(item: any): string | undefined {
 }
 
 // Props
-const props = defineProps<{
-    items: ApiTreeNode[];
+defineProps<{
+    items: TaskTreeItem[];
     open: UUID[];
     active?: UUID;
 }>();
 
 // Emits
-const emit = defineEmits<{
+defineEmits<{
     (e: 'update:open', value: UUID[]): void;
     (e: 'update:active', value: UUID | undefined): void;
     (e: 'add-child-task', value: UUID): void;
 }>();
-
-// Reactive states
-
-// Computed properties
-
-// Lifecycle hooks
-onMounted(() => {
-});
-
-onUnmounted(() => {
-});
-
-// Methods
 </script>
-
-<style scoped lang="scss">
-.task-tree {
-    :deep(.v-treeview-item) {
-        &:not(:hover) .v-list-item__append {
-            display: none;
-        }
-    }
-}
-</style>
