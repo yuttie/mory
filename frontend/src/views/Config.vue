@@ -106,6 +106,53 @@
                     </v-select>
                 </v-card-text>
             </v-card>
+            <v-card class="mt-6">
+                <v-card-text>
+                    <v-card-title>Navigation Drawer</v-card-title>
+                    <p class="text-body-2 text-medium-emphasis mb-4">
+                        The note tree shows the most recently changed notes and directories.
+                        Pressing &ldquo;Show older&rdquo; reveals the next batch.
+                    </p>
+                    <v-slider
+                        v-model="noteTreeInitialRows"
+                        label="Initial Rows"
+                        min="1"
+                        max="200"
+                        step="1"
+                        thumb-label
+                    >
+                        <template v-slot:append>
+                            <v-text-field
+                                v-model="noteTreeInitialRows"
+                                type="text"
+                                class="mt-0 pt-0"
+                                style="width: 6em"
+                                suffix="rows"
+                                readonly
+                            ></v-text-field>
+                        </template>
+                    </v-slider>
+                    <v-slider
+                        v-model="noteTreeRowIncrement"
+                        label="Rows per Press"
+                        min="1"
+                        max="200"
+                        step="1"
+                        thumb-label
+                    >
+                        <template v-slot:append>
+                            <v-text-field
+                                v-model="noteTreeRowIncrement"
+                                type="text"
+                                class="mt-0 pt-0"
+                                style="width: 6em"
+                                suffix="rows"
+                                readonly
+                            ></v-text-field>
+                        </template>
+                    </v-slider>
+                </v-card-text>
+            </v-card>
             <AiActionsSettings></AiActionsSettings>
         </v-sheet>
     </div>
@@ -116,7 +163,12 @@ import { ref, watch, onMounted } from 'vue';
 
 import AiActionsSettings from '@/components/AiActionsSettings.vue';
 import { useFilesStore } from '@/stores/files';
-import { loadConfigValue, saveConfigValue } from '@/config';
+import {
+    NOTE_TREE_INITIAL_ROWS,
+    NOTE_TREE_ROW_INCREMENT,
+    loadConfigValue,
+    saveConfigValue,
+} from '@/config';
 import YAML from 'yaml';
 
 // Composables
@@ -387,6 +439,8 @@ const currentLockScroll = ref(loadConfigValue('lock-scroll', false));
 const currentEditorFontFamily = ref(loadConfigValue('editor-font-family', 'Menlo, monospace'));
 const currentEditorFontSize = ref(loadConfigValue('editor-font-size', 10));
 const editorIndentSize = ref(loadConfigValue('editor-indent-size', 2));
+const noteTreeInitialRows = ref(loadConfigValue('note-tree-initial-rows', NOTE_TREE_INITIAL_ROWS));
+const noteTreeRowIncrement = ref(loadConfigValue('note-tree-row-increment', NOTE_TREE_ROW_INCREMENT));
 const currentEditorTheme = ref(loadConfigValue('editor-theme', 'default'));
 const currentEditorKeybinding = ref(loadConfigValue('editor-keybinding', 'default'));
 const editorEnableEmacsStyleBindings = ref(loadConfigValue('editor-enable-emacs-style-bindings', false));
@@ -411,6 +465,10 @@ async function loadDefault() {
     editorEnableEmacsStyleBindings.value = config.editorEnableEmacsStyleBindings;
     editorVimInsertUnmapCtCd.value = config.editorVimInsertUnmapCtCd;
     currentHighlightjsTheme.value = config.highlightjsTheme;
+    // Guarded: a default_config.yaml written before these keys existed would set undefined,
+    // which saveConfigValue stores as the string "undefined" and loadConfigValue then throws on.
+    noteTreeInitialRows.value = config.noteTreeInitialRows ?? NOTE_TREE_INITIAL_ROWS;
+    noteTreeRowIncrement.value = config.noteTreeRowIncrement ?? NOTE_TREE_ROW_INCREMENT;
 }
 
 function saveAsDefault() {
@@ -425,6 +483,8 @@ function saveAsDefault() {
         editorEnableEmacsStyleBindings: editorEnableEmacsStyleBindings.value,
         editorVimInsertUnmapCtCd: editorVimInsertUnmapCtCd.value,
         highlightjsTheme: currentHighlightjsTheme.value,
+        noteTreeInitialRows: noteTreeInitialRows.value,
+        noteTreeRowIncrement: noteTreeRowIncrement.value,
     };
     files.write('.mory/default_config.yaml', YAML.stringify(config));
 }
@@ -468,6 +528,14 @@ watch(editorVimInsertUnmapCtCd, (newEditorVimInsertUnmapCtCd: string) => {
 
 watch(currentHighlightjsTheme, (newHighlightjsTheme: string) => {
     saveConfigValue('highlightjs-theme', newHighlightjsTheme);
+});
+
+watch(noteTreeInitialRows, (newNoteTreeInitialRows: number) => {
+    saveConfigValue('note-tree-initial-rows', newNoteTreeInitialRows);
+});
+
+watch(noteTreeRowIncrement, (newNoteTreeRowIncrement: number) => {
+    saveConfigValue('note-tree-row-increment', newNoteTreeRowIncrement);
 });
 </script>
 
