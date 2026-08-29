@@ -91,7 +91,7 @@
             <v-divider></v-divider>
 
             <v-list>
-                <TagTree />
+                <NoteTree />
             </v-list>
         </v-navigation-drawer>
 
@@ -133,7 +133,7 @@
             <v-divider></v-divider>
 
             <v-list>
-                <TagTree />
+                <NoteTree />
             </v-list>
         </v-navigation-drawer>
 
