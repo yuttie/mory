@@ -108,6 +108,23 @@ function closesCycle<N extends ForestNode>(
     return false;
 }
 
+// Re-sort every sibling list, the roots included, in place.
+//
+// `buildForest` takes the comparator up front, which is enough when the order depends only on a
+// node's own fields. It is not enough when the order depends on the shape of the tree -- a
+// directory ordered by the newest file anywhere beneath it cannot be compared until its children
+// are linked -- so such a forest is built unsorted, annotated, and then sorted here.
+export function sortForest<N extends ForestNode>(
+    forest: Forest<N>,
+    sort: (a: N, b: N) => number,
+): void {
+    const compare = (a: string, b: string) => sort(forest.byId.get(a) as N, forest.byId.get(b) as N);
+    forest.roots.sort(compare);
+    for (const siblings of forest.childrenOf.values()) {
+        siblings.sort(compare);
+    }
+}
+
 export function childNodes<N extends ForestNode>(forest: Forest<N>, id: string): N[] {
     const ids = forest.childrenOf.get(id);
     if (ids === undefined) {
