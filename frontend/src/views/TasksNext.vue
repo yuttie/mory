@@ -23,7 +23,7 @@
                             <v-list-subheader>Statistics</v-list-subheader>
                             <v-list-item>
                                 <v-list-item-title v-for="[kind, label] of Object.entries(STATUS_LABEL)" v-bind:key="kind">
-                                    {{ label }}: {{ store.allTasks.filter((t) => [kind].includes(t.metadata?.task?.status?.kind)).length }}
+                                    {{ label }}: {{ store.allTasks.filter((t) => t.metadata?.task?.status?.kind === kind).length }}
                                 </v-list-item-title>
                             </v-list-item>
                         </v-list>
@@ -139,7 +139,7 @@
                                     <v-list-subheader>Descendants statistics</v-list-subheader>
                                     <v-list-item>
                                         <v-list-item-title v-for="[kind, label] of Object.entries(STATUS_LABEL)" v-bind:key="kind">
-                                            {{ label }}: {{ selectedNodeDescendants.filter((t) => [kind].includes(t.metadata?.task?.status?.kind)).length }}
+                                            {{ label }}: {{ selectedNodeDescendants.filter((t) => t.metadata?.task?.status?.kind === kind).length }}
                                         </v-list-item-title>
                                     </v-list-item>
                                 </v-list>
@@ -195,7 +195,7 @@
             v-model="showParentDialog"
             v-bind:task-uuid="selectedNode?.uuid || null"
             v-bind:task-title="selectedNode?.title || 'Untitled'"
-            v-bind:items="store.forest"
+            v-bind:items="store.tree"
             v-on:move="onMoveTask"
         />
     </div>
@@ -214,17 +214,15 @@ import {
     mdiTrafficLightOutline,
 } from '@mdi/js';
 
-import { type TreeNodeRecord } from '@/stores/taskForest';
-import { useTaggedTaskForestStore } from '@/stores/taggedTaskForest';
+import { type TaskNode, type TaskTreeItem } from '@/task-forest';
+import { isTagGroupId, tagGroupId, tagNameOf, useTasksStore } from '@/stores/tasks';
 
-import { useFilesStore } from '@/stores/files';
-import { type UUID, type StatusKind, type Task, STATUS_LABEL, render } from '@/task';
+import { type UUID, type StatusKind, type Task, STATUS_LABEL } from '@/task';
 import axios from 'axios';
 import dayjs from 'dayjs';
 
 // Stores
-const store = useTaggedTaskForestStore();
-const files = useFilesStore();
+const store = useTasksStore();
 
 // Router
 const router = useRouter();
@@ -245,7 +243,7 @@ const hideCompletedInItemView = useLocalStorage('hide-completed-in-item-view', f
 const showParentDialog = ref<boolean>(false);
 
 // URL-derived state (single source of truth)
-const selectedNode = computed<TreeNodeRecord | undefined>(() => {
+const selectedNode = computed<TaskNode | undefined>(() => {
     if (route.name === 'TasksNextWithParams' && route.params.selectedNodeId) {
         const nodeId = route.params.selectedNodeId === '_' ? undefined : route.params.selectedNodeId as string;
         return nodeId ? store.node(nodeId) : undefined;
@@ -273,12 +271,12 @@ const activeNodeId = computed<string | undefined>(() => {
 });
 
 const isTagGroupSelected = computed<boolean>(() => {
-    return activeNodeId.value?.startsWith('tag-group-') ?? false;
+    return activeNodeId.value !== undefined && isTagGroupId(activeNodeId.value);
 });
 
 const selectedTagName = computed<string | null>(() => {
     if (activeNodeId.value && isTagGroupSelected.value) {
-        return selectedNode.value.uuid.replace('tag-group-', '');
+        return tagNameOf(selectedNode.value.uuid);
     }
     return null;
 });
@@ -293,7 +291,7 @@ function getAncestorTitles(taskUuid: string): string[] {
         
         while (currentParentId) {
             // Skip tag group nodes (virtual nodes used for UI organization)
-            if (!currentParentId.startsWith('tag-group-')) {
+            if (!isTagGroupId(currentParentId)) {
                 const parentNode = store.node(currentParentId);
                 if (parentNode && parentNode.title) {
                     ancestors.unshift(parentNode.title); // Add to beginning to maintain hierarchy order
@@ -312,7 +310,7 @@ function getAncestorTitles(taskUuid: string): string[] {
 const selectedNodeParentTitle = computed<string | undefined>(() => {
     if (newTaskPath.value && selectedNode.value && !isTagGroupSelected.value) {
         // For new tasks, the selected node is the parent (unless it's a tag group)
-        if (selectedNode.value.uuid.startsWith('tag-group-')) {
+        if (isTagGroupId(selectedNode.value.uuid)) {
             return undefined; // Tag groups don't have meaningful titles for new task context
         } else {
             return selectedNode.value.title;
@@ -320,7 +318,7 @@ const selectedNodeParentTitle = computed<string | undefined>(() => {
     } else if (selectedNode.value && !isTagGroupSelected.value && !newTaskPath.value) {
         // For existing tasks, get their immediate parent title
         const parentId = store.parentOf(selectedNode.value.uuid);
-        if (parentId && !parentId.startsWith('tag-group-')) {
+        if (parentId && !isTagGroupId(parentId)) {
             const parentNode = store.node(parentId);
             return parentNode?.title;
         }
@@ -333,7 +331,7 @@ const selectedNodeAncestorTitlesForTaskAssessment = computed<string[]>(() => {
     if (newTaskPath.value && selectedNode.value && !isTagGroupSelected.value) {
         // For new tasks, include the selected node as the parent in ancestor chain
         // But exclude the selected node itself if it's a tag group
-        if (selectedNode.value.uuid.startsWith('tag-group-')) {
+        if (isTagGroupId(selectedNode.value.uuid)) {
             return getAncestorTitles(selectedNode.value.uuid);
         } else {
             return [...getAncestorTitles(selectedNode.value.uuid), selectedNode.value.title];
@@ -346,7 +344,7 @@ const selectedNodeAncestorTitlesForTaskAssessment = computed<string[]>(() => {
 });
 
 // Utility function to sort tasks by due date/deadline
-function sortTasksByDueDate(tasks: TreeNodeRecord[]): TreeNodeRecord[] {
+function sortTasksByDueDate(tasks: TaskNode[]): TaskNode[] {
     return tasks.slice().sort((task1, task2) => {
         // First sort by completion status (incomplete tasks first)
         const isDone1 = task1.metadata?.task?.status?.kind === 'done' || task1.metadata?.task?.status?.kind === 'canceled';
@@ -409,13 +407,13 @@ function sortTasksByDueDate(tasks: TreeNodeRecord[]): TreeNodeRecord[] {
 
 const taskStatuses = computed(() => {
     const statuses = {
-        todo: [] as TreeNodeRecord[],
-        inProgress: [] as TreeNodeRecord[],
-        waiting: [] as TreeNodeRecord[],
-        blocked: [] as TreeNodeRecord[],
-        onHold: [] as TreeNodeRecord[],
-        done: [] as TreeNodeRecord[],
-        canceled: [] as TreeNodeRecord[],
+        todo: [] as TaskNode[],
+        inProgress: [] as TaskNode[],
+        waiting: [] as TaskNode[],
+        blocked: [] as TaskNode[],
+        onHold: [] as TaskNode[],
+        done: [] as TaskNode[],
+        canceled: [] as TaskNode[],
     };
 
     for (const task of selectedNodeDescendants.value) {
@@ -444,7 +442,7 @@ const taskStatuses = computed(() => {
 });
 
 // Helper function to check if entire subtree should be filtered
-function isEntireSubtreeCompleted(node: any): boolean {
+function isEntireSubtreeCompleted(node: TaskTreeItem): boolean {
     const status = node.metadata?.task?.status?.kind;
     const completed = status === 'done' || status === 'canceled';
     if (!completed) {
@@ -456,15 +454,15 @@ function isEntireSubtreeCompleted(node: any): boolean {
 }
 
 // Helper function to recursively filter tree nodes based on task status with subtree logic
-function filterTreeNodes(nodes: any[], hideCompleted: boolean): any[] {
+function filterTreeNodes(nodes: TaskTreeItem[], hideCompleted: boolean): TaskTreeItem[] {
     return nodes
         .map(node => {
             // Check if this is a tag group node (virtual parent)
-            if (node.uuid.startsWith('tag-group-')) {
+            if (isTagGroupId(node.uuid)) {
                 // For tag groups, filter children individually since they're virtual parents
                 let filteredChildren = node.children;
                 if (node.children && node.children.length > 0) {
-                    filteredChildren = node.children.filter(child => {
+                    filteredChildren = node.children.filter((child: TaskTreeItem) => {
                         const taskStatus = child.metadata?.task?.status?.kind;
                         const shouldFilterOut =
                             hideCompleted && (taskStatus === 'done' || taskStatus === 'canceled');
@@ -507,7 +505,7 @@ function filterTreeNodes(nodes: any[], hideCompleted: boolean): any[] {
 
 // Computed property for filtered forest with tags
 const filteredForestWithTags = computed(() => {
-    return filterTreeNodes(store.forestWithTags, hideCompletedInTreeView.value);
+    return filterTreeNodes(store.treeWithTagGroups, hideCompletedInTreeView.value);
 });
 
 // Computed property for task count that reflects current filtering
@@ -515,13 +513,13 @@ const filteredTasksCount = computed(() => {
     return store.allTasks.filter((t) => {
         const kind = t.metadata?.task?.status?.kind;
         // Always exclude done and canceled from the "tasks left" count, regardless of filter switches
-        if (['done', 'canceled'].includes(kind)) return false;
+        if (kind === 'done' || kind === 'canceled') return false;
         return true;
     }).length;
 });
 
 // Helper function to filter task list based on status
-function filterTasksByStatus(tasks: TreeNodeRecord[], hideCompleted: boolean): TreeNodeRecord[] {
+function filterTasksByStatus(tasks: TaskNode[], hideCompleted: boolean): TaskNode[] {
     return tasks.filter(task => {
         const kind: StatusKind = task.metadata?.task?.status?.kind ?? 'todo';
         if (hideCompleted && (kind === 'done' || kind === 'canceled')) return false;
@@ -529,11 +527,11 @@ function filterTasksByStatus(tasks: TreeNodeRecord[], hideCompleted: boolean): T
     });
 }
 
-const selectedNodeDescendants = computed<TreeNodeRecord[]>(() => {
+const selectedNodeDescendants = computed<TaskNode[]>(() => {
     let targetTasks;
     if (isTagGroupSelected.value && selectedTagName.value) {
         // Show tasks from the selected tag group
-        targetTasks = store.childrenOf(`tag-group-${selectedTagName.value}`);
+        targetTasks = store.childrenOf(tagGroupId(selectedTagName.value));
     }
     else {
         // Show tasks based on selected node (descendants or all tasks)
@@ -545,15 +543,15 @@ const selectedNodeDescendants = computed<TreeNodeRecord[]>(() => {
     return targetTasks;
 });
 
-const filteredSelectedNodeDescendants = computed<TreeNodeRecord[]>(() => {
+const filteredSelectedNodeDescendants = computed<TaskNode[]>(() => {
     return filterTasksByStatus(selectedNodeDescendants.value, hideCompletedInItemView.value);
 });
 
-const scheduled = computed<Record<string, TreeNodeRecord[]>>(() => {
+const scheduled = computed<Record<string, TaskNode[]>>(() => {
     // Keep today, tomorrow, or other dates that have some undone tasks
     const today = dayjs().format('YYYY-MM-DD');
     const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
-    const scheduled: Record<string, TreeNodeRecord[]> = {
+    const scheduled: Record<string, TaskNode[]> = {
         [today]: [],
         [tomorrow]: [],
     };
@@ -591,7 +589,8 @@ const knownContacts = computed<[string, number][]>(() => {
     // Collect contacts
     const contactCounts = new Map();
     for (const node of store.allTasks) {
-        const contact = node.metadata?.task?.status?.contact;
+        const status = node.metadata?.task?.status;
+        const contact = status?.kind === 'waiting' ? status.contact : undefined;
         if (contact && contact.trim() !== '') {
             contactCounts.set(contact, (contactCounts.get(contact) ?? 0) + 1);
         }
@@ -603,10 +602,10 @@ const knownContacts = computed<[string, number][]>(() => {
 // Eisenhower Matrix computed properties
 const eisenhowerQuadrants = computed(() => {
     const quadrants = {
-        doFirst: [] as TreeNodeRecord[],      // High importance, High urgency
-        schedule: [] as TreeNodeRecord[],     // High importance, Low urgency
-        delegate: [] as TreeNodeRecord[],     // Low importance, High urgency
-        eliminate: [] as TreeNodeRecord[],    // Low importance, Low urgency
+        doFirst: [] as TaskNode[],      // High importance, High urgency
+        schedule: [] as TaskNode[],     // High importance, Low urgency
+        delegate: [] as TaskNode[],     // Low importance, High urgency
+        eliminate: [] as TaskNode[],    // Low importance, Low urgency
     };
 
     for (const task of filteredSelectedNodeDescendants.value) {
@@ -678,13 +677,17 @@ watch(selectedNode, (node) => {
 // Lifecycle hooks
 onMounted(async () => {
     document.title = `Tasks | ${import.meta.env.VITE_APP_NAME}`;
-    window.addEventListener('focus', load);
-    await load();
+    window.addEventListener('focus', onWindowFocus);
+    await load(true);
 });
 
 onUnmounted(() => {
-    window.removeEventListener('focus', load);
+    window.removeEventListener('focus', onWindowFocus);
 });
+
+function onWindowFocus() {
+    load();
+}
 
 // Event handlers for UI interactions
 function onTabChange(newTab: string) {
@@ -697,7 +700,7 @@ function onViewModeChange(newViewMode: string) {
 
 // Methods
 function onTaskSelectionChangeInTree(id: UUID | undefined) {
-    const tab = (id && !id.startsWith('tag-group-')) ? 'selected' : 'descendants';
+    const tab = (id && !isTagGroupId(id)) ? 'selected' : 'descendants';
     navigateToState(id, tab, descendantsViewMode.value);
 }
 
@@ -726,7 +729,7 @@ function onAddChildTask(parentUuid: UUID) {
     newTaskPath.value = getNewTaskPathForParent(taskUuid, parentNode);
 }
 
-function getNewTaskPathForParent(taskUuid: string, parentNode: TreeNodeRecord): string {
+function getNewTaskPathForParent(taskUuid: string, parentNode: TaskNode): string {
     const idx = parentNode.path.lastIndexOf('/');
     const parentDir = parentNode.path.slice(0, idx) + '/' + parentNode.uuid;
     return parentDir + '/' + taskUuid + '.md';
@@ -767,55 +770,17 @@ watch(selectedNode, () => {
 });
 
 async function onSelectedTaskSave(task: Task) {
+    const isNew = newTaskPath.value !== null;
     const path = newTaskPath.value ?? selectedNode.value?.path;
     if (!path) {
         return;
     }
-    const node: TreeNodeRecord = {
-        uuid: task.uuid,
-        name: null,
-        path: path,
-        size: 0,
-        mime_type: 'text/markdown',
-        metadata: {
-            task: {
-                status: task.status,
-                progress: task.progress,
-                importance: task.importance,
-                urgency: task.urgency,
-                ...(task.start_at ? { start_at: task.start_at } : {}),
-                ...(task.due_by ? { due_by: task.due_by } : {}),
-                ...(task.deadline ? { deadline: task.deadline } : {}),
-                scheduled_dates: task.scheduled_dates,
-            },
-            tags: task.tags,
-        },
-        title: task.title,
-        mtime: '',
-    };
-    const markdown = render(task);
-    if (newTaskPath.value) {
-        // Create a new one
-        await files.write(newTaskPath.value, markdown);
-        // Update the store locally for immediate update
-        const i = newTaskPath.value.lastIndexOf('/');
-        const parentPath = newTaskPath.value.slice(0, i);
-        const j = parentPath.lastIndexOf('/');
-        const parentUuid = j === -1 ? null : parentPath.slice(j + 1);
-        store.addNodeLocal(parentUuid, node);
-        // Select the task and navigate to it
+    // The forest is derived from the file listing, so there is nothing to update by hand: saving
+    // waits until the write is visible in the listing, and the tree follows from that.
+    await store.save(task, path);
+    if (isNew) {
         newTaskPath.value = null;
         navigateToState(task.uuid, 'selected', descendantsViewMode.value);
-        // Refresh the store
-        await store.refresh();
-    }
-    else if (selectedNode.value) {
-        // Update the existing one
-        await files.write(selectedNode.value.path, markdown);
-        // Update the store locally for immediate update
-        store.replaceNodeLocal(node);
-        // Refresh the store
-        await store.refresh();
     }
     // Refresh task editor manually because its task-path prop retains the same value
     // (the ref may be momentarily null while the window transition remounts the editor)
@@ -828,16 +793,11 @@ async function onSelectedTaskDelete(path: string) {
     if (!uuid) {
         return;
     }
-    // Delete the task
-    await files.remove(path);
-    // Update the store locally for immediate update
-    store.deleteLeafLocal(uuid);
+    await store.remove(path);
     // Unselect by navigating to no selection
     if (activeNodeId.value === uuid) {
         navigateToState(undefined, 'descendants', descendantsViewMode.value);
     }
-    // Refresh the store
-    await store.refresh();
 }
 
 function onNewTaskCancel() {
@@ -852,7 +812,7 @@ async function onMoveTask(newParentUuid: UUID | null) {
     }
 
     try {
-        await store.moveNode(selectedNode.value.uuid, newParentUuid);
+        await store.move(selectedNode.value.uuid, newParentUuid);
         
         // Navigate to the moved task to keep it selected
         navigateToState(selectedNode.value.uuid, 'selected', descendantsViewMode.value);
@@ -868,10 +828,12 @@ function showChangeParentDialog() {
     }
 }
 
-async function load() {
+// `primed` is true only for the very first load, which reads the cached `.tasks/` rows before
+// asking the server, so the tree paints without waiting for the whole listing to sync.
+async function load(primed = false) {
     error.value = null;
     try {
-        await store.refresh();
+        await (primed ? store.init() : store.refresh());
     }
     catch (e) {
         if (axios.isAxiosError(e) && e.response?.status === 401) {

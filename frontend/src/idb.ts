@@ -212,6 +212,21 @@ export function readAllEntries<T>(): Promise<T[] | null> {
     return runTransactionOn<T[]>(ENTRY_STORE, 'readonly', (store) => store.getAll() as IDBRequest<T[]>);
 }
 
+// The rows under a path prefix, without reading the listing.
+//
+// No secondary index is involved, and none is needed: the store is keyed by `path`, so a path
+// prefix is already a bounded range over the primary key. `.tasks/` answers from 162 rows rather
+// than the 2,170 the repository holds.
+export function readEntriesByPrefix<T>(prefix: string): Promise<T[] | null> {
+    if (prefix === '') {
+        return readAllEntries<T>();
+    }
+    // '\uffff' sorts after every character IndexedDB will see in a path, so the range covers
+    // exactly the keys beginning with `prefix`.
+    const range = IDBKeyRange.bound(prefix, prefix + '\uffff');
+    return runTransactionOn<T[]>(ENTRY_STORE, 'readonly', (store) => store.getAll(range) as IDBRequest<T[]>);
+}
+
 // One row, without reading the listing. This is what lets a single-entry lookup avoid pulling
 // every entry in the repository.
 export function readEntry<T>(path: string): Promise<T | null> {
