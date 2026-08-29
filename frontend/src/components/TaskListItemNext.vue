@@ -81,7 +81,7 @@ import {
     mdiNoteTextOutline,
 } from '@mdi/js';
 
-import type { TreeNodeRecord } from '@/stores/taskForest';
+import type { TaskNode } from '@/task-forest';
 
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -103,7 +103,7 @@ dayjs.extend(relativeTime, {
 
 // Props
 const props = defineProps<{
-    value: TreeNodeRecord;
+    value: TaskNode;
 }>();
 
 // Emits
@@ -131,7 +131,7 @@ const startAtText = computed<string>(() => {
 const startAtStyle = computed<Record<string, string>>(() => {
     if (!done.value && startAt.value) {
         const now = dayjs();
-        const daysLeft = dayjs(props.value.metadata.task.start_at).diff(now, 'day');
+        const daysLeft = dayjs(startAt.value).diff(now, 'day');
         const g = daysLeft < 3 ? 127 : 0;
         const b = daysLeft < 3 ? 255 : 0;
         const color = `rgb(0, ${g}, ${b})`;
@@ -155,7 +155,7 @@ const dueByText = computed<string>(() => {
 const dueByStyle = computed<Record<string, string>>(() => {
     if (!done.value && dueBy.value) {
         const now = dayjs();
-        const daysLeft = dayjs(props.value.metadata.task.due_by).diff(now, 'day');
+        const daysLeft = dayjs(dueBy.value).diff(now, 'day');
         const r = daysLeft < 3 ? 255 : 0;
         const g = daysLeft < 3 ? 127 : 0;
         const color = `rgb(${r}, ${g}, 0)`;
@@ -179,7 +179,7 @@ const deadlineText = computed<string>(() => {
 const deadlineStyle = computed<Record<string, string>>(() => {
     if (!done.value && deadline.value) {
         const now = dayjs();
-        const daysLeft = dayjs(props.value.metadata.task.deadline).diff(now, 'day');
+        const daysLeft = dayjs(deadline.value).diff(now, 'day');
         const r = daysLeft < 7 ? 255 : 0;
         const color = `rgb(${r}, 0, 0)`;
         return {

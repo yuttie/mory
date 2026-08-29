@@ -37,7 +37,7 @@ export interface SearchHit {
 // How long to wait before asking again after the backend served a listing older than HEAD,
 // which it does while a cold rebuild is still running. Without this, a component calling
 // `list()` in a loop would spin against a warming cache.
-const LAGGING_RETRY_MS = 1000;
+export const LAGGING_RETRY_MS = 1000;
 
 export const useFilesStore = defineStore('files', () => {
     // A `shallowRef` rather than a `ref`: the list can hold thousands of entries, and deep

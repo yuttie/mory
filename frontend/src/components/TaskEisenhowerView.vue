@@ -60,16 +60,16 @@
 </template>
 
 <script lang="ts" setup>
-import { type TreeNodeRecord } from '@/stores/taskForest';
+import { type TaskNode } from '@/task-forest';
 import { type UUID } from '@/task';
 
 // Props
 const props = defineProps<{
     eisenhowerQuadrants: {
-        doFirst: TreeNodeRecord[];
-        schedule: TreeNodeRecord[];
-        delegate: TreeNodeRecord[];
-        eliminate: TreeNodeRecord[];
+        doFirst: TaskNode[];
+        schedule: TaskNode[];
+        delegate: TaskNode[];
+        eliminate: TaskNode[];
     };
 }>();
 
