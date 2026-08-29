@@ -8,6 +8,7 @@ import {
     flatten,
     groupRoots,
     nodesOf,
+    sortForest,
     subtree,
     toNested,
     toNestedForest,
@@ -174,5 +175,32 @@ describe('groupRoots', () => {
             (n) => [n.id],
         );
         expect(grouped).toEqual([['b', 'a']]);
+    });
+});
+
+describe('sortForest', () => {
+    it('re-sorts every sibling list, the roots included', () => {
+        const forest = buildForest([node('a', null), node('z', null), node('b', 'a'), node('c', 'a')]);
+        sortForest(forest, byIdDesc);
+        expect(forest.roots).toEqual(['z', 'a']);
+        expect(forest.childrenOf.get('a')).toEqual(['c', 'b']);
+    });
+
+    // The reason it exists: an order that cannot be known until the tree is linked, such as a
+    // parent ranked by the newest of its descendants.
+    it('can order on a value derived from the shape of the tree', () => {
+        const forest = buildForest([
+            { id: 'quiet', parent: null, label: '1' },
+            { id: 'busy', parent: null, label: '1' },
+            { id: 'recent', parent: 'busy', label: '9' },
+        ]);
+        for (const id of [...flatten(forest)].reverse().map((n) => n.id)) {
+            const self = forest.byId.get(id) as Node;
+            for (const child of childNodes(forest, id)) {
+                if (child.label > self.label) { self.label = child.label; }
+            }
+        }
+        sortForest(forest, (a, b) => b.label.localeCompare(a.label));
+        expect(forest.roots).toEqual(['busy', 'quiet']);
     });
 });

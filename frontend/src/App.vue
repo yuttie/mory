@@ -91,26 +91,7 @@
             <v-divider></v-divider>
 
             <v-list>
-                <v-treeview
-                    v-model:activated="noteTreeActive"
-                    v-model:opened="noteTreeOpen"
-                    v-bind:items="noteTreeRoot"
-                    v-bind:load-children="populateTagChildren"
-                    item-title="name"
-                    item-value="id"
-                    activatable
-                    open-on-click
-                    density="compact"
-                >
-                    <template v-slot:prepend="{ item, isOpen }">
-                        <v-icon v-if="item.children" size="small">
-                            {{ isOpen ? mdiFolderOpen : mdiFolder }}
-                        </v-icon>
-                        <v-icon v-else size="small">
-                            {{ mdiFileDocumentOutline }}
-                        </v-icon>
-                    </template>
-                </v-treeview>
+                <NoteTree />
             </v-list>
         </v-navigation-drawer>
 
@@ -152,26 +133,7 @@
             <v-divider></v-divider>
 
             <v-list>
-                <v-treeview
-                    v-model:activated="noteTreeActive"
-                    v-model:opened="noteTreeOpen"
-                    v-bind:items="noteTreeRoot"
-                    v-bind:load-children="populateTagChildren"
-                    item-title="name"
-                    item-value="id"
-                    activatable
-                    open-on-click
-                    density="compact"
-                >
-                    <template v-slot:prepend="{ item, isOpen }">
-                        <v-icon v-if="item.children" size="small">
-                            {{ isOpen ? mdiFolderOpen : mdiFolder }}
-                        </v-icon>
-                        <v-icon v-else size="small">
-                            {{ mdiFileDocumentOutline }}
-                        </v-icon>
-                    </template>
-                </v-treeview>
+                <NoteTree />
             </v-list>
         </v-navigation-drawer>
 
@@ -407,8 +369,6 @@ import {
     mdiFileDocumentMultipleOutline,
     mdiFileMultipleOutline,
     mdiFileOutline,
-    mdiFolder,
-    mdiFolderOpen,
     mdiHelp,
     mdiHomeOutline,
     mdiInformationOutline,
@@ -427,13 +387,6 @@ import type { Claim, ListEntry2, UploadEntry } from '@/api';
 import { useFilesStore } from '@/stores/files';
 import { jwtDecode } from 'jwt-decode';
 
-interface TreeNode {
-    name: string;
-    id: string;
-    context: string[];
-    children: TreeNode[];
-}
-
 // Composables
 const appStore = useAppStore();
 const fileStore = useFilesStore();
@@ -447,9 +400,6 @@ const loginPassword = ref("");
 const templates = ref([] as string[]);
 const uploadList = ref([] as UploadEntry[]);
 const uploadMenuIsVisible = ref(false);
-const noteTree = ref([] as TreeNode[]);
-const noteTreeOpen = ref([]);
-const noteTreeActive = ref([]);
 const errors = ref([]);
 
 // Template Refs
@@ -537,17 +487,6 @@ const uploadListStatus = computed(() => {
     else {
         return ['unknown', -1];
     }
-});
-
-const noteTreeRoot = computed(() => {
-    return [
-        {
-            name: 'Tags',
-            id: '',
-            context: [],
-            children: noteTree.value,
-        },
-    ];
 });
 
 // Lifecycle hooks
@@ -805,35 +744,6 @@ function uploadFiles(files: File[]) {
 
 function copyToClipboard(text: string) {
     navigator.clipboard.writeText(text);
-}
-
-async function populateTagChildren(item: TreeNode) {
-    const entries = await fileStore.list();
-
-    const tags: Map<string, number> = new Map();
-    for (const entry of entries) {
-        const entryTags = entry.metadata?.tags;
-        if (!entryTags) {
-            continue;
-        }
-        if (item.context.every((t) => entryTags.includes(t))) {
-            for (const tag of entryTags) {
-                tags.set(tag, (tags.get(tag) || 0) + 1);
-            }
-        }
-    }
-    for (const tag of item.context) {
-        tags.delete(tag);
-    }
-    for (const tag of [...tags.entries()].sort((a, b) => b[1] - a[1]).map((x) => x[0])) {
-        const context = item.context.concat([tag]);
-        item.children.push({
-            name: tag,
-            id: context.join('/'),
-            context: context,
-            children: [],
-        });
-    }
 }
 
 // Watchers

@@ -6,6 +6,7 @@
         v-bind:opened="open"
         v-bind:activated="(active ?? '') !== '' ? [active] : []"
         v-bind:item-value="itemValue"
+        v-bind:open-on-click="openOnClick"
         item-title="title"
         activatable
         density="compact"
@@ -38,6 +39,8 @@ defineProps<{
     active?: string;
     // The item property identifying a row: the UUID for tasks, the path for notes.
     itemValue: string;
+    // Whether clicking anywhere on a branch row toggles it, rather than only its chevron.
+    openOnClick?: boolean;
 }>();
 
 // Emits
