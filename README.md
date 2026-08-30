@@ -14,6 +14,13 @@ built on two key ideas:
 - **Markdown-native format** — everything is stored as plain Markdown files,
   ensuring your data stays portable, human-readable, and future-proof.
 
+External calendars can be subscribed to by their iCal address, so the calendar
+shows the whole day rather than only what mory itself owns. Imported events are
+read-only and never written to the repository — they are a live view of someone
+else's calendar. Any one of them can be adopted with a single button, which
+writes an ordinary Markdown note for it; from then on the event is yours to
+edit, and the read-only original steps aside.
+
 mory is a **personal tool for private use only**. It is intentionally designed
 without multi-user support or collaboration features. This single-user focus
 helps keep the app **simple** and ensures your data remains **private and under

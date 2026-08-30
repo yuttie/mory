@@ -7,7 +7,8 @@ serving notes as files in a Git repository, and a Vue 3 / Vuetify frontend (`fro
 
 Layout of the tracked sources:
 
-- `backend/src/main.rs` — the whole server: routes, handlers, the `v2` module, and `models`.
+- `backend/src/main.rs` — the server: routes, handlers, the `v2` module, and `models`.
+- `backend/src/ical.rs` — parsing subscribed iCal feeds and expanding their recurrences.
 - `backend/src/tests.rs` — in-crate tests, with Git repository fixtures.
 - `frontend/src/` — `views/` (routed screens), `components/`, `stores/` (Pinia), `api.ts`
   (backend client), `idb.ts` (IndexedDB cache), `*.spec.ts` (tests next to their subject).
@@ -88,3 +89,37 @@ These follow from the philosophy above; keep them intact.
 - The frontend files store (`frontend/src/stores/files.ts`) is the single entry point for file
   operations. Every consumer reads the one shared listing from it; nothing calls the entries API
   or IndexedDB directly.
+- External calendars are subscribed in `.mory/calendars.yaml` and served by
+  `GET /v2/imported-events`. Their events are read-only and never stored: they are a live view of
+  someone else's calendar, so the repository is deliberately not their home. Converting one writes
+  an ordinary note under `.events/`, which then shadows the imported original by `ical.uid` — or by
+  `uid` and `recurrence_id` together, when the note claims a single occurrence.
+
+## The `events:` frontmatter
+
+An event is a base occurrence (`start`), a list of occurrences (`instances`, or its older spelling
+`times`), or a rule (`repeat`) with adjustments to what it generates — and may be more than one of
+those at once. Alongside `end`, `finished`, `color` and `note`:
+
+- `repeat` — `freq` (`daily`/`weekly`/`monthly`/`yearly`), `interval`, `byday`, `bymonthday`,
+  `bymonth`, `wkst`, `tz`, and at most one of `until` or `count`.
+- `exclusions` — occurrences to remove. `overrides` — entries carrying `at` plus the changed keys.
+  `instances` — occurrences with their own `start`.
+- `location`, `url`, `name` (overrides the map key for one occurrence), and `ical` provenance.
+
+Three details are easy to get wrong:
+
+- **Weekdays are three letters** (`wed`), not iCal's two (`WE`), and may carry an ordinal:
+  `3wed` is the third Wednesday, `-1fri` the last Friday. Ordinals need `freq: monthly` or
+  `yearly`. This is what separates "the third Wednesday of each month" from "every three weeks on
+  Wednesday" (`freq: weekly, interval: 3`).
+- **Datetimes carry their offset**, as a task's `completed_at` does, and dates are bare. The one
+  exception is `repeat.tz`, an IANA zone name: a zone maps a date to an offset, so expanding a rule
+  across a daylight-saving change needs the name and no offset can stand in for it.
+- **Adjustments match by instant, not by string.** `2020-01-30 10:00:00-08:00` and
+  `2020-01-30 10:00` are the same moment spelled two ways.
+
+`<v-calendar>` cannot parse an offset — its regex has no offset group and it *throws* on a miss — so
+`frontend/src/events.ts` converts every datetime to naive local wall clock before it reaches the
+view. Expansion itself goes through `rrule`, both here and in `backend/src/ical.rs`, so a converted
+note keeps rendering where the imported event did.
