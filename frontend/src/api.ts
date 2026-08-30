@@ -421,6 +421,67 @@ export interface TaskAssessmentResponse {
     note_suggestions: string[];
 }
 
+// Calendar import
+//
+// These mirror the backend's `/v2/imported-events`. An imported occurrence is read-only until it
+// is converted, so it is deliberately not a `MetadataEvent`: it has no note behind it, and the
+// identity it carries -- `uid` plus `recurrence_id` -- is what a converted note records to shadow
+// it.
+
+export interface ImportedOccurrence {
+  calendar: string;
+  uid: string;
+  /// Present on every occurrence, not only the ones a feed marks as modified.
+  recurrence_id: string;
+  name: string;
+  start: string;
+  end?: string;
+  note?: string;
+  location?: string;
+  url?: string;
+}
+
+/// What converting a whole series to a note needs, keyed by uid.
+export interface ImportedSeries {
+  name: string;
+  start: string;
+  end?: string;
+  /// Absent when the feed's rule cannot be said in mory's dialect, which is what makes conversion
+  /// fall back to listing the occurrences.
+  repeat?: EventRepeat;
+  exclusions?: string[];
+  overrides?: EventOccurrence[];
+  note?: string;
+  location?: string;
+  url?: string;
+  /// iCal properties mory has no key for, written into the converted note's body.
+  unmapped?: Record<string, string>;
+}
+
+export interface ImportedCalendarReport {
+  id: string;
+  name: string;
+  color: string | null;
+  /// `null` when the feed was read. One dead feed is reported here rather than failing the request.
+  error: string | null;
+}
+
+export interface ImportedEventsResponse {
+  calendars: ImportedCalendarReport[];
+  events: ImportedOccurrence[];
+  series: Record<string, ImportedSeries>;
+  truncated: boolean;
+}
+
+export async function getImportedEvents(
+  start: string,
+  end: string,
+): Promise<ImportedEventsResponse> {
+  const axios = await getAxios();
+  const response = await axios.get('/v2/imported-events', { params: { start, end } });
+  return response.data;
+}
+
 export async function runAiAction(prompt: string): Promise<string> {
     const axios = await getAxios();
     const response = await axios.post('/v2/ai-action', { prompt: prompt });
