@@ -9,13 +9,13 @@
 //
 //   * `end` is optional, and may be a duration (`+90m`), an absolute datetime, or a bare time of
 //     day that belongs to the start's date -- rolling to the next day when it would precede it.
-//   * an event is either one occurrence (`start`) or a list of them (`times`); the map key names
-//     it, and the same note may declare several.
+//   * an event is a base occurrence (`start`), a list of them (`instances`, or its older spelling
+//     `times`), or both; the map key names it, and the same note may declare several.
 //   * anything invalid is reported and skipped, never fatal. A typo in one note must not blank
 //     the calendar.
 
-import type { ListEntry2, MetadataEvent, MetadataEventSingle } from '@/api';
-import { isMetadataEventMultiple, validateEvent } from '@/api';
+import type { EventFields, EventOccurrence, ListEntry2, MetadataEvent } from '@/api';
+import { occurrencesOf, validateEvent } from '@/api';
 import dayjs from 'dayjs';
 
 // The colour an event falls back to when neither it nor its parent names one.
@@ -102,13 +102,13 @@ export function normalizeEndTime(
 // listing, and the inline versions of this code assigned the normalized end straight back into
 // them.
 function buildOccurrence(
-    time: MetadataEventSingle,
-    parent: { end?: string; color?: string; note?: string },
+    time: EventOccurrence,
+    parent: EventFields,
     eventName: string,
     entry: ListEntry2,
     errors: EventError[],
 ): CalendarEvent | null {
-    if (!dayjs(time.start).isValid()) {
+    if (time.start === undefined || !dayjs(time.start).isValid()) {
         errors.push(['start', time.start, eventName, entry.path, entry.title]);
         return null;
     }
@@ -120,7 +120,7 @@ function buildOccurrence(
     }
 
     const event: CalendarEvent = {
-        name: eventName,
+        name: time.name || eventName,
         start: time.start,
         end: normalizedEnd,
         finished: time.finished,
@@ -138,19 +138,28 @@ function eventsOfEntry(
     into: CalendarEvent[],
     errors: EventError[],
 ): void {
-    if (isMetadataEventMultiple(detail)) {
-        for (const time of detail.times) {
-            const event = buildOccurrence(time, detail, eventName, entry, errors);
-            if (event !== null) {
-                into.push(event);
-            }
-        }
-    }
-    else {
-        const event = buildOccurrence(detail, {}, eventName, entry, errors);
+    const push = (occurrence: EventOccurrence, parent: EventFields) => {
+        const event = buildOccurrence(occurrence, parent, eventName, entry, errors);
         if (event !== null) {
             into.push(event);
         }
+    };
+
+    // A base occurrence and a list of occurrences are no longer alternatives: a rule is anchored at
+    // `start` and may still list occurrences it does not generate. An event that has only a list
+    // contributes nothing here, which is what makes the two shapes compose rather than conflict.
+    const occurrences = occurrencesOf(detail);
+    if (detail.start === undefined && occurrences.length === 0) {
+        // Names no occurrence at all, which the schema rejects too. Reported rather than dropped:
+        // silently ignoring it is how a typo becomes an event that is simply missing.
+        errors.push(['start', detail.start, eventName, entry.path, entry.title]);
+        return;
+    }
+    if (detail.start !== undefined) {
+        push(detail, {});
+    }
+    for (const occurrence of occurrences) {
+        push(occurrence, detail);
     }
 }
 

@@ -55,25 +55,73 @@ export interface UploadEntry {
 }
 
 // Home and Calendar
-export interface MetadataEventSingle {
-  start: string;
+//
+// These mirror `metadata-schema.json`, which describes one `event` shape rather than the two
+// mutually exclusive ones it used to: an event is a base occurrence, a list of occurrences, or a
+// rule with adjustments to what the rule generates -- and may be more than one of those at once.
+
+export type Weekday = 'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat';
+
+export interface EventRepeat {
+  freq: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  interval?: number;
+  // A weekday, optionally ordinal-prefixed: `3wed` is the third Wednesday, `-1fri` the last Friday.
+  byday?: string[];
+  bymonthday?: number[];
+  bymonth?: number[];
+  // RFC 5545 defaults this to Monday; Google emits `WKST=SU` on most weekly rules.
+  wkst?: Weekday;
+  // An IANA zone name, and the one place in the format that is not an offset: expanding a rule
+  // needs a zone's DST function, which no fixed offset carries.
+  tz?: string;
+  until?: string;
+  count?: number;
+}
+
+export interface EventIcal {
+  calendar?: string;
+  uid: string;
+  // Present when the note claims a single occurrence rather than the whole series.
+  recurrence_id?: string;
+}
+
+// What an event and one of its occurrences both carry.
+export interface EventFields {
   end?: string;
   finished?: boolean;
   color?: string;
   note?: string;
+  // Overrides the map key for this occurrence, which is how a renamed occurrence is recorded.
+  name?: string;
+  location?: string;
+  url?: string;
 }
 
-export interface MetadataEventMultiple {
-  end?: string;
-  color?: string;
-  note?: string;
-  times: MetadataEventSingle[];
+export interface EventOccurrence extends EventFields {
+  // The rule-generated occurrence this entry changes. Mutually exclusive with `start` in practice.
+  at?: string;
+  start?: string;
 }
 
-export type MetadataEvent = MetadataEventSingle | MetadataEventMultiple;
+export interface MetadataEvent extends EventFields {
+  start?: string;
+  repeat?: EventRepeat;
+  exclusions?: string[];
+  overrides?: EventOccurrence[];
+  instances?: EventOccurrence[];
+  // The older spelling of `instances`. Still read, never written.
+  times?: EventOccurrence[];
+  ical?: EventIcal;
+}
 
-export function isMetadataEventMultiple(ev: MetadataEvent): ev is MetadataEventMultiple {
-  return Array.isArray((ev as MetadataEventMultiple).times);
+/// The explicitly listed occurrences of an event, under either spelling.
+///
+/// Replaces an `Array.isArray(ev.times)` test that decided between two shapes. That test could not
+/// see `instances`, and the branch it fell through to read `ev.start` -- which for a list-only
+/// event is `undefined`, and `dayjs(undefined)` is *now*, so the miss rendered a phantom event at
+/// the current time rather than failing.
+export function occurrencesOf(event: MetadataEvent): EventOccurrence[] {
+  return event.instances ?? event.times ?? [];
 }
 
 export interface Metadata {

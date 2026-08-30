@@ -143,6 +143,56 @@ describe('eventsFromEntries', () => {
         expect(errors).toEqual([]);
     });
 
+    it('reads the newer instances spelling as well as times', () => {
+        const { events } = eventsFromEntries([
+            entry('a.md', { Offsite: { instances: [{ start: '2024-05-01 09:00' }] } }),
+        ]);
+
+        expect(events.map((e) => e.start)).toEqual(['2024-05-01 09:00']);
+    });
+
+    // The old shapes were alternatives -- `start` XOR `times` -- so this could not be said at all.
+    it('derives a base occurrence and its listed occurrences together', () => {
+        const { events } = eventsFromEntries([
+            entry('a.md', {
+                Series: {
+                    start: '2024-05-01 09:00',
+                    end: '+1h',
+                    instances: [{ start: '2024-06-01 09:00' }],
+                },
+            }),
+        ]);
+
+        expect(events.map((e) => e.start)).toEqual(['2024-05-01 09:00', '2024-06-01 09:00']);
+        expect(events.map((e) => e.end)).toEqual(['2024-05-01 10:00', '2024-06-01 10:00']);
+    });
+
+    it('lets an occurrence rename itself, as a renamed occurrence of a series does', () => {
+        const { events } = eventsFromEntries([
+            entry('a.md', {
+                'Rust release': {
+                    instances: [
+                        { start: '2024-05-01 09:00' },
+                        { start: '2024-06-01 09:00', name: 'Rust release: 1.2 stable' },
+                    ],
+                },
+            }),
+        ]);
+
+        expect(events.map((e) => e.name)).toEqual(['Rust release', 'Rust release: 1.2 stable']);
+    });
+
+    // `dayjs(undefined)` is *now* and reports itself valid, so a list-only event that fell through
+    // to the single-occurrence branch used to render a phantom event at the current time.
+    it('reports an event that names no occurrence rather than inventing one', () => {
+        const { events, errors } = eventsFromEntries([
+            entry('a.md', { Nameless: { color: 'red' } }),
+        ]);
+
+        expect(events).toEqual([]);
+        expect(errors).toEqual([['start', undefined, 'Nameless', 'a.md', null]]);
+    });
+
     // The listing these entries come from is shared by every view, and the inline versions of this
     // code wrote the normalized end straight back into it.
     it('does not mutate the entries it reads', () => {
