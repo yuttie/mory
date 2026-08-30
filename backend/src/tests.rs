@@ -357,6 +357,36 @@ async fn cache_schema_applies_to_an_in_memory_database() {
     assert!(tables.contains(&"cache_state".to_string()));
     assert!(tables.contains(&"entry".to_string()));
     assert!(tables.contains(&"openai_cache".to_string()));
+    assert!(tables.contains(&"ical_cache".to_string()));
+}
+
+/// A fetched feed survives a write and comes back through the reader, like any handler-owned cache.
+#[tokio::test]
+async fn a_fetched_feed_round_trips_through_the_cache() {
+    let dir = TempDir::new().expect("failed to create a temporary directory");
+    let (reader, writer) = test_cache_pools(&dir).await;
+
+    sqlx::query(
+        "INSERT INTO ical_cache (url, body, etag, last_modified, created_at)
+         VALUES (?, ?, ?, ?, ?)",
+    )
+    .bind("https://example.invalid/basic.ics")
+    .bind("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n")
+    .bind(Some("\"abc\""))
+    .bind(None::<String>)
+    .bind(1_700_000_000_i64)
+    .execute(&writer)
+    .await
+    .expect("the writer pool must accept a feed");
+
+    let (body, etag): (String, Option<String>) =
+        sqlx::query_as("SELECT body, etag FROM ical_cache WHERE url = ?")
+            .bind("https://example.invalid/basic.ics")
+            .fetch_one(&reader)
+            .await
+            .expect("the reader pool must see it");
+    assert!(body.starts_with("BEGIN:VCALENDAR"));
+    assert_eq!(etag.as_deref(), Some("\"abc\""));
 }
 
 // ---------------------------------------------------------------------------
@@ -1128,4 +1158,297 @@ async fn syncing_to_a_commit_the_cache_already_describes_does_nothing() {
         .unwrap();
 
     assert_eq!(time_of(&mut conn, "a.md").await, 424_242);
+}
+
+// ---------------------------------------------------------------------------
+// T7 — iCalendar parsing and expansion
+//
+// The fixtures are cut down from two feeds fetched live: Google's public "Rust releases" calendar,
+// which happens to exercise TZID, RRULE, EXDATE and RECURRENCE-ID at once, and 日本の祝日, which is
+// all-day throughout.
+// ---------------------------------------------------------------------------
+
+use chrono::{DateTime, FixedOffset};
+
+fn window(from: &str, to: &str) -> (DateTime<FixedOffset>, DateTime<FixedOffset>) {
+    crate::ical::parse_window(from, to).expect("the window should parse")
+}
+
+fn calendar_of(events: &str) -> icalendar::Calendar {
+    let ics = format!(
+        "BEGIN:VCALENDAR\r\nPRODID:-//Test//EN\r\nVERSION:2.0\r\nX-WR-TIMEZONE:Asia/Tokyo\r\n{events}END:VCALENDAR\r\n"
+    );
+    crate::ical::parse_calendar(&ics).expect("the fixture should parse")
+}
+
+fn starts(expansion: &crate::ical::Expansion) -> Vec<String> {
+    expansion.events.iter().map(|e| e.start.clone()).collect()
+}
+
+const RUST_SERIES: &str = "\
+BEGIN:VEVENT\r
+DTSTART;TZID=America/Los_Angeles:20150625T100000\r
+DTEND;TZID=America/Los_Angeles:20150625T110000\r
+RRULE:FREQ=WEEKLY;INTERVAL=6;BYDAY=TH\r
+EXDATE;TZID=America/Los_Angeles:20200130T100000\r
+UID:poms@google.com\r
+SUMMARY:Rust release\r
+END:VEVENT\r
+";
+
+#[test]
+fn a_timed_event_keeps_its_own_offset() {
+    let calendar = calendar_of(
+        "BEGIN:VEVENT\r\nDTSTART;TZID=America/Los_Angeles:20150625T100000\r\n\
+         DTEND;TZID=America/Los_Angeles:20150625T110000\r\nUID:one@example\r\n\
+         SUMMARY:Once\r\nEND:VEVENT\r\n",
+    );
+    let (from, to) = window("2015-06-01", "2015-07-01");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    // 10:00 in Los Angeles in June is -07:00, and the offset travels with the value.
+    assert_eq!(starts(&expansion), vec!["2015-06-25 10:00:00-07:00"]);
+    assert_eq!(expansion.events[0].end.as_deref(), Some("2015-06-25 11:00:00-07:00"));
+    assert_eq!(expansion.events[0].name, "Once");
+}
+
+#[test]
+fn an_all_day_event_spans_one_day_not_two() {
+    // DTEND is exclusive in iCal -- the 12th for a holiday on the 11th -- and mory's is inclusive.
+    let calendar = calendar_of(
+        "BEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20210211\r\nDTEND;VALUE=DATE:20210212\r\n\
+         UID:holiday@example\r\nSUMMARY:建国記念の日\r\nDESCRIPTION:祝日\r\nEND:VEVENT\r\n",
+    );
+    let (from, to) = window("2021-02-01", "2021-02-28");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    assert_eq!(starts(&expansion), vec!["2021-02-11"]);
+    assert_eq!(expansion.events[0].end.as_deref(), Some("2021-02-11"));
+    assert_eq!(expansion.events[0].note.as_deref(), Some("祝日"));
+}
+
+#[test]
+fn a_duration_stands_in_for_a_missing_end() {
+    let calendar = calendar_of(
+        "BEGIN:VEVENT\r\nDTSTART;TZID=Asia/Tokyo:20240501T090000\r\nDURATION:PT1H30M\r\n\
+         UID:dur@example\r\nSUMMARY:Meeting\r\nEND:VEVENT\r\n",
+    );
+    let (from, to) = window("2024-05-01", "2024-05-02");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    assert_eq!(expansion.events[0].end.as_deref(), Some("2024-05-01 10:30:00+09:00"));
+}
+
+#[test]
+fn a_rule_is_expanded_into_the_window_only() {
+    let calendar = calendar_of(RUST_SERIES);
+    let (from, to) = window("2015-06-01", "2015-10-01");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    // Every six weeks on a Thursday, from 2015-06-25.
+    assert_eq!(
+        starts(&expansion),
+        vec![
+            "2015-06-25 10:00:00-07:00",
+            "2015-08-06 10:00:00-07:00",
+            "2015-09-17 10:00:00-07:00",
+        ],
+    );
+}
+
+#[test]
+fn an_exdate_removes_its_occurrence_and_reaches_the_series() {
+    let calendar = calendar_of(RUST_SERIES);
+    // Wide enough to hold the occurrences either side of the excluded one, so what is missing is
+    // visible as a gap rather than as an empty result.
+    let (from, to) = window("2019-12-01", "2020-04-01");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    assert_eq!(
+        starts(&expansion),
+        vec!["2019-12-19 10:00:00-08:00", "2020-03-12 10:00:00-07:00"],
+        "2020-01-30 falls on the rule and the EXDATE takes it out",
+    );
+
+    // ...and conversion is told, so a converted series keeps the same gap.
+    let series = &expansion.series["poms@google.com"];
+    assert_eq!(series.exclusions, vec!["2020-01-30 10:00:00-08:00"]);
+}
+
+#[test]
+fn a_series_with_nothing_in_the_window_is_not_described_at_all() {
+    // `series` exists so the popup can convert what is on screen. A feed of hundreds of one-off
+    // events would otherwise describe every one of them on every request.
+    let calendar = calendar_of(RUST_SERIES);
+    // Narrower than the rule's six-week period, so it cannot contain an occurrence.
+    let (from, to) = window("2016-01-01", "2016-01-05");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    assert!(expansion.events.is_empty());
+    assert!(expansion.series.is_empty());
+}
+
+#[test]
+fn a_recurrence_id_override_replaces_that_occurrence_only() {
+    let calendar = calendar_of(&format!(
+        "{RUST_SERIES}\
+         BEGIN:VEVENT\r\nDTSTART;TZID=America/Los_Angeles:20150806T100000\r\n\
+         DTEND;TZID=America/Los_Angeles:20150806T110000\r\n\
+         RECURRENCE-ID;TZID=America/Los_Angeles:20150806T100000\r\n\
+         UID:poms@google.com\r\nSUMMARY:Rust release: 1.2 stable\r\nEND:VEVENT\r\n",
+    ));
+    let (from, to) = window("2015-06-01", "2015-10-01");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    let names: Vec<_> = expansion.events.iter().map(|e| e.name.as_str()).collect();
+    assert_eq!(names, vec!["Rust release", "Rust release: 1.2 stable", "Rust release"]);
+
+    // ...and conversion is told about it, so a converted series keeps the renamed occurrence.
+    let series = &expansion.series["poms@google.com"];
+    assert_eq!(series.overrides.len(), 1);
+    assert_eq!(series.overrides[0].name.as_deref(), Some("Rust release: 1.2 stable"));
+}
+
+#[test]
+fn a_cancelled_override_removes_its_occurrence() {
+    // Google deletes a single occurrence this way as readily as with an EXDATE.
+    let calendar = calendar_of(&format!(
+        "{RUST_SERIES}\
+         BEGIN:VEVENT\r\nDTSTART;TZID=America/Los_Angeles:20150806T100000\r\n\
+         RECURRENCE-ID;TZID=America/Los_Angeles:20150806T100000\r\n\
+         STATUS:CANCELLED\r\nUID:poms@google.com\r\nSUMMARY:Rust release\r\nEND:VEVENT\r\n",
+    ));
+    let (from, to) = window("2015-06-01", "2015-10-01");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    assert_eq!(
+        starts(&expansion),
+        vec!["2015-06-25 10:00:00-07:00", "2015-09-17 10:00:00-07:00"],
+    );
+
+    // Both ways of deleting an occurrence reach the series as an exclusion, and a series carries
+    // all of them rather than only the ones the current window happens to cover -- converting it
+    // has to describe the whole series, not the part being looked at.
+    let exclusions = &expansion.series["poms@google.com"].exclusions;
+    assert_eq!(exclusions.len(), 2, "the fixture's own EXDATE, plus the cancelled occurrence");
+    assert!(exclusions.iter().any(|e| e.starts_with("2015-08-06")), "{exclusions:?}");
+    assert!(exclusions.iter().any(|e| e.starts_with("2020-01-30")), "{exclusions:?}");
+}
+
+#[test]
+fn every_occurrence_carries_a_recurrence_id() {
+    // Not only the ones the feed marks: a note converted from one occurrence records this to say
+    // which occurrence it claims, and without it a rule-generated occurrence could never be
+    // shadowed.
+    let calendar = calendar_of(RUST_SERIES);
+    let (from, to) = window("2015-06-01", "2015-10-01");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    for event in &expansion.events {
+        assert_eq!(event.recurrence_id, event.start);
+        assert_eq!(event.uid, "poms@google.com");
+        assert_eq!(event.calendar, "cal");
+    }
+}
+
+#[test]
+fn a_rule_becomes_the_dialect_including_its_week_start() {
+    // Google emits WKST=SU on nearly every weekly rule with an interval, while rrule defaults to
+    // Monday. Dropping it would import a rule that means something else.
+    let calendar = calendar_of(
+        "BEGIN:VEVENT\r\nDTSTART;TZID=America/Los_Angeles:20150625T100000\r\n\
+         RRULE:FREQ=WEEKLY;INTERVAL=6;BYDAY=TH;WKST=SU\r\nUID:w@example\r\n\
+         SUMMARY:Rust release\r\nEND:VEVENT\r\n",
+    );
+    let (from, to) = window("2015-06-01", "2015-07-01");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    let repeat = expansion.series["w@example"].repeat.as_ref().expect("expressible");
+    assert_eq!(repeat.freq, "weekly");
+    assert_eq!(repeat.interval, Some(6));
+    assert_eq!(repeat.byday, vec!["thu"]);
+    assert_eq!(repeat.wkst.as_deref(), Some("sun"));
+    // The zone, by name: the series crosses a daylight-saving change, which an offset cannot say.
+    assert_eq!(repeat.tz.as_deref(), Some("America/Los_Angeles"));
+}
+
+#[test]
+fn an_ordinal_weekday_survives_the_round_trip() {
+    let calendar = calendar_of(
+        "BEGIN:VEVENT\r\nDTSTART;TZID=Asia/Tokyo:20240501T090000\r\n\
+         RRULE:FREQ=MONTHLY;BYDAY=3WE\r\nUID:nth@example\r\nSUMMARY:Third Wednesday\r\n\
+         END:VEVENT\r\n",
+    );
+    let (from, to) = window("2024-05-01", "2024-05-31");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    assert_eq!(
+        expansion.series["nth@example"].repeat.as_ref().unwrap().byday,
+        vec!["3wed"],
+    );
+    assert_eq!(starts(&expansion), vec!["2024-05-15 09:00:00+09:00"]);
+}
+
+#[test]
+fn a_rule_the_dialect_cannot_say_is_reported_as_no_rule() {
+    // BYSETPOS is mostly an Outlook and Apple shape; Google writes "last Monday" as BYDAY=-1MO,
+    // which the ordinal prefix does cover. Returning no rule is what makes conversion fall back to
+    // listing the occurrences instead of writing a rule that means something else.
+    let calendar = calendar_of(
+        "BEGIN:VEVENT\r\nDTSTART;TZID=Asia/Tokyo:20240501T090000\r\n\
+         RRULE:FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1\r\nUID:pos@example\r\n\
+         SUMMARY:Last weekday\r\nEND:VEVENT\r\n",
+    );
+    let (from, to) = window("2024-05-01", "2024-05-31");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    assert!(expansion.series["pos@example"].repeat.is_none());
+    // The occurrences are still drawn, because rrule expands what the dialect cannot describe.
+    assert_eq!(starts(&expansion), vec!["2024-05-31 09:00:00+09:00"]);
+}
+
+#[test]
+fn properties_mory_has_no_key_for_are_kept_for_the_note_body() {
+    let calendar = calendar_of(
+        "BEGIN:VEVENT\r\nDTSTART;TZID=Asia/Tokyo:20240501T090000\r\nUID:un@example\r\n\
+         SUMMARY:Meeting\r\nLOCATION:Room 401\r\nORGANIZER:mailto:someone@example.com\r\n\
+         TRANSP:OPAQUE\r\nDTSTAMP:20240401T000000Z\r\nEND:VEVENT\r\n",
+    );
+    let (from, to) = window("2024-05-01", "2024-05-02");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    let series = &expansion.series["un@example"];
+    assert_eq!(series.location.as_deref(), Some("Room 401"));
+    assert!(series.unmapped.contains_key("organizer"));
+    assert!(series.unmapped.contains_key("transp"));
+    // Noise git already records, or that a mapped key covers, is not spilled into the body.
+    assert!(!series.unmapped.contains_key("dtstamp"));
+    assert!(!series.unmapped.contains_key("location"));
+}
+
+#[test]
+fn a_feed_using_a_non_iana_timezone_is_reported_rather_than_dropped_silently() {
+    // Outlook writes Windows zone names and defines them in a VTIMEZONE block, which the IANA
+    // lookup cannot use.
+    let calendar = calendar_of(
+        "BEGIN:VEVENT\r\nDTSTART;TZID=W. Europe Standard Time:20240501T090000\r\n\
+         RRULE:FREQ=DAILY\r\nUID:win@example\r\nSUMMARY:Outlook\r\nEND:VEVENT\r\n",
+    );
+    let (from, to) = window("2024-05-01", "2024-05-03");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    assert!(expansion.events.is_empty());
+    assert_eq!(expansion.warnings.len(), 1);
+    assert!(expansion.warnings[0].contains("win@example"));
+}
+
+#[test]
+fn a_window_is_read_as_whole_days_and_must_not_run_backwards() {
+    let (from, to) = window("2024-05-01", "2024-05-01");
+    assert_eq!(from.to_rfc3339(), "2024-05-01T00:00:00+00:00");
+    // The end covers the whole final day, so an occurrence at 09:00 on it is inside.
+    assert_eq!(to.to_rfc3339(), "2024-05-02T00:00:00+00:00");
+
+    assert!(crate::ical::parse_window("2024-05-02", "2024-05-01").is_err());
+    assert!(crate::ical::parse_window("nonsense", "2024-05-01").is_err());
 }

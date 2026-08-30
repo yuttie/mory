@@ -63,6 +63,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use models::*;
 
+mod ical;
+
 #[cfg(test)]
 mod tests;
 
@@ -161,6 +163,7 @@ async fn main() -> Result<()> {
         .route("/entries", get(v2::get_entries))
         .route("/tasks", get(v2::get_tasks))
         .route("/events", get(v2::get_events))
+        .route("/imported-events", get(v2::get_imported_events))
         .route("/assess-task", post(v2::post_assess_task))
         .route("/ai-action", post(v2::post_ai_action))
         .with_state(state.clone())
@@ -247,6 +250,17 @@ async fn init_cache_database(
         // here, where the cost is already being paid.
         sqlx::query("VACUUM;").execute(&mut *conn).await?;
     }
+    sqlx::query("
+            CREATE TABLE IF NOT EXISTS ical_cache (
+                url            TEXT PRIMARY KEY,
+                body           TEXT NOT NULL,
+                etag           TEXT,
+                last_modified  TEXT,
+                created_at     INTEGER NOT NULL
+            ) STRICT, WITHOUT ROWID;
+        ")
+        .execute(&mut *conn)
+        .await?;
     sqlx::query("
             CREATE TABLE IF NOT EXISTS entry (
                 path       TEXT NOT NULL PRIMARY KEY,
@@ -1279,6 +1293,7 @@ pub async fn grep_bare_repo(
 
 mod v2 {
     use super::*;
+    use anyhow::bail;
     use std::env;
 
     #[derive(Deserialize, Serialize)]
@@ -1573,6 +1588,301 @@ Important:
         ]).await?;
 
         Ok(Json(AiActionResponse { text }))
+    }
+
+    #[derive(serde::Deserialize)]
+    pub struct ImportedEventsQuery {
+        pub start: String,
+        pub end: String,
+    }
+
+    #[derive(serde::Deserialize)]
+    struct CalendarSubscriptions {
+        #[serde(default)]
+        calendars: Vec<CalendarSubscription>,
+    }
+
+    #[derive(serde::Deserialize)]
+    struct CalendarSubscription {
+        id: String,
+        #[serde(default)]
+        name: Option<String>,
+        url: String,
+        #[serde(default)]
+        color: Option<String>,
+        #[serde(default = "default_true")]
+        enabled: bool,
+    }
+
+    fn default_true() -> bool {
+        true
+    }
+
+    #[derive(Serialize)]
+    pub struct CalendarReport {
+        id: String,
+        name: String,
+        color: Option<String>,
+        /// `None` when the feed was read. A calendar that fails is reported here rather than
+        /// failing the request, so one dead feed cannot blank the whole view.
+        error: Option<String>,
+    }
+
+    #[derive(Serialize)]
+    pub struct ImportedEventsResponse {
+        calendars: Vec<CalendarReport>,
+        events: Vec<crate::ical::ImportedEvent>,
+        series: std::collections::BTreeMap<String, crate::ical::SeriesDefinition>,
+        /// Set when some series hit the per-series occurrence cap, so the client can say the view
+        /// is incomplete rather than quietly showing less than exists.
+        truncated: bool,
+    }
+
+    /// Where the subscription list lives, alongside the app's other repository-held config.
+    const CALENDARS_PATH: &str = ".mory/calendars.yaml";
+
+    /// How long a fetched feed is served from the cache before it is revalidated.
+    fn ical_cache_seconds() -> i64 {
+        env::var("MORIED_ICAL_CACHE_MINUTES")
+            .ok()
+            .and_then(|v| v.parse::<i64>().ok())
+            .unwrap_or(60)
+            * 60
+    }
+
+    /// The largest feed we will read into memory.
+    const MAX_FEED_BYTES: usize = 8 * 1024 * 1024;
+
+    /// Declaring a URL in the repository is not on its own a defence: a declared HTTPS address can
+    /// still redirect to a link-local or LAN one, and the body would come back to the caller. So
+    /// the scheme is pinned, redirects are refused rather than followed, and the body is capped.
+    fn feed_client(base: &reqwest::Client) -> reqwest::Client {
+        let _ = base;
+        reqwest::Client::builder()
+            .gzip(true)
+            .brotli(true)
+            .redirect(reqwest::redirect::Policy::none())
+            .timeout(time::Duration::from_secs(20))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new())
+    }
+
+    struct CachedFeed {
+        body: String,
+        etag: Option<String>,
+        last_modified: Option<String>,
+        age: i64,
+    }
+
+    async fn read_cached_feed(state: &AppState, url: &str) -> Option<CachedFeed> {
+        let now = chrono::Utc::now().timestamp();
+        let row = sqlx::query(
+            "SELECT body, etag, last_modified, created_at FROM ical_cache WHERE url = ?",
+        )
+        .bind(url)
+        .fetch_optional(&state.cache_db)
+        .await
+        .ok()??;
+        let created_at: i64 = row.get("created_at");
+        Some(CachedFeed {
+            body: row.get("body"),
+            etag: row.get("etag"),
+            last_modified: row.get("last_modified"),
+            age: now - created_at,
+        })
+    }
+
+    async fn write_cached_feed(
+        state: &AppState,
+        url: &str,
+        body: &str,
+        etag: Option<&str>,
+        last_modified: Option<&str>,
+    ) {
+        let now = chrono::Utc::now().timestamp();
+        if let Err(e) = sqlx::query(
+            "INSERT INTO ical_cache (url, body, etag, last_modified, created_at)
+             VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT(url) DO UPDATE SET
+                 body = excluded.body,
+                 etag = excluded.etag,
+                 last_modified = excluded.last_modified,
+                 created_at = excluded.created_at;",
+        )
+        .bind(url)
+        .bind(body)
+        .bind(etag)
+        .bind(last_modified)
+        .bind(now)
+        .execute(&state.cache_db_writer)
+        .await
+        {
+            tracing::debug!("Failed to cache the feed {}: {}", url, e);
+        }
+        // Bounded so `cache.sqlite` cannot grow without limit; a dropped row simply refetches.
+        let cutoff = now - 30 * 24 * 3600;
+        let _ = sqlx::query("DELETE FROM ical_cache WHERE created_at < ?")
+            .bind(cutoff)
+            .execute(&state.cache_db_writer)
+            .await;
+    }
+
+    /// The feed body, from the cache when it is still fresh and from the network otherwise.
+    ///
+    /// A revalidation answered with 304 refreshes the row's age, so a feed that rarely changes
+    /// costs one conditional request rather than a full download.
+    async fn fetch_feed(state: &AppState, url: &str) -> Result<String> {
+        if !url.starts_with("https://") {
+            bail!("only https:// calendar URLs are fetched");
+        }
+
+        let cached = read_cached_feed(state, url).await;
+        if let Some(cached) = &cached {
+            if cached.age < ical_cache_seconds() {
+                return Ok(cached.body.clone());
+            }
+        }
+
+        let client = feed_client(&state.http_client);
+        let mut request = client.get(url);
+        if let Some(cached) = &cached {
+            if let Some(etag) = &cached.etag {
+                request = request.header(header::IF_NONE_MATCH, etag);
+            }
+            else if let Some(modified) = &cached.last_modified {
+                request = request.header(header::IF_MODIFIED_SINCE, modified);
+            }
+        }
+
+        let response = match request.send().await {
+            Ok(response) => response,
+            Err(e) => {
+                // Serving a stale feed beats blanking the calendar because a network blipped.
+                if let Some(cached) = cached {
+                    tracing::debug!("Serving a stale feed for {}: {}", url, e);
+                    return Ok(cached.body);
+                }
+                return Err(e.into());
+            }
+        };
+
+        if response.status() == StatusCode::NOT_MODIFIED {
+            if let Some(cached) = cached {
+                write_cached_feed(
+                    state, url, &cached.body, cached.etag.as_deref(),
+                    cached.last_modified.as_deref(),
+                ).await;
+                return Ok(cached.body);
+            }
+        }
+        if !response.status().is_success() {
+            bail!("the calendar responded {}", response.status());
+        }
+
+        let etag = response
+            .headers()
+            .get(header::ETAG)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_string);
+        let last_modified = response
+            .headers()
+            .get(header::LAST_MODIFIED)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_string);
+
+        if let Some(length) = response.content_length() {
+            if length as usize > MAX_FEED_BYTES {
+                bail!("the calendar is larger than {} bytes", MAX_FEED_BYTES);
+            }
+        }
+        let body = response.text().await?;
+        if body.len() > MAX_FEED_BYTES {
+            bail!("the calendar is larger than {} bytes", MAX_FEED_BYTES);
+        }
+
+        write_cached_feed(state, url, &body, etag.as_deref(), last_modified.as_deref()).await;
+        Ok(body)
+    }
+
+    async fn read_subscriptions(state: &AppState) -> Result<Vec<CalendarSubscription>> {
+        let Some((_, content)) = find_entry_blob(state, CALENDARS_PATH).await else {
+            // No file means no calendars, which is the normal state before any are added.
+            return Ok(Vec::new());
+        };
+        let text = String::from_utf8(content.to_vec())
+            .context("the calendar list is not UTF-8")?;
+        if text.trim().is_empty() {
+            return Ok(Vec::new());
+        }
+        let parsed: CalendarSubscriptions = serde_yaml::from_str(&text)
+            .context("the calendar list is not valid YAML")?;
+        Ok(parsed.calendars)
+    }
+
+    /// Events from every subscribed calendar that fall inside the requested window.
+    pub async fn get_imported_events(
+        extract::Query(query): extract::Query<ImportedEventsQuery>,
+        extract::State(state): extract::State<AppState>,
+    ) -> Result<Json<ImportedEventsResponse>, AppError> {
+        tracing::debug!("v2::get_imported_events");
+
+        let (from, to) = crate::ical::parse_window(&query.start, &query.end)?;
+        let subscriptions = read_subscriptions(&state).await?;
+
+        let mut response = ImportedEventsResponse {
+            calendars: Vec::new(),
+            events: Vec::new(),
+            series: std::collections::BTreeMap::new(),
+            truncated: false,
+        };
+
+        for subscription in subscriptions {
+            let name = subscription.name.clone().unwrap_or_else(|| subscription.id.clone());
+            if !subscription.enabled {
+                continue;
+            }
+
+            let outcome = async {
+                let body = fetch_feed(&state, &subscription.url).await?;
+                let calendar = crate::ical::parse_calendar(&body)?;
+                Ok::<_, anyhow::Error>(crate::ical::expand(
+                    &calendar, &subscription.id, from, to,
+                ))
+            }
+            .await;
+
+            match outcome {
+                Ok(expansion) => {
+                    response.truncated |= expansion.limited;
+                    response.events.extend(expansion.events);
+                    response.series.extend(expansion.series);
+                    let error = if expansion.warnings.is_empty() {
+                        None
+                    }
+                    else {
+                        Some(expansion.warnings.join("; "))
+                    };
+                    response.calendars.push(CalendarReport {
+                        id: subscription.id,
+                        name,
+                        color: subscription.color,
+                        error,
+                    });
+                }
+                Err(e) => {
+                    tracing::debug!("Calendar {} failed: {:#}", subscription.id, e);
+                    response.calendars.push(CalendarReport {
+                        id: subscription.id,
+                        name,
+                        color: subscription.color,
+                        error: Some(format!("{e:#}")),
+                    });
+                }
+            }
+        }
+
+        response.events.sort_by(|a, b| a.start.cmp(&b.start));
+        Ok(Json(response))
     }
 
     pub async fn get_commits_head(
