@@ -82,6 +82,10 @@ async fn main() -> Result<()> {
         .journal_mode(SqliteJournalMode::Wal);
     let mut cache_writer_conn = SqliteConnection::connect_with(&cache_db_opts.clone().read_only(false))
         .await?;
+    let cache_writer_pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(cache_db_opts.clone().read_only(false))
+        .await?;
     let cache_reader_pool = SqlitePoolOptions::new()
         .max_connections(4)
         .connect_with(cache_db_opts.read_only(true))
@@ -102,6 +106,7 @@ async fn main() -> Result<()> {
     let state = models::AppState {
         repo: repo.clone(),
         cache_db: cache_reader_pool,
+        cache_db_writer: cache_writer_pool,
         cache_sync: Arc::new(CacheSync { request: refresh_tx, done: done_rx }),
         http_client: reqwest::Client::builder()
             .gzip(true)
@@ -1521,7 +1526,7 @@ Important:
         .bind(&request_json)
         .bind(&response_json)
         .bind(now)
-        .execute(&state.cache_db)
+        .execute(&state.cache_db_writer)
         .await
         {
             tracing::debug!("Failed to cache OpenAI response: {}", e);
@@ -2075,6 +2080,15 @@ mod models {
     pub struct AppState {
         pub repo: Arc<Mutex<Repository>>,
         pub cache_db: SqlitePool,
+        /// Writes to the disposable caches a handler owns, such as `openai_cache`.
+        ///
+        /// `cache_db` is opened read-only, so a handler cannot write through it -- an INSERT there
+        /// fails with "attempt to write a readonly database". The `entry` table is not affected,
+        /// because its writes belong to `cache_manager_task`, which holds its own connection; this
+        /// is for the caches that have no such task behind them. Single connection, because SQLite
+        /// serialises writers anyway and a pool would only queue them in a second place.
+        #[from_ref(skip)]
+        pub cache_db_writer: SqlitePool,
         pub cache_sync: Arc<CacheSync>,
         pub http_client: reqwest::Client,
     }

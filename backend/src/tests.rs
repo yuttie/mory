@@ -10,7 +10,7 @@
 use std::path::Path;
 
 use git2::{Index, IndexEntry, IndexTime, Oid, Repository, Signature, Time};
-use sqlx::sqlite::{SqliteConnectOptions, SqliteConnection};
+use sqlx::sqlite::{SqliteConnectOptions, SqliteConnection, SqlitePool, SqlitePoolOptions};
 use sqlx::Connection;
 use std::str::FromStr;
 use tempfile::TempDir;
@@ -147,6 +147,80 @@ pub async fn test_cache_db() -> SqliteConnection {
         .await
         .expect("failed to initialise the cache schema");
     conn
+}
+
+/// The reader/writer pool pair the server builds, over one temporary database file.
+///
+/// `sqlite::memory:` cannot stand in here: each connection to it gets its own private database, so
+/// a reader pool would see nothing a writer pool wrote regardless of permissions, and the very
+/// thing under test would be invisible.
+async fn test_cache_pools(dir: &TempDir) -> (SqlitePool, SqlitePool) {
+    let url = format!("sqlite://{}", dir.path().join("cache.sqlite").display());
+    let opts = SqliteConnectOptions::from_str(&url)
+        .expect("failed to parse the cache database URL")
+        .create_if_missing(true);
+
+    let mut writer_conn = SqliteConnection::connect_with(&opts.clone().read_only(false))
+        .await
+        .expect("failed to open the writer connection");
+    crate::init_cache_database(&mut writer_conn)
+        .await
+        .expect("failed to initialise the cache schema");
+
+    let writer = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(opts.clone().read_only(false))
+        .await
+        .expect("failed to open the writer pool");
+    let reader = SqlitePoolOptions::new()
+        .max_connections(4)
+        .connect_with(opts.read_only(true))
+        .await
+        .expect("failed to open the reader pool");
+    (reader, writer)
+}
+
+async fn insert_openai_row(pool: &SqlitePool, hash: &str) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        "INSERT INTO openai_cache (request_hash, request_data, response_data, created_at)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(request_hash) DO UPDATE SET
+             response_data = excluded.response_data,
+             created_at = excluded.created_at;",
+    )
+    .bind(hash)
+    .bind("{}")
+    .bind("{}")
+    .bind(0_i64)
+    .execute(pool)
+    .await
+    .map(|_| ())
+}
+
+/// A handler-owned cache is writable through `cache_db_writer` and not through `cache_db`.
+///
+/// Regression: every handler-owned cache write used to go through the read-only reader pool, fail
+/// with "attempt to write a readonly database", and be swallowed by a `debug!`. `openai_cache` was
+/// therefore empty in production while `entry` -- written by `cache_manager_task`, which holds its
+/// own connection -- was full. The asserted failure below is the whole point of the second pool.
+#[tokio::test]
+async fn handler_owned_caches_are_writable_only_through_the_writer_pool() {
+    let dir = TempDir::new().expect("failed to create a temporary directory");
+    let (reader, writer) = test_cache_pools(&dir).await;
+
+    let denied = insert_openai_row(&reader, "through-the-reader").await;
+    assert!(denied.is_err(), "the reader pool must refuse a write");
+
+    insert_openai_row(&writer, "through-the-writer")
+        .await
+        .expect("the writer pool must accept a write");
+
+    // Read it back through the reader, which is what a handler actually serves from.
+    let cached: i64 = sqlx::query_scalar("SELECT count(*) FROM openai_cache")
+        .fetch_one(&reader)
+        .await
+        .expect("failed to count the cached rows");
+    assert_eq!(cached, 1);
 }
 
 // ---------------------------------------------------------------------------
