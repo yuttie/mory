@@ -16,7 +16,7 @@
                 location="bottom"
                 indeterminate
                 color="primary"
-                v-bind:active="isLoading"
+                v-bind:active="isLoading || calendars.isLoading"
             ></v-progress-linear>
         </v-toolbar>
         <v-calendar
@@ -52,6 +52,14 @@
                 >
                     <v-toolbar-title>{{ selectedEvent.name }}</v-toolbar-title>
                     <v-spacer></v-spacer>
+                    <v-chip
+                        v-if="selectedEvent.source === 'ical'"
+                        class="mr-2"
+                        size="small"
+                        variant="flat"
+                    >
+                        iCal
+                    </v-chip>
                     <v-icon v-if="selectedEvent.finished" class="mr-4">{{ mdiCheck }}</v-icon>
                 </v-toolbar>
                 <v-card-text>
@@ -68,11 +76,33 @@
                             </template>
                             {{ selectedEvent.end }}
                         </v-list-item>
-                        <v-list-item>
+                        <v-list-item v-if="selectedEvent.location">
+                            <template v-slot:prepend>
+                                <v-icon>{{ mdiMapMarkerOutline }}</v-icon>
+                            </template>
+                            {{ selectedEvent.location }}
+                        </v-list-item>
+                        <v-list-item v-if="selectedEvent.url">
+                            <template v-slot:prepend>
+                                <v-icon>{{ mdiLinkVariant }}</v-icon>
+                            </template>
+                            <a
+                                v-bind:href="selectedEvent.url"
+                                rel="noopener"
+                                target="_blank"
+                            >{{ selectedEvent.url }}</a>
+                        </v-list-item>
+                        <v-list-item v-if="selectedEvent.notePath">
                             <template v-slot:prepend>
                                 <v-icon>{{ mdiFileDocumentOutline }}</v-icon>
                             </template>
                             <router-link v-bind:to="{ name: 'Note', params: { path: selectedEvent.notePath.split('/') } }">{{ selectedEvent.notePath }}</router-link>
+                        </v-list-item>
+                        <v-list-item v-else-if="selectedEvent.calendar">
+                            <template v-slot:prepend>
+                                <v-icon>{{ mdiCalendarImport }}</v-icon>
+                            </template>
+                            {{ calendars.nameOf.get(selectedEvent.calendar) ?? selectedEvent.calendar }}
                         </v-list-item>
                     </v-list>
                     <template v-if="selectedEvent.note">
@@ -80,15 +110,34 @@
                         <div class="mt-3" v-html="selectedEventRenderedNote"></div>
                     </template>
                 </v-card-text>
+                <v-card-actions v-if="selectedEvent.source === 'ical'">
+                    <v-btn
+                        v-bind:loading="isConverting"
+                        v-bind:prepend-icon="mdiNotePlusOutline"
+                        block
+                        variant="tonal"
+                        v-on:click="convertSelected"
+                    >
+                        Convert to note
+                    </v-btn>
+                </v-card-actions>
             </v-card>
         </v-menu>
         <v-snackbar v-model="error" color="error" location="top" timeout="5000">{{ errorText }}</v-snackbar>
-        <v-alert type="error" v-if="eventErrors.length > 0">
+        <v-alert type="error" v-if="eventErrors.length > 0 || calendars.errors.length > 0">
             <ul>
                 <li
                     v-for="[prop, value, eventName, entryPath, entryTitle] of eventErrors"
                 >Invalid event {{ prop }} value "{{ value }}" of "{{ eventName }}" defined in <router-link v-bind:to="{ path: `/note/${entryPath}` }">{{ entryTitle ?? entryPath }}</router-link></li>
+                <li v-for="message of calendars.errors" v-bind:key="message">{{ message }}</li>
             </ul>
+        </v-alert>
+        <v-alert
+            v-if="calendars.truncated"
+            density="compact"
+            type="warning"
+        >
+            Some calendars have more events in this range than can be shown.
         </v-alert>
     </div>
 </template>
@@ -99,17 +148,24 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import {
+    mdiCalendarImport,
     mdiCheck,
     mdiChevronLeft,
     mdiChevronRight,
     mdiClockEnd,
     mdiClockStart,
     mdiFileDocumentOutline,
+    mdiLinkVariant,
+    mdiMapMarkerOutline,
+    mdiNotePlusOutline,
 } from '@mdi/js';
 
 
-import { eventsFromEntries } from '@/events';
-import { useFilesStore } from '@/stores/files';
+import { eventsFromEntries, mergeImported } from '@/events';
+import type { CalendarEvent } from '@/events';
+import { buildOccurrenceNote, buildSeriesNote, canConvertSeries } from '@/event-note';
+import { useCalendarsStore } from '@/stores/calendars';
+import { LAGGING_RETRY_MS, useFilesStore } from '@/stores/files';
 import Color from 'color';
 import materialColors from 'vuetify/util/colors';
 import dayjs from 'dayjs';
@@ -124,6 +180,7 @@ const emit = defineEmits<{
 const router = useRouter();
 const route = useRoute();
 const files = useFilesStore();
+const calendars = useCalendarsStore();
 
 // Reactive states
 const isLoading = ref(false);
@@ -131,7 +188,8 @@ const error = ref(false);
 const errorText = ref('');
 const calendarType = ref<'month' | 'week' | 'day'>('month');
 const calendarCursor = ref(dayjs().format('YYYY-MM-DD'));
-const selectedEvent = ref<any>(null);
+const selectedEvent = ref<CalendarEvent | null>(null);
+const isConverting = ref(false);
 const selectedEventRenderedNote = ref<string | null>(null);
 const selectedElement = ref<Element | undefined>(undefined);
 const selectedOpen = ref(false);
@@ -151,12 +209,25 @@ const eventWindow = computed(() => {
     };
 });
 const derived = computed(() => eventsFromEntries(files.entries, eventWindow.value));
-const events = computed(() => derived.value.events);
+const events = computed(() => mergeImported(
+    derived.value.events,
+    calendars.events,
+    { colorOf: calendars.colorOf },
+));
 const eventErrors = computed(() => derived.value.errors);
+
+// Watchers
+watch(eventWindow, (window) => {
+    loadImported(window);
+}, { immediate: true });
 
 // Lifecycle hooks
 onMounted(() => {
     document.title = `Calendar | ${import.meta.env.VITE_APP_NAME}`;
+    calendars.loadSubscriptions().catch(() => {
+        // The subscription list is only needed for names and colours; the events themselves come
+        // back from the backend, which reads the same file.
+    });
 
     window.addEventListener('keydown', onKeydown);
     window.addEventListener('wheel', onWheel);
@@ -271,6 +342,74 @@ function load() {
                 throw err;
             }
         });
+}
+
+function loadImported(window: { from: string; to: string }) {
+    calendars.load(window.from, window.to).catch((err) => {
+        // A calendar that fails is already reported per-calendar in the response; this is the
+        // request itself failing, which must not take the note events down with it.
+        error.value = true;
+        errorText.value = `Could not load imported events: ${err}`;
+    });
+}
+
+/// Write a note for the imported event in the popup, so mory owns it from now on.
+async function convertSelected() {
+    const event = selectedEvent.value;
+    if (event === null || event.source !== 'ical' || event.uid === undefined) {
+        return;
+    }
+
+    const series = calendars.series[event.uid];
+    const occurrence = {
+        calendar: event.calendar ?? '',
+        uid: event.uid,
+        recurrence_id: event.recurrenceId ?? event.start,
+        name: event.name,
+        start: event.start,
+        end: event.end,
+        note: event.note,
+        location: event.location,
+        url: event.url,
+    };
+
+    isConverting.value = true;
+    try {
+        // A series whose rule mory cannot express converts as the single occurrence in front of
+        // the user, which `buildOccurrenceNote` records in the note itself.
+        const note = canConvertSeries(series)
+            ? buildSeriesNote(occurrence, series)
+            : buildOccurrenceNote(occurrence, series);
+        await files.write(note.path, note.content);
+        await settle(note.path);
+
+        // `selectedEvent` holds the imported object by reference, so rebuilding `events` leaves
+        // the popup showing an event that is no longer drawn -- with its Convert button still on
+        // it. Close it and let the user reopen whichever event replaced it.
+        selectedOpen.value = false;
+        selectedEvent.value = null;
+    }
+    catch (err) {
+        error.value = true;
+        errorText.value = `Could not convert the event: ${err}`;
+    }
+    finally {
+        isConverting.value = false;
+    }
+}
+
+/// Wait until the listing actually shows the note that was just written.
+///
+/// A single refresh can come back without it -- the same race `useEntrySubset` documents, and the
+/// reason a newly created task used to go missing from the tree.
+async function settle(path: string) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+        const entries = await files.refresh();
+        if (entries.some((entry) => entry.path === path)) {
+            return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, LAGGING_RETRY_MS));
+    }
 }
 
 function setToday() {

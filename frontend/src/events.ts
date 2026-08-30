@@ -20,15 +20,25 @@
 // offset group and *throws* on a string it cannot read, so one offset-bearing datetime reaching
 // `:events` would take down the whole calendar rather than lose one event.
 
-import type { EventFields, EventOccurrence, ListEntry2, MetadataEvent } from '@/api';
+import type {
+    EventFields,
+    EventIcal,
+    EventOccurrence,
+    ImportedOccurrence,
+    ListEntry2,
+    MetadataEvent,
+} from '@/api';
 import { occurrencesOf, validateEvent } from '@/api';
-import { RecurrenceError, expandRule } from '@/recurrence';
+import { RecurrenceError, expandRule, parseWallClock } from '@/recurrence';
 import dayjs from 'dayjs';
 
 // The colour an event falls back to when neither it nor its parent names one.
 export const DEFAULT_EVENT_COLOR = '#666666';
 
 // What the views hand to `<v-calendar>`, and what `Home.vue` filters by day.
+//
+// Note that `timed` is not a field here on purpose: v-calendar reads a property of that name off
+// the object it is given, and would take one of ours as an instruction.
 export interface CalendarEvent {
     name: string;
     start: string;
@@ -36,7 +46,16 @@ export interface CalendarEvent {
     finished?: boolean;
     color: string;
     note?: string;
-    notePath: string;
+    location?: string;
+    url?: string;
+    /// Where the event came from. An imported one has no note behind it and cannot be edited.
+    source: 'note' | 'ical';
+    /// The note that declares it; absent for an imported event, which is what the popup keys on.
+    notePath?: string;
+    /// Identity, for an imported event and for a note that claims one.
+    calendar?: string;
+    uid?: string;
+    recurrenceId?: string;
 }
 
 // `[property, offending value, event name, note path, note title]` -- the shape `Calendar.vue`
@@ -114,9 +133,13 @@ export function normalizeEndTime(
 // `time` and `parent` are read, never written: these objects belong to the files store's shared
 // listing, and the inline versions of this code assigned the normalized end straight back into
 // them.
+// `parent` carries `ical` as well as the display fields, because the claim on an imported event
+// belongs to the event as a whole rather than to any one of its occurrences.
+type EventParent = EventFields & { ical?: EventIcal };
+
 function buildOccurrence(
     time: EventOccurrence,
-    parent: EventFields,
+    parent: EventParent,
     eventName: string,
     entry: ListEntry2,
     errors: EventError[],
@@ -134,12 +157,22 @@ function buildOccurrence(
 
     const event: CalendarEvent = {
         name: time.name || eventName,
-        start: time.start,
-        end: normalizedEnd,
+        start: toWallClock(time.start),
+        end: normalizedEnd === undefined ? undefined : toWallClock(normalizedEnd),
         finished: time.finished,
         color: time.color || parent.color || DEFAULT_EVENT_COLOR,
         note: time.note || parent.note,
+        location: time.location || parent.location,
+        url: time.url || parent.url,
+        source: 'note',
         notePath: entry.path,
+        ...(parent.ical === undefined
+            ? {}
+            : {
+                calendar: parent.ical.calendar,
+                uid: parent.ical.uid,
+                recurrenceId: parent.ical.recurrence_id,
+            }),
     };
     return validateEvent(event) ? event : null;
 }
@@ -219,7 +252,7 @@ function expandSeries(
     }
 
     const matched = new Set<number>();
-    const parent: EventFields = { ...detail, end: durationOf(detail) };
+    const parent: EventParent = { ...detail, end: durationOf(detail) };
     for (const occurrence of generated) {
         const instant = instantOf(occurrence);
         if (instant === null) {
@@ -274,7 +307,7 @@ function eventsOfEntry(
     into: CalendarEvent[],
     errors: EventError[],
 ): void {
-    const push = (occurrence: EventOccurrence, parent: EventFields) => {
+    const push = (occurrence: EventOccurrence, parent: EventParent) => {
         const event = buildOccurrence(occurrence, parent, eventName, entry, errors);
         if (event !== null) {
             into.push(event);
@@ -296,7 +329,7 @@ function eventsOfEntry(
             expandSeries(eventName, detail, entry, window, into, errors);
         }
         else {
-            push(detail, {});
+            push(detail, { ical: detail.ical });
         }
     }
     for (const occurrence of occurrences) {
@@ -334,3 +367,101 @@ export function eventsFromEntries(
 
     return { events, errors };
 }
+
+/// A datetime with any offset removed, which is the only form `<v-calendar>` can read.
+///
+/// Vuetify parses with a regex that has no offset group and *throws* on a string it cannot match,
+/// so one offset-bearing value reaching `:events` takes down the whole calendar rather than losing
+/// one event. Notes are written with offsets, following the task convention, and the backend emits
+/// them too -- so everything crossing into the view goes through here.
+export function toWallClock(value: string): string {
+    const parsed = parseWallClock(value);
+    if (parsed === null) {
+        return value;
+    }
+    const p = (n: number) => String(n).padStart(2, '0');
+    const date = `${parsed.year}-${p(parsed.month)}-${p(parsed.day)}`;
+    if (!parsed.hasTime) {
+        return date;
+    }
+    // An offset means the value names an instant, so it is shown in the reader's own zone; a bare
+    // wall clock is already local and is left exactly as written.
+    if (HAS_OFFSET.test(value)) {
+        const local = dayjs(value);
+        if (local.isValid()) {
+            return local.second() === 0
+                ? local.format('YYYY-MM-DD HH:mm')
+                : local.format('YYYY-MM-DD HH:mm:ss');
+        }
+    }
+    const time = `${p(parsed.hour)}:${p(parsed.minute)}`;
+    return parsed.second === 0 ? `${date} ${time}` : `${date} ${time}:${p(parsed.second)}`;
+}
+
+const HAS_OFFSET = /(?:Z|[+-]\d{2}:?\d{2})$/;
+
+/// The key a note uses to claim an imported occurrence.
+function claimOf(event: CalendarEvent): string | null {
+    if (event.uid === undefined) {
+        return null;
+    }
+    return event.recurrenceId === undefined
+        ? `uid:${event.uid}`
+        : `uid:${event.uid}@${instantOf(event.recurrenceId) ?? event.recurrenceId}`;
+}
+
+/// Note events, plus the imported ones no note has claimed.
+///
+/// A note carrying `ical.uid` shadows the whole series; one that also carries `recurrence_id`
+/// shadows only that occurrence and leaves the rest imported. Both are compared by instant, since
+/// the note and the feed need not spell the same moment the same way.
+export function mergeImported(
+    noteEvents: readonly CalendarEvent[],
+    imported: readonly ImportedOccurrence[],
+    options: { colorOf?: Map<string, string> } = {},
+): CalendarEvent[] {
+    const wholeSeries = new Set<string>();
+    const occurrences = new Set<string>();
+    for (const event of noteEvents) {
+        if (event.uid === undefined) {
+            continue;
+        }
+        if (event.recurrenceId === undefined) {
+            wholeSeries.add(event.uid);
+        }
+        else {
+            const claim = claimOf(event);
+            if (claim !== null) {
+                occurrences.add(claim);
+            }
+        }
+    }
+
+    const merged = [...noteEvents];
+    for (const occurrence of imported) {
+        if (wholeSeries.has(occurrence.uid)) {
+            continue;
+        }
+        const instant = instantOf(occurrence.recurrence_id) ?? occurrence.recurrence_id;
+        if (occurrences.has(`uid:${occurrence.uid}@${instant}`)) {
+            continue;
+        }
+        merged.push({
+            name: occurrence.name,
+            start: toWallClock(occurrence.start),
+            end: occurrence.end === undefined ? undefined : toWallClock(occurrence.end),
+            color: options.colorOf?.get(occurrence.calendar) ?? DEFAULT_IMPORTED_COLOR,
+            note: occurrence.note,
+            location: occurrence.location,
+            url: occurrence.url,
+            source: 'ical',
+            calendar: occurrence.calendar,
+            uid: occurrence.uid,
+            recurrenceId: occurrence.recurrence_id,
+        });
+    }
+    return merged;
+}
+
+/// The colour an imported event falls back to when its calendar names none.
+export const DEFAULT_IMPORTED_COLOR = '#8d99ae';

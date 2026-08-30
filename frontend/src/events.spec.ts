@@ -1,12 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import dayjs from 'dayjs';
 
 import type { ListEntry2, MetadataEvent } from '@/api';
+import type { ImportedOccurrence } from '@/api';
 import {
     DEFAULT_EVENT_COLOR,
+    DEFAULT_IMPORTED_COLOR,
     eventsFromEntries,
+    mergeImported,
     normalizeEndTime,
+    toWallClock,
 } from '@/events';
 
 // Wide enough that a test only constrains expansion when it says so.
@@ -78,6 +82,9 @@ describe('eventsFromEntries', () => {
             finished: undefined,
             color: DEFAULT_EVENT_COLOR,
             note: undefined,
+            location: undefined,
+            url: undefined,
+            source: 'note',
             notePath: 'a.md',
         }]);
     });
@@ -372,5 +379,117 @@ describe('eventsFromEntries', () => {
         derive(entries);
 
         expect(entries).toEqual(before);
+    });
+});
+
+function imported(over: Partial<ImportedOccurrence> = {}): ImportedOccurrence {
+    return {
+        calendar: 'work',
+        uid: 'a@example',
+        recurrence_id: '2024-05-01 09:00:00+09:00',
+        name: 'Standup',
+        start: '2024-05-01 09:00:00+09:00',
+        end: '2024-05-01 09:15:00+09:00',
+        ...over,
+    };
+}
+
+function noteEvent(ical?: { uid: string; recurrence_id?: string }) {
+    const { events } = derive([
+        entry('a.md', {
+            Standup: {
+                start: '2024-05-01 09:00',
+                ...(ical === undefined ? {} : { ical: { calendar: 'work', ...ical } }),
+            },
+        }),
+    ]);
+    return events;
+}
+
+describe('toWallClock', () => {
+    // `<v-calendar>` parses with a regex that has no offset group and throws on a miss, so this is
+    // the guard between every datetime the app stores and the calendar that draws it.
+    it('drops an offset, showing the instant in the reader zone', () => {
+        vi.stubEnv('TZ', 'UTC');
+        expect(toWallClock('2015-06-25 10:00:00-07:00')).toBe('2015-06-25 17:00');
+        vi.unstubAllEnvs();
+    });
+
+    it('leaves a bare wall clock and a bare date exactly as written', () => {
+        expect(toWallClock('2024-05-01 09:00')).toBe('2024-05-01 09:00');
+        expect(toWallClock('2024-05-01')).toBe('2024-05-01');
+    });
+
+    it('returns anything it cannot read untouched, for the error path to report', () => {
+        expect(toWallClock('not a time')).toBe('not a time');
+    });
+});
+
+describe('mergeImported', () => {
+    it('adds imported events beside the note ones', () => {
+        const merged = mergeImported(noteEvent(), [imported({ uid: 'other@example' })]);
+
+        expect(merged).toHaveLength(2);
+        expect(merged[0].source).toBe('note');
+        expect(merged[1].source).toBe('ical');
+        expect(merged[1].notePath).toBeUndefined();
+    });
+
+    it('strips the offsets the backend sends, which the calendar cannot parse', () => {
+        vi.stubEnv('TZ', 'UTC');
+        const merged = mergeImported([], [imported()]);
+
+        expect(merged[0].start).toBe('2024-05-01 00:00');
+        expect(merged[0].start).not.toMatch(/[+-]\d{2}:?\d{2}$/);
+        vi.unstubAllEnvs();
+    });
+
+    it('tints an imported event with its calendar colour', () => {
+        const colorOf = new Map([['work', '#3f51b5']]);
+        expect(mergeImported([], [imported()], { colorOf })[0].color).toBe('#3f51b5');
+        expect(mergeImported([], [imported()])[0].color).toBe(DEFAULT_IMPORTED_COLOR);
+    });
+
+    // The whole point of converting: the read-only original must stop being drawn.
+    it('shadows the whole series for a note carrying only a uid', () => {
+        const merged = mergeImported(
+            noteEvent({ uid: 'a@example' }),
+            [imported(), imported({ recurrence_id: '2024-05-08 09:00:00+09:00' })],
+        );
+
+        expect(merged.every((event) => event.source === 'note')).toBe(true);
+    });
+
+    it('shadows one occurrence for a note that also carries a recurrence_id', () => {
+        const merged = mergeImported(
+            noteEvent({ uid: 'a@example', recurrence_id: '2024-05-01 09:00:00+09:00' }),
+            [
+                imported(),
+                imported({
+                    recurrence_id: '2024-05-08 09:00:00+09:00',
+                    start: '2024-05-08 09:00:00+09:00',
+                }),
+            ],
+        );
+
+        expect(merged).toHaveLength(2);
+        expect(merged.filter((event) => event.source === 'ical')).toHaveLength(1);
+        expect(merged.find((event) => event.source === 'ical')?.recurrenceId)
+            .toBe('2024-05-08 09:00:00+09:00');
+    });
+
+    // The note and the feed need not spell the same moment the same way.
+    it('matches a claim by instant rather than by spelling', () => {
+        const merged = mergeImported(
+            noteEvent({ uid: 'a@example', recurrence_id: '2024-05-01T00:00:00Z' }),
+            [imported()],
+        );
+
+        expect(merged.every((event) => event.source === 'note')).toBe(true);
+    });
+
+    it('leaves an imported event alone when a note claims a different series', () => {
+        const merged = mergeImported(noteEvent({ uid: 'somewhere-else@example' }), [imported()]);
+        expect(merged.filter((event) => event.source === 'ical')).toHaveLength(1);
     });
 });

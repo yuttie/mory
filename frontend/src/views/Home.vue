@@ -703,8 +703,12 @@ function navigateToTask(task: TaskNode) {
         });
 }
 
-function navigateToEvent(event: { notePath: string }) {
-    // Navigate to the Note view for the event's source note
+function navigateToEvent(event: { notePath?: string }) {
+    // Navigate to the Note view for the event's source note. Optional because an imported event
+    // has no note behind it; Home shows only note events, so this is a guard rather than a case.
+    if (event.notePath === undefined) {
+        return;
+    }
     router.push({
         name: 'Note',
         params: {
