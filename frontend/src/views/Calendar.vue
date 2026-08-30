@@ -95,7 +95,6 @@
 
 <script lang="ts" setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
-import type { Ref } from 'vue';
 
 import { useRoute, useRouter } from 'vue-router';
 
@@ -108,8 +107,8 @@ import {
     mdiFileDocumentOutline,
 } from '@mdi/js';
 
-import { isMetadataEventMultiple, validateEvent } from '@/api';
 
+import { eventsFromEntries } from '@/events';
 import { useFilesStore } from '@/stores/files';
 import Color from 'color';
 import materialColors from 'vuetify/util/colors';
@@ -130,7 +129,6 @@ const files = useFilesStore();
 const isLoading = ref(false);
 const error = ref(false);
 const errorText = ref('');
-const eventErrors: Ref<[string, unknown, string, string, string | null][]> = ref([]);
 const calendarType = ref<'month' | 'week' | 'day'>('month');
 const calendarCursor = ref(dayjs().format('YYYY-MM-DD'));
 const selectedEvent = ref<any>(null);
@@ -142,126 +140,9 @@ const selectedOpen = ref(false);
 const calendar = ref<any>(null);
 
 // Computed properties
-const events = computed(() => {
-    function normalizeEndTime(end: string | undefined, start: string): string | undefined | null {
-        if (end === undefined) {
-            return undefined;
-        }
-
-        const formatDateTime = (datetime: dayjs.Dayjs) => {
-            if (datetime.second() === 0) {
-                return datetime.format('YYYY-MM-DD HH:mm');
-            }
-            else {
-                return datetime.format('YYYY-MM-DD HH:mm:ss');
-            }
-        };
-        const durationShortRegexp =
-            /^\+([\d.]+) *(y|M|w|d|h|m|s|ms)$/;
-        const durationLongRegexp =
-            /^\+([\d.]+) *(years?|months?|weeks?|days?|hours?|minutes?|seconds?|milliseconds?)$/i;
-
-        const match = durationShortRegexp.exec(end) || durationLongRegexp.exec(end);
-        if (match === null) {
-            // `end` is not in duration format
-            if (dayjs(end).isValid()) {
-                // Return it as is if it's in valid format
-                return end;
-            }
-            else {
-                // Try to prefix it with start date
-                const prefixedEnd = dayjs(start).format('YYYY-MM-DD') + ' ' + end;
-                const parsedEnd = dayjs(prefixedEnd);
-                if (parsedEnd.isValid()) {
-                    if (parsedEnd.isAfter(start)) {
-                        return prefixedEnd;
-                    }
-                    else {
-                        return formatDateTime(parsedEnd.add(1, 'day'));
-                    }
-                }
-                else {
-                    // `end` is invalid
-                    return null;
-                }
-            }
-        }
-        else {
-            // `end` is in duration format
-            // Calculate actual end time based on the duration from the start time
-            const amount = parseFloat(match[1]);
-            const unit = match[2] as dayjs.ManipulateType;
-            return formatDateTime(dayjs(start).add(amount, unit));
-        }
-    }
-    const events = [];
-    const newEventErrors: [string, unknown, string, string, string | null][] = [];
-    for (const entry of files.entries) {
-        if (entry.metadata !== null) {
-            // Choose a default color for the note based on its path
-            let defaultColor = "#666666";
-            if (Object.hasOwn(entry.metadata, 'events') && typeof entry.metadata.events === 'object' && entry.metadata.events !== null) {
-                for (const [eventName, eventDetail] of Object.entries(entry.metadata.events)) {
-                    if (typeof eventDetail === 'object' && eventDetail !== null) {
-                        // If eventDetail has the 'times' property and it is an array
-                        if (isMetadataEventMultiple(eventDetail)) {
-                            for (const time of eventDetail.times) {
-                                if (!dayjs(time.start).isValid()) {
-                                    newEventErrors.push(['start', time.start, eventName, entry.path, entry.title]);
-                                    continue;
-                                }
-                                const normalizedEndTime = normalizeEndTime(time.end || eventDetail.end, time.start);
-                                if (normalizedEndTime === null) {
-                                    newEventErrors.push(['end', time.end, eventName, entry.path, entry.title]);
-                                    continue;
-                                }
-                                time.end = normalizedEndTime;
-                                const event = {
-                                    name: eventName,
-                                    start: time.start,
-                                    end: time.end,
-                                    finished: time.finished,
-                                    color: time.color || eventDetail.color || defaultColor,
-                                    note: time.note || eventDetail.note,
-                                    notePath: entry.path,
-                                };
-                                if (validateEvent(event)) {
-                                    events.push(event);
-                                }
-                            }
-                        }
-                        else {
-                            if (!dayjs(eventDetail.start).isValid()) {
-                                newEventErrors.push(['start', eventDetail.start, eventName, entry.path, entry.title]);
-                                continue;
-                            }
-                            const normalizedEndTime = normalizeEndTime(eventDetail.end, eventDetail.start);
-                            if (normalizedEndTime === null) {
-                                newEventErrors.push(['end', eventDetail.end, eventName, entry.path, entry.title]);
-                                continue;
-                            }
-                            eventDetail.end = normalizedEndTime;
-                            const event = {
-                                name: eventName,
-                                start: eventDetail.start,
-                                end: eventDetail.end,
-                                finished: eventDetail.finished,
-                                color: eventDetail.color || defaultColor,
-                                note: eventDetail.note,
-                                notePath: entry.path,
-                            };
-                            if (validateEvent(event)) {
-                                events.push(event);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    eventErrors.value = newEventErrors;
-    return events;
-});
+const derived = computed(() => eventsFromEntries(files.entries));
+const events = computed(() => derived.value.events);
+const eventErrors = computed(() => derived.value.errors);
 
 // Lifecycle hooks
 onMounted(() => {

@@ -320,9 +320,9 @@ import {
     mdiNotePlusOutline,
 } from '@mdi/js';
 
-import { isMetadataEventMultiple, validateEvent } from '@/api';
 import type { ListEntry2 } from '@/api';
 
+import { eventsFromEntries } from '@/events';
 import { useFilesStore } from '@/stores/files';
 import { by } from '@/utils';
 import dayjs from 'dayjs';
@@ -447,119 +447,8 @@ const categorizedEntries = computed(() => {
     return categorized;
 });
 
-// Events computation (based on Calendar view)
-const events = computed(() => {
-    function normalizeEndTime(end: string | undefined, start: string): string | undefined | null {
-        if (end === undefined) {
-            return undefined;
-        }
-
-        const formatDateTime = (datetime: dayjs.Dayjs) => {
-            if (datetime.second() === 0) {
-                return datetime.format('YYYY-MM-DD HH:mm');
-            }
-            else {
-                return datetime.format('YYYY-MM-DD HH:mm:ss');
-            }
-        };
-        const durationShortRegexp =
-            /^\+([\d.]+) *(y|M|w|d|h|m|s|ms)$/;
-        const durationLongRegexp =
-            /^\+([\d.]+) *(years?|months?|weeks?|days?|hours?|minutes?|seconds?|milliseconds?)$/i;
-
-        const match = durationShortRegexp.exec(end) || durationLongRegexp.exec(end);
-        if (match === null) {
-            // `end` is not in duration format
-            if (dayjs(end).isValid()) {
-                // Return it as is if it's in valid format
-                return end;
-            }
-            else {
-                // Try to prefix it with start date
-                const prefixedEnd = dayjs(start).format('YYYY-MM-DD') + ' ' + end;
-                const parsedEnd = dayjs(prefixedEnd);
-                if (parsedEnd.isValid()) {
-                    if (parsedEnd.isAfter(start)) {
-                        return prefixedEnd;
-                    }
-                    else {
-                        return formatDateTime(parsedEnd.add(1, 'day'));
-                    }
-                }
-                else {
-                    // `end` is invalid
-                    return null;
-                }
-            }
-        }
-        else {
-            // `end` is in duration format
-            const amount = parseFloat(match[1]);
-            const unit = match[2] as dayjs.ManipulateType;
-            return formatDateTime(dayjs(start).add(amount, unit));
-        }
-    }
-
-    const events = [];
-    for (const entry of files.entries) {
-        if (entry.metadata !== null) {
-            let defaultColor = "#666666";
-            if (Object.hasOwn(entry.metadata, 'events') && typeof entry.metadata.events === 'object' && entry.metadata.events !== null) {
-                for (const [eventName, eventDetail] of Object.entries(entry.metadata.events)) {
-                    if (typeof eventDetail === 'object' && eventDetail !== null) {
-                        if (isMetadataEventMultiple(eventDetail)) {
-                            for (const time of eventDetail.times) {
-                                if (!dayjs(time.start).isValid()) {
-                                    continue;
-                                }
-                                const normalizedEndTime = normalizeEndTime(time.end || eventDetail.end, time.start);
-                                if (normalizedEndTime === null) {
-                                    continue;
-                                }
-                                time.end = normalizedEndTime;
-                                const event = {
-                                    name: eventName,
-                                    start: time.start,
-                                    end: time.end,
-                                    finished: time.finished,
-                                    color: time.color || eventDetail.color || defaultColor,
-                                    note: time.note || eventDetail.note,
-                                    notePath: entry.path,
-                                };
-                                if (validateEvent(event)) {
-                                    events.push(event);
-                                }
-                            }
-                        }
-                        else {
-                            if (!dayjs(eventDetail.start).isValid()) {
-                                continue;
-                            }
-                            const normalizedEndTime = normalizeEndTime(eventDetail.end, eventDetail.start);
-                            if (normalizedEndTime === null) {
-                                continue;
-                            }
-                            eventDetail.end = normalizedEndTime;
-                            const event = {
-                                name: eventName,
-                                start: eventDetail.start,
-                                end: eventDetail.end,
-                                finished: eventDetail.finished,
-                                color: eventDetail.color || defaultColor,
-                                note: eventDetail.note,
-                                notePath: entry.path,
-                            };
-                            if (validateEvent(event)) {
-                                events.push(event);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    return events;
-});
+// Events computation, shared with the calendar view.
+const events = computed(() => eventsFromEntries(files.entries).events);
 
 const today = dayjs().format('YYYY-MM-DD');
 const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
