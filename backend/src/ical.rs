@@ -261,6 +261,19 @@ fn parse_duration(value: &str) -> Option<Duration> {
     Some(Duration::seconds(sign * seconds))
 }
 
+/// A DATE or DATE-TIME property in mory's spelling: a bare date, or local time with its offset.
+///
+/// Rendered in the series' own zone rather than UTC, so an override reads the way the feed wrote
+/// it and lines up with the occurrence it names.
+fn format_date_perhaps_time(value: &DatePerhapsTime, tz: Tz) -> Option<String> {
+    match value {
+        DatePerhapsTime::Date(date) => Some(format_date(*date)),
+        DatePerhapsTime::DateTime(date_time) => Some(format_datetime(to_fixed_offset(
+            date_time.try_into_utc()?.with_timezone(&tz),
+        ))),
+    }
+}
+
 fn format_occurrence(event: &Event, occurrence: DateTime<Tz>) -> String {
     if is_all_day(event) {
         format_date(occurrence.date_naive())
@@ -549,7 +562,6 @@ fn expand_series(
         replacements.insert(key, event);
     }
 
-    let mut collected_overrides: Vec<Override> = Vec::new();
     let mut occurrences_in_window = 0_usize;
     for occurrence in &result.dates {
         let key = occurrence_key(base, *occurrence);
@@ -579,17 +591,6 @@ fn expand_series(
             }
             None => (at.clone(), occurrence_end(base, *occurrence)),
         };
-
-        if replacements.contains_key(&key) {
-            collected_overrides.push(Override {
-                at: at.clone(),
-                name: source.get_summary().map(str::to_string),
-                start: if start == at { None } else { Some(start.clone()) },
-                end: end.clone(),
-                note: source.get_description().map(str::to_string),
-                location: source.get_location().map(str::to_string),
-            });
-        }
 
         occurrences_in_window += 1;
         into.events.push(ImportedEvent {
@@ -626,6 +627,35 @@ fn expand_series(
             }
         }
     }
+
+    // Every override the feed declared, not only those the window happens to cover. Converting a
+    // series has to describe the whole series: building this from the windowed loop silently
+    // dropped the renamed occurrences either side of the month being looked at, so a converted
+    // series lost the very titles that made those occurrences worth keeping.
+    let mut collected_overrides: Vec<Override> = Vec::new();
+    for event in overrides {
+        if is_cancelled(event) {
+            continue;
+        }
+        let Some(recurrence_id) = event.get_recurrence_id() else { continue };
+        let Some(at) = format_date_perhaps_time(&recurrence_id, dtstart_tz) else { continue };
+        let start = event.get_start().and_then(|value| format_date_perhaps_time(&value, dtstart_tz));
+        collected_overrides.push(Override {
+            at: at.clone(),
+            name: event.get_summary().map(str::to_string),
+            start: match &start {
+                Some(start) if *start != at => Some(start.clone()),
+                _ => None,
+            },
+            end: event
+                .get_end()
+                .and_then(|value| format_date_perhaps_time(&value, dtstart_tz))
+                .or_else(|| event.property_value("DURATION").map(str::to_string)),
+            note: event.get_description().map(str::to_string),
+            location: event.get_location().map(str::to_string),
+        });
+    }
+    collected_overrides.sort_by(|a, b| a.at.cmp(&b.at));
 
     // Only for a series that actually showed up: `series` exists so the popup can convert what the
     // user is looking at, and a feed of hundreds of one-off events would otherwise describe every

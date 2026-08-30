@@ -1309,6 +1309,38 @@ fn a_recurrence_id_override_replaces_that_occurrence_only() {
     assert_eq!(series.overrides[0].name.as_deref(), Some("Rust release: 1.2 stable"));
 }
 
+/// A converted series carries every override, not only those the window happened to show.
+///
+/// Regression: these were collected while walking the occurrences inside the window, so converting
+/// the Rust series from a June 2015 view wrote one override and silently dropped the renamed 1.2
+/// and 1.3 releases -- the very titles that made those occurrences worth keeping.
+#[test]
+fn a_series_carries_every_override_whatever_the_window_shows() {
+    let calendar = calendar_of(&format!(
+        "{RUST_SERIES}\
+         BEGIN:VEVENT\r\nDTSTART;TZID=America/Los_Angeles:20150806T100000\r\n\
+         DTEND;TZID=America/Los_Angeles:20150806T110000\r\n\
+         RECURRENCE-ID;TZID=America/Los_Angeles:20150806T100000\r\n\
+         UID:poms@google.com\r\nSUMMARY:Rust release: 1.2 stable\r\nEND:VEVENT\r\n\
+         BEGIN:VEVENT\r\nDTSTART;TZID=America/Los_Angeles:20150917T100000\r\n\
+         DTEND;TZID=America/Los_Angeles:20150917T110000\r\n\
+         RECURRENCE-ID;TZID=America/Los_Angeles:20150917T100000\r\n\
+         UID:poms@google.com\r\nSUMMARY:Rust release: 1.3 stable\r\nEND:VEVENT\r\n",
+    ));
+
+    // A window holding only the first occurrence, as a June 2015 month view would.
+    let (from, to) = window("2015-06-01", "2015-06-30");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    assert_eq!(starts(&expansion).len(), 1, "only June is drawn");
+
+    let overrides = &expansion.series["poms@google.com"].overrides;
+    let names: Vec<_> = overrides.iter().filter_map(|o| o.name.as_deref()).collect();
+    assert_eq!(names, vec!["Rust release: 1.2 stable", "Rust release: 1.3 stable"]);
+    // Named in the series' own zone, so they line up with the occurrences they replace.
+    assert_eq!(overrides[0].at, "2015-08-06 10:00:00-07:00");
+}
+
 #[test]
 fn a_cancelled_override_removes_its_occurrence() {
     // Google deletes a single occurrence this way as readily as with an EXDATE.
