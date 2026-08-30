@@ -448,7 +448,11 @@ const categorizedEntries = computed(() => {
 });
 
 // Events computation, shared with the calendar view.
-const events = computed(() => eventsFromEntries(files.entries).events);
+// Only the next three days are ever rendered, below, so that is all a rule needs expanding over.
+const events = computed(() => eventsFromEntries(files.entries, {
+    from: dayjs().format('YYYY-MM-DD'),
+    to: dayjs().add(2, 'days').format('YYYY-MM-DD'),
+}).events);
 
 const today = dayjs().format('YYYY-MM-DD');
 const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');

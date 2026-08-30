@@ -11,11 +11,18 @@
 //     day that belongs to the start's date -- rolling to the next day when it would precede it.
 //   * an event is a base occurrence (`start`), a list of them (`instances`, or its older spelling
 //     `times`), or both; the map key names it, and the same note may declare several.
+//   * a rule (`repeat`) generates occurrences, which `exclusions` removes from, `overrides`
+//     changes, and `instances` adds to.
 //   * anything invalid is reported and skipped, never fatal. A typo in one note must not blank
 //     the calendar.
+//
+// Every time this emits is naive local wall clock. `<v-calendar>` parses with a regex that has no
+// offset group and *throws* on a string it cannot read, so one offset-bearing datetime reaching
+// `:events` would take down the whole calendar rather than lose one event.
 
 import type { EventFields, EventOccurrence, ListEntry2, MetadataEvent } from '@/api';
 import { occurrencesOf, validateEvent } from '@/api';
+import { RecurrenceError, expandRule } from '@/recurrence';
 import dayjs from 'dayjs';
 
 // The colour an event falls back to when neither it nor its parent names one.
@@ -35,6 +42,12 @@ export interface CalendarEvent {
 // `[property, offending value, event name, note path, note title]` -- the shape `Calendar.vue`
 // renders in its error alert, kept as a tuple so that view needs no changes.
 export type EventError = [string, unknown, string, string, string | null];
+
+/// The span a view is drawing. A rule may be open-ended, so expansion is always bounded.
+export interface EventWindow {
+    from: string;
+    to: string;
+}
 
 export interface DerivedEvents {
     events: CalendarEvent[];
@@ -131,10 +144,133 @@ function buildOccurrence(
     return validateEvent(event) ? event : null;
 }
 
+/// The instant a wall-clock or offset-bearing datetime names, for comparing two spellings of it.
+///
+/// `2020-01-30 10:00:00-08:00` and `2020-01-30 10:00` are the same moment written two ways, and the
+/// importer will not spell an exclusion the way a hand-edited note does. Comparing the strings
+/// would report a mismatch that is not there.
+function instantOf(value: string): number | null {
+    const parsed = dayjs(value);
+    return parsed.isValid() ? parsed.valueOf() : null;
+}
+
+// How long an occurrence lasts, carried from the base event to the ones a rule generates.
+//
+// A duration is reapplied per occurrence; an absolute end is turned into the gap it describes, so
+// a series does not inherit the first occurrence's literal end date.
+function durationOf(detail: MetadataEvent): string | undefined {
+    if (detail.end === undefined || detail.start === undefined) {
+        return detail.end;
+    }
+    if (detail.end.startsWith('+')) {
+        return detail.end;
+    }
+    const start = instantOf(detail.start);
+    const end = instantOf(detail.end);
+    if (start === null || end === null || end < start) {
+        return detail.end;
+    }
+    return `+${end - start}ms`;
+}
+
+function expandSeries(
+    eventName: string,
+    detail: MetadataEvent,
+    entry: ListEntry2,
+    window: EventWindow,
+    into: CalendarEvent[],
+    errors: EventError[],
+): void {
+    const start = detail.start as string;
+    const repeat = detail.repeat!;
+
+    let generated: string[];
+    try {
+        generated = expandRule(repeat, start, window.from, window.to);
+    }
+    catch (error) {
+        if (error instanceof RecurrenceError) {
+            errors.push(['repeat', error.message, eventName, entry.path, entry.title]);
+            return;
+        }
+        throw error;
+    }
+
+    // Both sides are keyed by instant, so an adjustment may be written with or without an offset
+    // and still find the occurrence it names.
+    const excluded = new Map<number, string>();
+    for (const exclusion of detail.exclusions ?? []) {
+        const instant = instantOf(exclusion);
+        if (instant === null) {
+            errors.push(['exclusions', exclusion, eventName, entry.path, entry.title]);
+            continue;
+        }
+        excluded.set(instant, exclusion);
+    }
+
+    const overrides = new Map<number, EventOccurrence>();
+    for (const override of detail.overrides ?? []) {
+        const instant = override.at === undefined ? null : instantOf(override.at);
+        if (instant === null) {
+            errors.push(['at', override.at, eventName, entry.path, entry.title]);
+            continue;
+        }
+        overrides.set(instant, override);
+    }
+
+    const matched = new Set<number>();
+    const parent: EventFields = { ...detail, end: durationOf(detail) };
+    for (const occurrence of generated) {
+        const instant = instantOf(occurrence);
+        if (instant === null) {
+            continue;
+        }
+        if (excluded.has(instant)) {
+            matched.add(instant);
+            continue;
+        }
+        const override = overrides.get(instant);
+        if (override !== undefined) {
+            matched.add(instant);
+        }
+        const event = buildOccurrence(
+            { ...override, at: undefined, start: occurrence },
+            parent,
+            eventName,
+            entry,
+            errors,
+        );
+        if (event !== null) {
+            into.push(event);
+        }
+    }
+
+    // An adjustment landing on no occurrence is almost always a mistyped date, and doing nothing
+    // silently is how that survives. Only reported for adjustments inside the window: outside it
+    // there is nothing to match by construction.
+    const from = instantOf(window.from);
+    const to = instantOf(window.to);
+    if (from === null || to === null) {
+        return;
+    }
+    const reportUnmatched = (instant: number, property: string, spelling: string) => {
+        if (!matched.has(instant) && instant >= from && instant <= to) {
+            errors.push([property, spelling, eventName, entry.path, entry.title]);
+        }
+    };
+    for (const [instant, spelling] of excluded) {
+        reportUnmatched(instant, 'exclusions', spelling);
+    }
+    for (const [instant, override] of overrides) {
+        reportUnmatched(instant, 'at', override.at as string);
+    }
+}
+
 function eventsOfEntry(
     eventName: string,
     detail: MetadataEvent,
     entry: ListEntry2,
+    window: EventWindow,
     into: CalendarEvent[],
     errors: EventError[],
 ): void {
@@ -156,15 +292,23 @@ function eventsOfEntry(
         return;
     }
     if (detail.start !== undefined) {
-        push(detail, {});
+        if (detail.repeat !== undefined) {
+            expandSeries(eventName, detail, entry, window, into, errors);
+        }
+        else {
+            push(detail, {});
+        }
     }
     for (const occurrence of occurrences) {
         push(occurrence, detail);
     }
 }
 
-/// Every event declared by every entry in the listing.
-export function eventsFromEntries(entries: readonly ListEntry2[]): DerivedEvents {
+/// Every event declared by every entry in the listing, expanded over `window`.
+export function eventsFromEntries(
+    entries: readonly ListEntry2[],
+    window: EventWindow,
+): DerivedEvents {
     const events: CalendarEvent[] = [];
     const errors: EventError[] = [];
 
@@ -183,7 +327,7 @@ export function eventsFromEntries(entries: readonly ListEntry2[]): DerivedEvents
 
         for (const [eventName, detail] of Object.entries(declared)) {
             if (typeof detail === 'object' && detail !== null) {
-                eventsOfEntry(eventName, detail, entry, events, errors);
+                eventsOfEntry(eventName, detail, entry, window, events, errors);
             }
         }
     }

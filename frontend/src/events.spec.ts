@@ -1,11 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
+import dayjs from 'dayjs';
+
 import type { ListEntry2, MetadataEvent } from '@/api';
 import {
     DEFAULT_EVENT_COLOR,
     eventsFromEntries,
     normalizeEndTime,
 } from '@/events';
+
+// Wide enough that a test only constrains expansion when it says so.
+const ANY_WINDOW = { from: '2000-01-01', to: '2039-12-31' };
+const derive = (entries: ListEntry2[], window = ANY_WINDOW) =>
+    eventsFromEntries(entries, window);
 
 function entry(
     path: string,
@@ -59,7 +66,7 @@ describe('normalizeEndTime', () => {
 
 describe('eventsFromEntries', () => {
     it('derives a single event, defaulting the colour', () => {
-        const { events, errors } = eventsFromEntries([
+        const { events, errors } = derive([
             entry('a.md', { Standup: { start: '2024-05-01 09:00', end: '+15m' } }),
         ]);
 
@@ -76,7 +83,7 @@ describe('eventsFromEntries', () => {
     });
 
     it('derives every occurrence of a times list', () => {
-        const { events } = eventsFromEntries([
+        const { events } = derive([
             entry('a.md', {
                 Offsite: {
                     color: 'red',
@@ -90,7 +97,7 @@ describe('eventsFromEntries', () => {
     });
 
     it('lets an occurrence override its parent colour, note and end', () => {
-        const { events } = eventsFromEntries([
+        const { events } = derive([
             entry('a.md', {
                 Series: {
                     end: '+1h',
@@ -109,7 +116,7 @@ describe('eventsFromEntries', () => {
     });
 
     it('reports an invalid start and keeps the other events', () => {
-        const { events, errors } = eventsFromEntries([
+        const { events, errors } = derive([
             entry('a.md', {
                 Broken: { start: 'nonsense' },
                 Fine: { start: '2024-05-01 09:00' },
@@ -121,7 +128,7 @@ describe('eventsFromEntries', () => {
     });
 
     it('reports an invalid end and keeps the other events', () => {
-        const { events, errors } = eventsFromEntries([
+        const { events, errors } = derive([
             entry('a.md', {
                 Broken: { start: '2024-05-01 09:00', end: 'nonsense' },
                 Fine: { start: '2024-05-01 09:00' },
@@ -133,7 +140,7 @@ describe('eventsFromEntries', () => {
     });
 
     it('ignores entries with no metadata and notes with no events', () => {
-        const { events, errors } = eventsFromEntries([
+        const { events, errors } = derive([
             entry('image.png', null),
             entry('plain.md', {}),
             { ...entry('nokey.md', {}), metadata: { tags: [] } },
@@ -144,7 +151,7 @@ describe('eventsFromEntries', () => {
     });
 
     it('reads the newer instances spelling as well as times', () => {
-        const { events } = eventsFromEntries([
+        const { events } = derive([
             entry('a.md', { Offsite: { instances: [{ start: '2024-05-01 09:00' }] } }),
         ]);
 
@@ -153,7 +160,7 @@ describe('eventsFromEntries', () => {
 
     // The old shapes were alternatives -- `start` XOR `times` -- so this could not be said at all.
     it('derives a base occurrence and its listed occurrences together', () => {
-        const { events } = eventsFromEntries([
+        const { events } = derive([
             entry('a.md', {
                 Series: {
                     start: '2024-05-01 09:00',
@@ -168,7 +175,7 @@ describe('eventsFromEntries', () => {
     });
 
     it('lets an occurrence rename itself, as a renamed occurrence of a series does', () => {
-        const { events } = eventsFromEntries([
+        const { events } = derive([
             entry('a.md', {
                 'Rust release': {
                     instances: [
@@ -185,12 +192,163 @@ describe('eventsFromEntries', () => {
     // `dayjs(undefined)` is *now* and reports itself valid, so a list-only event that fell through
     // to the single-occurrence branch used to render a phantom event at the current time.
     it('reports an event that names no occurrence rather than inventing one', () => {
-        const { events, errors } = eventsFromEntries([
+        const { events, errors } = derive([
             entry('a.md', { Nameless: { color: 'red' } }),
         ]);
 
         expect(events).toEqual([]);
         expect(errors).toEqual([['start', undefined, 'Nameless', 'a.md', null]]);
+    });
+
+    it('expands a rule, bounded by the window', () => {
+        const { events } = derive([
+            entry('a.md', {
+                Standup: { start: '2024-05-01 09:00', end: '+15m', repeat: { freq: 'daily' } },
+            }),
+        ], { from: '2024-05-03', to: '2024-05-05' });
+
+        expect(events.map((e) => e.start))
+            .toEqual(['2024-05-03 09:00', '2024-05-04 09:00', '2024-05-05 09:00']);
+        // A duration end is reapplied to each occurrence rather than copied from the first.
+        expect(events.map((e) => e.end))
+            .toEqual(['2024-05-03 09:15', '2024-05-04 09:15', '2024-05-05 09:15']);
+    });
+
+    it('carries an absolute end across as the gap it describes', () => {
+        const { events } = derive([
+            entry('a.md', {
+                Long: {
+                    start: '2024-05-01 09:00',
+                    end: '2024-05-01 11:30',
+                    repeat: { freq: 'daily' },
+                },
+            }),
+        ], { from: '2024-05-02', to: '2024-05-02' });
+
+        expect(events).toMatchObject([{ start: '2024-05-02 09:00', end: '2024-05-02 11:30' }]);
+    });
+
+    it('removes the occurrences named by exclusions', () => {
+        const { events, errors } = derive([
+            entry('a.md', {
+                Standup: {
+                    start: '2024-05-01 09:00',
+                    repeat: { freq: 'daily' },
+                    exclusions: ['2024-05-02 09:00'],
+                },
+            }),
+        ], { from: '2024-05-01', to: '2024-05-03' });
+
+        expect(events.map((e) => e.start)).toEqual(['2024-05-01 09:00', '2024-05-03 09:00']);
+        expect(errors).toEqual([]);
+    });
+
+    // The importer will not spell an exclusion the way a hand-edited note does.
+    it('matches an adjustment by instant, not by spelling', () => {
+        const { events, errors } = derive([
+            entry('a.md', {
+                Standup: {
+                    start: '2024-05-01 09:00',
+                    repeat: { freq: 'daily' },
+                    exclusions: [dayjs('2024-05-02 09:00').format()],
+                },
+            }),
+        ], { from: '2024-05-01', to: '2024-05-03' });
+
+        expect(events.map((e) => e.start)).toEqual(['2024-05-01 09:00', '2024-05-03 09:00']);
+        expect(errors).toEqual([]);
+    });
+
+    it('applies an override to the occurrence it names', () => {
+        const { events } = derive([
+            entry('a.md', {
+                Standup: {
+                    start: '2024-05-01 09:00',
+                    end: '+15m',
+                    repeat: { freq: 'daily' },
+                    overrides: [{ at: '2024-05-02 09:00', name: 'Retro', color: 'red' }],
+                },
+            }),
+        ], { from: '2024-05-01', to: '2024-05-02' });
+
+        expect(events.map((e) => e.name)).toEqual(['Standup', 'Retro']);
+        expect(events[1]).toMatchObject({ start: '2024-05-02 09:00', color: 'red' });
+    });
+
+    it('adds instances the rule does not generate', () => {
+        const { events } = derive([
+            entry('a.md', {
+                Standup: {
+                    start: '2024-05-01 09:00',
+                    repeat: { freq: 'weekly' },
+                    instances: [{ start: '2024-05-03 14:00', name: 'Extra' }],
+                },
+            }),
+        ], { from: '2024-05-01', to: '2024-05-07' });
+
+        expect(events.map((e) => [e.name, e.start]))
+            .toEqual([['Standup', '2024-05-01 09:00'], ['Extra', '2024-05-03 14:00']]);
+    });
+
+    it('reports an adjustment inside the window that lands on no occurrence', () => {
+        const { errors } = derive([
+            entry('a.md', {
+                Standup: {
+                    start: '2024-05-01 09:00',
+                    repeat: { freq: 'daily' },
+                    exclusions: ['2024-05-02 17:30'],
+                },
+            }),
+        ], { from: '2024-05-01', to: '2024-05-03' });
+
+        expect(errors).toEqual([['exclusions', '2024-05-02 17:30', 'Standup', 'a.md', null]]);
+    });
+
+    it('stays quiet about an adjustment outside the window', () => {
+        const { errors } = derive([
+            entry('a.md', {
+                Standup: {
+                    start: '2024-05-01 09:00',
+                    repeat: { freq: 'daily' },
+                    exclusions: ['2025-01-01 09:00'],
+                },
+            }),
+        ], { from: '2024-05-01', to: '2024-05-03' });
+
+        expect(errors).toEqual([]);
+    });
+
+    it('reports an unusable rule instead of dropping the event silently', () => {
+        const { events, errors } = derive([
+            entry('a.md', {
+                Standup: {
+                    start: '2024-05-01 09:00',
+                    repeat: { freq: 'weekly', byday: ['3wed'] },
+                },
+            }),
+        ], { from: '2024-05-01', to: '2024-05-31' });
+
+        expect(events).toEqual([]);
+        expect(errors[0][0]).toBe('repeat');
+    });
+
+    // `<v-calendar>` throws on a string its regex cannot read, and its regex has no offset group.
+    it('never emits an offset, whatever the note was written with', () => {
+        const { events } = derive([
+            entry('a.md', {
+                Series: {
+                    start: '2015-06-25 10:00:00-07:00',
+                    end: '+1h',
+                    repeat: { freq: 'weekly', byday: ['thu'], tz: 'America/Los_Angeles' },
+                },
+            }),
+        ], { from: '2015-06-25', to: '2015-07-10' });
+
+        expect(events.length).toBeGreaterThan(0);
+        for (const event of events) {
+            expect(event.start).not.toMatch(/[+-]\d{2}:?\d{2}$/);
+            expect(event.end).not.toMatch(/[+-]\d{2}:?\d{2}$/);
+        }
     });
 
     // The listing these entries come from is shared by every view, and the inline versions of this
@@ -200,11 +358,18 @@ describe('eventsFromEntries', () => {
             entry('a.md', {
                 Single: { start: '2024-05-01 09:00', end: '+1h' },
                 Multiple: { end: '+2h', times: [{ start: '2024-05-02 09:00' }] },
+                Series: {
+                    start: '2024-05-01 09:00',
+                    end: '+1h',
+                    repeat: { freq: 'daily' },
+                    exclusions: ['2024-05-02 09:00'],
+                    overrides: [{ at: '2024-05-03 09:00', name: 'Moved' }],
+                },
             }),
         ];
         const before = structuredClone(entries);
 
-        eventsFromEntries(entries);
+        derive(entries);
 
         expect(entries).toEqual(before);
     });

@@ -140,7 +140,17 @@ const selectedOpen = ref(false);
 const calendar = ref<any>(null);
 
 // Computed properties
-const derived = computed(() => eventsFromEntries(files.entries));
+// A rule may be open-ended, so expansion is bounded by what the view can show. Padded a month
+// either side, so the occurrences a month view spills into its first and last rows are present.
+const eventWindow = computed(() => {
+    const cursor = dayjs(calendarCursor.value, 'YYYY-MM-DD');
+    const unit = calendarType.value === 'month' ? 'month' : calendarType.value;
+    return {
+        from: cursor.startOf(unit).subtract(1, 'month').format('YYYY-MM-DD'),
+        to: cursor.endOf(unit).add(1, 'month').format('YYYY-MM-DD'),
+    };
+});
+const derived = computed(() => eventsFromEntries(files.entries, eventWindow.value));
 const events = computed(() => derived.value.events);
 const eventErrors = computed(() => derived.value.errors);
 
