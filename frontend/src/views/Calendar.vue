@@ -12,6 +12,24 @@
                 {{ calendar.title }}
             </v-toolbar-title>
             <v-spacer></v-spacer>
+            <v-btn-toggle
+                v-bind:model-value="calendarType"
+                density="compact"
+                mandatory
+                variant="outlined"
+                class="mr-2"
+                v-on:update:model-value="setCalendarType"
+            >
+                <v-btn value="day">
+                    Day
+                </v-btn>
+                <v-btn value="week">
+                    Week
+                </v-btn>
+                <v-btn value="month">
+                    Month
+                </v-btn>
+            </v-btn-toggle>
             <v-menu
                 v-if="calendars.available.length > 0"
                 v-bind:close-on-content-click="false"
@@ -239,11 +257,13 @@ const route = useRoute();
 const files = useFilesStore();
 const calendars = useCalendarsStore();
 
+type CalendarType = 'month' | 'week' | 'day';
+
 // Reactive states
 const isLoading = ref(false);
 const error = ref(false);
 const errorText = ref('');
-const calendarType = ref<'month' | 'week' | 'day'>('month');
+const calendarType = ref<CalendarType>('month');
 const calendarCursor = ref(dayjs().format('YYYY-MM-DD'));
 const selectedEvent = ref<CalendarEvent | null>(null);
 const isConverting = ref(false);
@@ -312,6 +332,23 @@ function onCalendarInput(date: unknown) {
             year: parsedDate.format('YYYY'),
             month: parsedDate.format('MM'),
             day: parsedDate.format('DD'),
+        },
+    });
+}
+
+function setCalendarType(type: CalendarType) {
+    if (type === calendarType.value) {
+        return;
+    }
+
+    const date = dayjs(calendarCursor.value, 'YYYY-MM-DD');
+    router.push({
+        name: 'CalendarWithDate',
+        params: {
+            type,
+            year: date.format('YYYY'),
+            month: date.format('MM'),
+            day: date.format('DD'),
         },
     });
 }
@@ -602,7 +639,7 @@ watch(selectedEvent, async (newValue) => {
 watch(route, (newRoute) => {
     if (newRoute.name === 'CalendarWithDate') {
         const { year, month, day } = newRoute.params as { year: string, month: string, day: string };
-        calendarType.value = newRoute.params.type as string;
+        calendarType.value = newRoute.params.type as CalendarType;
         calendarCursor.value = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
     }
 }, { immediate: true });
