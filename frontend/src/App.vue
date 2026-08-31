@@ -219,12 +219,14 @@
                 <v-fade-transition>
                     <v-list
                         v-show="!miniMainSidebar"
-                        class="flex-grow-1 flex-shrink-1 overflow-y-auto"
+                        class="flex-shrink-1 overflow-y-auto"
                     >
                         <v-list-subheader>Notes</v-list-subheader>
                         <NoteTree />
                     </v-list>
                 </v-fade-transition>
+
+                <v-spacer></v-spacer>
 
                 <v-divider></v-divider>
 
