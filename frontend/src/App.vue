@@ -482,7 +482,7 @@
             color="white"
         >
             <v-app-bar-nav-icon v-on:click="mobileDrawer = !mobileDrawer" />
-            <v-toolbar-title>{{ $route.name.replace(/With.*$/, '') }}</v-toolbar-title>
+            <v-toolbar-title>{{ $route.name?.replace(/With.*$/, '') ?? '' }}</v-toolbar-title>
         </v-app-bar>
 
         <input type="file" multiple class="d-none" ref="fileInputEl">
