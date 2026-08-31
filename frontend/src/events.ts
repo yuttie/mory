@@ -457,7 +457,7 @@ function occurrenceKey(calendar: string | undefined, uid: string, recurrenceId: 
 export function mergeImported(
     noteEvents: readonly CalendarEvent[],
     imported: readonly ImportedOccurrence[],
-    options: { colorOf?: Map<string, string> } = {},
+    options: { colorOf?: Map<string, string>; hidden?: ReadonlySet<string> } = {},
 ): CalendarEvent[] {
     const wholeSeries = new Set<string>();
     const occurrences = new Set<string>();
@@ -475,6 +475,11 @@ export function mergeImported(
 
     const merged = [...noteEvents];
     for (const occurrence of imported) {
+        // Hiding a calendar hides only what it imports. A note converted from it is mory's own
+        // event now, and stays drawn like any other note event.
+        if (options.hidden?.has(occurrence.calendar)) {
+            continue;
+        }
         if (wholeSeries.has(seriesKey(occurrence.calendar, occurrence.uid))) {
             continue;
         }

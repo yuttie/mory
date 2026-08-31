@@ -492,6 +492,30 @@ describe('mergeImported', () => {
         const merged = mergeImported(noteEvent({ uid: 'somewhere-else@example' }), [imported()]);
         expect(merged.filter((event) => event.source === 'ical')).toHaveLength(1);
     });
+
+    it('drops the events of a hidden calendar and keeps the rest', () => {
+        const merged = mergeImported(
+            [],
+            [imported(), imported({ calendar: 'family', uid: 'b@example' })],
+            { hidden: new Set(['work']) },
+        );
+
+        expect(merged).toHaveLength(1);
+        expect(merged[0].calendar).toBe('family');
+    });
+
+    // Hiding a calendar is a view preference about what it imports; a note converted from it is
+    // mory's own event and must stay drawn.
+    it('keeps a note converted from a hidden calendar', () => {
+        const merged = mergeImported(
+            noteEvent({ uid: 'a@example' }),
+            [imported()],
+            { hidden: new Set(['work']) },
+        );
+
+        expect(merged).toHaveLength(1);
+        expect(merged[0].source).toBe('note');
+    });
 });
 
 // The module's own contract: "anything invalid is reported and skipped, never fatal. A typo in one
