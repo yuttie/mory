@@ -37,6 +37,9 @@ export function buildSeriesNote(
         ...(series.repeat === undefined ? {} : { repeat: series.repeat }),
         ...(series.exclusions?.length ? { exclusions: series.exclusions } : {}),
         ...(series.overrides?.length ? { overrides: series.overrides as EventOccurrence[] } : {}),
+        // Dates the rule does not generate -- iCal's RDATE. Dropping them lost the dates *and*
+        // hid them, since the note claims the whole series either way.
+        ...(series.instances?.length ? { instances: series.instances as EventOccurrence[] } : {}),
         ical: { calendar: occurrence.calendar, uid: occurrence.uid },
     };
     return render(series.name || occurrence.name, event, series.unmapped, null);

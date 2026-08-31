@@ -1777,3 +1777,80 @@ fn an_absurd_duration_is_refused_rather_than_panicking() {
     assert_eq!(expansion.events.len(), 1);
     assert_eq!(expansion.events[0].end, None);
 }
+
+// ---------------------------------------------------------------------------
+// T9 — the shared calendar fixtures
+//
+// Expands every feed in `fixtures/calendar/` and pins the result. The golden file is the backend's
+// half of the differential test: `frontend/src/differential.spec.ts` reads the same file, converts
+// each series to a note the way the app does, re-expands it, and asserts the occurrences match.
+//
+// Regenerate with `UPDATE_CALENDAR_GOLDEN=1 cargo test calendar_fixtures`.
+// ---------------------------------------------------------------------------
+
+/// The span the fixtures are expanded over. Wide enough to hold every series in them.
+const FIXTURE_WINDOW: (&str, &str) = ("2015-01-01", "2027-01-01");
+
+fn fixtures_dir() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("the crate has a parent directory")
+        .join("fixtures/calendar")
+}
+
+#[test]
+fn calendar_fixtures_expand_as_recorded() {
+    let dir = fixtures_dir();
+    let (from, to) = window(FIXTURE_WINDOW.0, FIXTURE_WINDOW.1);
+
+    let mut names: Vec<String> = std::fs::read_dir(&dir)
+        .expect("the fixtures directory should exist")
+        .filter_map(|entry| {
+            let name = entry.ok()?.file_name().to_string_lossy().into_owned();
+            name.ends_with(".ics").then_some(name)
+        })
+        .collect();
+    names.sort();
+    assert!(!names.is_empty(), "no fixtures found in {}", dir.display());
+
+    let mut recorded = serde_json::Map::new();
+    for name in &names {
+        let ics = std::fs::read_to_string(dir.join(name)).expect("a readable fixture");
+        let calendar = crate::ical::parse_calendar(&ics).expect("a parseable fixture");
+        let expansion = crate::ical::expand(&calendar, "fixture", from, to);
+
+        assert!(
+            expansion.warnings.is_empty(),
+            "{name} should expand cleanly: {:?}",
+            expansion.warnings,
+        );
+        recorded.insert(
+            name.clone(),
+            serde_json::json!({
+                "events": expansion.events,
+                "series": expansion.series,
+            }),
+        );
+    }
+
+    let golden_path = dir.join("expansion.json");
+    let golden = serde_json::to_string_pretty(&serde_json::json!({
+        "window": { "from": FIXTURE_WINDOW.0, "to": FIXTURE_WINDOW.1 },
+        "feeds": recorded,
+    }))
+    .expect("serialisable");
+
+    if std::env::var("UPDATE_CALENDAR_GOLDEN").is_ok() {
+        std::fs::write(&golden_path, golden + "\n").expect("the golden should be writable");
+        return;
+    }
+
+    let expected = std::fs::read_to_string(&golden_path).unwrap_or_else(|_| {
+        panic!("{} is missing; regenerate with UPDATE_CALENDAR_GOLDEN=1", golden_path.display())
+    });
+    assert_eq!(
+        golden.trim(),
+        expected.trim(),
+        "the expansion changed; if that is intended, regenerate with UPDATE_CALENDAR_GOLDEN=1",
+    );
+}

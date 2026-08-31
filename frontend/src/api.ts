@@ -452,6 +452,8 @@ export interface ImportedSeries {
   repeat?: EventRepeat;
   exclusions?: string[];
   overrides?: EventOccurrence[];
+  /// Occurrences the rule does not generate -- iCal's `RDATE`.
+  instances?: EventOccurrence[];
   note?: string;
   location?: string;
   url?: string;

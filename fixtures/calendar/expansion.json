@@ -1,0 +1,2377 @@
+{
+  "feeds": {
+    "all-day-series.ics": {
+      "events": [
+        {
+          "calendar": "fixture",
+          "end": "2024-05-06",
+          "name": "Holiday",
+          "recurrence_id": "2024-05-06",
+          "start": "2024-05-06",
+          "uid": "allday@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-05-13",
+          "name": "Holiday",
+          "recurrence_id": "2024-05-13",
+          "start": "2024-05-13",
+          "uid": "allday@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-05-20",
+          "name": "Holiday",
+          "recurrence_id": "2024-05-20",
+          "start": "2024-05-20",
+          "uid": "allday@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-05-27",
+          "name": "Holiday",
+          "recurrence_id": "2024-05-27",
+          "start": "2024-05-27",
+          "uid": "allday@example"
+        }
+      ],
+      "series": {
+        "allday@example": {
+          "end": "2024-05-06",
+          "name": "Holiday",
+          "repeat": {
+            "byday": [
+              "mon"
+            ],
+            "count": 4,
+            "freq": "weekly",
+            "wkst": "mon"
+          },
+          "start": "2024-05-06"
+        }
+      }
+    },
+    "multi-day-all-day.ics": {
+      "events": [
+        {
+          "calendar": "fixture",
+          "end": "2024-05-07",
+          "name": "Two-day break",
+          "recurrence_id": "2024-05-06",
+          "start": "2024-05-06",
+          "uid": "span@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-05-14",
+          "name": "Two-day break",
+          "recurrence_id": "2024-05-13",
+          "start": "2024-05-13",
+          "uid": "span@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-05-21",
+          "name": "Two-day break",
+          "recurrence_id": "2024-05-20",
+          "start": "2024-05-20",
+          "uid": "span@example"
+        }
+      ],
+      "series": {
+        "span@example": {
+          "end": "2024-05-07",
+          "name": "Two-day break",
+          "repeat": {
+            "byday": [
+              "mon"
+            ],
+            "count": 3,
+            "freq": "weekly",
+            "wkst": "mon"
+          },
+          "start": "2024-05-06"
+        }
+      }
+    },
+    "negative-monthday.ics": {
+      "events": [
+        {
+          "calendar": "fixture",
+          "end": "2024-01-31 10:00:00+09:00",
+          "name": "Month end",
+          "recurrence_id": "2024-01-31 09:00:00+09:00",
+          "start": "2024-01-31 09:00:00+09:00",
+          "uid": "monthend@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-02-29 10:00:00+09:00",
+          "name": "Month end",
+          "recurrence_id": "2024-02-29 09:00:00+09:00",
+          "start": "2024-02-29 09:00:00+09:00",
+          "uid": "monthend@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-03-31 10:00:00+09:00",
+          "name": "Month end",
+          "recurrence_id": "2024-03-31 09:00:00+09:00",
+          "start": "2024-03-31 09:00:00+09:00",
+          "uid": "monthend@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-04-30 10:00:00+09:00",
+          "name": "Month end",
+          "recurrence_id": "2024-04-30 09:00:00+09:00",
+          "start": "2024-04-30 09:00:00+09:00",
+          "uid": "monthend@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-05-31 10:00:00+09:00",
+          "name": "Month end",
+          "recurrence_id": "2024-05-31 09:00:00+09:00",
+          "start": "2024-05-31 09:00:00+09:00",
+          "uid": "monthend@example"
+        }
+      ],
+      "series": {
+        "monthend@example": {
+          "end": "2024-01-31 10:00:00+09:00",
+          "name": "Month end",
+          "repeat": {
+            "bymonthday": [
+              -1
+            ],
+            "count": 5,
+            "freq": "monthly",
+            "tz": "Asia/Tokyo",
+            "wkst": "mon"
+          },
+          "start": "2024-01-31 09:00:00+09:00"
+        }
+      }
+    },
+    "ordinal-weekday.ics": {
+      "events": [
+        {
+          "calendar": "fixture",
+          "end": "2024-05-15 10:30:00+09:00",
+          "name": "Third Wednesday",
+          "recurrence_id": "2024-05-15 09:00:00+09:00",
+          "start": "2024-05-15 09:00:00+09:00",
+          "uid": "ordinal@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-06-19 10:30:00+09:00",
+          "name": "Third Wednesday",
+          "recurrence_id": "2024-06-19 09:00:00+09:00",
+          "start": "2024-06-19 09:00:00+09:00",
+          "uid": "ordinal@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-07-17 10:30:00+09:00",
+          "name": "Third Wednesday",
+          "recurrence_id": "2024-07-17 09:00:00+09:00",
+          "start": "2024-07-17 09:00:00+09:00",
+          "uid": "ordinal@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-08-21 10:30:00+09:00",
+          "name": "Third Wednesday",
+          "recurrence_id": "2024-08-21 09:00:00+09:00",
+          "start": "2024-08-21 09:00:00+09:00",
+          "uid": "ordinal@example"
+        }
+      ],
+      "series": {
+        "ordinal@example": {
+          "end": "2024-05-15 10:30:00+09:00",
+          "name": "Third Wednesday",
+          "repeat": {
+            "byday": [
+              "3wed"
+            ],
+            "count": 4,
+            "freq": "monthly",
+            "tz": "Asia/Tokyo",
+            "wkst": "mon"
+          },
+          "start": "2024-05-15 09:00:00+09:00"
+        }
+      }
+    },
+    "overrides-and-exclusion.ics": {
+      "events": [
+        {
+          "calendar": "fixture",
+          "end": "2015-06-25 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2015-06-25 10:00:00-07:00",
+          "start": "2015-06-25 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2015-08-06 17:30:00-07:00",
+          "name": "Moved to the afternoon",
+          "recurrence_id": "2015-08-06 10:00:00-07:00",
+          "start": "2015-08-06 16:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2015-10-29 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2015-10-29 10:00:00-07:00",
+          "start": "2015-10-29 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2016-01-21 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2016-01-21 10:00:00-08:00",
+          "start": "2016-01-21 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2016-03-03 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2016-03-03 10:00:00-08:00",
+          "start": "2016-03-03 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2016-04-14 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2016-04-14 10:00:00-07:00",
+          "start": "2016-04-14 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2016-05-26 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2016-05-26 10:00:00-07:00",
+          "start": "2016-05-26 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2016-07-07 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2016-07-07 10:00:00-07:00",
+          "start": "2016-07-07 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2016-08-18 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2016-08-18 10:00:00-07:00",
+          "start": "2016-08-18 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2016-09-29 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2016-09-29 10:00:00-07:00",
+          "start": "2016-09-29 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2016-11-10 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2016-11-10 10:00:00-08:00",
+          "start": "2016-11-10 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2016-12-22 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2016-12-22 10:00:00-08:00",
+          "start": "2016-12-22 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2017-02-02 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2017-02-02 10:00:00-08:00",
+          "start": "2017-02-02 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2017-03-16 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2017-03-16 10:00:00-07:00",
+          "start": "2017-03-16 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2017-04-27 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2017-04-27 10:00:00-07:00",
+          "start": "2017-04-27 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2017-06-08 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2017-06-08 10:00:00-07:00",
+          "start": "2017-06-08 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2017-07-20 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2017-07-20 10:00:00-07:00",
+          "start": "2017-07-20 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2017-08-31 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2017-08-31 10:00:00-07:00",
+          "start": "2017-08-31 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2017-10-12 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2017-10-12 10:00:00-07:00",
+          "start": "2017-10-12 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2017-11-23 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2017-11-23 10:00:00-08:00",
+          "start": "2017-11-23 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2018-01-04 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2018-01-04 10:00:00-08:00",
+          "start": "2018-01-04 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2018-02-15 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2018-02-15 10:00:00-08:00",
+          "start": "2018-02-15 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2018-03-29 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2018-03-29 10:00:00-07:00",
+          "start": "2018-03-29 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2018-05-10 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2018-05-10 10:00:00-07:00",
+          "start": "2018-05-10 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2018-06-21 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2018-06-21 10:00:00-07:00",
+          "start": "2018-06-21 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2018-08-02 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2018-08-02 10:00:00-07:00",
+          "start": "2018-08-02 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2018-09-13 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2018-09-13 10:00:00-07:00",
+          "start": "2018-09-13 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2018-10-25 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2018-10-25 10:00:00-07:00",
+          "start": "2018-10-25 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2018-12-06 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2018-12-06 10:00:00-08:00",
+          "start": "2018-12-06 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2019-01-17 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2019-01-17 10:00:00-08:00",
+          "start": "2019-01-17 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2019-02-28 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2019-02-28 10:00:00-08:00",
+          "start": "2019-02-28 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2019-04-11 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2019-04-11 10:00:00-07:00",
+          "start": "2019-04-11 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2019-05-23 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2019-05-23 10:00:00-07:00",
+          "start": "2019-05-23 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2019-07-04 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2019-07-04 10:00:00-07:00",
+          "start": "2019-07-04 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2019-08-15 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2019-08-15 10:00:00-07:00",
+          "start": "2019-08-15 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2019-09-26 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2019-09-26 10:00:00-07:00",
+          "start": "2019-09-26 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2019-11-07 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2019-11-07 10:00:00-08:00",
+          "start": "2019-11-07 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2019-12-19 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2019-12-19 10:00:00-08:00",
+          "start": "2019-12-19 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2020-01-30 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2020-01-30 10:00:00-08:00",
+          "start": "2020-01-30 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2020-03-12 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2020-03-12 10:00:00-07:00",
+          "start": "2020-03-12 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2020-04-23 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2020-04-23 10:00:00-07:00",
+          "start": "2020-04-23 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2020-06-04 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2020-06-04 10:00:00-07:00",
+          "start": "2020-06-04 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2020-07-16 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2020-07-16 10:00:00-07:00",
+          "start": "2020-07-16 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2020-08-27 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2020-08-27 10:00:00-07:00",
+          "start": "2020-08-27 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2020-10-08 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2020-10-08 10:00:00-07:00",
+          "start": "2020-10-08 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2020-11-19 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2020-11-19 10:00:00-08:00",
+          "start": "2020-11-19 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2020-12-31 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2020-12-31 10:00:00-08:00",
+          "start": "2020-12-31 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2021-02-11 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2021-02-11 10:00:00-08:00",
+          "start": "2021-02-11 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2021-03-25 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2021-03-25 10:00:00-07:00",
+          "start": "2021-03-25 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2021-05-06 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2021-05-06 10:00:00-07:00",
+          "start": "2021-05-06 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2021-06-17 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2021-06-17 10:00:00-07:00",
+          "start": "2021-06-17 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2021-07-29 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2021-07-29 10:00:00-07:00",
+          "start": "2021-07-29 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2021-09-09 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2021-09-09 10:00:00-07:00",
+          "start": "2021-09-09 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2021-10-21 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2021-10-21 10:00:00-07:00",
+          "start": "2021-10-21 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2021-12-02 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2021-12-02 10:00:00-08:00",
+          "start": "2021-12-02 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2022-01-13 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2022-01-13 10:00:00-08:00",
+          "start": "2022-01-13 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2022-02-24 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2022-02-24 10:00:00-08:00",
+          "start": "2022-02-24 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2022-04-07 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2022-04-07 10:00:00-07:00",
+          "start": "2022-04-07 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2022-05-19 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2022-05-19 10:00:00-07:00",
+          "start": "2022-05-19 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2022-06-30 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2022-06-30 10:00:00-07:00",
+          "start": "2022-06-30 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2022-08-11 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2022-08-11 10:00:00-07:00",
+          "start": "2022-08-11 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2022-09-22 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2022-09-22 10:00:00-07:00",
+          "start": "2022-09-22 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2022-11-03 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2022-11-03 10:00:00-07:00",
+          "start": "2022-11-03 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2022-12-15 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2022-12-15 10:00:00-08:00",
+          "start": "2022-12-15 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2023-01-26 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2023-01-26 10:00:00-08:00",
+          "start": "2023-01-26 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2023-03-09 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2023-03-09 10:00:00-08:00",
+          "start": "2023-03-09 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2023-04-20 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2023-04-20 10:00:00-07:00",
+          "start": "2023-04-20 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2023-06-01 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2023-06-01 10:00:00-07:00",
+          "start": "2023-06-01 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2023-07-13 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2023-07-13 10:00:00-07:00",
+          "start": "2023-07-13 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2023-08-24 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2023-08-24 10:00:00-07:00",
+          "start": "2023-08-24 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2023-10-05 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2023-10-05 10:00:00-07:00",
+          "start": "2023-10-05 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2023-11-16 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2023-11-16 10:00:00-08:00",
+          "start": "2023-11-16 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2023-12-28 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2023-12-28 10:00:00-08:00",
+          "start": "2023-12-28 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-02-08 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2024-02-08 10:00:00-08:00",
+          "start": "2024-02-08 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-03-21 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2024-03-21 10:00:00-07:00",
+          "start": "2024-03-21 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-05-02 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2024-05-02 10:00:00-07:00",
+          "start": "2024-05-02 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-06-13 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2024-06-13 10:00:00-07:00",
+          "start": "2024-06-13 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-07-25 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2024-07-25 10:00:00-07:00",
+          "start": "2024-07-25 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-09-05 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2024-09-05 10:00:00-07:00",
+          "start": "2024-09-05 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-10-17 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2024-10-17 10:00:00-07:00",
+          "start": "2024-10-17 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-11-28 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2024-11-28 10:00:00-08:00",
+          "start": "2024-11-28 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-01-09 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2025-01-09 10:00:00-08:00",
+          "start": "2025-01-09 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-02-20 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2025-02-20 10:00:00-08:00",
+          "start": "2025-02-20 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-04-03 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2025-04-03 10:00:00-07:00",
+          "start": "2025-04-03 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-05-15 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2025-05-15 10:00:00-07:00",
+          "start": "2025-05-15 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-06-26 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2025-06-26 10:00:00-07:00",
+          "start": "2025-06-26 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-08-07 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2025-08-07 10:00:00-07:00",
+          "start": "2025-08-07 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-09-18 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2025-09-18 10:00:00-07:00",
+          "start": "2025-09-18 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-10-30 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2025-10-30 10:00:00-07:00",
+          "start": "2025-10-30 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-12-11 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2025-12-11 10:00:00-08:00",
+          "start": "2025-12-11 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-01-22 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2026-01-22 10:00:00-08:00",
+          "start": "2026-01-22 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-03-05 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2026-03-05 10:00:00-08:00",
+          "start": "2026-03-05 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-04-16 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2026-04-16 10:00:00-07:00",
+          "start": "2026-04-16 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-05-28 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2026-05-28 10:00:00-07:00",
+          "start": "2026-05-28 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-07-09 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2026-07-09 10:00:00-07:00",
+          "start": "2026-07-09 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-08-20 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2026-08-20 10:00:00-07:00",
+          "start": "2026-08-20 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-10-01 11:00:00-07:00",
+          "name": "Rust release",
+          "recurrence_id": "2026-10-01 10:00:00-07:00",
+          "start": "2026-10-01 10:00:00-07:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-11-12 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2026-11-12 10:00:00-08:00",
+          "start": "2026-11-12 10:00:00-08:00",
+          "uid": "series@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-12-24 11:00:00-08:00",
+          "name": "Rust release",
+          "recurrence_id": "2026-12-24 10:00:00-08:00",
+          "start": "2026-12-24 10:00:00-08:00",
+          "uid": "series@example"
+        }
+      ],
+      "series": {
+        "series@example": {
+          "end": "2015-06-25 11:00:00-07:00",
+          "exclusions": [
+            "2015-09-17 10:00:00-07:00",
+            "2015-12-10 10:00:00-08:00"
+          ],
+          "name": "Rust release",
+          "overrides": [
+            {
+              "at": "2015-08-06 10:00:00-07:00",
+              "end": "2015-08-06 17:30:00-07:00",
+              "name": "Moved to the afternoon",
+              "start": "2015-08-06 16:00:00-07:00"
+            }
+          ],
+          "repeat": {
+            "byday": [
+              "thu"
+            ],
+            "freq": "weekly",
+            "interval": 6,
+            "tz": "America/Los_Angeles",
+            "wkst": "mon"
+          },
+          "start": "2015-06-25 10:00:00-07:00"
+        }
+      }
+    },
+    "rdate.ics": {
+      "events": [
+        {
+          "calendar": "fixture",
+          "end": "2024-05-06 11:00:00+09:00",
+          "name": "Weekly plus an extra",
+          "recurrence_id": "2024-05-06 10:00:00+09:00",
+          "start": "2024-05-06 10:00:00+09:00",
+          "uid": "rdate@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-05-09 20:00:00+09:00",
+          "name": "Weekly plus an extra",
+          "recurrence_id": "2024-05-09 19:00:00+09:00",
+          "start": "2024-05-09 19:00:00+09:00",
+          "uid": "rdate@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-05-13 11:00:00+09:00",
+          "name": "Weekly plus an extra",
+          "recurrence_id": "2024-05-13 10:00:00+09:00",
+          "start": "2024-05-13 10:00:00+09:00",
+          "uid": "rdate@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-05-20 11:00:00+09:00",
+          "name": "Weekly plus an extra",
+          "recurrence_id": "2024-05-20 10:00:00+09:00",
+          "start": "2024-05-20 10:00:00+09:00",
+          "uid": "rdate@example"
+        }
+      ],
+      "series": {
+        "rdate@example": {
+          "end": "2024-05-06 11:00:00+09:00",
+          "instances": [
+            {
+              "end": "2024-05-09 20:00:00+09:00",
+              "start": "2024-05-09 19:00:00+09:00"
+            }
+          ],
+          "name": "Weekly plus an extra",
+          "repeat": {
+            "byday": [
+              "mon"
+            ],
+            "count": 3,
+            "freq": "weekly",
+            "tz": "Asia/Tokyo",
+            "wkst": "mon"
+          },
+          "start": "2024-05-06 10:00:00+09:00"
+        }
+      }
+    },
+    "timed-tz-dst.ics": {
+      "events": [
+        {
+          "calendar": "fixture",
+          "end": "2024-03-01 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-03-01 10:00:00-08:00",
+          "start": "2024-03-01 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-03-08 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-03-08 10:00:00-08:00",
+          "start": "2024-03-08 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-03-15 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-03-15 10:00:00-07:00",
+          "start": "2024-03-15 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-03-22 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-03-22 10:00:00-07:00",
+          "start": "2024-03-22 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-03-29 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-03-29 10:00:00-07:00",
+          "start": "2024-03-29 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-04-05 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-04-05 10:00:00-07:00",
+          "start": "2024-04-05 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-04-12 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-04-12 10:00:00-07:00",
+          "start": "2024-04-12 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-04-19 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-04-19 10:00:00-07:00",
+          "start": "2024-04-19 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-04-26 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-04-26 10:00:00-07:00",
+          "start": "2024-04-26 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-05-03 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-05-03 10:00:00-07:00",
+          "start": "2024-05-03 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-05-10 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-05-10 10:00:00-07:00",
+          "start": "2024-05-10 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-05-17 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-05-17 10:00:00-07:00",
+          "start": "2024-05-17 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-05-24 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-05-24 10:00:00-07:00",
+          "start": "2024-05-24 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-05-31 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-05-31 10:00:00-07:00",
+          "start": "2024-05-31 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-06-07 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-06-07 10:00:00-07:00",
+          "start": "2024-06-07 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-06-14 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-06-14 10:00:00-07:00",
+          "start": "2024-06-14 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-06-21 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-06-21 10:00:00-07:00",
+          "start": "2024-06-21 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-06-28 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-06-28 10:00:00-07:00",
+          "start": "2024-06-28 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-07-05 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-07-05 10:00:00-07:00",
+          "start": "2024-07-05 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-07-12 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-07-12 10:00:00-07:00",
+          "start": "2024-07-12 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-07-19 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-07-19 10:00:00-07:00",
+          "start": "2024-07-19 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-07-26 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-07-26 10:00:00-07:00",
+          "start": "2024-07-26 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-08-02 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-08-02 10:00:00-07:00",
+          "start": "2024-08-02 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-08-09 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-08-09 10:00:00-07:00",
+          "start": "2024-08-09 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-08-16 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-08-16 10:00:00-07:00",
+          "start": "2024-08-16 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-08-23 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-08-23 10:00:00-07:00",
+          "start": "2024-08-23 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-08-30 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-08-30 10:00:00-07:00",
+          "start": "2024-08-30 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-09-06 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-09-06 10:00:00-07:00",
+          "start": "2024-09-06 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-09-13 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-09-13 10:00:00-07:00",
+          "start": "2024-09-13 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-09-20 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-09-20 10:00:00-07:00",
+          "start": "2024-09-20 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-09-27 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-09-27 10:00:00-07:00",
+          "start": "2024-09-27 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-10-04 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-10-04 10:00:00-07:00",
+          "start": "2024-10-04 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-10-11 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-10-11 10:00:00-07:00",
+          "start": "2024-10-11 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-10-18 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-10-18 10:00:00-07:00",
+          "start": "2024-10-18 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-10-25 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-10-25 10:00:00-07:00",
+          "start": "2024-10-25 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-11-01 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-11-01 10:00:00-07:00",
+          "start": "2024-11-01 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-11-08 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-11-08 10:00:00-08:00",
+          "start": "2024-11-08 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-11-15 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-11-15 10:00:00-08:00",
+          "start": "2024-11-15 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-11-22 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-11-22 10:00:00-08:00",
+          "start": "2024-11-22 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-11-29 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-11-29 10:00:00-08:00",
+          "start": "2024-11-29 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-12-06 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-12-06 10:00:00-08:00",
+          "start": "2024-12-06 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-12-13 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-12-13 10:00:00-08:00",
+          "start": "2024-12-13 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-12-20 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-12-20 10:00:00-08:00",
+          "start": "2024-12-20 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-12-27 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2024-12-27 10:00:00-08:00",
+          "start": "2024-12-27 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-01-03 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-01-03 10:00:00-08:00",
+          "start": "2025-01-03 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-01-10 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-01-10 10:00:00-08:00",
+          "start": "2025-01-10 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-01-17 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-01-17 10:00:00-08:00",
+          "start": "2025-01-17 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-01-24 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-01-24 10:00:00-08:00",
+          "start": "2025-01-24 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-01-31 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-01-31 10:00:00-08:00",
+          "start": "2025-01-31 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-02-07 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-02-07 10:00:00-08:00",
+          "start": "2025-02-07 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-02-14 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-02-14 10:00:00-08:00",
+          "start": "2025-02-14 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-02-21 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-02-21 10:00:00-08:00",
+          "start": "2025-02-21 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-02-28 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-02-28 10:00:00-08:00",
+          "start": "2025-02-28 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-03-07 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-03-07 10:00:00-08:00",
+          "start": "2025-03-07 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-03-14 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-03-14 10:00:00-07:00",
+          "start": "2025-03-14 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-03-21 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-03-21 10:00:00-07:00",
+          "start": "2025-03-21 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-03-28 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-03-28 10:00:00-07:00",
+          "start": "2025-03-28 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-04-04 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-04-04 10:00:00-07:00",
+          "start": "2025-04-04 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-04-11 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-04-11 10:00:00-07:00",
+          "start": "2025-04-11 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-04-18 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-04-18 10:00:00-07:00",
+          "start": "2025-04-18 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-04-25 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-04-25 10:00:00-07:00",
+          "start": "2025-04-25 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-05-02 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-05-02 10:00:00-07:00",
+          "start": "2025-05-02 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-05-09 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-05-09 10:00:00-07:00",
+          "start": "2025-05-09 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-05-16 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-05-16 10:00:00-07:00",
+          "start": "2025-05-16 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-05-23 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-05-23 10:00:00-07:00",
+          "start": "2025-05-23 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-05-30 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-05-30 10:00:00-07:00",
+          "start": "2025-05-30 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-06-06 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-06-06 10:00:00-07:00",
+          "start": "2025-06-06 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-06-13 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-06-13 10:00:00-07:00",
+          "start": "2025-06-13 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-06-20 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-06-20 10:00:00-07:00",
+          "start": "2025-06-20 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-06-27 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-06-27 10:00:00-07:00",
+          "start": "2025-06-27 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-07-04 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-07-04 10:00:00-07:00",
+          "start": "2025-07-04 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-07-11 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-07-11 10:00:00-07:00",
+          "start": "2025-07-11 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-07-18 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-07-18 10:00:00-07:00",
+          "start": "2025-07-18 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-07-25 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-07-25 10:00:00-07:00",
+          "start": "2025-07-25 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-08-01 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-08-01 10:00:00-07:00",
+          "start": "2025-08-01 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-08-08 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-08-08 10:00:00-07:00",
+          "start": "2025-08-08 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-08-15 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-08-15 10:00:00-07:00",
+          "start": "2025-08-15 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-08-22 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-08-22 10:00:00-07:00",
+          "start": "2025-08-22 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-08-29 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-08-29 10:00:00-07:00",
+          "start": "2025-08-29 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-09-05 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-09-05 10:00:00-07:00",
+          "start": "2025-09-05 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-09-12 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-09-12 10:00:00-07:00",
+          "start": "2025-09-12 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-09-19 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-09-19 10:00:00-07:00",
+          "start": "2025-09-19 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-09-26 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-09-26 10:00:00-07:00",
+          "start": "2025-09-26 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-10-03 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-10-03 10:00:00-07:00",
+          "start": "2025-10-03 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-10-10 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-10-10 10:00:00-07:00",
+          "start": "2025-10-10 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-10-17 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-10-17 10:00:00-07:00",
+          "start": "2025-10-17 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-10-24 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-10-24 10:00:00-07:00",
+          "start": "2025-10-24 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-10-31 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-10-31 10:00:00-07:00",
+          "start": "2025-10-31 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-11-07 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-11-07 10:00:00-08:00",
+          "start": "2025-11-07 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-11-14 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-11-14 10:00:00-08:00",
+          "start": "2025-11-14 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-11-21 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-11-21 10:00:00-08:00",
+          "start": "2025-11-21 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-11-28 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-11-28 10:00:00-08:00",
+          "start": "2025-11-28 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-12-05 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-12-05 10:00:00-08:00",
+          "start": "2025-12-05 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-12-12 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-12-12 10:00:00-08:00",
+          "start": "2025-12-12 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-12-19 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-12-19 10:00:00-08:00",
+          "start": "2025-12-19 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-12-26 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2025-12-26 10:00:00-08:00",
+          "start": "2025-12-26 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-01-02 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-01-02 10:00:00-08:00",
+          "start": "2026-01-02 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-01-09 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-01-09 10:00:00-08:00",
+          "start": "2026-01-09 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-01-16 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-01-16 10:00:00-08:00",
+          "start": "2026-01-16 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-01-23 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-01-23 10:00:00-08:00",
+          "start": "2026-01-23 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-01-30 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-01-30 10:00:00-08:00",
+          "start": "2026-01-30 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-02-06 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-02-06 10:00:00-08:00",
+          "start": "2026-02-06 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-02-13 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-02-13 10:00:00-08:00",
+          "start": "2026-02-13 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-02-20 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-02-20 10:00:00-08:00",
+          "start": "2026-02-20 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-02-27 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-02-27 10:00:00-08:00",
+          "start": "2026-02-27 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-03-06 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-03-06 10:00:00-08:00",
+          "start": "2026-03-06 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-03-13 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-03-13 10:00:00-07:00",
+          "start": "2026-03-13 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-03-20 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-03-20 10:00:00-07:00",
+          "start": "2026-03-20 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-03-27 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-03-27 10:00:00-07:00",
+          "start": "2026-03-27 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-04-03 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-04-03 10:00:00-07:00",
+          "start": "2026-04-03 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-04-10 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-04-10 10:00:00-07:00",
+          "start": "2026-04-10 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-04-17 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-04-17 10:00:00-07:00",
+          "start": "2026-04-17 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-04-24 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-04-24 10:00:00-07:00",
+          "start": "2026-04-24 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-05-01 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-05-01 10:00:00-07:00",
+          "start": "2026-05-01 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-05-08 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-05-08 10:00:00-07:00",
+          "start": "2026-05-08 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-05-15 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-05-15 10:00:00-07:00",
+          "start": "2026-05-15 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-05-22 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-05-22 10:00:00-07:00",
+          "start": "2026-05-22 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-05-29 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-05-29 10:00:00-07:00",
+          "start": "2026-05-29 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-06-05 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-06-05 10:00:00-07:00",
+          "start": "2026-06-05 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-06-12 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-06-12 10:00:00-07:00",
+          "start": "2026-06-12 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-06-19 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-06-19 10:00:00-07:00",
+          "start": "2026-06-19 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-06-26 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-06-26 10:00:00-07:00",
+          "start": "2026-06-26 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-07-03 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-07-03 10:00:00-07:00",
+          "start": "2026-07-03 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-07-10 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-07-10 10:00:00-07:00",
+          "start": "2026-07-10 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-07-17 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-07-17 10:00:00-07:00",
+          "start": "2026-07-17 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-07-24 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-07-24 10:00:00-07:00",
+          "start": "2026-07-24 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-07-31 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-07-31 10:00:00-07:00",
+          "start": "2026-07-31 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-08-07 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-08-07 10:00:00-07:00",
+          "start": "2026-08-07 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-08-14 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-08-14 10:00:00-07:00",
+          "start": "2026-08-14 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-08-21 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-08-21 10:00:00-07:00",
+          "start": "2026-08-21 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-08-28 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-08-28 10:00:00-07:00",
+          "start": "2026-08-28 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-09-04 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-09-04 10:00:00-07:00",
+          "start": "2026-09-04 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-09-11 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-09-11 10:00:00-07:00",
+          "start": "2026-09-11 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-09-18 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-09-18 10:00:00-07:00",
+          "start": "2026-09-18 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-09-25 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-09-25 10:00:00-07:00",
+          "start": "2026-09-25 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-10-02 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-10-02 10:00:00-07:00",
+          "start": "2026-10-02 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-10-09 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-10-09 10:00:00-07:00",
+          "start": "2026-10-09 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-10-16 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-10-16 10:00:00-07:00",
+          "start": "2026-10-16 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-10-23 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-10-23 10:00:00-07:00",
+          "start": "2026-10-23 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-10-30 11:00:00-07:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-10-30 10:00:00-07:00",
+          "start": "2026-10-30 10:00:00-07:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-11-06 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-11-06 10:00:00-08:00",
+          "start": "2026-11-06 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-11-13 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-11-13 10:00:00-08:00",
+          "start": "2026-11-13 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-11-20 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-11-20 10:00:00-08:00",
+          "start": "2026-11-20 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-11-27 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-11-27 10:00:00-08:00",
+          "start": "2026-11-27 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-12-04 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-12-04 10:00:00-08:00",
+          "start": "2026-12-04 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-12-11 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-12-11 10:00:00-08:00",
+          "start": "2026-12-11 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-12-18 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-12-18 10:00:00-08:00",
+          "start": "2026-12-18 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2026-12-25 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2026-12-25 10:00:00-08:00",
+          "start": "2026-12-25 10:00:00-08:00",
+          "uid": "dst@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2027-01-01 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "recurrence_id": "2027-01-01 10:00:00-08:00",
+          "start": "2027-01-01 10:00:00-08:00",
+          "uid": "dst@example"
+        }
+      ],
+      "series": {
+        "dst@example": {
+          "end": "2024-03-01 11:00:00-08:00",
+          "name": "Weekly across a DST change",
+          "repeat": {
+            "byday": [
+              "fri"
+            ],
+            "freq": "weekly",
+            "tz": "America/Los_Angeles",
+            "wkst": "mon"
+          },
+          "start": "2024-03-01 10:00:00-08:00"
+        }
+      }
+    },
+    "until-and-wkst.ics": {
+      "events": [
+        {
+          "calendar": "fixture",
+          "end": "2020-01-01 11:00:00-08:00",
+          "name": "Bounded fortnightly",
+          "recurrence_id": "2020-01-01 10:00:00-08:00",
+          "start": "2020-01-01 10:00:00-08:00",
+          "uid": "until@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2020-01-12 11:00:00-08:00",
+          "name": "Bounded fortnightly",
+          "recurrence_id": "2020-01-12 10:00:00-08:00",
+          "start": "2020-01-12 10:00:00-08:00",
+          "uid": "until@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2020-01-15 11:00:00-08:00",
+          "name": "Bounded fortnightly",
+          "recurrence_id": "2020-01-15 10:00:00-08:00",
+          "start": "2020-01-15 10:00:00-08:00",
+          "uid": "until@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2020-01-26 11:00:00-08:00",
+          "name": "Bounded fortnightly",
+          "recurrence_id": "2020-01-26 10:00:00-08:00",
+          "start": "2020-01-26 10:00:00-08:00",
+          "uid": "until@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2020-01-29 11:00:00-08:00",
+          "name": "Bounded fortnightly",
+          "recurrence_id": "2020-01-29 10:00:00-08:00",
+          "start": "2020-01-29 10:00:00-08:00",
+          "uid": "until@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2020-02-09 11:00:00-08:00",
+          "name": "Bounded fortnightly",
+          "recurrence_id": "2020-02-09 10:00:00-08:00",
+          "start": "2020-02-09 10:00:00-08:00",
+          "uid": "until@example"
+        }
+      ],
+      "series": {
+        "until@example": {
+          "end": "2020-01-01 11:00:00-08:00",
+          "name": "Bounded fortnightly",
+          "repeat": {
+            "byday": [
+              "wed",
+              "sun"
+            ],
+            "freq": "weekly",
+            "interval": 2,
+            "tz": "America/Los_Angeles",
+            "until": "2020-02-10 10:00:00-08:00",
+            "wkst": "sun"
+          },
+          "start": "2020-01-01 10:00:00-08:00"
+        }
+      }
+    }
+  },
+  "window": {
+    "from": "2015-01-01",
+    "to": "2027-01-01"
+  }
+}

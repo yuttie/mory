@@ -107,6 +107,14 @@ pub struct Override {
     pub location: Option<String>,
 }
 
+/// An occurrence the rule does not generate.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct Instance {
+    pub start: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end: Option<String>,
+}
+
 /// Everything conversion needs to write a note for a whole series.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct SeriesDefinition {
@@ -122,6 +130,10 @@ pub struct SeriesDefinition {
     pub exclusions: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub overrides: Vec<Override>,
+    /// Occurrences the rule does not generate -- iCal's `RDATE`. Dropping these lost the dates
+    /// *and* hid them, since the note then claimed the whole series.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub instances: Vec<Instance>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -764,6 +776,21 @@ fn expand_series(
     }
     collected_overrides.sort_by(|a, b| a.at.cmp(&b.at));
 
+    // RDATEs, which the rule cannot describe. `build_recurrence_set` adds DTSTART as an implicit
+    // RDATE when there is no RRULE, so they are only meaningful alongside one.
+    let rdates: Vec<Instance> = if base.property_value("RRULE").is_some() {
+        set.get_rdate()
+            .iter()
+            .map(|rdate| Instance {
+                start: format_occurrence(base, *rdate),
+                end: occurrence_end(base, *rdate),
+            })
+            .collect()
+    }
+    else {
+        Vec::new()
+    };
+
     // Only for a series that actually showed up: `series` exists so the popup can convert what the
     // user is looking at, and a feed of hundreds of one-off events would otherwise describe every
     // one of them on every request, whatever window was asked for.
@@ -781,6 +808,7 @@ fn expand_series(
             repeat: to_repeat(&set, is_all_day(base), base.property_value("RRULE")),
             exclusions,
             overrides: collected_overrides,
+            instances: rdates,
             note: base.get_description().map(str::to_string),
             location: base.get_location().map(str::to_string),
             url: base.get_url().map(str::to_string),

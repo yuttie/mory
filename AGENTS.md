@@ -9,6 +9,8 @@ Layout of the tracked sources:
 
 - `backend/src/main.rs` — the server: routes, handlers, the `v2` module, and `models`.
 - `backend/src/ical.rs` — parsing subscribed iCal feeds and expanding their recurrences.
+- `fixtures/calendar/` — iCal feeds both components expand, and the golden the differential test
+  compares them against.
 - `backend/src/tests.rs` — in-crate tests, with Git repository fixtures.
 - `frontend/src/` — `views/` (routed screens), `components/`, `stores/` (Pinia), `api.ts`
   (backend client), `idb.ts` (IndexedDB cache), `*.spec.ts` (tests next to their subject).
@@ -121,5 +123,13 @@ Three details are easy to get wrong:
 
 `<v-calendar>` cannot parse an offset — its regex has no offset group and it *throws* on a miss — so
 `frontend/src/events.ts` converts every datetime to naive local wall clock before it reaches the
-view. Expansion itself goes through `rrule`, both here and in `backend/src/ical.rs`, so a converted
-note keeps rendering where the imported event did.
+view. Nothing in the derivation may throw for the same reason: it runs inside a computed, so one
+bad value in one note would blank the whole calendar. Frontmatter is whatever the file said, so
+values are type-checked rather than trusted.
+
+Both sides expand with `rrule` — the crate in `backend/src/ical.rs`, rrule.js in
+`frontend/src/recurrence.ts` — but sharing a library is not the same as agreeing. Conversion is
+where the two swap places, and a disagreement is invisible afterwards, because the note claims the
+series and the imported original stops being drawn. `fixtures/calendar/` and
+`frontend/src/differential.spec.ts` exist to compare them; both expanders passed their own tests
+while disagreeing about nearly every feed there. Change either one and run it.
