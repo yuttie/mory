@@ -31,6 +31,13 @@ export interface CalendarSubscription {
     enabled: boolean;
 }
 
+/// A calendar as a view needs to list it: what to call it, and what colour it draws in.
+export interface CalendarSummary {
+    id: string;
+    name: string;
+    color?: string;
+}
+
 interface Loaded {
     events: ImportedOccurrence[];
     series: Record<string, ImportedSeries>;
@@ -86,6 +93,29 @@ export const useCalendarsStore = defineStore('calendars', () => {
             }
         }
         return names;
+    });
+
+    /// The calendars whose events this window could contain, in the order they are configured.
+    ///
+    /// The backend reports exactly the enabled subscriptions, so this is what a view may offer to
+    /// show and hide. Before the first response there is nothing to report yet, and the
+    /// subscriptions stand in so the control is not empty on the first paint.
+    const available = computed<CalendarSummary[]>(() => {
+        const reports = loaded.value.calendars.map((calendar) => ({
+            id: calendar.id,
+            name: nameOf.value.get(calendar.id) ?? calendar.id,
+            color: colorOf.value.get(calendar.id),
+        }));
+        if (reports.length > 0) {
+            return reports;
+        }
+        return subscriptions.value
+            .filter((subscription) => subscription.enabled)
+            .map((subscription) => ({
+                id: subscription.id,
+                name: subscription.name || subscription.id,
+                color: subscription.color,
+            }));
     });
 
     /// One line per calendar that failed, for the view's existing error alert.
@@ -200,6 +230,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
     return {
         subscriptions,
         hasLoadedSubscriptions,
+        available,
         events,
         series,
         errors,

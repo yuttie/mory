@@ -65,6 +65,31 @@ afterEach(() => {
     vi.clearAllMocks();
 });
 
+describe('available', () => {
+    it('lists what the backend reported for the loaded window', async () => {
+        apiMocks.getImportedEvents.mockResolvedValue(response());
+        const { useCalendarsStore } = await load();
+        const store = useCalendarsStore();
+
+        await store.load('2024-05-01', '2024-05-31');
+
+        expect(store.available).toEqual([{ id: 'work', name: 'Work', color: '#3f51b5' }]);
+    });
+
+    // So the view's control is not empty on its first paint, before any events have arrived.
+    it('falls back to the enabled subscriptions before anything is loaded', async () => {
+        apiMocks.getNote.mockResolvedValue({ data: YAML_FILE });
+        const { useCalendarsStore } = await load();
+        const store = useCalendarsStore();
+
+        await store.loadSubscriptions();
+
+        // The disabled one is left out: the backend never fetches it, so hiding it would do
+        // nothing.
+        expect(store.available).toEqual([{ id: 'work', name: 'Work', color: '#3f51b5' }]);
+    });
+});
+
 describe('subscriptions', () => {
     it('reads the list out of the repository', async () => {
         apiMocks.getNote.mockResolvedValue({ data: YAML_FILE });
