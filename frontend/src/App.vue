@@ -233,8 +233,8 @@
                         <template v-slot:activator="{ props }">
                             <v-list-item
                                 v-bind="props"
-                                v-bind:title="username"
-                                v-bind:subtitle="email"
+                                v-bind:title="username ?? undefined"
+                                v-bind:subtitle="email ?? undefined"
                             >
                                 <template v-slot:prepend>
                                     <Gravatar v-bind:email="email" style="margin-right: 8px"></Gravatar>
@@ -451,8 +451,8 @@
                     <template v-slot:activator="{ props }">
                         <v-list-item
                             v-bind="props"
-                            v-bind:title="username"
-                            v-bind:subtitle="email"
+                            v-bind:title="username ?? undefined"
+                            v-bind:subtitle="email ?? undefined"
                         >
                             <template v-slot:prepend>
                                 <Gravatar v-bind:email="email" style="margin-right: 8px"></Gravatar>
