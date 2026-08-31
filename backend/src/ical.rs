@@ -57,9 +57,15 @@ pub struct ImportedEvent {
     pub recurrence_id: String,
     pub name: String,
     pub start: String,
+    // Omitted rather than null: the client's types say `end?: string`, and a `null` reaching
+    // `toWallClock` threw out of the calendar's `events` computed, taking note events down with it.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub end: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub location: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
 }
 
@@ -186,32 +192,46 @@ fn date_of(value: &DatePerhapsTime) -> Option<NaiveDate> {
 ///
 /// iCal's `DTEND` is exclusive. For a timed event that is simply the end instant; for an all-day
 /// event it is the day *after* the last, which mory writes inclusively, so a day comes back off.
-fn occurrence_end(event: &Event, start: DateTime<Tz>) -> Option<String> {
-    let Some(end) = event.get_end() else {
-        // RFC 5545 allows DURATION in place of DTEND, and it is the shape that maps most directly
-        // onto mory's own `end: +1h`.
-        let duration = parse_duration(event.property_value("DURATION")?)?;
-        return Some(format_datetime(to_fixed_offset(start + duration)));
-    };
+fn utc_of(value: &DatePerhapsTime) -> Option<chrono::DateTime<chrono::Utc>> {
+    match value {
+        DatePerhapsTime::DateTime(date_time) => date_time.try_into_utc(),
+        DatePerhapsTime::Date(date) => Some(chrono::Utc.from_utc_datetime(&date.and_hms_opt(0, 0, 0)?)),
+    }
+}
+
+/// How long the event lasts, from its own `DTSTART`/`DTEND`, or from `DURATION`.
+///
+/// Measured against the event's *own* start, never against the occurrence being emitted: this is
+/// what every occurrence of a series is then given, so a daily meeting is an hour long on every
+/// day rather than on the first.
+fn event_length(event: &Event) -> Option<Duration> {
+    if let Some(end) = event.get_end() {
+        let start = utc_of(&event.get_start()?)?;
+        return Some(utc_of(&end)?.signed_duration_since(start));
+    }
+    // RFC 5545 allows DURATION in place of DTEND, and it is the shape that maps most directly onto
+    // mory's own `end: +1h`.
+    parse_duration(event.property_value("DURATION")?)
+}
+
+fn occurrence_end(event: &Event, occurrence: DateTime<Tz>) -> Option<String> {
+    let length = event_length(event)?;
     if is_all_day(event) {
-        let last = date_of(&end)?.pred_opt()?;
+        // `DTEND` is exclusive, so a one-day event spans zero days by this measure and mory's
+        // inclusive end is the start date itself.
+        let days = length.num_days();
+        let last = occurrence
+            .date_naive()
+            .checked_add_signed(Duration::days((days - 1).max(0)))?;
         return Some(format_date(last));
     }
-    let start_utc = start.with_timezone(&chrono::Utc);
-    let end_utc = match &end {
-        DatePerhapsTime::DateTime(date_time) => date_time.try_into_utc()?,
-        DatePerhapsTime::Date(date) => chrono::Utc.from_utc_datetime(&date.and_hms_opt(0, 0, 0)?),
-    };
-    // Carried as a duration so every occurrence of a series gets its own end rather than the
-    // first occurrence's literal one.
-    let length = end_utc.signed_duration_since(start_utc);
-    Some(format_datetime(to_fixed_offset(start + length)))
+    Some(format_datetime(to_fixed_offset(occurrence.checked_add_signed(length)?)))
 }
 
 /// An RFC 5545 `DURATION`, which is ISO 8601 restricted to whole units and no months or years.
 fn parse_duration(value: &str) -> Option<Duration> {
     let value = value.trim();
-    let (sign, rest) = match value.strip_prefix('-') {
+    let (sign, rest): (i64, &str) = match value.strip_prefix('-') {
         Some(rest) => (-1, rest),
         None => (1, value.strip_prefix('+').unwrap_or(value)),
     };
@@ -230,11 +250,13 @@ fn parse_duration(value: &str) -> Option<Duration> {
         }
         let amount: i64 = number.parse().ok()?;
         number.clear();
-        seconds += match c {
-            'W' => amount * 7 * 24 * 3600,
-            'D' => amount * 24 * 3600,
+        // Checked throughout: `DURATION:P999999999999D` in a feed used to panic inside chrono and
+        // drop the connection, taking every other calendar in the request with it.
+        seconds = seconds.checked_add(match c {
+            'W' => amount.checked_mul(7 * 24 * 3600)?,
+            'D' => amount.checked_mul(24 * 3600)?,
             _ => return None,
-        };
+        })?;
     }
     if !number.is_empty() {
         return None;
@@ -247,18 +269,18 @@ fn parse_duration(value: &str) -> Option<Duration> {
             }
             let amount: i64 = number.parse().ok()?;
             number.clear();
-            seconds += match c {
-                'H' => amount * 3600,
-                'M' => amount * 60,
+            seconds = seconds.checked_add(match c {
+                'H' => amount.checked_mul(3600)?,
+                'M' => amount.checked_mul(60)?,
                 'S' => amount,
                 _ => return None,
-            };
+            })?;
         }
         if !number.is_empty() {
             return None;
         }
     }
-    Some(Duration::seconds(sign * seconds))
+    Duration::try_seconds(sign.checked_mul(seconds)?)
 }
 
 /// A DATE or DATE-TIME property in mory's spelling: a bare date, or local time with its offset.
@@ -313,7 +335,7 @@ fn frequency_name(frequency: Frequency) -> Option<&'static str> {
 /// instead of the rule. Returning a rule that means something slightly different would be far
 /// worse, which is why `wkst` is carried rather than assumed -- Google emits `WKST=SU` on nearly
 /// every weekly rule with an interval, while `rrule` defaults to Monday.
-pub fn to_repeat(set: &RRuleSet) -> Option<Repeat> {
+pub fn to_repeat(set: &RRuleSet, all_day: bool, raw_rrule: Option<&str>) -> Option<Repeat> {
     let rules = set.get_rrule();
     if rules.len() != 1 {
         return None;
@@ -341,17 +363,51 @@ pub fn to_repeat(set: &RRuleSet) -> Option<Repeat> {
     let interval = rule.get_interval();
     let dtstart = set.get_dt_start();
 
+    // rrule splits BYMONTHDAY into positive and negative lists when it validates, and exposes a
+    // getter only for the positive one -- so `BYMONTHDAY=-1` ("the last day of the month") reads
+    // back as no restriction at all. Since the dialect can say it, read it off the rule as the
+    // feed wrote it rather than losing it or refusing the series.
+    let bymonthday = match raw_rrule.and_then(parse_by_month_day) {
+        Some(days) => days,
+        None => rule.get_by_month_day().to_vec(),
+    };
+
     Some(Repeat {
         freq: frequency_name(rule.get_freq())?.to_string(),
         interval: if interval == 1 { None } else { Some(interval) },
         byday,
-        bymonthday: rule.get_by_month_day().to_vec(),
+        bymonthday,
         bymonth: rule.get_by_month().to_vec(),
         wkst: Some(weekday_name(rule.get_week_start()).to_string()),
-        tz: iana_name_of(dtstart),
-        until: rule.get_until().map(|until| format_datetime(to_fixed_offset(*until))),
+        // Only for a timed series. An all-day occurrence is a date, not an instant, and naming a
+        // zone for it makes the reader convert midnight-in-that-zone into their own -- which moved
+        // every date in an imported holiday feed by a day for any reader west of it.
+        tz: if all_day { None } else { iana_name_of(dtstart) },
+        // Rendered in the series' own zone, not UTC. rrule keeps UNTIL in UTC, but the reader
+        // takes every rule value as wall clock in `tz` -- so a UTC spelling shifted the cut-off by
+        // the whole offset and gained or lost the final occurrence.
+        until: rule.get_until().map(|until| {
+            if all_day {
+                format_date(until.with_timezone(&dtstart.timezone()).date_naive())
+            }
+            else {
+                format_datetime(to_fixed_offset(until.with_timezone(&dtstart.timezone())))
+            }
+        }),
         count: rule.get_count(),
     })
+}
+
+/// The `BYMONTHDAY` list exactly as the feed wrote it, signs included.
+fn parse_by_month_day(rrule: &str) -> Option<Vec<i8>> {
+    let part = rrule
+        .split(';')
+        .find_map(|part| part.strip_prefix("BYMONTHDAY="))?;
+    let mut days = Vec::new();
+    for value in part.split(',') {
+        days.push(value.trim().parse::<i8>().ok()?);
+    }
+    if days.is_empty() { None } else { Some(days) }
 }
 
 /// The IANA zone a series is anchored in, when that is worth recording.
@@ -492,17 +548,31 @@ fn standalone(
     if date < from.date_naive() || date > to.date_naive() {
         return None;
     }
-    let at = match &start {
-        DatePerhapsTime::Date(day) => format_date(*day),
-        _ => format_date(date),
+
+    // Through the recurrence machinery even though there is no rule: with no RRULE it yields
+    // DTSTART as the single occurrence, already anchored in the event's own zone. That is the only
+    // way to recover the zone here -- a lone override has no series to borrow one from, and
+    // reducing it to a bare date drew a 90-minute meeting in the all-day row.
+    let occurrence = event.get_recurrence().ok().map(|set| *set.get_dt_start());
+    let at = match occurrence {
+        Some(occurrence) => format_occurrence(event, occurrence),
+        None => format_date(date),
+    };
+    // A RECURRENCE-ID names the occurrence this replaces; with no base series to match against,
+    // the override's own start is the best identity available.
+    let recurrence_id = match (event.get_recurrence_id(), occurrence) {
+        (Some(value), Some(occurrence)) => {
+            format_date_perhaps_time(&value, occurrence.timezone()).unwrap_or_else(|| at.clone())
+        }
+        _ => at.clone(),
     };
     Some(ImportedEvent {
         calendar: calendar_id.to_string(),
         uid: uid.to_string(),
-        recurrence_id: at.clone(),
+        recurrence_id,
         name: event.get_summary().unwrap_or("(untitled)").to_string(),
         start: at,
-        end: None,
+        end: occurrence.and_then(|occurrence| occurrence_end(event, occurrence)),
         note: event.get_description().map(str::to_string),
         location: event.get_location().map(str::to_string),
         url: event.get_url().map(str::to_string),
@@ -532,6 +602,9 @@ fn expand_series(
         .get_recurrence()
         .map_err(|e| format!("{uid}: {e}"))?;
 
+    // Every datetime this series contributes is rendered in its own zone.
+    let dtstart_tz = set.get_dt_start().timezone();
+
     let result = set
         .clone()
         .after(from.with_timezone(&Tz::UTC))
@@ -551,11 +624,11 @@ fn expand_series(
         let Some(key) = recurrence_key(&recurrence_id) else { continue };
         if is_cancelled(event) {
             cancelled.push(key.clone());
-            if let Some(spelling) = date_of(&recurrence_id) {
-                exclusions.push(match recurrence_id {
-                    DatePerhapsTime::Date(day) => format_date(day),
-                    _ => format_date(spelling),
-                });
+            // Spelled like the occurrence it removes. Reducing a timed RECURRENCE-ID to a bare
+            // date made the exclusion match nothing once converted, so the deleted occurrence came
+            // back -- and was reported as an unmatched adjustment besides.
+            if let Some(spelling) = format_date_perhaps_time(&recurrence_id, dtstart_tz) {
+                exclusions.push(spelling);
             }
             continue;
         }
@@ -571,24 +644,41 @@ fn expand_series(
         let at = format_occurrence(base, *occurrence);
         let source = replacements.get(&key).copied().unwrap_or(base);
 
+        // A replacement carries its own DTSTART, which is usually *why* it exists: moving one
+        // occurrence of a series is the commonest reason to override it. Reading only the
+        // occurrence the rule generated would draw a moved meeting at the time it used to be.
         let (start, end) = match replacements.get(&key) {
-            // A replaced occurrence carries its own times, which may differ from the one it
-            // replaces -- that is usually why it exists.
-            Some(replacement) => {
-                let start = replacement
-                    .get_start()
-                    .and_then(|value| date_of(&value).map(|d| (value, d)));
-                match start {
-                    Some((value, day)) => (
-                        match value {
-                            DatePerhapsTime::Date(_) => format_date(day),
-                            _ => format_occurrence(replacement, *occurrence),
-                        },
-                        occurrence_end(replacement, *occurrence),
-                    ),
-                    None => (at.clone(), occurrence_end(base, *occurrence)),
+            Some(replacement) => match replacement
+                .get_start()
+                .and_then(|value| format_date_perhaps_time(&value, dtstart_tz))
+            {
+                Some(moved) => {
+                    let end = replacement
+                        .get_end()
+                        .and_then(|value| format_date_perhaps_time(&value, dtstart_tz))
+                        .or_else(|| {
+                            // Only DURATION is left, which is relative to the replacement's start.
+                            let length = event_length(replacement)?;
+                            let anchor = utc_of(&replacement.get_start()?)?;
+                            Some(format_datetime(to_fixed_offset(
+                                anchor.checked_add_signed(length)?.with_timezone(&dtstart_tz),
+                            )))
+                        });
+                    let end = if is_all_day(replacement) {
+                        // Exclusive DTEND, as everywhere else.
+                        replacement
+                            .get_end()
+                            .and_then(|value| date_of(&value))
+                            .and_then(|day| day.pred_opt())
+                            .map(format_date)
+                    }
+                    else {
+                        end
+                    };
+                    (moved, end)
                 }
-            }
+                None => (at.clone(), occurrence_end(base, *occurrence)),
+            },
             None => (at.clone(), occurrence_end(base, *occurrence)),
         };
 
@@ -607,7 +697,6 @@ fn expand_series(
     }
 
     // EXDATEs the feed declared, alongside the cancelled overrides collected above.
-    let dtstart_tz = set.get_dt_start().timezone();
     if let Some(exdates) = base.multi_properties().get("EXDATE") {
         for property in exdates {
             if let Some(value) = DatePerhapsTime::from_property(property) {
@@ -647,10 +736,28 @@ fn expand_series(
                 Some(start) if *start != at => Some(start.clone()),
                 _ => None,
             },
-            end: event
-                .get_end()
-                .and_then(|value| format_date_perhaps_time(&value, dtstart_tz))
-                .or_else(|| event.property_value("DURATION").map(str::to_string)),
+            end: if is_all_day(event) {
+                // Exclusive DTEND, as everywhere else.
+                event
+                    .get_end()
+                    .and_then(|value| date_of(&value))
+                    .and_then(|day| day.pred_opt())
+                    .map(format_date)
+            }
+            else {
+                event
+                    .get_end()
+                    .and_then(|value| format_date_perhaps_time(&value, dtstart_tz))
+                    // A raw `PT90M` is iCal's spelling, which the reader cannot parse and would
+                    // drop the occurrence over. Resolve it against this override's own start.
+                    .or_else(|| {
+                        let length = event_length(event)?;
+                        let anchor = utc_of(&event.get_start()?)?;
+                        Some(format_datetime(to_fixed_offset(
+                            anchor.checked_add_signed(length)?.with_timezone(&dtstart_tz),
+                        )))
+                    })
+            },
             note: event.get_description().map(str::to_string),
             location: event.get_location().map(str::to_string),
         });
@@ -671,7 +778,7 @@ fn expand_series(
             name: base.get_summary().unwrap_or("(untitled)").to_string(),
             start: format_occurrence(base, *dtstart),
             end: occurrence_end(base, *dtstart),
-            repeat: to_repeat(&set),
+            repeat: to_repeat(&set, is_all_day(base), base.property_value("RRULE")),
             exclusions,
             overrides: collected_overrides,
             note: base.get_description().map(str::to_string),
@@ -683,7 +790,20 @@ fn expand_series(
     Ok(())
 }
 
-/// Parse the `start`/`end` a request asks for: a bare date, read as the whole day, in UTC.
+/// A day either side of the requested range, because the range is dates and occurrences are
+/// instants.
+///
+/// A window of bare dates does not name instants until a timezone is chosen, and each feed anchors
+/// its own occurrences in its own zone -- a Tokyo feed's 2024-05-01 begins nine hours before UTC's
+/// does. Applying the dates as UTC midnights therefore clipped the first day and leaked the day
+/// after for any feed east of UTC, which for a Japanese calendar is every month view.
+///
+/// The reader's zone is not known here and could not settle it for several feeds at once anyway,
+/// so the window is widened instead. Erring wide is safe: the caller already asks for a month
+/// either side of what it draws, and the calendar renders only the days on screen. Erring narrow
+/// silently loses events.
+const WINDOW_PADDING_DAYS: i64 = 1;
+
 pub fn parse_window(from: &str, to: &str) -> Result<(DateTime<FixedOffset>, DateTime<FixedOffset>)> {
     let start = NaiveDate::parse_from_str(from, "%Y-%m-%d").context("invalid start")?;
     let end = NaiveDate::parse_from_str(to, "%Y-%m-%d").context("invalid end")?;
@@ -691,8 +811,14 @@ pub fn parse_window(from: &str, to: &str) -> Result<(DateTime<FixedOffset>, Date
         bail!("the window ends before it starts");
     }
     let utc = FixedOffset::east_opt(0).unwrap();
+    let first = start
+        .checked_sub_signed(Duration::days(WINDOW_PADDING_DAYS))
+        .context("the window starts too early")?;
+    let last = end
+        .checked_add_signed(Duration::days(WINDOW_PADDING_DAYS + 1))
+        .context("the window ends too late")?;
     Ok((
-        utc.from_utc_datetime(&start.and_hms_opt(0, 0, 0).unwrap()),
-        utc.from_utc_datetime(&(end + Duration::days(1)).and_hms_opt(0, 0, 0).unwrap()),
+        utc.from_utc_datetime(&first.and_hms_opt(0, 0, 0).unwrap()),
+        utc.from_utc_datetime(&last.and_hms_opt(0, 0, 0).unwrap()),
     ))
 }

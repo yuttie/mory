@@ -1678,12 +1678,25 @@ Important:
         let literal = host.strip_prefix('[').and_then(|h| h.strip_suffix(']')).unwrap_or(&host);
 
         if let Ok(ip) = literal.parse::<std::net::IpAddr>() {
+            // An IPv4-mapped address is the same host wearing a v6 spelling, and `is_loopback` is
+            // false for `::ffff:127.0.0.1`, so unwrap it before judging.
+            let ip = match ip {
+                std::net::IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
+                    Some(v4) => std::net::IpAddr::V4(v4),
+                    None => ip,
+                },
+                _ => ip,
+            };
             return !(ip.is_loopback()
                 || ip.is_unspecified()
                 || ip.is_multicast()
                 || match ip {
                     std::net::IpAddr::V4(v4) => {
-                        v4.is_private() || v4.is_link_local() || v4.is_broadcast()
+                        v4.is_private()
+                            || v4.is_link_local()
+                            || v4.is_broadcast()
+                            // Carrier-grade NAT, 100.64.0.0/10.
+                            || (v4.octets()[0] == 100 && (v4.octets()[1] & 0xc0) == 0x40)
                     }
                     // Unique-local (fc00::/7) and link-local (fe80::/10).
                     std::net::IpAddr::V6(v6) => {

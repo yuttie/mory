@@ -1477,9 +1477,11 @@ fn a_feed_using_a_non_iana_timezone_is_reported_rather_than_dropped_silently() {
 #[test]
 fn a_window_is_read_as_whole_days_and_must_not_run_backwards() {
     let (from, to) = window("2024-05-01", "2024-05-01");
-    assert_eq!(from.to_rfc3339(), "2024-05-01T00:00:00+00:00");
-    // The end covers the whole final day, so an occurrence at 09:00 on it is inside.
-    assert_eq!(to.to_rfc3339(), "2024-05-02T00:00:00+00:00");
+    // A day either side of the requested range: the range names dates, occurrences are instants,
+    // and each feed anchors its own in its own zone. Erring wide costs a few rows; erring narrow
+    // clipped the first day of every month view of a Japanese calendar.
+    assert_eq!(from.to_rfc3339(), "2024-04-30T00:00:00+00:00");
+    assert_eq!(to.to_rfc3339(), "2024-05-03T00:00:00+00:00");
 
     assert!(crate::ical::parse_window("2024-05-02", "2024-05-01").is_err());
     assert!(crate::ical::parse_window("nonsense", "2024-05-01").is_err());
@@ -1530,6 +1532,11 @@ fn loopback_private_and_link_local_addresses_are_not_fetchable() {
         "https://[::1]/x.ics",
         "https://[fe80::1]/x.ics",
         "https://[fc00::1]/x.ics",
+        // An IPv4-mapped address is the same host in a v6 spelling; `is_loopback` is false for it.
+        "https://[::ffff:127.0.0.1]/x.ics",
+        "https://[::ffff:10.0.0.1]/x.ics",
+        // Carrier-grade NAT.
+        "https://100.64.0.1/x.ics",
     ] {
         assert!(!fetchable(url), "{url} must not be fetchable");
     }
@@ -1540,4 +1547,233 @@ fn a_public_address_literal_is_still_fetchable() {
     // Only the private ranges are excluded, not addresses written as literals.
     assert!(fetchable("https://93.184.216.34/x.ics"));
     assert!(fetchable("https://[2606:2800:220:1:248:1893:25c8:1946]/x.ics"));
+}
+
+/// Every occurrence of a series lasts as long as the event does, not until the first one's end.
+///
+/// Regression: the length was measured from the occurrence being emitted rather than from DTSTART,
+/// so `occurrence + (DTEND - occurrence)` collapsed back to DTEND for every occurrence -- and every
+/// occurrence after the first ended *before* it started.
+#[test]
+fn every_occurrence_of_a_series_keeps_the_events_own_length() {
+    let calendar = calendar_of(
+        "BEGIN:VEVENT\r\nDTSTART;TZID=Asia/Tokyo:20240501T090000\r\n\
+         DTEND;TZID=Asia/Tokyo:20240501T100000\r\nRRULE:FREQ=DAILY\r\nUID:t@example\r\n\
+         SUMMARY:Daily\r\nEND:VEVENT\r\n",
+    );
+    let (from, to) = window("2024-05-01", "2024-05-03");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    for day in ["2024-05-01", "2024-05-02", "2024-05-03"] {
+        let event = expansion
+            .events
+            .iter()
+            .find(|e| e.start.starts_with(day))
+            .unwrap_or_else(|| panic!("{day} should be drawn"));
+        assert_eq!(event.end.as_deref(), Some(format!("{day} 10:00:00+09:00").as_str()));
+    }
+    for event in &expansion.events {
+        assert!(event.end.as_deref().unwrap() > event.start.as_str(), "{event:?}");
+    }
+}
+
+#[test]
+fn a_multi_day_all_day_series_keeps_its_span_on_every_occurrence() {
+    // DTEND is exclusive, so 20240101..20240103 is the 1st and 2nd inclusive.
+    let calendar = calendar_of(
+        "BEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20240101\r\nDTEND;VALUE=DATE:20240103\r\n\
+         RRULE:FREQ=WEEKLY;BYDAY=MO\r\nUID:a@example\r\nSUMMARY:Two-day\r\nEND:VEVENT\r\n",
+    );
+    let (from, to) = window("2024-01-01", "2024-01-20");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    let spans: Vec<_> = expansion
+        .events
+        .iter()
+        .map(|e| (e.start.as_str(), e.end.as_deref().unwrap()))
+        .collect();
+    assert!(spans.contains(&("2024-01-08", "2024-01-09")), "{spans:?}");
+    assert!(spans.contains(&("2024-01-15", "2024-01-16")), "{spans:?}");
+}
+
+/// An override that moves an occurrence is drawn where it moved to.
+///
+/// Regression: only the *shape* of the replacement's DTSTART was read, never its time, so a meeting
+/// moved from 10:00 to 16:00 was drawn at 10:00 and given the new end -- a one-hour meeting shown
+/// as a seven-hour block, disagreeing with the note that converting it would write.
+#[test]
+fn an_override_that_moves_an_occurrence_is_drawn_at_its_new_time() {
+    let calendar = calendar_of(&format!(
+        "{RUST_SERIES}\
+         BEGIN:VEVENT\r\nDTSTART;TZID=America/Los_Angeles:20150806T160000\r\n\
+         DTEND;TZID=America/Los_Angeles:20150806T170000\r\n\
+         RECURRENCE-ID;TZID=America/Los_Angeles:20150806T100000\r\n\
+         UID:poms@google.com\r\nSUMMARY:Moved to the afternoon\r\nEND:VEVENT\r\n",
+    ));
+    let (from, to) = window("2015-08-01", "2015-08-31");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    let moved = expansion.events.iter().find(|e| e.name == "Moved to the afternoon").unwrap();
+    assert_eq!(moved.start, "2015-08-06 16:00:00-07:00");
+    assert_eq!(moved.end.as_deref(), Some("2015-08-06 17:00:00-07:00"));
+    // The occurrence it replaces is still what identifies it.
+    assert_eq!(moved.recurrence_id, "2015-08-06 10:00:00-07:00");
+
+    // ...and the note conversion would write agrees with what is drawn.
+    let override_ = &expansion.series["poms@google.com"].overrides[0];
+    assert_eq!(override_.at, "2015-08-06 10:00:00-07:00");
+    assert_eq!(override_.start.as_deref(), Some("2015-08-06 16:00:00-07:00"));
+}
+
+/// An all-day series is not given a timezone, because a date is not an instant.
+///
+/// Regression: `X-WR-TIMEZONE` anchoring made `to_repeat` write `tz: Asia/Tokyo` onto a series
+/// whose `start` is a bare date. The reader then converted midnight-in-Tokyo into its own zone and
+/// every date in an imported holiday feed moved a day for anyone west of it.
+#[test]
+fn an_all_day_series_carries_no_timezone() {
+    let calendar = calendar_of(
+        "BEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20240506\r\nDTEND;VALUE=DATE:20240507\r\n\
+         RRULE:FREQ=WEEKLY;BYDAY=MO\r\nUID:ad@example\r\nSUMMARY:Holiday\r\nEND:VEVENT\r\n",
+    );
+    let (from, to) = window("2024-05-01", "2024-05-31");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    let repeat = expansion.series["ad@example"].repeat.as_ref().expect("expressible");
+    assert_eq!(repeat.tz, None);
+
+    // ...while a timed series in the same feed still names its zone.
+    let timed = calendar_of(
+        "BEGIN:VEVENT\r\nDTSTART;TZID=America/Los_Angeles:20240506T100000\r\n\
+         RRULE:FREQ=WEEKLY\r\nUID:t@example\r\nSUMMARY:Timed\r\nEND:VEVENT\r\n",
+    );
+    let (from, to) = window("2024-05-01", "2024-05-31");
+    let timed = crate::ical::expand(&timed, "cal", from, to);
+    assert_eq!(
+        timed.series["t@example"].repeat.as_ref().unwrap().tz.as_deref(),
+        Some("America/Los_Angeles"),
+    );
+}
+
+/// `BYMONTHDAY=-1` survives, rather than reading back as no restriction at all.
+///
+/// Regression: rrule splits BYMONTHDAY into positive and negative lists when it validates and
+/// exposes a getter only for the positive one, so "the last day of the month" silently became
+/// "every month" -- and the note claimed the whole series, hiding the occurrences it had lost.
+#[test]
+fn a_negative_month_day_survives_the_round_trip() {
+    let calendar = calendar_of(
+        "BEGIN:VEVENT\r\nDTSTART;TZID=Asia/Tokyo:20240131T090000\r\n\
+         RRULE:FREQ=MONTHLY;BYMONTHDAY=-1;COUNT=5\r\nUID:neg@example\r\n\
+         SUMMARY:Month end\r\nEND:VEVENT\r\n",
+    );
+    let (from, to) = window("2024-01-01", "2024-05-31");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    assert_eq!(
+        expansion.series["neg@example"].repeat.as_ref().unwrap().bymonthday,
+        vec![-1],
+    );
+    // Five month-ends, including the leap-year February.
+    let days: Vec<_> = expansion.events.iter().map(|e| e.start[..10].to_string()).collect();
+    assert_eq!(
+        days,
+        vec!["2024-01-31", "2024-02-29", "2024-03-31", "2024-04-30", "2024-05-31"],
+    );
+}
+
+/// `UNTIL` is written in the series' own zone, since the reader takes rule values as wall clock.
+///
+/// Regression: rrule keeps UNTIL in UTC and it was formatted as such, so the cut-off was compared
+/// against occurrences in a different frame and the series gained or lost its final occurrence.
+#[test]
+fn until_is_written_in_the_series_own_zone() {
+    let calendar = calendar_of(
+        "BEGIN:VEVENT\r\nDTSTART;TZID=Asia/Tokyo:20260101T160000\r\n\
+         RRULE:FREQ=DAILY;UNTIL=20260105T070000Z\r\nUID:u@example\r\n\
+         SUMMARY:Bounded\r\nEND:VEVENT\r\n",
+    );
+    let (from, to) = window("2026-01-01", "2026-01-10");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    // 07:00Z is 16:00 JST, the last occurrence.
+    assert_eq!(
+        expansion.series["u@example"].repeat.as_ref().unwrap().until.as_deref(),
+        Some("2026-01-05 16:00:00+09:00"),
+    );
+}
+
+/// A cancelled override is spelled like the occurrence it removes, so the exclusion matches.
+///
+/// Regression: a timed RECURRENCE-ID was reduced to a bare date, which matched no occurrence once
+/// converted -- so the deleted occurrence came back, and was reported as a bad adjustment too.
+#[test]
+fn a_cancelled_override_is_excluded_at_its_own_time() {
+    let calendar = calendar_of(&format!(
+        "{RUST_SERIES}\
+         BEGIN:VEVENT\r\nDTSTART;TZID=America/Los_Angeles:20150806T100000\r\n\
+         RECURRENCE-ID;TZID=America/Los_Angeles:20150806T100000\r\n\
+         STATUS:CANCELLED\r\nUID:poms@google.com\r\nSUMMARY:Rust release\r\nEND:VEVENT\r\n",
+    ));
+    let (from, to) = window("2015-06-01", "2015-10-01");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    let exclusions = &expansion.series["poms@google.com"].exclusions;
+    assert!(
+        exclusions.contains(&"2015-08-06 10:00:00-07:00".to_string()),
+        "a timed cancellation keeps its time: {exclusions:?}",
+    );
+}
+
+/// An override with no base series keeps its own time and end.
+///
+/// Regression: both arms of the formatting reduced it to a bare date, so a 90-minute meeting drew
+/// in the all-day row with no end at all -- and the null end then threw in the client.
+#[test]
+fn an_orphan_override_keeps_its_time() {
+    let calendar = calendar_of(
+        "BEGIN:VEVENT\r\nDTSTART;TZID=Asia/Tokyo:20240513T150000\r\n\
+         DTEND;TZID=Asia/Tokyo:20240513T163000\r\n\
+         RECURRENCE-ID;TZID=Asia/Tokyo:20240513T100000\r\n\
+         UID:orphan@example\r\nSUMMARY:Moved standup\r\nEND:VEVENT\r\n",
+    );
+    let (from, to) = window("2024-05-01", "2024-05-31");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    assert_eq!(expansion.events.len(), 1);
+    let event = &expansion.events[0];
+    assert!(event.start.contains("15:00"), "{}", event.start);
+    assert!(event.end.as_deref().unwrap().contains("16:30"), "{:?}", event.end);
+}
+
+/// An override whose length is a DURATION reaches the note as a time, not as `PT90M`.
+#[test]
+fn an_override_duration_is_resolved_before_it_reaches_the_note() {
+    let calendar = calendar_of(&format!(
+        "{RUST_SERIES}\
+         BEGIN:VEVENT\r\nDTSTART;TZID=America/Los_Angeles:20150806T100000\r\n\
+         DURATION:PT90M\r\n\
+         RECURRENCE-ID;TZID=America/Los_Angeles:20150806T100000\r\n\
+         UID:poms@google.com\r\nSUMMARY:Longer one\r\nEND:VEVENT\r\n",
+    ));
+    let (from, to) = window("2015-08-01", "2015-08-31");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    let end = expansion.series["poms@google.com"].overrides[0].end.as_deref().unwrap();
+    assert_eq!(end, "2015-08-06 11:30:00-07:00", "not the raw iCal spelling");
+}
+
+/// A hostile DURATION cannot take the request down.
+#[test]
+fn an_absurd_duration_is_refused_rather_than_panicking() {
+    let calendar = calendar_of(
+        "BEGIN:VEVENT\r\nDTSTART;TZID=Asia/Tokyo:20240501T090000\r\n\
+         DURATION:P999999999999D\r\nUID:boom@example\r\nSUMMARY:Overflow\r\nEND:VEVENT\r\n",
+    );
+    let (from, to) = window("2024-05-01", "2024-05-02");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    // The event still appears; only its end is unusable.
+    assert_eq!(expansion.events.len(), 1);
+    assert_eq!(expansion.events[0].end, None);
 }
