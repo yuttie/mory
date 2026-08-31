@@ -126,27 +126,16 @@
                 <v-navigation-drawer
                     location="end"
                     v-bind:rail="miniSubSidebar"
-                    v-bind:expand-on-hover="miniSubSidebar"
                     permanent
                     width="312"
                     class="sidebar"
                 >
                     <v-list density="compact" nav>
-                        <v-list-item>
-                            <v-btn
-                                v-if="!miniSubSidebar"
-                                icon
-                                variant="text"
-                                rounded="0"
-                                v-on:click.stop="miniSubSidebar = true"
-                            ><v-icon>{{ mdiChevronDoubleRight }}</v-icon></v-btn>
-                        </v-list-item>
                         <v-list-item
-                            v-if="miniSubSidebar"
-                            v-on:click="miniSubSidebar = false"
+                            v-on:click.stop="miniSubSidebar = !miniSubSidebar"
                         >
                             <template v-slot:prepend>
-                                <v-icon>{{ mdiChevronDoubleLeft }}</v-icon>
+                                <v-icon>{{ miniSubSidebar ? mdiChevronDoubleLeft : mdiChevronDoubleRight }}</v-icon>
                             </template>
                         </v-list-item>
                     </v-list>
