@@ -34,14 +34,14 @@
                         label="Font Size"
                         min="1"
                         max="64"
+                        step="0.5"
                         thumb-label
                     >
                         <template v-slot:append>
                             <v-text-field
                                 v-model="currentEditorFontSize"
                                 type="text"
-                                class="mt-0 pt-0"
-                                style="width: 3em"
+                                style="width: 6em"
                                 suffix="pt"
                                 readonly
                             ></v-text-field>
@@ -51,15 +51,14 @@
                         v-model="editorIndentSize"
                         label="Indent Size"
                         min="1"
-                        max="64"
+                        max="16"
+                        step="1"
                         thumb-label
                     >
                         <template v-slot:append>
                             <v-text-field
                                 v-model="editorIndentSize"
                                 type="text"
-                                class="mt-0 pt-0"
-                                style="width: 6em"
                                 suffix="spaces"
                                 readonly
                             ></v-text-field>
@@ -116,17 +115,16 @@
                     <v-slider
                         v-model="noteTreeInitialRows"
                         label="Initial Rows"
-                        min="1"
-                        max="200"
-                        step="1"
+                        min="10"
+                        max="100"
+                        step="10"
                         thumb-label
                     >
                         <template v-slot:append>
                             <v-text-field
                                 v-model="noteTreeInitialRows"
                                 type="text"
-                                class="mt-0 pt-0"
-                                style="width: 6em"
+                                style="width: 7em"
                                 suffix="rows"
                                 readonly
                             ></v-text-field>
@@ -135,17 +133,16 @@
                     <v-slider
                         v-model="noteTreeRowIncrement"
                         label="Rows per Press"
-                        min="1"
-                        max="200"
-                        step="1"
+                        min="10"
+                        max="100"
+                        step="10"
                         thumb-label
                     >
                         <template v-slot:append>
                             <v-text-field
                                 v-model="noteTreeRowIncrement"
                                 type="text"
-                                class="mt-0 pt-0"
-                                style="width: 6em"
+                                style="width: 7em"
                                 suffix="rows"
                                 readonly
                             ></v-text-field>
