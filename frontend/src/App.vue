@@ -62,7 +62,7 @@
                     <v-list-item
                         variant="text"
                         title="Enable notification"
-                        color="error"
+                        base-color="error"
                         style="min-width: 36px"
                         v-if="needRequestForNotificationPermission"
                         v-on:click="requestNotificationPermission"
@@ -289,7 +289,7 @@
                 <v-list-item
                     variant="text"
                     title="Enable notification"
-                    color="error"
+                    base-color="error"
                     style="min-width: 36px"
                     v-if="needRequestForNotificationPermission"
                     v-on:click="requestNotificationPermission"
