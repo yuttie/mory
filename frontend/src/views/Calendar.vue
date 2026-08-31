@@ -11,6 +11,61 @@
             <v-toolbar-title v-if="calendar" class="mr-3">
                 {{ calendar.title }}
             </v-toolbar-title>
+            <v-spacer></v-spacer>
+            <v-menu
+                v-if="calendars.available.length > 0"
+                v-bind:close-on-content-click="false"
+                location="bottom end"
+            >
+                <template v-slot:activator="{ props }">
+                    <v-btn
+                        v-bind="props"
+                        icon
+                        size="small"
+                        variant="text"
+                        title="Choose which imported calendars are shown"
+                    >
+                        <v-badge
+                            v-bind:model-value="hiddenCalendars.size > 0"
+                            v-bind:content="hiddenCalendars.size"
+                            color="grey"
+                        >
+                            <v-icon>{{ mdiCalendarMultiple }}</v-icon>
+                        </v-badge>
+                    </v-btn>
+                </template>
+                <v-card min-width="16em">
+                    <v-list density="compact" class="py-0">
+                        <v-list-subheader>Imported calendars</v-list-subheader>
+                        <v-list-item
+                            v-for="subscription of calendars.available"
+                            v-bind:key="subscription.id"
+                            v-bind:title="subscription.name"
+                            v-on:click="toggleCalendar(subscription.id)"
+                        >
+                            <template v-slot:prepend>
+                                <v-checkbox-btn
+                                    v-bind:model-value="!hiddenCalendars.has(subscription.id)"
+                                    density="compact"
+                                    class="mr-1"
+                                    tabindex="-1"
+                                ></v-checkbox-btn>
+                                <v-avatar
+                                    v-bind:color="calendars.colorOf.get(subscription.id) || DEFAULT_IMPORTED_COLOR"
+                                    class="mr-3"
+                                    size="12"
+                                ></v-avatar>
+                            </template>
+                        </v-list-item>
+                        <v-divider></v-divider>
+                        <v-list-item
+                            v-bind:disabled="hiddenCalendars.size === 0"
+                            title="Show all"
+                            v-on:click="showAllCalendars"
+                        ></v-list-item>
+                    </v-list>
+                </v-card>
+            </v-menu>
             <v-progress-linear
                 absolute
                 location="bottom"
@@ -149,6 +204,7 @@ import { useRoute, useRouter } from 'vue-router';
 
 import {
     mdiCalendarImport,
+    mdiCalendarMultiple,
     mdiCheck,
     mdiChevronLeft,
     mdiChevronRight,
@@ -161,11 +217,12 @@ import {
 } from '@mdi/js';
 
 
-import { DEFAULT_EVENT_COLOR, eventsFromEntries, mergeImported } from '@/events';
+import { DEFAULT_EVENT_COLOR, DEFAULT_IMPORTED_COLOR, eventsFromEntries, mergeImported } from '@/events';
 import type { CalendarEvent } from '@/events';
 import { buildOccurrenceNote, buildSeriesNote, canConvertSeries } from '@/event-note';
 import { useCalendarsStore } from '@/stores/calendars';
 import { LAGGING_RETRY_MS, useFilesStore } from '@/stores/files';
+import { useLocalStorage } from '@/composables/localStorage';
 import Color from 'color';
 import materialColors from 'vuetify/util/colors';
 import dayjs from 'dayjs';
@@ -193,6 +250,12 @@ const isConverting = ref(false);
 const selectedEventRenderedNote = ref<string | null>(null);
 const selectedElement = ref<Element | undefined>(undefined);
 const selectedOpen = ref(false);
+// Which imported calendars this browser is not drawing. A view preference, not repository data:
+// the `enabled` flag in the settings decides what is fetched at all and is shared through
+// `.mory/calendars.yaml`, while this only stops what arrived from being drawn here. Ids of
+// calendars that are gone are kept rather than pruned, so a subscription that fails to load once
+// does not come back shown.
+const hiddenCalendarIds = useLocalStorage<string[]>('hidden-imported-calendars', []);
 
 // Template Refs
 const calendar = ref<any>(null);
@@ -209,10 +272,11 @@ const eventWindow = computed(() => {
     };
 });
 const derived = computed(() => eventsFromEntries(files.entries, eventWindow.value));
+const hiddenCalendars = computed(() => new Set(hiddenCalendarIds.value));
 const events = computed(() => mergeImported(
     derived.value.events,
     calendars.events,
-    { colorOf: calendars.colorOf },
+    { colorOf: calendars.colorOf, hidden: hiddenCalendars.value },
 ));
 const eventErrors = computed(() => derived.value.errors);
 
@@ -413,6 +477,16 @@ async function settle(path: string) {
         }
         await new Promise((resolve) => setTimeout(resolve, LAGGING_RETRY_MS));
     }
+}
+
+function toggleCalendar(id: string) {
+    hiddenCalendarIds.value = hiddenCalendars.value.has(id)
+        ? hiddenCalendarIds.value.filter((hidden) => hidden !== id)
+        : [...hiddenCalendarIds.value, id];
+}
+
+function showAllCalendars() {
+    hiddenCalendarIds.value = [];
 }
 
 function setToday() {
