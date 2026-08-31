@@ -1484,3 +1484,60 @@ fn a_window_is_read_as_whole_days_and_must_not_run_backwards() {
     assert!(crate::ical::parse_window("2024-05-02", "2024-05-01").is_err());
     assert!(crate::ical::parse_window("nonsense", "2024-05-01").is_err());
 }
+
+// ---------------------------------------------------------------------------
+// T8 — which URLs a calendar feed may be fetched from
+// ---------------------------------------------------------------------------
+
+fn fetchable(url: &str) -> bool {
+    crate::v2::is_fetchable_feed_url(&reqwest::Url::parse(url).expect("a parseable URL"))
+}
+
+#[test]
+fn a_public_https_calendar_is_fetchable() {
+    assert!(fetchable("https://calendar.google.com/calendar/ical/x/public/basic.ics"));
+    assert!(fetchable("https://www.google.com/calendar/ical/x/public/basic.ics"));
+    assert!(fetchable("https://outlook.office365.com/owa/calendar/x/calendar.ics"));
+    // A trailing dot is the same host, written absolutely.
+    assert!(fetchable("https://calendar.google.com./x.ics"));
+}
+
+#[test]
+fn only_https_is_fetchable() {
+    assert!(!fetchable("http://calendar.google.com/x.ics"));
+    assert!(!fetchable("file:///etc/passwd"));
+    assert!(!fetchable("ftp://example.com/x.ics"));
+}
+
+/// The addresses a redirect could otherwise be used to reach.
+///
+/// This is the check a redirect hop goes through, which is why redirects can be followed at all --
+/// Google hands out `www.google.com/calendar/ical/...` links that 302 to `calendar.google.com`.
+#[test]
+fn loopback_private_and_link_local_addresses_are_not_fetchable() {
+    for url in [
+        "https://127.0.0.1/x.ics",
+        "https://localhost/x.ics",
+        "https://LOCALHOST/x.ics",
+        "https://box.localhost/x.ics",
+        "https://printer.local/x.ics",
+        "https://metadata.internal/x.ics",
+        "https://169.254.169.254/latest/meta-data/",
+        "https://10.0.0.1/x.ics",
+        "https://192.168.1.1/x.ics",
+        "https://172.16.0.1/x.ics",
+        "https://0.0.0.0/x.ics",
+        "https://[::1]/x.ics",
+        "https://[fe80::1]/x.ics",
+        "https://[fc00::1]/x.ics",
+    ] {
+        assert!(!fetchable(url), "{url} must not be fetchable");
+    }
+}
+
+#[test]
+fn a_public_address_literal_is_still_fetchable() {
+    // Only the private ranges are excluded, not addresses written as literals.
+    assert!(fetchable("https://93.184.216.34/x.ics"));
+    assert!(fetchable("https://[2606:2800:220:1:248:1893:25c8:1946]/x.ics"));
+}

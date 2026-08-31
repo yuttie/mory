@@ -1653,15 +1653,68 @@ Important:
     /// The largest feed we will read into memory.
     const MAX_FEED_BYTES: usize = 8 * 1024 * 1024;
 
-    /// Declaring a URL in the repository is not on its own a defence: a declared HTTPS address can
-    /// still redirect to a link-local or LAN one, and the body would come back to the caller. So
-    /// the scheme is pinned, redirects are refused rather than followed, and the body is capped.
-    fn feed_client(base: &reqwest::Client) -> reqwest::Client {
-        let _ = base;
+    /// At most this many hops, which is more than any calendar host needs.
+    const MAX_FEED_REDIRECTS: usize = 5;
+
+    /// Whether a URL is one a feed may be fetched from, or redirected to.
+    ///
+    /// Declaring a URL in the repository is not on its own a defence: a declared address can
+    /// redirect somewhere else, and the body would come back to the caller. Redirects must still be
+    /// followed -- Google hands out `www.google.com/calendar/ical/...` links that 302 to
+    /// `calendar.google.com` -- so each hop is checked instead of refused.
+    ///
+    /// This is a hostname check, so it stops the obvious cases and not a host that resolves to a
+    /// private address anyway. Blocking that needs the resolved IP, which means a custom connector;
+    /// for a single-user app fetching calendars it names itself, this is the proportionate guard.
+    pub fn is_fetchable_feed_url(url: &reqwest::Url) -> bool {
+        if url.scheme() != "https" {
+            return false;
+        }
+        let Some(host) = url.host_str() else {
+            return false;
+        };
+        let host = host.trim_end_matches('.').to_ascii_lowercase();
+        // `host_str` keeps the brackets on an IPv6 literal, which `IpAddr` will not parse.
+        let literal = host.strip_prefix('[').and_then(|h| h.strip_suffix(']')).unwrap_or(&host);
+
+        if let Ok(ip) = literal.parse::<std::net::IpAddr>() {
+            return !(ip.is_loopback()
+                || ip.is_unspecified()
+                || ip.is_multicast()
+                || match ip {
+                    std::net::IpAddr::V4(v4) => {
+                        v4.is_private() || v4.is_link_local() || v4.is_broadcast()
+                    }
+                    // Unique-local (fc00::/7) and link-local (fe80::/10).
+                    std::net::IpAddr::V6(v6) => {
+                        let segments = v6.segments();
+                        (segments[0] & 0xfe00) == 0xfc00 || (segments[0] & 0xffc0) == 0xfe80
+                    }
+                });
+        }
+
+        host != "localhost"
+            && !host.ends_with(".localhost")
+            && !host.ends_with(".local")
+            && !host.ends_with(".internal")
+    }
+
+    fn feed_client() -> reqwest::Client {
+        let redirect = reqwest::redirect::Policy::custom(|attempt| {
+            if attempt.previous().len() >= MAX_FEED_REDIRECTS {
+                return attempt.error("too many redirects");
+            }
+            if is_fetchable_feed_url(attempt.url()) {
+                attempt.follow()
+            }
+            else {
+                attempt.error("redirected somewhere a calendar may not be fetched from")
+            }
+        });
         reqwest::Client::builder()
             .gzip(true)
             .brotli(true)
-            .redirect(reqwest::redirect::Policy::none())
+            .redirect(redirect)
             .timeout(time::Duration::from_secs(20))
             .build()
             .unwrap_or_else(|_| reqwest::Client::new())
@@ -1732,8 +1785,9 @@ Important:
     /// A revalidation answered with 304 refreshes the row's age, so a feed that rarely changes
     /// costs one conditional request rather than a full download.
     async fn fetch_feed(state: &AppState, url: &str) -> Result<String> {
-        if !url.starts_with("https://") {
-            bail!("only https:// calendar URLs are fetched");
+        let parsed = reqwest::Url::parse(url).context("the calendar URL is not a URL")?;
+        if !is_fetchable_feed_url(&parsed) {
+            bail!("a calendar must be an https:// URL on a public host");
         }
 
         let cached = read_cached_feed(state, url).await;
@@ -1743,7 +1797,7 @@ Important:
             }
         }
 
-        let client = feed_client(&state.http_client);
+        let client = feed_client();
         let mut request = client.get(url);
         if let Some(cached) = &cached {
             if let Some(etag) = &cached.etag {
