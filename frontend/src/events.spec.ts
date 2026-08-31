@@ -394,7 +394,7 @@ function imported(over: Partial<ImportedOccurrence> = {}): ImportedOccurrence {
     };
 }
 
-function noteEvent(ical?: { uid: string; recurrence_id?: string }) {
+function noteEvent(ical?: { uid: string; recurrence_id?: string; calendar?: string }) {
     const { events } = derive([
         entry('a.md', {
             Standup: {
@@ -491,5 +491,171 @@ describe('mergeImported', () => {
     it('leaves an imported event alone when a note claims a different series', () => {
         const merged = mergeImported(noteEvent({ uid: 'somewhere-else@example' }), [imported()]);
         expect(merged.filter((event) => event.source === 'ical')).toHaveLength(1);
+    });
+});
+
+// The module's own contract: "anything invalid is reported and skipped, never fatal. A typo in one
+// note must not blank the calendar." Derivation runs inside a Vue computed, so anything thrown
+// here takes down the whole view -- note events and imported events together.
+describe('malformed frontmatter', () => {
+    const cases: [string, unknown][] = [
+        ['a bare integer start', { start: 20240501 }],
+        ['a half-typed date', { start: 2024 }],
+        ['a repeat that is not a mapping', { start: '2024-05-01 09:00', repeat: 'daily' }],
+        ['an unknown frequency', { start: '2024-05-01 09:00', repeat: { freq: 'fortnightly' } }],
+        // Schema-valid: the weekday pattern admits a zero ordinal, but rrule refuses it.
+        ['a zero ordinal', { start: '2024-05-01', repeat: { freq: 'monthly', byday: ['0wed'] } }],
+        ['an ordinal under freq: weekly', {
+            start: '2024-05-01', repeat: { freq: 'weekly', byday: ['3wed'] },
+        }],
+        ['instances that are not a list', { instances: 5 }],
+        ['exclusions that are not a list', {
+            start: '2024-05-01 09:00', repeat: { freq: 'daily' }, exclusions: 7,
+        }],
+        ['an occurrence that is not a mapping', { instances: ['nonsense'] }],
+        ['a null end', { start: '2024-05-01 09:00', end: null }],
+        ['a non-string name', { start: '2024-05-01 09:00', name: 123 }],
+    ];
+
+    for (const [description, event] of cases) {
+        it(`survives ${description}`, () => {
+            expect(() => derive([entry('a.md', { Broken: event as never })])).not.toThrow();
+        });
+    }
+
+    it('still derives the good events in a note that also has a broken one', () => {
+        const { events } = derive([
+            entry('a.md', {
+                Broken: { start: 20240501 } as never,
+                Fine: { start: '2024-05-01 09:00' },
+            }),
+        ]);
+
+        expect(events.map((e) => e.name)).toEqual(['Fine']);
+    });
+
+    it('never emits a non-string start, whatever the note held', () => {
+        const { events } = derive([
+            entry('a.md', { Broken: { start: 20240501 } as never }),
+        ]);
+        for (const event of events) {
+            expect(typeof event.start).toBe('string');
+        }
+    });
+});
+
+describe('mergeImported with what the wire may actually carry', () => {
+    it('survives an occurrence whose optional fields are absent', () => {
+        expect(() => mergeImported([], [{
+            calendar: 'work',
+            uid: 'a@example',
+            recurrence_id: '2024-05-01 09:00:00+09:00',
+            name: 'No end',
+            start: '2024-05-01 09:00:00+09:00',
+        }])).not.toThrow();
+    });
+
+    // Regression: the backend serialised these as `null`, the TS type said `?: string`, and
+    // `toWallClock(null)` threw out of the calendar's computed.
+    it('survives an occurrence whose optional fields are null', () => {
+        const merged = mergeImported([], [{
+            calendar: 'work',
+            uid: 'a@example',
+            recurrence_id: '2024-05-01 09:00:00+09:00',
+            name: 'Null end',
+            start: '2024-05-01 09:00:00+09:00',
+            end: null,
+            note: null,
+            location: null,
+            url: null,
+        } as never]);
+
+        expect(merged).toHaveLength(1);
+        expect(merged[0].end ?? undefined).toBeUndefined();
+    });
+});
+
+describe('shadowing is scoped to the calendar', () => {
+    // A uid is unique within a calendar, not across them, and a shared invite really does carry
+    // the same one in two subscriptions.
+    it('does not hide the same uid in another calendar', () => {
+        const merged = mergeImported(
+            noteEvent({ uid: 'shared@example', calendar: 'work' }),
+            [imported({ uid: 'shared@example', calendar: 'family', name: 'Family copy' })],
+        );
+
+        const stillImported = merged.filter((event) => event.source === 'ical');
+        expect(stillImported).toHaveLength(1);
+        expect(stillImported[0].name).toBe('Family copy');
+    });
+
+    it('still hides the same uid in the calendar it was converted from', () => {
+        const merged = mergeImported(
+            noteEvent({ uid: 'shared@example', calendar: 'work' }),
+            [imported({ uid: 'shared@example', calendar: 'work' })],
+        );
+
+        expect(merged.every((event) => event.source === 'note')).toBe(true);
+    });
+});
+
+describe('an override that moves its occurrence', () => {
+    // The moved start is the whole point of such an override; it used to be clobbered by the
+    // rule-generated time it replaces.
+    it('is expanded at the time it moved to', () => {
+        const { events } = derive([
+            entry('a.md', {
+                Standup: {
+                    start: '2024-05-01 09:00',
+                    end: '+30m',
+                    repeat: { freq: 'daily' },
+                    overrides: [{ at: '2024-05-02 09:00', start: '2024-05-02 15:00' }],
+                },
+            }),
+        ], { from: '2024-05-01', to: '2024-05-02' });
+
+        expect(events.map((e) => e.start)).toEqual(['2024-05-01 09:00', '2024-05-02 15:00']);
+    });
+});
+
+describe('an all-day series', () => {
+    // Milliseconds gave each occurrence a midnight, so the same data rendered all-day without a
+    // rule and timed with one -- and drifted an hour across a daylight-saving change.
+    it('keeps dates as dates on every occurrence', () => {
+        const { events } = derive([
+            entry('a.md', {
+                Holiday: {
+                    start: '2026-03-01',
+                    end: '2026-03-03',
+                    repeat: { freq: 'weekly' },
+                },
+            }),
+        ], { from: '2026-03-01', to: '2026-03-20' });
+
+        for (const event of events) {
+            expect(event.start).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+            expect(event.end).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        }
+        expect(events.map((e) => [e.start, e.end])).toEqual([
+            ['2026-03-01', '2026-03-03'],
+            ['2026-03-08', '2026-03-10'],
+            ['2026-03-15', '2026-03-17'],
+        ]);
+    });
+
+    // A date is not an instant; converting midnight-in-a-zone into the reader's moves the date.
+    it('is not shifted by a timezone a note happens to carry', () => {
+        vi.stubEnv('TZ', 'America/Los_Angeles');
+        const { events } = derive([
+            entry('a.md', {
+                Holiday: {
+                    start: '2026-08-01',
+                    repeat: { freq: 'daily', tz: 'Asia/Tokyo' },
+                },
+            }),
+        ], { from: '2026-08-01', to: '2026-08-03' });
+
+        expect(events.map((e) => e.start)).toEqual(['2026-08-01', '2026-08-02', '2026-08-03']);
+        vi.unstubAllEnvs();
     });
 });

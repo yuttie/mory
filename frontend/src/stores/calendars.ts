@@ -51,6 +51,9 @@ export const useCalendarsStore = defineStore('calendars', () => {
     // The window the current `loaded` describes, so a repeat request for it costs nothing.
     const loadedWindow = ref<string | null>(null);
     let inFlight: Promise<void> | null = null;
+    // Which window `inFlight` is fetching, so a second caller for it can wait rather than refetch.
+    let pendingWindow: string | null = null;
+    let latestRequest = 0;
 
     const events = computed(() => loaded.value.events);
     const series = computed(() => loaded.value.series);
@@ -144,15 +147,27 @@ export const useCalendarsStore = defineStore('calendars', () => {
         if (loadedWindow.value === key) {
             return;
         }
+        // Wait out whatever is in flight, but never inherit its outcome: a request for another
+        // window failing is not this window's failure, and swallowing it here left the queued
+        // window unfetched with nothing to retrigger it.
         if (inFlight !== null) {
-            await inFlight;
+            await inFlight.catch(() => undefined);
             if (loadedWindow.value === key) {
+                return;
+            }
+            // A second caller for this same window may have started it meanwhile.
+            if (pendingWindow === key && inFlight !== null) {
+                await inFlight.catch(() => undefined);
                 return;
             }
         }
 
         isLoading.value = true;
-        inFlight = (async () => {
+        pendingWindow = key;
+        // A generation, so the `finally` only clears the slot if it still owns it -- a later
+        // request for another window must not have its bookkeeping torn down by an earlier one.
+        const generation = ++latestRequest;
+        const request = (async () => {
             try {
                 const response = await getImportedEvents(from, to);
                 loaded.value = {
@@ -163,12 +178,23 @@ export const useCalendarsStore = defineStore('calendars', () => {
                 };
                 loadedWindow.value = key;
             }
+            catch (error) {
+                // Showing another window's events under this one's dates would be worse than
+                // showing none, so what was loaded is dropped rather than left to mislead.
+                loaded.value = EMPTY;
+                loadedWindow.value = null;
+                throw error;
+            }
             finally {
                 isLoading.value = false;
-                inFlight = null;
+                if (latestRequest === generation) {
+                    inFlight = null;
+                    pendingWindow = null;
+                }
             }
         })();
-        await inFlight;
+        inFlight = request;
+        await request;
     }
 
     return {

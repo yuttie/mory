@@ -205,6 +205,56 @@ describe('loading events', () => {
         expect(store.nameOf.get('work')).toBe('Work');
     });
 
+    // Showing May's events under June's dates is worse than showing none, and leaving the window
+    // marked unloaded is what lets a later navigation retry it.
+    it('drops what was loaded when a later window fails', async () => {
+        apiMocks.getImportedEvents.mockResolvedValueOnce(response());
+        const { useCalendarsStore } = await load();
+        const store = useCalendarsStore();
+
+        await store.load('2024-05-01', '2024-05-31');
+        expect(store.events).toHaveLength(1);
+
+        apiMocks.getImportedEvents.mockRejectedValueOnce(new Error('offline'));
+        await expect(store.load('2024-06-01', '2024-06-30')).rejects.toThrow('offline');
+
+        expect(store.events).toHaveLength(0);
+    });
+
+    // Regression: a caller queued behind another window awaited the in-flight promise and so
+    // inherited its rejection -- its own window was never fetched, and nothing retriggered it.
+    it('fetches a queued window even when the one before it fails', async () => {
+        apiMocks.getImportedEvents
+            .mockRejectedValueOnce(new Error('offline'))
+            .mockResolvedValueOnce(response());
+        const { useCalendarsStore } = await load();
+        const store = useCalendarsStore();
+
+        const first = store.load('2024-05-01', '2024-05-31');
+        const second = store.load('2024-06-01', '2024-06-30');
+
+        await expect(first).rejects.toThrow('offline');
+        await second;
+
+        expect(apiMocks.getImportedEvents).toHaveBeenCalledTimes(2);
+        expect(store.events).toHaveLength(1);
+    });
+
+    it('does not refetch a window a queued caller is already waiting on', async () => {
+        apiMocks.getImportedEvents.mockResolvedValue(response());
+        const { useCalendarsStore } = await load();
+        const store = useCalendarsStore();
+
+        await Promise.all([
+            store.load('2024-05-01', '2024-05-31'),
+            store.load('2024-06-01', '2024-06-30'),
+            store.load('2024-06-01', '2024-06-30'),
+        ]);
+
+        // May once, June once -- not twice for June because two callers asked while it queued.
+        expect(apiMocks.getImportedEvents).toHaveBeenCalledTimes(2);
+    });
+
     it('clears the loading flag even when the request fails', async () => {
         apiMocks.getImportedEvents.mockRejectedValue(new Error('offline'));
         const { useCalendarsStore } = await load();

@@ -43,7 +43,12 @@ export interface WallClock {
     hasTime: boolean;
 }
 
-export function parseWallClock(value: string): WallClock | null {
+export function parseWallClock(value: unknown): WallClock | null {
+    // `unknown`, not `string`: frontmatter is whatever the file said, and a bare `start: 20240501`
+    // is a YAML integer. `dayjs` calls that a valid epoch, so a type check upstream is not enough.
+    if (typeof value !== 'string') {
+        return null;
+    }
     const m = WALL_CLOCK.exec(value.trim());
     if (m === null) {
         return null;
@@ -89,6 +94,8 @@ const WEEKDAYS: Record<string, RRuleWeekday> = {
 // `wed`, `3wed`, `-1fri`. The ordinal picks that weekday within the period.
 const BYDAY = /^(-?\d+)?(sun|mon|tue|wed|thu|fri|sat)$/;
 
+const HAS_OFFSET = /(?:Z|[+-]\d{2}:?\d{2})$/;
+
 export class RecurrenceError extends Error {}
 
 function toWeekday(value: string): RRuleWeekday {
@@ -97,7 +104,15 @@ function toWeekday(value: string): RRuleWeekday {
         throw new RecurrenceError(`Unknown weekday "${value}"`);
     }
     const weekday = WEEKDAYS[m[2]];
-    return m[1] === undefined ? weekday : weekday.nth(Number(m[1]));
+    if (m[1] === undefined) {
+        return weekday;
+    }
+    const ordinal = Number(m[1]);
+    if (!Number.isInteger(ordinal) || ordinal === 0) {
+        // rrule throws on a zero ordinal, and the schema's pattern admits `0wed`.
+        throw new RecurrenceError(`"${value}" needs a non-zero ordinal`);
+    }
+    return weekday.nth(ordinal);
 }
 
 function hasOrdinal(value: string): boolean {
@@ -115,6 +130,9 @@ export function expandRule(
     from: string,
     to: string,
 ): string[] {
+    if (typeof repeat !== 'object' || repeat === null) {
+        throw new RecurrenceError('repeat must be a mapping of rule fields');
+    }
     const anchorStart = parseWallClock(start);
     if (anchorStart === null) {
         throw new RecurrenceError(`Unusable start "${start}"`);
@@ -152,10 +170,17 @@ export function expandRule(
         if (until === null) {
             throw new RecurrenceError(`Unusable until "${repeat.until}"`);
         }
+        // `until` is compared against occurrences in the rule's own frame, so an offset on it is
+        // read rather than ignored -- unlike `start`, whose offset only records which one applied.
+        // Both are the same wall clock here once the offset has been resolved into `tz`.
+        const bounded = repeat.tz !== undefined && until.hasTime && HAS_OFFSET.test(repeat.until)
+            ? parseWallClock(dayjs(repeat.until).tz(repeat.tz).format('YYYY-MM-DD HH:mm:ss'))
+            : until;
+        const resolved = bounded ?? until;
         // A date-only `until` includes the whole day.
-        options.until = until.hasTime
-            ? toAnchor(until)
-            : toAnchor({ ...until, hour: 23, minute: 59, second: 59, hasTime: true });
+        options.until = resolved.hasTime
+            ? toAnchor(resolved)
+            : toAnchor({ ...resolved, hour: 23, minute: 59, second: 59, hasTime: true });
     }
 
     const windowFrom = parseWallClock(from);
@@ -171,11 +196,23 @@ export function expandRule(
 
     // `between` is inclusive at both ends here, and `count` is still honoured from the series
     // start, which is the reason the rule is never re-anchored to the window.
-    const occurrences = new RRule(options)
-        .between(toAnchor(windowFrom), toAnchor(windowTo), true)
-        .map((anchor) => formatAnchor(anchor, anchorStart.hasTime));
+    // rrule throws plain `Error`s for a rule it will not build -- an unknown frequency, a
+    // contradictory combination. Those are a note's mistake, so they are reported like any other,
+    // never allowed out of the derivation to blank the view.
+    let occurrences: string[];
+    try {
+        occurrences = new RRule(options)
+            .between(toAnchor(windowFrom), toAnchor(windowTo), true)
+            .map((anchor) => formatAnchor(anchor, anchorStart.hasTime));
+    }
+    catch (error) {
+        throw new RecurrenceError(
+            error instanceof Error ? error.message : 'the rule could not be expanded');
+    }
 
-    if (repeat.tz === undefined) {
+    // A date is not an instant: converting midnight-in-a-zone into the reader's moves the date.
+    // The backend no longer writes `tz` for an all-day series, but a hand-written note may.
+    if (repeat.tz === undefined || !anchorStart.hasTime) {
         return occurrences;
     }
     return occurrences.map((wallClock) => {

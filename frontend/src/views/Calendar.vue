@@ -161,7 +161,7 @@ import {
 } from '@mdi/js';
 
 
-import { eventsFromEntries, mergeImported } from '@/events';
+import { DEFAULT_EVENT_COLOR, eventsFromEntries, mergeImported } from '@/events';
 import type { CalendarEvent } from '@/events';
 import { buildOccurrenceNote, buildSeriesNote, canConvertSeries } from '@/event-note';
 import { useCalendarsStore } from '@/stores/calendars';
@@ -217,10 +217,6 @@ const events = computed(() => mergeImported(
 const eventErrors = computed(() => derived.value.errors);
 
 // Watchers
-watch(eventWindow, (window) => {
-    loadImported(window);
-}, { immediate: true });
-
 // Lifecycle hooks
 onMounted(() => {
     document.title = `Calendar | ${import.meta.env.VITE_APP_NAME}`;
@@ -361,7 +357,14 @@ async function convertSelected() {
     }
 
     const series = calendars.series[event.uid];
-    const occurrence = {
+    // From the backend's own record, not from the popup: the drawn event's times have been through
+    // `toWallClock` and no longer carry their offsets, so writing them into a note would fix the
+    // event to whatever zone the reader happened to be in.
+    const source = calendars.events.find((candidate) =>
+        candidate.uid === event.uid
+        && candidate.calendar === event.calendar
+        && candidate.recurrence_id === event.recurrenceId);
+    const occurrence = source ?? {
         calendar: event.calendar ?? '',
         uid: event.uid,
         recurrence_id: event.recurrenceId ?? event.start,
@@ -462,9 +465,18 @@ function getEventEndTime(event: any): dayjs.Dayjs {
 
 function getEventColor(event: any): string {
     const toPropName = (s: string) => s.replace(/-./g, (match: string) => match[1].toUpperCase());
-    const color = Object.hasOwn(materialColors, toPropName(event.color))
-                ? Color((materialColors as any)[toPropName(event.color)].base)
-                : Color(event.color);
+    // `Color` throws on anything it cannot parse, and both a note's `color:` and a calendar's
+    // configured colour are free text. Throwing here happens inside v-calendar's render, so one
+    // typo would blank the whole view rather than mis-colour one event.
+    let color;
+    try {
+        color = Object.hasOwn(materialColors, toPropName(event.color))
+            ? Color((materialColors as any)[toPropName(event.color)].base)
+            : Color(event.color);
+    }
+    catch {
+        color = Color(DEFAULT_EVENT_COLOR);
+    }
 
     const now = dayjs();
     const time = getEventEndTime(event);
@@ -519,6 +531,13 @@ watch(route, (newRoute) => {
         calendarType.value = newRoute.params.type as string;
         calendarCursor.value = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
     }
+}, { immediate: true });
+
+// Declared after the route watcher, and immediate like it: watchers run in declaration order, so
+// the other way round a deep-linked date fetched twice -- once for today's window, which is never
+// drawn, and again once the route had moved the cursor.
+watch(eventWindow, (window) => {
+    loadImported(window);
 }, { immediate: true });
 </script>
 

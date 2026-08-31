@@ -121,7 +121,8 @@ export interface MetadataEvent extends EventFields {
 /// event is `undefined`, and `dayjs(undefined)` is *now*, so the miss rendered a phantom event at
 /// the current time rather than failing.
 export function occurrencesOf(event: MetadataEvent): EventOccurrence[] {
-  return event.instances ?? event.times ?? [];
+  const listed = event.instances ?? event.times;
+  return Array.isArray(listed) ? listed : [];
 }
 
 export interface Metadata {

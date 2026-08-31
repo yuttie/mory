@@ -73,6 +73,14 @@ export interface DerivedEvents {
     errors: EventError[];
 }
 
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+/// Whether a value names a whole day rather than a moment. The shape *is* the all-day flag, in the
+/// feed and in the note alike, so it has to survive every transformation.
+function isDateOnly(value: string): boolean {
+    return DATE_ONLY.test(value.trim());
+}
+
 const DURATION_SHORT = /^\+([\d.]+) *(y|M|w|d|h|m|s|ms)$/;
 const DURATION_LONG =
     /^\+([\d.]+) *(years?|months?|weeks?|days?|hours?|minutes?|seconds?|milliseconds?)$/i;
@@ -124,7 +132,10 @@ export function normalizeEndTime(
     else {
         const amount = parseFloat(match[1]);
         const unit = match[2] as dayjs.ManipulateType;
-        return formatDateTime(dayjs(start).add(amount, unit));
+        const end = dayjs(start).add(amount, unit);
+        // A whole-day event stays whole days: giving its end a midnight would make the same data
+        // render all-day on its own and timed once a rule expands it.
+        return isDateOnly(start) ? end.format('YYYY-MM-DD') : formatDateTime(end);
     }
 }
 
@@ -144,7 +155,9 @@ function buildOccurrence(
     entry: ListEntry2,
     errors: EventError[],
 ): CalendarEvent | null {
-    if (time.start === undefined || !dayjs(time.start).isValid()) {
+    // `typeof` first: `dayjs(20240501)` is a valid epoch, so a YAML integer would pass the
+    // validity check and then fail as a string later, inside the view.
+    if (typeof time.start !== 'string' || !dayjs(time.start).isValid()) {
         errors.push(['start', time.start, eventName, entry.path, entry.title]);
         return null;
     }
@@ -182,7 +195,15 @@ function buildOccurrence(
 /// `2020-01-30 10:00:00-08:00` and `2020-01-30 10:00` are the same moment written two ways, and the
 /// importer will not spell an exclusion the way a hand-edited note does. Comparing the strings
 /// would report a mismatch that is not there.
-function instantOf(value: string): number | null {
+/// A list from whatever the frontmatter held, which need not have been a list.
+function asArray<T>(value: T[] | undefined): T[] {
+    return Array.isArray(value) ? value : [];
+}
+
+function instantOf(value: unknown): number | null {
+    if (typeof value !== 'string') {
+        return null;
+    }
     const parsed = dayjs(value);
     return parsed.isValid() ? parsed.valueOf() : null;
 }
@@ -195,7 +216,7 @@ function durationOf(detail: MetadataEvent): string | undefined {
     if (detail.end === undefined || detail.start === undefined) {
         return detail.end;
     }
-    if (detail.end.startsWith('+')) {
+    if (typeof detail.end !== 'string' || detail.end.startsWith('+')) {
         return detail.end;
     }
     const start = instantOf(detail.start);
@@ -203,8 +224,16 @@ function durationOf(detail: MetadataEvent): string | undefined {
     if (start === null || end === null || end < start) {
         return detail.end;
     }
+    // A whole number of days for an all-day series, so its occurrences stay dates. Milliseconds
+    // would give each one a midnight -- turning the same data all-day without a rule and timed
+    // with one -- and would drift by an hour across a daylight-saving change.
+    if (isDateOnly(detail.start)) {
+        return `+${Math.round((end - start) / 86_400_000)}d`;
+    }
     return `+${end - start}ms`;
 }
+
+
 
 function expandSeries(
     eventName: string,
@@ -232,7 +261,7 @@ function expandSeries(
     // Both sides are keyed by instant, so an adjustment may be written with or without an offset
     // and still find the occurrence it names.
     const excluded = new Map<number, string>();
-    for (const exclusion of detail.exclusions ?? []) {
+    for (const exclusion of asArray(detail.exclusions)) {
         const instant = instantOf(exclusion);
         if (instant === null) {
             errors.push(['exclusions', exclusion, eventName, entry.path, entry.title]);
@@ -242,7 +271,7 @@ function expandSeries(
     }
 
     const overrides = new Map<number, EventOccurrence>();
-    for (const override of detail.overrides ?? []) {
+    for (const override of asArray(detail.overrides)) {
         const instant = override.at === undefined ? null : instantOf(override.at);
         if (instant === null) {
             errors.push(['at', override.at, eventName, entry.path, entry.title]);
@@ -267,7 +296,9 @@ function expandSeries(
             matched.add(instant);
         }
         const event = buildOccurrence(
-            { ...override, at: undefined, start: occurrence },
+            // An override may move its occurrence, and its own `start` is the whole point when it
+            // does; `occurrence` is only the fallback for one that changes other fields.
+            { ...override, at: undefined, start: override?.start ?? occurrence },
             parent,
             eventName,
             entry,
@@ -317,7 +348,8 @@ function eventsOfEntry(
     // A base occurrence and a list of occurrences are no longer alternatives: a rule is anchored at
     // `start` and may still list occurrences it does not generate. An event that has only a list
     // contributes nothing here, which is what makes the two shapes compose rather than conflict.
-    const occurrences = occurrencesOf(detail);
+    const occurrences = occurrencesOf(detail).filter(
+        (occurrence) => typeof occurrence === 'object' && occurrence !== null);
     if (detail.start === undefined && occurrences.length === 0) {
         // Names no occurrence at all, which the schema rejects too. Reported rather than dropped:
         // silently ignoring it is how a typo becomes an event that is simply missing.
@@ -374,11 +406,14 @@ export function eventsFromEntries(
 /// so one offset-bearing value reaching `:events` takes down the whole calendar rather than losing
 /// one event. Notes are written with offsets, following the task convention, and the backend emits
 /// them too -- so everything crossing into the view goes through here.
-export function toWallClock(value: string): string {
+export function toWallClock(value: unknown): string {
     const parsed = parseWallClock(value);
     if (parsed === null) {
-        return value;
+        // Whatever it was, hand it on as text: the error path reports it, and nothing that reaches
+        // the calendar may throw. A `null` from the wire would otherwise take the whole view down.
+        return typeof value === 'string' ? value : String(value ?? '');
     }
+    const text = value as string;
     const p = (n: number) => String(n).padStart(2, '0');
     const date = `${parsed.year}-${p(parsed.month)}-${p(parsed.day)}`;
     if (!parsed.hasTime) {
@@ -386,8 +421,8 @@ export function toWallClock(value: string): string {
     }
     // An offset means the value names an instant, so it is shown in the reader's own zone; a bare
     // wall clock is already local and is left exactly as written.
-    if (HAS_OFFSET.test(value)) {
-        const local = dayjs(value);
+    if (HAS_OFFSET.test(text)) {
+        const local = dayjs(text);
         if (local.isValid()) {
             return local.second() === 0
                 ? local.format('YYYY-MM-DD HH:mm')
@@ -401,13 +436,17 @@ export function toWallClock(value: string): string {
 const HAS_OFFSET = /(?:Z|[+-]\d{2}:?\d{2})$/;
 
 /// The key a note uses to claim an imported occurrence.
-function claimOf(event: CalendarEvent): string | null {
-    if (event.uid === undefined) {
-        return null;
-    }
-    return event.recurrenceId === undefined
-        ? `uid:${event.uid}`
-        : `uid:${event.uid}@${instantOf(event.recurrenceId) ?? event.recurrenceId}`;
+///
+/// Scoped to the calendar as well as the uid: a uid is only unique *within* a calendar, and a
+/// shared invite genuinely carries the same one in two subscriptions. Keying on the uid alone let
+/// a note converted from a work calendar hide the same meeting in a family one, with no note
+/// behind it and no way to get it back short of unsubscribing.
+function seriesKey(calendar: string | undefined, uid: string): string {
+    return `${calendar ?? ''}\u0000${uid}`;
+}
+
+function occurrenceKey(calendar: string | undefined, uid: string, recurrenceId: string): string {
+    return `${seriesKey(calendar, uid)}@${instantOf(recurrenceId) ?? recurrenceId}`;
 }
 
 /// Note events, plus the imported ones no note has claimed.
@@ -427,33 +466,32 @@ export function mergeImported(
             continue;
         }
         if (event.recurrenceId === undefined) {
-            wholeSeries.add(event.uid);
+            wholeSeries.add(seriesKey(event.calendar, event.uid));
         }
         else {
-            const claim = claimOf(event);
-            if (claim !== null) {
-                occurrences.add(claim);
-            }
+            occurrences.add(occurrenceKey(event.calendar, event.uid, event.recurrenceId));
         }
     }
 
     const merged = [...noteEvents];
     for (const occurrence of imported) {
-        if (wholeSeries.has(occurrence.uid)) {
+        if (wholeSeries.has(seriesKey(occurrence.calendar, occurrence.uid))) {
             continue;
         }
-        const instant = instantOf(occurrence.recurrence_id) ?? occurrence.recurrence_id;
-        if (occurrences.has(`uid:${occurrence.uid}@${instant}`)) {
+        if (occurrences.has(
+            occurrenceKey(occurrence.calendar, occurrence.uid, occurrence.recurrence_id))) {
             continue;
         }
+        // `== null` catches an explicit null as well as an absent field: the wire has carried both,
+        // and a null reaching `toWallClock` used to throw out of the calendar's derivation.
         merged.push({
             name: occurrence.name,
             start: toWallClock(occurrence.start),
-            end: occurrence.end === undefined ? undefined : toWallClock(occurrence.end),
+            end: occurrence.end == null ? undefined : toWallClock(occurrence.end),
             color: options.colorOf?.get(occurrence.calendar) ?? DEFAULT_IMPORTED_COLOR,
-            note: occurrence.note,
-            location: occurrence.location,
-            url: occurrence.url,
+            note: occurrence.note ?? undefined,
+            location: occurrence.location ?? undefined,
+            url: occurrence.url ?? undefined,
             source: 'ical',
             calendar: occurrence.calendar,
             uid: occurrence.uid,
