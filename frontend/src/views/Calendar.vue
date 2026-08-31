@@ -16,7 +16,7 @@
                 location="bottom"
                 indeterminate
                 color="primary"
-                v-bind:active="isLoading"
+                v-bind:active="isLoading || calendars.isLoading"
             ></v-progress-linear>
         </v-toolbar>
         <v-calendar
@@ -52,6 +52,14 @@
                 >
                     <v-toolbar-title>{{ selectedEvent.name }}</v-toolbar-title>
                     <v-spacer></v-spacer>
+                    <v-chip
+                        v-if="selectedEvent.source === 'ical'"
+                        class="mr-2"
+                        size="small"
+                        variant="flat"
+                    >
+                        iCal
+                    </v-chip>
                     <v-icon v-if="selectedEvent.finished" class="mr-4">{{ mdiCheck }}</v-icon>
                 </v-toolbar>
                 <v-card-text>
@@ -68,11 +76,33 @@
                             </template>
                             {{ selectedEvent.end }}
                         </v-list-item>
-                        <v-list-item>
+                        <v-list-item v-if="selectedEvent.location">
+                            <template v-slot:prepend>
+                                <v-icon>{{ mdiMapMarkerOutline }}</v-icon>
+                            </template>
+                            {{ selectedEvent.location }}
+                        </v-list-item>
+                        <v-list-item v-if="selectedEvent.url">
+                            <template v-slot:prepend>
+                                <v-icon>{{ mdiLinkVariant }}</v-icon>
+                            </template>
+                            <a
+                                v-bind:href="selectedEvent.url"
+                                rel="noopener"
+                                target="_blank"
+                            >{{ selectedEvent.url }}</a>
+                        </v-list-item>
+                        <v-list-item v-if="selectedEvent.notePath">
                             <template v-slot:prepend>
                                 <v-icon>{{ mdiFileDocumentOutline }}</v-icon>
                             </template>
                             <router-link v-bind:to="{ name: 'Note', params: { path: selectedEvent.notePath.split('/') } }">{{ selectedEvent.notePath }}</router-link>
+                        </v-list-item>
+                        <v-list-item v-else-if="selectedEvent.calendar">
+                            <template v-slot:prepend>
+                                <v-icon>{{ mdiCalendarImport }}</v-icon>
+                            </template>
+                            {{ calendars.nameOf.get(selectedEvent.calendar) ?? selectedEvent.calendar }}
                         </v-list-item>
                     </v-list>
                     <template v-if="selectedEvent.note">
@@ -80,37 +110,62 @@
                         <div class="mt-3" v-html="selectedEventRenderedNote"></div>
                     </template>
                 </v-card-text>
+                <v-card-actions v-if="selectedEvent.source === 'ical'">
+                    <v-btn
+                        v-bind:loading="isConverting"
+                        v-bind:prepend-icon="mdiNotePlusOutline"
+                        block
+                        variant="tonal"
+                        v-on:click="convertSelected"
+                    >
+                        Convert to note
+                    </v-btn>
+                </v-card-actions>
             </v-card>
         </v-menu>
         <v-snackbar v-model="error" color="error" location="top" timeout="5000">{{ errorText }}</v-snackbar>
-        <v-alert type="error" v-if="eventErrors.length > 0">
+        <v-alert type="error" v-if="eventErrors.length > 0 || calendars.errors.length > 0">
             <ul>
                 <li
                     v-for="[prop, value, eventName, entryPath, entryTitle] of eventErrors"
                 >Invalid event {{ prop }} value "{{ value }}" of "{{ eventName }}" defined in <router-link v-bind:to="{ path: `/note/${entryPath}` }">{{ entryTitle ?? entryPath }}</router-link></li>
+                <li v-for="message of calendars.errors" v-bind:key="message">{{ message }}</li>
             </ul>
+        </v-alert>
+        <v-alert
+            v-if="calendars.truncated"
+            density="compact"
+            type="warning"
+        >
+            Some calendars have more events in this range than can be shown.
         </v-alert>
     </div>
 </template>
 
 <script lang="ts" setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
-import type { Ref } from 'vue';
 
 import { useRoute, useRouter } from 'vue-router';
 
 import {
+    mdiCalendarImport,
     mdiCheck,
     mdiChevronLeft,
     mdiChevronRight,
     mdiClockEnd,
     mdiClockStart,
     mdiFileDocumentOutline,
+    mdiLinkVariant,
+    mdiMapMarkerOutline,
+    mdiNotePlusOutline,
 } from '@mdi/js';
 
-import { isMetadataEventMultiple, validateEvent } from '@/api';
 
-import { useFilesStore } from '@/stores/files';
+import { DEFAULT_EVENT_COLOR, eventsFromEntries, mergeImported } from '@/events';
+import type { CalendarEvent } from '@/events';
+import { buildOccurrenceNote, buildSeriesNote, canConvertSeries } from '@/event-note';
+import { useCalendarsStore } from '@/stores/calendars';
+import { LAGGING_RETRY_MS, useFilesStore } from '@/stores/files';
 import Color from 'color';
 import materialColors from 'vuetify/util/colors';
 import dayjs from 'dayjs';
@@ -125,15 +180,16 @@ const emit = defineEmits<{
 const router = useRouter();
 const route = useRoute();
 const files = useFilesStore();
+const calendars = useCalendarsStore();
 
 // Reactive states
 const isLoading = ref(false);
 const error = ref(false);
 const errorText = ref('');
-const eventErrors: Ref<[string, unknown, string, string, string | null][]> = ref([]);
 const calendarType = ref<'month' | 'week' | 'day'>('month');
 const calendarCursor = ref(dayjs().format('YYYY-MM-DD'));
-const selectedEvent = ref<any>(null);
+const selectedEvent = ref<CalendarEvent | null>(null);
+const isConverting = ref(false);
 const selectedEventRenderedNote = ref<string | null>(null);
 const selectedElement = ref<Element | undefined>(undefined);
 const selectedOpen = ref(false);
@@ -142,130 +198,32 @@ const selectedOpen = ref(false);
 const calendar = ref<any>(null);
 
 // Computed properties
-const events = computed(() => {
-    function normalizeEndTime(end: string | undefined, start: string): string | undefined | null {
-        if (end === undefined) {
-            return undefined;
-        }
-
-        const formatDateTime = (datetime: dayjs.Dayjs) => {
-            if (datetime.second() === 0) {
-                return datetime.format('YYYY-MM-DD HH:mm');
-            }
-            else {
-                return datetime.format('YYYY-MM-DD HH:mm:ss');
-            }
-        };
-        const durationShortRegexp =
-            /^\+([\d.]+) *(y|M|w|d|h|m|s|ms)$/;
-        const durationLongRegexp =
-            /^\+([\d.]+) *(years?|months?|weeks?|days?|hours?|minutes?|seconds?|milliseconds?)$/i;
-
-        const match = durationShortRegexp.exec(end) || durationLongRegexp.exec(end);
-        if (match === null) {
-            // `end` is not in duration format
-            if (dayjs(end).isValid()) {
-                // Return it as is if it's in valid format
-                return end;
-            }
-            else {
-                // Try to prefix it with start date
-                const prefixedEnd = dayjs(start).format('YYYY-MM-DD') + ' ' + end;
-                const parsedEnd = dayjs(prefixedEnd);
-                if (parsedEnd.isValid()) {
-                    if (parsedEnd.isAfter(start)) {
-                        return prefixedEnd;
-                    }
-                    else {
-                        return formatDateTime(parsedEnd.add(1, 'day'));
-                    }
-                }
-                else {
-                    // `end` is invalid
-                    return null;
-                }
-            }
-        }
-        else {
-            // `end` is in duration format
-            // Calculate actual end time based on the duration from the start time
-            const amount = parseFloat(match[1]);
-            const unit = match[2] as dayjs.ManipulateType;
-            return formatDateTime(dayjs(start).add(amount, unit));
-        }
-    }
-    const events = [];
-    const newEventErrors: [string, unknown, string, string, string | null][] = [];
-    for (const entry of files.entries) {
-        if (entry.metadata !== null) {
-            // Choose a default color for the note based on its path
-            let defaultColor = "#666666";
-            if (Object.hasOwn(entry.metadata, 'events') && typeof entry.metadata.events === 'object' && entry.metadata.events !== null) {
-                for (const [eventName, eventDetail] of Object.entries(entry.metadata.events)) {
-                    if (typeof eventDetail === 'object' && eventDetail !== null) {
-                        // If eventDetail has the 'times' property and it is an array
-                        if (isMetadataEventMultiple(eventDetail)) {
-                            for (const time of eventDetail.times) {
-                                if (!dayjs(time.start).isValid()) {
-                                    newEventErrors.push(['start', time.start, eventName, entry.path, entry.title]);
-                                    continue;
-                                }
-                                const normalizedEndTime = normalizeEndTime(time.end || eventDetail.end, time.start);
-                                if (normalizedEndTime === null) {
-                                    newEventErrors.push(['end', time.end, eventName, entry.path, entry.title]);
-                                    continue;
-                                }
-                                time.end = normalizedEndTime;
-                                const event = {
-                                    name: eventName,
-                                    start: time.start,
-                                    end: time.end,
-                                    finished: time.finished,
-                                    color: time.color || eventDetail.color || defaultColor,
-                                    note: time.note || eventDetail.note,
-                                    notePath: entry.path,
-                                };
-                                if (validateEvent(event)) {
-                                    events.push(event);
-                                }
-                            }
-                        }
-                        else {
-                            if (!dayjs(eventDetail.start).isValid()) {
-                                newEventErrors.push(['start', eventDetail.start, eventName, entry.path, entry.title]);
-                                continue;
-                            }
-                            const normalizedEndTime = normalizeEndTime(eventDetail.end, eventDetail.start);
-                            if (normalizedEndTime === null) {
-                                newEventErrors.push(['end', eventDetail.end, eventName, entry.path, entry.title]);
-                                continue;
-                            }
-                            eventDetail.end = normalizedEndTime;
-                            const event = {
-                                name: eventName,
-                                start: eventDetail.start,
-                                end: eventDetail.end,
-                                finished: eventDetail.finished,
-                                color: eventDetail.color || defaultColor,
-                                note: eventDetail.note,
-                                notePath: entry.path,
-                            };
-                            if (validateEvent(event)) {
-                                events.push(event);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    eventErrors.value = newEventErrors;
-    return events;
+// A rule may be open-ended, so expansion is bounded by what the view can show. Padded a month
+// either side, so the occurrences a month view spills into its first and last rows are present.
+const eventWindow = computed(() => {
+    const cursor = dayjs(calendarCursor.value, 'YYYY-MM-DD');
+    const unit = calendarType.value === 'month' ? 'month' : calendarType.value;
+    return {
+        from: cursor.startOf(unit).subtract(1, 'month').format('YYYY-MM-DD'),
+        to: cursor.endOf(unit).add(1, 'month').format('YYYY-MM-DD'),
+    };
 });
+const derived = computed(() => eventsFromEntries(files.entries, eventWindow.value));
+const events = computed(() => mergeImported(
+    derived.value.events,
+    calendars.events,
+    { colorOf: calendars.colorOf },
+));
+const eventErrors = computed(() => derived.value.errors);
 
+// Watchers
 // Lifecycle hooks
 onMounted(() => {
     document.title = `Calendar | ${import.meta.env.VITE_APP_NAME}`;
+    calendars.loadSubscriptions().catch(() => {
+        // The subscription list is only needed for names and colours; the events themselves come
+        // back from the backend, which reads the same file.
+    });
 
     window.addEventListener('keydown', onKeydown);
     window.addEventListener('wheel', onWheel);
@@ -382,6 +340,81 @@ function load() {
         });
 }
 
+function loadImported(window: { from: string; to: string }) {
+    calendars.load(window.from, window.to).catch((err) => {
+        // A calendar that fails is already reported per-calendar in the response; this is the
+        // request itself failing, which must not take the note events down with it.
+        error.value = true;
+        errorText.value = `Could not load imported events: ${err}`;
+    });
+}
+
+/// Write a note for the imported event in the popup, so mory owns it from now on.
+async function convertSelected() {
+    const event = selectedEvent.value;
+    if (event === null || event.source !== 'ical' || event.uid === undefined) {
+        return;
+    }
+
+    const series = calendars.series[event.uid];
+    // From the backend's own record, not from the popup: the drawn event's times have been through
+    // `toWallClock` and no longer carry their offsets, so writing them into a note would fix the
+    // event to whatever zone the reader happened to be in.
+    const source = calendars.events.find((candidate) =>
+        candidate.uid === event.uid
+        && candidate.calendar === event.calendar
+        && candidate.recurrence_id === event.recurrenceId);
+    const occurrence = source ?? {
+        calendar: event.calendar ?? '',
+        uid: event.uid,
+        recurrence_id: event.recurrenceId ?? event.start,
+        name: event.name,
+        start: event.start,
+        end: event.end,
+        note: event.note,
+        location: event.location,
+        url: event.url,
+    };
+
+    isConverting.value = true;
+    try {
+        // A series whose rule mory cannot express converts as the single occurrence in front of
+        // the user, which `buildOccurrenceNote` records in the note itself.
+        const note = canConvertSeries(series)
+            ? buildSeriesNote(occurrence, series)
+            : buildOccurrenceNote(occurrence, series);
+        await files.write(note.path, note.content);
+        await settle(note.path);
+
+        // `selectedEvent` holds the imported object by reference, so rebuilding `events` leaves
+        // the popup showing an event that is no longer drawn -- with its Convert button still on
+        // it. Close it and let the user reopen whichever event replaced it.
+        selectedOpen.value = false;
+        selectedEvent.value = null;
+    }
+    catch (err) {
+        error.value = true;
+        errorText.value = `Could not convert the event: ${err}`;
+    }
+    finally {
+        isConverting.value = false;
+    }
+}
+
+/// Wait until the listing actually shows the note that was just written.
+///
+/// A single refresh can come back without it -- the same race `useEntrySubset` documents, and the
+/// reason a newly created task used to go missing from the tree.
+async function settle(path: string) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+        const entries = await files.refresh();
+        if (entries.some((entry) => entry.path === path)) {
+            return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, LAGGING_RETRY_MS));
+    }
+}
+
 function setToday() {
     router.push({
         name: 'Calendar',
@@ -432,9 +465,18 @@ function getEventEndTime(event: any): dayjs.Dayjs {
 
 function getEventColor(event: any): string {
     const toPropName = (s: string) => s.replace(/-./g, (match: string) => match[1].toUpperCase());
-    const color = Object.hasOwn(materialColors, toPropName(event.color))
-                ? Color((materialColors as any)[toPropName(event.color)].base)
-                : Color(event.color);
+    // `Color` throws on anything it cannot parse, and both a note's `color:` and a calendar's
+    // configured colour are free text. Throwing here happens inside v-calendar's render, so one
+    // typo would blank the whole view rather than mis-colour one event.
+    let color;
+    try {
+        color = Object.hasOwn(materialColors, toPropName(event.color))
+            ? Color((materialColors as any)[toPropName(event.color)].base)
+            : Color(event.color);
+    }
+    catch {
+        color = Color(DEFAULT_EVENT_COLOR);
+    }
 
     const now = dayjs();
     const time = getEventEndTime(event);
@@ -489,6 +531,13 @@ watch(route, (newRoute) => {
         calendarType.value = newRoute.params.type as string;
         calendarCursor.value = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
     }
+}, { immediate: true });
+
+// Declared after the route watcher, and immediate like it: watchers run in declaration order, so
+// the other way round a deep-linked date fetched twice -- once for today's window, which is never
+// drawn, and again once the route had moved the cursor.
+watch(eventWindow, (window) => {
+    loadImported(window);
 }, { immediate: true });
 </script>
 

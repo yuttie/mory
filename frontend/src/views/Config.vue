@@ -153,6 +153,7 @@
                     </v-slider>
                 </v-card-text>
             </v-card>
+            <CalendarsSettings></CalendarsSettings>
             <AiActionsSettings></AiActionsSettings>
         </v-sheet>
     </div>
@@ -162,6 +163,7 @@
 import { ref, watch, onMounted } from 'vue';
 
 import AiActionsSettings from '@/components/AiActionsSettings.vue';
+import CalendarsSettings from '@/components/CalendarsSettings.vue';
 import { useFilesStore } from '@/stores/files';
 import {
     NOTE_TREE_INITIAL_ROWS,
