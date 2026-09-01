@@ -210,8 +210,6 @@
                     <v-list-item color="primary" to="/tasks-next"><template v-slot:prepend><v-icon size="small">{{ mdiBallotOutline }}</v-icon></template><v-list-item-title>Tasks (New)</v-list-item-title></v-list-item>
                     <v-list-item color="primary" to="/files"><template v-slot:prepend><v-icon size="small">{{ mdiFileDocumentMultipleOutline }}</v-icon></template><v-list-item-title>Files</v-list-item-title></v-list-item>
                     <v-list-item color="primary" to="/search"><template v-slot:prepend><v-icon size="small">{{ mdiMagnify }}</v-icon></template><v-list-item-title>Search</v-list-item-title></v-list-item>
-                    <v-list-item color="primary" to="/config"><template v-slot:prepend><v-icon size="small">{{ mdiCogOutline }}</v-icon></template><v-list-item-title>Config</v-list-item-title></v-list-item>
-                    <v-list-item color="primary" to="/about"><template v-slot:prepend><v-icon size="small">{{ mdiInformationOutline }}</v-icon></template><v-list-item-title>About</v-list-item-title></v-list-item>
                 </v-list>
 
                 <v-divider></v-divider>
@@ -232,7 +230,7 @@
                 <v-divider></v-divider>
 
                 <v-list nav class="flex-shrink-0">
-                    <v-menu location="right">
+                    <v-menu location="top">
                         <template v-slot:activator="{ props }">
                             <v-list-item
                                 v-bind="props"
@@ -246,6 +244,19 @@
                         </template>
                         <v-card>
                             <v-list density="compact">
+                                <v-list-item to="/config">
+                                    <template v-slot:prepend>
+                                        <v-icon size="small">{{ mdiCogOutline }}</v-icon>
+                                    </template>
+                                    <v-list-item-title>Config</v-list-item-title>
+                                </v-list-item>
+                                <v-list-item to="/about">
+                                    <template v-slot:prepend>
+                                        <v-icon size="small">{{ mdiInformationOutline }}</v-icon>
+                                    </template>
+                                    <v-list-item-title>About</v-list-item-title>
+                                </v-list-item>
+                                <v-divider></v-divider>
                                 <v-list-item
                                     v-on:click="appStore.logout()"
                                 >
@@ -437,8 +448,6 @@
                 <v-list-item color="primary" to="/tasks-next"><template v-slot:prepend><v-icon size="small">{{ mdiBallotOutline }}</v-icon></template><v-list-item-title>Tasks (New)</v-list-item-title></v-list-item>
                 <v-list-item color="primary" to="/files"><template v-slot:prepend><v-icon size="small">{{ mdiFileDocumentMultipleOutline }}</v-icon></template><v-list-item-title>Files</v-list-item-title></v-list-item>
                 <v-list-item color="primary" to="/search"><template v-slot:prepend><v-icon size="small">{{ mdiMagnify }}</v-icon></template><v-list-item-title>Search</v-list-item-title></v-list-item>
-                <v-list-item color="primary" to="/config"><template v-slot:prepend><v-icon size="small">{{ mdiCogOutline }}</v-icon></template><v-list-item-title>Config</v-list-item-title></v-list-item>
-                <v-list-item color="primary" to="/about"><template v-slot:prepend><v-icon size="small">{{ mdiInformationOutline }}</v-icon></template><v-list-item-title>About</v-list-item-title></v-list-item>
             </v-list>
 
             <v-divider></v-divider>
@@ -450,7 +459,7 @@
             <v-divider></v-divider>
 
             <v-list nav>
-                <v-menu location="right">
+                <v-menu location="top">
                     <template v-slot:activator="{ props }">
                         <v-list-item
                             v-bind="props"
@@ -464,6 +473,19 @@
                     </template>
                     <v-card>
                         <v-list density="compact">
+                            <v-list-item to="/config">
+                                <template v-slot:prepend>
+                                    <v-icon size="small">{{ mdiCogOutline }}</v-icon>
+                                </template>
+                                <v-list-item-title>Config</v-list-item-title>
+                            </v-list-item>
+                            <v-list-item to="/about">
+                                <template v-slot:prepend>
+                                    <v-icon size="small">{{ mdiInformationOutline }}</v-icon>
+                                </template>
+                                <v-list-item-title>About</v-list-item-title>
+                            </v-list-item>
+                            <v-divider></v-divider>
                             <v-list-item
                                 v-on:click="appStore.logout()"
                             >
