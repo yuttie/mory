@@ -68,6 +68,18 @@ Run commands in the component's own directory (`backend/` or `frontend/`).
       decides how git-cliff groups the commit in `CHANGELOG.md`.
     - In the subject and body, record any numbers you measured when they matter to the change.
 - Past commit messages are a useful model, but the rules in this file always win.
+- When creating commits, append an `Assisted-by:` trailer naming yourself — the agent, and the
+  model behind it when that is what identifies you. Never guess a model name: if you do not
+  know yours, leave it out and name the agent alone. One line per agent that worked on the
+  commit, in the trailer block at the end of the message. For example:
+
+    ```
+    Assisted-by: Claude Opus 5
+    Assisted-by: Codex GPT-5.6 Sol
+    Assisted-by: GitHub Copilot
+    ```
+
+    Do not add attribution or session links to pull-request descriptions.
 - Small, focused commits, made as the work proceeds. Never one large commit at the end.
 - Every commit must build and stand on its own. Verify before committing. A reviewer should
   be able to read any single commit and understand it without the ones after it.
