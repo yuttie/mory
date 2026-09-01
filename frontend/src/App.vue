@@ -219,6 +219,7 @@
                 <v-fade-transition>
                     <v-list
                         v-show="!miniMainSidebar"
+                        nav
                         class="flex-shrink-1 overflow-y-auto"
                     >
                         <v-list-subheader>Notes</v-list-subheader>
@@ -230,7 +231,7 @@
 
                 <v-divider></v-divider>
 
-                <v-list class="flex-shrink-0">
+                <v-list nav class="flex-shrink-0">
                     <v-menu location="right">
                         <template v-slot:activator="{ props }">
                             <v-list-item
@@ -442,13 +443,13 @@
 
             <v-divider></v-divider>
 
-            <v-list>
+            <v-list nav>
                 <NoteTree />
             </v-list>
 
             <v-divider></v-divider>
 
-            <v-list>
+            <v-list nav>
                 <v-menu location="right">
                     <template v-slot:activator="{ props }">
                         <v-list-item
