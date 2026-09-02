@@ -19,7 +19,6 @@
                 v-for="error of errors"
                 v-bind:key="error.id"
                 type="error"
-                density="compact"
                 closable
                 style="z-index: 100; margin-bottom: 2px;"
             >{{ error.message }}</v-alert>
@@ -84,7 +83,7 @@
                                 </template>
                             </v-list-item>
                         </template>
-                        <v-list density="compact">
+                        <v-list>
                             <v-list-subheader>Create</v-list-subheader>
                             <v-list-item to="/create">
                                 <template v-slot:prepend>
@@ -156,7 +155,7 @@
                             </v-list-item>
                         </template>
                         <v-card>
-                            <v-list density="compact">
+                            <v-list>
                                 <v-list-item
                                     v-on:click="chooseFile"
                                 >
@@ -167,7 +166,6 @@
                             <v-divider v-if="uploadList.length > 0"></v-divider>
                             <v-list
                                 v-if="uploadList.length > 0"
-                                density="compact"
                             >
                                 <v-list-subheader>Uploaded files</v-list-subheader>
                                 <v-list-item
@@ -200,7 +198,6 @@
                 <v-divider></v-divider>
 
                 <v-list
-                    dense
                     nav
                     class="flex-grow-0 flex-shrink-0"
                 >
@@ -243,7 +240,7 @@
                             </v-list-item>
                         </template>
                         <v-card>
-                            <v-list density="compact">
+                            <v-list>
                                 <v-list-item to="/config">
                                     <template v-slot:prepend>
                                         <v-icon size="small">{{ mdiCogOutline }}</v-icon>
@@ -323,7 +320,7 @@
                             </template>
                         </v-list-item>
                     </template>
-                    <v-list density="compact">
+                    <v-list>
                         <v-list-subheader>Create</v-list-subheader>
                         <v-list-item to="/create">
                             <template v-slot:prepend>
@@ -395,7 +392,7 @@
                         </v-list-item>
                     </template>
                     <v-card>
-                        <v-list density="compact">
+                        <v-list>
                             <v-list-item
                                 v-on:click="chooseFile"
                             >
@@ -406,7 +403,6 @@
                         <v-divider v-if="uploadList.length > 0"></v-divider>
                         <v-list
                             v-if="uploadList.length > 0"
-                            density="compact"
                         >
                             <v-list-subheader>Uploaded files</v-list-subheader>
                             <v-list-item
@@ -439,7 +435,6 @@
             <v-divider></v-divider>
 
             <v-list
-                density="compact"
                 nav
             >
                 <v-list-item color="primary" to="/"><template v-slot:prepend><v-icon size="small">{{ mdiHomeOutline }}</v-icon></template><v-list-item-title>Home</v-list-item-title></v-list-item>
@@ -472,7 +467,7 @@
                         </v-list-item>
                     </template>
                     <v-card>
-                        <v-list density="compact">
+                        <v-list>
                             <v-list-item to="/config">
                                 <template v-slot:prepend>
                                     <v-icon size="small">{{ mdiCogOutline }}</v-icon>

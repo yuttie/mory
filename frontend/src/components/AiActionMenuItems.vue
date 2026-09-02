@@ -11,7 +11,7 @@
                     submenu
                     open-on-hover
                 >
-                    <v-list density="compact">
+                    <v-list>
                         <AiActionMenuItems
                             v-bind:nodes="node.children"
                             v-on:run="$emit('run', $event)"

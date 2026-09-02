@@ -12,7 +12,7 @@
             activator="parent"
             v-on:update:model-value="onMenuToggle"
         >
-            <v-list density="compact">
+            <v-list>
                 <v-list-item v-on:click="$emit('adHoc')">
                     <v-list-item-title>Ad hoc&hellip;</v-list-item-title>
                 </v-list-item>

@@ -1,6 +1,6 @@
 <template>
     <div id="calendar" class="d-flex flex-column">
-        <v-toolbar flat border density="compact" color="transparent" class="flex-grow-0">
+        <v-toolbar flat border color="transparent" class="flex-grow-0">
             <v-btn variant="outlined" v-on:click="setToday" class="mr-3">Today</v-btn>
             <v-btn icon variant="text" size="small" v-on:click="navigateCalendar('prev')">
                 <v-icon>{{ mdiChevronLeft }}</v-icon>
@@ -14,7 +14,6 @@
             <v-spacer></v-spacer>
             <v-btn-toggle
                 v-bind:model-value="calendarType"
-                density="compact"
                 mandatory
                 variant="outlined"
                 class="mr-2"
@@ -53,7 +52,7 @@
                     </v-btn>
                 </template>
                 <v-card min-width="16em">
-                    <v-list density="compact" class="py-0">
+                    <v-list class="py-0">
                         <v-list-subheader>Imported calendars</v-list-subheader>
                         <v-list-item
                             v-for="subscription of calendars.available"
@@ -64,7 +63,6 @@
                             <template v-slot:prepend>
                                 <v-checkbox-btn
                                     v-bind:model-value="!hiddenCalendars.has(subscription.id)"
-                                    density="compact"
                                     class="mr-1"
                                     tabindex="-1"
                                 ></v-checkbox-btn>
@@ -136,7 +134,7 @@
                     <v-icon v-if="selectedEvent.finished" class="mr-4">{{ mdiCheck }}</v-icon>
                 </v-toolbar>
                 <v-card-text>
-                    <v-list density="compact">
+                    <v-list>
                         <v-list-item>
                             <template v-slot:prepend>
                                 <v-icon>{{ mdiClockStart }}</v-icon>
@@ -207,7 +205,6 @@
         </v-alert>
         <v-alert
             v-if="calendars.truncated"
-            density="compact"
             type="warning"
         >
             Some calendars have more events in this range than can be shown.

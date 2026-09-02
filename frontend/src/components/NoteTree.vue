@@ -19,7 +19,6 @@
             v-if="remaining > 0"
             variant="text"
             size="small"
-            density="compact"
             class="show-older"
             block
             v-on:click="showOlder"

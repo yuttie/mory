@@ -93,12 +93,11 @@
                         />
                     </v-window-item>
                     <v-window-item value="descendants">
-                        <v-toolbar flat border density="compact" color="transparent" class="flex-grow-0">
+                        <v-toolbar flat border color="transparent" class="flex-grow-0">
                             <!-- View mode selector -->
                             <v-btn-toggle
                                 v-bind:model-value="descendantsViewMode"
                                 v-on:update:model-value="onViewModeChange"
-                                density="compact"
                                 mandatory
                             >
                                 <v-btn

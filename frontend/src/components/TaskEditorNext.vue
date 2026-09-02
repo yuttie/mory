@@ -65,7 +65,6 @@
             <v-alert
                 v-if="error"
                 type="error"
-                density="compact"
                 variant="outlined"
                 class="mx-4"
             >
@@ -354,7 +353,6 @@
                                 <v-rating
                                     v-bind:model-value="taskAssessment.quality_score / 2"
                                     readonly
-                                    density="compact"
                                     size="16"
                                     length="5"
                                     half-increments

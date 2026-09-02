@@ -16,7 +16,6 @@
                             placeholder="Enter note content..."
                             rows="5"
                             variant="outlined"
-                            density="compact"
                             hide-details="auto"
                             v-on:keydown="handleNoteKeydown"
                         ></v-textarea>
@@ -45,7 +44,6 @@
                             placeholder="Enter task name..."
                             variant="outlined"
                             hide-details="auto"
-                            density="compact"
                             class="mb-2"
                             v-on:keydown="handleTaskKeydown"
                         ></v-text-field>
@@ -54,7 +52,6 @@
                             hide-details="auto"
                             class="mb-2"
                             inline
-                            density="compact"
                         >
                             <template v-slot:label>
                                 <div>Schedule</div>

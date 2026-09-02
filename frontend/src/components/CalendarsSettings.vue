@@ -14,7 +14,6 @@
 
             <v-list
                 v-if="calendars.subscriptions.length > 0"
-                density="compact"
             >
                 <v-list-item
                     v-for="(subscription, index) of calendars.subscriptions"
@@ -32,7 +31,6 @@
                         <v-switch
                             v-bind:model-value="subscription.enabled"
                             class="mr-2"
-                            density="compact"
                             hide-details
                             v-on:update:model-value="setEnabled(index, $event)"
                         ></v-switch>

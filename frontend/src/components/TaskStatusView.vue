@@ -1,6 +1,6 @@
 <template>
     <div class="status-view groups">
-        <v-card dense class="group">
+        <v-card class="group">
             <v-card-title>To do</v-card-title>
             <div class="task-list">
                 <TaskListItemNext
@@ -11,7 +11,7 @@
                 />
             </div>
         </v-card>
-        <v-card dense class="group">
+        <v-card class="group">
             <v-card-title>In progress</v-card-title>
             <div class="task-list">
                 <TaskListItemNext
@@ -22,7 +22,7 @@
                 />
             </div>
         </v-card>
-        <v-card dense class="group">
+        <v-card class="group">
             <v-card-title>Waiting</v-card-title>
             <div class="task-list">
                 <TaskListItemNext
@@ -33,7 +33,7 @@
                 />
             </div>
         </v-card>
-        <v-card dense class="group">
+        <v-card class="group">
             <v-card-title>Blocked</v-card-title>
             <div class="task-list">
                 <TaskListItemNext
@@ -44,7 +44,7 @@
                 />
             </div>
         </v-card>
-        <v-card dense class="group">
+        <v-card class="group">
             <v-card-title>On hold</v-card-title>
             <div class="task-list">
                 <TaskListItemNext
@@ -55,7 +55,7 @@
                 />
             </div>
         </v-card>
-        <v-card dense class="group">
+        <v-card class="group">
             <v-card-title>Done</v-card-title>
             <div class="task-list">
                 <TaskListItemNext
@@ -66,7 +66,7 @@
                 />
             </div>
         </v-card>
-        <v-card dense class="group">
+        <v-card class="group">
             <v-card-title>Canceled</v-card-title>
             <div class="task-list">
                 <TaskListItemNext
