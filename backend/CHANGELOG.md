@@ -2,6 +2,9 @@
 
 ### 🚀 Features
 
+- *(backend/search)* Add local Tantivy Text search, opt-in SQLite-backed Semantic and Hybrid
+  search, and cached image descriptions through the unified `/v2/search` API
+
 - [**breaking**] Add `commit` column to `entry` table for multi-version support
   - The `entry` table now uses a composite primary key `(commit, path)` instead of just `path`
   - This allows multiple versions of entry sets to coexist in the cache database

@@ -1,3 +1,10 @@
+## [Unreleased]
+
+### 🚀 Features
+
+- *(frontend/views/Search)* Add route-driven Grep, Text, Semantic, and Hybrid modes with indexing,
+  fallback, partial-coverage, and generated-image-description states
+
 ## [1.9.0] - 2025-09-11
 
 ### 🚀 Features
