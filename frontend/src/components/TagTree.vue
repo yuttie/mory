@@ -8,7 +8,6 @@
         item-value="id"
         activatable
         open-on-click
-        density="compact"
     >
         <template v-slot:prepend="{ item, isOpen }">
             <v-icon v-if="item.children" size="small">

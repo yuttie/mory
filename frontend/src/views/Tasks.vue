@@ -1,6 +1,6 @@
 <template>
     <div id="tasks" class="d-flex flex-column">
-        <v-toolbar flat border density="compact" color="transparent" class="flex-grow-0">
+        <v-toolbar flat border color="transparent" class="flex-grow-0">
             <!-- New task button -->
             <v-dialog
                 max-width="600px"
@@ -137,7 +137,6 @@
 
             <!-- Search text box -->
             <v-text-field
-                density="compact"
                 label="Search"
                 clearable
                 v-model="searchQuery"
@@ -253,7 +252,7 @@
                         </div>
                     </div>
                 </v-card>
-                <v-card dense class="group">
+                <v-card class="group">
                     <v-card-title>With Deadline</v-card-title>
                     <div class="task-list">
                         <TaskListItem
@@ -267,7 +266,7 @@
                         ></TaskListItem>
                     </div>
                 </v-card>
-                <v-card dense class="group">
+                <v-card class="group">
                     <v-card-title>Backlog</v-card-title>
                     <draggable
                         class="task-list"

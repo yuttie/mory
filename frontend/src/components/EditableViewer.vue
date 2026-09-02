@@ -130,7 +130,7 @@
                     width="312"
                     class="sidebar"
                 >
-                    <v-list density="compact" nav>
+                    <v-list nav>
                         <v-list-item
                             v-on:click.stop="miniSubSidebar = !miniSubSidebar"
                         >
@@ -249,7 +249,6 @@
                              another drawer would break both out of the sidebar. -->
                         <div class="mode-rail">
                             <v-list
-                                density="compact"
                                 nav
                                 mandatory
                                 color="primary"
@@ -262,7 +261,7 @@
 
                             <v-divider></v-divider>
 
-                            <v-list density="compact" nav>
+                            <v-list nav>
                                 <v-list-item v-on:click="lockScroll = !lockScroll;">
                                     <template v-slot:prepend>
                                         <template v-if="lockScroll">

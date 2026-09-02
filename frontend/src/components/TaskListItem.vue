@@ -5,7 +5,6 @@
   >
     <v-checkbox-btn
       color="primary"
-      density="compact"
       v-bind:ripple="false"
       v-bind:model-value="value.done"
       v-on:update:model-value="$emit('done-toggle', $event)"

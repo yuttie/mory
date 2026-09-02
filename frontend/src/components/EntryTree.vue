@@ -9,7 +9,6 @@
         v-bind:open-on-click="openOnClick"
         item-title="title"
         activatable
-        density="compact"
         class="entry-tree"
     >
         <template v-slot:prepend="{ item }">

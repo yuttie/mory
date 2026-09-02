@@ -7,7 +7,7 @@
                 as <code>{{ AI_ACTIONS_PATH }}</code> and are shared across browsers.
             </v-alert>
 
-            <v-list v-if="sortedActions.length > 0" density="compact">
+            <v-list v-if="sortedActions.length > 0">
                 <v-list-item
                     v-for="action of sortedActions"
                     v-bind:key="action.id"
