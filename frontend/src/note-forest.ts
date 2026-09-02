@@ -15,12 +15,10 @@ import { flatten, sortForest } from '@/forest';
 import type { PathForestPolicy } from '@/path-forest';
 import { buildPathForest, stripExtension } from '@/path-forest';
 import { compareInstantsDesc } from '@/utils';
+import { routeForMime } from '@/file-route';
 
 // The application's own directories -- `.tasks/`, `.mory/`, `.events/` -- are storage, not notes.
 const HIDDEN_SEGMENT = /(^|\/)\./;
-
-// Which files open in the media viewer rather than the note editor. Same rule as `Files.vue`.
-const MEDIA_MIME = /^(image\/|video\/|application\/pdf)/i;
 
 export interface NoteNode extends ForestNode {
     id: string;
@@ -130,7 +128,5 @@ export function noteRouteFor(node: NoteNode): string | null {
     if (node.entry === null) {
         return null;
     }
-    return MEDIA_MIME.test(node.entry.mime_type)
-        ? `/media/${node.path}`
-        : `/note/${node.path}`;
+    return routeForMime(node.path, node.entry.mime_type);
 }

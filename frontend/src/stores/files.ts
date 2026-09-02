@@ -3,7 +3,7 @@ import type { ShallowRef } from 'vue';
 import { defineStore } from 'pinia';
 
 import * as api from '@/api';
-import type { ListEntry2 } from '@/api';
+import type { ListEntry2, SearchRequest, SearchResponse, SearchStatusResponse } from '@/api';
 import {
     applyEntryDelta,
     clearEntries,
@@ -27,12 +27,6 @@ import {
 // A sync sends that commit as `since`, so the backend can reply with just what changed instead
 // of the whole listing. In-memory optimistic patches never reach IndexedDB: they would corrupt
 // that base.
-
-export interface SearchHit {
-    file: string;
-    line: number;
-    content: string;
-}
 
 // How long to wait before asking again after the backend served a listing older than HEAD,
 // which it does while a cold rebuild is still running. Without this, a component calling
@@ -315,9 +309,13 @@ export const useFilesStore = defineStore('files', () => {
     }
 
     // Full-text search is answered by the backend against HEAD, so it is not cached.
-    async function search(pattern: string): Promise<SearchHit[]> {
-        const res = await api.searchNotes(pattern);
-        return res.data as SearchHit[];
+    async function search(request: SearchRequest, signal?: AbortSignal): Promise<SearchResponse> {
+        const res = await api.searchNotes(request, signal);
+        return res.data;
+    }
+
+    function searchStatus(signal?: AbortSignal): Promise<SearchStatusResponse> {
+        return api.getSearchStatus(signal);
     }
 
     // Whether a path is taken, asked of the repository rather than of the listing so that a
@@ -344,6 +342,7 @@ export const useFilesStore = defineStore('files', () => {
         remove,
         upload,
         search,
+        searchStatus,
         exists,
         invalidate,
         clear,

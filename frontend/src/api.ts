@@ -286,8 +286,73 @@ export function uploadFiles(fd: FormData) {
   return getAxios().post(`/files`, fd);
 }
 
-export function searchNotes(pattern: string) {
-  return getAxios().post('/notes', { pattern: pattern });
+export type SearchMode = 'grep' | 'text' | 'semantic' | 'hybrid';
+
+export interface SearchRequest {
+  query: string;
+  mode: SearchMode;
+  limit?: number;
+}
+
+export interface SearchIndexStatus {
+  state: 'ready' | 'updating' | 'error';
+  indexed_commit: string | null;
+  message?: string;
+}
+
+export interface SemanticIndexStatus {
+  state: 'disabled' | 'indexing' | 'ready' | 'error';
+  indexed: number;
+  total: number;
+  failed: number;
+}
+
+export interface SearchWarning {
+  code: string;
+  message: string;
+}
+
+export type SearchSource = Exclude<SearchMode, 'hybrid'>;
+
+export interface SearchHit {
+  path: string;
+  blob_id: string;
+  passage_id: string;
+  mime_type: string;
+  title?: string;
+  start_line?: number;
+  end_line?: number;
+  snippet: string;
+  content_kind: 'source' | 'image_description';
+  sources: SearchSource[];
+  score: number | null;
+}
+
+export interface SearchResponse {
+  requested_mode: SearchMode;
+  executed_modes: SearchMode[];
+  commit: string;
+  head: string;
+  lexical: SearchIndexStatus;
+  semantic: SemanticIndexStatus;
+  warnings: SearchWarning[];
+  hits: SearchHit[];
+}
+
+export interface SearchStatusResponse {
+  commit: string;
+  head: string;
+  lexical: SearchIndexStatus;
+  semantic: SemanticIndexStatus;
+}
+
+export function searchNotes(request: SearchRequest, signal?: AbortSignal) {
+  return getAxios().post<SearchResponse>('/v2/search', request, { signal });
+}
+
+export async function getSearchStatus(signal?: AbortSignal): Promise<SearchStatusResponse> {
+  const response = await getAxios().get<SearchStatusResponse>('/v2/search/status', { signal });
+  return response.data;
 }
 
 export interface TaskData {

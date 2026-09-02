@@ -74,7 +74,7 @@
             <template v-slot:item.path="{ item }">
                 <div class="path truncate" style="max-width: 20em;" v-bind:title="item.title ?? item.path">
                     <v-icon class="mr-1" v-bind:color="item.iconColor">{{ item.icon }}</v-icon>
-                    <router-link v-bind:to="item.mimeType.match(/^(image\/|video\/|application\/pdf)/i) ? { path: `/media/${item.path}` } : { path: `/note/${item.path}` }">{{ item.title ?? item.path }}</router-link>
+                    <router-link v-bind:to="routeForMime(item.path, item.mimeType)">{{ item.title ?? item.path }}</router-link>
                 </div>
             </template>
             <template v-slot:item.time="{ item }">
@@ -126,6 +126,7 @@ import {
 import { compareTags } from '@/api';
 
 import { useFilesStore } from '@/stores/files';
+import { routeForMime } from '@/file-route';
 
 import dayjs from 'dayjs';
 
