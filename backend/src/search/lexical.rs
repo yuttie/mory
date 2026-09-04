@@ -555,7 +555,7 @@ fn number(doc: &TantivyDocument, field: TField) -> Option<u64> {
 }
 
 pub fn replace_directory(build: &Path, destination: &Path) -> Result<()> {
-    let parent = destination.parent().unwrap_or_else(|| Path::new("."));
+    let parent = parent_directory(destination);
     fs::create_dir_all(parent)?;
     let old = unique_sibling(destination, "old");
     if old.exists() {
@@ -577,7 +577,7 @@ pub fn replace_directory(build: &Path, destination: &Path) -> Result<()> {
 }
 
 pub fn recover_directory(destination: &Path) -> Result<()> {
-    let parent = destination.parent().unwrap_or_else(|| Path::new("."));
+    let parent = parent_directory(destination);
     fs::create_dir_all(parent)?;
     let name = destination
         .file_name()
@@ -613,6 +613,14 @@ pub fn recover_directory(destination: &Path) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn parent_directory(path: &Path) -> &Path {
+    // A single relative component has an empty parent rather than no parent. Passing that empty
+    // path to create_dir_all/read_dir produces an opaque ENOENT during startup.
+    path.parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."))
 }
 
 pub fn unique_sibling(destination: &Path, suffix: &str) -> PathBuf {
@@ -726,6 +734,15 @@ mod tests {
             "last good"
         );
         assert!(!old.exists());
+    }
+
+    #[test]
+    fn a_default_relative_index_uses_the_working_directory_as_its_parent() {
+        assert_eq!(parent_directory(Path::new("search-index")), Path::new("."));
+        assert_eq!(
+            parent_directory(Path::new("cache/search-index")),
+            Path::new("cache")
+        );
     }
 
     #[test]

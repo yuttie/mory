@@ -146,7 +146,12 @@ impl SearchManager {
         cache_db: SqlitePool,
         cache_db_writer: SqlitePool,
     ) -> Result<Arc<Self>> {
-        lexical::recover_directory(&config.index_dir)?;
+        lexical::recover_directory(&config.index_dir).with_context(|| {
+            format!(
+                "failed to prepare local search index at {}",
+                config.index_dir.display()
+            )
+        })?;
         let existing = LexicalIndex::open(&config.index_dir).ok().map(Arc::new);
         let status = if let Some(index) = &existing {
             ManagerStatus {

@@ -11,6 +11,10 @@
   - Enables smaller insertion transactions and atomic switching of entry sets
   - **Migration required:** Delete `cache.sqlite` to allow it to be recreated with the new schema
 
+### 🐛 Bug Fixes
+
+- *(backend/search)* Start successfully with the default relative search-index directory
+
 ## [1.5.1] - 2025-09-12
 
 ### 🐛 Bug Fixes
