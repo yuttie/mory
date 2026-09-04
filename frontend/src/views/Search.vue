@@ -19,6 +19,7 @@
                         hide-details="auto"
                         class="flex-grow-1"
                         v-on:click:clear="clearQuery"
+                        v-on:keydown.enter="submitFromKeyboard"
                     />
                     <v-select
                         v-model="draftMode"
@@ -235,6 +236,14 @@ function submit(): void {
         return;
     }
     router.push({ query: query ? { q: query, mode: draftMode.value } : { mode: draftMode.value } });
+}
+
+function submitFromKeyboard(event: KeyboardEvent): void {
+    if (event.isComposing) {
+        return;
+    }
+    event.preventDefault();
+    submit();
 }
 
 function clearQuery(): void {

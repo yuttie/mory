@@ -5,6 +5,10 @@
 - *(frontend/views/Search)* Add route-driven Grep, Text, Semantic, and Hybrid modes with indexing,
   fallback, partial-coverage, and generated-image-description states
 
+### 🐛 Bug Fixes
+
+- *(frontend/views/Search)* Submit searches by pressing Enter in the query box
+
 ## [1.9.0] - 2025-09-11
 
 ### 🚀 Features
