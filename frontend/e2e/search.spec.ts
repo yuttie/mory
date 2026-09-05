@@ -189,3 +189,38 @@ test('links result paths containing URL metacharacters literally', async ({ cont
     expect(target.search).toBe('');
     expect(target.hash).toBe('');
 });
+
+test('shows a status failure once instead of retrying forever', async ({ context, page }) => {
+    let statusCalls = 0;
+    await mockBackend(context, {
+        onStatus: async (route) => {
+            statusCalls += 1;
+            await route.fulfill({
+                status: 500,
+                json: { message: 'Search status is unavailable' },
+            });
+        },
+    });
+
+    await page.goto('/search?mode=text');
+
+    await expect(page.getByText('Search status is unavailable')).toBeVisible();
+    await page.waitForTimeout(2_100);
+    expect(statusCalls).toBe(1);
+});
+
+test('hands a status authentication failure to the login flow', async ({ context, page }) => {
+    let statusCalls = 0;
+    await mockBackend(context, {
+        onStatus: async (route) => {
+            statusCalls += 1;
+            await route.fulfill({ status: 401, json: { message: 'Expired' } });
+        },
+    });
+
+    await page.goto('/search?mode=text');
+
+    await expect(page.getByRole('heading', { name: 'Login' })).toBeVisible();
+    await page.waitForTimeout(100);
+    expect(statusCalls).toBe(1);
+});

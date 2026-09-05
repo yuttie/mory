@@ -12,6 +12,7 @@
 - *(frontend/views/Search)* Retry an updating search when its first status response is already ready
 - *(frontend/views/Search)* Avoid duplicate reruns when ready status already matches the response
 - *(frontend/file-route)* Preserve URL metacharacters in paths opened from search and file results
+- *(frontend/views/Search)* Stop silent status retries and route authentication failures to login
 
 ## [1.9.0] - 2025-09-11
 

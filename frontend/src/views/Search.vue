@@ -357,9 +357,17 @@ async function pollStatus(): Promise<void> {
         }
     }
     catch (error: unknown) {
-        if (!axios.isCancel(error) && generation === statusRequestGeneration && mounted) {
-            pollTimer = setTimeout(pollStatus, 2000);
+        if (axios.isCancel(error) || generation !== statusRequestGeneration || !mounted) {
+            return;
         }
+        if (axios.isAxiosError(error) && error.response?.status === 401) {
+            emit('tokenExpired', pollStatus);
+            return;
+        }
+        showError.value = true;
+        errorText.value = axios.isAxiosError(error)
+            ? (error.response?.data as { message?: string } | undefined)?.message ?? error.message
+            : String(error);
     }
 }
 
