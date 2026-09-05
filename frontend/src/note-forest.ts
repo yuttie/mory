@@ -11,6 +11,7 @@
 
 import type { ListEntry2 } from '@/api';
 import type { Forest, ForestNode } from '@/forest';
+import type { RouteLocationRaw } from 'vue-router';
 import { flatten, sortForest } from '@/forest';
 import type { PathForestPolicy } from '@/path-forest';
 import { buildPathForest, stripExtension } from '@/path-forest';
@@ -124,7 +125,7 @@ export function buildNoteForest(
 }
 
 // Where clicking this row should go, or `null` for a directory, which only opens.
-export function noteRouteFor(node: NoteNode): string | null {
+export function noteRouteFor(node: NoteNode): RouteLocationRaw | null {
     if (node.entry === null) {
         return null;
     }

@@ -153,7 +153,7 @@ function onActivate(id: string | undefined) {
     const target = noteRouteFor(node);
     // A directory only opens. And a row activated *because* the route already points at it must
     // not navigate again, or revealing would bounce straight back into a push.
-    if (target === null || target === route.path) {
+    if (target === null || router.resolve(target).path === route.path) {
         return;
     }
     router.push(target);

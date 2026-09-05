@@ -156,3 +156,36 @@ test('does not repeat a semantic search already covered by ready status', async 
 
     expect(attempts).toBe(1);
 });
+
+test('links result paths containing URL metacharacters literally', async ({ context, page }) => {
+    const path = 'notes/name#draft?100%.md';
+    await mockBackend(context, {
+        onSearch: async (route) => {
+            const request = route.request().postDataJSON();
+            await route.fulfill({
+                json: {
+                    ...emptySearchResponse(request),
+                    hits: [{
+                        path,
+                        blob_id: 'blob',
+                        passage_id: 'passage',
+                        mime_type: 'text/markdown',
+                        title: 'Special path result',
+                        snippet: 'Result body',
+                        content_kind: 'source',
+                        sources: ['text'],
+                        score: 1,
+                    }],
+                },
+            });
+        },
+    });
+    await page.goto('/search?q=special&mode=text');
+
+    const href = await page.getByRole('link', { name: /Special path result/ }).getAttribute('href');
+    const target = new URL(href!, page.url());
+
+    expect(decodeURIComponent(target.pathname)).toBe(`/note/${path}`);
+    expect(target.search).toBe('');
+    expect(target.hash).toBe('');
+});
