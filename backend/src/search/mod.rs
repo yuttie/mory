@@ -172,10 +172,15 @@ impl SearchManager {
                 config.index_dir.display()
             )
         })?;
+        lexical::adopt_legacy(&config.index_dir).with_context(|| {
+            format!(
+                "failed to recognize an existing local search index at {}",
+                config.index_dir.display()
+            )
+        })?;
         let existing = LexicalIndex::open(&config.index_dir).ok().map(Arc::new);
         if existing.is_some() {
-            // Indexes created before the ownership marker was introduced are adopted only after
-            // Tantivy and the application fingerprint have both validated successfully.
+            // A compatible index may predate the ownership marker even without needing a rebuild.
             lexical::mark_managed(&config.index_dir)?;
         }
         let status = if let Some(index) = &existing {

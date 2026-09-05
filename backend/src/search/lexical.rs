@@ -624,6 +624,28 @@ pub fn mark_managed(path: &Path) -> Result<()> {
         .context("failed to mark the managed lexical index")
 }
 
+pub fn adopt_legacy(path: &Path) -> Result<bool> {
+    if !path.is_dir() || is_managed(path) {
+        return Ok(false);
+    }
+    let recognized = (|| -> Result<bool> {
+        let index = Index::open_in_dir(path)?;
+        let fields = fields_from_schema(&index.schema())?;
+        let reader = index
+            .reader_builder()
+            .reload_policy(ReloadPolicy::Manual)
+            .try_into()?;
+        Ok(read_marker(&reader, fields)?.is_some_and(|(_, fingerprint, _)| {
+            fingerprint.starts_with("mory-search-v")
+        }))
+    })()
+    .unwrap_or(false);
+    if recognized {
+        mark_managed(path)?;
+    }
+    Ok(recognized)
+}
+
 pub fn recover_directory(destination: &Path) -> Result<()> {
     let parent = parent_directory(destination);
     fs::create_dir_all(parent)?;
@@ -864,6 +886,32 @@ mod tests {
         assert!(build.exists());
         recover_directory(&destination).unwrap();
         assert!(decoy.exists());
+    }
+
+    #[test]
+    fn adopts_a_valid_pre_marker_index_with_an_old_fingerprint() {
+        let directory = tempfile::tempdir().unwrap();
+        let destination = directory.path().join("index");
+        fs::create_dir(&destination).unwrap();
+        let (schema, fields) = build_schema();
+        let index = Index::create_in_dir(&destination, schema).unwrap();
+        register_analyzers(&index).unwrap();
+        let mut writer = index.writer::<TantivyDocument>(15_000_000).unwrap();
+        writer
+            .add_document(doc!(
+                fields.kind => "meta",
+                fields.generation => "old-commit",
+                fields.fingerprint => "mory-search-v3:legacy",
+                fields.content_version => "old-content",
+            ))
+            .unwrap();
+        writer.commit().unwrap();
+        drop(writer);
+
+        assert!(LexicalIndex::open(&destination).is_err());
+        assert!(adopt_legacy(&destination).unwrap());
+        assert!(is_managed(&destination));
+        ensure_replaceable(&destination).unwrap();
     }
 
     #[test]
