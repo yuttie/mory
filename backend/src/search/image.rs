@@ -55,9 +55,13 @@ pub async fn describe(
             message: format!("image description provider returned HTTP {status}"),
         });
     }
-    let response = response
-        .json::<serde_json::Value>()
+    let body = response
+        .bytes()
         .await
+        .map_err(|error| {
+            retryable_body_failure(format!("image description response body failed: {error}"))
+        })?;
+    let response = serde_json::from_slice::<serde_json::Value>(&body)
         .map_err(|error| permanent(&format!("invalid image description response: {error}")))?;
     let text = response
         .get("output")
@@ -227,6 +231,14 @@ fn permanent(message: &str) -> ProviderError {
     }
 }
 
+fn retryable_body_failure(message: String) -> ProviderError {
+    ProviderError {
+        retryable: true,
+        retry_after: None,
+        message,
+    }
+}
+
 pub fn supported(mime_type: &str, path: &Path) -> bool {
     if mime_type == "image/svg+xml" {
         return false;
@@ -320,5 +332,21 @@ mod tests {
 
         assert!(normalized.starts_with(&[0xff, 0xd8, 0xff]));
         assert!(normalized.len() <= MAX_OUTPUT_BYTES);
+    }
+
+    #[test]
+    fn malformed_complete_image_response_is_permanent() {
+        let error = serde_json::from_slice::<serde_json::Value>(b"{not json")
+            .map_err(|error| permanent(&format!("invalid image description response: {error}")))
+            .unwrap_err();
+
+        assert!(!error.retryable);
+    }
+
+    #[test]
+    fn interrupted_image_response_body_is_retryable() {
+        let error = retryable_body_failure("response ended early".to_owned());
+
+        assert!(error.retryable);
     }
 }

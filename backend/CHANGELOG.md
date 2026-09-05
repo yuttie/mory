@@ -29,6 +29,7 @@
 - *(backend/search)* Report semantic progress only for the response's selected repository generation
 - *(backend/search)* Require passage and entry caches to share the reported semantic generation
 - *(backend/search)* Defer background provider work instead of queuing ahead of interactive queries
+- *(backend/search)* Retry truncated image-response bodies while rejecting complete malformed JSON
 
 ## [1.5.1] - 2025-09-12
 
