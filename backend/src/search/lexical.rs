@@ -24,7 +24,7 @@ use super::passage::Passage;
 use super::query::{Clause, Field, Occur, ParsedQuery};
 
 pub const FINGERPRINT: &str =
-    "mory-search-v3:passage-500-800-80:path-nfkc-fold:ja-ipadic-base:en-nfkc-fold-stem";
+    "mory-search-v4:passage-500-800-80-v3:path-nfkc-fold:ja-ipadic-base:en-nfkc-fold-stem";
 const GENERAL_ANALYZER: &str = "mory_general";
 const JAPANESE_ANALYZER: &str = "mory_japanese";
 const PATH_ANALYZER: &str = "mory_path";

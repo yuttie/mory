@@ -33,7 +33,7 @@ use provider::{EmbeddingProvider, OpenAiEmbeddingProvider, ProviderError};
 use query::{parse, ParsedQuery, SearchMode};
 
 const SEARCH_WAIT: Duration = Duration::from_millis(1200);
-const EMBEDDING_TEMPLATE: &str = "mory-passage-v2:chunker-500-800-80-v2";
+const EMBEDDING_TEMPLATE: &str = "mory-passage-v3:chunker-500-800-80-v3";
 const MAX_EMBEDDING_INPUT_CHARS: usize = 4_000;
 
 #[derive(Debug, Clone)]

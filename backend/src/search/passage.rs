@@ -109,7 +109,11 @@ fn assemble(blob_id: &str, units: Vec<Unit>) -> Vec<Passage> {
             continue;
         }
         let words = word_spans(&unit.text);
-        if words.len() <= MAX_TOKENS {
+        let word_tokens = words
+            .iter()
+            .map(|(start, end)| approximate_tokens(&unit.text[*start..*end]))
+            .collect::<Vec<_>>();
+        if words.len() == 1 || word_tokens.iter().any(|tokens| *tokens > MAX_TOKENS) {
             // A delimiter-free Japanese paragraph (or a giant code token) has one whitespace
             // word but many search tokens. Split on Unicode scalar boundaries as a conservative
             // cap; this may produce smaller chunks for Latin text, never an oversized one.
@@ -134,20 +138,28 @@ fn assemble(blob_id: &str, units: Vec<Unit>) -> Vec<Passage> {
             }
             continue;
         }
-        let step = MAX_TOKENS - OVERLAP_TOKENS;
-        for start in (0..words.len()).step_by(step) {
-            let end = (start + MAX_TOKENS).min(words.len());
+        let mut start = 0;
+        while start < words.len() {
+            let mut end = start;
+            let mut size = 0;
+            while end < words.len() && size + word_tokens[end] <= MAX_TOKENS {
+                size += word_tokens[end];
+                end += 1;
+            }
             let start_byte = words[start].0;
             let end_byte = words[end - 1].1;
-            let text = words[start..end]
-                .iter()
-                .map(|(start, end)| &unit.text[*start..*end])
-                .collect::<Vec<_>>()
-                .join(" ");
+            let text = unit.text[start_byte..end_byte].to_owned();
             expanded.push(split_unit(&unit, start_byte, end_byte, text));
             if end == words.len() {
                 break;
             }
+            let mut next = end;
+            let mut overlap = 0;
+            while next > start && overlap + word_tokens[next - 1] <= OVERLAP_TOKENS {
+                next -= 1;
+                overlap += word_tokens[next];
+            }
+            start = if next == start { end } else { next };
         }
     }
 
@@ -274,6 +286,17 @@ mod tests {
         let source = format!("```text\n{}\n```", "x".repeat(10_000));
         let found = passages("blob", &source);
         assert!(found.len() > 1);
+        assert!(found
+            .iter()
+            .all(|passage| approximate_tokens(&passage.text) <= MAX_TOKENS));
+    }
+
+    #[test]
+    fn long_whitespace_delimited_units_respect_the_token_cap() {
+        let source = "abcdefgh ".repeat(900);
+        let found = passages("blob", &source);
+
+        assert!(found.len() > 2);
         assert!(found
             .iter()
             .all(|passage| approximate_tokens(&passage.text) <= MAX_TOKENS));
