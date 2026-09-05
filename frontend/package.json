@@ -69,10 +69,12 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
+    "@playwright/test": "^1.62.1",
     "@types/color": "^4.2.0",
     "@types/eslint__js": "^8.42.3",
     "@types/less": "^3.0.2",
     "@types/md5": "^2.2.1",
+    "@types/node": "^26.4.0",
     "@vitejs/plugin-vue": "^6.0.0",
     "eslint": "^9.9.0",
     "eslint-plugin-vue": "^10.2.0",
