@@ -52,7 +52,7 @@ struct EmbeddingResponse {
     data: Vec<EmbeddingData>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct EmbeddingData {
     index: usize,
     embedding: Vec<f32>,
@@ -98,21 +98,40 @@ impl EmbeddingProvider for OpenAiEmbeddingProvider {
                 message: format!("embedding provider returned HTTP {status}"),
             });
         }
-        let mut response = response
-            .json::<EmbeddingResponse>()
-            .await
-            .map_err(|error| ProviderError {
+        let body = response.bytes().await.map_err(|error| ProviderError {
+            retryable: error.is_body() || error.is_timeout(),
+            retry_after: None,
+            message: format!("embedding response body failed: {error}"),
+        })?;
+        let response = serde_json::from_slice::<EmbeddingResponse>(&body).map_err(|error| {
+            ProviderError {
                 retryable: false,
                 retry_after: None,
                 message: format!("invalid embedding response: {error}"),
-            })?;
-        response.data.sort_by_key(|item| item.index);
-        Ok(response
-            .data
-            .into_iter()
-            .map(|item| item.embedding)
-            .collect())
+            }
+        })?;
+        ordered_embeddings(response.data, input.len())
     }
+}
+
+fn ordered_embeddings(
+    mut data: Vec<EmbeddingData>,
+    expected: usize,
+) -> Result<Vec<Vec<f32>>, ProviderError> {
+    data.sort_by_key(|item| item.index);
+    if data.len() != expected
+        || data
+            .iter()
+            .enumerate()
+            .any(|(expected_index, item)| item.index != expected_index)
+    {
+        return Err(ProviderError {
+            retryable: false,
+            retry_after: None,
+            message: "embedding response indices do not match the request".to_owned(),
+        });
+    }
+    Ok(data.into_iter().map(|item| item.embedding).collect())
 }
 
 pub fn retry_after(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
@@ -161,5 +180,44 @@ mod tests {
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(reqwest::header::RETRY_AFTER, "17".parse().unwrap());
         assert_eq!(retry_after(&headers), Some(Duration::from_secs(17)));
+    }
+
+    #[test]
+    fn orders_embedding_response_by_complete_unique_indices() {
+        let ordered = ordered_embeddings(
+            vec![
+                EmbeddingData {
+                    index: 1,
+                    embedding: vec![2.0],
+                },
+                EmbeddingData {
+                    index: 0,
+                    embedding: vec![1.0],
+                },
+            ],
+            2,
+        )
+        .unwrap();
+        assert_eq!(ordered, vec![vec![1.0], vec![2.0]]);
+
+        let duplicate = vec![
+            EmbeddingData {
+                index: 0,
+                embedding: vec![1.0],
+            },
+            EmbeddingData {
+                index: 0,
+                embedding: vec![2.0],
+            },
+        ];
+        assert!(ordered_embeddings(duplicate, 2).is_err());
+        assert!(ordered_embeddings(
+            vec![EmbeddingData {
+                index: 1,
+                embedding: vec![1.0],
+            }],
+            1,
+        )
+        .is_err());
     }
 }

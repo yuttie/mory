@@ -714,48 +714,67 @@ impl SearchManager {
             )
             .await;
         drop(_gate);
-        let response = match response {
-            Ok(vectors) if vectors.len() == pending.len() => vectors
-                .into_iter()
-                .map(|vector| normalize_vector(vector, self.config.embedding_dimensions))
-                .collect::<Result<Vec<_>>>()
-                .map_err(|error| ProviderError {
-                    retryable: false,
-                    retry_after: None,
-                    message: error.to_string(),
-                }),
-            Ok(_) => Err(ProviderError {
-                retryable: false,
-                retry_after: None,
-                message: "embedding response count mismatch".to_owned(),
-            }),
-            Err(error) => Err(error),
-        };
+        let response = response.and_then(|vectors| {
+            validate_embedding_vectors(
+                vectors,
+                pending.len(),
+                self.config.embedding_dimensions,
+            )
+        });
         match response {
             Ok(vectors) => {
                 let mut transaction = self.cache_db_writer.begin().await?;
                 for (item, vector) in pending.iter().zip(vectors) {
-                    sqlx::query(
-                        "INSERT INTO search_embedding (
-                            passage_id, text_hash, model, dimensions, template, vector, norm,
-                            state, last_attempt, next_retry, last_used
-                         ) VALUES (?, ?, ?, ?, ?, ?, 1.0, 'ready', ?, NULL, ?)
-                         ON CONFLICT(passage_id, model, dimensions, template) DO UPDATE SET
-                            text_hash = excluded.text_hash, vector = excluded.vector,
-                            norm = excluded.norm, state = excluded.state,
-                            last_attempt = excluded.last_attempt, next_retry = NULL,
-                            last_used = excluded.last_used;",
-                    )
-                    .bind(&item.passage_id)
-                    .bind(&item.text_hash)
-                    .bind(&self.config.embedding_model)
-                    .bind(self.config.embedding_dimensions as i64)
-                    .bind(EMBEDDING_TEMPLATE)
-                    .bind(encode_vector(&vector))
-                    .bind(now)
-                    .bind(now)
-                    .execute(&mut *transaction)
-                    .await?;
+                    match vector {
+                        Ok(vector) => {
+                            sqlx::query(
+                                "INSERT INTO search_embedding (
+                                    passage_id, text_hash, model, dimensions, template, vector,
+                                    norm, state, last_attempt, next_retry, last_used
+                                 ) VALUES (?, ?, ?, ?, ?, ?, 1.0, 'ready', ?, NULL, ?)
+                                 ON CONFLICT(passage_id, model, dimensions, template) DO UPDATE SET
+                                    text_hash = excluded.text_hash, vector = excluded.vector,
+                                    norm = excluded.norm, state = excluded.state,
+                                    last_attempt = excluded.last_attempt, next_retry = NULL,
+                                    last_used = excluded.last_used;",
+                            )
+                            .bind(&item.passage_id)
+                            .bind(&item.text_hash)
+                            .bind(&self.config.embedding_model)
+                            .bind(self.config.embedding_dimensions as i64)
+                            .bind(EMBEDDING_TEMPLATE)
+                            .bind(encode_vector(&vector))
+                            .bind(now)
+                            .bind(now)
+                            .execute(&mut *transaction)
+                            .await?;
+                        },
+                        Err(error) => {
+                            tracing::warn!(
+                                passage_id = %item.passage_id,
+                                "Rejected malformed embedding vector: {error}"
+                            );
+                            sqlx::query(
+                                "INSERT INTO search_embedding (
+                                    passage_id, text_hash, model, dimensions, template, vector,
+                                    norm, state, last_attempt, next_retry, last_used
+                                 ) VALUES (?, ?, ?, ?, ?, NULL, NULL, 'failed', ?, NULL, ?)
+                                 ON CONFLICT(passage_id, model, dimensions, template) DO UPDATE SET
+                                    text_hash = excluded.text_hash, vector = NULL, norm = NULL,
+                                    state = excluded.state, last_attempt = excluded.last_attempt,
+                                    next_retry = NULL, last_used = excluded.last_used;",
+                            )
+                            .bind(&item.passage_id)
+                            .bind(&item.text_hash)
+                            .bind(&self.config.embedding_model)
+                            .bind(self.config.embedding_dimensions as i64)
+                            .bind(EMBEDDING_TEMPLATE)
+                            .bind(now)
+                            .bind(now)
+                            .execute(&mut *transaction)
+                            .await?;
+                        },
+                    }
                 }
                 transaction.commit().await?;
             },
@@ -1087,6 +1106,24 @@ fn bounded_embedding_input(text: &str) -> String {
     // Tokenization cannot produce more tokens than there are input bytes, making this a
     // provider-independent conservative enforcement of the endpoint's token ceiling.
     text[..end].to_owned()
+}
+
+fn validate_embedding_vectors(
+    vectors: Vec<Vec<f32>>,
+    expected: usize,
+    dimensions: usize,
+) -> std::result::Result<Vec<Result<Vec<f32>>>, ProviderError> {
+    if vectors.len() != expected {
+        return Err(ProviderError {
+            retryable: false,
+            retry_after: None,
+            message: "embedding response count mismatch".to_owned(),
+        });
+    }
+    Ok(vectors
+        .into_iter()
+        .map(|vector| normalize_vector(vector, dimensions))
+        .collect())
 }
 
 async fn resume_failed_artifacts(pool: &SqlitePool, config: &SearchConfig) -> Result<()> {
@@ -2315,5 +2352,21 @@ mod tests {
             .map(|_| bounded_embedding_input(&oversized))
             .collect::<Vec<_>>();
         assert!(batch.iter().map(String::len).sum::<usize>() <= MAX_EMBEDDING_REQUEST_BYTES);
+    }
+
+    #[test]
+    fn malformed_embedding_does_not_discard_valid_siblings() {
+        let vectors = validate_embedding_vectors(
+            vec![vec![3.0, 4.0], vec![f32::NAN, 1.0], vec![1.0]],
+            3,
+            2,
+        )
+        .unwrap();
+
+        assert_eq!(vectors.len(), 3);
+        assert!(vectors[0].is_ok());
+        assert!(vectors[1].is_err());
+        assert!(vectors[2].is_err());
+        assert!(validate_embedding_vectors(vec![vec![1.0, 0.0]], 2, 2).is_err());
     }
 }
