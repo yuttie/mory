@@ -27,7 +27,7 @@ use sha1::{Digest, Sha1};
 use sqlx::{sqlite::SqliteRow, Row, SqlitePool};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 use tokio::process::Command;
-use tokio::sync::Mutex as AsyncMutex;
+use tokio::sync::{Mutex as AsyncMutex, MutexGuard};
 
 use crate::models::AppState;
 use lexical::{IndexInput, LexicalHit, LexicalIndex};
@@ -586,7 +586,9 @@ impl SearchManager {
                 .to_vec();
             source
         };
-        let gate = self.provider_gate.lock().await;
+        let Some(gate) = try_background_gate(&self.provider_gate, &self.interactive_waiters) else {
+            return Ok(());
+        };
         let result = image::describe(&self.vision_client, &model, &source).await;
         drop(gate);
         // A delayed response may outlive a delete. A rename is safe because the blob remains in
@@ -706,7 +708,9 @@ impl SearchManager {
             })
             .collect::<Vec<_>>();
         let pending = &pending[..input.len()];
-        let _gate = self.provider_gate.lock().await;
+        let Some(_gate) = try_background_gate(&self.provider_gate, &self.interactive_waiters) else {
+            return Ok(());
+        };
         let response = self
             .provider
             .embed(
@@ -1135,6 +1139,20 @@ fn bounded_embedding_input(text: &str) -> String {
     // Tokenization cannot produce more tokens than there are input bytes, making this a
     // provider-independent conservative enforcement of the endpoint's token ceiling.
     text[..end].to_owned()
+}
+
+fn try_background_gate<'a>(
+    gate: &'a AsyncMutex<()>,
+    interactive_waiters: &AtomicUsize,
+) -> Option<MutexGuard<'a, ()>> {
+    if interactive_waiters.load(Ordering::SeqCst) > 0 {
+        return None;
+    }
+    let guard = gate.try_lock().ok()?;
+    if interactive_waiters.load(Ordering::SeqCst) > 0 {
+        return None;
+    }
+    Some(guard)
 }
 
 fn validate_embedding_vectors(
@@ -2503,6 +2521,22 @@ mod tests {
         drop(waiting);
         assert_eq!(count.load(Ordering::SeqCst), 0);
         drop(held);
+    }
+
+    #[tokio::test]
+    async fn background_ingestion_never_queues_ahead_of_interactive_work() {
+        let count = AtomicUsize::new(0);
+        let gate = AsyncMutex::new(());
+        let held = gate.lock().await;
+
+        // Background work that reaches a busy provider must defer instead of taking a place in
+        // the FIFO mutex queue before an interactive request that arrives moments later.
+        assert!(try_background_gate(&gate, &count).is_none());
+        let waiter = InteractiveWaiter::new(&count);
+        drop(held);
+        assert!(try_background_gate(&gate, &count).is_none());
+        drop(waiter);
+        assert!(try_background_gate(&gate, &count).is_some());
     }
 
     #[test]
