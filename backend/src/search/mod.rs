@@ -139,6 +139,23 @@ pub struct SearchManager {
     force_rebuild: AtomicBool,
 }
 
+struct InteractiveWaiter<'a> {
+    count: &'a AtomicUsize,
+}
+
+impl<'a> InteractiveWaiter<'a> {
+    fn new(count: &'a AtomicUsize) -> Self {
+        count.fetch_add(1, Ordering::SeqCst);
+        Self { count }
+    }
+}
+
+impl Drop for InteractiveWaiter<'_> {
+    fn drop(&mut self) {
+        self.count.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
 impl SearchManager {
     pub async fn new(
         config: SearchConfig,
@@ -782,9 +799,8 @@ impl SearchManager {
     }
 
     async fn embed_interactive(&self, text: &str) -> std::result::Result<Vec<f32>, ProviderError> {
-        self.interactive_waiters.fetch_add(1, Ordering::SeqCst);
+        let _waiter = InteractiveWaiter::new(&self.interactive_waiters);
         let gate = self.provider_gate.lock().await;
-        self.interactive_waiters.fetch_sub(1, Ordering::SeqCst);
         let result = self
             .provider
             .embed(
@@ -2248,5 +2264,26 @@ mod tests {
                 .unwrap();
         assert_eq!(embedding, ("pending".to_owned(), 0));
         assert_eq!(image, ("pending".to_owned(), 0));
+    }
+
+    #[tokio::test]
+    async fn cancelling_a_queued_interactive_query_releases_its_priority() {
+        let count = AtomicUsize::new(0);
+        let gate = AsyncMutex::new(());
+        let held = gate.lock().await;
+        let mut waiting = Box::pin(async {
+            let _waiter = InteractiveWaiter::new(&count);
+            let _gate = gate.lock().await;
+        });
+
+        assert!(
+            tokio::time::timeout(Duration::from_millis(10), &mut waiting)
+                .await
+                .is_err()
+        );
+        assert_eq!(count.load(Ordering::SeqCst), 1);
+        drop(waiting);
+        assert_eq!(count.load(Ordering::SeqCst), 0);
+        drop(held);
     }
 }

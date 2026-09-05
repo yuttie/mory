@@ -21,6 +21,7 @@
 - *(backend/search)* Enforce the 800-token cap when splitting whitespace-delimited passages
 - *(backend/search)* Index Markdown recognized by MIME type or case-insensitive file extension
 - *(backend/search)* Retry failed active-model artifacts after configuration is corrected and restarted
+- *(backend/search)* Release interactive query priority on cancellation and hold it through completion
 
 ## [1.5.1] - 2025-09-12
 
