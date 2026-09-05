@@ -47,6 +47,17 @@
 
         <v-sheet class="px-3 pb-2">
             <v-alert
+                v-if="errorText"
+                type="error"
+                variant="tonal"
+                density="compact"
+                closable
+                class="mb-2"
+                v-on:click:close="errorText = ''"
+            >
+                {{ errorText }}
+            </v-alert>
+            <v-alert
                 v-if="statusMessage"
                 v-bind:type="statusType"
                 variant="tonal"
@@ -110,14 +121,6 @@
                 size="64"
             />
         </v-overlay>
-        <v-snackbar
-            v-model="showError"
-            color="error"
-            location="top"
-            timeout="5000"
-        >
-            {{ errorText }}
-        </v-snackbar>
     </div>
 </template>
 
@@ -160,7 +163,6 @@ const response: Ref<SearchResponse | null> = ref(null);
 const status: Ref<SearchStatusResponse | null> = ref(null);
 const isLoading = ref(false);
 const hasSearched = ref(false);
-const showError = ref(false);
 const errorText = ref('');
 const queryEl = ref<{ focus: () => void } | null>(null);
 
@@ -272,6 +274,7 @@ async function execute(): Promise<void> {
     requestController?.abort();
     requestController = new AbortController();
     response.value = null;
+    errorText.value = '';
     isLoading.value = true;
     hasSearched.value = true;
     try {
@@ -295,7 +298,6 @@ async function execute(): Promise<void> {
             waitingForIndex = true;
             pollStatus();
         }
-        showError.value = true;
         errorText.value = axios.isAxiosError(error)
             ? (error.response?.data as { message?: string } | undefined)?.message ?? error.message
             : String(error);
@@ -365,7 +367,6 @@ async function pollStatus(): Promise<void> {
             emit('tokenExpired', pollStatus);
             return;
         }
-        showError.value = true;
         errorText.value = axios.isAxiosError(error)
             ? (error.response?.data as { message?: string } | undefined)?.message ?? error.message
             : String(error);

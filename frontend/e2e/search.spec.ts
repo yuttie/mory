@@ -248,3 +248,21 @@ test('keeps an unsubmitted draft while a mode change reruns the committed query'
     await expect.poll(() => new URL(page.url()).searchParams.get('q')).toBe('committed');
     await expect.poll(() => submitted.at(-1)).toMatchObject({ query: 'committed', mode: 'semantic' });
 });
+
+test('keeps search errors visible until the user can act on them', async ({ context, page }) => {
+    await mockBackend(context, {
+        onSearch: async (route) => {
+            await route.fulfill({
+                status: 400,
+                json: { code: 'invalid_query', message: 'The query syntax is invalid' },
+            });
+        },
+    });
+
+    await page.goto('/search?q=broken&mode=text');
+    const error = page.getByText('The query syntax is invalid');
+
+    await expect(error).toBeVisible();
+    await page.waitForTimeout(5_100);
+    await expect(error).toBeVisible();
+});

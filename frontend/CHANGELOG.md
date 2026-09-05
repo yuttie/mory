@@ -14,6 +14,7 @@
 - *(frontend/file-route)* Preserve URL metacharacters in paths opened from search and file results
 - *(frontend/views/Search)* Stop silent status retries and route authentication failures to login
 - *(frontend/views/Search)* Preserve unsubmitted query text when changing the search mode
+- *(frontend/views/Search)* Keep search errors visible in a dismissible inline alert
 
 ## [1.9.0] - 2025-09-11
 
