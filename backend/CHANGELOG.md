@@ -25,6 +25,7 @@
 - *(backend/search)* Enforce embedding input and request limits with conservative UTF-8 byte bounds
 - *(backend/search)* Reject misindexed embedding responses and retain valid vectors from mixed batches
 - *(backend/search)* Reject oversized decoded images before ImageMagick performs full normalization
+- *(backend/search)* Stream Grep output and stop the child process once the requested limit is met
 
 ## [1.5.1] - 2025-09-12
 

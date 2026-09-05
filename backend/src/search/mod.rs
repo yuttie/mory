@@ -7,6 +7,7 @@ pub mod query;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::path::PathBuf;
+use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
@@ -24,6 +25,7 @@ use git2::{Oid, Repository};
 use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
 use sqlx::{sqlite::SqliteRow, Row, SqlitePool};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::Mutex as AsyncMutex;
 
@@ -1630,6 +1632,7 @@ pub async fn post_search(
             &env::var("MORIED_GIT_DIR").unwrap(),
             &request.query,
             snapshot.commit,
+            request.limit,
         )
         .await
         {
@@ -1950,8 +1953,9 @@ async fn grep_at(
     git_dir: &str,
     pattern: &str,
     revision: Oid,
+    limit: usize,
 ) -> std::result::Result<Vec<GrepMatch>, GrepError> {
-    let output = Command::new("git")
+    let mut child = Command::new("git")
         .arg("-C")
         .arg(git_dir)
         .arg("grep")
@@ -1963,26 +1967,43 @@ async fn grep_at(
         .arg(revision.to_string())
         .arg("--")
         .env("LC_ALL", "C")
-        .output()
-        .await
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
         .map_err(|error| GrepError::Internal(error.into()))?;
-    if output.status.code() == Some(1) {
-        return Ok(Vec::new());
-    }
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        if stderr.contains("Invalid regular expression") || stderr.contains("invalid regex") {
-            return Err(GrepError::Invalid);
-        }
-        return Err(GrepError::Internal(anyhow::anyhow!(
-            "git grep exited {:?}",
-            output.status.code()
-        )));
-    }
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| GrepError::Internal(anyhow::anyhow!("git grep stdout was unavailable")))?;
+    let mut stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| GrepError::Internal(anyhow::anyhow!("git grep stderr was unavailable")))?;
+    let stderr_task = tokio::spawn(async move {
+        let mut bytes = Vec::new();
+        stderr.read_to_end(&mut bytes).await.map(|_| bytes)
+    });
     let prefix = format!("{revision}:");
     let mut results = Vec::new();
-    for line in stdout.lines() {
+    let mut stdout = BufReader::new(stdout);
+    let mut reached_limit = false;
+    loop {
+        let mut bytes = Vec::new();
+        let read = stdout
+            .read_until(b'\n', &mut bytes)
+            .await
+            .map_err(|error| GrepError::Internal(error.into()))?;
+        if read == 0 {
+            break;
+        }
+        if bytes.last() == Some(&b'\n') {
+            bytes.pop();
+        }
+        if bytes.last() == Some(&b'\r') {
+            bytes.pop();
+        }
+        let line = String::from_utf8_lossy(&bytes);
         let mut parts = line.split('\0');
         let Some(file) = parts.next() else {
             continue;
@@ -1998,6 +2019,35 @@ async fn grep_at(
             line: number,
             content: content.to_owned(),
         });
+        if results.len() >= limit {
+            reached_limit = true;
+            let _ = child.kill().await;
+            break;
+        }
+    }
+    let status = child
+        .wait()
+        .await
+        .map_err(|error| GrepError::Internal(error.into()))?;
+    let stderr = stderr_task
+        .await
+        .map_err(|error| GrepError::Internal(error.into()))?
+        .map_err(|error| GrepError::Internal(error.into()))?;
+    if reached_limit {
+        return Ok(results);
+    }
+    if status.code() == Some(1) {
+        return Ok(Vec::new());
+    }
+    if !status.success() {
+        let stderr = String::from_utf8_lossy(&stderr);
+        if stderr.contains("Invalid regular expression") || stderr.contains("invalid regex") {
+            return Err(GrepError::Invalid);
+        }
+        return Err(GrepError::Internal(anyhow::anyhow!(
+            "git grep exited {:?}",
+            status.code()
+        )));
     }
     Ok(results)
 }
@@ -2106,21 +2156,21 @@ mod tests {
     async fn grep_uses_a_fixed_commit_and_treats_option_like_patterns_as_data() {
         let directory = tempfile::tempdir().unwrap();
         let repo = Repository::init(directory.path()).unwrap();
-        let first = commit_file(&repo, directory.path(), "-danger\n", &[]);
+        let first = commit_file(&repo, directory.path(), "-danger\n-danger again\n", &[]);
         let first_commit = repo.find_commit(first).unwrap();
         let second = commit_file(&repo, directory.path(), "replacement\n", &[&first_commit]);
 
-        let found = grep_at(directory.path().to_str().unwrap(), "-danger", first)
+        let found = grep_at(directory.path().to_str().unwrap(), "-danger", first, 1)
             .await
             .unwrap();
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].file, "note.md");
-        assert!(grep_at(directory.path().to_str().unwrap(), "absent", first)
+        assert!(grep_at(directory.path().to_str().unwrap(), "absent", first, 10)
             .await
             .unwrap()
             .is_empty());
         assert!(matches!(
-            grep_at(directory.path().to_str().unwrap(), "[", first).await,
+            grep_at(directory.path().to_str().unwrap(), "[", first, 10).await,
             Err(GrepError::Invalid)
         ));
         drop(first_commit);
