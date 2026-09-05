@@ -207,6 +207,10 @@ impl LexicalIndex {
         Ok(hits)
     }
 
+    pub fn validate_query(&self, parsed: &ParsedQuery) -> Result<()> {
+        build_query(&self.index, self.fields, parsed).map(|_| ())
+    }
+
     pub fn matching_passages(&self, parsed: &ParsedQuery) -> Result<HashSet<PassageKey>> {
         let hard_filters = ParsedQuery {
             clauses: parsed
@@ -538,16 +542,20 @@ fn build_query(index: &Index, fields: Fields, parsed: &ParsedQuery) -> Result<Bo
         .iter()
         .any(|clause| clause.occur == Occur::Required);
     for clause in &parsed.clauses {
-        if let Some(query) = clause_query(index, fields, clause)? {
-            let occur = match clause.occur {
-                Occur::Excluded => TOccur::MustNot,
-                Occur::Required => TOccur::Must,
-                Occur::Optional if clause.field != Field::Any => TOccur::Must,
-                Occur::Optional if has_required => TOccur::Should,
-                Occur::Optional => TOccur::Must,
-            };
-            clauses.push((occur, query));
-        }
+        let query = clause_query(index, fields, clause)?.with_context(|| {
+            format!(
+                "search clause {:?} contains no indexable text",
+                clause.value
+            )
+        })?;
+        let occur = match clause.occur {
+            Occur::Excluded => TOccur::MustNot,
+            Occur::Required => TOccur::Must,
+            Occur::Optional if clause.field != Field::Any => TOccur::Must,
+            Occur::Optional if has_required => TOccur::Should,
+            Occur::Optional => TOccur::Must,
+        };
+        clauses.push((occur, query));
     }
     Ok(Box::new(BooleanQuery::new(clauses)))
 }
@@ -787,6 +795,25 @@ mod tests {
             allowed,
             HashSet::from([("research/shared.md".to_owned(), "same".to_owned())])
         );
+    }
+
+    #[test]
+    fn rejects_clauses_that_the_analyzers_reduce_to_nothing() {
+        let directory = tempfile::tempdir().unwrap();
+        let index_path = directory.path().join("index");
+        let index = LexicalIndex::build(
+            &index_path,
+            "commit",
+            "content",
+            &[input("note.md", "one", "Title", "body")],
+        )
+        .unwrap();
+
+        for query in ["path:...", "path:---", "normal +path:..."] {
+            let parsed = parse(query).unwrap();
+            assert!(index.validate_query(&parsed).is_err(), "accepted {query:?}");
+            assert!(index.search(&parsed, 10).is_err(), "searched {query:?}");
+        }
     }
 
     #[test]

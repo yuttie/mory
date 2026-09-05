@@ -17,6 +17,7 @@
 - *(backend/search)* Refuse to replace directories not owned by the search index
 - *(backend/search)* Keep Semantic hard filters scoped to a path when blobs are duplicated
 - *(backend/search)* Hold Semantic candidates to one repository generation during query embedding
+- *(backend/search)* Reject clauses that contain no indexable text instead of matching everything
 
 ## [1.5.1] - 2025-09-12
 

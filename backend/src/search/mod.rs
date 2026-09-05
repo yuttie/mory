@@ -469,6 +469,20 @@ impl SearchManager {
         }
     }
 
+    fn validate_query(&self, commit: Oid, parsed: &ParsedQuery) -> Result<()> {
+        let lexical = self
+            .lexical
+            .read()
+            .unwrap()
+            .clone()
+            .context("lexical index is not available")?;
+        anyhow::ensure!(
+            lexical.generation == commit.to_string(),
+            "lexical generation changed"
+        );
+        lexical.validate_query(parsed)
+    }
+
     async fn cached_image_descriptions(
         &self,
         snapshot: &SearchSnapshot,
@@ -1587,6 +1601,9 @@ pub async fn post_search(
             "lexical_index_updating",
             "The local text index is updating. Please retry shortly.",
         );
+    }
+    if let Err(error) = state.search.validate_query(snapshot.commit, &parsed) {
+        return search_error(StatusCode::BAD_REQUEST, "invalid_query", error.to_string());
     }
 
     let mut warnings = Vec::new();
