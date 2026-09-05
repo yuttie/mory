@@ -1021,10 +1021,28 @@ impl SearchManager {
         Ok(())
     }
 
-    async fn semantic_status(&self) -> Result<SemanticStatus> {
+    async fn semantic_status_for(&self, commit: Oid) -> Result<SemanticStatus> {
+        let mut snapshot = self.cache_db.begin().await?;
+        let passage_commit: Option<String> =
+            sqlx::query_scalar("SELECT value FROM search_state WHERE key = 'passage_commit';")
+                .fetch_optional(&mut *snapshot)
+                .await?;
+        if passage_commit.as_deref() != Some(commit.to_string().as_str()) {
+            return Ok(SemanticStatus {
+                state: if self.config.semantic_enabled {
+                    "indexing"
+                } else {
+                    "disabled"
+                }
+                .to_owned(),
+                indexed: 0,
+                total: 0,
+                failed: 0,
+            });
+        }
         let passage_total: i64 =
             sqlx::query_scalar("SELECT count(DISTINCT passage_id) FROM search_passage;")
-                .fetch_one(&self.cache_db)
+                .fetch_one(&mut *snapshot)
                 .await?;
         let (image_total, described_images, image_failed) = if let Some(model) =
             &self.config.vision_model
@@ -1033,10 +1051,10 @@ impl SearchManager {
                 "SELECT count(DISTINCT blob_id) FROM entry
                  WHERE path NOT LIKE '.mory/%' AND path != '.mory'
                    AND mime_type IN ('image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp', 'image/tiff');",
-            ).fetch_one(&self.cache_db).await?;
+            ).fetch_one(&mut *snapshot).await?;
             let described: i64 = sqlx::query_scalar(
                 "SELECT count(DISTINCT blob_id) FROM search_passage WHERE content_kind = 'image_description';",
-            ).fetch_one(&self.cache_db).await?;
+            ).fetch_one(&mut *snapshot).await?;
             let failed: i64 = sqlx::query_scalar(
                 "SELECT count(DISTINCT d.blob_id) FROM search_image_description d
                  WHERE d.model = ? AND d.prompt_version = ? AND d.preprocess = ? AND d.detail = ?
@@ -1047,7 +1065,7 @@ impl SearchManager {
             .bind(image::PROMPT_VERSION)
             .bind(image::PREPROCESS_VERSION)
             .bind(image::DETAIL)
-            .fetch_one(&self.cache_db)
+            .fetch_one(&mut *snapshot)
             .await?;
             (image_total, described, failed)
         } else {
@@ -1070,7 +1088,7 @@ impl SearchManager {
         .bind(&self.config.embedding_model)
         .bind(self.config.embedding_dimensions as i64)
         .bind(EMBEDDING_TEMPLATE)
-        .fetch_one(&self.cache_db)
+        .fetch_one(&mut *snapshot)
         .await?;
         let embedding_failed: i64 = sqlx::query_scalar(
             "SELECT count(DISTINCT p.passage_id) FROM search_passage p
@@ -1080,10 +1098,10 @@ impl SearchManager {
         .bind(&self.config.embedding_model)
         .bind(self.config.embedding_dimensions as i64)
         .bind(EMBEDDING_TEMPLATE)
-        .fetch_one(&self.cache_db)
+        .fetch_one(&mut *snapshot)
         .await?;
         let failed = embedding_failed + image_failed;
-        Ok(SemanticStatus {
+        let status = SemanticStatus {
             state: if indexed + failed >= total {
                 "ready"
             } else {
@@ -1093,7 +1111,9 @@ impl SearchManager {
             indexed: indexed as usize,
             total: total as usize,
             failed: failed as usize,
-        })
+        };
+        snapshot.commit().await?;
+        Ok(status)
     }
 }
 
@@ -1545,7 +1565,7 @@ pub async fn get_status(extract::State(state): extract::State<AppState>) -> Resp
             );
         },
     };
-    let semantic = match state.search.semantic_status().await {
+    let semantic = match state.search.semantic_status_for(snapshot.commit).await {
         Ok(status) => status,
         Err(error) => {
             tracing::error!("Semantic status failed: {error:?}");
@@ -1616,18 +1636,17 @@ pub async fn post_search(
         },
     };
     let head = state.head_commit_id().unwrap_or(snapshot.commit);
-    let semantic = state
-        .search
-        .semantic_status()
-        .await
-        .unwrap_or(SemanticStatus {
-            state: "error".to_owned(),
-            indexed: 0,
-            total: 0,
-            failed: 0,
-        });
-
     if request.mode == SearchMode::Grep {
+        let semantic = state
+            .search
+            .semantic_status_for(snapshot.commit)
+            .await
+            .unwrap_or(SemanticStatus {
+                state: "error".to_owned(),
+                indexed: 0,
+                total: 0,
+                failed: 0,
+            });
         return match grep_at(
             &env::var("MORIED_GIT_DIR").unwrap(),
             &request.query,
@@ -1722,6 +1741,16 @@ pub async fn post_search(
     if let Err(error) = state.search.validate_query(snapshot.commit, &parsed) {
         return search_error(StatusCode::BAD_REQUEST, "invalid_query", error.to_string());
     }
+    let semantic = state
+        .search
+        .semantic_status_for(snapshot.commit)
+        .await
+        .unwrap_or(SemanticStatus {
+            state: "error".to_owned(),
+            indexed: 0,
+            total: 0,
+            failed: 0,
+        });
 
     let mut warnings = Vec::new();
     let mut executed_modes = vec![SearchMode::Text];
@@ -2253,6 +2282,62 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(current, "new");
+    }
+
+    #[tokio::test]
+    async fn semantic_status_does_not_report_a_different_generation() {
+        use sqlx::sqlite::SqlitePoolOptions;
+
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::query("CREATE TABLE search_state (key TEXT PRIMARY KEY, value TEXT NOT NULL);")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let selected = Oid::from_str(&"1".repeat(40)).unwrap();
+        let newer = Oid::from_str(&"2".repeat(40)).unwrap();
+        sqlx::query("INSERT INTO search_state VALUES ('passage_commit', ?);")
+            .bind(newer.to_string())
+            .execute(&pool)
+            .await
+            .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let manager = SearchManager {
+            config: SearchConfig {
+                index_dir: directory.path().join("index"),
+                semantic_enabled: true,
+                embedding_model: "model".to_owned(),
+                embedding_dimensions: 2,
+                vision_model: None,
+            },
+            repo: Arc::new(std::sync::Mutex::new(
+                Repository::init(directory.path().join("repo")).unwrap(),
+            )),
+            cache_db: pool.clone(),
+            cache_db_writer: pool,
+            lexical: RwLock::new(None),
+            status: RwLock::new(ManagerStatus {
+                state: "updating".to_owned(),
+                indexed_commit: None,
+                message: None,
+            }),
+            writer: AsyncMutex::new(()),
+            provider: Arc::new(DeterministicEmbeddingProvider),
+            provider_gate: AsyncMutex::new(()),
+            interactive_waiters: AtomicUsize::new(0),
+            vision_client: reqwest::Client::new(),
+            force_rebuild: AtomicBool::new(false),
+        };
+
+        let status = manager.semantic_status_for(selected).await.unwrap();
+
+        assert_eq!(status.state, "indexing");
+        assert_eq!(status.indexed, 0);
+        assert_eq!(status.total, 0);
+        assert_eq!(status.failed, 0);
     }
 
     #[test]
