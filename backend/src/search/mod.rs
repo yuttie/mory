@@ -802,14 +802,7 @@ impl SearchManager {
         parsed: &ParsedQuery,
         limit: usize,
     ) -> std::result::Result<Vec<SearchHit>, SemanticSearchError> {
-        let passage_commit: Option<String> =
-            sqlx::query_scalar("SELECT value FROM search_state WHERE key = 'passage_commit';")
-                .fetch_optional(&self.cache_db)
-                .await
-                .map_err(|error| SemanticSearchError::Internal(error.into()))?;
-        if passage_commit.as_deref() != Some(commit.to_string().as_str()) {
-            return Err(SemanticSearchError::Generation);
-        }
+        let mut snapshot = begin_semantic_snapshot(&self.cache_db, commit).await?;
         let lexical = self
             .lexical
             .read()
@@ -825,10 +818,6 @@ impl SearchManager {
                 .await
                 .map_err(|error| SemanticSearchError::Internal(error.into()))?
                 .map_err(SemanticSearchError::Internal)?;
-        let query_vector = self
-            .embed_interactive(&parsed.semantic_text())
-            .await
-            .map_err(SemanticSearchError::Provider)?;
         let rows = sqlx::query(
             "SELECT p.path, p.blob_id, p.passage_id, p.mime_type, p.title,
                     p.start_line, p.end_line, p.snippet, p.content_kind, e.vector
@@ -841,9 +830,13 @@ impl SearchManager {
         .bind(&self.config.embedding_model)
         .bind(self.config.embedding_dimensions as i64)
         .bind(EMBEDDING_TEMPLATE)
-        .fetch_all(&self.cache_db)
+        .fetch_all(&mut *snapshot)
         .await
         .map_err(|error| SemanticSearchError::Internal(error.into()))?;
+        snapshot
+            .commit()
+            .await
+            .map_err(|error| SemanticSearchError::Internal(error.into()))?;
         let mut corrupt = Vec::new();
         let candidates = rows
             .into_iter()
@@ -906,6 +899,10 @@ impl SearchManager {
                 .await
                 .map_err(|error| SemanticSearchError::Internal(error.into()))?;
         }
+        let query_vector = self
+            .embed_interactive(&parsed.semantic_text())
+            .await
+            .map_err(SemanticSearchError::Provider)?;
         let hits = tokio::task::spawn_blocking(move || {
             score_semantic_candidates(candidates, &query_vector, limit)
         })
@@ -1042,6 +1039,25 @@ impl SearchManager {
             failed: failed as usize,
         })
     }
+}
+
+async fn begin_semantic_snapshot(
+    pool: &SqlitePool,
+    commit: Oid,
+) -> std::result::Result<sqlx::Transaction<'static, sqlx::Sqlite>, SemanticSearchError> {
+    let mut transaction = pool
+        .begin()
+        .await
+        .map_err(|error| SemanticSearchError::Internal(error.into()))?;
+    let passage_commit: Option<String> =
+        sqlx::query_scalar("SELECT value FROM search_state WHERE key = 'passage_commit';")
+            .fetch_optional(&mut *transaction)
+            .await
+            .map_err(|error| SemanticSearchError::Internal(error.into()))?;
+    if passage_commit.as_deref() != Some(commit.to_string().as_str()) {
+        return Err(SemanticSearchError::Generation);
+    }
+    Ok(transaction)
 }
 
 #[derive(Debug)]
@@ -1985,5 +2001,76 @@ mod tests {
             changed_paths(&repo, &first.to_string(), second).unwrap(),
             HashSet::from(["note.md".to_owned()]),
         );
+    }
+
+    #[tokio::test]
+    async fn semantic_candidate_reads_stay_on_the_selected_generation() {
+        use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+        use std::str::FromStr;
+
+        let directory = tempfile::tempdir().unwrap();
+        let database = directory.path().join("semantic.sqlite");
+        let options = SqliteConnectOptions::from_str(&format!("sqlite://{}", database.display()))
+            .unwrap()
+            .create_if_missing(true)
+            .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal);
+        let writer = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options.clone())
+            .await
+            .unwrap();
+        let reader = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options.read_only(true))
+            .await
+            .unwrap();
+        sqlx::query("CREATE TABLE search_state (key TEXT PRIMARY KEY, value TEXT NOT NULL);")
+            .execute(&writer)
+            .await
+            .unwrap();
+        sqlx::query("CREATE TABLE search_passage (passage_id TEXT NOT NULL);")
+            .execute(&writer)
+            .await
+            .unwrap();
+        let first = Oid::from_str(&"1".repeat(40)).unwrap();
+        let second = Oid::from_str(&"2".repeat(40)).unwrap();
+        sqlx::query("INSERT INTO search_state VALUES ('passage_commit', ?);")
+            .bind(first.to_string())
+            .execute(&writer)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO search_passage VALUES ('old');")
+            .execute(&writer)
+            .await
+            .unwrap();
+
+        let mut snapshot = begin_semantic_snapshot(&reader, first).await.unwrap();
+        let mut replacement = writer.begin().await.unwrap();
+        sqlx::query("UPDATE search_state SET value = ? WHERE key = 'passage_commit';")
+            .bind(second.to_string())
+            .execute(&mut *replacement)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM search_passage;")
+            .execute(&mut *replacement)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO search_passage VALUES ('new');")
+            .execute(&mut *replacement)
+            .await
+            .unwrap();
+        replacement.commit().await.unwrap();
+
+        let passage: String = sqlx::query_scalar("SELECT passage_id FROM search_passage;")
+            .fetch_one(&mut *snapshot)
+            .await
+            .unwrap();
+        assert_eq!(passage, "old");
+        snapshot.commit().await.unwrap();
+        let current: String = sqlx::query_scalar("SELECT passage_id FROM search_passage;")
+            .fetch_one(&reader)
+            .await
+            .unwrap();
+        assert_eq!(current, "new");
     }
 }
