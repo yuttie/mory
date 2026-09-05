@@ -224,3 +224,27 @@ test('hands a status authentication failure to the login flow', async ({ context
     await page.waitForTimeout(100);
     expect(statusCalls).toBe(1);
 });
+
+test('keeps an unsubmitted draft while a mode change reruns the committed query', async ({ context, page }) => {
+    const submitted: { query: string, mode: string }[] = [];
+    await mockBackend(context, {
+        onSearch: async (route) => {
+            const request = route.request().postDataJSON();
+            submitted.push(request);
+            await route.fulfill({ json: emptySearchResponse(request) });
+        },
+    });
+    await page.goto('/search?q=committed&mode=text');
+    await expect.poll(() => submitted.length).toBe(1);
+    await expect(page.getByText('No results')).toBeVisible();
+    const query = page.getByRole('textbox', { name: 'Search' });
+    await query.fill('draft-only');
+
+    await page.getByRole('combobox', { name: 'Mode' }).focus();
+    await page.getByRole('combobox', { name: 'Mode' }).press('ArrowDown');
+    await page.getByRole('option', { name: 'Semantic' }).click();
+
+    await expect(query).toHaveValue('draft-only');
+    await expect.poll(() => new URL(page.url()).searchParams.get('q')).toBe('committed');
+    await expect.poll(() => submitted.at(-1)).toMatchObject({ query: 'committed', mode: 'semantic' });
+});

@@ -13,6 +13,7 @@
 - *(frontend/views/Search)* Avoid duplicate reruns when ready status already matches the response
 - *(frontend/file-route)* Preserve URL metacharacters in paths opened from search and file results
 - *(frontend/views/Search)* Stop silent status retries and route authentication failures to login
+- *(frontend/views/Search)* Preserve unsubmitted query text when changing the search mode
 
 ## [1.9.0] - 2025-09-11
 

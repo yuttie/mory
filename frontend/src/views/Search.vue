@@ -174,6 +174,7 @@ let lastReadyGeneration: string | null = null;
 let waitingGeneration: string | null = null;
 let waitingForIndex = false;
 let lastSemanticState: SearchStatusResponse['semantic']['state'] | null = null;
+let preserveDraftOnModeRoute = false;
 
 const modeHelp = computed(() => ({
     grep: 'Regular-expression search across every text file, including raw YAML syntax.',
@@ -395,7 +396,13 @@ watch(
     ([query, mode]) => {
         const nextQuery = typeof query === 'string' ? query : '';
         const nextMode = modeFromRoute(mode);
-        draftQuery.value = nextQuery;
+        const preserveDraft = preserveDraftOnModeRoute
+            && nextQuery === committedQuery.value
+            && nextMode === draftMode.value;
+        preserveDraftOnModeRoute = false;
+        if (!preserveDraft) {
+            draftQuery.value = nextQuery;
+        }
         draftMode.value = nextMode;
         committedQuery.value = nextQuery;
         committedMode.value = nextMode;
@@ -409,10 +416,15 @@ watch(
 
 watch(draftMode, (mode) => {
     if (mode !== committedMode.value) {
+        preserveDraftOnModeRoute = true;
         router.push({
             query: committedQuery.value === ''
                 ? { mode }
                 : { q: committedQuery.value, mode },
+        }).then((failure) => {
+            if (failure !== undefined) {
+                preserveDraftOnModeRoute = false;
+            }
         });
     }
 });
