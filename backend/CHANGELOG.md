@@ -19,6 +19,7 @@
 - *(backend/search)* Hold Semantic candidates to one repository generation during query embedding
 - *(backend/search)* Reject clauses that contain no indexable text instead of matching everything
 - *(backend/search)* Enforce the 800-token cap when splitting whitespace-delimited passages
+- *(backend/search)* Index Markdown recognized by MIME type or case-insensitive file extension
 
 ## [1.5.1] - 2025-09-12
 

@@ -1221,7 +1221,7 @@ fn build_inputs(
         if entry.path == ".mory" || entry.path.starts_with(".mory/") {
             continue;
         }
-        if !entry.path.ends_with(".md") {
+        if !is_markdown(entry) {
             if image::supported(&entry.mime_type, std::path::Path::new(&entry.path)) {
                 if let Some(description) = descriptions.get(entry.blob_id.as_str()) {
                     let text = if description.visible_text.trim().is_empty() {
@@ -1278,6 +1278,20 @@ fn build_inputs(
         }
     }
     Ok(inputs)
+}
+
+fn is_markdown(entry: &SnapshotEntry) -> bool {
+    entry
+        .mime_type
+        .split(';')
+        .next()
+        .is_some_and(|mime| mime.trim().eq_ignore_ascii_case("text/markdown"))
+        || std::path::Path::new(&entry.path)
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| {
+                extension.eq_ignore_ascii_case("md") || extension.eq_ignore_ascii_case("markdown")
+            })
 }
 
 fn changed_paths(
@@ -2089,5 +2103,56 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(current, "new");
+    }
+
+    #[test]
+    fn indexes_markdown_from_mime_and_case_insensitive_extensions() {
+        let directory = tempfile::tempdir().unwrap();
+        let repo = Repository::init(directory.path()).unwrap();
+        let upper = repo.blob(b"# Upper\n\nBody").unwrap();
+        let long = repo.blob(b"# Long\n\nBody").unwrap();
+        let mime = repo.blob(b"# Mime\n\nBody").unwrap();
+        let snapshot = SearchSnapshot {
+            commit: Oid::zero(),
+            entries: vec![
+                SnapshotEntry {
+                    path: "Upper.MD".to_owned(),
+                    blob_id: upper.to_string(),
+                    mime_type: "application/octet-stream".to_owned(),
+                    title: None,
+                    metadata: "{}".to_owned(),
+                },
+                SnapshotEntry {
+                    path: "Long.markdown".to_owned(),
+                    blob_id: long.to_string(),
+                    mime_type: "application/octet-stream".to_owned(),
+                    title: None,
+                    metadata: "{}".to_owned(),
+                },
+                SnapshotEntry {
+                    path: "notes/custom".to_owned(),
+                    blob_id: mime.to_string(),
+                    mime_type: "text/markdown; charset=utf-8".to_owned(),
+                    title: None,
+                    metadata: "{}".to_owned(),
+                },
+            ],
+        };
+        let repo = Arc::new(std::sync::Mutex::new(repo));
+
+        let inputs = build_inputs(&repo, &snapshot, &[]).unwrap();
+        let paths = inputs
+            .into_iter()
+            .map(|input| input.path)
+            .collect::<HashSet<_>>();
+
+        assert_eq!(
+            paths,
+            HashSet::from([
+                "Upper.MD".to_owned(),
+                "Long.markdown".to_owned(),
+                "notes/custom".to_owned(),
+            ])
+        );
     }
 }
