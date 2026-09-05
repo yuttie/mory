@@ -172,6 +172,7 @@ let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let mounted = false;
 let lastReadyGeneration: string | null = null;
 let waitingGeneration: string | null = null;
+let waitingForIndex = false;
 let lastSemanticState: SearchStatusResponse['semantic']['state'] | null = null;
 
 const modeHelp = computed(() => ({
@@ -290,6 +291,7 @@ async function execute(): Promise<void> {
             ? (error.response?.data as { code?: string } | undefined)?.code
             : undefined;
         if (code === 'lexical_index_updating' || code === 'semantic_index_updating') {
+            waitingForIndex = true;
             pollStatus();
         }
         showError.value = true;
@@ -327,10 +329,12 @@ async function pollStatus(): Promise<void> {
         const selectedReady = next.lexical.state === 'ready' && next.lexical.indexed_commit === next.commit;
         if (selectedReady) {
             lastReadyGeneration = next.commit;
-            if ((waitingGeneration === next.commit || (wasReady !== null && wasReady !== next.commit))
+            if ((waitingForIndex || waitingGeneration === next.commit
+                || (wasReady !== null && wasReady !== next.commit))
                 && committedQuery.value !== '') {
                 shouldRerun = true;
             }
+            waitingForIndex = false;
             waitingGeneration = null;
         }
         else if (next.lexical.state === 'updating') {

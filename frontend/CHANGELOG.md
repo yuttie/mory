@@ -9,6 +9,7 @@
 
 - *(frontend/views/Search)* Submit searches by pressing Enter in the query box
 - *(frontend/views/Search)* Allow slash characters in the focused search field
+- *(frontend/views/Search)* Retry an updating search when its first status response is already ready
 
 ## [1.9.0] - 2025-09-11
 
