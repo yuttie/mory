@@ -24,6 +24,7 @@
 - *(backend/search)* Release interactive query priority on cancellation and hold it through completion
 - *(backend/search)* Enforce embedding input and request limits with conservative UTF-8 byte bounds
 - *(backend/search)* Reject misindexed embedding responses and retain valid vectors from mixed batches
+- *(backend/search)* Reject oversized decoded images before ImageMagick performs full normalization
 
 ## [1.5.1] - 2025-09-12
 

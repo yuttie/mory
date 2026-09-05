@@ -9,10 +9,12 @@ use tokio::process::Command;
 use super::provider::{retry_after, ProviderError};
 
 pub const PROMPT_VERSION: &str = "image-description-v1";
-pub const PREPROCESS_VERSION: &str = "imagemagick-oriented-2048-v1";
+pub const PREPROCESS_VERSION: &str = "imagemagick-oriented-2048-v2";
 pub const DETAIL: &str = "high";
 const MAX_SOURCE_BYTES: usize = 32 * 1024 * 1024;
 const MAX_OUTPUT_BYTES: usize = 16 * 1024 * 1024;
+const MAX_DECODED_PIXELS: u64 = 40_000_000;
+const MAX_DIMENSION: u64 = 20_000;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ImageDescription {
@@ -123,6 +125,7 @@ async fn normalize(source: &[u8]) -> Result<Vec<u8>, ProviderError> {
     tokio::fs::write(&input, source)
         .await
         .map_err(|error| permanent(&format!("temporary image write failed: {error}")))?;
+    inspect_dimensions(&input).await?;
     let command = Command::new("magick")
         .arg("-limit")
         .arg("memory")
@@ -166,6 +169,54 @@ async fn normalize(source: &[u8]) -> Result<Vec<u8>, ProviderError> {
         return Err(permanent("normalized image exceeds the output-byte limit"));
     }
     Ok(bytes)
+}
+
+async fn inspect_dimensions(input: &Path) -> Result<(), ProviderError> {
+    // `-limit area` controls when ImageMagick spills pixels to disk; it does not reject a
+    // decompression bomb. Ping reads only enough metadata to enforce the hard bound first.
+    let command = Command::new("magick")
+        .arg("identify")
+        .arg("-ping")
+        .arg("-format")
+        .arg("%w %h")
+        .arg(format!("{}[0]", input.display()))
+        .kill_on_drop(true)
+        .output();
+    let result = tokio::time::timeout(Duration::from_secs(30), command)
+        .await
+        .map_err(|_| permanent("image inspection exceeded 30 seconds"))?
+        .map_err(|error| permanent(&format!("ImageMagick could not start: {error}")))?;
+    if !result.status.success() {
+        return Err(permanent("ImageMagick rejected the image header"));
+    }
+    let dimensions = String::from_utf8(result.stdout)
+        .map_err(|_| permanent("ImageMagick returned invalid image dimensions"))?;
+    let mut parts = dimensions.split_whitespace();
+    let width = parts
+        .next()
+        .and_then(|value| value.parse::<u64>().ok())
+        .ok_or_else(|| permanent("ImageMagick returned invalid image dimensions"))?;
+    let height = parts
+        .next()
+        .and_then(|value| value.parse::<u64>().ok())
+        .ok_or_else(|| permanent("ImageMagick returned invalid image dimensions"))?;
+    if parts.next().is_some() {
+        return Err(permanent("ImageMagick returned invalid image dimensions"));
+    }
+    validate_dimensions(width, height)
+}
+
+fn validate_dimensions(width: u64, height: u64) -> Result<(), ProviderError> {
+    let pixels = width.checked_mul(height);
+    if width == 0
+        || height == 0
+        || width > MAX_DIMENSION
+        || height > MAX_DIMENSION
+        || pixels.is_none_or(|value| value > MAX_DECODED_PIXELS)
+    {
+        return Err(permanent("image exceeds the decoded-pixel limit"));
+    }
+    Ok(())
 }
 
 fn permanent(message: &str) -> ProviderError {
@@ -248,5 +299,26 @@ mod tests {
         assert_eq!(request["input"][0]["content"][1]["detail"], DETAIL);
         assert_eq!(request["text"]["format"]["type"], "json_schema");
         assert_eq!(request["text"]["format"]["strict"], true);
+    }
+
+    #[test]
+    fn rejects_decoded_pixel_bombs_before_normalization() {
+        assert!(validate_dimensions(8_000, 5_000).is_ok());
+        assert!(validate_dimensions(10_000, 5_000).is_err());
+        assert!(validate_dimensions(MAX_DIMENSION + 1, 1).is_err());
+        assert!(validate_dimensions(u64::MAX, 2).is_err());
+        assert!(validate_dimensions(0, 100).is_err());
+    }
+
+    #[tokio::test]
+    async fn normalizes_a_real_raster_with_imagemagick() {
+        let png = base64::engine::general_purpose::STANDARD
+            .decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")
+            .unwrap();
+
+        let normalized = normalize(&png).await.unwrap();
+
+        assert!(normalized.starts_with(&[0xff, 0xd8, 0xff]));
+        assert!(normalized.len() <= MAX_OUTPUT_BYTES);
     }
 }
