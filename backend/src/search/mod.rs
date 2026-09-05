@@ -1027,7 +1027,14 @@ impl SearchManager {
             sqlx::query_scalar("SELECT value FROM search_state WHERE key = 'passage_commit';")
                 .fetch_optional(&mut *snapshot)
                 .await?;
-        if passage_commit.as_deref() != Some(commit.to_string().as_str()) {
+        let entry_commit: Option<String> =
+            sqlx::query_scalar("SELECT value FROM cache_state WHERE key = 'commit_id';")
+                .fetch_optional(&mut *snapshot)
+                .await?;
+        let expected = commit.to_string();
+        if passage_commit.as_deref() != Some(expected.as_str())
+            || entry_commit.as_deref() != Some(expected.as_str())
+        {
             return Ok(SemanticStatus {
                 state: if self.config.semantic_enabled {
                     "indexing"
@@ -2285,7 +2292,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn semantic_status_does_not_report_a_different_generation() {
+    async fn semantic_status_does_not_mix_passage_and_entry_generations() {
         use sqlx::sqlite::SqlitePoolOptions;
 
         let pool = SqlitePoolOptions::new()
@@ -2297,9 +2304,31 @@ mod tests {
             .execute(&pool)
             .await
             .unwrap();
+        sqlx::query("CREATE TABLE cache_state (key TEXT PRIMARY KEY, value TEXT NOT NULL);")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("CREATE TABLE search_passage (passage_id TEXT, text_hash TEXT);")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query(
+            "CREATE TABLE search_embedding (
+                passage_id TEXT, text_hash TEXT, model TEXT, dimensions INTEGER,
+                template TEXT, state TEXT
+             );",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
         let selected = Oid::from_str(&"1".repeat(40)).unwrap();
         let newer = Oid::from_str(&"2".repeat(40)).unwrap();
         sqlx::query("INSERT INTO search_state VALUES ('passage_commit', ?);")
+            .bind(selected.to_string())
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO cache_state VALUES ('commit_id', ?);")
             .bind(newer.to_string())
             .execute(&pool)
             .await
