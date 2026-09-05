@@ -8,6 +8,7 @@
 ### 🐛 Bug Fixes
 
 - *(frontend/views/Search)* Submit searches by pressing Enter in the query box
+- *(frontend/views/Search)* Allow slash characters in the focused search field
 
 ## [1.9.0] - 2025-09-11
 

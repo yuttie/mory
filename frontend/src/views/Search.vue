@@ -122,7 +122,7 @@
 </template>
 
 <script lang="ts" setup>
-/* global AbortController, clearTimeout, document, KeyboardEvent, setTimeout, window */
+/* global AbortController, clearTimeout, document, HTMLElement, KeyboardEvent, setTimeout, window */
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import type { Ref } from 'vue';
 import axios from 'axios';
@@ -358,7 +358,10 @@ async function pollStatus(): Promise<void> {
 }
 
 function handleKeydown(event: KeyboardEvent): void {
-    if (event.key === '/') {
+    const target = event.target;
+    const isEditing = target instanceof HTMLElement
+        && (target.isContentEditable || ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName));
+    if (event.key === '/' && !isEditing) {
         queryEl.value?.focus();
         event.preventDefault();
     }
