@@ -56,6 +56,8 @@ pub struct LexicalHit {
     pub score: f32,
 }
 
+pub type PassageKey = (String, String);
+
 #[derive(Clone, Copy)]
 struct Fields {
     kind: TField,
@@ -205,7 +207,7 @@ impl LexicalIndex {
         Ok(hits)
     }
 
-    pub fn matching_passage_ids(&self, parsed: &ParsedQuery) -> Result<HashSet<String>> {
+    pub fn matching_passages(&self, parsed: &ParsedQuery) -> Result<HashSet<PassageKey>> {
         let hard_filters = ParsedQuery {
             clauses: parsed
                 .clauses
@@ -221,14 +223,17 @@ impl LexicalIndex {
             return Ok(HashSet::new());
         }
         let docs = searcher.search(&query, &TopDocs::with_limit(count).order_by_score())?;
-        let mut passage_ids = HashSet::with_capacity(docs.len());
+        let mut passages = HashSet::with_capacity(docs.len());
         for (_, address) in docs {
             let found: TantivyDocument = searcher.doc(address)?;
-            if let Some(passage_id) = string(&found, self.fields.passage_id) {
-                passage_ids.insert(passage_id);
+            if let (Some(path), Some(passage_id)) = (
+                string(&found, self.fields.path),
+                string(&found, self.fields.passage_id),
+            ) {
+                passages.insert((path, passage_id));
             }
         }
-        Ok(passage_ids)
+        Ok(passages)
     }
 }
 
@@ -749,11 +754,39 @@ mod tests {
             .unwrap()
             .is_empty());
         let allowed = index
-            .matching_passage_ids(
+            .matching_passages(
                 &parse("path:research +検索する -obsolete unrelated-semantic-text").unwrap(),
             )
             .unwrap();
-        assert_eq!(allowed, HashSet::from(["one".to_owned()]));
+        assert_eq!(
+            allowed,
+            HashSet::from([("research/rust.md".to_owned(), "one".to_owned())])
+        );
+    }
+
+    #[test]
+    fn hard_filters_keep_identical_passages_scoped_to_their_paths() {
+        let directory = tempfile::tempdir().unwrap();
+        let index_path = directory.path().join("index");
+        let index = LexicalIndex::build(
+            &index_path,
+            "commit",
+            "content",
+            &[
+                input("research/shared.md", "same", "Shared", "identical"),
+                input("private/shared.md", "same", "Shared", "identical"),
+            ],
+        )
+        .unwrap();
+
+        let allowed = index
+            .matching_passages(&parse("path:research meaning").unwrap())
+            .unwrap();
+
+        assert_eq!(
+            allowed,
+            HashSet::from([("research/shared.md".to_owned(), "same".to_owned())])
+        );
     }
 
     #[test]

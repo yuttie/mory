@@ -15,6 +15,7 @@
 
 - *(backend/search)* Start successfully with the default relative search-index directory
 - *(backend/search)* Refuse to replace directories not owned by the search index
+- *(backend/search)* Keep Semantic hard filters scoped to a path when blobs are duplicated
 
 ## [1.5.1] - 2025-09-12
 

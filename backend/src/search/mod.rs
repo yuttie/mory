@@ -821,7 +821,7 @@ impl SearchManager {
         }
         let parsed_for_filters = parsed.clone();
         let allowed =
-            tokio::task::spawn_blocking(move || lexical.matching_passage_ids(&parsed_for_filters))
+            tokio::task::spawn_blocking(move || lexical.matching_passages(&parsed_for_filters))
                 .await
                 .map_err(|error| SemanticSearchError::Internal(error.into()))?
                 .map_err(SemanticSearchError::Internal)?;
@@ -848,8 +848,9 @@ impl SearchManager {
         let candidates = rows
             .into_iter()
             .filter_map(|row| {
+                let path: String = row.get("path");
                 let passage_id: String = row.get("passage_id");
-                if !allowed.contains(&passage_id) {
+                if !allowed.contains(&(path.clone(), passage_id.clone())) {
                     return None;
                 }
                 let vector = row
@@ -861,7 +862,7 @@ impl SearchManager {
                     return None;
                 };
                 Some(SemanticCandidate {
-                    path: row.get("path"),
+                    path,
                     blob_id: row.get("blob_id"),
                     passage_id,
                     mime_type: row.get("mime_type"),
