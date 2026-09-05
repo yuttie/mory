@@ -327,10 +327,11 @@ async function pollStatus(): Promise<void> {
         status.value = next;
         let shouldRerun = false;
         const selectedReady = next.lexical.state === 'ready' && next.lexical.indexed_commit === next.commit;
+        const responseMatchesGeneration = response.value?.commit === next.commit;
         if (selectedReady) {
             lastReadyGeneration = next.commit;
             if ((waitingForIndex || waitingGeneration === next.commit
-                || (wasReady !== null && wasReady !== next.commit))
+                || (wasReady !== null && wasReady !== next.commit && !responseMatchesGeneration))
                 && committedQuery.value !== '') {
                 shouldRerun = true;
             }
@@ -342,7 +343,8 @@ async function pollStatus(): Promise<void> {
         }
         lastSemanticState = next.semantic.state;
         if (previousSemanticState === 'indexing' && next.semantic.state === 'ready'
-            && ['semantic', 'hybrid'].includes(committedMode.value) && committedQuery.value !== '') {
+            && ['semantic', 'hybrid'].includes(committedMode.value) && committedQuery.value !== ''
+            && (!responseMatchesGeneration || response.value?.semantic.state !== 'ready')) {
             shouldRerun = true;
         }
         if (shouldRerun) {

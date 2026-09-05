@@ -120,3 +120,39 @@ test('retries an updating search when the first status response is ready', async
     await expect.poll(() => attempts).toBe(2);
     await expect(page.getByText('No results')).toBeVisible();
 });
+
+test('does not repeat a semantic search already covered by ready status', async ({ context, page }) => {
+    let attempts = 0;
+    let statusCalls = 0;
+    await mockBackend(context, {
+        onSearch: async (route) => {
+            attempts += 1;
+            const request = route.request().postDataJSON();
+            await route.fulfill({
+                json: {
+                    ...emptySearchResponse(request),
+                    semantic: { state: 'ready', indexed: 3, total: 3, failed: 0 },
+                },
+            });
+        },
+        onStatus: async (route) => {
+            statusCalls += 1;
+            await route.fulfill({
+                json: {
+                    commit: COMMIT,
+                    head: COMMIT,
+                    lexical: { state: 'ready', indexed_commit: COMMIT },
+                    semantic: statusCalls === 1
+                        ? { state: 'indexing', indexed: 2, total: 3, failed: 0 }
+                        : { state: 'ready', indexed: 3, total: 3, failed: 0 },
+                },
+            });
+        },
+    });
+
+    await page.goto('/search?q=already-current&mode=semantic');
+    await expect.poll(() => statusCalls, { timeout: 4_000 }).toBeGreaterThanOrEqual(2);
+    await page.waitForTimeout(100);
+
+    expect(attempts).toBe(1);
+});
