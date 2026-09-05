@@ -34,7 +34,8 @@ use query::{parse, ParsedQuery, SearchMode};
 
 const SEARCH_WAIT: Duration = Duration::from_millis(1200);
 const EMBEDDING_TEMPLATE: &str = "mory-passage-v3:chunker-500-800-80-v3";
-const MAX_EMBEDDING_INPUT_CHARS: usize = 4_000;
+const MAX_EMBEDDING_INPUT_BYTES: usize = 8_192;
+const MAX_EMBEDDING_REQUEST_BYTES: usize = 300_000;
 
 #[derive(Debug, Clone)]
 pub struct SearchConfig {
@@ -370,19 +371,13 @@ impl SearchManager {
             .execute(&mut *transaction)
             .await?;
         for input in inputs {
-            let semantic_text = format!(
+            let semantic_text = bounded_embedding_input(&format!(
                 "{}\n{}\n{}\n{}",
                 input.title.as_deref().unwrap_or(""),
                 input.passage.heading,
                 input.tags,
                 input.passage.text,
-            )
-            .chars()
-            // Passage text is already capped at 800 approximate tokens. This additional
-            // conservative ceiling prevents pathological titles or tag lists from approaching
-            // the embeddings endpoint's 8,192-token per-input limit.
-            .take(MAX_EMBEDDING_INPUT_CHARS)
-            .collect::<String>();
+            ));
             sqlx::query(
                 "INSERT INTO search_passage (
                     path, blob_id, passage_id, text_hash, start_byte, end_byte,
@@ -694,12 +689,21 @@ impl SearchManager {
             self.garbage_collect_embeddings().await?;
             return Ok(());
         }
-        // Every passage is capped at 800 approximate tokens, so 32 inputs remain far below the
-        // endpoint's 300,000-token request ceiling as well as its 8,192-token per-input ceiling.
+        // UTF-8 bytes conservatively bound model tokens without coupling the cache to a provider
+        // tokenizer implementation.
+        let mut request_bytes = 0;
         let input = pending
             .iter()
-            .map(|item| item.text.clone())
+            .map(|item| bounded_embedding_input(&item.text))
+            .take_while(|text| {
+                let fits = request_bytes + text.len() <= MAX_EMBEDDING_REQUEST_BYTES;
+                if fits {
+                    request_bytes += text.len();
+                }
+                fits
+            })
             .collect::<Vec<_>>();
+        let pending = &pending[..input.len()];
         let _gate = self.provider_gate.lock().await;
         let response = self
             .provider
@@ -765,7 +769,7 @@ impl SearchManager {
                     as i64;
                 let state = if error.retryable { "pending" } else { "failed" };
                 let mut transaction = self.cache_db_writer.begin().await?;
-                for item in &pending {
+                for item in pending {
                     sqlx::query(
                         "INSERT INTO search_embedding (
                             passage_id, text_hash, model, dimensions, template, vector, norm,
@@ -1070,6 +1074,19 @@ impl SearchManager {
             failed: failed as usize,
         })
     }
+}
+
+fn bounded_embedding_input(text: &str) -> String {
+    if text.len() <= MAX_EMBEDDING_INPUT_BYTES {
+        return text.to_owned();
+    }
+    let mut end = MAX_EMBEDDING_INPUT_BYTES;
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    // Tokenization cannot produce more tokens than there are input bytes, making this a
+    // provider-independent conservative enforcement of the endpoint's token ceiling.
+    text[..end].to_owned()
 }
 
 async fn resume_failed_artifacts(pool: &SqlitePool, config: &SearchConfig) -> Result<()> {
@@ -2285,5 +2302,18 @@ mod tests {
         drop(waiting);
         assert_eq!(count.load(Ordering::SeqCst), 0);
         drop(held);
+    }
+
+    #[test]
+    fn embedding_inputs_obey_per_input_and_request_limits() {
+        let oversized = "🦀".repeat(MAX_EMBEDDING_INPUT_BYTES);
+        let bounded = bounded_embedding_input(&oversized);
+        assert!(bounded.len() <= MAX_EMBEDDING_INPUT_BYTES);
+        assert!(bounded.is_char_boundary(bounded.len()));
+
+        let batch = (0..32)
+            .map(|_| bounded_embedding_input(&oversized))
+            .collect::<Vec<_>>();
+        assert!(batch.iter().map(String::len).sum::<usize>() <= MAX_EMBEDDING_REQUEST_BYTES);
     }
 }
