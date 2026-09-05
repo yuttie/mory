@@ -1,5 +1,5 @@
 use std::path::Path;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use base64::Engine;
 use reqwest::{Client, StatusCode};
@@ -15,6 +15,7 @@ const MAX_SOURCE_BYTES: usize = 32 * 1024 * 1024;
 const MAX_OUTPUT_BYTES: usize = 16 * 1024 * 1024;
 const MAX_DECODED_PIXELS: u64 = 40_000_000;
 const MAX_DIMENSION: u64 = 20_000;
+const PREPROCESS_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ImageDescription {
@@ -122,6 +123,7 @@ fn responses_request(model: &str, encoded: String) -> ResponsesRequest<'_> {
 }
 
 async fn normalize(source: &[u8]) -> Result<Vec<u8>, ProviderError> {
+    let deadline = Instant::now() + PREPROCESS_TIMEOUT;
     let directory = tempfile::tempdir()
         .map_err(|error| permanent(&format!("temporary image directory failed: {error}")))?;
     let input = directory.path().join("source");
@@ -129,8 +131,38 @@ async fn normalize(source: &[u8]) -> Result<Vec<u8>, ProviderError> {
     tokio::fs::write(&input, source)
         .await
         .map_err(|error| permanent(&format!("temporary image write failed: {error}")))?;
-    inspect_dimensions(&input).await?;
-    let command = Command::new("magick")
+    inspect_dimensions(&input, deadline).await?;
+    let mut command = Command::new("magick");
+    apply_resource_limits(&mut command);
+    let command = command
+        .arg(format!("{}[0]", input.display()))
+        .arg("-auto-orient")
+        .arg("-strip")
+        .arg("-resize")
+        .arg("2048x2048>")
+        .arg("-quality")
+        .arg("92")
+        .arg(&output)
+        .kill_on_drop(true)
+        .output();
+    let result = tokio::time::timeout(remaining_preprocess_time(deadline)?, command)
+        .await
+        .map_err(|_| permanent("image preprocessing exceeded 30 seconds"))?
+        .map_err(|error| permanent(&format!("ImageMagick could not start: {error}")))?;
+    if !result.status.success() {
+        return Err(permanent("ImageMagick rejected the image"));
+    }
+    let bytes = tokio::fs::read(&output)
+        .await
+        .map_err(|error| permanent(&format!("normalized image could not be read: {error}")))?;
+    if bytes.len() > MAX_OUTPUT_BYTES {
+        return Err(permanent("normalized image exceeds the output-byte limit"));
+    }
+    Ok(bytes)
+}
+
+fn apply_resource_limits(command: &mut Command) {
+    command
         .arg("-limit")
         .arg("memory")
         .arg("256MiB")
@@ -148,47 +180,25 @@ async fn normalize(source: &[u8]) -> Result<Vec<u8>, ProviderError> {
         .arg("20000")
         .arg("-limit")
         .arg("height")
-        .arg("20000")
-        .arg(format!("{}[0]", input.display()))
-        .arg("-auto-orient")
-        .arg("-strip")
-        .arg("-resize")
-        .arg("2048x2048>")
-        .arg("-quality")
-        .arg("92")
-        .arg(&output)
-        .kill_on_drop(true)
-        .output();
-    let result = tokio::time::timeout(Duration::from_secs(30), command)
-        .await
-        .map_err(|_| permanent("image normalization exceeded 30 seconds"))?
-        .map_err(|error| permanent(&format!("ImageMagick could not start: {error}")))?;
-    if !result.status.success() {
-        return Err(permanent("ImageMagick rejected the image"));
-    }
-    let bytes = tokio::fs::read(&output)
-        .await
-        .map_err(|error| permanent(&format!("normalized image could not be read: {error}")))?;
-    if bytes.len() > MAX_OUTPUT_BYTES {
-        return Err(permanent("normalized image exceeds the output-byte limit"));
-    }
-    Ok(bytes)
+        .arg(MAX_DIMENSION.to_string());
 }
 
-async fn inspect_dimensions(input: &Path) -> Result<(), ProviderError> {
+async fn inspect_dimensions(input: &Path, deadline: Instant) -> Result<(), ProviderError> {
     // `-limit area` controls when ImageMagick spills pixels to disk; it does not reject a
     // decompression bomb. Ping reads only enough metadata to enforce the hard bound first.
-    let command = Command::new("magick")
-        .arg("identify")
+    let mut command = Command::new("magick");
+    command.arg("identify");
+    apply_resource_limits(&mut command);
+    let command = command
         .arg("-ping")
         .arg("-format")
         .arg("%w %h")
         .arg(format!("{}[0]", input.display()))
         .kill_on_drop(true)
         .output();
-    let result = tokio::time::timeout(Duration::from_secs(30), command)
+    let result = tokio::time::timeout(remaining_preprocess_time(deadline)?, command)
         .await
-        .map_err(|_| permanent("image inspection exceeded 30 seconds"))?
+        .map_err(|_| permanent("image preprocessing exceeded 30 seconds"))?
         .map_err(|error| permanent(&format!("ImageMagick could not start: {error}")))?;
     if !result.status.success() {
         return Err(permanent("ImageMagick rejected the image header"));
@@ -208,6 +218,13 @@ async fn inspect_dimensions(input: &Path) -> Result<(), ProviderError> {
         return Err(permanent("ImageMagick returned invalid image dimensions"));
     }
     validate_dimensions(width, height)
+}
+
+fn remaining_preprocess_time(deadline: Instant) -> Result<Duration, ProviderError> {
+    deadline
+        .checked_duration_since(Instant::now())
+        .filter(|remaining| !remaining.is_zero())
+        .ok_or_else(|| permanent("image preprocessing exceeded 30 seconds"))
 }
 
 fn validate_dimensions(width: u64, height: u64) -> Result<(), ProviderError> {
@@ -348,5 +365,16 @@ mod tests {
         let error = retryable_body_failure("response ended early".to_owned());
 
         assert!(error.retryable);
+    }
+
+    #[tokio::test]
+    async fn preprocessing_stages_consume_one_shared_deadline() {
+        let deadline = Instant::now() + Duration::from_millis(50);
+        let first = remaining_preprocess_time(deadline).unwrap();
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        let second = remaining_preprocess_time(deadline).unwrap();
+
+        assert!(second < first);
+        assert!(remaining_preprocess_time(Instant::now()).is_err());
     }
 }
