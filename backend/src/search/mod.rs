@@ -173,6 +173,7 @@ impl SearchManager {
         };
         let vision_client = reqwest::Client::builder().gzip(true).brotli(true).build()?;
         let provider = Arc::new(OpenAiEmbeddingProvider::new(vision_client.clone()));
+        resume_failed_artifacts(&cache_db_writer, &config).await?;
         Ok(Arc::new(Self {
             config,
             repo,
@@ -1053,6 +1054,35 @@ impl SearchManager {
             failed: failed as usize,
         })
     }
+}
+
+async fn resume_failed_artifacts(pool: &SqlitePool, config: &SearchConfig) -> Result<()> {
+    if !config.semantic_enabled {
+        return Ok(());
+    }
+    sqlx::query(
+        "UPDATE search_embedding SET state = 'pending', next_retry = 0
+         WHERE state = 'failed' AND model = ? AND dimensions = ? AND template = ?;",
+    )
+    .bind(&config.embedding_model)
+    .bind(config.embedding_dimensions as i64)
+    .bind(EMBEDDING_TEMPLATE)
+    .execute(pool)
+    .await?;
+    if let Some(model) = &config.vision_model {
+        sqlx::query(
+            "UPDATE search_image_description SET state = 'pending', next_retry = 0
+             WHERE state = 'failed' AND model = ? AND prompt_version = ?
+               AND preprocess = ? AND detail = ?;",
+        )
+        .bind(model)
+        .bind(image::PROMPT_VERSION)
+        .bind(image::PREPROCESS_VERSION)
+        .bind(image::DETAIL)
+        .execute(pool)
+        .await?;
+    }
+    Ok(())
 }
 
 async fn begin_semantic_snapshot(
@@ -2154,5 +2184,69 @@ mod tests {
                 "notes/custom".to_owned(),
             ])
         );
+    }
+
+    #[tokio::test]
+    async fn restart_requeues_failed_artifacts_after_configuration_is_corrected() {
+        use sqlx::sqlite::SqlitePoolOptions;
+
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::query(
+            "CREATE TABLE search_embedding (
+                model TEXT, dimensions INTEGER, template TEXT, state TEXT, next_retry INTEGER
+             );",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "CREATE TABLE search_image_description (
+                model TEXT, prompt_version TEXT, preprocess TEXT, detail TEXT,
+                state TEXT, next_retry INTEGER
+             );",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query("INSERT INTO search_embedding VALUES ('model', 8, ?, 'failed', NULL);")
+            .bind(EMBEDDING_TEMPLATE)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO search_image_description VALUES ('vision', ?, ?, ?, 'failed', NULL);",
+        )
+        .bind(image::PROMPT_VERSION)
+        .bind(image::PREPROCESS_VERSION)
+        .bind(image::DETAIL)
+        .execute(&pool)
+        .await
+        .unwrap();
+        let config = SearchConfig {
+            index_dir: PathBuf::from("index"),
+            semantic_enabled: true,
+            embedding_model: "model".to_owned(),
+            embedding_dimensions: 8,
+            vision_model: Some("vision".to_owned()),
+        };
+
+        resume_failed_artifacts(&pool, &config).await.unwrap();
+
+        let embedding: (String, i64) =
+            sqlx::query_as("SELECT state, next_retry FROM search_embedding;")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let image: (String, i64) =
+            sqlx::query_as("SELECT state, next_retry FROM search_image_description;")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(embedding, ("pending".to_owned(), 0));
+        assert_eq!(image, ("pending".to_owned(), 0));
     }
 }

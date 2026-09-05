@@ -20,6 +20,7 @@
 - *(backend/search)* Reject clauses that contain no indexable text instead of matching everything
 - *(backend/search)* Enforce the 800-token cap when splitting whitespace-delimited passages
 - *(backend/search)* Index Markdown recognized by MIME type or case-insensitive file extension
+- *(backend/search)* Retry failed active-model artifacts after configuration is corrected and restarted
 
 ## [1.5.1] - 2025-09-12
 
