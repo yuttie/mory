@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use lindera::dictionary::{load_embedded_dictionary, DictionaryKind};
 use lindera::mode::Mode;
 use lindera::segmenter::Segmenter;
@@ -28,6 +28,8 @@ pub const FINGERPRINT: &str =
 const GENERAL_ANALYZER: &str = "mory_general";
 const JAPANESE_ANALYZER: &str = "mory_japanese";
 const PATH_ANALYZER: &str = "mory_path";
+const MANAGED_MARKER: &str = ".mory-search-index";
+const MANAGED_MARKER_CONTENT: &str = "mory-search-index-v1\n";
 
 #[derive(Debug, Clone)]
 pub struct IndexInput {
@@ -133,6 +135,7 @@ impl LexicalIndex {
         }
         writer.commit()?;
         drop(writer);
+        mark_managed(path)?;
         let reader = index
             .reader_builder()
             .reload_policy(ReloadPolicy::Manual)
@@ -557,6 +560,7 @@ fn number(doc: &TantivyDocument, field: TField) -> Option<u64> {
 pub fn replace_directory(build: &Path, destination: &Path) -> Result<()> {
     let parent = parent_directory(destination);
     fs::create_dir_all(parent)?;
+    ensure_replaceable(destination)?;
     let old = unique_sibling(destination, "old");
     if old.exists() {
         fs::remove_dir_all(&old).context("failed to remove an abandoned lexical index backup")?;
@@ -576,6 +580,37 @@ pub fn replace_directory(build: &Path, destination: &Path) -> Result<()> {
     Ok(())
 }
 
+fn ensure_replaceable(destination: &Path) -> Result<()> {
+    if !destination.exists() {
+        return Ok(());
+    }
+    if !destination.is_dir() {
+        bail!(
+            "refusing to replace non-directory search index path {}",
+            destination.display()
+        );
+    }
+    if fs::read_dir(destination)?.next().is_none() {
+        return Ok(());
+    }
+    if !is_managed(destination) {
+        bail!(
+            "refusing to replace unrecognized nonempty search index directory {}",
+            destination.display()
+        );
+    }
+    Ok(())
+}
+
+fn is_managed(path: &Path) -> bool {
+    fs::read_to_string(path.join(MANAGED_MARKER)).is_ok_and(|value| value == MANAGED_MARKER_CONTENT)
+}
+
+pub fn mark_managed(path: &Path) -> Result<()> {
+    fs::write(path.join(MANAGED_MARKER), MANAGED_MARKER_CONTENT)
+        .context("failed to mark the managed lexical index")
+}
+
 pub fn recover_directory(destination: &Path) -> Result<()> {
     let parent = parent_directory(destination);
     fs::create_dir_all(parent)?;
@@ -592,9 +627,9 @@ pub fn recover_directory(destination: &Path) -> Result<()> {
         let Some(entry_name) = entry.file_name().to_str().map(str::to_owned) else {
             continue;
         };
-        if entry_name.starts_with(&old_prefix) {
+        if entry_name.starts_with(&old_prefix) && is_managed(&entry.path()) {
             old.push(entry.path());
-        } else if entry_name.starts_with(&build_prefix) {
+        } else if entry_name.starts_with(&build_prefix) && is_managed(&entry.path()) {
             builds.push(entry.path());
         }
     }
@@ -728,6 +763,7 @@ mod tests {
         let old = unique_sibling(&destination, "old");
         fs::create_dir_all(&old).unwrap();
         fs::write(old.join("marker"), "last good").unwrap();
+        mark_managed(&old).unwrap();
         recover_directory(&destination).unwrap();
         assert_eq!(
             fs::read_to_string(destination.join("marker")).unwrap(),
@@ -743,6 +779,31 @@ mod tests {
             parent_directory(Path::new("cache/search-index")),
             Path::new("cache")
         );
+    }
+
+    #[test]
+    fn refuses_to_replace_an_unrecognized_nonempty_directory() {
+        let directory = tempfile::tempdir().unwrap();
+        let destination = directory.path().join("notes");
+        let build = directory.path().join("build");
+        fs::create_dir_all(&destination).unwrap();
+        fs::create_dir_all(&build).unwrap();
+        fs::write(destination.join("important.md"), "keep me").unwrap();
+        fs::write(build.join("index"), "replacement").unwrap();
+        let decoy = unique_sibling(&destination, "building");
+        fs::create_dir_all(&decoy).unwrap();
+        fs::write(decoy.join("also-important"), "keep this too").unwrap();
+
+        let error = replace_directory(&build, &destination).unwrap_err();
+
+        assert!(error.to_string().contains("refusing to replace"));
+        assert_eq!(
+            fs::read_to_string(destination.join("important.md")).unwrap(),
+            "keep me"
+        );
+        assert!(build.exists());
+        recover_directory(&destination).unwrap();
+        assert!(decoy.exists());
     }
 
     #[test]

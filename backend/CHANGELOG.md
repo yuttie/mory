@@ -14,6 +14,7 @@
 ### 🐛 Bug Fixes
 
 - *(backend/search)* Start successfully with the default relative search-index directory
+- *(backend/search)* Refuse to replace directories not owned by the search index
 
 ## [1.5.1] - 2025-09-12
 

@@ -153,6 +153,11 @@ impl SearchManager {
             )
         })?;
         let existing = LexicalIndex::open(&config.index_dir).ok().map(Arc::new);
+        if existing.is_some() {
+            // Indexes created before the ownership marker was introduced are adopted only after
+            // Tantivy and the application fingerprint have both validated successfully.
+            lexical::mark_managed(&config.index_dir)?;
+        }
         let status = if let Some(index) = &existing {
             ManagerStatus {
                 state: "ready".to_owned(),
