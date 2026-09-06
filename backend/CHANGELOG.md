@@ -34,6 +34,7 @@
 - *(backend/search)* Return an updating response when query validation races with index advancement
 - *(backend/search)* Keep permanently failed semantic artifacts failed across process restarts
 - *(backend/search)* Preserve unmarked directories that collide with temporary index sibling names
+- *(backend/search)* Cap memory and snippets for a single oversized Grep result line
 
 ## [1.5.1] - 2025-09-12
 

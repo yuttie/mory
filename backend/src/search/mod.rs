@@ -25,7 +25,7 @@ use git2::{Oid, Repository};
 use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
 use sqlx::{sqlite::SqliteRow, Row, SqlitePool};
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
+use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::Command;
 use tokio::sync::{Mutex as AsyncMutex, MutexGuard};
 
@@ -38,6 +38,7 @@ const SEARCH_WAIT: Duration = Duration::from_millis(1200);
 const EMBEDDING_TEMPLATE: &str = "mory-passage-v3:chunker-500-800-80-v3";
 const MAX_EMBEDDING_INPUT_BYTES: usize = 8_192;
 const MAX_EMBEDDING_REQUEST_BYTES: usize = 300_000;
+const MAX_GREP_RECORD_BYTES: usize = 64 * 1024;
 
 #[derive(Debug, Clone)]
 pub struct SearchConfig {
@@ -2043,45 +2044,11 @@ async fn grep_at(
         stderr.read_to_end(&mut bytes).await.map(|_| bytes)
     });
     let prefix = format!("{revision}:");
-    let mut results = Vec::new();
-    let mut stdout = BufReader::new(stdout);
-    let mut reached_limit = false;
-    loop {
-        let mut bytes = Vec::new();
-        let read = stdout
-            .read_until(b'\n', &mut bytes)
-            .await
-            .map_err(|error| GrepError::Internal(error.into()))?;
-        if read == 0 {
-            break;
-        }
-        if bytes.last() == Some(&b'\n') {
-            bytes.pop();
-        }
-        if bytes.last() == Some(&b'\r') {
-            bytes.pop();
-        }
-        let line = String::from_utf8_lossy(&bytes);
-        let mut parts = line.split('\0');
-        let Some(file) = parts.next() else {
-            continue;
-        };
-        let Some(number) = parts.next().and_then(|value| value.parse().ok()) else {
-            continue;
-        };
-        let Some(content) = parts.next() else {
-            continue;
-        };
-        results.push(GrepMatch {
-            file: file.strip_prefix(&prefix).unwrap_or(file).to_owned(),
-            line: number,
-            content: content.to_owned(),
-        });
-        if results.len() >= limit {
-            reached_limit = true;
-            let _ = child.kill().await;
-            break;
-        }
+    let (results, reached_limit) = read_grep_matches(stdout, &prefix, limit)
+        .await
+        .map_err(|error| GrepError::Internal(error.into()))?;
+    if reached_limit {
+        let _ = child.kill().await;
     }
     let status = child
         .wait()
@@ -2108,6 +2075,91 @@ async fn grep_at(
         )));
     }
     Ok(results)
+}
+
+async fn read_grep_matches<R: AsyncRead + Unpin>(
+    mut stdout: R,
+    prefix: &str,
+    limit: usize,
+) -> std::io::Result<(Vec<GrepMatch>, bool)> {
+    let mut results = Vec::new();
+    let mut record = Vec::with_capacity(MAX_GREP_RECORD_BYTES.min(8 * 1024));
+    let mut chunk = [0_u8; 8 * 1024];
+    let mut discarding = false;
+    loop {
+        let read = stdout.read(&mut chunk).await?;
+        if read == 0 {
+            if !discarding && !record.is_empty() {
+                if let Some(found) = parse_grep_record(&record, prefix, false) {
+                    results.push(found);
+                }
+            }
+            return Ok((results, false));
+        }
+        let mut offset = 0;
+        while offset < read {
+            if discarding {
+                if let Some(end) = chunk[offset..read].iter().position(|byte| *byte == b'\n') {
+                    offset += end + 1;
+                    discarding = false;
+                } else {
+                    break;
+                }
+                continue;
+            }
+            let available = &chunk[offset..read];
+            let newline = available.iter().position(|byte| *byte == b'\n');
+            let segment_len = newline.unwrap_or(available.len());
+            let remaining = MAX_GREP_RECORD_BYTES.saturating_sub(record.len());
+            let copied = segment_len.min(remaining);
+            record.extend_from_slice(&available[..copied]);
+            offset += segment_len;
+            let truncated = copied < segment_len
+                || (record.len() == MAX_GREP_RECORD_BYTES && newline.is_none());
+            if truncated {
+                if let Some(found) = parse_grep_record(&record, prefix, true) {
+                    results.push(found);
+                    if results.len() >= limit {
+                        return Ok((results, true));
+                    }
+                }
+                record.clear();
+                discarding = true;
+            }
+            if newline.is_some() {
+                offset += 1;
+                if !discarding {
+                    if record.last() == Some(&b'\r') {
+                        record.pop();
+                    }
+                    if let Some(found) = parse_grep_record(&record, prefix, false) {
+                        results.push(found);
+                        if results.len() >= limit {
+                            return Ok((results, true));
+                        }
+                    }
+                    record.clear();
+                } else {
+                    discarding = false;
+                }
+            }
+        }
+    }
+}
+
+fn parse_grep_record(bytes: &[u8], prefix: &str, truncated: bool) -> Option<GrepMatch> {
+    let mut parts = bytes.splitn(3, |byte| *byte == 0);
+    let file = String::from_utf8_lossy(parts.next()?);
+    let number = String::from_utf8_lossy(parts.next()?).parse().ok()?;
+    let mut content = String::from_utf8_lossy(parts.next()?).into_owned();
+    if truncated {
+        content.push('…');
+    }
+    Some(GrepMatch {
+        file: file.strip_prefix(prefix).unwrap_or(&file).to_owned(),
+        line: number,
+        content,
+    })
 }
 
 #[cfg(test)]
@@ -2240,6 +2292,22 @@ mod tests {
             changed_paths(&repo, &first.to_string(), second).unwrap(),
             HashSet::from(["note.md".to_owned()]),
         );
+    }
+
+    #[tokio::test]
+    async fn grep_caps_memory_for_one_oversized_matching_line() {
+        let directory = tempfile::tempdir().unwrap();
+        let repo = Repository::init(directory.path()).unwrap();
+        let body = format!("needle {}", "x".repeat(MAX_GREP_RECORD_BYTES * 2));
+        let commit = commit_file(&repo, directory.path(), &body, &[]);
+
+        let found = grep_at(directory.path().to_str().unwrap(), "needle", commit, 1)
+            .await
+            .unwrap();
+
+        assert_eq!(found.len(), 1);
+        assert!(found[0].content.len() <= MAX_GREP_RECORD_BYTES);
+        assert!(found[0].content.ends_with('…'));
     }
 
     #[tokio::test]
