@@ -667,14 +667,28 @@ pub fn recover_directory(destination: &Path) -> Result<()> {
             builds.push(entry.path());
         }
     }
+    old.sort_by_key(|path| fs::metadata(path).and_then(|value| value.modified()).ok());
     if !destination.exists() {
-        old.sort_by_key(|path| fs::metadata(path).and_then(|value| value.modified()).ok());
         if let Some(last_good) = old.pop() {
             fs::rename(last_good, destination)
                 .context("failed to restore the previous lexical index")?;
         }
     }
-    for abandoned in old.into_iter().chain(builds) {
+    else if is_managed(destination) && !is_readable_index(destination) {
+        if let Some(index) = old.iter().rposition(|path| is_readable_index(path)) {
+            let last_good = old.remove(index);
+            fs::remove_dir_all(destination)
+                .context("failed to discard the corrupt lexical index")?;
+            fs::rename(last_good, destination)
+                .context("failed to restore the readable lexical index backup")?;
+        }
+    }
+    let discard_old = is_readable_index(destination);
+    for abandoned in old
+        .into_iter()
+        .filter(|_| discard_old)
+        .chain(builds)
+    {
         if abandoned.is_dir() {
             fs::remove_dir_all(abandoned)?;
         } else {
@@ -682,6 +696,17 @@ pub fn recover_directory(destination: &Path) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn is_readable_index(path: &Path) -> bool {
+    (|| -> Result<()> {
+        let index = Index::open_in_dir(path)?;
+        let reader = index.reader()?;
+        reader.reload()?;
+        let _ = reader.searcher().num_docs();
+        Ok(())
+    })()
+    .is_ok()
 }
 
 fn parent_directory(path: &Path) -> &Path {
@@ -861,6 +886,29 @@ mod tests {
             fs::read_to_string(destination.join("marker")).unwrap(),
             "last good"
         );
+        assert!(!old.exists());
+    }
+
+    #[test]
+    fn restores_a_readable_backup_before_discarding_a_corrupt_destination() {
+        let directory = tempfile::tempdir().unwrap();
+        let destination = directory.path().join("index");
+        let old = unique_sibling(&destination, "old");
+        LexicalIndex::build(
+            &old,
+            "last-good-commit",
+            "content",
+            &[input("note.md", "one", "Title", "searchable")],
+        )
+        .unwrap();
+        fs::create_dir(&destination).unwrap();
+        mark_managed(&destination).unwrap();
+        fs::write(destination.join("corrupt"), "not a Tantivy index").unwrap();
+
+        recover_directory(&destination).unwrap();
+
+        let restored = LexicalIndex::open(&destination).unwrap();
+        assert_eq!(restored.generation, "last-good-commit");
         assert!(!old.exists());
     }
 
