@@ -31,10 +31,17 @@
 - *(backend/search)* Retry truncated image-response bodies while rejecting complete malformed JSON
 - *(backend/search)* Apply ImageMagick limits during inspection and share one preprocessing deadline
 - *(backend/search)* Adopt valid pre-marker mory indexes before rebuilding incompatible schemas
+- *(backend/search)* Rebuild corrupt pre-marker indexes when their schema still identifies them
 - *(backend/search)* Return an updating response when query validation races with index advancement
 - *(backend/search)* Keep permanently failed semantic artifacts failed across process restarts
+- *(backend/search)* Retry credential and tool availability failures without retrying invalid content
+- *(backend/search)* Start provider retry delays when failed responses finish
+- *(backend/search)* Retry provider connections interrupted after the socket opens
+- *(backend/search)* Exclude out-of-corpus image failures from semantic coverage status
 - *(backend/search)* Preserve unmarked directories that collide with temporary index sibling names
+- *(backend/search)* Restore readable backups before discarding corrupt installed indexes
 - *(backend/search)* Cap memory and snippets for a single oversized Grep result line
+- *(backend/search)* Preserve legal newline characters in Git paths returned by Grep
 
 ## [1.5.1] - 2025-09-12
 
