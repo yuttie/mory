@@ -572,3 +572,30 @@ test('preserves the draft across overlapping mode navigations', async ({ context
     await expect.poll(() => new URL(page.url()).searchParams.get('mode')).toBe('hybrid');
     await expect(query).toHaveValue('draft-only');
 });
+
+test('restores the route query when history changes only the mode', async ({ context, page }) => {
+    const submitted: { query: string, mode: string }[] = [];
+    await mockBackend(context, {
+        onSearch: async (route) => {
+            const request = route.request().postDataJSON();
+            submitted.push(request);
+            await route.fulfill({ json: emptySearchResponse(request) });
+        },
+    });
+    await page.goto('/search?q=committed&mode=text');
+    await expect.poll(() => submitted.length).toBe(1);
+
+    const mode = page.getByRole('combobox', { name: 'Mode' });
+    await mode.focus();
+    await mode.press('ArrowDown');
+    await page.getByRole('option', { name: 'Semantic' }).click();
+    await expect.poll(() => new URL(page.url()).searchParams.get('mode')).toBe('semantic');
+
+    const query = page.getByRole('textbox', { name: 'Search' });
+    await query.fill('draft-only');
+    await page.goBack();
+
+    await expect.poll(() => new URL(page.url()).searchParams.get('mode')).toBe('text');
+    await expect.poll(() => submitted.at(-1)).toMatchObject({ query: 'committed', mode: 'text' });
+    await expect(query).toHaveValue('committed');
+});

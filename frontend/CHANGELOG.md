@@ -22,6 +22,7 @@
 - *(frontend/views/Search)* Preserve query drafts across overlapping mode changes
 - *(frontend/views/Search)* Keep Semantic indexing polls alive across transient status failures
 - *(frontend/views/Search)* Do not rerun Grep when the independent Text index becomes ready
+- *(frontend/views/Search)* Restore committed query text during browser history navigation
 
 ## [1.9.0] - 2025-09-11
 

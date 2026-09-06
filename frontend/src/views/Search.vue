@@ -155,6 +155,7 @@ const modeItems: { title: string, value: SearchMode }[] = [
     { title: 'Hybrid', value: 'hybrid' },
 ];
 const validModes = new Set<SearchMode>(modeItems.map((item) => item.value));
+const MODE_NAVIGATION_STATE = 'morySearchModeNavigation';
 const draftQuery = ref('');
 const draftMode = ref<SearchMode>('text');
 const committedQuery = ref('');
@@ -178,6 +179,8 @@ let waitingForIndexRequest: number | null = null;
 let lastSemanticState: SearchStatusResponse['semantic']['state'] | null = null;
 let rerunWhenIdle = false;
 let lastStatusErrorText: string | null = null;
+let nextModeNavigation = 0;
+const pendingModeNavigations = new Set<number>();
 
 const modeHelp = computed(() => ({
     grep: 'Regular-expression search across every text file, including raw YAML syntax.',
@@ -443,7 +446,10 @@ watch(
     ([query, mode]) => {
         const nextQuery = typeof query === 'string' ? query : '';
         const nextMode = modeFromRoute(mode);
-        if (nextQuery !== committedQuery.value) {
+        const navigation = window.history.state?.[MODE_NAVIGATION_STATE];
+        const preserveDraft = typeof navigation === 'number'
+            && pendingModeNavigations.delete(navigation);
+        if (!preserveDraft) {
             draftQuery.value = nextQuery;
         }
         draftMode.value = nextMode;
@@ -459,10 +465,19 @@ watch(
 
 watch(draftMode, (mode) => {
     if (mode !== committedMode.value) {
+        const navigation = ++nextModeNavigation;
+        pendingModeNavigations.add(navigation);
         router.push({
             query: committedQuery.value === ''
                 ? { mode }
                 : { q: committedQuery.value, mode },
+            state: { [MODE_NAVIGATION_STATE]: navigation },
+        }).then((failure) => {
+            if (failure !== undefined) {
+                pendingModeNavigations.delete(navigation);
+            }
+        }).catch(() => {
+            pendingModeNavigations.delete(navigation);
         });
     }
 });
