@@ -290,7 +290,11 @@ async function execute(): Promise<void> {
             return;
         }
         if (axios.isAxiosError(error) && error.response?.status === 401) {
-            emit('tokenExpired', execute);
+            emit('tokenExpired', () => {
+                if (mounted) {
+                    execute();
+                }
+            });
             return;
         }
         const code = axios.isAxiosError(error)

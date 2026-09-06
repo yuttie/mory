@@ -18,6 +18,7 @@
 - *(frontend/views/Search)* Defer ready-status reruns until an in-flight response proves stale
 - *(frontend/views/Search)* Resume index polling after transient status failures
 - *(frontend/views/Search)* Keep index-ready retries scoped to the search that requested them
+- *(frontend/views/Search)* Discard login retries after leaving the Search view
 
 ## [1.9.0] - 2025-09-11
 

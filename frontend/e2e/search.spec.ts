@@ -40,6 +40,10 @@ async function mockBackend(context: BrowserContext, options: BackendOptions = {}
             });
             return;
         }
+        if (url.pathname === '/api/login') {
+            await route.fulfill({ json: TOKEN });
+            return;
+        }
         if (url.pathname.startsWith('/api/notes/.mory/custom.')) {
             await route.fulfill({ status: 404, json: {} });
             return;
@@ -414,4 +418,27 @@ test('does not apply an old indexing retry to a newer Grep search', async ({ con
     await page.waitForTimeout(100);
 
     expect(grepAttempts).toBe(1);
+});
+
+test('does not retry an authenticated search after leaving the view', async ({ context, page }) => {
+    let searchAttempts = 0;
+    await mockBackend(context, {
+        onSearch: async (route) => {
+            searchAttempts += 1;
+            await route.fulfill({ status: 401, json: { message: 'Expired' } });
+        },
+    });
+    await page.goto('/search?q=expired&mode=text');
+    await expect(page.getByRole('heading', { name: 'Login' })).toBeVisible();
+    expect(searchAttempts).toBe(1);
+
+    await page.getByRole('link', { name: 'About' }).click({ force: true });
+    await expect.poll(() => new URL(page.url()).pathname).toBe('/about');
+    await page.getByRole('textbox', { name: 'Username' }).fill('test');
+    await page.getByLabel('Password').fill('password');
+    await page.getByRole('button', { name: 'Login' }).click();
+    await expect(page.getByRole('heading', { name: 'Login' })).not.toBeVisible();
+    await page.waitForTimeout(100);
+
+    expect(searchAttempts).toBe(1);
 });
