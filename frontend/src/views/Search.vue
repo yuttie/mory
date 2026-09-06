@@ -173,8 +173,8 @@ let statusController: AbortController | null = null;
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let mounted = false;
 let lastReadyGeneration: string | null = null;
-let waitingGeneration: string | null = null;
-let waitingForIndex = false;
+let waitingGeneration: { commit: string, request: number } | null = null;
+let waitingForIndexRequest: number | null = null;
 let lastSemanticState: SearchStatusResponse['semantic']['state'] | null = null;
 let preserveDraftOnModeRoute = false;
 let rerunWhenIdle = false;
@@ -297,7 +297,7 @@ async function execute(): Promise<void> {
             ? (error.response?.data as { code?: string } | undefined)?.code
             : undefined;
         if (code === 'lexical_index_updating' || code === 'semantic_index_updating') {
-            waitingForIndex = true;
+            waitingForIndexRequest = generation;
             pollStatus();
         }
         errorText.value = axios.isAxiosError(error)
@@ -359,16 +359,18 @@ async function pollStatus(): Promise<void> {
         const responseMatchesGeneration = response.value?.commit === next.commit;
         if (selectedReady) {
             lastReadyGeneration = next.commit;
-            if ((waitingForIndex || waitingGeneration === next.commit
+            if ((waitingForIndexRequest === requestGeneration
+                || (waitingGeneration?.commit === next.commit
+                    && waitingGeneration.request === requestGeneration)
                 || (wasReady !== null && wasReady !== next.commit && !responseMatchesGeneration))
                 && committedQuery.value !== '') {
                 shouldRerun = true;
             }
-            waitingForIndex = false;
+            waitingForIndexRequest = null;
             waitingGeneration = null;
         }
         else if (next.lexical.state === 'updating') {
-            waitingGeneration = next.commit;
+            waitingGeneration = { commit: next.commit, request: requestGeneration };
         }
         lastSemanticState = next.semantic.state;
         if (previousSemanticState === 'indexing' && next.semantic.state === 'ready'
@@ -403,7 +405,8 @@ async function pollStatus(): Promise<void> {
             : String(error);
         lastStatusErrorText = message;
         errorText.value = message;
-        if ((waitingForIndex || waitingGeneration !== null) && mounted) {
+        if ((waitingForIndexRequest === requestGeneration
+            || waitingGeneration?.request === requestGeneration) && mounted) {
             pollTimer = setTimeout(pollStatus, 2000);
         }
     }

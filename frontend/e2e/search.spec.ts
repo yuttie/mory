@@ -355,3 +355,63 @@ test('keeps polling after a transient status failure while a search awaits index
     await expect(page.getByText('Search status is temporarily unavailable')).not.toBeVisible();
     expect(statusCalls).toBe(3);
 });
+
+test('does not apply an old indexing retry to a newer Grep search', async ({ context, page }) => {
+    let grepAttempts = 0;
+    let statusCalls = 0;
+    let releaseReady: (() => void) | undefined;
+    const ready = new Promise<void>((resolve) => {
+        releaseReady = resolve;
+    });
+    await mockBackend(context, {
+        onSearch: async (route) => {
+            const request = route.request().postDataJSON();
+            if (request.mode === 'text') {
+                await new Promise((resolve) => setTimeout(resolve, 100));
+                await route.fulfill({
+                    status: 503,
+                    json: { code: 'lexical_index_updating', message: 'Indexing' },
+                });
+                return;
+            }
+            grepAttempts += 1;
+            await route.fulfill({ json: emptySearchResponse(request) });
+        },
+        onStatus: async (route) => {
+            statusCalls += 1;
+            if (statusCalls === 1) {
+                await route.fulfill({
+                    json: {
+                        commit: COMMIT,
+                        head: COMMIT,
+                        lexical: { state: 'updating', indexed_commit: null },
+                        semantic: { state: 'disabled', indexed: 0, total: 0, failed: 0 },
+                    },
+                });
+                return;
+            }
+            await ready;
+            await route.fulfill({
+                json: {
+                    commit: COMMIT,
+                    head: COMMIT,
+                    lexical: { state: 'ready', indexed_commit: COMMIT },
+                    semantic: { state: 'disabled', indexed: 0, total: 0, failed: 0 },
+                },
+            });
+        },
+    });
+    await page.goto('/search?q=old-query&mode=text');
+    await expect(page.getByText('Indexing')).toBeVisible();
+
+    const mode = page.getByRole('combobox', { name: 'Mode' });
+    await mode.focus();
+    await mode.press('ArrowDown');
+    await page.getByRole('option', { name: 'Grep' }).click();
+    await expect.poll(() => grepAttempts).toBe(1);
+    releaseReady!();
+    await expect(page.getByText('No results')).toBeVisible();
+    await page.waitForTimeout(100);
+
+    expect(grepAttempts).toBe(1);
+});
