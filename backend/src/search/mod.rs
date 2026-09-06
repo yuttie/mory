@@ -39,6 +39,18 @@ const EMBEDDING_TEMPLATE: &str = "mory-passage-v3:chunker-500-800-80-v3";
 const MAX_EMBEDDING_INPUT_BYTES: usize = 8_192;
 const MAX_EMBEDDING_REQUEST_BYTES: usize = 300_000;
 const MAX_GREP_RECORD_BYTES: usize = 64 * 1024;
+const FAILED_IMAGE_COUNT_SQL: &str =
+    "SELECT count(DISTINCT d.blob_id) FROM search_image_description d
+     WHERE d.model = ? AND d.prompt_version = ? AND d.preprocess = ? AND d.detail = ?
+       AND d.state = 'failed'
+       AND EXISTS (
+           SELECT 1 FROM entry e WHERE e.blob_id = d.blob_id
+             AND e.path NOT LIKE '.mory/%' AND e.path != '.mory'
+             AND e.mime_type IN (
+                 'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+                 'image/bmp', 'image/tiff'
+             )
+       );";
 
 #[derive(Debug, Clone)]
 pub struct SearchConfig {
@@ -1053,12 +1065,7 @@ impl SearchManager {
             let described: i64 = sqlx::query_scalar(
                 "SELECT count(DISTINCT blob_id) FROM search_passage WHERE content_kind = 'image_description';",
             ).fetch_one(&mut *snapshot).await?;
-            let failed: i64 = sqlx::query_scalar(
-                "SELECT count(DISTINCT d.blob_id) FROM search_image_description d
-                 WHERE d.model = ? AND d.prompt_version = ? AND d.preprocess = ? AND d.detail = ?
-                   AND d.state = 'failed'
-                   AND EXISTS (SELECT 1 FROM entry e WHERE e.blob_id = d.blob_id);",
-            )
+            let failed: i64 = sqlx::query_scalar(FAILED_IMAGE_COUNT_SQL)
             .bind(model)
             .bind(image::PROMPT_VERSION)
             .bind(image::PREPROCESS_VERSION)
@@ -2454,6 +2461,68 @@ mod tests {
         assert_eq!(status.indexed, 0);
         assert_eq!(status.total, 0);
         assert_eq!(status.failed, 0);
+    }
+
+    #[tokio::test]
+    async fn semantic_status_excludes_failed_images_outside_the_search_corpus() {
+        use sqlx::sqlite::SqlitePoolOptions;
+
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::query("CREATE TABLE entry (path TEXT, blob_id TEXT, mime_type TEXT);")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query(
+            "CREATE TABLE search_image_description (
+                blob_id TEXT, model TEXT, prompt_version TEXT, preprocess TEXT,
+                detail TEXT, state TEXT
+             );",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query("INSERT INTO entry VALUES ('.mory/photo.png', 'blob', 'image/png');")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO search_image_description VALUES ('blob', 'vision', ?, ?, ?, 'failed');",
+        )
+        .bind(image::PROMPT_VERSION)
+        .bind(image::PREPROCESS_VERSION)
+        .bind(image::DETAIL)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let failed: i64 = sqlx::query_scalar(FAILED_IMAGE_COUNT_SQL)
+            .bind("vision")
+            .bind(image::PROMPT_VERSION)
+            .bind(image::PREPROCESS_VERSION)
+            .bind(image::DETAIL)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+        assert_eq!(failed, 0);
+
+        sqlx::query("UPDATE entry SET path = 'photo.png';")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let failed: i64 = sqlx::query_scalar(FAILED_IMAGE_COUNT_SQL)
+            .bind("vision")
+            .bind(image::PROMPT_VERSION)
+            .bind(image::PREPROCESS_VERSION)
+            .bind(image::DETAIL)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(failed, 1);
     }
 
     #[test]
