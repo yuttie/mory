@@ -20,7 +20,6 @@
 - *(backend/search)* Reject clauses that contain no indexable text instead of matching everything
 - *(backend/search)* Enforce the 800-token cap when splitting whitespace-delimited passages
 - *(backend/search)* Index Markdown recognized by MIME type or case-insensitive file extension
-- *(backend/search)* Retry failed active-model artifacts after configuration is corrected and restarted
 - *(backend/search)* Release interactive query priority on cancellation and hold it through completion
 - *(backend/search)* Enforce embedding input and request limits with conservative UTF-8 byte bounds
 - *(backend/search)* Reject misindexed embedding responses and retain valid vectors from mixed batches
@@ -33,6 +32,7 @@
 - *(backend/search)* Apply ImageMagick limits during inspection and share one preprocessing deadline
 - *(backend/search)* Adopt valid pre-marker mory indexes before rebuilding incompatible schemas
 - *(backend/search)* Return an updating response when query validation races with index advancement
+- *(backend/search)* Keep permanently failed semantic artifacts failed across process restarts
 
 ## [1.5.1] - 2025-09-12
 

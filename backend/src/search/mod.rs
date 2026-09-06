@@ -198,7 +198,6 @@ impl SearchManager {
         };
         let vision_client = reqwest::Client::builder().gzip(true).brotli(true).build()?;
         let provider = Arc::new(OpenAiEmbeddingProvider::new(vision_client.clone()));
-        resume_failed_artifacts(&cache_db_writer, &config).await?;
         Ok(Arc::new(Self {
             config,
             repo,
@@ -1176,35 +1175,6 @@ fn validate_embedding_vectors(
         .into_iter()
         .map(|vector| normalize_vector(vector, dimensions))
         .collect())
-}
-
-async fn resume_failed_artifacts(pool: &SqlitePool, config: &SearchConfig) -> Result<()> {
-    if !config.semantic_enabled {
-        return Ok(());
-    }
-    sqlx::query(
-        "UPDATE search_embedding SET state = 'pending', next_retry = 0
-         WHERE state = 'failed' AND model = ? AND dimensions = ? AND template = ?;",
-    )
-    .bind(&config.embedding_model)
-    .bind(config.embedding_dimensions as i64)
-    .bind(EMBEDDING_TEMPLATE)
-    .execute(pool)
-    .await?;
-    if let Some(model) = &config.vision_model {
-        sqlx::query(
-            "UPDATE search_image_description SET state = 'pending', next_retry = 0
-             WHERE state = 'failed' AND model = ? AND prompt_version = ?
-               AND preprocess = ? AND detail = ?;",
-        )
-        .bind(model)
-        .bind(image::PROMPT_VERSION)
-        .bind(image::PREPROCESS_VERSION)
-        .bind(image::DETAIL)
-        .execute(pool)
-        .await?;
-    }
-    Ok(())
 }
 
 async fn begin_semantic_snapshot(
@@ -2493,7 +2463,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn restart_requeues_failed_artifacts_after_configuration_is_corrected() {
+    async fn restart_does_not_retry_permanently_failed_artifacts() {
         use sqlx::sqlite::SqlitePoolOptions;
 
         let pool = SqlitePoolOptions::new()
@@ -2532,28 +2502,37 @@ mod tests {
         .execute(&pool)
         .await
         .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let repository = Repository::init(directory.path().join("repo")).unwrap();
         let config = SearchConfig {
-            index_dir: PathBuf::from("index"),
+            index_dir: directory.path().join("index"),
             semantic_enabled: true,
             embedding_model: "model".to_owned(),
             embedding_dimensions: 8,
             vision_model: Some("vision".to_owned()),
         };
 
-        resume_failed_artifacts(&pool, &config).await.unwrap();
+        SearchManager::new(
+            config,
+            Arc::new(std::sync::Mutex::new(repository)),
+            pool.clone(),
+            pool.clone(),
+        )
+        .await
+        .unwrap();
 
-        let embedding: (String, i64) =
+        let embedding: (String, Option<i64>) =
             sqlx::query_as("SELECT state, next_retry FROM search_embedding;")
                 .fetch_one(&pool)
                 .await
                 .unwrap();
-        let image: (String, i64) =
+        let image: (String, Option<i64>) =
             sqlx::query_as("SELECT state, next_retry FROM search_image_description;")
                 .fetch_one(&pool)
                 .await
                 .unwrap();
-        assert_eq!(embedding, ("pending".to_owned(), 0));
-        assert_eq!(image, ("pending".to_owned(), 0));
+        assert_eq!(embedding, ("failed".to_owned(), None));
+        assert_eq!(image, ("failed".to_owned(), None));
     }
 
     #[tokio::test]
