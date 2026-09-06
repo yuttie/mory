@@ -19,6 +19,20 @@ impl std::fmt::Display for ProviderError {
 
 impl std::error::Error for ProviderError {}
 
+pub fn recoverable(message: impl Into<String>) -> ProviderError {
+    ProviderError {
+        retryable: true,
+        retry_after: None,
+        message: message.into(),
+    }
+}
+
+pub fn status_is_retryable(status: StatusCode) -> bool {
+    matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN)
+        || status == StatusCode::TOO_MANY_REQUESTS
+        || status.is_server_error()
+}
+
 #[async_trait]
 pub trait EmbeddingProvider: Send + Sync {
     async fn embed(
@@ -66,11 +80,8 @@ impl EmbeddingProvider for OpenAiEmbeddingProvider {
         model: &str,
         dimensions: usize,
     ) -> Result<Vec<Vec<f32>>, ProviderError> {
-        let api_key = std::env::var("MORIED_OPENAI_API_KEY").map_err(|_| ProviderError {
-            retryable: false,
-            retry_after: None,
-            message: "OpenAI API key is not configured".to_owned(),
-        })?;
+        let api_key = std::env::var("MORIED_OPENAI_API_KEY")
+            .map_err(|_| recoverable("OpenAI API key is not configured"))?;
         let response = self
             .client
             .post("https://api.openai.com/v1/embeddings")
@@ -92,7 +103,7 @@ impl EmbeddingProvider for OpenAiEmbeddingProvider {
         let retry_after = retry_after(response.headers());
         if !status.is_success() {
             return Err(ProviderError {
-                retryable: status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error(),
+                retryable: status_is_retryable(status),
                 retry_after,
                 // Do not read the body: provider request IDs and diagnostics stay in server logs.
                 message: format!("embedding provider returned HTTP {status}"),
@@ -103,13 +114,12 @@ impl EmbeddingProvider for OpenAiEmbeddingProvider {
             retry_after: None,
             message: format!("embedding response body failed: {error}"),
         })?;
-        let response = serde_json::from_slice::<EmbeddingResponse>(&body).map_err(|error| {
-            ProviderError {
+        let response =
+            serde_json::from_slice::<EmbeddingResponse>(&body).map_err(|error| ProviderError {
                 retryable: false,
                 retry_after: None,
                 message: format!("invalid embedding response: {error}"),
-            }
-        })?;
+            })?;
         ordered_embeddings(response.data, input.len())
     }
 }
@@ -180,6 +190,14 @@ mod tests {
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert(reqwest::header::RETRY_AFTER, "17".parse().unwrap());
         assert_eq!(retry_after(&headers), Some(Duration::from_secs(17)));
+    }
+
+    #[test]
+    fn corrected_provider_configuration_remains_retryable() {
+        assert!(recoverable("missing API key").retryable);
+        assert!(status_is_retryable(StatusCode::UNAUTHORIZED));
+        assert!(status_is_retryable(StatusCode::FORBIDDEN));
+        assert!(!status_is_retryable(StatusCode::BAD_REQUEST));
     }
 
     #[test]

@@ -2,11 +2,11 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use base64::Engine;
-use reqwest::{Client, StatusCode};
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 
-use super::provider::{retry_after, ProviderError};
+use super::provider::{recoverable, retry_after, status_is_retryable, ProviderError};
 
 pub const PROMPT_VERSION: &str = "image-description-v1";
 pub const PREPROCESS_VERSION: &str = "imagemagick-oriented-2048-v2";
@@ -35,7 +35,7 @@ pub async fn describe(
     let encoded = base64::engine::general_purpose::STANDARD.encode(normalized);
     let request = responses_request(model, encoded);
     let api_key = std::env::var("MORIED_OPENAI_API_KEY")
-        .map_err(|_| permanent("OpenAI API key is not configured"))?;
+        .map_err(|_| recoverable("OpenAI API key is not configured"))?;
     let response = client
         .post("https://api.openai.com/v1/responses")
         .bearer_auth(api_key)
@@ -51,17 +51,14 @@ pub async fn describe(
     let retry_after = retry_after(response.headers());
     if !status.is_success() {
         return Err(ProviderError {
-            retryable: status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error(),
+            retryable: status_is_retryable(status),
             retry_after,
             message: format!("image description provider returned HTTP {status}"),
         });
     }
-    let body = response
-        .bytes()
-        .await
-        .map_err(|error| {
-            retryable_body_failure(format!("image description response body failed: {error}"))
-        })?;
+    let body = response.bytes().await.map_err(|error| {
+        retryable_body_failure(format!("image description response body failed: {error}"))
+    })?;
     let response = serde_json::from_slice::<serde_json::Value>(&body)
         .map_err(|error| permanent(&format!("invalid image description response: {error}")))?;
     let text = response
@@ -148,7 +145,7 @@ async fn normalize(source: &[u8]) -> Result<Vec<u8>, ProviderError> {
     let result = tokio::time::timeout(remaining_preprocess_time(deadline)?, command)
         .await
         .map_err(|_| permanent("image preprocessing exceeded 30 seconds"))?
-        .map_err(|error| permanent(&format!("ImageMagick could not start: {error}")))?;
+        .map_err(|error| recoverable(format!("ImageMagick could not start: {error}")))?;
     if !result.status.success() {
         return Err(permanent("ImageMagick rejected the image"));
     }
@@ -199,7 +196,7 @@ async fn inspect_dimensions(input: &Path, deadline: Instant) -> Result<(), Provi
     let result = tokio::time::timeout(remaining_preprocess_time(deadline)?, command)
         .await
         .map_err(|_| permanent("image preprocessing exceeded 30 seconds"))?
-        .map_err(|error| permanent(&format!("ImageMagick could not start: {error}")))?;
+        .map_err(|error| recoverable(format!("ImageMagick could not start: {error}")))?;
     if !result.status.success() {
         return Err(permanent("ImageMagick rejected the image header"));
     }
@@ -358,6 +355,14 @@ mod tests {
             .unwrap_err();
 
         assert!(!error.retryable);
+    }
+
+    #[test]
+    fn corrected_image_tool_configuration_remains_retryable() {
+        let error = recoverable("ImageMagick could not start");
+
+        assert!(error.retryable);
+        assert!(!permanent("image exceeds the decoded-pixel limit").retryable);
     }
 
     #[test]
