@@ -489,18 +489,18 @@ impl SearchManager {
         }
     }
 
-    fn validate_query(&self, commit: Oid, parsed: &ParsedQuery) -> Result<()> {
+    fn validate_query(
+        &self,
+        commit: Oid,
+        parsed: &ParsedQuery,
+    ) -> std::result::Result<(), QueryValidationError> {
         let lexical = self
             .lexical
             .read()
             .unwrap()
             .clone()
-            .context("lexical index is not available")?;
-        anyhow::ensure!(
-            lexical.generation == commit.to_string(),
-            "lexical generation changed"
-        );
-        lexical.validate_query(parsed)
+            .ok_or(QueryValidationError::Generation)?;
+        validate_query_at(&lexical, commit, parsed)
     }
 
     async fn cached_image_descriptions(
@@ -1262,6 +1262,25 @@ enum SemanticSearchError {
 }
 
 #[derive(Debug)]
+enum QueryValidationError {
+    Generation,
+    Invalid(anyhow::Error),
+}
+
+fn validate_query_at(
+    lexical: &LexicalIndex,
+    commit: Oid,
+    parsed: &ParsedQuery,
+) -> std::result::Result<(), QueryValidationError> {
+    if lexical.generation != commit.to_string() {
+        return Err(QueryValidationError::Generation);
+    }
+    lexical
+        .validate_query(parsed)
+        .map_err(QueryValidationError::Invalid)
+}
+
+#[derive(Debug)]
 struct SemanticCandidate {
     path: String,
     blob_id: String,
@@ -1768,8 +1787,18 @@ pub async fn post_search(
             "The local text index is updating. Please retry shortly.",
         );
     }
-    if let Err(error) = state.search.validate_query(snapshot.commit, &parsed) {
-        return search_error(StatusCode::BAD_REQUEST, "invalid_query", error.to_string());
+    match state.search.validate_query(snapshot.commit, &parsed) {
+        Ok(()) => {},
+        Err(QueryValidationError::Generation) => {
+            return search_error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "lexical_index_updating",
+                "The local text index changed while validating the query. Please retry.",
+            )
+        },
+        Err(QueryValidationError::Invalid(error)) => {
+            return search_error(StatusCode::BAD_REQUEST, "invalid_query", error.to_string())
+        },
     }
     let semantic = state
         .search
@@ -2441,6 +2470,26 @@ mod tests {
                 "notes/custom".to_owned(),
             ])
         );
+    }
+
+    #[test]
+    fn generation_changes_are_not_query_syntax_errors() {
+        let directory = tempfile::tempdir().unwrap();
+        let current = Oid::from_str(&"2".repeat(40)).unwrap();
+        let selected = Oid::from_str(&"1".repeat(40)).unwrap();
+        let lexical = LexicalIndex::build(
+            &directory.path().join("index"),
+            &current.to_string(),
+            "content",
+            &[],
+        )
+        .unwrap();
+        let parsed = parse("valid query").unwrap();
+
+        assert!(matches!(
+            validate_query_at(&lexical, selected, &parsed),
+            Err(QueryValidationError::Generation)
+        ));
     }
 
     #[tokio::test]

@@ -32,6 +32,7 @@
 - *(backend/search)* Retry truncated image-response bodies while rejecting complete malformed JSON
 - *(backend/search)* Apply ImageMagick limits during inspection and share one preprocessing deadline
 - *(backend/search)* Adopt valid pre-marker mory indexes before rebuilding incompatible schemas
+- *(backend/search)* Return an updating response when query validation races with index advancement
 
 ## [1.5.1] - 2025-09-12
 
