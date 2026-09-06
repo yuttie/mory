@@ -178,6 +178,7 @@ let waitingForIndex = false;
 let lastSemanticState: SearchStatusResponse['semantic']['state'] | null = null;
 let preserveDraftOnModeRoute = false;
 let rerunWhenIdle = false;
+let lastStatusErrorText: string | null = null;
 
 const modeHelp = computed(() => ({
     grep: 'Regular-expression search across every text file, including raw YAML syntax.',
@@ -349,6 +350,10 @@ async function pollStatus(): Promise<void> {
         const wasReady = lastReadyGeneration;
         const previousSemanticState = lastSemanticState;
         status.value = next;
+        if (lastStatusErrorText !== null && errorText.value === lastStatusErrorText) {
+            errorText.value = '';
+        }
+        lastStatusErrorText = null;
         let shouldRerun = false;
         const selectedReady = next.lexical.state === 'ready' && next.lexical.indexed_commit === next.commit;
         const responseMatchesGeneration = response.value?.commit === next.commit;
@@ -393,9 +398,14 @@ async function pollStatus(): Promise<void> {
             emit('tokenExpired', pollStatus);
             return;
         }
-        errorText.value = axios.isAxiosError(error)
+        const message = axios.isAxiosError(error)
             ? (error.response?.data as { message?: string } | undefined)?.message ?? error.message
             : String(error);
+        lastStatusErrorText = message;
+        errorText.value = message;
+        if ((waitingForIndex || waitingGeneration !== null) && mounted) {
+            pollTimer = setTimeout(pollStatus, 2000);
+        }
     }
 }
 

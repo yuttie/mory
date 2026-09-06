@@ -309,3 +309,49 @@ test('does not restart a slow search when ready status already covers its respon
 
     expect(searchCalls).toBe(2);
 });
+
+test('keeps polling after a transient status failure while a search awaits indexing', async ({ context, page }) => {
+    let searchAttempts = 0;
+    let statusCalls = 0;
+    await mockBackend(context, {
+        onSearch: async (route) => {
+            searchAttempts += 1;
+            if (searchAttempts === 1) {
+                await new Promise((resolve) => setTimeout(resolve, 100));
+                await route.fulfill({
+                    status: 503,
+                    json: { code: 'lexical_index_updating', message: 'Indexing' },
+                });
+                return;
+            }
+            await route.fulfill({ json: emptySearchResponse(route.request().postDataJSON()) });
+        },
+        onStatus: async (route) => {
+            statusCalls += 1;
+            if (statusCalls === 2) {
+                await route.fulfill({
+                    status: 500,
+                    json: { message: 'Search status is temporarily unavailable' },
+                });
+                return;
+            }
+            await route.fulfill({
+                json: {
+                    commit: COMMIT,
+                    head: COMMIT,
+                    lexical: statusCalls === 1
+                        ? { state: 'updating', indexed_commit: null }
+                        : { state: 'ready', indexed_commit: COMMIT },
+                    semantic: { state: 'disabled', indexed: 0, total: 0, failed: 0 },
+                },
+            });
+        },
+    });
+
+    await page.goto('/search?q=retry-after-status-error&mode=text');
+
+    await expect.poll(() => searchAttempts, { timeout: 4_000 }).toBe(2);
+    await expect(page.getByText('No results')).toBeVisible();
+    await expect(page.getByText('Search status is temporarily unavailable')).not.toBeVisible();
+    expect(statusCalls).toBe(3);
+});

@@ -16,6 +16,7 @@
 - *(frontend/views/Search)* Preserve unsubmitted query text when changing the search mode
 - *(frontend/views/Search)* Keep search errors visible in a dismissible inline alert
 - *(frontend/views/Search)* Defer ready-status reruns until an in-flight response proves stale
+- *(frontend/views/Search)* Resume index polling after transient status failures
 
 ## [1.9.0] - 2025-09-11
 
