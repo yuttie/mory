@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { API_URL } from './e2e/backend';
 
 export default defineConfig({
     testDir: './e2e',
@@ -27,6 +28,8 @@ export default defineConfig({
     ],
     webServer: {
         command: 'npm run dev -- --host 127.0.0.1',
+        // Vite reads VITE_* from the environment over `.env`, which is untracked.
+        env: { VITE_APP_API_URL: API_URL },
         url: 'http://127.0.0.1:8080',
         reuseExistingServer: !process.env.CI,
     },
