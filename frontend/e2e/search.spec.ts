@@ -442,3 +442,57 @@ test('does not retry an authenticated search after leaving the view', async ({ c
 
     expect(searchAttempts).toBe(1);
 });
+
+test('preserves the draft across overlapping mode navigations', async ({ context, page }) => {
+    await mockBackend(context, {
+        onSearch: async (route) => {
+            await route.fulfill({ json: emptySearchResponse(route.request().postDataJSON()) });
+        },
+    });
+    await page.goto('/search?q=committed&mode=text');
+    const query = page.getByRole('textbox', { name: 'Search' });
+    await query.fill('draft-only');
+    await page.evaluate(() => {
+        const app = (document.querySelector('#app') as HTMLElement & {
+            __vue_app__: { config: { globalProperties: { $router: {
+                beforeEach: (guard: (to: { query: { mode?: string } }) => Promise<void> | undefined) => void,
+            } } } },
+        }).__vue_app__;
+        const pending: Record<string, (() => void) | undefined> = {};
+        Object.assign(window, { __searchModePending: pending });
+        app.config.globalProperties.$router.beforeEach((to) => {
+            if (to.query.mode !== 'semantic' && to.query.mode !== 'hybrid') {
+                return undefined;
+            }
+            return new Promise<void>((resolve) => {
+                pending[to.query.mode!] = resolve;
+            });
+        });
+    });
+
+    const mode = page.getByRole('combobox', { name: 'Mode' });
+    await mode.focus();
+    await mode.press('ArrowDown');
+    await page.getByRole('option', { name: 'Semantic' }).click();
+    await expect.poll(() => page.evaluate(() => Boolean(
+        (window as typeof window & { __searchModePending?: Record<string, () => void> })
+            .__searchModePending?.semantic,
+    ))).toBe(true);
+
+    await mode.focus();
+    await mode.press('ArrowDown');
+    await page.getByRole('option', { name: 'Hybrid' }).click();
+    await expect.poll(() => page.evaluate(() => Boolean(
+        (window as typeof window & { __searchModePending?: Record<string, () => void> })
+            .__searchModePending?.hybrid,
+    ))).toBe(true);
+    await page.evaluate(() => {
+        const pending = (window as typeof window & { __searchModePending: Record<string, () => void> })
+            .__searchModePending;
+        pending.semantic();
+        pending.hybrid();
+    });
+
+    await expect.poll(() => new URL(page.url()).searchParams.get('mode')).toBe('hybrid');
+    await expect(query).toHaveValue('draft-only');
+});

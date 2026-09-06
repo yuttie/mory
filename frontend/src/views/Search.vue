@@ -176,7 +176,6 @@ let lastReadyGeneration: string | null = null;
 let waitingGeneration: { commit: string, request: number } | null = null;
 let waitingForIndexRequest: number | null = null;
 let lastSemanticState: SearchStatusResponse['semantic']['state'] | null = null;
-let preserveDraftOnModeRoute = false;
 let rerunWhenIdle = false;
 let lastStatusErrorText: string | null = null;
 
@@ -440,11 +439,7 @@ watch(
     ([query, mode]) => {
         const nextQuery = typeof query === 'string' ? query : '';
         const nextMode = modeFromRoute(mode);
-        const preserveDraft = preserveDraftOnModeRoute
-            && nextQuery === committedQuery.value
-            && nextMode === draftMode.value;
-        preserveDraftOnModeRoute = false;
-        if (!preserveDraft) {
+        if (nextQuery !== committedQuery.value) {
             draftQuery.value = nextQuery;
         }
         draftMode.value = nextMode;
@@ -460,15 +455,10 @@ watch(
 
 watch(draftMode, (mode) => {
     if (mode !== committedMode.value) {
-        preserveDraftOnModeRoute = true;
         router.push({
             query: committedQuery.value === ''
                 ? { mode }
                 : { q: committedQuery.value, mode },
-        }).then((failure) => {
-            if (failure !== undefined) {
-                preserveDraftOnModeRoute = false;
-            }
         });
     }
 });
