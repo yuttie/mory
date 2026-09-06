@@ -19,6 +19,11 @@ export default defineConfig({
         baseURL: APP_URL,
         trace: 'on-first-retry',
     },
+    // WebKit is deliberately absent. The service worker claims the page
+    // (public/service-worker.js), and WebKit does not surface a controlled page's requests
+    // to Playwright's routing, so every mock in the suite is bypassed and the app parses the
+    // dev server's index.html as JSON. Blocking the worker instead renders nothing at all,
+    // because App.vue gates the view on it.
     projects: [
         {
             name: 'chromium',
@@ -27,10 +32,6 @@ export default defineConfig({
         {
             name: 'firefox',
             use: { ...devices['Desktop Firefox'] },
-        },
-        {
-            name: 'webkit',
-            use: { ...devices['Desktop Safari'] },
         },
     ],
     webServer: {
