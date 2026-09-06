@@ -177,6 +177,7 @@ let waitingGeneration: string | null = null;
 let waitingForIndex = false;
 let lastSemanticState: SearchStatusResponse['semantic']['state'] | null = null;
 let preserveDraftOnModeRoute = false;
+let rerunWhenIdle = false;
 
 const modeHelp = computed(() => ({
     grep: 'Regular-expression search across every text file, including raw YAML syntax.',
@@ -305,8 +306,28 @@ async function execute(): Promise<void> {
     finally {
         if (generation === requestGeneration) {
             isLoading.value = false;
+            const shouldRerun = rerunWhenIdle && responseNeedsStatusRefresh();
+            rerunWhenIdle = false;
+            if (shouldRerun) {
+                execute();
+            }
         }
     }
+}
+
+function responseNeedsStatusRefresh(): boolean {
+    const current = status.value;
+    if (current === null || committedQuery.value === '') {
+        return false;
+    }
+    const selectedReady = current.lexical.state === 'ready'
+        && current.lexical.indexed_commit === current.commit;
+    if (selectedReady && response.value?.commit !== current.commit) {
+        return true;
+    }
+    return ['semantic', 'hybrid'].includes(committedMode.value)
+        && current.semantic.state === 'ready'
+        && response.value?.semantic.state !== 'ready';
 }
 
 async function pollStatus(): Promise<void> {
@@ -351,7 +372,12 @@ async function pollStatus(): Promise<void> {
             shouldRerun = true;
         }
         if (shouldRerun) {
-            execute();
+            if (isLoading.value) {
+                rerunWhenIdle = true;
+            }
+            else {
+                execute();
+            }
         }
         const active = next.lexical.state === 'updating'
             || (next.semantic.state === 'indexing' && ['semantic', 'hybrid'].includes(committedMode.value));

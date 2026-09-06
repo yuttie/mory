@@ -266,3 +266,46 @@ test('keeps search errors visible until the user can act on them', async ({ cont
     await page.waitForTimeout(5_100);
     await expect(error).toBeVisible();
 });
+
+test('does not restart a slow search when ready status already covers its response', async ({ context, page }) => {
+    const firstCommit = '1'.repeat(40);
+    const secondCommit = '2'.repeat(40);
+    let statusCalls = 0;
+    let searchCalls = 0;
+    await mockBackend(context, {
+        onSearch: async (route) => {
+            searchCalls += 1;
+            const request = route.request().postDataJSON();
+            if (searchCalls === 2) {
+                await new Promise((resolve) => setTimeout(resolve, 200));
+            }
+            const commit = searchCalls === 1 ? firstCommit : secondCommit;
+            await route.fulfill({
+                json: { ...emptySearchResponse(request), commit, head: commit },
+            });
+        },
+        onStatus: async (route) => {
+            statusCalls += 1;
+            const commit = statusCalls === 1 ? firstCommit : secondCommit;
+            await route.fulfill({
+                json: {
+                    commit,
+                    head: commit,
+                    lexical: { state: 'ready', indexed_commit: commit },
+                    semantic: { state: 'disabled', indexed: 0, total: 0, failed: 0 },
+                },
+            });
+        },
+    });
+    await page.goto('/search?q=first&mode=text');
+    await expect(page.getByText('No results')).toBeVisible();
+    const query = page.getByRole('textbox', { name: 'Search' });
+
+    await query.fill('second');
+    await query.press('Enter');
+    await expect.poll(() => searchCalls).toBe(2);
+    await expect(page.getByText('No results')).toBeVisible();
+    await page.waitForTimeout(100);
+
+    expect(searchCalls).toBe(2);
+});
