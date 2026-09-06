@@ -326,7 +326,7 @@ function responseNeedsStatusRefresh(): boolean {
     }
     const selectedReady = current.lexical.state === 'ready'
         && current.lexical.indexed_commit === current.commit;
-    if (selectedReady && response.value?.commit !== current.commit) {
+    if (committedMode.value !== 'grep' && selectedReady && response.value?.commit !== current.commit) {
         return true;
     }
     return ['semantic', 'hybrid'].includes(committedMode.value)
@@ -362,7 +362,8 @@ async function pollStatus(): Promise<void> {
         const responseMatchesGeneration = response.value?.commit === next.commit;
         if (selectedReady) {
             lastReadyGeneration = next.commit;
-            if ((waitingForIndexRequest === requestGeneration
+            if (committedMode.value !== 'grep'
+                && (waitingForIndexRequest === requestGeneration
                 || (waitingGeneration?.commit === next.commit
                     && waitingGeneration.request === requestGeneration)
                 || (wasReady !== null && wasReady !== next.commit && !responseMatchesGeneration))
@@ -372,7 +373,7 @@ async function pollStatus(): Promise<void> {
             waitingForIndexRequest = null;
             waitingGeneration = null;
         }
-        else if (next.lexical.state === 'updating') {
+        else if (next.lexical.state === 'updating' && committedMode.value !== 'grep') {
             waitingGeneration = { commit: next.commit, request: requestGeneration };
         }
         lastSemanticState = next.semantic.state;

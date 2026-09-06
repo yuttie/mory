@@ -465,6 +465,37 @@ test('does not apply an old indexing retry to a newer Grep search', async ({ con
     expect(grepAttempts).toBe(1);
 });
 
+test('does not rerun Grep when the independent Text index becomes ready', async ({ context, page }) => {
+    let grepAttempts = 0;
+    let statusCalls = 0;
+    await mockBackend(context, {
+        onSearch: async (route) => {
+            grepAttempts += 1;
+            await route.fulfill({ json: emptySearchResponse(route.request().postDataJSON()) });
+        },
+        onStatus: async (route) => {
+            statusCalls += 1;
+            await route.fulfill({
+                json: {
+                    commit: COMMIT,
+                    head: COMMIT,
+                    lexical: statusCalls === 1
+                        ? { state: 'updating', indexed_commit: null }
+                        : { state: 'ready', indexed_commit: COMMIT },
+                    semantic: { state: 'disabled', indexed: 0, total: 0, failed: 0 },
+                },
+            });
+        },
+    });
+
+    await page.goto('/search?q=grep-stays-current&mode=grep');
+
+    await expect.poll(() => statusCalls, { timeout: 4_000 }).toBe(2);
+    await expect(page.getByText('No results')).toBeVisible();
+    await page.waitForTimeout(100);
+    expect(grepAttempts).toBe(1);
+});
+
 test('does not retry an authenticated search after leaving the view', async ({ context, page }) => {
     let searchAttempts = 0;
     await mockBackend(context, {
