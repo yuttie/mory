@@ -64,6 +64,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use models::*;
 
 mod ical;
+mod search;
 
 #[cfg(test)]
 mod tests;
@@ -105,6 +106,13 @@ async fn main() -> Result<()> {
     let (refresh_tx, refresh_rx) = watch::channel(CacheState::Fresh(Oid::zero()));
     let (done_tx, done_rx) = watch::channel(None);
 
+    let search = search::SearchManager::new(
+        search::SearchConfig::from_env()?,
+        repo.clone(),
+        cache_reader_pool.clone(),
+        cache_writer_pool.clone(),
+    ).await?;
+
     let state = models::AppState {
         repo: repo.clone(),
         cache_db: cache_reader_pool,
@@ -116,11 +124,14 @@ async fn main() -> Result<()> {
             .build()
             .context("Failed to build a reqwest client")
             .unwrap(),
+        search: search.clone(),
     };
     // Sync before binding the listener, so the server never starts up serving a listing it knows
     // to be behind.
     let cache_state = state.check_cache_state().await?;
     sync_cache_to(&mut cache_writer_conn, state.repo.clone(), cache_state).await?;
+    // Search follows the entry cache's exact generation, so reconcile it before serving requests.
+    search.reconcile_initial().await?;
 
     tokio::spawn(cache_manager_task(
         repo.clone(),
@@ -128,6 +139,7 @@ async fn main() -> Result<()> {
         done_tx,
         cache_writer_conn,
     ));
+    search.spawn();
 
     let addr = env::var("MORIED_LISTEN").unwrap();
     tracing::debug!("{:?}", addr);
@@ -164,6 +176,8 @@ async fn main() -> Result<()> {
         .route("/tasks", get(v2::get_tasks))
         .route("/events", get(v2::get_events))
         .route("/imported-events", get(v2::get_imported_events))
+        .route("/search", post(search::post_search))
+        .route("/search/status", get(search::get_status))
         .route("/assess-task", post(v2::post_assess_task))
         .route("/ai-action", post(v2::post_ai_action))
         .with_state(state.clone())
@@ -222,6 +236,70 @@ async fn init_cache_database(
                 request_data  TEXT NOT NULL,
                 response_data TEXT NOT NULL,
                 created_at    INTEGER NOT NULL
+            ) STRICT;
+        ")
+        .execute(&mut *conn)
+        .await?;
+    sqlx::query("
+            CREATE TABLE IF NOT EXISTS search_state (
+                key    TEXT PRIMARY KEY,
+                value  TEXT NOT NULL
+            ) STRICT, WITHOUT ROWID;
+        ")
+        .execute(&mut *conn)
+        .await?;
+    sqlx::query("
+            CREATE TABLE IF NOT EXISTS search_passage (
+                path           TEXT NOT NULL,
+                blob_id        TEXT NOT NULL,
+                passage_id     TEXT NOT NULL,
+                text_hash      TEXT NOT NULL,
+                start_byte     INTEGER NOT NULL,
+                end_byte       INTEGER NOT NULL,
+                start_line     INTEGER,
+                end_line       INTEGER,
+                mime_type      TEXT NOT NULL,
+                title          TEXT,
+                snippet        TEXT NOT NULL,
+                semantic_text  TEXT NOT NULL,
+                content_kind   TEXT NOT NULL,
+                PRIMARY KEY (path, passage_id)
+            ) STRICT;
+        ")
+        .execute(&mut *conn)
+        .await?;
+    sqlx::query("
+            CREATE TABLE IF NOT EXISTS search_embedding (
+                passage_id    TEXT NOT NULL,
+                text_hash     TEXT NOT NULL,
+                model         TEXT NOT NULL,
+                dimensions    INTEGER NOT NULL,
+                template      TEXT NOT NULL,
+                vector        BLOB,
+                norm          REAL,
+                state         TEXT NOT NULL,
+                last_attempt  INTEGER,
+                next_retry    INTEGER,
+                last_used     INTEGER NOT NULL,
+                PRIMARY KEY (passage_id, model, dimensions, template)
+            ) STRICT;
+        ")
+        .execute(&mut *conn)
+        .await?;
+    sqlx::query("
+            CREATE TABLE IF NOT EXISTS search_image_description (
+                blob_id        TEXT NOT NULL,
+                model          TEXT NOT NULL,
+                prompt_version TEXT NOT NULL,
+                preprocess     TEXT NOT NULL,
+                detail         TEXT NOT NULL,
+                description    TEXT,
+                visible_text   TEXT,
+                state          TEXT NOT NULL,
+                last_attempt   INTEGER,
+                next_retry     INTEGER,
+                last_used      INTEGER NOT NULL,
+                PRIMARY KEY (blob_id, model, prompt_version, preprocess, detail)
             ) STRICT;
         ")
         .execute(&mut *conn)
@@ -1223,23 +1301,52 @@ fn extract_metadata(blob: &[u8], mime_type: &str) -> (Option<serde_yaml::Value>,
 
 /// Search notes for a given query with `git grep`.
 pub async fn post_notes(
+    extract::State(state): extract::State<AppState>,
     Json(query): Json<GrepQuery>,
 ) -> impl IntoResponse {
+    if query.pattern.trim().is_empty() || query.pattern.len() > 2048 {
+        return (
+            StatusCode::BAD_REQUEST,
+            "Query must contain 1–2,048 UTF-8 bytes.",
+        ).into_response();
+    }
     let git_dir = env::var("MORIED_GIT_DIR").unwrap();
-    match grep_bare_repo(&git_dir, &query.pattern, "HEAD").await {
+    let revision = match state.head_commit_id() {
+        Ok(revision) => revision.to_string(),
+        Err(err) => {
+            tracing::error!("Could not resolve the Grep snapshot: {:?}", err);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Search is temporarily unavailable.",
+            ).into_response();
+        },
+    };
+    match grep_bare_repo(&git_dir, &query.pattern, &revision).await {
         Ok(matches) => Json(matches).into_response(),
-        Err(err) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Error: {}", err),
+        Err(GrepBareError::Invalid) => (
+            StatusCode::BAD_REQUEST,
+            "The Grep pattern is invalid.",
         ).into_response(),
+        Err(GrepBareError::Internal(err)) => {
+            tracing::error!("git grep failed: {:?}", err);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Grep could not be completed.",
+            ).into_response()
+        },
     }
 }
 
-pub async fn grep_bare_repo(
+enum GrepBareError {
+    Invalid,
+    Internal(anyhow::Error),
+}
+
+async fn grep_bare_repo(
     git_dir: &str,
     pattern: &str,
     revision: &str,
-) -> anyhow::Result<Vec<models::GrepMatch>> {
+) -> Result<Vec<models::GrepMatch>, GrepBareError> {
     let output = Command::new("git")
         .arg("-C")
         .arg(git_dir)
@@ -1247,17 +1354,27 @@ pub async fn grep_bare_repo(
         .arg("--line-number")
         .arg("--null")
         .arg("-I")  // Don’t match the pattern in binary files
+        .arg("-e")
         .arg(pattern)
         .arg(revision)
+        .arg("--")
+        .env("LC_ALL", "C")
         .output()
         .await
-        .with_context(|| "Failed to execute git grep")?;
+        .map_err(|err| GrepBareError::Internal(err.into()))?;
 
+    if output.status.code() == Some(1) {
+        return Ok(Vec::new());
+    }
     if !output.status.success() {
-        return Err(anyhow::anyhow!(
-            "git grep failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stderr.contains("Invalid regular expression") || stderr.contains("invalid regex") {
+            return Err(GrepBareError::Invalid);
+        }
+        return Err(GrepBareError::Internal(anyhow::anyhow!(
+            "git grep exited {:?}",
+            output.status.code(),
+        )));
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -2195,6 +2312,8 @@ mod models {
     };
     use uuid::Uuid;
 
+    use crate::search::SearchManager;
+
     pub type Metadata = serde_yaml::Value;
 
     #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -2468,6 +2587,7 @@ mod models {
         pub cache_db_writer: SqlitePool,
         pub cache_sync: Arc<CacheSync>,
         pub http_client: reqwest::Client,
+        pub search: Arc<SearchManager>,
     }
 
     impl AppState {

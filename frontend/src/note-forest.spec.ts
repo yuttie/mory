@@ -203,16 +203,19 @@ describe('noteRouteFor', () => {
     };
 
     it('sends media to the viewer and everything else to the editor', () => {
-        expect(routeOf('a.png', 'image/png')).toBe('/media/a.png');
-        expect(routeOf('a.mp4', 'video/mp4')).toBe('/media/a.mp4');
-        expect(routeOf('a.pdf', 'application/pdf')).toBe('/media/a.pdf');
-        expect(routeOf('a.md', 'text/markdown')).toBe('/note/a.md');
-        expect(routeOf('a.txt', 'text/plain')).toBe('/note/a.txt');
-        expect(routeOf('a.bin', 'application/octet-stream')).toBe('/note/a.bin');
+        expect(routeOf('a.png', 'image/png')).toEqual({ name: 'Media', params: { path: ['a.png'] } });
+        expect(routeOf('a.mp4', 'video/mp4')).toEqual({ name: 'Media', params: { path: ['a.mp4'] } });
+        expect(routeOf('a.pdf', 'application/pdf')).toEqual({ name: 'Media', params: { path: ['a.pdf'] } });
+        expect(routeOf('a.md', 'text/markdown')).toEqual({ name: 'Note', params: { path: ['a.md'] } });
+        expect(routeOf('a.txt', 'text/plain')).toEqual({ name: 'Note', params: { path: ['a.txt'] } });
+        expect(routeOf('a.bin', 'application/octet-stream')).toEqual({ name: 'Note', params: { path: ['a.bin'] } });
     });
 
     it('keeps the whole path, not just the name', () => {
-        expect(routeOf('deep/nested/a.md', 'text/markdown')).toBe('/note/deep/nested/a.md');
+        expect(routeOf('deep/nested/a.md', 'text/markdown')).toEqual({
+            name: 'Note',
+            params: { path: ['deep', 'nested', 'a.md'] },
+        });
     });
 
     it('has nowhere to send a directory', () => {

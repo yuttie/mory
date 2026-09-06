@@ -1,3 +1,29 @@
+## [Unreleased]
+
+### 🚀 Features
+
+- *(frontend/views/Search)* Add route-driven Grep, Text, Semantic, and Hybrid modes with indexing,
+  fallback, partial-coverage, and generated-image-description states
+
+### 🐛 Bug Fixes
+
+- *(frontend/views/Search)* Submit searches by pressing Enter in the query box
+- *(frontend/views/Search)* Allow slash characters in the focused search field
+- *(frontend/views/Search)* Retry an updating search when its first status response is already ready
+- *(frontend/views/Search)* Avoid duplicate reruns when ready status already matches the response
+- *(frontend/file-route)* Preserve URL metacharacters in paths opened from search and file results
+- *(frontend/views/Search)* Stop silent status retries and route authentication failures to login
+- *(frontend/views/Search)* Preserve unsubmitted query text when changing the search mode
+- *(frontend/views/Search)* Keep search errors visible in a dismissible inline alert
+- *(frontend/views/Search)* Defer ready-status reruns until an in-flight response proves stale
+- *(frontend/views/Search)* Resume index polling after transient status failures
+- *(frontend/views/Search)* Keep index-ready retries scoped to the search that requested them
+- *(frontend/views/Search)* Discard login retries after leaving the Search view
+- *(frontend/views/Search)* Preserve query drafts across overlapping mode changes
+- *(frontend/views/Search)* Keep Semantic indexing polls alive across transient status failures
+- *(frontend/views/Search)* Do not rerun Grep when the independent Text index becomes ready
+- *(frontend/views/Search)* Restore committed query text during browser history navigation
+
 ## [1.9.0] - 2025-09-11
 
 ### 🚀 Features
