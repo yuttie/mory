@@ -119,11 +119,18 @@ impl LexicalIndex {
         inputs: &[IndexInput],
     ) -> Result<Self> {
         if path.exists() {
+            if !path.is_dir() || !is_managed(path) {
+                bail!(
+                    "refusing to clear unrecognized temporary search index path {}",
+                    path.display()
+                );
+            }
             fs::remove_dir_all(path).context("failed to clear temporary lexical index")?;
         }
         fs::create_dir_all(path).context("failed to create temporary lexical index")?;
         let (schema, fields) = build_schema();
         let index = Index::create_in_dir(path, schema)?;
+        mark_managed(path)?;
         register_analyzers(&index)?;
         let mut writer = index.writer::<TantivyDocument>(64 * 1024 * 1024)?;
         writer.add_document(doc!(
@@ -137,7 +144,6 @@ impl LexicalIndex {
         }
         writer.commit()?;
         drop(writer);
-        mark_managed(path)?;
         let reader = index
             .reader_builder()
             .reload_policy(ReloadPolicy::Manual)
@@ -575,9 +581,6 @@ pub fn replace_directory(build: &Path, destination: &Path) -> Result<()> {
     fs::create_dir_all(parent)?;
     ensure_replaceable(destination)?;
     let old = unique_sibling(destination, "old");
-    if old.exists() {
-        fs::remove_dir_all(&old).context("failed to remove an abandoned lexical index backup")?;
-    }
     if destination.exists() {
         fs::rename(destination, &old).context("failed to preserve the previous lexical index")?;
     }
@@ -587,7 +590,7 @@ pub fn replace_directory(build: &Path, destination: &Path) -> Result<()> {
         }
         return Err(error).context("failed to install the rebuilt lexical index");
     }
-    if old.exists() {
+    if old.exists() && is_managed(&old) {
         let _ = fs::remove_dir_all(old);
     }
     Ok(())
@@ -698,7 +701,18 @@ pub fn unique_sibling(destination: &Path, suffix: &str) -> PathBuf {
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or("search-index");
-    destination.with_file_name(format!(".{name}.{suffix}.{}", std::process::id()))
+    let base = format!(".{name}.{suffix}.{}", std::process::id());
+    for attempt in 0..u32::MAX {
+        let candidate = destination.with_file_name(if attempt == 0 {
+            base.clone()
+        } else {
+            format!("{base}.{attempt}")
+        });
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+    unreachable!("exhausted temporary lexical index sibling names")
 }
 
 #[cfg(test)]
@@ -886,6 +900,26 @@ mod tests {
         assert!(build.exists());
         recover_directory(&destination).unwrap();
         assert!(decoy.exists());
+    }
+
+    #[test]
+    fn refuses_to_clear_an_unrecognized_predictable_build_sibling() {
+        let directory = tempfile::tempdir().unwrap();
+        let destination = directory.path().join("index");
+        let decoy = destination.with_file_name(format!(
+            ".index.building.{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&decoy).unwrap();
+        fs::write(decoy.join("important.md"), "keep me").unwrap();
+
+        let selected = unique_sibling(&destination, "building");
+        assert_ne!(selected, decoy);
+        assert!(LexicalIndex::build(&decoy, "commit", "content", &[]).is_err());
+        assert_eq!(
+            fs::read_to_string(decoy.join("important.md")).unwrap(),
+            "keep me"
+        );
     }
 
     #[test]
