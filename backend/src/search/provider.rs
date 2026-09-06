@@ -33,6 +33,11 @@ pub fn status_is_retryable(status: StatusCode) -> bool {
         || status.is_server_error()
 }
 
+pub fn request_error_is_retryable(error: &reqwest::Error) -> bool {
+    !error.is_builder()
+        && (error.is_connect() || error.is_timeout() || error.is_request() || error.is_body())
+}
+
 #[async_trait]
 pub trait EmbeddingProvider: Send + Sync {
     async fn embed(
@@ -95,7 +100,7 @@ impl EmbeddingProvider for OpenAiEmbeddingProvider {
             .send()
             .await
             .map_err(|error| ProviderError {
-                retryable: error.is_connect() || error.is_timeout(),
+                retryable: request_error_is_retryable(&error),
                 retry_after: None,
                 message: format!("embedding request failed: {error}"),
             })?;
@@ -198,6 +203,27 @@ mod tests {
         assert!(status_is_retryable(StatusCode::UNAUTHORIZED));
         assert!(status_is_retryable(StatusCode::FORBIDDEN));
         assert!(!status_is_retryable(StatusCode::BAD_REQUEST));
+    }
+
+    #[tokio::test]
+    async fn post_connect_transport_failures_are_retryable() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            drop(stream);
+        });
+        let error = Client::new()
+            .get(format!("http://{address}"))
+            .send()
+            .await
+            .unwrap_err();
+        server.await.unwrap();
+
+        assert!(request_error_is_retryable(&error));
+
+        let builder_error = Client::new().get("://invalid").send().await.unwrap_err();
+        assert!(!request_error_is_retryable(&builder_error));
     }
 
     #[test]

@@ -6,7 +6,9 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 
-use super::provider::{recoverable, retry_after, status_is_retryable, ProviderError};
+use super::provider::{
+    recoverable, request_error_is_retryable, retry_after, status_is_retryable, ProviderError,
+};
 
 pub const PROMPT_VERSION: &str = "image-description-v1";
 pub const PREPROCESS_VERSION: &str = "imagemagick-oriented-2048-v2";
@@ -43,7 +45,7 @@ pub async fn describe(
         .send()
         .await
         .map_err(|error| ProviderError {
-            retryable: error.is_connect() || error.is_timeout(),
+            retryable: request_error_is_retryable(&error),
             retry_after: None,
             message: format!("image description request failed: {error}"),
         })?;
