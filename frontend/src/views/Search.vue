@@ -408,8 +408,11 @@ async function pollStatus(): Promise<void> {
             : String(error);
         lastStatusErrorText = message;
         errorText.value = message;
+        const semanticIndexing = status.value?.semantic.state === 'indexing'
+            && ['semantic', 'hybrid'].includes(committedMode.value);
         if ((waitingForIndexRequest === requestGeneration
-            || waitingGeneration?.request === requestGeneration) && mounted) {
+            || waitingGeneration?.request === requestGeneration
+            || semanticIndexing) && mounted) {
             pollTimer = setTimeout(pollStatus, 2000);
         }
     }

@@ -360,6 +360,51 @@ test('keeps polling after a transient status failure while a search awaits index
     expect(statusCalls).toBe(3);
 });
 
+test('keeps polling after a transient status failure during semantic indexing', async ({ context, page }) => {
+    let searchAttempts = 0;
+    let statusCalls = 0;
+    await mockBackend(context, {
+        onSearch: async (route) => {
+            searchAttempts += 1;
+            const request = route.request().postDataJSON();
+            await route.fulfill({
+                json: {
+                    ...emptySearchResponse(request),
+                    semantic: searchAttempts === 1
+                        ? { state: 'indexing', indexed: 2, total: 3, failed: 0 }
+                        : { state: 'ready', indexed: 3, total: 3, failed: 0 },
+                },
+            });
+        },
+        onStatus: async (route) => {
+            statusCalls += 1;
+            if (statusCalls === 2) {
+                await route.fulfill({
+                    status: 500,
+                    json: { message: 'Search status is temporarily unavailable' },
+                });
+                return;
+            }
+            await route.fulfill({
+                json: {
+                    commit: COMMIT,
+                    head: COMMIT,
+                    lexical: { state: 'ready', indexed_commit: COMMIT },
+                    semantic: statusCalls === 1
+                        ? { state: 'indexing', indexed: 2, total: 3, failed: 0 }
+                        : { state: 'ready', indexed: 3, total: 3, failed: 0 },
+                },
+            });
+        },
+    });
+
+    await page.goto('/search?q=semantic-status-retry&mode=semantic');
+
+    await expect.poll(() => statusCalls, { timeout: 5_000 }).toBe(3);
+    await expect.poll(() => searchAttempts).toBe(2);
+    await expect(page.getByText('No results')).toBeVisible();
+});
+
 test('does not apply an old indexing retry to a newer Grep search', async ({ context, page }) => {
     let grepAttempts = 0;
     let statusCalls = 0;

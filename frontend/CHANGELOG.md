@@ -20,6 +20,7 @@
 - *(frontend/views/Search)* Keep index-ready retries scoped to the search that requested them
 - *(frontend/views/Search)* Discard login retries after leaving the Search view
 - *(frontend/views/Search)* Preserve query drafts across overlapping mode changes
+- *(frontend/views/Search)* Keep Semantic indexing polls alive across transient status failures
 
 ## [1.9.0] - 2025-09-11
 
