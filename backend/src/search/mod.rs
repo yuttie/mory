@@ -2090,6 +2090,7 @@ async fn read_grep_matches<R: AsyncRead + Unpin>(
     let mut record = Vec::with_capacity(MAX_GREP_RECORD_BYTES.min(8 * 1024));
     let mut chunk = [0_u8; 8 * 1024];
     let mut discarding = false;
+    let mut separators = 0;
     loop {
         let read = stdout.read(&mut chunk).await?;
         if read == 0 {
@@ -2100,38 +2101,13 @@ async fn read_grep_matches<R: AsyncRead + Unpin>(
             }
             return Ok((results, false));
         }
-        let mut offset = 0;
-        while offset < read {
-            if discarding {
-                if let Some(end) = chunk[offset..read].iter().position(|byte| *byte == b'\n') {
-                    offset += end + 1;
-                    discarding = false;
-                } else {
-                    break;
-                }
-                continue;
+        for byte in &chunk[..read] {
+            if *byte == 0 && separators < 2 {
+                separators += 1;
             }
-            let available = &chunk[offset..read];
-            let newline = available.iter().position(|byte| *byte == b'\n');
-            let segment_len = newline.unwrap_or(available.len());
-            let remaining = MAX_GREP_RECORD_BYTES.saturating_sub(record.len());
-            let copied = segment_len.min(remaining);
-            record.extend_from_slice(&available[..copied]);
-            offset += segment_len;
-            let truncated = copied < segment_len
-                || (record.len() == MAX_GREP_RECORD_BYTES && newline.is_none());
-            if truncated {
-                if let Some(found) = parse_grep_record(&record, prefix, true) {
-                    results.push(found);
-                    if results.len() >= limit {
-                        return Ok((results, true));
-                    }
-                }
-                record.clear();
-                discarding = true;
-            }
-            if newline.is_some() {
-                offset += 1;
+            // With `git grep --null --line-number`, the filename and line number end in NUL.
+            // A newline cannot terminate the record until both protected fields are complete.
+            if *byte == b'\n' && separators >= 2 {
                 if !discarding {
                     if record.last() == Some(&b'\r') {
                         record.pop();
@@ -2142,11 +2118,27 @@ async fn read_grep_matches<R: AsyncRead + Unpin>(
                             return Ok((results, true));
                         }
                     }
-                    record.clear();
-                } else {
-                    discarding = false;
                 }
+                record.clear();
+                discarding = false;
+                separators = 0;
+                continue;
             }
+            if discarding {
+                continue;
+            }
+            if record.len() == MAX_GREP_RECORD_BYTES {
+                if let Some(found) = parse_grep_record(&record, prefix, true) {
+                    results.push(found);
+                    if results.len() >= limit {
+                        return Ok((results, true));
+                    }
+                }
+                record.clear();
+                discarding = true;
+                continue;
+            }
+            record.push(*byte);
         }
     }
 }
@@ -2312,6 +2304,38 @@ mod tests {
         assert_eq!(found.len(), 1);
         assert!(found[0].content.len() <= MAX_GREP_RECORD_BYTES);
         assert!(found[0].content.ends_with('…'));
+    }
+
+    #[tokio::test]
+    async fn grep_preserves_newlines_in_git_paths() {
+        let directory = tempfile::tempdir().unwrap();
+        let repo = Repository::init(directory.path()).unwrap();
+        let path = std::path::Path::new("first\nsecond.md");
+        std::fs::write(directory.path().join(path), "needle\n").unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(path).unwrap();
+        index.write().unwrap();
+        let tree_id = index.write_tree().unwrap();
+        let tree = repo.find_tree(tree_id).unwrap();
+        let signature = git2::Signature::now("Search Test", "search@example.invalid").unwrap();
+        let commit = repo
+            .commit(
+                Some("HEAD"),
+                &signature,
+                &signature,
+                "newline path",
+                &tree,
+                &[],
+            )
+            .unwrap();
+
+        let found = grep_at(directory.path().to_str().unwrap(), "needle", commit, 10)
+            .await
+            .unwrap();
+
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].file, "first\nsecond.md");
+        assert_eq!(found[0].content, "needle");
     }
 
     #[tokio::test]
