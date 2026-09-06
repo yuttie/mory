@@ -632,13 +632,8 @@ impl SearchManager {
             },
             Err(error) => {
                 tracing::warn!("Image description provider failure: {error}");
-                let retry_seconds = error
-                    .retry_after
-                    .unwrap_or(Duration::from_secs(30))
-                    .as_secs()
-                    .min(i64::MAX.saturating_sub(now) as u64)
-                    as i64;
                 let state = if error.retryable { "pending" } else { "failed" };
+                let (last_attempt, next_retry) = failure_timestamps(&error);
                 sqlx::query(
                     "INSERT INTO search_image_description (
                         blob_id, model, prompt_version, preprocess, detail, description,
@@ -654,13 +649,9 @@ impl SearchManager {
                 .bind(image::PREPROCESS_VERSION)
                 .bind(image::DETAIL)
                 .bind(state)
-                .bind(now)
-                .bind(if error.retryable {
-                    Some(now + retry_seconds)
-                } else {
-                    None
-                })
-                .bind(now)
+                .bind(last_attempt)
+                .bind(next_retry)
+                .bind(last_attempt)
                 .execute(&self.cache_db_writer)
                 .await?;
             },
@@ -791,13 +782,8 @@ impl SearchManager {
             },
             Err(error) => {
                 tracing::warn!("Embedding ingestion provider failure: {error}");
-                let retry_seconds = error
-                    .retry_after
-                    .unwrap_or(Duration::from_secs(30))
-                    .as_secs()
-                    .min(i64::MAX.saturating_sub(now) as u64)
-                    as i64;
                 let state = if error.retryable { "pending" } else { "failed" };
+                let (last_attempt, next_retry) = failure_timestamps(&error);
                 let mut transaction = self.cache_db_writer.begin().await?;
                 for item in pending {
                     sqlx::query(
@@ -816,13 +802,9 @@ impl SearchManager {
                     .bind(self.config.embedding_dimensions as i64)
                     .bind(EMBEDDING_TEMPLATE)
                     .bind(state)
-                    .bind(now)
-                    .bind(if error.retryable {
-                        Some(now + retry_seconds)
-                    } else {
-                        None
-                    })
-                    .bind(now)
+                    .bind(last_attempt)
+                    .bind(next_retry)
+                    .bind(last_attempt)
                     .execute(&mut *transaction)
                     .await?;
                 }
@@ -1158,6 +1140,21 @@ fn try_background_gate<'a>(
         return None;
     }
     Some(guard)
+}
+
+fn failure_timestamps(error: &ProviderError) -> (i64, Option<i64>) {
+    failure_timestamps_at(error, Utc::now().timestamp())
+}
+
+fn failure_timestamps_at(error: &ProviderError, completed_at: i64) -> (i64, Option<i64>) {
+    let next_retry = error.retryable.then(|| {
+        let retry_seconds = error
+            .retry_after
+            .unwrap_or(Duration::from_secs(30))
+            .as_secs();
+        completed_at.saturating_add(i64::try_from(retry_seconds).unwrap_or(i64::MAX))
+    });
+    (completed_at, next_retry)
 }
 
 fn validate_embedding_vectors(
@@ -2651,6 +2648,19 @@ mod tests {
             .map(|_| bounded_embedding_input(&oversized))
             .collect::<Vec<_>>();
         assert!(batch.iter().map(String::len).sum::<usize>() <= MAX_EMBEDDING_REQUEST_BYTES);
+    }
+
+    #[test]
+    fn retry_after_starts_when_the_failed_response_finishes() {
+        let error = ProviderError {
+            retryable: true,
+            retry_after: Some(Duration::from_secs(10)),
+            message: "rate limited".to_owned(),
+        };
+
+        // The request began at 100 but did not finish until 120. Scheduling from the request start
+        // would produce an already-expired deadline of 110.
+        assert_eq!(failure_timestamps_at(&error, 120), (120, Some(130)));
     }
 
     #[test]
