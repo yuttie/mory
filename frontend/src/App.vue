@@ -203,8 +203,7 @@
                 >
                     <v-list-item color="primary" to="/"><template v-slot:prepend><v-icon size="small">{{ mdiHomeOutline }}</v-icon></template><v-list-item-title>Home</v-list-item-title></v-list-item>
                     <v-list-item color="primary" to="/calendar"><template v-slot:prepend><v-icon size="small">{{ mdiCalendarOutline }}</v-icon></template><v-list-item-title>Calendar</v-list-item-title></v-list-item>
-                    <v-list-item color="primary" to="/tasks"><template v-slot:prepend><v-icon size="small">{{ mdiBallotOutline }}</v-icon></template><v-list-item-title>Tasks</v-list-item-title></v-list-item>
-                    <v-list-item color="primary" to="/tasks-next"><template v-slot:prepend><v-icon size="small">{{ mdiBallotOutline }}</v-icon></template><v-list-item-title>Tasks (New)</v-list-item-title></v-list-item>
+                    <v-list-item color="primary" to="/tasks-next"><template v-slot:prepend><v-icon size="small">{{ mdiBallotOutline }}</v-icon></template><v-list-item-title>Tasks</v-list-item-title></v-list-item>
                     <v-list-item color="primary" to="/files"><template v-slot:prepend><v-icon size="small">{{ mdiFileDocumentMultipleOutline }}</v-icon></template><v-list-item-title>Files</v-list-item-title></v-list-item>
                     <v-list-item color="primary" to="/search"><template v-slot:prepend><v-icon size="small">{{ mdiMagnify }}</v-icon></template><v-list-item-title>Search</v-list-item-title></v-list-item>
                 </v-list>
@@ -241,6 +240,12 @@
                         </template>
                         <v-card>
                             <v-list>
+                                <v-list-item to="/tasks">
+                                    <template v-slot:prepend>
+                                        <v-icon size="small">{{ mdiBallotOutline }}</v-icon>
+                                    </template>
+                                    <v-list-item-title>Tasks (deprecated)</v-list-item-title>
+                                </v-list-item>
                                 <v-list-item to="/config">
                                     <template v-slot:prepend>
                                         <v-icon size="small">{{ mdiCogOutline }}</v-icon>
@@ -439,8 +444,7 @@
             >
                 <v-list-item color="primary" to="/"><template v-slot:prepend><v-icon size="small">{{ mdiHomeOutline }}</v-icon></template><v-list-item-title>Home</v-list-item-title></v-list-item>
                 <v-list-item color="primary" to="/calendar"><template v-slot:prepend><v-icon size="small">{{ mdiCalendarOutline }}</v-icon></template><v-list-item-title>Calendar</v-list-item-title></v-list-item>
-                <v-list-item color="primary" to="/tasks"><template v-slot:prepend><v-icon size="small">{{ mdiBallotOutline }}</v-icon></template><v-list-item-title>Tasks</v-list-item-title></v-list-item>
-                <v-list-item color="primary" to="/tasks-next"><template v-slot:prepend><v-icon size="small">{{ mdiBallotOutline }}</v-icon></template><v-list-item-title>Tasks (New)</v-list-item-title></v-list-item>
+                <v-list-item color="primary" to="/tasks-next"><template v-slot:prepend><v-icon size="small">{{ mdiBallotOutline }}</v-icon></template><v-list-item-title>Tasks</v-list-item-title></v-list-item>
                 <v-list-item color="primary" to="/files"><template v-slot:prepend><v-icon size="small">{{ mdiFileDocumentMultipleOutline }}</v-icon></template><v-list-item-title>Files</v-list-item-title></v-list-item>
                 <v-list-item color="primary" to="/search"><template v-slot:prepend><v-icon size="small">{{ mdiMagnify }}</v-icon></template><v-list-item-title>Search</v-list-item-title></v-list-item>
             </v-list>
@@ -468,6 +472,12 @@
                     </template>
                     <v-card>
                         <v-list>
+                            <v-list-item to="/tasks">
+                                <template v-slot:prepend>
+                                    <v-icon size="small">{{ mdiBallotOutline }}</v-icon>
+                                </template>
+                                <v-list-item-title>Tasks (deprecated)</v-list-item-title>
+                            </v-list-item>
                             <v-list-item to="/config">
                                 <template v-slot:prepend>
                                     <v-icon size="small">{{ mdiCogOutline }}</v-icon>
