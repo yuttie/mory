@@ -1,4 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
+import { API_URL } from './e2e/backend';
+
+// The origin the dev server serves the app on, and the one the tests navigate to.
+const APP_URL = 'http://127.0.0.1:8080';
 
 export default defineConfig({
     testDir: './e2e',
@@ -6,11 +10,20 @@ export default defineConfig({
     forbidOnly: Boolean(process.env.CI),
     retries: process.env.CI ? 2 : 0,
     workers: process.env.CI ? 1 : undefined,
-    reporter: 'list',
+    reporter: [
+        ['list'],
+        // The workflow uploads playwright-report/, which only the HTML reporter writes.
+        ['html', { open: 'never' }],
+    ],
     use: {
-        baseURL: 'http://127.0.0.1:8080',
+        baseURL: APP_URL,
         trace: 'on-first-retry',
     },
+    // WebKit is deliberately absent. The service worker claims the page
+    // (public/service-worker.js), and WebKit does not surface a controlled page's requests
+    // to Playwright's routing, so every mock in the suite is bypassed and the app parses the
+    // dev server's index.html as JSON. Blocking the worker instead renders nothing at all,
+    // because App.vue gates the view on it.
     projects: [
         {
             name: 'chromium',
@@ -20,14 +33,14 @@ export default defineConfig({
             name: 'firefox',
             use: { ...devices['Desktop Firefox'] },
         },
-        {
-            name: 'webkit',
-            use: { ...devices['Desktop Safari'] },
-        },
     ],
     webServer: {
-        command: 'npm run dev -- --host 127.0.0.1',
-        url: 'http://127.0.0.1:8080',
+        // Bind the port the tests wait on, and fail loudly rather than let Vite fall
+        // back to another port that nothing is watching.
+        command: `npm run dev -- --host 127.0.0.1 --port ${new URL(APP_URL).port} --strictPort`,
+        // Vite reads VITE_* from the environment over `.env`, which is untracked.
+        env: { VITE_APP_API_URL: API_URL },
+        url: APP_URL,
         reuseExistingServer: !process.env.CI,
     },
 });
