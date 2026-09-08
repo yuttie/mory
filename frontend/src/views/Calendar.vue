@@ -306,7 +306,11 @@ const eventWindow = computed(() => {
 const derived = computed(() => eventsFromEntries(files.entries, eventWindow.value));
 // A task's dates are not an `events:` block, so they come from their own derivation over the same
 // listing.
-const taskDates = computed(() => taskDatesFromEntries(files.entries, eventWindow.value));
+const taskDates = computed(() => taskDatesFromEntries(
+    files.entries,
+    eventWindow.value,
+    { colorOf: calendars.taskDateColors },
+));
 const hiddenCalendars = computed(() => new Set(hiddenCalendarIds.value));
 const events = computed(() => mergeImported(
     [...derived.value.events, ...taskDates.value.events],

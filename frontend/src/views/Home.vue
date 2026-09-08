@@ -338,6 +338,7 @@ import {
 import type { ListEntry2 } from '@/api';
 
 import { eventsFromEntries, taskDatesFromEntries } from '@/events';
+import { useCalendarsStore } from '@/stores/calendars';
 import { useFilesStore } from '@/stores/files';
 import { by } from '@/utils';
 import dayjs from 'dayjs';
@@ -383,6 +384,7 @@ const emit = defineEmits<{
 const taskStore = useTasksStore();
 const router = useRouter();
 const files = useFilesStore();
+const calendars = useCalendarsStore();
 
 // Reactive states
 const isLoading = ref(false);
@@ -474,7 +476,11 @@ const eventWindow = computed(() => ({
 // derivation over the same listing.
 const events = computed(() => [
     ...eventsFromEntries(files.entries, eventWindow.value).events,
-    ...taskDatesFromEntries(files.entries, eventWindow.value).events,
+    ...taskDatesFromEntries(
+        files.entries,
+        eventWindow.value,
+        { colorOf: calendars.taskDateColors },
+    ).events,
 ]);
 
 const today = dayjs().format('YYYY-MM-DD');
@@ -572,6 +578,10 @@ onMounted(() => {
 
     load();
     loadTasks();
+    calendars.loadSubscriptions().catch(() => {
+        // Only the configured task-date colours are wanted here, and there are defaults for those;
+        // no imported events are fetched or drawn on this page.
+    });
 });
 
 // Methods
