@@ -77,21 +77,13 @@
                 browser. Leave one empty for its default.
             </p>
             <div class="task-date-colors">
-                <v-text-field
+                <ColorField
                     v-for="field of TASK_DATE_FIELDS"
                     v-bind:key="field.name"
                     v-model="taskDateDraft[field.name]"
+                    v-bind:fallback="field.fallback"
                     v-bind:label="field.label"
-                    v-bind:placeholder="field.fallback"
-                    persistent-placeholder
-                >
-                    <template v-slot:prepend-inner>
-                        <v-avatar
-                            v-bind:color="taskDateDraft[field.name].trim() || field.fallback"
-                            size="16"
-                        ></v-avatar>
-                    </template>
-                </v-text-field>
+                ></ColorField>
             </div>
             <v-btn
                 v-bind:disabled="!taskDateColorsChanged"
@@ -139,12 +131,12 @@
                         label="Identifier"
                         persistent-hint
                     ></v-text-field>
-                    <v-text-field
+                    <ColorField
                         v-model="draft.color"
+                        v-bind:fallback="DEFAULT_IMPORTED_COLOR"
                         class="mt-4"
                         label="Colour"
-                        placeholder="#3f51b5"
-                    ></v-text-field>
+                    ></ColorField>
                     <v-alert
                         v-if="draftError"
                         type="error"
@@ -171,6 +163,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import Color from 'color';
 import { mdiDelete, mdiPencil, mdiPlus } from '@mdi/js';
 
+import ColorField from '@/components/ColorField.vue';
 import { DEFAULT_DEADLINE_COLOR, DEFAULT_DUE_COLOR, DEFAULT_IMPORTED_COLOR } from '@/events';
 import type { TaskDateColors } from '@/events';
 import { CALENDARS_PATH, useCalendarsStore } from '@/stores/calendars';
