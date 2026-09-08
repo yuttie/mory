@@ -5,9 +5,12 @@ import dayjs from 'dayjs';
 import type { ListEntry2, MetadataEvent } from '@/api';
 import type { ImportedOccurrence } from '@/api';
 import {
+    DEFAULT_DEADLINE_COLOR,
+    DEFAULT_DUE_COLOR,
     DEFAULT_EVENT_COLOR,
     DEFAULT_IMPORTED_COLOR,
     eventsFromEntries,
+    taskDatesFromEntries,
     mergeImported,
     normalizeEndTime,
     toWallClock,
@@ -681,5 +684,153 @@ describe('an all-day series', () => {
 
         expect(events.map((e) => e.start)).toEqual(['2026-08-01', '2026-08-02', '2026-08-03']);
         vi.unstubAllEnvs();
+    });
+});
+
+describe('taskDatesFromEntries', () => {
+    const UUID_A = '11111111-1111-4111-8111-111111111111';
+    const UUID_B = '22222222-2222-4222-8222-222222222222';
+
+    function taskEntry(
+        uuid: string,
+        task: Record<string, unknown> | null,
+        options: Partial<ListEntry2> = {},
+    ): ListEntry2 {
+        return {
+            path: `.tasks/${uuid}.md`,
+            size: 1,
+            mime_type: 'text/markdown',
+            metadata: task === null ? { tags: [] } : { tags: [], task },
+            title: 'Submit the paper',
+            time: '2024-05-01T12:00:00+00:00',
+            ...options,
+        };
+    }
+
+    const taskDates = (entries: ListEntry2[], window = ANY_WINDOW) =>
+        taskDatesFromEntries(entries, window);
+
+    it('draws a deadline as a one-off event named after the task', () => {
+        const { events, errors } = taskDates([
+            taskEntry(UUID_A, { status: { kind: 'todo' }, deadline: '2026-03-04' }),
+        ]);
+
+        expect(errors).toEqual([]);
+        expect(events).toEqual([{
+            name: 'Submit the paper',
+            start: '2026-03-04',
+            finished: false,
+            color: DEFAULT_DEADLINE_COLOR,
+            source: 'task',
+            taskDate: 'deadline',
+            notePath: `.tasks/${UUID_A}.md`,
+            taskId: UUID_A,
+        }]);
+    });
+
+    it('keeps a deadline with a time of day timed, and drops its offset', () => {
+        vi.stubEnv('TZ', 'Asia/Tokyo');
+        const { events } = taskDates([
+            taskEntry(UUID_A, { status: { kind: 'todo' }, deadline: '2026-03-04 23:59+00:00' }),
+        ]);
+
+        expect(events.map((e) => e.start)).toEqual(['2026-03-05 08:59']);
+        vi.unstubAllEnvs();
+    });
+
+    it('ignores an entry that is not a task, or a task with neither date', () => {
+        const { events, errors } = taskDates([
+            entry('notes/a.md', { Meeting: { start: '2026-03-04 10:00' } }),
+            taskEntry(UUID_A, { status: { kind: 'todo' } }),
+            taskEntry(UUID_B, null),
+        ]);
+
+        expect(events).toEqual([]);
+        expect(errors).toEqual([]);
+    });
+
+    it('marks a finished task, so the view fades its deadline', () => {
+        const { events } = taskDates([
+            taskEntry(UUID_A, {
+                status: { kind: 'done', completed_at: '2026-03-01 10:00+09:00' },
+                deadline: '2026-03-04',
+            }),
+            taskEntry(UUID_B, {
+                status: { kind: 'canceled', canceled_at: '2026-03-01 10:00+09:00' },
+                deadline: '2026-03-05',
+            }),
+        ]);
+
+        expect(events.map((e) => e.finished)).toEqual([true, true]);
+    });
+
+    it('keeps only the deadlines inside the window', () => {
+        const { events } = taskDates([
+            taskEntry(UUID_A, { status: { kind: 'todo' }, deadline: '2026-02-28' }),
+            taskEntry(UUID_B, { status: { kind: 'todo' }, deadline: '2026-03-31 23:59+09:00' }),
+        ], { from: '2026-03-01', to: '2026-03-31' });
+
+        expect(events.map((e) => e.taskId)).toEqual([UUID_B]);
+    });
+
+    it('reports an unusable deadline rather than dropping it silently', () => {
+        const { events, errors } = taskDates([
+            taskEntry(UUID_A, { status: { kind: 'todo' }, deadline: 20260304 }),
+            taskEntry(UUID_B, { status: { kind: 'todo' }, deadline: 'next Friday' }),
+        ]);
+
+        expect(events).toEqual([]);
+        expect(errors).toEqual([
+            ['deadline', 20260304, 'Submit the paper', `.tasks/${UUID_A}.md`, 'Submit the paper'],
+            ['deadline', 'next Friday', 'Submit the paper', `.tasks/${UUID_B}.md`, 'Submit the paper'],
+        ]);
+    });
+
+    it('falls back to the path when the task has no title', () => {
+        const { events } = taskDates([
+            taskEntry(UUID_A, { status: { kind: 'todo' }, deadline: '2026-03-04' }, { title: null }),
+        ]);
+
+        expect(events.map((e) => e.name)).toEqual([`.tasks/${UUID_A}.md`]);
+    });
+
+    it('draws a due date in its own colour, beside the deadline of the same task', () => {
+        const { events } = taskDates([
+            taskEntry(UUID_A, {
+                status: { kind: 'todo' },
+                due_by: '2026-03-01',
+                deadline: '2026-03-04',
+            }),
+        ]);
+
+        expect(events.map((e) => [e.taskDate, e.start, e.color])).toEqual([
+            ['due_by', '2026-03-01', DEFAULT_DUE_COLOR],
+            ['deadline', '2026-03-04', DEFAULT_DEADLINE_COLOR],
+        ]);
+        // Both point at the same task, which is what makes the pair readable as a run-up.
+        expect(new Set(events.map((e) => e.taskId))).toEqual(new Set([UUID_A]));
+    });
+
+    it('reports an unusable due date under its own field name', () => {
+        const { events, errors } = taskDates([
+            taskEntry(UUID_A, { status: { kind: 'todo' }, due_by: 'sometime' }),
+        ]);
+
+        expect(events).toEqual([]);
+        expect(errors).toEqual([
+            ['due_by', 'sometime', 'Submit the paper', `.tasks/${UUID_A}.md`, 'Submit the paper'],
+        ]);
+    });
+    it('draws a task date in the colour the configuration names', () => {
+        const { events } = taskDatesFromEntries([
+            taskEntry(UUID_A, {
+                status: { kind: 'todo' },
+                due_by: '2026-03-01',
+                deadline: '2026-03-04',
+            }),
+        ], ANY_WINDOW, { colorOf: { due_by: '#0d47a1' } });
+
+        // Only what is configured is overridden; the rest keeps its default.
+        expect(events.map((e) => e.color)).toEqual(['#0d47a1', DEFAULT_DEADLINE_COLOR]);
     });
 });

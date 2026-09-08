@@ -68,6 +68,38 @@
                 Add calendar
             </v-btn>
 
+            <v-divider class="mt-6 mb-4"></v-divider>
+
+            <v-card-subtitle class="px-0">Task dates</v-card-subtitle>
+            <p class="text-medium-emphasis mb-4">
+                The colours a task's due date and deadline are drawn in, on the calendar and on the
+                home page. Stored in the same file, so they follow the notes rather than the
+                browser. Leave one empty for its default.
+            </p>
+            <div class="task-date-colors">
+                <ColorField
+                    v-for="field of TASK_DATE_FIELDS"
+                    v-bind:key="field.name"
+                    v-model="taskDateDraft[field.name]"
+                    v-bind:fallback="field.fallback"
+                    v-bind:label="field.label"
+                ></ColorField>
+            </div>
+            <v-btn
+                v-bind:disabled="!taskDateColorsChanged"
+                v-bind:loading="isSavingColors"
+                variant="tonal"
+                v-on:click="saveTaskDateColors"
+            >
+                Save colours
+            </v-btn>
+            <v-alert
+                v-if="colorError"
+                class="mt-4"
+                type="error"
+                variant="tonal"
+            >{{ colorError }}</v-alert>
+
             <v-alert
                 v-if="error"
                 class="mt-4"
@@ -99,12 +131,12 @@
                         label="Identifier"
                         persistent-hint
                     ></v-text-field>
-                    <v-text-field
+                    <ColorField
                         v-model="draft.color"
+                        v-bind:fallback="DEFAULT_IMPORTED_COLOR"
                         class="mt-4"
                         label="Colour"
-                        placeholder="#3f51b5"
-                    ></v-text-field>
+                    ></ColorField>
                     <v-alert
                         v-if="draftError"
                         type="error"
@@ -126,13 +158,22 @@
 </template>
 
 <script lang="ts" setup>
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 
+import Color from 'color';
 import { mdiDelete, mdiPencil, mdiPlus } from '@mdi/js';
 
-import { DEFAULT_IMPORTED_COLOR } from '@/events';
+import ColorField from '@/components/ColorField.vue';
+import { DEFAULT_DEADLINE_COLOR, DEFAULT_DUE_COLOR, DEFAULT_IMPORTED_COLOR } from '@/events';
+import type { TaskDateColors } from '@/events';
 import { CALENDARS_PATH, useCalendarsStore } from '@/stores/calendars';
 import type { CalendarSubscription } from '@/stores/calendars';
+
+// The two fields, with what each falls back to when it is left empty.
+const TASK_DATE_FIELDS = [
+    { name: 'due_by', label: 'Due date colour', fallback: DEFAULT_DUE_COLOR },
+    { name: 'deadline', label: 'Deadline colour', fallback: DEFAULT_DEADLINE_COLOR },
+] as const;
 
 // Composables
 const calendars = useCalendarsStore();
@@ -151,12 +192,31 @@ const draft = reactive<CalendarSubscription>({
     enabled: true,
 });
 
+const isSavingColors = ref(false);
+const colorError = ref('');
+// Edited as text, so an empty field can mean "the default" rather than an unset key.
+const taskDateDraft = reactive<Record<'due_by' | 'deadline', string>>({ due_by: '', deadline: '' });
+
+// Computed properties
+const taskDateColorsChanged = computed(() => TASK_DATE_FIELDS.some(
+    (field) => taskDateDraft[field.name].trim() !== (calendars.taskDateColors[field.name] ?? ''),
+));
+
 // Lifecycle hooks
 onMounted(() => {
     calendars.loadSubscriptions().catch((err) => {
         error.value = `Could not read ${CALENDARS_PATH}: ${err}`;
     });
 });
+
+// Watchers
+// The file is read after this component mounts, so the draft is filled in when it arrives rather
+// than at setup, where there is nothing to fill it from yet.
+watch(() => calendars.taskDateColors, (colors) => {
+    for (const field of TASK_DATE_FIELDS) {
+        taskDateDraft[field.name] = colors[field.name] ?? '';
+    }
+}, { immediate: true });
 
 // Methods
 function openEditDialog(index: number | null) {
@@ -223,6 +283,38 @@ async function remove(index: number) {
     await persist(next);
 }
 
+async function saveTaskDateColors() {
+    const next: TaskDateColors = {};
+    for (const field of TASK_DATE_FIELDS) {
+        const value = taskDateDraft[field.name].trim();
+        if (value === '') {
+            continue;
+        }
+        // `Color` throws on anything it cannot parse, and the views fall back to the default when
+        // it does -- so a typo would silently save and then appear to have been ignored.
+        try {
+            Color(value);
+        }
+        catch {
+            colorError.value = `"${value}" is not a colour this can draw.`;
+            return;
+        }
+        next[field.name] = value;
+    }
+
+    isSavingColors.value = true;
+    colorError.value = '';
+    try {
+        await calendars.saveTaskDateColors(next);
+    }
+    catch (err) {
+        colorError.value = `Could not save ${CALENDARS_PATH}: ${err}`;
+    }
+    finally {
+        isSavingColors.value = false;
+    }
+}
+
 async function persist(next: CalendarSubscription[], onSaved?: () => void) {
     isSaving.value = true;
     error.value = '';
@@ -238,3 +330,12 @@ async function persist(next: CalendarSubscription[], onSaved?: () => void) {
     }
 }
 </script>
+
+<style scoped lang="scss">
+// Side by side where there is room, so the two colours are compared rather than read in turn.
+.task-date-colors {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14em, 1fr));
+    gap: 0 1rem;
+}
+</style>

@@ -187,7 +187,9 @@ export interface ListEntry2 {
   path: string;
   size: number;
   mime_type: string;
-  metadata: { tags: string[], events?: { [key: string]: MetadataEvent } } | null;
+  // `task` is whatever the frontmatter held; `task-forest` gives it its shape, and every reader
+  // type-checks it rather than trusting it.
+  metadata: { tags: string[], events?: { [key: string]: MetadataEvent }, task?: unknown } | null;
   title: string | null;
   time: string;
 }

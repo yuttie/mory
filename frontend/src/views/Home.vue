@@ -111,7 +111,13 @@
                                 v-bind:style="{ 'border-left': `8px solid ${getEventColor(event)}` }"
                                 v-on:click="navigateToEvent(event)"
                             >
-                                <div class="event-name font-weight-medium">{{ event.name }}</div>
+                                <div class="event-name font-weight-medium">
+                                    <span
+                                        v-if="event.taskDate"
+                                        class="task-date-label text-caption mr-1"
+                                        v-bind:style="{ 'background-color': event.color }"
+                                    >{{ event.taskDate === 'due_by' ? 'Due' : 'Deadline' }}</span>{{ event.name }}
+                                </div>
                                 <div class="event-time text-medium-emphasis text-caption">{{ formatEventTime(event) }}</div>
                                 <div v-if="event.note" class="event-note text-caption mt-1">{{ event.note }}</div>
                             </div>
@@ -136,7 +142,13 @@
                                 v-bind:style="{ 'border-left': `8px solid ${getEventColor(event)}` }"
                                 v-on:click="navigateToEvent(event)"
                             >
-                                <div class="event-name font-weight-medium">{{ event.name }}</div>
+                                <div class="event-name font-weight-medium">
+                                    <span
+                                        v-if="event.taskDate"
+                                        class="task-date-label text-caption mr-1"
+                                        v-bind:style="{ 'background-color': event.color }"
+                                    >{{ event.taskDate === 'due_by' ? 'Due' : 'Deadline' }}</span>{{ event.name }}
+                                </div>
                                 <div class="event-time text-medium-emphasis text-caption">{{ formatEventTime(event) }}</div>
                                 <div v-if="event.note" class="event-note text-caption mt-1">{{ event.note }}</div>
                             </div>
@@ -161,7 +173,13 @@
                                 v-bind:style="{ 'border-left': `8px solid ${getEventColor(event)}` }"
                                 v-on:click="navigateToEvent(event)"
                             >
-                                <div class="event-name font-weight-medium">{{ event.name }}</div>
+                                <div class="event-name font-weight-medium">
+                                    <span
+                                        v-if="event.taskDate"
+                                        class="task-date-label text-caption mr-1"
+                                        v-bind:style="{ 'background-color': event.color }"
+                                    >{{ event.taskDate === 'due_by' ? 'Due' : 'Deadline' }}</span>{{ event.name }}
+                                </div>
                                 <div class="event-time text-medium-emphasis text-caption">{{ formatEventTime(event) }}</div>
                                 <div v-if="event.note" class="event-note text-caption mt-1">{{ event.note }}</div>
                             </div>
@@ -319,7 +337,8 @@ import {
 
 import type { ListEntry2 } from '@/api';
 
-import { eventsFromEntries } from '@/events';
+import { eventsFromEntries, taskDatesFromEntries } from '@/events';
+import { useCalendarsStore } from '@/stores/calendars';
 import { useFilesStore } from '@/stores/files';
 import { by } from '@/utils';
 import dayjs from 'dayjs';
@@ -365,6 +384,7 @@ const emit = defineEmits<{
 const taskStore = useTasksStore();
 const router = useRouter();
 const files = useFilesStore();
+const calendars = useCalendarsStore();
 
 // Reactive states
 const isLoading = ref(false);
@@ -446,10 +466,22 @@ const categorizedEntries = computed(() => {
 
 // Events computation, shared with the calendar view.
 // Only the next three days are ever rendered, below, so that is all a rule needs expanding over.
-const events = computed(() => eventsFromEntries(files.entries, {
+const eventWindow = computed(() => ({
     from: dayjs().format('YYYY-MM-DD'),
     to: dayjs().add(2, 'days').format('YYYY-MM-DD'),
-}).events);
+}));
+// A task's due date and deadline are events here for the same reason they are on the calendar:
+// what falls in the next three days is exactly what this section is for. They come from
+// `task.due_by` and `task.deadline` rather than from an `events:` block, so they need their own
+// derivation over the same listing.
+const events = computed(() => [
+    ...eventsFromEntries(files.entries, eventWindow.value).events,
+    ...taskDatesFromEntries(
+        files.entries,
+        eventWindow.value,
+        { colorOf: calendars.taskDateColors },
+    ).events,
+]);
 
 const today = dayjs().format('YYYY-MM-DD');
 const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
@@ -546,6 +578,10 @@ onMounted(() => {
 
     load();
     loadTasks();
+    calendars.loadSubscriptions().catch(() => {
+        // Only the configured task-date colours are wanted here, and there are defaults for those;
+        // no imported events are fetched or drawn on this page.
+    });
 });
 
 // Methods
@@ -683,7 +719,9 @@ async function createQuickTask() {
     }
 }
 
-function navigateToTask(task: TaskNode) {
+// Takes the uuid alone rather than a whole node, so a deadline event can reach the task it names
+// without having to look the node up first.
+function navigateToTask(task: { uuid: string }) {
     // Navigate to the TasksNext view with the selected task
     router.push({
         name: 'TasksNextWithParams',
@@ -700,9 +738,14 @@ function navigateToTask(task: TaskNode) {
         });
 }
 
-function navigateToEvent(event: { notePath?: string }) {
+function navigateToEvent(event: { notePath?: string; taskId?: string }) {
+    // A due date or deadline belongs to its task, not to the file under `.tasks/` holding it.
+    if (event.taskId !== undefined) {
+        navigateToTask({ uuid: event.taskId });
+        return;
+    }
     // Navigate to the Note view for the event's source note. Optional because an imported event
-    // has no note behind it; Home shows only note events, so this is a guard rather than a case.
+    // has no note behind it; Home draws none of those, so this is a guard rather than a case.
     if (event.notePath === undefined) {
         return;
     }
@@ -753,7 +796,14 @@ function openCreatedItem() {
     successMessage.value = false;
 }
 
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
 function formatEventTime(event: { start: string; end?: string }) {
+    // A start with no time of day names a whole day -- the shape is the all-day flag, here as in
+    // the frontmatter. Parsing it would give it a midnight, and every all-day event read "00:00".
+    if (DATE_ONLY.test(event.start)) {
+        return 'All day';
+    }
     const start = dayjs(event.start);
     if (event.end) {
         const end = dayjs(event.end);
@@ -917,6 +967,18 @@ function changeSortOrder(category: string, kind: string) {
 .event-name {
     font-size: 0.9rem;
     line-height: 1.2;
+}
+
+// A task's date carries its own colour, set inline: the label says which date it is, and the
+// colour says it in the same terms as the border beside it and the bar on the calendar.
+.task-date-label {
+    display: inline-block;
+    padding: 0 0.4em;
+    border-radius: 0.25em;
+    color: #ffffff;
+    font-size: 0.7rem;
+    line-height: 1.5;
+    vertical-align: 0.1em;
 }
 
 .event-time {

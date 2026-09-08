@@ -30,6 +30,7 @@ import type {
 } from '@/api';
 import { occurrencesOf, validateEvent } from '@/api';
 import { RecurrenceError, expandRule, parseWallClock } from '@/recurrence';
+import { taskUuidOf } from '@/task-forest';
 import dayjs from 'dayjs';
 
 // The colour an event falls back to when neither it nor its parent names one.
@@ -48,10 +49,15 @@ export interface CalendarEvent {
     note?: string;
     location?: string;
     url?: string;
-    /// Where the event came from. An imported one has no note behind it and cannot be edited.
-    source: 'note' | 'ical';
+    /// Where the event came from. An imported one has no note behind it and cannot be edited; a
+    /// task deadline has one, but belongs to the task view rather than to the note.
+    source: 'note' | 'ical' | 'task';
     /// The note that declares it; absent for an imported event, which is what the popup keys on.
     notePath?: string;
+    /// The task whose date this is, for `source: 'task'` alone.
+    taskId?: string;
+    /// Which of the task's dates it is, for `source: 'task'` alone.
+    taskDate?: TaskDate;
     /// Identity, for an imported event and for a note that claims one.
     calendar?: string;
     uid?: string;
@@ -508,3 +514,113 @@ export function mergeImported(
 
 /// The colour an imported event falls back to when its calendar names none.
 export const DEFAULT_IMPORTED_COLOR = '#8d99ae';
+
+/// The colour a task deadline falls back to. Deliberately not `DEFAULT_EVENT_COLOR`: a deadline is
+/// not an appointment, and reading as one is the whole failure mode of drawing it on a calendar.
+export const DEFAULT_DEADLINE_COLOR = '#b3261e';
+
+/// The colour a due date falls back to. A due date is the day the work is wanted; a deadline is
+/// the day it cannot pass. Drawing both in the same red would say they carry the same weight.
+///
+/// Dark enough to carry white text (5.1:1), like the deadline red: the label on the home page
+/// fixes its text white, and the calendar's own picker chooses white for both.
+export const DEFAULT_DUE_COLOR = '#a35c00';
+
+/// Which of a task's two dates an event stands for.
+export type TaskDate = 'due_by' | 'deadline';
+
+// Whether a task is over, and so neither of its dates still stands. Read defensively: `status` is
+// frontmatter, so it may be anything at all.
+function isSettled(status: unknown): boolean {
+    if (typeof status !== 'object' || status === null) {
+        return false;
+    }
+    const kind = (status as { kind?: unknown }).kind;
+    return kind === 'done' || kind === 'canceled';
+}
+
+const TASK_DATE_COLOR: Record<TaskDate, string> = {
+    due_by: DEFAULT_DUE_COLOR,
+    deadline: DEFAULT_DEADLINE_COLOR,
+};
+
+/// The colours configured for a task's dates, each falling back to the built-in one.
+export type TaskDateColors = Partial<Record<TaskDate, string>>;
+
+// One of a task's dates, as an event -- or nothing, when the field is absent.
+//
+// A date is a moment, not a span, so it becomes a one-off event with no end: all-day when the
+// frontmatter names a bare date, timed when it names a time.
+function taskDateEvent(
+    field: TaskDate,
+    task: object,
+    uuid: string,
+    entry: ListEntry2,
+    window: EventWindow,
+    colors: TaskDateColors,
+    into: CalendarEvent[],
+    errors: EventError[],
+): void {
+    const value = (task as Record<string, unknown>)[field];
+    if (value === undefined || value === null) {
+        return;
+    }
+
+    const name = entry.title ?? entry.path;
+    // `typeof` first, for the same reason `buildOccurrence` checks it: a YAML integer is a valid
+    // epoch to dayjs and would only fail later, inside the view.
+    if (typeof value !== 'string' || !dayjs(value).isValid()) {
+        errors.push([field, value, name, entry.path, entry.title]);
+        return;
+    }
+
+    // Compared as dates, not as instants: the window's ends are bare dates, so an instant
+    // comparison would drop a date late on its last day.
+    const start = toWallClock(value);
+    const day = start.slice(0, 10);
+    if (day < window.from || day > window.to) {
+        return;
+    }
+
+    into.push({
+        name,
+        start,
+        finished: isSettled((task as { status?: unknown }).status),
+        color: colors[field] || TASK_DATE_COLOR[field],
+        source: 'task',
+        taskDate: field,
+        notePath: entry.path,
+        taskId: uuid,
+    });
+}
+
+/// Every task due date and deadline in the listing, as events the calendar can draw.
+///
+/// Nothing here is expanded or repeated: a task has at most one of each, and they live in
+/// `task.due_by` and `task.deadline` rather than in an `events:` block, which is why
+/// `eventsFromEntries` cannot see them. A task carrying both contributes both, so the run-up to a
+/// deadline is visible rather than implied.
+export function taskDatesFromEntries(
+    entries: readonly ListEntry2[],
+    window: EventWindow,
+    options: { colorOf?: TaskDateColors } = {},
+): DerivedEvents {
+    const events: CalendarEvent[] = [];
+    const errors: EventError[] = [];
+    const colors = options.colorOf ?? {};
+
+    for (const entry of entries) {
+        const uuid = taskUuidOf(entry.path);
+        if (uuid === null) {
+            continue;
+        }
+        const task = entry.metadata?.task;
+        if (typeof task !== 'object' || task === null) {
+            continue;
+        }
+        taskDateEvent('due_by', task, uuid, entry, window, colors, events, errors);
+        taskDateEvent('deadline', task, uuid, entry, window, colors, events, errors);
+    }
+
+    return { events, errors };
+}

@@ -101,6 +101,7 @@ These follow from the philosophy above; keep them intact.
 - The backend keeps a SQLite cache of the file listing, keyed by the commit it describes. It is disposable: delete it and it rebuilds.
 - `GET /v2/entries` serves the listing together with its commit ID, and serves only the changes when given `since`.
 - The frontend files store (`frontend/src/stores/files.ts`) is the single entry point for file operations. Every consumer reads the one shared listing from it; nothing calls the entries API or IndexedDB directly.
+- A task's `due_by` and `deadline` are drawn as events too, derived from the same listing by `taskDatesFromEntries` in `frontend/src/events.ts` rather than from an `events:` block. Each has its own colour, configurable under `task_dates:` in `.mory/calendars.yaml`.
 - External calendars are subscribed in `.mory/calendars.yaml` and served by `GET /v2/imported-events`. Their events are read-only and never stored: they are a live view of someone else's calendar, so the repository is deliberately not their home. Converting one writes an ordinary note under `.events/`, which then shadows the imported original by `ical.uid` — or by `uid` and `recurrence_id` together, when the note claims a single occurrence.
 
 ## The `events:` frontmatter
