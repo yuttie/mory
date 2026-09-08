@@ -79,7 +79,7 @@
                                 v-bind="props"
                             >
                                 <template v-slot:prepend>
-                                    <v-icon size="small">{{ mdiPencilBoxOutline }}</v-icon>
+                                    <v-icon size="small">{{ mdiPlus }}</v-icon>
                                 </template>
                             </v-list-item>
                         </template>
@@ -203,8 +203,8 @@
                 >
                     <v-list-item color="primary" to="/"><template v-slot:prepend><v-icon size="small">{{ mdiHomeOutline }}</v-icon></template><v-list-item-title>Home</v-list-item-title></v-list-item>
                     <v-list-item color="primary" to="/calendar"><template v-slot:prepend><v-icon size="small">{{ mdiCalendarOutline }}</v-icon></template><v-list-item-title>Calendar</v-list-item-title></v-list-item>
-                    <v-list-item color="primary" to="/tasks-next"><template v-slot:prepend><v-icon size="small">{{ mdiBallotOutline }}</v-icon></template><v-list-item-title>Tasks</v-list-item-title></v-list-item>
-                    <v-list-item color="primary" to="/files"><template v-slot:prepend><v-icon size="small">{{ mdiFileDocumentMultipleOutline }}</v-icon></template><v-list-item-title>Files</v-list-item-title></v-list-item>
+                    <v-list-item color="primary" to="/tasks-next"><template v-slot:prepend><v-icon size="small">{{ mdiCheckboxMultipleMarkedOutline }}</v-icon></template><v-list-item-title>Tasks</v-list-item-title></v-list-item>
+                    <v-list-item color="primary" to="/files"><template v-slot:prepend><v-icon size="small">{{ mdiFolderOutline }}</v-icon></template><v-list-item-title>Files</v-list-item-title></v-list-item>
                     <v-list-item color="primary" to="/search"><template v-slot:prepend><v-icon size="small">{{ mdiMagnify }}</v-icon></template><v-list-item-title>Search</v-list-item-title></v-list-item>
                 </v-list>
 
@@ -242,7 +242,7 @@
                             <v-list>
                                 <v-list-item to="/tasks">
                                     <template v-slot:prepend>
-                                        <v-icon size="small">{{ mdiBallotOutline }}</v-icon>
+                                        <v-icon size="small">{{ mdiCheckboxMultipleMarkedOutline }}</v-icon>
                                     </template>
                                     <v-list-item-title>Tasks (deprecated)</v-list-item-title>
                                 </v-list-item>
@@ -321,7 +321,7 @@
                             v-bind="props"
                         >
                             <template v-slot:prepend>
-                                <v-icon size="small">{{ mdiPencilBoxOutline }}</v-icon>
+                                <v-icon size="small">{{ mdiPlus }}</v-icon>
                             </template>
                         </v-list-item>
                     </template>
@@ -444,8 +444,8 @@
             >
                 <v-list-item color="primary" to="/"><template v-slot:prepend><v-icon size="small">{{ mdiHomeOutline }}</v-icon></template><v-list-item-title>Home</v-list-item-title></v-list-item>
                 <v-list-item color="primary" to="/calendar"><template v-slot:prepend><v-icon size="small">{{ mdiCalendarOutline }}</v-icon></template><v-list-item-title>Calendar</v-list-item-title></v-list-item>
-                <v-list-item color="primary" to="/tasks-next"><template v-slot:prepend><v-icon size="small">{{ mdiBallotOutline }}</v-icon></template><v-list-item-title>Tasks</v-list-item-title></v-list-item>
-                <v-list-item color="primary" to="/files"><template v-slot:prepend><v-icon size="small">{{ mdiFileDocumentMultipleOutline }}</v-icon></template><v-list-item-title>Files</v-list-item-title></v-list-item>
+                <v-list-item color="primary" to="/tasks-next"><template v-slot:prepend><v-icon size="small">{{ mdiCheckboxMultipleMarkedOutline }}</v-icon></template><v-list-item-title>Tasks</v-list-item-title></v-list-item>
+                <v-list-item color="primary" to="/files"><template v-slot:prepend><v-icon size="small">{{ mdiFolderOutline }}</v-icon></template><v-list-item-title>Files</v-list-item-title></v-list-item>
                 <v-list-item color="primary" to="/search"><template v-slot:prepend><v-icon size="small">{{ mdiMagnify }}</v-icon></template><v-list-item-title>Search</v-list-item-title></v-list-item>
             </v-list>
 
@@ -474,7 +474,7 @@
                         <v-list>
                             <v-list-item to="/tasks">
                                 <template v-slot:prepend>
-                                    <v-icon size="small">{{ mdiBallotOutline }}</v-icon>
+                                    <v-icon size="small">{{ mdiCheckboxMultipleMarkedOutline }}</v-icon>
                                 </template>
                                 <v-list-item-title>Tasks (deprecated)</v-list-item-title>
                             </v-list-item>
@@ -562,20 +562,20 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 
 import {
     mdiAutorenew,
-    mdiBallotOutline,
     mdiBell,
     mdiBroom,
     mdiCalendarOutline,
     mdiCheck,
+    mdiCheckboxMultipleMarkedOutline,
     mdiChevronDoubleLeft,
     mdiChevronDoubleRight,
     mdiCloudUploadOutline,
     mdiCogOutline,
     mdiExclamationThick,
     mdiFileDocumentOutline,
-    mdiFileDocumentMultipleOutline,
     mdiFileMultipleOutline,
     mdiFileOutline,
+    mdiFolderOutline,
     mdiHelp,
     mdiHomeOutline,
     mdiInformationOutline,
@@ -583,7 +583,7 @@ import {
     mdiLogout,
     mdiMagnify,
     mdiPencil,
-    mdiPencilBoxOutline,
+    mdiPlus,
     mdiUpload,
 } from '@mdi/js';
 
