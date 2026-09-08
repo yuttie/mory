@@ -12,7 +12,7 @@ Layout of the tracked sources:
 - `backend/src/tests.rs` — in-crate tests, with Git repository fixtures.
 - `frontend/src/` — `views/` (routed screens), `components/`, `stores/` (Pinia), `api.ts` (backend client), `idb.ts` (IndexedDB cache), `*.spec.ts` (tests next to their subject).
 
-Everything else in the working directory is untracked scratch. Ignore it.
+Untracked configuration, build artifacts, and scratch files may exist in the working directory. Do not inspect, modify, or commit them unless the task specifically requires it.
 
 ## Philosophy
 
