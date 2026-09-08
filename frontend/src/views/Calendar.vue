@@ -137,7 +137,7 @@
                         size="small"
                         variant="flat"
                     >
-                        Deadline
+                        {{ selectedEvent.taskDate === 'due_by' ? 'Due' : 'Deadline' }}
                     </v-chip>
                     <v-icon v-if="selectedEvent.finished" class="mr-4">{{ mdiCheck }}</v-icon>
                 </v-toolbar>
