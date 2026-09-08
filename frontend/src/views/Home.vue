@@ -319,7 +319,7 @@ import {
 
 import type { ListEntry2 } from '@/api';
 
-import { eventsFromEntries } from '@/events';
+import { deadlinesFromEntries, eventsFromEntries } from '@/events';
 import { useFilesStore } from '@/stores/files';
 import { by } from '@/utils';
 import dayjs from 'dayjs';
@@ -446,10 +446,17 @@ const categorizedEntries = computed(() => {
 
 // Events computation, shared with the calendar view.
 // Only the next three days are ever rendered, below, so that is all a rule needs expanding over.
-const events = computed(() => eventsFromEntries(files.entries, {
+const eventWindow = computed(() => ({
     from: dayjs().format('YYYY-MM-DD'),
     to: dayjs().add(2, 'days').format('YYYY-MM-DD'),
-}).events);
+}));
+// Deadlines are events here for the same reason they are on the calendar: what is due in the next
+// three days is exactly what this section is for. They come from `task.deadline` rather than from
+// an `events:` block, so they need their own derivation over the same listing.
+const events = computed(() => [
+    ...eventsFromEntries(files.entries, eventWindow.value).events,
+    ...deadlinesFromEntries(files.entries, eventWindow.value).events,
+]);
 
 const today = dayjs().format('YYYY-MM-DD');
 const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
@@ -683,7 +690,9 @@ async function createQuickTask() {
     }
 }
 
-function navigateToTask(task: TaskNode) {
+// Takes the uuid alone rather than a whole node, so a deadline event can reach the task it names
+// without having to look the node up first.
+function navigateToTask(task: { uuid: string }) {
     // Navigate to the TasksNext view with the selected task
     router.push({
         name: 'TasksNextWithParams',
@@ -700,9 +709,14 @@ function navigateToTask(task: TaskNode) {
         });
 }
 
-function navigateToEvent(event: { notePath?: string }) {
+function navigateToEvent(event: { notePath?: string; taskId?: string }) {
+    // A deadline belongs to its task, not to the file under `.tasks/` that happens to hold it.
+    if (event.taskId !== undefined) {
+        navigateToTask({ uuid: event.taskId });
+        return;
+    }
     // Navigate to the Note view for the event's source note. Optional because an imported event
-    // has no note behind it; Home shows only note events, so this is a guard rather than a case.
+    // has no note behind it; Home draws none of those, so this is a guard rather than a case.
     if (event.notePath === undefined) {
         return;
     }
