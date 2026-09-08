@@ -5,8 +5,10 @@ import dayjs from 'dayjs';
 import type { ListEntry2, MetadataEvent } from '@/api';
 import type { ImportedOccurrence } from '@/api';
 import {
+    DEFAULT_DEADLINE_COLOR,
     DEFAULT_EVENT_COLOR,
     DEFAULT_IMPORTED_COLOR,
+    deadlinesFromEntries,
     eventsFromEntries,
     mergeImported,
     normalizeEndTime,
@@ -681,5 +683,112 @@ describe('an all-day series', () => {
 
         expect(events.map((e) => e.start)).toEqual(['2026-08-01', '2026-08-02', '2026-08-03']);
         vi.unstubAllEnvs();
+    });
+});
+
+describe('deadlinesFromEntries', () => {
+    const UUID_A = '11111111-1111-4111-8111-111111111111';
+    const UUID_B = '22222222-2222-4222-8222-222222222222';
+
+    function taskEntry(
+        uuid: string,
+        task: Record<string, unknown> | null,
+        options: Partial<ListEntry2> = {},
+    ): ListEntry2 {
+        return {
+            path: `.tasks/${uuid}.md`,
+            size: 1,
+            mime_type: 'text/markdown',
+            metadata: task === null ? { tags: [] } : { tags: [], task },
+            title: 'Submit the paper',
+            time: '2024-05-01T12:00:00+00:00',
+            ...options,
+        };
+    }
+
+    const deadlines = (entries: ListEntry2[], window = ANY_WINDOW) =>
+        deadlinesFromEntries(entries, window);
+
+    it('draws a deadline as a one-off event named after the task', () => {
+        const { events, errors } = deadlines([
+            taskEntry(UUID_A, { status: { kind: 'todo' }, deadline: '2026-03-04' }),
+        ]);
+
+        expect(errors).toEqual([]);
+        expect(events).toEqual([{
+            name: 'Submit the paper',
+            start: '2026-03-04',
+            finished: false,
+            color: DEFAULT_DEADLINE_COLOR,
+            source: 'task',
+            notePath: `.tasks/${UUID_A}.md`,
+            taskId: UUID_A,
+        }]);
+    });
+
+    it('keeps a deadline with a time of day timed, and drops its offset', () => {
+        vi.stubEnv('TZ', 'Asia/Tokyo');
+        const { events } = deadlines([
+            taskEntry(UUID_A, { status: { kind: 'todo' }, deadline: '2026-03-04 23:59+00:00' }),
+        ]);
+
+        expect(events.map((e) => e.start)).toEqual(['2026-03-05 08:59']);
+        vi.unstubAllEnvs();
+    });
+
+    it('ignores an entry that is not a task, or a task with no deadline', () => {
+        const { events, errors } = deadlines([
+            entry('notes/a.md', { Meeting: { start: '2026-03-04 10:00' } }),
+            taskEntry(UUID_A, { status: { kind: 'todo' } }),
+            taskEntry(UUID_B, null),
+        ]);
+
+        expect(events).toEqual([]);
+        expect(errors).toEqual([]);
+    });
+
+    it('marks a finished task, so the view fades its deadline', () => {
+        const { events } = deadlines([
+            taskEntry(UUID_A, {
+                status: { kind: 'done', completed_at: '2026-03-01 10:00+09:00' },
+                deadline: '2026-03-04',
+            }),
+            taskEntry(UUID_B, {
+                status: { kind: 'canceled', canceled_at: '2026-03-01 10:00+09:00' },
+                deadline: '2026-03-05',
+            }),
+        ]);
+
+        expect(events.map((e) => e.finished)).toEqual([true, true]);
+    });
+
+    it('keeps only the deadlines inside the window', () => {
+        const { events } = deadlines([
+            taskEntry(UUID_A, { status: { kind: 'todo' }, deadline: '2026-02-28' }),
+            taskEntry(UUID_B, { status: { kind: 'todo' }, deadline: '2026-03-31 23:59+09:00' }),
+        ], { from: '2026-03-01', to: '2026-03-31' });
+
+        expect(events.map((e) => e.taskId)).toEqual([UUID_B]);
+    });
+
+    it('reports an unusable deadline rather than dropping it silently', () => {
+        const { events, errors } = deadlines([
+            taskEntry(UUID_A, { status: { kind: 'todo' }, deadline: 20260304 }),
+            taskEntry(UUID_B, { status: { kind: 'todo' }, deadline: 'next Friday' }),
+        ]);
+
+        expect(events).toEqual([]);
+        expect(errors).toEqual([
+            ['deadline', 20260304, 'Submit the paper', `.tasks/${UUID_A}.md`, 'Submit the paper'],
+            ['deadline', 'next Friday', 'Submit the paper', `.tasks/${UUID_B}.md`, 'Submit the paper'],
+        ]);
+    });
+
+    it('falls back to the path when the task has no title', () => {
+        const { events } = deadlines([
+            taskEntry(UUID_A, { status: { kind: 'todo' }, deadline: '2026-03-04' }, { title: null }),
+        ]);
+
+        expect(events.map((e) => e.name)).toEqual([`.tasks/${UUID_A}.md`]);
     });
 });

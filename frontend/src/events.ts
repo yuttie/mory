@@ -30,6 +30,7 @@ import type {
 } from '@/api';
 import { occurrencesOf, validateEvent } from '@/api';
 import { RecurrenceError, expandRule, parseWallClock } from '@/recurrence';
+import { taskUuidOf } from '@/task-forest';
 import dayjs from 'dayjs';
 
 // The colour an event falls back to when neither it nor its parent names one.
@@ -48,10 +49,13 @@ export interface CalendarEvent {
     note?: string;
     location?: string;
     url?: string;
-    /// Where the event came from. An imported one has no note behind it and cannot be edited.
-    source: 'note' | 'ical';
+    /// Where the event came from. An imported one has no note behind it and cannot be edited; a
+    /// task deadline has one, but belongs to the task view rather than to the note.
+    source: 'note' | 'ical' | 'task';
     /// The note that declares it; absent for an imported event, which is what the popup keys on.
     notePath?: string;
+    /// The task whose deadline this is, for `source: 'task'` alone.
+    taskId?: string;
     /// Identity, for an imported event and for a note that claims one.
     calendar?: string;
     uid?: string;
@@ -508,3 +512,74 @@ export function mergeImported(
 
 /// The colour an imported event falls back to when its calendar names none.
 export const DEFAULT_IMPORTED_COLOR = '#8d99ae';
+
+/// The colour a task deadline falls back to. Deliberately not `DEFAULT_EVENT_COLOR`: a deadline is
+/// not an appointment, and reading as one is the whole failure mode of drawing it on a calendar.
+export const DEFAULT_DEADLINE_COLOR = '#b3261e';
+
+// Whether a task is over, and so its deadline no longer stands. Read defensively: `status` is
+// frontmatter, so it may be anything at all.
+function isSettled(status: unknown): boolean {
+    if (typeof status !== 'object' || status === null) {
+        return false;
+    }
+    const kind = (status as { kind?: unknown }).kind;
+    return kind === 'done' || kind === 'canceled';
+}
+
+/// Every task deadline in the listing, as an event the calendar can draw.
+///
+/// A deadline is a moment, not a span, so it becomes a one-off event with no end -- all-day when
+/// the frontmatter names a bare date, timed when it names a time. Nothing here is expanded or
+/// repeated: a task has at most one deadline, and it lives in `task.deadline` rather than in an
+/// `events:` block, which is why `eventsFromEntries` cannot see it.
+export function deadlinesFromEntries(
+    entries: readonly ListEntry2[],
+    window: EventWindow,
+): DerivedEvents {
+    const events: CalendarEvent[] = [];
+    const errors: EventError[] = [];
+
+    for (const entry of entries) {
+        const uuid = taskUuidOf(entry.path);
+        if (uuid === null) {
+            continue;
+        }
+        const task = entry.metadata?.task;
+        if (typeof task !== 'object' || task === null) {
+            continue;
+        }
+        const deadline = (task as { deadline?: unknown }).deadline;
+        if (deadline === undefined || deadline === null) {
+            continue;
+        }
+
+        const name = entry.title ?? entry.path;
+        // `typeof` first, for the same reason `buildOccurrence` checks it: a YAML integer is a
+        // valid epoch to dayjs and would only fail later, inside the view.
+        if (typeof deadline !== 'string' || !dayjs(deadline).isValid()) {
+            errors.push(['deadline', deadline, name, entry.path, entry.title]);
+            continue;
+        }
+
+        // Compared as dates, not as instants: the window's ends are bare dates, so an instant
+        // comparison would drop a deadline late on its last day.
+        const start = toWallClock(deadline);
+        const day = start.slice(0, 10);
+        if (day < window.from || day > window.to) {
+            continue;
+        }
+
+        events.push({
+            name,
+            start,
+            finished: isSettled((task as { status?: unknown }).status),
+            color: DEFAULT_DEADLINE_COLOR,
+            source: 'task',
+            notePath: entry.path,
+            taskId: uuid,
+        });
+    }
+
+    return { events, errors };
+}
