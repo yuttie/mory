@@ -54,8 +54,10 @@ export interface CalendarEvent {
     source: 'note' | 'ical' | 'task';
     /// The note that declares it; absent for an imported event, which is what the popup keys on.
     notePath?: string;
-    /// The task whose deadline this is, for `source: 'task'` alone.
+    /// The task whose date this is, for `source: 'task'` alone.
     taskId?: string;
+    /// Which of the task's dates it is, for `source: 'task'` alone.
+    taskDate?: TaskDate;
     /// Identity, for an imported event and for a note that claims one.
     calendar?: string;
     uid?: string;
@@ -517,7 +519,17 @@ export const DEFAULT_IMPORTED_COLOR = '#8d99ae';
 /// not an appointment, and reading as one is the whole failure mode of drawing it on a calendar.
 export const DEFAULT_DEADLINE_COLOR = '#b3261e';
 
-// Whether a task is over, and so its deadline no longer stands. Read defensively: `status` is
+/// The colour a due date falls back to. A due date is the day the work is wanted; a deadline is
+/// the day it cannot pass. Drawing both in the same red would say they carry the same weight.
+///
+/// Dark enough to carry white text (5.1:1), like the deadline red: the label on the home page
+/// fixes its text white, and the calendar's own picker chooses white for both.
+export const DEFAULT_DUE_COLOR = '#a35c00';
+
+/// Which of a task's two dates an event stands for.
+export type TaskDate = 'due_by' | 'deadline';
+
+// Whether a task is over, and so neither of its dates still stands. Read defensively: `status` is
 // frontmatter, so it may be anything at all.
 function isSettled(status: unknown): boolean {
     if (typeof status !== 'object' || status === null) {
@@ -527,13 +539,64 @@ function isSettled(status: unknown): boolean {
     return kind === 'done' || kind === 'canceled';
 }
 
-/// Every task deadline in the listing, as an event the calendar can draw.
+const TASK_DATE_COLOR: Record<TaskDate, string> = {
+    due_by: DEFAULT_DUE_COLOR,
+    deadline: DEFAULT_DEADLINE_COLOR,
+};
+
+// One of a task's dates, as an event -- or nothing, when the field is absent.
+//
+// A date is a moment, not a span, so it becomes a one-off event with no end: all-day when the
+// frontmatter names a bare date, timed when it names a time.
+function taskDateEvent(
+    field: TaskDate,
+    task: object,
+    uuid: string,
+    entry: ListEntry2,
+    window: EventWindow,
+    into: CalendarEvent[],
+    errors: EventError[],
+): void {
+    const value = (task as Record<string, unknown>)[field];
+    if (value === undefined || value === null) {
+        return;
+    }
+
+    const name = entry.title ?? entry.path;
+    // `typeof` first, for the same reason `buildOccurrence` checks it: a YAML integer is a valid
+    // epoch to dayjs and would only fail later, inside the view.
+    if (typeof value !== 'string' || !dayjs(value).isValid()) {
+        errors.push([field, value, name, entry.path, entry.title]);
+        return;
+    }
+
+    // Compared as dates, not as instants: the window's ends are bare dates, so an instant
+    // comparison would drop a date late on its last day.
+    const start = toWallClock(value);
+    const day = start.slice(0, 10);
+    if (day < window.from || day > window.to) {
+        return;
+    }
+
+    into.push({
+        name,
+        start,
+        finished: isSettled((task as { status?: unknown }).status),
+        color: TASK_DATE_COLOR[field],
+        source: 'task',
+        taskDate: field,
+        notePath: entry.path,
+        taskId: uuid,
+    });
+}
+
+/// Every task due date and deadline in the listing, as events the calendar can draw.
 ///
-/// A deadline is a moment, not a span, so it becomes a one-off event with no end -- all-day when
-/// the frontmatter names a bare date, timed when it names a time. Nothing here is expanded or
-/// repeated: a task has at most one deadline, and it lives in `task.deadline` rather than in an
-/// `events:` block, which is why `eventsFromEntries` cannot see it.
-export function deadlinesFromEntries(
+/// Nothing here is expanded or repeated: a task has at most one of each, and they live in
+/// `task.due_by` and `task.deadline` rather than in an `events:` block, which is why
+/// `eventsFromEntries` cannot see them. A task carrying both contributes both, so the run-up to a
+/// deadline is visible rather than implied.
+export function taskDatesFromEntries(
     entries: readonly ListEntry2[],
     window: EventWindow,
 ): DerivedEvents {
@@ -549,36 +612,8 @@ export function deadlinesFromEntries(
         if (typeof task !== 'object' || task === null) {
             continue;
         }
-        const deadline = (task as { deadline?: unknown }).deadline;
-        if (deadline === undefined || deadline === null) {
-            continue;
-        }
-
-        const name = entry.title ?? entry.path;
-        // `typeof` first, for the same reason `buildOccurrence` checks it: a YAML integer is a
-        // valid epoch to dayjs and would only fail later, inside the view.
-        if (typeof deadline !== 'string' || !dayjs(deadline).isValid()) {
-            errors.push(['deadline', deadline, name, entry.path, entry.title]);
-            continue;
-        }
-
-        // Compared as dates, not as instants: the window's ends are bare dates, so an instant
-        // comparison would drop a deadline late on its last day.
-        const start = toWallClock(deadline);
-        const day = start.slice(0, 10);
-        if (day < window.from || day > window.to) {
-            continue;
-        }
-
-        events.push({
-            name,
-            start,
-            finished: isSettled((task as { status?: unknown }).status),
-            color: DEFAULT_DEADLINE_COLOR,
-            source: 'task',
-            notePath: entry.path,
-            taskId: uuid,
-        });
+        taskDateEvent('due_by', task, uuid, entry, window, events, errors);
+        taskDateEvent('deadline', task, uuid, entry, window, events, errors);
     }
 
     return { events, errors };

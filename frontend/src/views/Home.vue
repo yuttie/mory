@@ -319,7 +319,7 @@ import {
 
 import type { ListEntry2 } from '@/api';
 
-import { deadlinesFromEntries, eventsFromEntries } from '@/events';
+import { eventsFromEntries, taskDatesFromEntries } from '@/events';
 import { useFilesStore } from '@/stores/files';
 import { by } from '@/utils';
 import dayjs from 'dayjs';
@@ -450,12 +450,13 @@ const eventWindow = computed(() => ({
     from: dayjs().format('YYYY-MM-DD'),
     to: dayjs().add(2, 'days').format('YYYY-MM-DD'),
 }));
-// Deadlines are events here for the same reason they are on the calendar: what is due in the next
-// three days is exactly what this section is for. They come from `task.deadline` rather than from
-// an `events:` block, so they need their own derivation over the same listing.
+// A task's due date and deadline are events here for the same reason they are on the calendar:
+// what falls in the next three days is exactly what this section is for. They come from
+// `task.due_by` and `task.deadline` rather than from an `events:` block, so they need their own
+// derivation over the same listing.
 const events = computed(() => [
     ...eventsFromEntries(files.entries, eventWindow.value).events,
-    ...deadlinesFromEntries(files.entries, eventWindow.value).events,
+    ...taskDatesFromEntries(files.entries, eventWindow.value).events,
 ]);
 
 const today = dayjs().format('YYYY-MM-DD');
@@ -710,7 +711,7 @@ function navigateToTask(task: { uuid: string }) {
 }
 
 function navigateToEvent(event: { notePath?: string; taskId?: string }) {
-    // A deadline belongs to its task, not to the file under `.tasks/` that happens to hold it.
+    // A due date or deadline belongs to its task, not to the file under `.tasks/` holding it.
     if (event.taskId !== undefined) {
         navigateToTask({ uuid: event.taskId });
         return;

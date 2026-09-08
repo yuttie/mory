@@ -247,7 +247,7 @@ import {
 } from '@mdi/js';
 
 
-import { DEFAULT_EVENT_COLOR, DEFAULT_IMPORTED_COLOR, deadlinesFromEntries, eventsFromEntries, mergeImported } from '@/events';
+import { DEFAULT_EVENT_COLOR, DEFAULT_IMPORTED_COLOR, eventsFromEntries, mergeImported, taskDatesFromEntries } from '@/events';
 import type { CalendarEvent } from '@/events';
 import { buildOccurrenceNote, buildSeriesNote, canConvertSeries } from '@/event-note';
 import { useCalendarsStore } from '@/stores/calendars';
@@ -304,15 +304,16 @@ const eventWindow = computed(() => {
     };
 });
 const derived = computed(() => eventsFromEntries(files.entries, eventWindow.value));
-// A deadline is not an `events:` block, so it comes from its own derivation over the same listing.
-const deadlines = computed(() => deadlinesFromEntries(files.entries, eventWindow.value));
+// A task's dates are not an `events:` block, so they come from their own derivation over the same
+// listing.
+const taskDates = computed(() => taskDatesFromEntries(files.entries, eventWindow.value));
 const hiddenCalendars = computed(() => new Set(hiddenCalendarIds.value));
 const events = computed(() => mergeImported(
-    [...derived.value.events, ...deadlines.value.events],
+    [...derived.value.events, ...taskDates.value.events],
     calendars.events,
     { colorOf: calendars.colorOf, hidden: hiddenCalendars.value },
 ));
-const eventErrors = computed(() => [...derived.value.errors, ...deadlines.value.errors]);
+const eventErrors = computed(() => [...derived.value.errors, ...taskDates.value.errors]);
 
 // Watchers
 // Lifecycle hooks
