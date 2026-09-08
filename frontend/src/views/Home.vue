@@ -111,7 +111,13 @@
                                 v-bind:style="{ 'border-left': `8px solid ${getEventColor(event)}` }"
                                 v-on:click="navigateToEvent(event)"
                             >
-                                <div class="event-name font-weight-medium">{{ event.name }}</div>
+                                <div class="event-name font-weight-medium">
+                                    <span
+                                        v-if="event.taskDate"
+                                        class="task-date-label text-caption mr-1"
+                                        v-bind:style="{ 'background-color': event.color }"
+                                    >{{ event.taskDate === 'due_by' ? 'Due' : 'Deadline' }}</span>{{ event.name }}
+                                </div>
                                 <div class="event-time text-medium-emphasis text-caption">{{ formatEventTime(event) }}</div>
                                 <div v-if="event.note" class="event-note text-caption mt-1">{{ event.note }}</div>
                             </div>
@@ -136,7 +142,13 @@
                                 v-bind:style="{ 'border-left': `8px solid ${getEventColor(event)}` }"
                                 v-on:click="navigateToEvent(event)"
                             >
-                                <div class="event-name font-weight-medium">{{ event.name }}</div>
+                                <div class="event-name font-weight-medium">
+                                    <span
+                                        v-if="event.taskDate"
+                                        class="task-date-label text-caption mr-1"
+                                        v-bind:style="{ 'background-color': event.color }"
+                                    >{{ event.taskDate === 'due_by' ? 'Due' : 'Deadline' }}</span>{{ event.name }}
+                                </div>
                                 <div class="event-time text-medium-emphasis text-caption">{{ formatEventTime(event) }}</div>
                                 <div v-if="event.note" class="event-note text-caption mt-1">{{ event.note }}</div>
                             </div>
@@ -161,7 +173,13 @@
                                 v-bind:style="{ 'border-left': `8px solid ${getEventColor(event)}` }"
                                 v-on:click="navigateToEvent(event)"
                             >
-                                <div class="event-name font-weight-medium">{{ event.name }}</div>
+                                <div class="event-name font-weight-medium">
+                                    <span
+                                        v-if="event.taskDate"
+                                        class="task-date-label text-caption mr-1"
+                                        v-bind:style="{ 'background-color': event.color }"
+                                    >{{ event.taskDate === 'due_by' ? 'Due' : 'Deadline' }}</span>{{ event.name }}
+                                </div>
                                 <div class="event-time text-medium-emphasis text-caption">{{ formatEventTime(event) }}</div>
                                 <div v-if="event.note" class="event-note text-caption mt-1">{{ event.note }}</div>
                             </div>
@@ -939,6 +957,18 @@ function changeSortOrder(category: string, kind: string) {
 .event-name {
     font-size: 0.9rem;
     line-height: 1.2;
+}
+
+// A task's date carries its own colour, set inline: the label says which date it is, and the
+// colour says it in the same terms as the border beside it and the bar on the calendar.
+.task-date-label {
+    display: inline-block;
+    padding: 0 0.4em;
+    border-radius: 0.25em;
+    color: #ffffff;
+    font-size: 0.7rem;
+    line-height: 1.5;
+    vertical-align: 0.1em;
 }
 
 .event-time {
