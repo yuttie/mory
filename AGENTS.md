@@ -12,7 +12,7 @@ Layout of the tracked sources:
 - `backend/src/tests.rs` — in-crate tests, with Git repository fixtures.
 - `frontend/src/` — `views/` (routed screens), `components/`, `stores/` (Pinia), `api.ts` (backend client), `idb.ts` (IndexedDB cache), `*.spec.ts` (tests next to their subject).
 
-Everything else in the working directory is untracked scratch. Ignore it.
+Untracked configuration, build artifacts, and scratch files may exist in the working directory. Do not inspect, modify, or commit them unless the task specifically requires it.
 
 ## Philosophy
 
@@ -46,28 +46,51 @@ Run commands in the component's own directory (`backend/` or `frontend/`).
 
 ### Commits
 
+- Commit as the work proceeds, without waiting to be asked.
+- Small and focused; never one large commit at the end.
+- Split a commit that needs "and" to describe it; merge one too small to stand alone.
+- Every commit must build and stand on its own.
+    - Verify before committing.
+    - A reviewer should be able to read any single commit and understand it without the ones after it.
+- Never commit directly to the default branch unless the user explicitly asks for it.
+    - Create a branch first, and say which branch you created.
 - Follow [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): subject`.
-    - Derive `scope` from the path of what you touched, dropping the `src` component and the file extension. Use the most specific scope that is still accurate. For example:
+    - Type
+        - Choose a type best describing your changes from:
+            - `fix`
+            - `feat` (only for user-facing changes, in either the frontend or the backend)
+            - `build`
+            - `chore`
+            - `ci`
+            - `docs`
+            - `style` (source formatting only, such as indentation; not visual or CSS changes, which are `feat` when user-facing and `refactor` otherwise)
+            - `refactor`
+            - `perf`
+            - `test`
+        - The type decides how git-cliff groups the commit in `CHANGELOG.md`.
+        - Append `!` after the scope for a breaking change: `feat(backend/v2)!: ...`.
+    - Scope
+        - Derive `scope` from the path of what you touched, dropping the `src` component and the file extension.
+        - Use the most specific scope that is still accurate.
+    - Examples:
         - `refactor(backend): ...`
-        - `fix(backend/example_module): ...`
+        - `fix(backend/ical): ...`
         - `feat(frontend/views/Home): ...`
         - `feat(frontend/api): ...`
-    - Use `feat` for user-facing changes, in either the frontend or the backend. The type decides how git-cliff groups the commit in `CHANGELOG.md`.
-    - In the subject and body, record any numbers you measured when they matter to the change.
-- If these rules don't cover a case, past commit messages can serve as a fallback. Otherwise don't consult them; the rules in this file always win.
-- When creating commits, append an `Assisted-by:` trailer naming yourself — the agent, and the model behind it when that is what identifies you. Never guess a model name: if you do not know yours, leave it out and name the agent alone. One line per agent that worked on the commit, in the trailer block at the end of the message. For example:
+- In the subject and body, record any numbers you measured when they matter to the change.
+- The rules in this file always win. Consult past commit messages only where these rules leave a case ambiguous.
+- Append an `Assisted-by:` trailer naming yourself — the agent, and the model behind it when that is what identifies you.
+    - Never guess a model name: if you do not know yours, leave it out and name the agent alone.
+    - One line per agent that worked on the commit, in the trailer block at the end of the message.
+    - Examples:
+        - `Assisted-by: Claude Opus 5`
+        - `Assisted-by: Codex GPT-5.6 Sol`
+        - `Assisted-by: GitHub Copilot`
 
-    ```
-    Assisted-by: Claude Opus 5
-    Assisted-by: Codex GPT-5.6 Sol
-    Assisted-by: GitHub Copilot
-    ```
+### Remote repositories
 
-    Do not add attribution or session links to pull-request descriptions.
-- Small, focused commits, made as the work proceeds. Never one large commit at the end.
-- Every commit must build and stand on its own. Verify before committing. A reviewer should be able to read any single commit and understand it without the ones after it.
-- Split a commit that needs "and" to describe it; merge one too small to stand alone.
-- Do not commit, push, or open a pull request unless asked. If asked to commit while on the default branch, create a branch first.
+- Do not push or open a pull request unless asked.
+- Do not add `Assisted-by:` trailers, other attribution, or session links to pull-request descriptions.
 
 ## Architecture decisions
 
