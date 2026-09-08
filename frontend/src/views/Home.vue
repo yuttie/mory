@@ -753,7 +753,14 @@ function openCreatedItem() {
     successMessage.value = false;
 }
 
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
 function formatEventTime(event: { start: string; end?: string }) {
+    // A start with no time of day names a whole day -- the shape is the all-day flag, here as in
+    // the frontmatter. Parsing it would give it a midnight, and every all-day event read "00:00".
+    if (DATE_ONLY.test(event.start)) {
+        return 'All day';
+    }
     const start = dayjs(event.start);
     if (event.end) {
         const end = dayjs(event.end);
