@@ -67,7 +67,7 @@ Run commands in the component's own directory (`backend/` or `frontend/`).
     - Use `feat` for user-facing changes, in either the frontend or the backend. The type
       decides how git-cliff groups the commit in `CHANGELOG.md`.
     - In the subject and body, record any numbers you measured when they matter to the change.
-- Past commit messages are a useful model, but the rules in this file always win.
+- If these rules don't cover a case, past commit messages can serve as a fallback. Otherwise don't consult them; the rules in this file always win.
 - When creating commits, append an `Assisted-by:` trailer naming yourself — the agent, and the
   model behind it when that is what identifies you. Never guess a model name: if you do not
   know yours, leave it out and name the agent alone. One line per agent that worked on the
