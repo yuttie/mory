@@ -289,3 +289,66 @@ describe('loading events', () => {
         expect(store.isLoading).toBe(false);
     });
 });
+
+describe('task date colours', () => {
+    const WITH_COLORS = `${YAML_FILE}task_dates:
+    due_by: "#0d47a1"
+    deadline: "#880e4f"
+`;
+
+    it('reads them out of the same file', async () => {
+        apiMocks.getNote.mockResolvedValue({ data: WITH_COLORS });
+        const { useCalendarsStore } = await load();
+        const store = useCalendarsStore();
+
+        await store.loadSubscriptions();
+
+        expect(store.taskDateColors).toEqual({ due_by: '#0d47a1', deadline: '#880e4f' });
+    });
+
+    // Hand-edited YAML: anything but a non-empty string means "use the default".
+    it('drops a colour that is not usable text', async () => {
+        apiMocks.getNote.mockResolvedValue({
+            data: `${YAML_FILE}task_dates:\n    due_by: 12\n    deadline: "  "\n`,
+        });
+        const { useCalendarsStore } = await load();
+        const store = useCalendarsStore();
+
+        await store.loadSubscriptions();
+
+        expect(store.taskDateColors).toEqual({});
+    });
+
+    it('keeps the subscriptions when only the colours are saved', async () => {
+        apiMocks.getNote.mockResolvedValue({ data: WITH_COLORS });
+        const { useCalendarsStore } = await load();
+        const store = useCalendarsStore();
+
+        await store.loadSubscriptions();
+        await store.saveTaskDateColors({ deadline: '#b71c1c' });
+
+        const [path, content] = apiMocks.addNote.mock.calls[0];
+        expect(path).toBe('.mory/calendars.yaml');
+        expect(content).toContain('https://example.invalid/work.ics');
+        expect(content).toContain('#b71c1c');
+        expect(content).not.toContain('due_by');
+    });
+
+    it('keeps the colours when only the subscriptions are saved', async () => {
+        apiMocks.getNote.mockResolvedValue({ data: WITH_COLORS });
+        const { useCalendarsStore } = await load();
+        const store = useCalendarsStore();
+
+        await store.loadSubscriptions();
+        await store.saveSubscriptions([{
+            id: 'work',
+            name: 'Work',
+            url: 'https://example.invalid/work.ics',
+            enabled: true,
+        }]);
+
+        const [, content] = apiMocks.addNote.mock.calls[0];
+        expect(content).toContain('#0d47a1');
+        expect(content).toContain('#880e4f');
+    });
+});

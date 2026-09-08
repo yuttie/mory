@@ -544,6 +544,9 @@ const TASK_DATE_COLOR: Record<TaskDate, string> = {
     deadline: DEFAULT_DEADLINE_COLOR,
 };
 
+/// The colours configured for a task's dates, each falling back to the built-in one.
+export type TaskDateColors = Partial<Record<TaskDate, string>>;
+
 // One of a task's dates, as an event -- or nothing, when the field is absent.
 //
 // A date is a moment, not a span, so it becomes a one-off event with no end: all-day when the
@@ -554,6 +557,7 @@ function taskDateEvent(
     uuid: string,
     entry: ListEntry2,
     window: EventWindow,
+    colors: TaskDateColors,
     into: CalendarEvent[],
     errors: EventError[],
 ): void {
@@ -582,7 +586,7 @@ function taskDateEvent(
         name,
         start,
         finished: isSettled((task as { status?: unknown }).status),
-        color: TASK_DATE_COLOR[field],
+        color: colors[field] || TASK_DATE_COLOR[field],
         source: 'task',
         taskDate: field,
         notePath: entry.path,
@@ -599,9 +603,11 @@ function taskDateEvent(
 export function taskDatesFromEntries(
     entries: readonly ListEntry2[],
     window: EventWindow,
+    options: { colorOf?: TaskDateColors } = {},
 ): DerivedEvents {
     const events: CalendarEvent[] = [];
     const errors: EventError[] = [];
+    const colors = options.colorOf ?? {};
 
     for (const entry of entries) {
         const uuid = taskUuidOf(entry.path);
@@ -612,8 +618,8 @@ export function taskDatesFromEntries(
         if (typeof task !== 'object' || task === null) {
             continue;
         }
-        taskDateEvent('due_by', task, uuid, entry, window, events, errors);
-        taskDateEvent('deadline', task, uuid, entry, window, events, errors);
+        taskDateEvent('due_by', task, uuid, entry, window, colors, events, errors);
+        taskDateEvent('deadline', task, uuid, entry, window, colors, events, errors);
     }
 
     return { events, errors };

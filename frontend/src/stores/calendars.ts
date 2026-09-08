@@ -19,6 +19,7 @@ import type {
     ImportedSeries,
 } from '@/api';
 import { getImportedEvents } from '@/api';
+import type { TaskDateColors } from '@/events';
 import { useFilesStore } from '@/stores/files';
 
 export const CALENDARS_PATH = '.mory/calendars.yaml';
@@ -30,6 +31,11 @@ export interface CalendarSubscription {
     color?: string;
     enabled: boolean;
 }
+
+// The colours a task's due date and deadline are drawn in live beside the subscriptions rather
+// than in this browser's storage because they are the same kind of thing as a calendar's colour:
+// how one source of dates is told from another, and something the user would otherwise have to set
+// again on every device.
 
 /// A calendar as a view needs to list it: what to call it, and what colour it draws in.
 export interface CalendarSummary {
@@ -51,6 +57,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
     const files = useFilesStore();
 
     const subscriptions = ref<CalendarSubscription[]>([]);
+    const taskDateColors = ref<TaskDateColors>({});
     const hasLoadedSubscriptions = ref(false);
 
     const loaded = shallowRef<Loaded>(EMPTY);
@@ -136,11 +143,13 @@ export const useCalendarsStore = defineStore('calendars', () => {
                 color: entry.color === undefined ? undefined : String(entry.color),
                 enabled: entry.enabled !== false,
             }));
+            taskDateColors.value = readTaskDateColors(parsed?.task_dates);
         }
         catch (error) {
             // No file means no calendars, which is the normal state before any are added -- the
             // same reading `ai-actions.ts` gives a 404 on its own config.
             subscriptions.value = [];
+            taskDateColors.value = {};
             if (!isMissing(error)) {
                 throw error;
             }
@@ -151,19 +160,36 @@ export const useCalendarsStore = defineStore('calendars', () => {
 
     async function saveSubscriptions(next: CalendarSubscription[]): Promise<void> {
         subscriptions.value = next;
+        await writeConfiguration();
+        // The subscription list decides what the events request returns, so what is loaded now
+        // describes a configuration that no longer exists.
+        invalidate();
+    }
+
+    /// Set the colours a task's dates draw in. An absent colour means the built-in default.
+    ///
+    /// No `invalidate()`: this changes how events are drawn, not which ones the backend returns.
+    async function saveTaskDateColors(next: TaskDateColors): Promise<void> {
+        taskDateColors.value = next;
+        await writeConfiguration();
+    }
+
+    // The whole file, from whatever the store holds. Both halves are written every time, so
+    // editing one never drops the other.
+    async function writeConfiguration(): Promise<void> {
         const document = {
-            calendars: next.map((subscription) => ({
+            calendars: subscriptions.value.map((subscription) => ({
                 id: subscription.id,
                 name: subscription.name,
                 url: subscription.url,
                 ...(subscription.color ? { color: subscription.color } : {}),
                 enabled: subscription.enabled,
             })),
+            ...(Object.keys(taskDateColors.value).length > 0
+                ? { task_dates: { ...taskDateColors.value } }
+                : {}),
         };
         await files.write(CALENDARS_PATH, YAML.stringify(document, { indent: 4 }));
-        // The subscription list decides what the events request returns, so what is loaded now
-        // describes a configuration that no longer exists.
-        invalidate();
     }
 
     function invalidate(): void {
@@ -229,6 +255,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
 
     return {
         subscriptions,
+        taskDateColors,
         hasLoadedSubscriptions,
         available,
         events,
@@ -240,10 +267,27 @@ export const useCalendarsStore = defineStore('calendars', () => {
         isLoading,
         loadSubscriptions,
         saveSubscriptions,
+        saveTaskDateColors,
         invalidate,
         load,
     };
 });
+
+// Hand-edited YAML, so every value is checked rather than trusted: a colour that is not a string
+// is dropped in favour of the default, which is what an absent one means anyway.
+function readTaskDateColors(value: unknown): TaskDateColors {
+    if (typeof value !== 'object' || value === null) {
+        return {};
+    }
+    const colors: TaskDateColors = {};
+    for (const field of ['due_by', 'deadline'] as const) {
+        const color = (value as Record<string, unknown>)[field];
+        if (typeof color === 'string' && color.trim() !== '') {
+            colors[field] = color.trim();
+        }
+    }
+    return colors;
+}
 
 function isMissing(error: unknown): boolean {
     const status = (error as { response?: { status?: number } })?.response?.status;

@@ -821,4 +821,16 @@ describe('taskDatesFromEntries', () => {
             ['due_by', 'sometime', 'Submit the paper', `.tasks/${UUID_A}.md`, 'Submit the paper'],
         ]);
     });
+    it('draws a task date in the colour the configuration names', () => {
+        const { events } = taskDatesFromEntries([
+            taskEntry(UUID_A, {
+                status: { kind: 'todo' },
+                due_by: '2026-03-01',
+                deadline: '2026-03-04',
+            }),
+        ], ANY_WINDOW, { colorOf: { due_by: '#0d47a1' } });
+
+        // Only what is configured is overridden; the rest keeps its default.
+        expect(events.map((e) => e.color)).toEqual(['#0d47a1', DEFAULT_DEADLINE_COLOR]);
+    });
 });
