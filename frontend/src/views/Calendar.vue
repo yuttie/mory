@@ -131,6 +131,14 @@
                     >
                         iCal
                     </v-chip>
+                    <v-chip
+                        v-else-if="selectedEvent.source === 'task'"
+                        class="mr-2"
+                        size="small"
+                        variant="flat"
+                    >
+                        Deadline
+                    </v-chip>
                     <v-icon v-if="selectedEvent.finished" class="mr-4">{{ mdiCheck }}</v-icon>
                 </v-toolbar>
                 <v-card-text>
@@ -163,7 +171,13 @@
                                 target="_blank"
                             >{{ selectedEvent.url }}</a>
                         </v-list-item>
-                        <v-list-item v-if="selectedEvent.notePath">
+                        <v-list-item v-if="selectedEvent.taskId">
+                            <template v-slot:prepend>
+                                <v-icon>{{ mdiCheckboxMarkedOutline }}</v-icon>
+                            </template>
+                            <router-link v-bind:to="{ name: 'TasksNextWithParams', params: { selectedNodeId: selectedEvent.taskId, tab: 'selected', viewMode: 'status' } }">{{ selectedEvent.name }}</router-link>
+                        </v-list-item>
+                        <v-list-item v-else-if="selectedEvent.notePath">
                             <template v-slot:prepend>
                                 <v-icon>{{ mdiFileDocumentOutline }}</v-icon>
                             </template>
@@ -221,6 +235,7 @@ import {
     mdiCalendarImport,
     mdiCalendarMultiple,
     mdiCheck,
+    mdiCheckboxMarkedOutline,
     mdiChevronLeft,
     mdiChevronRight,
     mdiClockEnd,
@@ -232,7 +247,7 @@ import {
 } from '@mdi/js';
 
 
-import { DEFAULT_EVENT_COLOR, DEFAULT_IMPORTED_COLOR, eventsFromEntries, mergeImported } from '@/events';
+import { DEFAULT_EVENT_COLOR, DEFAULT_IMPORTED_COLOR, deadlinesFromEntries, eventsFromEntries, mergeImported } from '@/events';
 import type { CalendarEvent } from '@/events';
 import { buildOccurrenceNote, buildSeriesNote, canConvertSeries } from '@/event-note';
 import { useCalendarsStore } from '@/stores/calendars';
@@ -289,13 +304,15 @@ const eventWindow = computed(() => {
     };
 });
 const derived = computed(() => eventsFromEntries(files.entries, eventWindow.value));
+// A deadline is not an `events:` block, so it comes from its own derivation over the same listing.
+const deadlines = computed(() => deadlinesFromEntries(files.entries, eventWindow.value));
 const hiddenCalendars = computed(() => new Set(hiddenCalendarIds.value));
 const events = computed(() => mergeImported(
-    derived.value.events,
+    [...derived.value.events, ...deadlines.value.events],
     calendars.events,
     { colorOf: calendars.colorOf, hidden: hiddenCalendars.value },
 ));
-const eventErrors = computed(() => derived.value.errors);
+const eventErrors = computed(() => [...derived.value.errors, ...deadlines.value.errors]);
 
 // Watchers
 // Lifecycle hooks
