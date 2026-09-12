@@ -13,16 +13,18 @@ use std::sync::Arc;
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::{CallToolResult, ContentBlock, Implementation, ServerCapabilities, ServerInfo},
+    service::RequestContext,
     tool, tool_handler, tool_router,
     transport::streamable_http_server::{
         session::local::LocalSessionManager, tower::StreamableHttpService,
         StreamableHttpServerConfig,
     },
-    ErrorData, ServerHandler,
+    ErrorData, RoleServer, ServerHandler,
 };
 use serde::Serialize;
 
 use crate::models::AppState;
+use crate::oauth::{AccessClaims, SCOPE_WRITE};
 
 mod tools;
 
@@ -45,6 +47,28 @@ fn tool_error(message: impl Into<String>) -> CallToolResult {
     CallToolResult::error(vec![ContentBlock::text(message.into())])
 }
 
+/// Whether the token this request arrived with carries a scope.
+///
+/// `mcp_auth` has already required `notes:read` and put the claims in the HTTP request's
+/// extensions; rmcp passes the whole `http::request::Parts` through to the tool. A request with
+/// no claims at all cannot happen behind that middleware, but it is treated as un-granted rather
+/// than assumed granted: a write must never be the thing that depends on a `.unwrap()`.
+fn granted(context: &RequestContext<RoleServer>, scope: &str) -> bool {
+    context
+        .extensions
+        .get::<axum::http::request::Parts>()
+        .and_then(|parts| parts.extensions.get::<Arc<AccessClaims>>())
+        .is_some_and(|claims| claims.has_scope(scope))
+}
+
+/// The refusal a write tool returns when its token is read-only.
+fn needs_write_scope() -> CallToolResult {
+    tool_error(
+        "This connection was granted read-only access. Reconnect and approve the \
+         notes:write scope to change anything.",
+    )
+}
+
 /// The MCP server's view of mory. Cloned per session; `AppState` is itself a handle.
 #[derive(Clone)]
 pub struct Mory {
@@ -61,15 +85,15 @@ impl Mory {
     #[tool(
         name = "search_notes",
         description = "Search the notes by text, meaning, or regular expression. Returns the \
-                       repository path of each match, which read_note then reads.\n\n\
-                       The query language is small and deliberate: bare words match anywhere, \
-                       `path:`, `title:` and `body:` restrict a term to one field, `+` requires \
-                       a term and `-` excludes it, and \"a phrase\" matches words in order. \
-                       Boolean syntax such as (a OR b) is not accepted.\n\n\
-                       Modes: `text` is the local index and is always available; `semantic` and \
-                       `hybrid` need embeddings enabled on this server and fall back to text \
-                       with a warning when they are not; `grep` is a literal regular-expression \
-                       scan. Start with `hybrid`, or `text` for an exact term.",
+                       repository path of each match, which read_note then reads.\n\nThe query \
+                       language is small and deliberate: bare words match anywhere, `path:`, \
+                       `title:` and `body:` restrict a term to one field, `+` requires a term \
+                       and `-` excludes it, and \"a phrase\" matches words in order. Boolean \
+                       syntax such as (a OR b) is not accepted.\n\nModes: `text` is the local \
+                       index and is always available; `semantic` and `hybrid` need embeddings \
+                       enabled on this server and fall back to text with a warning when they \
+                       are not; `grep` is a literal regular-expression scan. Start with \
+                       `hybrid`, or `text` for an exact term.",
         annotations(title = "Search notes", read_only_hint = true, open_world_hint = false)
     )]
     pub async fn search_notes(
@@ -81,7 +105,12 @@ impl Mory {
 
     #[tool(
         name = "list_notes",
-        description = "List the notes in the repository, newest first, with their titles, tags                        and task status. Optionally restricted to a path prefix such as `.tasks/`                        or `projects/`.\n\n                       The repository holds on the order of a thousand entries, so this is                        always a page: pass the `next_offset` a result reports to continue. To                        find something specific, search_notes is the better tool.",
+        description = "List the notes in the repository, newest first, with their titles, tags \
+                       and task status. Optionally restricted to a path prefix such as \
+                       `.tasks/` or `projects/`.\n\nThe repository holds on the order of a \
+                       thousand entries, so this is always a page: pass the `next_offset` a \
+                       result reports to continue. To find something specific, search_notes is \
+                       the better tool.",
         annotations(title = "List notes", read_only_hint = true, open_world_hint = false)
     )]
     pub async fn list_notes(
@@ -93,7 +122,11 @@ impl Mory {
 
     #[tool(
         name = "list_tasks",
-        description = "List the tasks under `.tasks/`, optionally filtered by status or tag.                        Each result carries the note's `task:` block exactly as the file declares                        it: status kind, progress, importance, urgency, and whichever of                        start_at, due_by, deadline and scheduled_dates it sets.\n\n                       Statuses are todo, in_progress, waiting, blocked, on_hold, done and                        canceled.",
+        description = "List the tasks under `.tasks/`, optionally filtered by status or tag. \
+                       Each result carries the note's `task:` block exactly as the file \
+                       declares it: status kind, progress, importance, urgency, and whichever \
+                       of start_at, due_by, deadline and scheduled_dates it sets.\n\nStatuses \
+                       are todo, in_progress, waiting, blocked, on_hold, done and canceled.",
         annotations(title = "List tasks", read_only_hint = true, open_world_hint = false)
     )]
     pub async fn list_tasks(
@@ -105,7 +138,13 @@ impl Mory {
 
     #[tool(
         name = "list_events",
-        description = "List the calendar events the notes declare in their `events:`                        frontmatter, over a window of whole days.\n\n                       An event carrying a `repeat` rule is returned with `recurs: true` and its                        rule, but its occurrences are NOT expanded -- read the rule and work the                        dates out from it. Every other event appears only when one of its                        declared occurrences falls inside the window. Events subscribed from an                        external calendar are a separate tool, list_imported_events.",
+        description = "List the calendar events the notes declare in their `events:` \
+                       frontmatter, over a window of whole days.\n\nAn event carrying a \
+                       `repeat` rule is returned with `recurs: true` and its rule, but its \
+                       occurrences are NOT expanded -- read the rule and work the dates out \
+                       from it. Every other event appears only when one of its declared \
+                       occurrences falls inside the window. Events subscribed from an external \
+                       calendar are a separate tool, list_imported_events.",
         annotations(title = "List events", read_only_hint = true, open_world_hint = false)
     )]
     pub async fn list_events(
@@ -117,7 +156,12 @@ impl Mory {
 
     #[tool(
         name = "list_imported_events",
-        description = "List the events from the external calendars subscribed in                        `.mory/calendars.yaml`, expanded over a window of whole days.\n\n                       These are a live view of someone else's calendar: they are read-only,                        they are not stored in the repository, and they must never be written                        into it. A calendar that could not be read is reported in `calendars`                        with its error rather than failing the call.",
+        description = "List the events from the external calendars subscribed in \
+                       `.mory/calendars.yaml`, expanded over a window of whole days.\n\nThese \
+                       are a live view of someone else's calendar: they are read-only, they are \
+                       not stored in the repository, and they must never be written into it. A \
+                       calendar that could not be read is reported in `calendars` with its \
+                       error rather than failing the call.",
         annotations(title = "List imported events", read_only_hint = true, open_world_hint = true)
     )]
     pub async fn list_imported_events(
@@ -125,6 +169,88 @@ impl Mory {
         Parameters(args): Parameters<tools::WindowArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         tools::list_imported_events(&self.state, args).await
+    }
+
+    #[tool(
+        name = "create_note",
+        description = "Create a new note and commit it. Requires the notes:write scope.\n\nOmit \
+                       `path` and it becomes `<uuid>.md` at the repository root, which is what \
+                       the web app does. A path under `.tasks/` must end with a UUIDv4 -- \
+                       `<uuid>.md` or `readable-name-<uuid>.md` -- because the task tree is \
+                       derived from the paths. Fails rather than overwriting an existing file.",
+        annotations(title = "Create a note", read_only_hint = false, destructive_hint = false,
+                    idempotent_hint = false, open_world_hint = false)
+    )]
+    pub async fn create_note(
+        &self,
+        Parameters(args): Parameters<tools::CreateNoteArgs>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        if !granted(&context, SCOPE_WRITE) {
+            return Ok(needs_write_scope());
+        }
+        tools::create_note(&self.state, args).await
+    }
+
+    #[tool(
+        name = "update_note",
+        description = "Replace a note's entire content and commit it. Requires the notes:write \
+                       scope.\n\nThis is not a patch: read_note first and send the whole file \
+                       back, frontmatter included, or everything you did not send is lost. \
+                       Editing a task or an event means editing the YAML frontmatter of its \
+                       note.",
+        annotations(title = "Update a note", read_only_hint = false, destructive_hint = true,
+                    idempotent_hint = true, open_world_hint = false)
+    )]
+    pub async fn update_note(
+        &self,
+        Parameters(args): Parameters<tools::UpdateNoteArgs>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        if !granted(&context, SCOPE_WRITE) {
+            return Ok(needs_write_scope());
+        }
+        tools::update_note(&self.state, args).await
+    }
+
+    #[tool(
+        name = "rename_note",
+        description = "Move a note to another path and commit it. Requires the notes:write \
+                       scope.\n\nA note under `.tasks/` must keep a UUIDv4 at the end of its \
+                       file name, so renaming a task usually means changing only the readable \
+                       prefix in front of it. Fails rather than overwriting an existing file.",
+        annotations(title = "Rename a note", read_only_hint = false, destructive_hint = false,
+                    idempotent_hint = false, open_world_hint = false)
+    )]
+    pub async fn rename_note(
+        &self,
+        Parameters(args): Parameters<tools::RenameNoteArgs>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        if !granted(&context, SCOPE_WRITE) {
+            return Ok(needs_write_scope());
+        }
+        tools::rename_note(&self.state, args).await
+    }
+
+    #[tool(
+        name = "delete_note",
+        description = "Delete a note and commit the deletion. Requires the notes:write \
+                       scope.\n\nThe content stays in the Git history, so this is recoverable, \
+                       but the note leaves the app. Ask before deleting anything you were not \
+                       explicitly told to delete.",
+        annotations(title = "Delete a note", read_only_hint = false, destructive_hint = true,
+                    idempotent_hint = true, open_world_hint = false)
+    )]
+    pub async fn delete_note(
+        &self,
+        Parameters(args): Parameters<tools::DeleteNoteArgs>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        if !granted(&context, SCOPE_WRITE) {
+            return Ok(needs_write_scope());
+        }
+        tools::delete_note(&self.state, args).await
     }
 
     #[tool(

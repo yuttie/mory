@@ -577,6 +577,275 @@ pub async fn list_imported_events(
     }
 }
 
+// ---------------------------------------------------------------------------------------------
+// Writing
+// ---------------------------------------------------------------------------------------------
+
+/// 600 KB of legacy YAML held together by anchors and aliases (`&a1` / `*a1`), which a naive
+/// parse-and-serialize round-trip silently expands into independent copies. Nothing here writes
+/// it; it is readable through `read_note` like any other file.
+const READ_ONLY_PATHS: [&str; 1] = [".mory/tasks.yaml"];
+
+/// Where the task tree's naming rules apply.
+///
+/// `entries_to_tree` derives the forest from the paths, so a file here named outside the
+/// convention makes the whole task tree unbuildable for the web app.
+const TASKS_DIR: &str = ".tasks/";
+
+/// Check a path a tool was asked to touch, and return it in its canonical spelling.
+///
+/// Traversal is refused rather than normalised away: a caller that wrote `../` meant something,
+/// and quietly writing somewhere else would be worse than saying no.
+fn safe_path(path: &str) -> Result<String, String> {
+    let path = path.trim();
+    if path.is_empty() {
+        return Err("A path is required.".to_owned());
+    }
+    if path.starts_with('/') {
+        return Err(format!(
+            "{path:?} is absolute. Paths are relative to the repository root.",
+        ));
+    }
+    if path.contains('\\') {
+        return Err(format!("{path:?} must use / as its separator."));
+    }
+    for component in path.split('/') {
+        if component.is_empty() {
+            return Err(format!("{path:?} has an empty path component."));
+        }
+        if component == "." || component == ".." {
+            return Err(format!("{path:?} must not contain . or .. components."));
+        }
+    }
+    if path.contains('\0') {
+        return Err(format!("{path:?} contains a null byte."));
+    }
+    if READ_ONLY_PATHS.contains(&path) {
+        return Err(format!(
+            "{path:?} is read-only through MCP. It is legacy YAML using anchors and aliases \
+             that a rewrite would silently expand into independent copies.",
+        ));
+    }
+    Ok(path.to_owned())
+}
+
+/// `safe_path`, plus the naming rules for a path content is about to *land* on.
+///
+/// Only destinations are held to this. A file already named outside the convention has already
+/// broken the task tree, and the tools that would repair it -- renaming it to a conforming name,
+/// or deleting it -- must not be the ones refused.
+fn writable_path(path: &str) -> Result<String, String> {
+    let path = safe_path(path)?;
+    if let Some(rest) = path.strip_prefix(TASKS_DIR) {
+        check_tree_naming(rest)?;
+    }
+    Ok(path)
+}
+
+/// The naming `entries_to_tree` needs: every directory component a bare UUIDv4, and the file
+/// stem ending in one, optionally after a readable prefix.
+fn check_tree_naming(rest: &str) -> Result<(), String> {
+    let advice = "A task's file name must end with a UUIDv4 -- `<uuid>.md` or \
+                  `readable-name-<uuid>.md` -- and every directory under `.tasks/` must be a bare \
+                  UUIDv4 naming its parent task. The task tree is derived from these paths.";
+
+    let mut components = rest.split('/').collect::<Vec<_>>();
+    let Some(file) = components.pop() else {
+        return Err(advice.to_owned());
+    };
+    for directory in components {
+        if !is_uuid_v4(directory) {
+            return Err(format!("The directory {directory:?} is not a UUIDv4. {advice}"));
+        }
+    }
+    let stem = file.rsplit_once('.').map(|(stem, _)| stem).unwrap_or(file);
+    if stem.len() < 36 || !is_uuid_v4(&stem[stem.len() - 36..]) {
+        return Err(format!("The file name {file:?} does not end with a UUIDv4. {advice}"));
+    }
+    Ok(())
+}
+
+fn is_uuid_v4(value: &str) -> bool {
+    uuid::Uuid::parse_str(value)
+        .is_ok_and(|parsed| parsed.get_version() == Some(uuid::Version::Random))
+}
+
+#[derive(Debug, Serialize)]
+struct WriteOutput {
+    path: String,
+    /// The commit this write made, so a caller can point at it afterwards.
+    commit: String,
+    message: String,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct CreateNoteArgs {
+    /// The full Markdown source, YAML frontmatter included.
+    pub content: String,
+    /// The commit message. Say what changed and why.
+    pub message: String,
+    /// Where to put it. Omit for `<uuid>.md` at the repository root, which is what the web app
+    /// does. A path under `.tasks/` must follow the UUID naming the task tree is built from.
+    #[serde(default)]
+    pub path: Option<String>,
+}
+
+pub async fn create_note(
+    state: &AppState,
+    args: CreateNoteArgs,
+) -> Result<CallToolResult, ErrorData> {
+    // UUIDv4 rather than v7, matching the frontend's `crypto.randomUUID()`: `entries_to_tree`
+    // rejects every other version, so a v7 name would break the tree it appears in.
+    let path = match args.path {
+        Some(path) => match writable_path(&path) {
+            Ok(path) => path,
+            Err(message) => return Ok(tool_error(message)),
+        },
+        None => format!("{}.md", uuid::Uuid::new_v4()),
+    };
+
+    // Creating over an existing note would be a silent overwrite; update_note is the tool that
+    // says it is replacing something.
+    if crate::find_entry_blob(state, &path).await.is_some() {
+        return Ok(tool_error(format!(
+            "{path:?} already exists. Use update_note to replace its content.",
+        )));
+    }
+
+    match state.save_note(&path, args.content.as_bytes(), &args.message).await {
+        Ok(commit) => json_result(&WriteOutput {
+            path,
+            commit: commit.to_string(),
+            message: args.message,
+        }),
+        Err(e) => {
+            tracing::error!("MCP create_note failed for {}: {:?}", path, e);
+            Ok(tool_error(format!("{path:?} could not be written: {e:#}")))
+        },
+    }
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateNoteArgs {
+    /// The exact repository path of the note to replace.
+    pub path: String,
+    /// The full Markdown source that replaces it, frontmatter included. This is not a patch:
+    /// read the note first and send back the whole file.
+    pub content: String,
+    /// The commit message. Say what changed and why.
+    pub message: String,
+}
+
+pub async fn update_note(
+    state: &AppState,
+    args: UpdateNoteArgs,
+) -> Result<CallToolResult, ErrorData> {
+    // `safe_path`, not `writable_path`: the name is already whatever it is, and refusing to edit
+    // the content of a badly-named note would help nobody.
+    let path = match safe_path(&args.path) {
+        Ok(path) => path,
+        Err(message) => return Ok(tool_error(message)),
+    };
+    if crate::find_entry_blob(state, &path).await.is_none() {
+        return Ok(tool_error(format!(
+            "No file at {path:?}. Use create_note to make one, or search_notes to find the path.",
+        )));
+    }
+
+    match state.save_note(&path, args.content.as_bytes(), &args.message).await {
+        Ok(commit) => json_result(&WriteOutput {
+            path,
+            commit: commit.to_string(),
+            message: args.message,
+        }),
+        Err(e) => {
+            tracing::error!("MCP update_note failed for {}: {:?}", path, e);
+            Ok(tool_error(format!("{path:?} could not be written: {e:#}")))
+        },
+    }
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct DeleteNoteArgs {
+    /// The exact repository path of the note to delete.
+    pub path: String,
+    /// The commit message. Say why it went.
+    pub message: String,
+}
+
+pub async fn delete_note(
+    state: &AppState,
+    args: DeleteNoteArgs,
+) -> Result<CallToolResult, ErrorData> {
+    // Deleting a file named outside the convention is one of the two ways to repair a broken
+    // task tree, so the naming rules must not stand in its way.
+    let path = match safe_path(&args.path) {
+        Ok(path) => path,
+        Err(message) => return Ok(tool_error(message)),
+    };
+
+    match state.delete_note(&path, &args.message).await {
+        Ok(Some(commit)) => json_result(&WriteOutput {
+            path,
+            commit: commit.to_string(),
+            message: args.message,
+        }),
+        Ok(None) => Ok(tool_error(format!("No file at {path:?}, so nothing was deleted."))),
+        Err(e) => {
+            tracing::error!("MCP delete_note failed for {}: {:?}", path, e);
+            Ok(tool_error(format!("{path:?} could not be deleted: {e:#}")))
+        },
+    }
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct RenameNoteArgs {
+    /// The note's current repository path.
+    pub from: String,
+    /// Where it should be. A path under `.tasks/` must keep the UUID naming the task tree is
+    /// built from, so renaming a task usually means changing only the readable prefix.
+    pub to: String,
+    /// The commit message. Omit for "Rename <from> to <to>", which is what the web app writes.
+    #[serde(default)]
+    pub message: Option<String>,
+}
+
+pub async fn rename_note(
+    state: &AppState,
+    args: RenameNoteArgs,
+) -> Result<CallToolResult, ErrorData> {
+    // The source is only checked for safety -- renaming a badly-named task into a conforming
+    // name is the other way to repair a broken tree -- but it is still checked, because renaming
+    // *out of* a read-only path removes it just as surely as deleting it. The destination is
+    // where content lands, so it gets the full rules.
+    let (from, to) = match (safe_path(&args.from), writable_path(&args.to)) {
+        (Ok(from), Ok(to)) => (from, to),
+        (Err(message), _) | (_, Err(message)) => return Ok(tool_error(message)),
+    };
+    if from == to {
+        return Ok(tool_error("The source and destination are the same path."));
+    }
+    if crate::find_entry_blob(state, &to).await.is_some() {
+        return Ok(tool_error(format!("{to:?} already exists.")));
+    }
+
+    let message = args
+        .message
+        .unwrap_or_else(|| format!("Rename {from} to {to}"));
+    match state.rename_note(&from, &to, &message).await {
+        Ok(Some(commit)) => json_result(&WriteOutput {
+            path: to,
+            commit: commit.to_string(),
+            message,
+        }),
+        Ok(None) => Ok(tool_error(format!("No file at {from:?}, so nothing was renamed."))),
+        Err(e) => {
+            tracing::error!("MCP rename_note failed for {} -> {}: {:?}", from, to, e);
+            Ok(tool_error(format!("{from:?} could not be renamed: {e:#}")))
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -634,7 +903,9 @@ mod tests {
         );
         assert_eq!(
             declared_starts(&yaml(
-                "start: 2026-01-01\ninstances:\n  - start: 2026-02-01\ntimes:\n  - start: 2026-03-01",
+                "start: 2026-01-01\n\
+                 instances:\n  - start: 2026-02-01\n\
+                 times:\n  - start: 2026-03-01",
             )),
             vec!["2026-01-01", "2026-02-01", "2026-03-01"],
         );
@@ -647,6 +918,65 @@ mod tests {
             declared_starts(&yaml("repeat:\n  freq: weekly")),
             Vec::<String>::new(),
         );
+    }
+
+    #[test]
+    fn a_path_that_escapes_the_repository_is_refused_rather_than_normalised() {
+        for bad in [
+            "../../etc/passwd",
+            "notes/../../etc/passwd",
+            "/etc/passwd",
+            "./note.md",
+            "a//b.md",
+            "",
+            "   ",
+            "windows\\path.md",
+        ] {
+            assert!(safe_path(bad).is_err(), "accepted {bad:?}");
+        }
+        assert_eq!(safe_path("  notes/a.md  ").as_deref(), Ok("notes/a.md"));
+        // A name that merely *contains* dots is fine; only whole components are traversal.
+        assert_eq!(safe_path("..hidden.md").as_deref(), Ok("..hidden.md"));
+    }
+
+    #[test]
+    fn the_legacy_task_yaml_is_read_only() {
+        assert!(safe_path(".mory/tasks.yaml").is_err());
+        // Its neighbours are not.
+        assert!(safe_path(".mory/calendars.yaml").is_ok());
+    }
+
+    /// The task tree is derived from the paths, so a name outside the convention makes the whole
+    /// forest unbuildable for the web app.
+    #[test]
+    fn a_task_path_must_carry_the_uuid_the_tree_is_built_from() {
+        assert!(writable_path(".tasks/1f8c4a2e-3d5b-4e7a-9c1d-2b6f8a0e4d33.md").is_ok());
+        assert!(writable_path(".tasks/readable-1f8c4a2e-3d5b-4e7a-9c1d-2b6f8a0e4d33.md").is_ok());
+        let nested = concat!(
+            ".tasks/1f8c4a2e-3d5b-4e7a-9c1d-2b6f8a0e4d33",
+            "/child-3a7d9e12-4b8c-4f6a-9d2e-1c5b7a3f8e04.md",
+        );
+        assert!(writable_path(nested).is_ok(), "rejected {nested:?}");
+
+        assert!(writable_path(".tasks/my-task.md").is_err());
+        // UUIDv7, which `parse_uuid_v4` rejects -- the frontend mints v4 for exactly this reason.
+        assert!(writable_path(".tasks/01973561-7832-720d-8707-d117baabd452.md").is_err());
+        // A parent directory that is not a bare UUIDv4.
+        assert!(
+            writable_path(".tasks/project/1f8c4a2e-3d5b-4e7a-9c1d-2b6f8a0e4d33.md").is_err(),
+        );
+
+        // Outside `.tasks/` the convention does not apply: ordinary notes are free-form.
+        assert!(writable_path("anything.md").is_ok());
+        assert!(writable_path("folder/anything.md").is_ok());
+    }
+
+    /// A file already named outside the convention has already broken the tree; the two tools
+    /// that could repair it must not be the ones refused.
+    #[test]
+    fn a_badly_named_task_can_still_be_renamed_or_deleted() {
+        assert!(safe_path(".tasks/my-task.md").is_ok());
+        assert!(writable_path(".tasks/my-task.md").is_err());
     }
 
     #[test]
