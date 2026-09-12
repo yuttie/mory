@@ -2164,10 +2164,21 @@ Important:
 
         match query.format.as_deref() {
             Some("tree") => {
-                // Tree structure response
-                let roots = entries_to_tree(&entries, Some(".tasks")).unwrap();
-                let response = Json(roots).into_response();
-                attach_oid(response, head_commit_id)
+                // The tree is derived from the paths, so one file named outside the convention --
+                // a directory that is not a UUIDv4, a stem that does not end in one, a parent
+                // UUID with no file of its own -- makes the whole forest unbuildable. Reporting
+                // that is the honest answer; panicking the request task was not.
+                match entries_to_tree(&entries, Some(".tasks")) {
+                    Ok(roots) => attach_oid(Json(roots).into_response(), head_commit_id),
+                    Err(e) => {
+                        tracing::error!("The task tree could not be built: {:?}", e);
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            format!("The task tree could not be built: {:#}", e),
+                        )
+                            .into_response()
+                    },
+                }
             },
             _ => {
                 // List structure response
