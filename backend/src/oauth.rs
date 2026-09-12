@@ -1520,19 +1520,33 @@ fn consent_throttle() -> impl tower::Layer<
         .rate_limit(1, Duration::from_secs(3))
 }
 
-/// The same discovery documents again, at the site root.
+/// The discovery documents at the site root, for a deployment mounted below it.
 ///
-/// A client that follows the `resource_metadata` pointer never needs these, and neither does one
-/// that walks RFC 8414's fallbacks down to `{root_path}.well-known/openid-configuration`. They
-/// are here for the deployment that adds the recommended `/.well-known/*` proxy rule, which puts
-/// discovery on every client's first-choice path.
+/// Only the *suffixed* spellings belong here, and that distinction is the whole point. RFC 8414
+/// §3.3 says a client that fetched metadata from a URL built out of an issuer must reject the
+/// document unless its `issuer` is exactly the issuer it started from. With
+/// `MORIED_ROOT_PATH=/api/` this server's issuer is `https://host/api`, so
+/// `/.well-known/oauth-authorization-server/api` is its document -- and the bare
+/// `/.well-known/oauth-authorization-server` is the document of `https://host`, which this server
+/// is not. Answering there with a path-bearing issuer is a mismatch a conformant client must
+/// refuse; a 404 is both honest and more useful, because it lets the client fall through to a
+/// fallback that does match.
 ///
-/// Only for a non-root `MORIED_ROOT_PATH`: at `/` these would be the very same routes twice, and
-/// axum panics on a duplicate.
+/// The same reasoning applies to the protected-resource document: the bare path describes the
+/// resource `https://host`, not `https://host/api/v2/mcp`.
+///
+/// A client that follows the `resource_metadata` pointer never needs any of these, and neither
+/// does one that walks RFC 8414's fallbacks down to `{root_path}.well-known/openid-configuration`
+/// -- which the `/api/` rule a deployment already has will serve. They are here for the
+/// deployment that adds the recommended `/.well-known/*` proxy rule, which puts discovery on
+/// every client's first-choice path.
+///
+/// Only for a non-root `MORIED_ROOT_PATH`. At `/` the issuer *is* the site root, so the bare
+/// paths are correct and `routes` already serves them.
 pub fn site_root_routes(state: OauthState) -> Router {
     let root = state.config.root_path.trim_end_matches('/').to_owned();
     Router::new()
-        // What RFC 9728 actually asks for: the resource's path, inserted after the document name.
+        // What RFC 9728 asks for: the resource's path, inserted after the document name.
         .route(
             &format!("/.well-known/oauth-protected-resource{root}/v2/mcp"),
             get(get_protected_resource_metadata),
@@ -1546,7 +1560,6 @@ pub fn site_root_routes(state: OauthState) -> Router {
             &format!("/.well-known/openid-configuration{root}"),
             get(get_authorization_server_metadata),
         )
-        .merge(well_known_routes())
         .with_state(state)
         .layer(
             ServiceBuilder::new()
