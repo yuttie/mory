@@ -43,6 +43,7 @@ url = "2"
 uuid = { version = "1.17.0", features = ["serde"] }
 rmcp = { version = "3", features = ["server", "macros", "schemars", "transport-streamable-http-server"] }
 schemars = "1"
+chrono-tz = "0.10.4"
 
 [dev-dependencies]
 # Used only by the test that checks what the task and event tools emit against

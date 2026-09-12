@@ -27,6 +27,7 @@ use crate::models::AppState;
 use crate::oauth::{AccessClaims, SCOPE_WRITE};
 
 pub(crate) mod frontmatter;
+mod event_tools;
 mod task_tools;
 mod tools;
 
@@ -357,6 +358,75 @@ impl Mory {
             return Ok(needs_write_scope());
         }
         task_tools::set_task_dates(&self.state, args).await
+    }
+
+    #[tool(
+        name = "add_event",
+        description = "Add a calendar event to a note's `events:` frontmatter and commit it. \
+                       Requires the notes:write scope.\n\nAn event is keyed by its name in that \
+                       map, so the name must not already be taken. `start` is required: a bare \
+                       date makes it an all-day event, a datetime carrying its offset makes it \
+                       a timed one, and the shape is the only thing that says which. `end` may \
+                       be a datetime, a bare time of day, or a duration such as `+1.5h`.\n\nIn \
+                       a `repeat` rule, weekdays are three letters (`wed`), not iCal's two, and \
+                       may carry an ordinal: `3wed` is the third Wednesday, which needs `freq: \
+                       monthly` or `yearly`. `tz` is an IANA zone name such as `Asia/Tokyo`, \
+                       never an offset.",
+        annotations(title = "Add an event", read_only_hint = false, destructive_hint = false,
+                    idempotent_hint = false, open_world_hint = false)
+    )]
+    pub async fn add_event(
+        &self,
+        Parameters(args): Parameters<event_tools::EventArgs>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        if !granted(&context, SCOPE_WRITE) {
+            return Ok(needs_write_scope());
+        }
+        event_tools::add_event(&self.state, args).await
+    }
+
+    #[tool(
+        name = "update_event",
+        description = "Change a calendar event already declared in a note's `events:` \
+                       frontmatter. Requires the notes:write scope.\n\nOnly the fields given \
+                       are changed; name keys in `clear` to remove them. The rest of the note, \
+                       comments and hand-formatting included, is untouched. The same spelling \
+                       rules as add_event apply: three-letter weekdays with an optional \
+                       ordinal, an IANA zone name for `tz`, offsets on datetimes and none on \
+                       dates.",
+        annotations(title = "Update an event", read_only_hint = false, destructive_hint = false,
+                    idempotent_hint = true, open_world_hint = false)
+    )]
+    pub async fn update_event(
+        &self,
+        Parameters(args): Parameters<event_tools::EventArgs>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        if !granted(&context, SCOPE_WRITE) {
+            return Ok(needs_write_scope());
+        }
+        event_tools::update_event(&self.state, args).await
+    }
+
+    #[tool(
+        name = "remove_event",
+        description = "Remove one event from a note's `events:` frontmatter and commit it. \
+                       Requires the notes:write scope.\n\nThe note itself stays; only that \
+                       entry in the map goes. Events from a subscribed external calendar are \
+                       not in any note and cannot be removed this way.",
+        annotations(title = "Remove an event", read_only_hint = false, destructive_hint = true,
+                    idempotent_hint = true, open_world_hint = false)
+    )]
+    pub async fn remove_event(
+        &self,
+        Parameters(args): Parameters<event_tools::RemoveEventArgs>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        if !granted(&context, SCOPE_WRITE) {
+            return Ok(needs_write_scope());
+        }
+        event_tools::remove_event(&self.state, args).await
     }
 
     #[tool(
