@@ -63,6 +63,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use models::*;
 
 mod ical;
+mod mcp;
 mod oauth;
 mod search;
 
@@ -210,7 +211,9 @@ async fn main() -> Result<()> {
         // Merged after the layers above, so the OAuth routes carry their own CORS policy rather
         // than the single-origin, credentialed one the app's own API needs.
         let api = match &mcp {
-            Some(oauth_state) => api.merge(oauth::routes(oauth_state.clone())),
+            Some(oauth_state) => api
+                .merge(oauth::routes(oauth_state.clone()))
+                .merge(mcp_routes(oauth_state.clone())),
             None => api,
         };
 
@@ -234,6 +237,34 @@ async fn main() -> Result<()> {
         .unwrap();
 
     Ok(())
+}
+
+/// `/v2/mcp`, behind the access-token check.
+///
+/// Mounted with `route_service` at an exact path rather than nested: rmcp validates the `Host`
+/// header against `allowed_hosts` to stop DNS rebinding, and its own source warns that
+/// `Router::nest` can drop the `Host` hyper synthesizes from an HTTP/2 `:authority`. One layer of
+/// nesting is unavoidable when `MORIED_ROOT_PATH` is not `/`, but the endpoint itself adds none.
+///
+/// The layers are this route's own, not the app API's: no `CorsLayer` with a single credentialed
+/// origin, because the caller is Anthropic's or OpenAI's servers rather than a browser, and the
+/// MCP session headers are the ones a browser-based client would need exposed.
+fn mcp_routes(oauth_state: oauth::OauthState) -> Router {
+    let service = mcp::service(
+        oauth_state.app.clone(),
+        &oauth_state.config.issuer,
+    );
+    Router::new()
+        .route_service("/v2/mcp", service)
+        .layer(
+            ServiceBuilder::new()
+                .layer(TraceLayer::new_for_http())
+                .layer(SetSensitiveHeadersLayer::new(once(header::AUTHORIZATION)))
+                .layer(middleware::from_fn_with_state(
+                    oauth_state,
+                    oauth::mcp_auth,
+                )),
+        )
 }
 
 /// Bumping this drops and refills the `entry` table on the next start.

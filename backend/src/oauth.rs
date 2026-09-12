@@ -31,8 +31,10 @@ use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
 use axum::{
+    body::Body,
     extract,
-    http::{header, Method, StatusCode},
+    http::{header, Method, Request, StatusCode},
+    middleware::Next,
     response::{Html, IntoResponse, Redirect, Response},
     routing::{get, post},
     Json, Router,
@@ -91,6 +93,14 @@ pub struct McpConfig {
     pub authorization_endpoint: String,
     pub token_endpoint: String,
     pub registration_endpoint: String,
+    /// Where `WWW-Authenticate` points a client that arrives without a token.
+    pub resource_metadata: String,
+}
+
+impl AccessClaims {
+    pub fn has_scope(&self, wanted: &str) -> bool {
+        self.scope.split_whitespace().any(|scope| scope == wanted)
+    }
 }
 
 impl McpConfig {
@@ -119,6 +129,10 @@ impl McpConfig {
         let issuer = base.trim_end_matches('/').to_owned();
         let resource = format!("{}v2/mcp", base);
         Ok(Some(Self {
+            resource_metadata: format!(
+                "{}/.well-known/oauth-protected-resource{}v2/mcp",
+                public_url, root_path,
+            ),
             root_path,
             issuer,
             resource,
@@ -1188,6 +1202,89 @@ async fn get_authorization_server_metadata(
 }
 
 // ---------------------------------------------------------------------------------------------
+// Resource server
+// ---------------------------------------------------------------------------------------------
+
+/// Reject anything reaching `/v2/mcp` without a valid, audience-bound access token.
+///
+/// The 401 carries the `resource_metadata` pointer RFC 9728 defines, which is how a connector
+/// added by URL alone discovers where to authorize.
+pub async fn mcp_auth(
+    extract::State(state): extract::State<OauthState>,
+    mut req: Request<Body>,
+    next: Next,
+) -> Response {
+    let presented = req
+        .headers()
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer "))
+        .map(str::trim)
+        .filter(|token| !token.is_empty());
+
+    let Some(token) = presented else {
+        return unauthorized(&state, "A bearer token is required.");
+    };
+    let claims: AccessClaims =
+        match decode(token, &state.config.issuer, Some(&state.config.resource)) {
+            Ok(claims) => claims,
+            Err(e) => {
+                tracing::debug!("Rejected an MCP access token: {:#}", e);
+                return unauthorized(&state, "The access token is not valid.");
+            },
+        };
+    if claims.typ != "mcp_access" {
+        return unauthorized(&state, "That token is not an access token.");
+    }
+    if !claims.has_scope(SCOPE_READ) {
+        return forbidden(&state, "This token does not carry the notes:read scope.");
+    }
+
+    // Tools read the granted scopes from here, which is what lets a read-only token run the read
+    // tools and be refused by the write ones.
+    req.extensions_mut().insert(Arc::new(claims));
+    next.run(req).await
+}
+
+fn www_authenticate(state: &OauthState, error: &str, description: &str) -> String {
+    format!(
+        "Bearer error=\"{error}\", error_description=\"{description}\", \
+         resource_metadata=\"{}\", scope=\"{} {}\"",
+        state.config.resource_metadata, SCOPE_READ, SCOPE_WRITE,
+    )
+}
+
+fn unauthorized(state: &OauthState, description: &str) -> Response {
+    (
+        StatusCode::UNAUTHORIZED,
+        [(
+            header::WWW_AUTHENTICATE,
+            www_authenticate(state, "invalid_token", description),
+        )],
+        Json(OauthErrorBody {
+            error: "invalid_token".to_owned(),
+            error_description: Some(description.to_owned()),
+        }),
+    )
+        .into_response()
+}
+
+fn forbidden(state: &OauthState, description: &str) -> Response {
+    (
+        StatusCode::FORBIDDEN,
+        [(
+            header::WWW_AUTHENTICATE,
+            www_authenticate(state, "insufficient_scope", description),
+        )],
+        Json(OauthErrorBody {
+            error: "insufficient_scope".to_owned(),
+            error_description: Some(description.to_owned()),
+        }),
+    )
+        .into_response()
+}
+
+// ---------------------------------------------------------------------------------------------
 // Pages
 // ---------------------------------------------------------------------------------------------
 
@@ -1460,6 +1557,53 @@ mod tests {
         }
     }
 
+    /// Every discovery URL a client ever sees is derived here, and a client compares `resource`
+    /// to the URL it was given byte for byte.
+    ///
+    /// This is the one test that mutates the environment it reads back. Both variables belong to
+    /// `main` and to `McpConfig::from_env`, neither of which any other test calls, so the
+    /// parallel suite cannot see the window where they are set.
+    #[test]
+    fn the_config_derives_every_url_from_the_public_url_and_the_root_path() {
+        let derive = |public: &str, root: &str| {
+            env::set_var("MORIED_PUBLIC_URL", public);
+            env::set_var("MORIED_ROOT_PATH", root);
+            McpConfig::from_env().expect("the config should parse").expect("MCP should be on")
+        };
+
+        let mounted = derive("https://notes.example.com", "/api/");
+        assert_eq!(mounted.issuer, "https://notes.example.com/api");
+        assert_eq!(mounted.resource, "https://notes.example.com/api/v2/mcp");
+        assert_eq!(
+            mounted.authorization_endpoint,
+            "https://notes.example.com/api/oauth/authorize",
+        );
+        assert_eq!(
+            mounted.resource_metadata,
+            "https://notes.example.com/.well-known/oauth-protected-resource/api/v2/mcp",
+        );
+
+        // At the site root the issuer is the origin itself, with no trailing slash.
+        let at_root = derive("https://notes.example.com/", "/");
+        assert_eq!(at_root.issuer, "https://notes.example.com");
+        assert_eq!(at_root.resource, "https://notes.example.com/v2/mcp");
+        assert_eq!(
+            at_root.resource_metadata,
+            "https://notes.example.com/.well-known/oauth-protected-resource/v2/mcp",
+        );
+
+        // Unset, and MCP is off: no route is registered and nothing changes for a deployment
+        // that has never heard of it.
+        env::remove_var("MORIED_PUBLIC_URL");
+        assert!(McpConfig::from_env().expect("the config should parse").is_none());
+
+        // A plaintext origin that is not loopback would put every token on the wire.
+        env::set_var("MORIED_PUBLIC_URL", "http://notes.example.com");
+        assert!(McpConfig::from_env().is_err());
+        env::remove_var("MORIED_PUBLIC_URL");
+        env::remove_var("MORIED_ROOT_PATH");
+    }
+
     #[test]
     fn a_registered_redirect_uri_matches_exactly() {
         let client = client(&["https://claude.ai/api/mcp/auth_callback"]);
@@ -1570,6 +1714,9 @@ mod tests {
             authorization_endpoint: "https://notes.example.com/api/oauth/authorize".to_owned(),
             token_endpoint: "https://notes.example.com/api/oauth/token".to_owned(),
             registration_endpoint: "https://notes.example.com/api/oauth/register".to_owned(),
+            resource_metadata:
+                "https://notes.example.com/.well-known/oauth-protected-resource/api/v2/mcp"
+                    .to_owned(),
         }
     }
 

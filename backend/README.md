@@ -67,6 +67,73 @@ The Docker image stores the Tantivy index in `/search-index`; mount that volume
 to avoid rebuilding Text search after replacing a container. SQLite embeddings
 and descriptions live with `cache.sqlite` under `/home`.
 
+### MCP server
+
+moried serves an [MCP](https://modelcontextprotocol.io/) endpoint at
+`{MORIED_ROOT_PATH}v2/mcp`, so Claude and ChatGPT can search and read the notes
+directly. It is **off unless `MORIED_PUBLIC_URL` is set**; without that variable
+none of its routes are registered.
+
+```
+MORIED_PUBLIC_URL=https://notes.example.com
+```
+
+That one value is the origin every discovery URL is derived from, and it must be
+the origin clients actually reach — not the address moried binds to. Add the
+connector by URL:
+
+```
+https://notes.example.com/api/v2/mcp
+```
+
+claude.ai and ChatGPT both refuse a static bearer token for a connector added by
+URL, so moried is also a small OAuth 2.1 authorization server: adding the
+connector opens a consent page that asks for the same username and password the
+web app uses. Tokens are signed with `MORIED_SECRET`, so **rotating that secret
+disconnects every connector** — and ends the web session too. There is no other
+way to revoke one.
+
+For a command-line client:
+
+```shell
+claude mcp add --transport http mory https://notes.example.com/api/v2/mcp
+```
+
+#### Reverse proxy
+
+Discovery works with no new proxy rule: with `MORIED_ROOT_PATH=/api/` the issuer
+is `https://notes.example.com/api`, and RFC 8414's last fallback for a
+path-bearing issuer is `https://notes.example.com/api/.well-known/openid-configuration`,
+which the `/api/` rule already routes.
+
+Adding these three rules puts discovery on each client's *first*-choice path,
+which is one fewer round trip and one fewer thing to go wrong:
+
+```
+https://<host>/.well-known/oauth-authorization-server*  → moried
+https://<host>/.well-known/oauth-protected-resource*    → moried
+https://<host>/.well-known/openid-configuration*        → moried
+```
+
+If the proxy rewrites `Host` to an internal name, that name has to be allowed
+explicitly or every MCP request is refused with 403 — rmcp validates `Host` to
+prevent DNS rebinding:
+
+```
+MORIED_MCP_ALLOWED_HOSTS=notes.internal,notes.internal:3030
+```
+
+Checking a deployment by hand:
+
+```shell
+curl -s https://notes.example.com/.well-known/oauth-protected-resource/api/v2/mcp | jq
+curl -si -X POST https://notes.example.com/api/v2/mcp | head -3
+```
+
+The first must report a `resource` byte-identical to the URL typed into the
+connector dialog; the second must be a 401 carrying `WWW-Authenticate: Bearer
+… resource_metadata="…"`.
+
 Run a container:
 ```shell
 docker run --env-file env.list -p 127.0.0.1:3030:3030 -v /path/to/local/repo:/repo -u $(id -u $USER):$(id -g $USER) moried
