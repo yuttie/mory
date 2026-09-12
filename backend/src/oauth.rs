@@ -130,8 +130,22 @@ impl McpConfig {
         let issuer = base.trim_end_matches('/').to_owned();
         let resource = format!("{}v2/mcp", base);
         Ok(Some(Self {
+            // Deliberately below the mount rather than at the site root.
+            //
+            // RFC 9728 constructs a default location at the site root, but `WWW-Authenticate`
+            // carries an explicit pointer and a client follows it -- so it can be any URL this
+            // server actually serves. Pointing below the mount means the one reverse-proxy rule
+            // a deployment already has, forwarding `{root_path}` to the backend, is enough for
+            // discovery to work. Pointing at the site root needs a second rule, and without it
+            // that path usually reaches whatever serves `/` -- for a single-page app, the index
+            // page, returned as 200 text/html, which is a worse failure than a 404 because
+            // nothing about it looks like an error.
+            //
+            // The site-root spellings are still served, for a client that constructs the
+            // default location instead of following the pointer; those are what the optional
+            // `/.well-known/*` proxy rule is for.
             resource_metadata: format!(
-                "{}/.well-known/oauth-protected-resource{}v2/mcp",
+                "{}{}.well-known/oauth-protected-resource/v2/mcp",
                 public_url, root_path,
             ),
             root_path,
@@ -1629,9 +1643,10 @@ mod tests {
             mounted.authorization_endpoint,
             "https://notes.example.com/api/oauth/authorize",
         );
+        // Below the mount, so the `/api/` proxy rule a deployment already has serves it.
         assert_eq!(
             mounted.resource_metadata,
-            "https://notes.example.com/.well-known/oauth-protected-resource/api/v2/mcp",
+            "https://notes.example.com/api/.well-known/oauth-protected-resource/v2/mcp",
         );
 
         // At the site root the issuer is the origin itself, with no trailing slash.
@@ -1766,7 +1781,7 @@ mod tests {
             token_endpoint: "https://notes.example.com/api/oauth/token".to_owned(),
             registration_endpoint: "https://notes.example.com/api/oauth/register".to_owned(),
             resource_metadata:
-                "https://notes.example.com/.well-known/oauth-protected-resource/api/v2/mcp"
+                "https://notes.example.com/api/.well-known/oauth-protected-resource/v2/mcp"
                     .to_owned(),
         }
     }

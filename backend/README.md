@@ -101,13 +101,26 @@ claude mcp add --transport http mory https://notes.example.com/api/v2/mcp
 
 #### Reverse proxy
 
-Discovery works with no new proxy rule: with `MORIED_ROOT_PATH=/api/` the issuer
-is `https://notes.example.com/api`, and RFC 8414's last fallback for a
-path-bearing issuer is `https://notes.example.com/api/.well-known/openid-configuration`,
-which the `/api/` rule already routes.
+**The rule you already have is enough.** Whatever forwards `{MORIED_ROOT_PATH}`
+to moried also serves discovery: the `WWW-Authenticate` challenge points clients
+at `{MORIED_ROOT_PATH}.well-known/oauth-protected-resource/v2/mcp`, below the
+mount, and RFC 8414's last fallback for a path-bearing issuer is
+`{MORIED_ROOT_PATH}.well-known/openid-configuration`. Both are behind that one
+rule. A typical block needs nothing added:
 
-Adding these three rules puts discovery on each client's *first*-choice path,
-which is one fewer round trip and one fewer thing to go wrong:
+```nginx
+location /api/ {
+    proxy_pass       http://backend;   # no trailing slash: keep the prefix
+    proxy_set_header Host $host;       # rmcp validates this
+}
+```
+
+`Host` matters: rmcp checks it against the authority in `MORIED_PUBLIC_URL` to
+stop DNS rebinding. Pass it through as above, or name the internal hostname in
+`MORIED_MCP_ALLOWED_HOSTS`, or every MCP request is refused with 403.
+
+Optionally, these three put discovery on the path a client tries *first*, saving
+a round trip:
 
 ```
 https://<host>/.well-known/oauth-authorization-server*  → moried
@@ -115,13 +128,20 @@ https://<host>/.well-known/oauth-protected-resource*    → moried
 https://<host>/.well-known/openid-configuration*        → moried
 ```
 
-If the proxy rewrites `Host` to an internal name, that name has to be allowed
-explicitly or every MCP request is refused with 403 — rmcp validates `Host` to
-prevent DNS rebinding:
+Match them narrowly rather than proxying all of `/.well-known/`, or you will
+break `acme-challenge` and your certificate renewals:
 
+```nginx
+location ~ ^/\.well-known/(oauth-authorization-server|oauth-protected-resource|openid-configuration) {
+    proxy_pass       http://backend;
+    proxy_set_header Host $host;
+}
 ```
-MORIED_MCP_ALLOWED_HOSTS=notes.internal,notes.internal:3030
-```
+
+Without them those paths reach whatever serves `/`. If that is a single-page
+app, it answers **200 with its index page** rather than 404 — which is why the
+challenge points below the mount instead: a client following it cannot be
+handed HTML by a route that was never meant to answer.
 
 Checking a deployment by hand:
 
