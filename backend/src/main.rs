@@ -413,10 +413,15 @@ async fn auth(req: Request<Body>, next: Next) -> Result<Response, StatusCode> {
 }
 
 fn token_is_valid(header_value: &str) -> bool {
-    let token = header_value.split_whitespace().nth(1).unwrap();
+    // A header with no second token is a malformed request, not a panic: `Authorization: Bearer`
+    // alone, or any single word, must simply fail to authorize.
+    let Some(token) = header_value.split_whitespace().nth(1) else {
+        tracing::debug!("the Authorization header carries no token");
+        return false;
+    };
 
     let secret = env::var("MORIED_SECRET").unwrap();
-    match jwt::decode::<Claims>(&token, &jwt::DecodingKey::from_secret(secret.as_ref()), &jwt::Validation::default()) {
+    match jwt::decode::<Claims>(token, &jwt::DecodingKey::from_secret(secret.as_ref()), &jwt::Validation::default()) {
         Ok(_) => {
             tracing::debug!("authorized");
             true

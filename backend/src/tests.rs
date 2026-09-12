@@ -1854,3 +1854,16 @@ fn calendar_fixtures_expand_as_recorded() {
         "the expansion changed; if that is intended, regenerate with UPDATE_CALENDAR_GOLDEN=1",
     );
 }
+
+/// A header with no second whitespace-separated token used to panic the whole request.
+///
+/// These cases return before `MORIED_SECRET` is read, so the test needs no environment.
+#[test]
+fn a_token_less_authorization_header_is_rejected_rather_than_panicking() {
+    for header in ["", "Bearer", "   ", "Basic"] {
+        assert!(
+            !crate::token_is_valid(header),
+            "{header:?} should not authorize",
+        );
+    }
+}
