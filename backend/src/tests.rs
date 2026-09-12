@@ -1867,3 +1867,165 @@ fn a_token_less_authorization_header_is_rejected_rather_than_panicking() {
         );
     }
 }
+
+/// A fixture repository with one commit, HEAD on `refs/heads/main`, and a local identity.
+///
+/// The identity is set locally rather than left to `repo.signature()`'s global fallback, for the
+/// same reason every fixture commit names its own time: nothing under test may depend on the
+/// developer's gitconfig.
+fn write_fixture() -> RepoFixture {
+    let fixture = RepoFixture::new();
+    {
+        let mut config = fixture.repo.config().expect("failed to open the repo config");
+        config.set_str("user.name", "Fixture").expect("failed to set user.name");
+        config
+            .set_str("user.email", "fixture@example.invalid")
+            .expect("failed to set user.email");
+    }
+    fixture.commit_at(
+        "refs/heads/main",
+        &[],
+        &[("note.md", Some("first\n")), ("dir/other.md", Some("other\n"))],
+        1_700_000_000,
+        0,
+        "Root",
+    );
+    fixture.set_head("refs/heads/main");
+    fixture
+}
+
+fn head_of(fixture: &RepoFixture) -> Oid {
+    fixture
+        .repo
+        .head()
+        .expect("HEAD should resolve")
+        .peel_to_commit()
+        .expect("HEAD should peel to a commit")
+        .id()
+}
+
+fn message_of(fixture: &RepoFixture, commit: Oid) -> String {
+    fixture
+        .repo
+        .find_commit(commit)
+        .expect("the commit should exist")
+        .message()
+        .expect("the message should be UTF-8")
+        .to_owned()
+}
+
+#[test]
+fn commit_save_replaces_the_blob_and_leaves_the_rest_alone() {
+    let fixture = write_fixture();
+    let before = head_of(&fixture);
+
+    let commit = crate::models::commit_save(&fixture.repo, "note.md", b"second\n", "Save note.md")
+        .expect("the save should succeed");
+
+    assert_eq!(fixture.blob_at(commit, "note.md").as_deref(), Some("second\n"));
+    assert_eq!(fixture.blob_at(commit, "dir/other.md").as_deref(), Some("other\n"));
+    assert_eq!(message_of(&fixture, commit), "Save note.md");
+    assert_eq!(head_of(&fixture), commit, "HEAD should move to the new commit");
+    assert_eq!(
+        fixture.repo.find_commit(commit).unwrap().parent_id(0).unwrap(),
+        before,
+        "the new commit should be parented on the old HEAD",
+    );
+}
+
+#[test]
+fn commit_save_creates_a_path_that_did_not_exist() {
+    let fixture = write_fixture();
+
+    let commit = crate::models::commit_save(&fixture.repo, "deep/new.md", b"new\n", "Add")
+        .expect("the save should succeed");
+
+    assert_eq!(fixture.blob_at(commit, "deep/new.md").as_deref(), Some("new\n"));
+}
+
+#[test]
+fn commit_rename_moves_the_content_and_drops_the_old_path() {
+    let fixture = write_fixture();
+
+    let commit = crate::models::commit_rename(&fixture.repo, "note.md", "moved.md", "Rename")
+        .expect("the rename should succeed")
+        .expect("the source exists, so it should not report not-found");
+
+    assert_eq!(fixture.blob_at(commit, "moved.md").as_deref(), Some("first\n"));
+    assert_eq!(fixture.blob_at(commit, "note.md"), None);
+}
+
+#[test]
+fn commit_rename_reports_a_missing_source_without_committing() {
+    let fixture = write_fixture();
+    let before = head_of(&fixture);
+
+    let renamed = crate::models::commit_rename(&fixture.repo, "absent.md", "moved.md", "Rename")
+        .expect("a missing source is not an error");
+
+    assert!(renamed.is_none());
+    assert_eq!(head_of(&fixture), before, "HEAD must not move");
+}
+
+#[test]
+fn commit_delete_removes_only_the_named_path() {
+    let fixture = write_fixture();
+
+    let commit = crate::models::commit_delete(&fixture.repo, "note.md", "Delete note.md")
+        .expect("the delete should succeed")
+        .expect("the path exists, so it should not report not-found");
+
+    assert_eq!(fixture.blob_at(commit, "note.md"), None);
+    assert_eq!(fixture.blob_at(commit, "dir/other.md").as_deref(), Some("other\n"));
+}
+
+#[test]
+fn commit_delete_reports_a_missing_path_without_committing() {
+    let fixture = write_fixture();
+    let before = head_of(&fixture);
+
+    let deleted = crate::models::commit_delete(&fixture.repo, "absent.md", "Delete")
+        .expect("a missing path is not an error");
+
+    assert!(deleted.is_none());
+    assert_eq!(head_of(&fixture), before, "HEAD must not move");
+}
+
+#[test]
+fn commit_files_writes_every_part_in_one_commit() {
+    let fixture = write_fixture();
+    let before = head_of(&fixture);
+
+    let files = vec![
+        (b"a.png".to_vec(), b"one".to_vec()),
+        (b"sub/b.png".to_vec(), b"two".to_vec()),
+    ];
+    let commit = crate::models::commit_files(&fixture.repo, &files, "Upload 2 files")
+        .expect("the upload should succeed");
+
+    assert_eq!(fixture.blob_at(commit, "a.png").as_deref(), Some("one"));
+    assert_eq!(fixture.blob_at(commit, "sub/b.png").as_deref(), Some("two"));
+    assert_eq!(
+        fixture.repo.find_commit(commit).unwrap().parent_id(0).unwrap(),
+        before,
+        "both files should land in a single commit",
+    );
+}
+
+/// A path git accepted but that is not UTF-8 must not take down a write about some other path.
+///
+/// `find_index_entry` used to decode every path it walked with `.unwrap()`, so one such name
+/// anywhere in HEAD panicked every save, rename and delete in the repository.
+#[test]
+fn a_non_utf8_path_in_head_does_not_break_a_lookup() {
+    let fixture = write_fixture();
+    let latin1 = vec![(b"caf\xe9.md".to_vec(), b"latin1\n".to_vec())];
+    crate::models::commit_files(&fixture.repo, &latin1, "Add a latin-1 name")
+        .expect("git should accept a non-UTF-8 path");
+
+    let commit = crate::models::commit_delete(&fixture.repo, "note.md", "Delete note.md")
+        .expect("the non-UTF-8 sibling must not make this fail")
+        .expect("note.md exists");
+    assert_eq!(fixture.blob_at(commit, "note.md"), None);
+    assert_eq!(fixture.blob_at(commit, "dir/other.md").as_deref(), Some("other\n"));
+}
