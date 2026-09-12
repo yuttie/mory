@@ -32,12 +32,13 @@ use std::time::{Duration, Instant};
 use anyhow::{bail, Context, Result};
 use axum::{
     body::Body,
+    error_handling::HandleErrorLayer,
     extract,
     http::{header, Method, Request, StatusCode},
     middleware::Next,
     response::{Html, IntoResponse, Redirect, Response},
     routing::{get, post},
-    Json, Router,
+    BoxError, Json, Router,
 };
 use base64::Engine;
 use chrono::Utc;
@@ -1461,7 +1462,10 @@ fn consent_page(
 pub fn routes(state: OauthState) -> Router {
     Router::new()
         .route("/oauth/register", post(post_register))
-        .route("/oauth/authorize", get(get_authorize).post(post_authorize))
+        .route(
+            "/oauth/authorize",
+            get(get_authorize).post(post_authorize).layer(consent_throttle()),
+        )
         .route("/oauth/token", post(post_token))
         .merge(well_known_routes())
         .with_state(state)
@@ -1480,6 +1484,40 @@ pub fn routes(state: OauthState) -> Router {
                         .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION]),
                 ),
         )
+}
+
+/// One authorization attempt every few seconds, shedding the rest.
+///
+/// This is the same stack `/login` has carried since long before MCP, for the same reason: both
+/// endpoints verify the one configured password against the one argon2 hash, and an unthrottled
+/// one is a guessing oracle. Without it this endpoint answered ten wrong passwords in 565 ms.
+///
+/// It covers the `GET` as well as the `POST`, which closes a second hole: resolving a `client_id`
+/// that is a URL fetches that URL, so an unthrottled authorize endpoint is also a way to make
+/// this server hammer somebody else's.
+///
+/// The limit is global rather than per-caller, again matching `/login`. For a single-user app
+/// reached through one reverse proxy there is no per-caller to speak of, and the cost of being
+/// wrong about that is a legitimate retry waiting a few seconds.
+fn consent_throttle() -> impl tower::Layer<
+    axum::routing::Route,
+    Service = impl tower::Service<
+        axum::http::Request<Body>,
+        Response = Response,
+        Error = std::convert::Infallible,
+        Future = impl Send,
+    > + Clone
+              + Send,
+> + Clone
+       + Send {
+    ServiceBuilder::new()
+        .layer(HandleErrorLayer::new(|_: BoxError| async {
+            // Too many requests
+            StatusCode::SERVICE_UNAVAILABLE
+        }))
+        .load_shed()
+        .buffer(1) // Required to make it Clone.
+        .rate_limit(1, Duration::from_secs(3))
 }
 
 /// The same discovery documents again, at the site root.
