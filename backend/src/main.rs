@@ -1640,22 +1640,22 @@ Important:
 
     #[derive(Serialize)]
     pub struct CalendarReport {
-        id: String,
-        name: String,
-        color: Option<String>,
+        pub id: String,
+        pub name: String,
+        pub color: Option<String>,
         /// `None` when the feed was read. A calendar that fails is reported here rather than
         /// failing the request, so one dead feed cannot blank the whole view.
-        error: Option<String>,
+        pub error: Option<String>,
     }
 
     #[derive(Serialize)]
     pub struct ImportedEventsResponse {
-        calendars: Vec<CalendarReport>,
-        events: Vec<crate::ical::ImportedEvent>,
-        series: std::collections::BTreeMap<String, crate::ical::SeriesDefinition>,
+        pub calendars: Vec<CalendarReport>,
+        pub events: Vec<crate::ical::ImportedEvent>,
+        pub series: std::collections::BTreeMap<String, crate::ical::SeriesDefinition>,
         /// Set when some series hit the per-series occurrence cap, so the client can say the view
         /// is incomplete rather than quietly showing less than exists.
-        truncated: bool,
+        pub truncated: bool,
     }
 
     /// Where the subscription list lives, alongside the app's other repository-held config.
@@ -1914,7 +1914,20 @@ Important:
         tracing::debug!("v2::get_imported_events");
 
         let (from, to) = crate::ical::parse_window(&query.start, &query.end)?;
-        let subscriptions = read_subscriptions(&state).await?;
+        Ok(Json(imported_events(&state, from, to).await?))
+    }
+
+    /// The same expansion, without any HTTP in sight, so the MCP tool and the endpoint cannot
+    /// drift apart.
+    ///
+    /// A calendar that fails is reported in `calendars` rather than failing the call: one dead
+    /// feed must not blank the whole view.
+    pub(crate) async fn imported_events(
+        state: &AppState,
+        from: DateTime<chrono::FixedOffset>,
+        to: DateTime<chrono::FixedOffset>,
+    ) -> Result<ImportedEventsResponse> {
+        let subscriptions = read_subscriptions(state).await?;
 
         let mut response = ImportedEventsResponse {
             calendars: Vec::new(),
@@ -1930,7 +1943,7 @@ Important:
             }
 
             let outcome = async {
-                let body = fetch_feed(&state, &subscription.url).await?;
+                let body = fetch_feed(state, &subscription.url).await?;
                 let calendar = crate::ical::parse_calendar(&body)?;
                 Ok::<_, anyhow::Error>(crate::ical::expand(
                     &calendar, &subscription.id, from, to,
@@ -1969,7 +1982,7 @@ Important:
         }
 
         response.events.sort_by(|a, b| a.start.cmp(&b.start));
-        Ok(Json(response))
+        Ok(response)
     }
 
     pub async fn get_commits_head(

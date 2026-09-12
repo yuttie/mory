@@ -80,6 +80,54 @@ impl Mory {
     }
 
     #[tool(
+        name = "list_notes",
+        description = "List the notes in the repository, newest first, with their titles, tags                        and task status. Optionally restricted to a path prefix such as `.tasks/`                        or `projects/`.\n\n                       The repository holds on the order of a thousand entries, so this is                        always a page: pass the `next_offset` a result reports to continue. To                        find something specific, search_notes is the better tool.",
+        annotations(title = "List notes", read_only_hint = true, open_world_hint = false)
+    )]
+    pub async fn list_notes(
+        &self,
+        Parameters(args): Parameters<tools::ListNotesArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        tools::list_notes(&self.state, args).await
+    }
+
+    #[tool(
+        name = "list_tasks",
+        description = "List the tasks under `.tasks/`, optionally filtered by status or tag.                        Each result carries the note's `task:` block exactly as the file declares                        it: status kind, progress, importance, urgency, and whichever of                        start_at, due_by, deadline and scheduled_dates it sets.\n\n                       Statuses are todo, in_progress, waiting, blocked, on_hold, done and                        canceled.",
+        annotations(title = "List tasks", read_only_hint = true, open_world_hint = false)
+    )]
+    pub async fn list_tasks(
+        &self,
+        Parameters(args): Parameters<tools::ListTasksArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        tools::list_tasks(&self.state, args).await
+    }
+
+    #[tool(
+        name = "list_events",
+        description = "List the calendar events the notes declare in their `events:`                        frontmatter, over a window of whole days.\n\n                       An event carrying a `repeat` rule is returned with `recurs: true` and its                        rule, but its occurrences are NOT expanded -- read the rule and work the                        dates out from it. Every other event appears only when one of its                        declared occurrences falls inside the window. Events subscribed from an                        external calendar are a separate tool, list_imported_events.",
+        annotations(title = "List events", read_only_hint = true, open_world_hint = false)
+    )]
+    pub async fn list_events(
+        &self,
+        Parameters(args): Parameters<tools::WindowArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        tools::list_events(&self.state, args).await
+    }
+
+    #[tool(
+        name = "list_imported_events",
+        description = "List the events from the external calendars subscribed in                        `.mory/calendars.yaml`, expanded over a window of whole days.\n\n                       These are a live view of someone else's calendar: they are read-only,                        they are not stored in the repository, and they must never be written                        into it. A calendar that could not be read is reported in `calendars`                        with its error rather than failing the call.",
+        annotations(title = "List imported events", read_only_hint = true, open_world_hint = true)
+    )]
+    pub async fn list_imported_events(
+        &self,
+        Parameters(args): Parameters<tools::WindowArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        tools::list_imported_events(&self.state, args).await
+    }
+
+    #[tool(
         name = "read_note",
         description = "Read one note's full Markdown source, YAML frontmatter included, by the \
                        exact repository path a search result reported.",
