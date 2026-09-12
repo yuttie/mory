@@ -63,6 +63,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use models::*;
 
 mod ical;
+mod oauth;
 mod search;
 
 #[cfg(test)]
@@ -194,16 +195,36 @@ async fn main() -> Result<()> {
                 .layer(cors)
         );
 
+    // MCP is off unless `MORIED_PUBLIC_URL` names the origin clients reach this server at. An
+    // existing deployment that does not set it registers none of these routes and is unchanged.
+    let mcp = oauth::McpConfig::from_env()?.map(|config| {
+        tracing::info!("MCP is enabled at {}, issued by {}", config.resource, config.issuer);
+        oauth::OauthState::new(Arc::new(config), state.clone())
+    });
+
     let app = {
         let root_path = env::var("MORIED_ROOT_PATH").unwrap();
         assert!(root_path.starts_with('/'), "MORIED_ROOT_PATH must start with '/'");
         assert!(root_path.ends_with('/'), "MORIED_ROOT_PATH must end with '/'");
 
+        // Merged after the layers above, so the OAuth routes carry their own CORS policy rather
+        // than the single-origin, credentialed one the app's own API needs.
+        let api = match &mcp {
+            Some(oauth_state) => api.merge(oauth::routes(oauth_state.clone())),
+            None => api,
+        };
+
         if root_path == "/" {
             api
         }
         else {
-            Router::new().nest(&root_path, api)
+            let app = Router::new().nest(&root_path, api);
+            // Only reachable with the recommended `/.well-known/*` proxy rule, and only
+            // meaningful when the app is not already at the site root.
+            match &mcp {
+                Some(oauth_state) => app.merge(oauth::site_root_routes(oauth_state.clone())),
+                None => app,
+            }
         }
     };
 
