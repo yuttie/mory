@@ -43,3 +43,8 @@ url = "2"
 uuid = { version = "1.17.0", features = ["serde"] }
 rmcp = { version = "3", features = ["server", "macros", "schemars", "transport-streamable-http-server"] }
 schemars = "1"
+
+[dev-dependencies]
+# Used only by the test that checks what the task and event tools emit against
+# `frontend/src/metadata-schema.json`, which stays the single copy of that schema.
+jsonschema = "0.33"

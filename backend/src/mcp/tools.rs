@@ -596,7 +596,7 @@ const TASKS_DIR: &str = ".tasks/";
 ///
 /// Traversal is refused rather than normalised away: a caller that wrote `../` meant something,
 /// and quietly writing somewhere else would be worse than saying no.
-fn safe_path(path: &str) -> Result<String, String> {
+pub fn safe_path(path: &str) -> Result<String, String> {
     let path = path.trim();
     if path.is_empty() {
         return Err("A path is required.".to_owned());
@@ -634,7 +634,7 @@ fn safe_path(path: &str) -> Result<String, String> {
 /// Only destinations are held to this. A file already named outside the convention has already
 /// broken the task tree, and the tools that would repair it -- renaming it to a conforming name,
 /// or deleting it -- must not be the ones refused.
-fn writable_path(path: &str) -> Result<String, String> {
+pub fn writable_path(path: &str) -> Result<String, String> {
     let path = safe_path(path)?;
     if let Some(rest) = path.strip_prefix(TASKS_DIR) {
         check_tree_naming(rest)?;
@@ -671,11 +671,44 @@ fn is_uuid_v4(value: &str) -> bool {
 }
 
 #[derive(Debug, Serialize)]
-struct WriteOutput {
-    path: String,
+pub struct WriteOutput {
+    pub path: String,
     /// The commit this write made, so a caller can point at it afterwards.
-    commit: String,
-    message: String,
+    pub commit: String,
+    pub message: String,
+}
+
+/// A note's text at HEAD, or `None` when there is no such file.
+///
+/// Non-UTF-8 is an `Err`, not a `None`: it is a real failure of an operation that named an
+/// existing path, and the difference matters to the caller.
+pub async fn note_text(state: &AppState, path: &str) -> Result<Option<String>, ErrorData> {
+    let Some((_, bytes)) = crate::find_entry_blob(state, path).await else {
+        return Ok(None);
+    };
+    String::from_utf8(bytes)
+        .map(Some)
+        .map_err(|_| ErrorData::invalid_params(format!("{path} is not UTF-8 text"), None))
+}
+
+/// Commit an edited note and report where it landed.
+pub async fn write_note(
+    state: &AppState,
+    path: &str,
+    content: &str,
+    message: &str,
+) -> Result<CallToolResult, ErrorData> {
+    match state.save_note(path, content.as_bytes(), message).await {
+        Ok(commit) => json_result(&WriteOutput {
+            path: path.to_owned(),
+            commit: commit.to_string(),
+            message: message.to_owned(),
+        }),
+        Err(e) => {
+            tracing::error!("MCP could not write {}: {:?}", path, e);
+            Ok(tool_error(format!("{path:?} could not be written: {e:#}")))
+        },
+    }
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]

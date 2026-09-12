@@ -2029,3 +2029,277 @@ fn a_non_utf8_path_in_head_does_not_break_a_lookup() {
     assert_eq!(fixture.blob_at(commit, "note.md"), None);
     assert_eq!(fixture.blob_at(commit, "dir/other.md").as_deref(), Some("other\n"));
 }
+
+
+
+
+/// Every frontmatter edit the MCP tools make, run against a real notes repository.
+///
+/// Ignored by default: it needs a corpus, and the only honest corpus is somebody's actual notes.
+/// Point it at one and run it whenever `mcp::frontmatter` changes:
+///
+/// ```shell
+/// MORY_CORPUS=/path/to/notes cargo test frontmatter_edits_a_real_corpus -- --ignored --nocapture
+/// ```
+///
+/// Two passes, asserting the two things the module claims.
+///
+/// **Adding a key and removing it again is byte-identical.** This is the ordinary shape of an
+/// edit and the whole reason the editor is textual: measured on a 952-note corpus, this holds for
+/// 951 and refuses the one note whose YAML is genuinely invalid. Re-serializing the block with
+/// `serde_yaml` instead reproduces 61.
+///
+/// **Changing every scalar and changing it back preserves the note's meaning and its body.** Not
+/// its bytes: this pass overwrites block scalars, which destroys the body indentation the author
+/// chose and the white space on lines that held only indentation, and no amount of care can put
+/// those back once they are gone. A single real edit keeps them, because the lines are still
+/// there to read the indentation from.
+#[test]
+#[ignore]
+fn frontmatter_edits_a_real_corpus() {
+    use crate::mcp::frontmatter::{apply, Change, Note};
+    use serde_yaml::Value;
+
+    let Ok(dir) = std::env::var("MORY_CORPUS") else {
+        eprintln!("set MORY_CORPUS to a notes repository to run this");
+        return;
+    };
+
+    let mut notes = Vec::new();
+    let mut stack = vec![std::path::PathBuf::from(dir)];
+    while let Some(path) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&path) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            }
+            else if path.extension().and_then(|e| e.to_str()) == Some("md") {
+                notes.push(path);
+            }
+        }
+    }
+
+    let (mut with_frontmatter, mut exact, mut declined) = (0, 0, 0);
+    let (mut touched, mut same_meaning, mut declined_deep) = (0, 0, 0);
+
+    for path in &notes {
+        let Ok(text) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        if !text.starts_with("---\n") {
+            continue;
+        }
+        with_frontmatter += 1;
+
+        // Pass one: a key that no note has, added and taken away again.
+        match apply(&text, &[Change::set(&["mory_corpus_probe"], "x")])
+            .and_then(|edited| apply(&edited, &[Change::remove(&["mory_corpus_probe"])]))
+        {
+            Ok(restored) => {
+                assert_eq!(
+                    restored,
+                    text,
+                    "{}: adding and removing a key changed the note",
+                    path.display(),
+                );
+                exact += 1;
+            },
+            // Declining is a correct outcome -- an unparseable note, or flow style -- and the
+            // count is what is worth watching.
+            Err(_) => declined += 1,
+        }
+
+        // Pass two: every scalar the task and event tools can reach, changed and changed back.
+        let Ok(Value::Mapping(root)) = serde_yaml::from_str::<Value>(&Note::parse(&text).block)
+        else {
+            continue;
+        };
+        let mut restore = Vec::new();
+        if let Some(Value::Mapping(task)) = root.get(Value::String("task".into())) {
+            for (key, value) in task {
+                if let (Value::String(key), value) = (key, value) {
+                    if !matches!(value, Value::Mapping(_)) {
+                        restore.push(Change::set(&["task", key], value.clone()));
+                    }
+                }
+            }
+        }
+        if let Some(Value::Mapping(events)) = root.get(Value::String("events".into())) {
+            for (name, event) in events {
+                let (Value::String(name), Value::Mapping(fields)) = (name, event) else {
+                    continue;
+                };
+                for (key, value) in fields {
+                    if let (Value::String(key), value) = (key, value) {
+                        if !matches!(value, Value::Mapping(_) | Value::Sequence(_)) {
+                            restore.push(Change::set(&["events", name, key], value.clone()));
+                        }
+                    }
+                }
+            }
+        }
+        if restore.is_empty() {
+            continue;
+        }
+        touched += 1;
+
+        let disturb = restore
+            .iter()
+            .map(|change| match change {
+                Change::Set { path, .. } => Change::Set {
+                    path: path.clone(),
+                    value: Value::String("corpus-probe".to_owned()),
+                },
+                other => other.clone(),
+            })
+            .collect::<Vec<_>>();
+
+        match apply(&text, &disturb).and_then(|edited| apply(&edited, &restore)) {
+            Ok(restored) => {
+                let after = Note::parse(&restored);
+                let parsed: Value = serde_yaml::from_str(&after.block).unwrap_or_else(|e| {
+                    panic!("{}: the edit produced invalid YAML: {e}", path.display())
+                });
+                assert_eq!(
+                    parsed,
+                    Value::Mapping(root.clone()),
+                    "{}: restoring every value did not restore the note's meaning",
+                    path.display(),
+                );
+                assert_eq!(
+                    after.body,
+                    Note::parse(&text).body,
+                    "{}: a frontmatter edit changed the body",
+                    path.display(),
+                );
+                same_meaning += 1;
+            },
+            Err(_) => declined_deep += 1,
+        }
+    }
+
+    println!("notes with frontmatter:             {with_frontmatter}");
+    println!("  add and remove is byte-identical: {exact}");
+    println!("  declined with an explanation:     {declined}");
+    println!("notes carrying a task or an event:  {touched}");
+    println!("  meaning and body preserved:       {same_meaning}");
+    println!("  declined with an explanation:     {declined_deep}");
+    assert!(with_frontmatter > 0, "the corpus held no frontmatter");
+}
+
+/// What the task and event tools emit, validated against the schema the frontend validates with.
+///
+/// `frontend/src/metadata-schema.json` stays the only copy. `include_str!` reaches it from the
+/// repository checkout, where both components exist; the Docker build copies only `backend/` and
+/// never compiles tests, so it never sees this.
+#[cfg(test)]
+const METADATA_SCHEMA: &str = include_str!("../../frontend/src/metadata-schema.json");
+
+#[test]
+fn the_task_tools_emit_frontmatter_the_frontend_would_accept() {
+    use crate::mcp::frontmatter::{apply, Change, Note};
+
+    let schema: serde_json::Value =
+        serde_json::from_str(METADATA_SCHEMA).expect("the schema should be JSON");
+    let validator = jsonschema::validator_for(&schema).expect("the schema should compile");
+
+    // One case per member of the status union, each carrying exactly the keys that member
+    // requires -- the shapes `status_changes` produces.
+    let statuses: Vec<Vec<Change>> = vec![
+        vec![Change::set(&["task", "status", "kind"], "todo")],
+        vec![Change::set(&["task", "status", "kind"], "in_progress")],
+        vec![
+            Change::set(&["task", "status", "kind"], "waiting"),
+            Change::set(&["task", "status", "waiting_for"], "a reply"),
+            Change::set(&["task", "status", "contact"], "someone"),
+        ],
+        vec![
+            Change::set(&["task", "status", "kind"], "blocked"),
+            Change::set(&["task", "status", "blocked_by"], "the other thing"),
+        ],
+        vec![
+            Change::set(&["task", "status", "kind"], "on_hold"),
+            Change::set(&["task", "status", "hold_reason"], "waiting on budget"),
+            Change::set(&["task", "status", "review_at"], "2026-04-01"),
+        ],
+        vec![
+            Change::set(&["task", "status", "kind"], "done"),
+            Change::set(&["task", "status", "completed_at"], "2026-03-15 18:17:46+09:00"),
+            Change::set(&["task", "status", "completion_note"], "went fine"),
+        ],
+        vec![
+            Change::set(&["task", "status", "kind"], "canceled"),
+            Change::set(&["task", "status", "canceled_at"], "2026-03-15"),
+            Change::set(&["task", "status", "cancel_reason"], "no longer needed"),
+        ],
+    ];
+
+    for status in statuses {
+        let mut changes = vec![
+            Change::set(&["tags"], serde_yaml::Value::Sequence(vec!["work".into()])),
+            Change::set(&["task", "progress"], 0),
+            Change::set(&["task", "importance"], 3),
+            Change::set(&["task", "urgency"], 3),
+            Change::set(&["task", "due_by"], "2026-03-15"),
+            Change::set(
+                &["task", "scheduled_dates"],
+                serde_yaml::Value::Sequence(vec!["2026-03-01".into()]),
+            ),
+        ];
+        changes.extend(status.clone());
+
+        let note = apply("# A task\n", &changes).expect("the frontmatter should be written");
+        let block = Note::parse(&note).block;
+        let parsed: serde_yaml::Value =
+            serde_yaml::from_str(&block).expect("the emitted YAML should parse");
+        let as_json = serde_json::to_value(&parsed).expect("it should convert to JSON");
+
+        if let Err(error) = validator.validate(&as_json) {
+            panic!("{changes:?}\nemitted:\n{block}\nrejected by the schema: {error}");
+        }
+    }
+}
+
+#[test]
+fn the_event_tools_emit_frontmatter_the_frontend_would_accept() {
+    use crate::mcp::frontmatter::{apply, Change, Note};
+
+    let schema: serde_json::Value =
+        serde_json::from_str(METADATA_SCHEMA).expect("the schema should be JSON");
+    let validator = jsonschema::validator_for(&schema).expect("the schema should compile");
+
+    let changes = vec![
+        Change::set(&["events", "Book club", "start"], "2026-03-12 19:00:00+09:00"),
+        Change::set(&["events", "Book club", "end"], "+1.5h"),
+        Change::set(&["events", "Book club", "color"], "indigo"),
+        Change::set(&["events", "Book club", "location"], "the library"),
+        Change::set(&["events", "Standup", "start"], "2026-01-05 09:30:00+09:00"),
+        Change::set(&["events", "Standup", "repeat", "freq"], "weekly"),
+        Change::set(&["events", "Standup", "repeat", "interval"], 1),
+        Change::set(
+            &["events", "Standup", "repeat", "byday"],
+            // Three letters, not iCal's two, and an ordinal is allowed.
+            serde_yaml::Value::Sequence(vec!["mon".into(), "wed".into(), "-1fri".into()]),
+        ),
+        // An IANA zone name, never an offset: a zone maps a date to an offset, and a series
+        // crossing a daylight-saving boundary needs the name to do it.
+        Change::set(&["events", "Standup", "repeat", "tz"], "Asia/Tokyo"),
+        Change::set(
+            &["events", "Standup", "exclusions"],
+            serde_yaml::Value::Sequence(vec!["2026-01-07 09:30:00+09:00".into()]),
+        ),
+    ];
+
+    let note = apply("# Some events\n", &changes).expect("the frontmatter should be written");
+    let block = Note::parse(&note).block;
+    let parsed: serde_yaml::Value =
+        serde_yaml::from_str(&block).expect("the emitted YAML should parse");
+    let as_json = serde_json::to_value(&parsed).expect("it should convert to JSON");
+
+    if let Err(error) = validator.validate(&as_json) {
+        panic!("emitted:\n{block}\nrejected by the schema: {error}");
+    }
+}

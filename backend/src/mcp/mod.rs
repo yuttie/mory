@@ -26,6 +26,8 @@ use serde::Serialize;
 use crate::models::AppState;
 use crate::oauth::{AccessClaims, SCOPE_WRITE};
 
+pub(crate) mod frontmatter;
+mod task_tools;
 mod tools;
 
 /// What every tool returns: text the model reads.
@@ -251,6 +253,110 @@ impl Mory {
             return Ok(needs_write_scope());
         }
         tools::delete_note(&self.state, args).await
+    }
+
+    #[tool(
+        name = "create_task",
+        description = "Create a task and commit it. Requires the notes:write scope.\n\nA task \
+                       is an ordinary note under `.tasks/` carrying a `task:` block. The schema \
+                       requires status, progress, importance, urgency and scheduled_dates, so \
+                       whatever is not given is filled in: status todo, progress 0, importance \
+                       and urgency 3, no scheduled dates. The result echoes the whole file back \
+                       so those defaults are visible.",
+        annotations(title = "Create a task", read_only_hint = false, destructive_hint = false,
+                    idempotent_hint = false, open_world_hint = false)
+    )]
+    pub async fn create_task(
+        &self,
+        Parameters(args): Parameters<task_tools::CreateTaskArgs>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        if !granted(&context, SCOPE_WRITE) {
+            return Ok(needs_write_scope());
+        }
+        task_tools::create_task(&self.state, args).await
+    }
+
+    #[tool(
+        name = "update_task",
+        description = "Change a task's status, progress, importance or urgency, editing its \
+                       frontmatter in place. Requires the notes:write scope.\n\nThe rest of the \
+                       note is untouched, comments and hand-formatting included. Changing \
+                       status replaces the whole status block, so the keys the new one requires \
+                       must come with it: `waiting` needs waiting_for, `blocked` needs \
+                       blocked_by, `on_hold` needs hold_reason, `canceled` needs cancel_reason. \
+                       `done` and `canceled` default their timestamp to now.",
+        annotations(title = "Update a task", read_only_hint = false, destructive_hint = false,
+                    idempotent_hint = true, open_world_hint = false)
+    )]
+    pub async fn update_task(
+        &self,
+        Parameters(args): Parameters<task_tools::UpdateTaskArgs>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        if !granted(&context, SCOPE_WRITE) {
+            return Ok(needs_write_scope());
+        }
+        task_tools::update_task(&self.state, args).await
+    }
+
+    #[tool(
+        name = "complete_task",
+        description = "Mark a task done and commit it. Requires the notes:write scope.\n\nSets \
+                       the status to done with a completed_at of now unless one is given, and \
+                       progress to 100 unless set_progress is false.",
+        annotations(title = "Complete a task", read_only_hint = false, destructive_hint = false,
+                    idempotent_hint = true, open_world_hint = false)
+    )]
+    pub async fn complete_task(
+        &self,
+        Parameters(args): Parameters<task_tools::CompleteTaskArgs>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        if !granted(&context, SCOPE_WRITE) {
+            return Ok(needs_write_scope());
+        }
+        task_tools::complete_task(&self.state, args).await
+    }
+
+    #[tool(
+        name = "cancel_task",
+        description = "Cancel a task and commit it. Requires the notes:write scope.\n\nThe \
+                       schema requires a reason, which is the point: a cancelled task with no \
+                       reason is indistinguishable later from one that was forgotten.",
+        annotations(title = "Cancel a task", read_only_hint = false, destructive_hint = false,
+                    idempotent_hint = true, open_world_hint = false)
+    )]
+    pub async fn cancel_task(
+        &self,
+        Parameters(args): Parameters<task_tools::CancelTaskArgs>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        if !granted(&context, SCOPE_WRITE) {
+            return Ok(needs_write_scope());
+        }
+        task_tools::cancel_task(&self.state, args).await
+    }
+
+    #[tool(
+        name = "set_task_dates",
+        description = "Set or clear a task's start_at, due_by, deadline and scheduled_dates. \
+                       Requires the notes:write scope.\n\nThese are bare dates (`2026-03-15`) \
+                       or datetimes carrying their offset (`2026-03-15 09:00:00+09:00`). due_by \
+                       and deadline are drawn on the calendar in their own colours, so they are \
+                       events as well as fields.",
+        annotations(title = "Set a task's dates", read_only_hint = false,
+                    destructive_hint = false, idempotent_hint = true, open_world_hint = false)
+    )]
+    pub async fn set_task_dates(
+        &self,
+        Parameters(args): Parameters<task_tools::SetTaskDatesArgs>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
+        if !granted(&context, SCOPE_WRITE) {
+            return Ok(needs_write_scope());
+        }
+        task_tools::set_task_dates(&self.state, args).await
     }
 
     #[tool(
