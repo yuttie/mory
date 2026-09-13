@@ -67,6 +67,101 @@ The Docker image stores the Tantivy index in `/search-index`; mount that volume
 to avoid rebuilding Text search after replacing a container. SQLite embeddings
 and descriptions live with `cache.sqlite` under `/home`.
 
+### MCP server
+
+moried serves an [MCP](https://modelcontextprotocol.io/) endpoint at
+`{MORIED_ROOT_PATH}v2/mcp`, so Claude and ChatGPT can search and read the notes
+directly. It is **off unless `MORIED_PUBLIC_URL` is set**; without that variable
+none of its routes are registered.
+
+```
+MORIED_PUBLIC_URL=https://notes.example.com
+```
+
+That one value is the origin every discovery URL is derived from, and it must be
+the origin clients actually reach — not the address moried binds to. Add the
+connector by URL:
+
+```
+https://notes.example.com/api/v2/mcp
+```
+
+claude.ai and ChatGPT both refuse a static bearer token for a connector added by
+URL, so moried is also a small OAuth 2.1 authorization server: adding the
+connector opens a consent page that asks for the same username and password the
+web app uses. Tokens are signed with `MORIED_SECRET`, so **rotating that secret
+disconnects every connector** — and ends the web session too. There is no other
+way to revoke one.
+
+For a command-line client:
+
+```shell
+claude mcp add --transport http mory https://notes.example.com/api/v2/mcp
+```
+
+#### Reverse proxy
+
+**The rule you already have is enough.** Whatever forwards `{MORIED_ROOT_PATH}`
+to moried also serves discovery: the `WWW-Authenticate` challenge points clients
+at `{MORIED_ROOT_PATH}.well-known/oauth-protected-resource/v2/mcp`, below the
+mount, and RFC 8414's last fallback for a path-bearing issuer is
+`{MORIED_ROOT_PATH}.well-known/openid-configuration`. Both are behind that one
+rule. A typical block needs nothing added:
+
+```nginx
+location /api/ {
+    proxy_pass       http://backend;   # no trailing slash: keep the prefix
+    proxy_set_header Host $host;       # rmcp validates this
+}
+```
+
+Verified against a real deployment behind nginx with exactly that one rule and no
+`/.well-known/` rules at all: claude.ai follows the `resource_metadata` pointer
+and then reads `{MORIED_ROOT_PATH}.well-known/openid-configuration`, both of
+which sit under the mount. Claude Code instead builds the site-root paths, so it
+wants the optional rules below — or the `{MORIED_ROOT_PATH}` fallback, which it
+also accepts. Both identify themselves by client ID metadata document rather
+than by registering.
+
+`Host` matters: rmcp checks it against the authority in `MORIED_PUBLIC_URL` to
+stop DNS rebinding. Pass it through as above, or name the internal hostname in
+`MORIED_MCP_ALLOWED_HOSTS`, or every MCP request is refused with 403.
+
+Optionally, these three put discovery on the path a client tries *first*, saving
+a round trip:
+
+```
+https://<host>/.well-known/oauth-authorization-server*  → moried
+https://<host>/.well-known/oauth-protected-resource*    → moried
+https://<host>/.well-known/openid-configuration*        → moried
+```
+
+Match them narrowly rather than proxying all of `/.well-known/`, or you will
+break `acme-challenge` and your certificate renewals:
+
+```nginx
+location ~ ^/\.well-known/(oauth-authorization-server|oauth-protected-resource|openid-configuration) {
+    proxy_pass       http://backend;
+    proxy_set_header Host $host;
+}
+```
+
+Without them those paths reach whatever serves `/`. If that is a single-page
+app, it answers **200 with its index page** rather than 404 — which is why the
+challenge points below the mount instead: a client following it cannot be
+handed HTML by a route that was never meant to answer.
+
+Checking a deployment by hand:
+
+```shell
+curl -s https://notes.example.com/.well-known/oauth-protected-resource/api/v2/mcp | jq
+curl -si -X POST https://notes.example.com/api/v2/mcp | head -3
+```
+
+The first must report a `resource` byte-identical to the URL typed into the
+connector dialog; the second must be a 401 carrying `WWW-Authenticate: Bearer
+… resource_metadata="…"`.
+
 Run a container:
 ```shell
 docker run --env-file env.list -p 127.0.0.1:3030:3030 -v /path/to/local/repo:/repo -u $(id -u $USER):$(id -g $USER) moried

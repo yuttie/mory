@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::ffi::OsStr;
-use std::io::Write;
 use std::iter::once;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
@@ -35,7 +34,7 @@ use axum::{
 };
 use chrono::{DateTime, Duration, Utc};
 use dotenv::dotenv;
-use git2::{Index, IndexEntry, IndexTime, Repository, Oid};
+use git2::{Index, Repository, Oid};
 use jsonwebtoken as jwt;
 use mime_guess;
 use reqwest;
@@ -64,6 +63,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use models::*;
 
 mod ical;
+mod mcp;
+mod oauth;
 mod search;
 
 #[cfg(test)]
@@ -195,16 +196,38 @@ async fn main() -> Result<()> {
                 .layer(cors)
         );
 
+    // MCP is off unless `MORIED_PUBLIC_URL` names the origin clients reach this server at. An
+    // existing deployment that does not set it registers none of these routes and is unchanged.
+    let mcp = oauth::McpConfig::from_env()?.map(|config| {
+        tracing::info!("MCP is enabled at {}, issued by {}", config.resource, config.issuer);
+        oauth::OauthState::new(Arc::new(config), state.clone())
+    });
+
     let app = {
         let root_path = env::var("MORIED_ROOT_PATH").unwrap();
         assert!(root_path.starts_with('/'), "MORIED_ROOT_PATH must start with '/'");
         assert!(root_path.ends_with('/'), "MORIED_ROOT_PATH must end with '/'");
 
+        // Merged after the layers above, so the OAuth routes carry their own CORS policy rather
+        // than the single-origin, credentialed one the app's own API needs.
+        let api = match &mcp {
+            Some(oauth_state) => api
+                .merge(oauth::routes(oauth_state.clone()))
+                .merge(mcp_routes(oauth_state.clone())),
+            None => api,
+        };
+
         if root_path == "/" {
             api
         }
         else {
-            Router::new().nest(&root_path, api)
+            let app = Router::new().nest(&root_path, api);
+            // Only reachable with the recommended `/.well-known/*` proxy rule, and only
+            // meaningful when the app is not already at the site root.
+            match &mcp {
+                Some(oauth_state) => app.merge(oauth::site_root_routes(oauth_state.clone())),
+                None => app,
+            }
         }
     };
 
@@ -214,6 +237,34 @@ async fn main() -> Result<()> {
         .unwrap();
 
     Ok(())
+}
+
+/// `/v2/mcp`, behind the access-token check.
+///
+/// Mounted with `route_service` at an exact path rather than nested: rmcp validates the `Host`
+/// header against `allowed_hosts` to stop DNS rebinding, and its own source warns that
+/// `Router::nest` can drop the `Host` hyper synthesizes from an HTTP/2 `:authority`. One layer of
+/// nesting is unavoidable when `MORIED_ROOT_PATH` is not `/`, but the endpoint itself adds none.
+///
+/// The layers are this route's own, not the app API's: no `CorsLayer` with a single credentialed
+/// origin, because the caller is Anthropic's or OpenAI's servers rather than a browser, and the
+/// MCP session headers are the ones a browser-based client would need exposed.
+fn mcp_routes(oauth_state: oauth::OauthState) -> Router {
+    let service = mcp::service(
+        oauth_state.app.clone(),
+        &oauth_state.config.issuer,
+    );
+    Router::new()
+        .route_service("/v2/mcp", service)
+        .layer(
+            ServiceBuilder::new()
+                .layer(TraceLayer::new_for_http())
+                .layer(SetSensitiveHeadersLayer::new(once(header::AUTHORIZATION)))
+                .layer(middleware::from_fn_with_state(
+                    oauth_state,
+                    oauth::mcp_auth,
+                )),
+        )
 }
 
 /// Bumping this drops and refills the `entry` table on the next start.
@@ -413,10 +464,15 @@ async fn auth(req: Request<Body>, next: Next) -> Result<Response, StatusCode> {
 }
 
 fn token_is_valid(header_value: &str) -> bool {
-    let token = header_value.split_whitespace().nth(1).unwrap();
+    // A header with no second token is a malformed request, not a panic: `Authorization: Bearer`
+    // alone, or any single word, must simply fail to authorize.
+    let Some(token) = header_value.split_whitespace().nth(1) else {
+        tracing::debug!("the Authorization header carries no token");
+        return false;
+    };
 
     let secret = env::var("MORIED_SECRET").unwrap();
-    match jwt::decode::<Claims>(&token, &jwt::DecodingKey::from_secret(secret.as_ref()), &jwt::Validation::default()) {
+    match jwt::decode::<Claims>(token, &jwt::DecodingKey::from_secret(secret.as_ref()), &jwt::Validation::default()) {
         Ok(_) => {
             tracing::debug!("authorized");
             true
@@ -911,102 +967,24 @@ async fn put_notes_path(
     tracing::debug!("put_notes_path");
     tracing::debug!("{:?}", note_save);
 
-    let response = match note_save {
+    let written = match note_save {
         NoteSave::Save { content, message } => {
-            let repo = state.repo.lock().unwrap();
-
-            let head = repo.head().unwrap();
-            let head_tree = head.peel_to_tree().unwrap();
-            let head_commit = head.peel_to_commit().unwrap();
-
-            let mut index = Index::new().unwrap();
-            index.read_tree(&head_tree).unwrap();
-
-            let blob_oid = repo.blob(content.as_bytes()).unwrap();
-            let entry = IndexEntry {
-                ctime: IndexTime::new(0, 0),
-                mtime: IndexTime::new(0, 0),
-                dev: 0,
-                ino: 0,
-                mode: 0o100644,
-                uid: 0,
-                gid: 0,
-                file_size: 0,
-                id: blob_oid,
-                flags: 0,
-                flags_extended: 0,
-                path: path.as_bytes().into(),
-            };
-            index.add(&entry).unwrap();
-
-            let tree_oid = index.write_tree_to(&repo).unwrap();
-            let tree = repo.find_tree(tree_oid).unwrap();
-
-            let signature = repo.signature().unwrap();
-            repo.commit(
-                Some("HEAD"),
-                &signature,
-                &signature,
-                &message,
-                &tree,
-                &[&head_commit],
-            ).unwrap();
-            Json(&true).into_response()
+            state.save_note(&path, content.as_bytes(), &message).await.map(Some)
         },
         NoteSave::Rename { from } => {
-            let found = {
-                let repo = state.repo.lock().unwrap();
-
-                let head = repo.head().unwrap();
-                let head_tree = head.peel_to_tree().unwrap();
-
-                let mut index = Index::new().unwrap();
-                index.read_tree(&head_tree).unwrap();
-
-                index.iter().find(|entry| std::str::from_utf8(&entry.path).unwrap() == from)
-            };
-            if let Some(mut entry) = found {
-                let repo = state.repo.lock().unwrap();
-
-                let head = repo.head().unwrap();
-                let head_tree = head.peel_to_tree().unwrap();
-                let head_commit = head.peel_to_commit().unwrap();
-
-                let mut index = Index::new().unwrap();
-                index.read_tree(&head_tree).unwrap();
-
-                let from = std::str::from_utf8(&entry.path).unwrap();
-                index.remove(from.as_ref(), 0).unwrap();
-
-                let message = format!("Rename {} to {}", &from, &path);
-                entry.path = path.as_bytes().into();
-                index.add(&entry).unwrap();
-
-                let tree_oid = index.write_tree_to(&repo).unwrap();
-                let tree = repo.find_tree(tree_oid).unwrap();
-
-                let signature = repo.signature().unwrap();
-                repo.commit(
-                    Some("HEAD"),
-                    &signature,
-                    &signature,
-                    &message,
-                    &tree,
-                    &[&head_commit],
-                ).unwrap();
-                Json(&true).into_response()
-            }
-            else {
-                StatusCode::NOT_FOUND.into_response()
-            }
+            let message = format!("Rename {} to {}", &from, &path);
+            state.rename_note(&from, &path, &message).await
         },
     };
 
-    // Let the writer start on the new HEAD now, rather than leaving the next read to discover
-    // it. Unconditional: when HEAD did not move the sync sees a fresh cache and returns at once,
-    // which is cheaper than working out whether this particular branch changed anything.
-    state.nudge_cache().await;
-    response
+    match written {
+        Ok(Some(_)) => Json(&true).into_response(),
+        Ok(None) => StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            tracing::error!("Failed to write {}: {:?}", path, e);
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        },
+    }
 }
 
 async fn delete_notes_path(
@@ -1015,55 +993,14 @@ async fn delete_notes_path(
 ) -> Response {
     tracing::debug!("delete_notes_path");
 
-    let response = {
-        let found = {
-            let repo = state.repo.lock().unwrap();
-
-            let head = repo.head().unwrap();
-            let head_tree = head.peel_to_tree().unwrap();
-
-            let mut index = Index::new().unwrap();
-            index.read_tree(&head_tree).unwrap();
-
-            index.iter().find(|entry| std::str::from_utf8(&entry.path).unwrap() == path)
-    };
-    if let Some(entry) = found {
-        let repo = state.repo.lock().unwrap();
-
-        let head = repo.head().unwrap();
-        let head_tree = head.peel_to_tree().unwrap();
-        let head_commit = head.peel_to_commit().unwrap();
-
-        let mut index = Index::new().unwrap();
-        index.read_tree(&head_tree).unwrap();
-
-        let path = std::str::from_utf8(&entry.path).unwrap();
-        index.remove(path.as_ref(), 0).unwrap();
-
-        let tree_oid = index.write_tree_to(&repo).unwrap();
-        let tree = repo.find_tree(tree_oid).unwrap();
-
-        let signature = repo.signature().unwrap();
-        repo.commit(
-            Some("HEAD"),
-            &signature,
-            &signature,
-            &format!("Delete {}", &path),
-            &tree,
-            &[&head_commit],
-        ).unwrap();
-        Json(&true).into_response()
+    match state.delete_note(&path, &format!("Delete {}", &path)).await {
+        Ok(Some(_)) => Json(&true).into_response(),
+        Ok(None) => StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            tracing::error!("Failed to delete {}: {:?}", path, e);
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        },
     }
-    else {
-        StatusCode::NOT_FOUND.into_response()
-    }
-    };
-
-    // Let the writer start on the new HEAD now, rather than leaving the next read to discover
-    // it. Unconditional: when HEAD did not move the sync sees a fresh cache and returns at once,
-    // which is cheaper than working out whether this particular branch changed anything.
-    state.nudge_cache().await;
-    response
 }
 
 async fn serve_image_content(content: Vec<u8>, path: &Path) -> Response {
@@ -1149,77 +1086,43 @@ async fn post_files(
 ) -> Response {
     tracing::debug!("post_files_path");
 
-    // Create a blob for each part (file) in the form data
     let mut files = Vec::new();
     let mut result = Vec::new();
-    while let Some(field) = multipart.next_field().await.unwrap() {
+    loop {
+        let field = match multipart.next_field().await {
+            Ok(Some(field)) => field,
+            Ok(None) => break,
+            Err(e) => {
+                tracing::error!("Failed to read the upload: {:?}", e);
+                return StatusCode::BAD_REQUEST.into_response();
+            },
+        };
         tracing::debug!("{:?}", field);
 
-        let uuid = field.name().unwrap().to_owned();
-        let filename = field.file_name().unwrap().as_bytes().to_vec();
-
-        let blob_oid = {
-            let data = field.bytes().await.unwrap();
-
-            let repo = state.repo.lock().unwrap();
-            let mut writer = repo.blob_writer(None).unwrap();
-            writer.write_all(&data).unwrap();
-            writer.commit().unwrap()
+        let (Some(uuid), Some(filename)) = (
+            field.name().map(str::to_owned),
+            field.file_name().map(|name| name.as_bytes().to_vec()),
+        ) else {
+            tracing::error!("An uploaded part carries no name or no filename");
+            return StatusCode::BAD_REQUEST.into_response();
+        };
+        let data = match field.bytes().await {
+            Ok(data) => data,
+            Err(e) => {
+                tracing::error!("Failed to read the part {}: {:?}", uuid, e);
+                return StatusCode::BAD_REQUEST.into_response();
+            },
         };
 
-        files.push((filename, blob_oid));
+        files.push((filename, data.to_vec()));
         result.push((uuid, "success"));
     }
 
-    // Commit. Scoped so the repository guard and everything borrowing from it are released
-    // before the cache is nudged, which re-locks it.
-    {
-        let repo = state.repo.lock().unwrap();
-
-        let head = repo.head().unwrap();
-        let head_tree = head.peel_to_tree().unwrap();
-        let head_commit = head.peel_to_commit().unwrap();
-
-        let mut index = Index::new().unwrap();
-        index.read_tree(&head_tree).unwrap();
-
-        let count = files.len();
-        for (path, blob_oid) in files {
-            let entry = IndexEntry {
-                ctime: IndexTime::new(0, 0),
-                mtime: IndexTime::new(0, 0),
-                dev: 0,
-                ino: 0,
-                mode: 0o100644,
-                uid: 0,
-                gid: 0,
-                file_size: 0,
-                id: blob_oid,
-                flags: 0,
-                flags_extended: 0,
-                path: path,
-            };
-            index.add(&entry).unwrap();
+    let message = format!("Upload {} files", files.len());
+    if let Err(e) = state.save_files(&files, &message).await {
+        tracing::error!("Failed to commit the upload: {:?}", e);
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
-
-    let tree_oid = index.write_tree_to(&repo).unwrap();
-    let tree = repo.find_tree(tree_oid).unwrap();
-
-    let signature = repo.signature().unwrap();
-    repo.commit(
-        Some("HEAD"),
-        &signature,
-        &signature,
-        &format!("Upload {} files", count),
-        &tree,
-        &[&head_commit],
-    ).unwrap();
-    }
-
-    // Let the writer start on the new HEAD now, rather than leaving the next read to discover
-    // it. Unconditional: when HEAD did not move the sync sees a fresh cache and returns at once,
-    // which is cheaper than working out whether this particular branch changed anything.
-    state.nudge_cache().await;
 
     Json(result).into_response()
 }
@@ -1737,22 +1640,22 @@ Important:
 
     #[derive(Serialize)]
     pub struct CalendarReport {
-        id: String,
-        name: String,
-        color: Option<String>,
+        pub id: String,
+        pub name: String,
+        pub color: Option<String>,
         /// `None` when the feed was read. A calendar that fails is reported here rather than
         /// failing the request, so one dead feed cannot blank the whole view.
-        error: Option<String>,
+        pub error: Option<String>,
     }
 
     #[derive(Serialize)]
     pub struct ImportedEventsResponse {
-        calendars: Vec<CalendarReport>,
-        events: Vec<crate::ical::ImportedEvent>,
-        series: std::collections::BTreeMap<String, crate::ical::SeriesDefinition>,
+        pub calendars: Vec<CalendarReport>,
+        pub events: Vec<crate::ical::ImportedEvent>,
+        pub series: std::collections::BTreeMap<String, crate::ical::SeriesDefinition>,
         /// Set when some series hit the per-series occurrence cap, so the client can say the view
         /// is incomplete rather than quietly showing less than exists.
-        truncated: bool,
+        pub truncated: bool,
     }
 
     /// Where the subscription list lives, alongside the app's other repository-held config.
@@ -2011,7 +1914,20 @@ Important:
         tracing::debug!("v2::get_imported_events");
 
         let (from, to) = crate::ical::parse_window(&query.start, &query.end)?;
-        let subscriptions = read_subscriptions(&state).await?;
+        Ok(Json(imported_events(&state, from, to).await?))
+    }
+
+    /// The same expansion, without any HTTP in sight, so the MCP tool and the endpoint cannot
+    /// drift apart.
+    ///
+    /// A calendar that fails is reported in `calendars` rather than failing the call: one dead
+    /// feed must not blank the whole view.
+    pub(crate) async fn imported_events(
+        state: &AppState,
+        from: DateTime<chrono::FixedOffset>,
+        to: DateTime<chrono::FixedOffset>,
+    ) -> Result<ImportedEventsResponse> {
+        let subscriptions = read_subscriptions(state).await?;
 
         let mut response = ImportedEventsResponse {
             calendars: Vec::new(),
@@ -2027,7 +1943,7 @@ Important:
             }
 
             let outcome = async {
-                let body = fetch_feed(&state, &subscription.url).await?;
+                let body = fetch_feed(state, &subscription.url).await?;
                 let calendar = crate::ical::parse_calendar(&body)?;
                 Ok::<_, anyhow::Error>(crate::ical::expand(
                     &calendar, &subscription.id, from, to,
@@ -2066,7 +1982,7 @@ Important:
         }
 
         response.events.sort_by(|a, b| a.start.cmp(&b.start));
-        Ok(Json(response))
+        Ok(response)
     }
 
     pub async fn get_commits_head(
@@ -2248,10 +2164,21 @@ Important:
 
         match query.format.as_deref() {
             Some("tree") => {
-                // Tree structure response
-                let roots = entries_to_tree(&entries, Some(".tasks")).unwrap();
-                let response = Json(roots).into_response();
-                attach_oid(response, head_commit_id)
+                // The tree is derived from the paths, so one file named outside the convention --
+                // a directory that is not a UUIDv4, a stem that does not end in one, a parent
+                // UUID with no file of its own -- makes the whole forest unbuildable. Reporting
+                // that is the honest answer; panicking the request task was not.
+                match entries_to_tree(&entries, Some(".tasks")) {
+                    Ok(roots) => attach_oid(Json(roots).into_response(), head_commit_id),
+                    Err(e) => {
+                        tracing::error!("The task tree could not be built: {:?}", e);
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            format!("The task tree could not be built: {:#}", e),
+                        )
+                            .into_response()
+                    },
+                }
             },
             _ => {
                 // List structure response
@@ -2303,7 +2230,7 @@ mod models {
         response::{IntoResponse, Response},
     };
     use chrono::{DateTime, FixedOffset, offset::TimeZone};
-    use git2::{Repository, Oid};
+    use git2::{Index, IndexEntry, IndexTime, Repository, Oid};
     use serde::{Deserialize, Serialize};
     use serde_yaml;
     use sqlx::{Row, SqlitePool, sqlite::SqliteRow};
@@ -2590,6 +2517,130 @@ mod models {
         pub search: Arc<SearchManager>,
     }
 
+    /// An in-memory index loaded from HEAD, with the commit to parent the next one on.
+    fn head_index(repo: &Repository) -> Result<(Index, git2::Commit<'_>)> {
+        let head = repo.head().context("the repository has no HEAD")?;
+        let head_tree = head.peel_to_tree().context("HEAD does not peel to a tree")?;
+        let head_commit = head.peel_to_commit().context("HEAD does not peel to a commit")?;
+        let mut index = Index::new().context("failed to create an in-memory index")?;
+        index.read_tree(&head_tree).context("failed to load the HEAD tree")?;
+        Ok((index, head_commit))
+    }
+
+    /// A staged regular file. The times and ownership are zeroed because nothing here comes from
+    /// a working tree -- the index exists only to produce a tree.
+    fn blob_index_entry(path: &[u8], blob_oid: Oid) -> IndexEntry {
+        IndexEntry {
+            ctime: IndexTime::new(0, 0),
+            mtime: IndexTime::new(0, 0),
+            dev: 0,
+            ino: 0,
+            mode: 0o100644,
+            uid: 0,
+            gid: 0,
+            file_size: 0,
+            id: blob_oid,
+            flags: 0,
+            flags_extended: 0,
+            path: path.into(),
+        }
+    }
+
+    /// Compare on bytes rather than decoding: git paths need not be UTF-8, and a repository that
+    /// happens to hold one must not take down a request that is about some other path.
+    fn find_index_entry(index: &Index, path: &str) -> Option<IndexEntry> {
+        index.iter().find(|entry| entry.path == path.as_bytes())
+    }
+
+    /// Write `index` out as a tree and commit it onto `parent`, moving HEAD.
+    fn commit_index(
+        repo: &Repository,
+        index: &mut Index,
+        parent: &git2::Commit,
+        message: &str,
+    ) -> Result<Oid> {
+        let tree_oid = index.write_tree_to(repo).context("failed to write the tree")?;
+        let tree = repo.find_tree(tree_oid).context("the written tree is missing")?;
+        let signature = repo.signature().context("the repository has no usable signature")?;
+        repo.commit(Some("HEAD"), &signature, &signature, message, &tree, &[parent])
+            .context("failed to commit")
+    }
+
+    /// Commit one blob at `path`, replacing whatever HEAD held there.
+    ///
+    /// The four `commit_*` functions take `&Repository` rather than `&AppState` so the git
+    /// logic can be exercised against a fixture repository on its own; the `AppState` methods
+    /// add only the lock and the cache nudge.
+    pub(crate) fn commit_save(
+        repo: &Repository,
+        path: &str,
+        content: &[u8],
+        message: &str,
+    ) -> Result<Oid> {
+        let (mut index, head_commit) = head_index(repo)?;
+        let blob_oid = repo.blob(content).context("failed to write the blob")?;
+        index
+            .add(&blob_index_entry(path.as_bytes(), blob_oid))
+            .with_context(|| format!("failed to stage {}", path))?;
+        commit_index(repo, &mut index, &head_commit, message)
+    }
+
+    /// Move the blob at `from` to `to`, keeping its mode. `None` when `from` is not in HEAD.
+    pub(crate) fn commit_rename(
+        repo: &Repository,
+        from: &str,
+        to: &str,
+        message: &str,
+    ) -> Result<Option<Oid>> {
+        let (mut index, head_commit) = head_index(repo)?;
+        let Some(mut entry) = find_index_entry(&index, from) else {
+            return Ok(None);
+        };
+        index
+            .remove(Path::new(from), 0)
+            .with_context(|| format!("failed to unstage {}", from))?;
+        entry.path = to.as_bytes().into();
+        index
+            .add(&entry)
+            .with_context(|| format!("failed to stage {}", to))?;
+        Ok(Some(commit_index(repo, &mut index, &head_commit, message)?))
+    }
+
+    /// Remove the blob at `path`. `None` when it is not in HEAD.
+    pub(crate) fn commit_delete(
+        repo: &Repository,
+        path: &str,
+        message: &str,
+    ) -> Result<Option<Oid>> {
+        let (mut index, head_commit) = head_index(repo)?;
+        if find_index_entry(&index, path).is_none() {
+            return Ok(None);
+        }
+        index
+            .remove(Path::new(path), 0)
+            .with_context(|| format!("failed to unstage {}", path))?;
+        Ok(Some(commit_index(repo, &mut index, &head_commit, message)?))
+    }
+
+    /// Commit several blobs in one commit.
+    ///
+    /// Paths are bytes because they come from a multipart filename, which git stores verbatim
+    /// and which need not be UTF-8.
+    pub(crate) fn commit_files(
+        repo: &Repository,
+        files: &[(Vec<u8>, Vec<u8>)],
+        message: &str,
+    ) -> Result<Oid> {
+        let (mut index, head_commit) = head_index(repo)?;
+        for (path, content) in files {
+            let blob_oid = repo.blob(content).context("failed to write the blob")?;
+            index
+                .add(&blob_index_entry(path, blob_oid))
+                .with_context(|| format!("failed to stage {}", String::from_utf8_lossy(path)))?;
+        }
+        commit_index(repo, &mut index, &head_commit, message)
+    }
+
     impl AppState {
         /// Ask for a sync to HEAD and wait for it, up to a deadline.
         ///
@@ -2756,6 +2807,50 @@ mod models {
                 }
             }
             Ok((cache_commit_id, entries))
+        }
+
+        /// Commit `content` at `path`, replacing whatever HEAD held there.
+        pub async fn save_note(
+            &self,
+            path: &str,
+            content: &[u8],
+            message: &str,
+        ) -> Result<Oid> {
+            // Scoped so the repository guard is released before `nudge_cache` re-locks it, and
+            // so no guard is ever held across the await.
+            let commit_id = commit_save(&self.repo.lock().unwrap(), path, content, message)?;
+            self.nudge_cache().await;
+            Ok(commit_id)
+        }
+
+        /// Move the blob at `from` to `to`. `None` when `from` is not in HEAD.
+        pub async fn rename_note(
+            &self,
+            from: &str,
+            to: &str,
+            message: &str,
+        ) -> Result<Option<Oid>> {
+            let commit_id = commit_rename(&self.repo.lock().unwrap(), from, to, message)?;
+            self.nudge_cache().await;
+            Ok(commit_id)
+        }
+
+        /// Remove the blob at `path`. `None` when it is not in HEAD.
+        pub async fn delete_note(&self, path: &str, message: &str) -> Result<Option<Oid>> {
+            let commit_id = commit_delete(&self.repo.lock().unwrap(), path, message)?;
+            self.nudge_cache().await;
+            Ok(commit_id)
+        }
+
+        /// Commit several blobs at once, as an upload of many files is.
+        pub async fn save_files(
+            &self,
+            files: &[(Vec<u8>, Vec<u8>)],
+            message: &str,
+        ) -> Result<Oid> {
+            let commit_id = commit_files(&self.repo.lock().unwrap(), files, message)?;
+            self.nudge_cache().await;
+            Ok(commit_id)
         }
 
         pub async fn check_cache_state(

@@ -8,6 +8,9 @@ Layout of the tracked sources:
 
 - `backend/src/main.rs` — the server: routes, handlers, the `v2` module, and `models`.
 - `backend/src/ical.rs` — parsing subscribed iCal feeds and expanding their recurrences.
+- `backend/src/oauth.rs` — the OAuth 2.1 authorization server the MCP endpoint needs.
+- `backend/src/mcp/` — the MCP server: `mod.rs` holds the tool router, `frontmatter.rs` the
+  in-place frontmatter editor, and the rest the tools grouped by area.
 - `fixtures/calendar/` — iCal feeds both components expand, and the golden the differential test compares them against.
 - `backend/src/tests.rs` — in-crate tests, with Git repository fixtures.
 - `frontend/src/` — `views/` (routed screens), `components/`, `stores/` (Pinia), `api.ts` (backend client), `idb.ts` (IndexedDB cache), `*.spec.ts` (tests next to their subject).
@@ -103,6 +106,43 @@ These follow from the philosophy above; keep them intact.
 - The frontend files store (`frontend/src/stores/files.ts`) is the single entry point for file operations. Every consumer reads the one shared listing from it; nothing calls the entries API or IndexedDB directly.
 - A task's `due_by` and `deadline` are drawn as events too, derived from the same listing by `taskDatesFromEntries` in `frontend/src/events.ts` rather than from an `events:` block. Each has its own colour, configurable under `task_dates:` in `.mory/calendars.yaml`.
 - External calendars are subscribed in `.mory/calendars.yaml` and served by `GET /v2/imported-events`. Their events are read-only and never stored: they are a live view of someone else's calendar, so the repository is deliberately not their home. Converting one writes an ordinary note under `.events/`, which then shadows the imported original by `ical.uid` — or by `uid` and `recurrence_id` together, when the note claims a single occurrence.
+
+## The MCP server
+
+`moried` serves MCP at `{MORIED_ROOT_PATH}v2/mcp`, so Claude and ChatGPT can reach the notes as a
+connector added by URL. It is off unless `MORIED_PUBLIC_URL` is set: without it neither the MCP
+route nor the OAuth routes are registered.
+
+Tools call the same internal functions the HTTP handlers call — `search::run_search`,
+`find_entry_blob`, `AppState::save_note` and the rest — so an MCP read sees the listing the web
+app sees and an MCP write is an ordinary Git commit. When a handler holds logic a tool needs,
+extract it rather than writing a second copy; that is why `run_search` and `v2::imported_events`
+exist as separate functions from the handlers that call them.
+
+**OAuth artefacts are stateless JWTs** signed with `MORIED_SECRET` and told apart by a `typ`
+claim (`mcp_client`, `mcp_code`, `mcp_access`, `mcp_refresh`). A registered `client_id` is itself
+a signed JWT carrying that client's redirect URIs, so registration stores nothing. Nothing lands
+in `cache.sqlite`, which may hold only disposable data. The price: there is no revocation list,
+so cutting a client off before its token expires means rotating `MORIED_SECRET` — which ends the
+web session too.
+
+**Frontmatter is edited in place, never regenerated.** `mcp::frontmatter` finds a key's line,
+changes that line, and leaves every other byte alone; `serde_yaml` then parses both the intended
+result and the edited text, and the edit is refused unless they are the same value. Re-serializing
+was measured against the real 952-note corpus and rejected: a `serde_yaml` round-trip reproduces
+61 notes byte for byte and a post-processor tuned to the house style reaches 494, because what
+the rest lose is comments, block scalars and flow-style entries rather than formatting. The
+in-place editor reproduces 951. `tests::frontmatter_edits_a_real_corpus` is that measurement,
+ignored by default; point `MORY_CORPUS` at a real repository and run it whenever that module
+changes.
+
+A path under `.tasks/` must keep the UUIDv4 naming `entries_to_tree` derives the task tree from,
+and `.mory/tasks.yaml` is read-only through MCP — 600 KB of legacy YAML using anchors and aliases
+that a rewrite would silently expand into independent copies.
+
+`list_events` deliberately does **not** expand recurrence rules. Two expanders already exist and
+have disagreed before; a third with nothing comparing it to the frontend would be a disagreement
+nobody could see. It returns the rule as declared and says so in the result.
 
 ## The `events:` frontmatter
 

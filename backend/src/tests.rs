@@ -1854,3 +1854,452 @@ fn calendar_fixtures_expand_as_recorded() {
         "the expansion changed; if that is intended, regenerate with UPDATE_CALENDAR_GOLDEN=1",
     );
 }
+
+/// A header with no second whitespace-separated token used to panic the whole request.
+///
+/// These cases return before `MORIED_SECRET` is read, so the test needs no environment.
+#[test]
+fn a_token_less_authorization_header_is_rejected_rather_than_panicking() {
+    for header in ["", "Bearer", "   ", "Basic"] {
+        assert!(
+            !crate::token_is_valid(header),
+            "{header:?} should not authorize",
+        );
+    }
+}
+
+/// A fixture repository with one commit, HEAD on `refs/heads/main`, and a local identity.
+///
+/// The identity is set locally rather than left to `repo.signature()`'s global fallback, for the
+/// same reason every fixture commit names its own time: nothing under test may depend on the
+/// developer's gitconfig.
+fn write_fixture() -> RepoFixture {
+    let fixture = RepoFixture::new();
+    {
+        let mut config = fixture.repo.config().expect("failed to open the repo config");
+        config.set_str("user.name", "Fixture").expect("failed to set user.name");
+        config
+            .set_str("user.email", "fixture@example.invalid")
+            .expect("failed to set user.email");
+    }
+    fixture.commit_at(
+        "refs/heads/main",
+        &[],
+        &[("note.md", Some("first\n")), ("dir/other.md", Some("other\n"))],
+        1_700_000_000,
+        0,
+        "Root",
+    );
+    fixture.set_head("refs/heads/main");
+    fixture
+}
+
+fn head_of(fixture: &RepoFixture) -> Oid {
+    fixture
+        .repo
+        .head()
+        .expect("HEAD should resolve")
+        .peel_to_commit()
+        .expect("HEAD should peel to a commit")
+        .id()
+}
+
+fn message_of(fixture: &RepoFixture, commit: Oid) -> String {
+    fixture
+        .repo
+        .find_commit(commit)
+        .expect("the commit should exist")
+        .message()
+        .expect("the message should be UTF-8")
+        .to_owned()
+}
+
+#[test]
+fn commit_save_replaces_the_blob_and_leaves_the_rest_alone() {
+    let fixture = write_fixture();
+    let before = head_of(&fixture);
+
+    let commit = crate::models::commit_save(&fixture.repo, "note.md", b"second\n", "Save note.md")
+        .expect("the save should succeed");
+
+    assert_eq!(fixture.blob_at(commit, "note.md").as_deref(), Some("second\n"));
+    assert_eq!(fixture.blob_at(commit, "dir/other.md").as_deref(), Some("other\n"));
+    assert_eq!(message_of(&fixture, commit), "Save note.md");
+    assert_eq!(head_of(&fixture), commit, "HEAD should move to the new commit");
+    assert_eq!(
+        fixture.repo.find_commit(commit).unwrap().parent_id(0).unwrap(),
+        before,
+        "the new commit should be parented on the old HEAD",
+    );
+}
+
+#[test]
+fn commit_save_creates_a_path_that_did_not_exist() {
+    let fixture = write_fixture();
+
+    let commit = crate::models::commit_save(&fixture.repo, "deep/new.md", b"new\n", "Add")
+        .expect("the save should succeed");
+
+    assert_eq!(fixture.blob_at(commit, "deep/new.md").as_deref(), Some("new\n"));
+}
+
+#[test]
+fn commit_rename_moves_the_content_and_drops_the_old_path() {
+    let fixture = write_fixture();
+
+    let commit = crate::models::commit_rename(&fixture.repo, "note.md", "moved.md", "Rename")
+        .expect("the rename should succeed")
+        .expect("the source exists, so it should not report not-found");
+
+    assert_eq!(fixture.blob_at(commit, "moved.md").as_deref(), Some("first\n"));
+    assert_eq!(fixture.blob_at(commit, "note.md"), None);
+}
+
+#[test]
+fn commit_rename_reports_a_missing_source_without_committing() {
+    let fixture = write_fixture();
+    let before = head_of(&fixture);
+
+    let renamed = crate::models::commit_rename(&fixture.repo, "absent.md", "moved.md", "Rename")
+        .expect("a missing source is not an error");
+
+    assert!(renamed.is_none());
+    assert_eq!(head_of(&fixture), before, "HEAD must not move");
+}
+
+#[test]
+fn commit_delete_removes_only_the_named_path() {
+    let fixture = write_fixture();
+
+    let commit = crate::models::commit_delete(&fixture.repo, "note.md", "Delete note.md")
+        .expect("the delete should succeed")
+        .expect("the path exists, so it should not report not-found");
+
+    assert_eq!(fixture.blob_at(commit, "note.md"), None);
+    assert_eq!(fixture.blob_at(commit, "dir/other.md").as_deref(), Some("other\n"));
+}
+
+#[test]
+fn commit_delete_reports_a_missing_path_without_committing() {
+    let fixture = write_fixture();
+    let before = head_of(&fixture);
+
+    let deleted = crate::models::commit_delete(&fixture.repo, "absent.md", "Delete")
+        .expect("a missing path is not an error");
+
+    assert!(deleted.is_none());
+    assert_eq!(head_of(&fixture), before, "HEAD must not move");
+}
+
+#[test]
+fn commit_files_writes_every_part_in_one_commit() {
+    let fixture = write_fixture();
+    let before = head_of(&fixture);
+
+    let files = vec![
+        (b"a.png".to_vec(), b"one".to_vec()),
+        (b"sub/b.png".to_vec(), b"two".to_vec()),
+    ];
+    let commit = crate::models::commit_files(&fixture.repo, &files, "Upload 2 files")
+        .expect("the upload should succeed");
+
+    assert_eq!(fixture.blob_at(commit, "a.png").as_deref(), Some("one"));
+    assert_eq!(fixture.blob_at(commit, "sub/b.png").as_deref(), Some("two"));
+    assert_eq!(
+        fixture.repo.find_commit(commit).unwrap().parent_id(0).unwrap(),
+        before,
+        "both files should land in a single commit",
+    );
+}
+
+/// A path git accepted but that is not UTF-8 must not take down a write about some other path.
+///
+/// `find_index_entry` used to decode every path it walked with `.unwrap()`, so one such name
+/// anywhere in HEAD panicked every save, rename and delete in the repository.
+#[test]
+fn a_non_utf8_path_in_head_does_not_break_a_lookup() {
+    let fixture = write_fixture();
+    let latin1 = vec![(b"caf\xe9.md".to_vec(), b"latin1\n".to_vec())];
+    crate::models::commit_files(&fixture.repo, &latin1, "Add a latin-1 name")
+        .expect("git should accept a non-UTF-8 path");
+
+    let commit = crate::models::commit_delete(&fixture.repo, "note.md", "Delete note.md")
+        .expect("the non-UTF-8 sibling must not make this fail")
+        .expect("note.md exists");
+    assert_eq!(fixture.blob_at(commit, "note.md"), None);
+    assert_eq!(fixture.blob_at(commit, "dir/other.md").as_deref(), Some("other\n"));
+}
+
+
+
+
+/// Every frontmatter edit the MCP tools make, run against a real notes repository.
+///
+/// Ignored by default: it needs a corpus, and the only honest corpus is somebody's actual notes.
+/// Point it at one and run it whenever `mcp::frontmatter` changes:
+///
+/// ```shell
+/// MORY_CORPUS=/path/to/notes cargo test frontmatter_edits_a_real_corpus -- --ignored --nocapture
+/// ```
+///
+/// Two passes, asserting the two things the module claims.
+///
+/// **Adding a key and removing it again is byte-identical.** This is the ordinary shape of an
+/// edit and the whole reason the editor is textual: measured on a 952-note corpus, this holds for
+/// 951 and refuses the one note whose YAML is genuinely invalid. Re-serializing the block with
+/// `serde_yaml` instead reproduces 61.
+///
+/// **Changing every scalar and changing it back preserves the note's meaning and its body.** Not
+/// its bytes: this pass overwrites block scalars, which destroys the body indentation the author
+/// chose and the white space on lines that held only indentation, and no amount of care can put
+/// those back once they are gone. A single real edit keeps them, because the lines are still
+/// there to read the indentation from.
+#[test]
+#[ignore]
+fn frontmatter_edits_a_real_corpus() {
+    use crate::mcp::frontmatter::{apply, Change, Note};
+    use serde_yaml::Value;
+
+    let Ok(dir) = std::env::var("MORY_CORPUS") else {
+        eprintln!("set MORY_CORPUS to a notes repository to run this");
+        return;
+    };
+
+    let mut notes = Vec::new();
+    let mut stack = vec![std::path::PathBuf::from(dir)];
+    while let Some(path) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&path) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            }
+            else if path.extension().and_then(|e| e.to_str()) == Some("md") {
+                notes.push(path);
+            }
+        }
+    }
+
+    let (mut with_frontmatter, mut exact, mut declined) = (0, 0, 0);
+    let (mut touched, mut same_meaning, mut declined_deep) = (0, 0, 0);
+
+    for path in &notes {
+        let Ok(text) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        if !text.starts_with("---\n") {
+            continue;
+        }
+        with_frontmatter += 1;
+
+        // Pass one: a key that no note has, added and taken away again.
+        match apply(&text, &[Change::set(&["mory_corpus_probe"], "x")])
+            .and_then(|edited| apply(&edited, &[Change::remove(&["mory_corpus_probe"])]))
+        {
+            Ok(restored) => {
+                assert_eq!(
+                    restored,
+                    text,
+                    "{}: adding and removing a key changed the note",
+                    path.display(),
+                );
+                exact += 1;
+            },
+            // Declining is a correct outcome -- an unparseable note, or flow style -- and the
+            // count is what is worth watching.
+            Err(_) => declined += 1,
+        }
+
+        // Pass two: every scalar the task and event tools can reach, changed and changed back.
+        let Ok(Value::Mapping(root)) = serde_yaml::from_str::<Value>(&Note::parse(&text).block)
+        else {
+            continue;
+        };
+        let mut restore = Vec::new();
+        if let Some(Value::Mapping(task)) = root.get(Value::String("task".into())) {
+            for (key, value) in task {
+                if let (Value::String(key), value) = (key, value) {
+                    if !matches!(value, Value::Mapping(_)) {
+                        restore.push(Change::set(&["task", key], value.clone()));
+                    }
+                }
+            }
+        }
+        if let Some(Value::Mapping(events)) = root.get(Value::String("events".into())) {
+            for (name, event) in events {
+                let (Value::String(name), Value::Mapping(fields)) = (name, event) else {
+                    continue;
+                };
+                for (key, value) in fields {
+                    if let (Value::String(key), value) = (key, value) {
+                        if !matches!(value, Value::Mapping(_) | Value::Sequence(_)) {
+                            restore.push(Change::set(&["events", name, key], value.clone()));
+                        }
+                    }
+                }
+            }
+        }
+        if restore.is_empty() {
+            continue;
+        }
+        touched += 1;
+
+        let disturb = restore
+            .iter()
+            .map(|change| match change {
+                Change::Set { path, .. } => Change::Set {
+                    path: path.clone(),
+                    value: Value::String("corpus-probe".to_owned()),
+                },
+                other => other.clone(),
+            })
+            .collect::<Vec<_>>();
+
+        match apply(&text, &disturb).and_then(|edited| apply(&edited, &restore)) {
+            Ok(restored) => {
+                let after = Note::parse(&restored);
+                let parsed: Value = serde_yaml::from_str(&after.block).unwrap_or_else(|e| {
+                    panic!("{}: the edit produced invalid YAML: {e}", path.display())
+                });
+                assert_eq!(
+                    parsed,
+                    Value::Mapping(root.clone()),
+                    "{}: restoring every value did not restore the note's meaning",
+                    path.display(),
+                );
+                assert_eq!(
+                    after.body,
+                    Note::parse(&text).body,
+                    "{}: a frontmatter edit changed the body",
+                    path.display(),
+                );
+                same_meaning += 1;
+            },
+            Err(_) => declined_deep += 1,
+        }
+    }
+
+    println!("notes with frontmatter:             {with_frontmatter}");
+    println!("  add and remove is byte-identical: {exact}");
+    println!("  declined with an explanation:     {declined}");
+    println!("notes carrying a task or an event:  {touched}");
+    println!("  meaning and body preserved:       {same_meaning}");
+    println!("  declined with an explanation:     {declined_deep}");
+    assert!(with_frontmatter > 0, "the corpus held no frontmatter");
+}
+
+/// What the task and event tools emit, validated against the schema the frontend validates with.
+///
+/// `frontend/src/metadata-schema.json` stays the only copy. `include_str!` reaches it from the
+/// repository checkout, where both components exist; the Docker build copies only `backend/` and
+/// never compiles tests, so it never sees this.
+#[cfg(test)]
+const METADATA_SCHEMA: &str = include_str!("../../frontend/src/metadata-schema.json");
+
+#[test]
+fn the_task_tools_emit_frontmatter_the_frontend_would_accept() {
+    use crate::mcp::frontmatter::{apply, Change, Note};
+
+    let schema: serde_json::Value =
+        serde_json::from_str(METADATA_SCHEMA).expect("the schema should be JSON");
+    let validator = jsonschema::validator_for(&schema).expect("the schema should compile");
+
+    // One case per member of the status union, each carrying exactly the keys that member
+    // requires -- the shapes `status_changes` produces.
+    let statuses: Vec<Vec<Change>> = vec![
+        vec![Change::set(&["task", "status", "kind"], "todo")],
+        vec![Change::set(&["task", "status", "kind"], "in_progress")],
+        vec![
+            Change::set(&["task", "status", "kind"], "waiting"),
+            Change::set(&["task", "status", "waiting_for"], "a reply"),
+            Change::set(&["task", "status", "contact"], "someone"),
+        ],
+        vec![
+            Change::set(&["task", "status", "kind"], "blocked"),
+            Change::set(&["task", "status", "blocked_by"], "the other thing"),
+        ],
+        vec![
+            Change::set(&["task", "status", "kind"], "on_hold"),
+            Change::set(&["task", "status", "hold_reason"], "waiting on budget"),
+            Change::set(&["task", "status", "review_at"], "2026-04-01"),
+        ],
+        vec![
+            Change::set(&["task", "status", "kind"], "done"),
+            Change::set(&["task", "status", "completed_at"], "2026-03-15 18:17:46+09:00"),
+            Change::set(&["task", "status", "completion_note"], "went fine"),
+        ],
+        vec![
+            Change::set(&["task", "status", "kind"], "canceled"),
+            Change::set(&["task", "status", "canceled_at"], "2026-03-15"),
+            Change::set(&["task", "status", "cancel_reason"], "no longer needed"),
+        ],
+    ];
+
+    for status in statuses {
+        let mut changes = vec![
+            Change::set(&["tags"], serde_yaml::Value::Sequence(vec!["work".into()])),
+            Change::set(&["task", "progress"], 0),
+            Change::set(&["task", "importance"], 3),
+            Change::set(&["task", "urgency"], 3),
+            Change::set(&["task", "due_by"], "2026-03-15"),
+            Change::set(
+                &["task", "scheduled_dates"],
+                serde_yaml::Value::Sequence(vec!["2026-03-01".into()]),
+            ),
+        ];
+        changes.extend(status.clone());
+
+        let note = apply("# A task\n", &changes).expect("the frontmatter should be written");
+        let block = Note::parse(&note).block;
+        let parsed: serde_yaml::Value =
+            serde_yaml::from_str(&block).expect("the emitted YAML should parse");
+        let as_json = serde_json::to_value(&parsed).expect("it should convert to JSON");
+
+        if let Err(error) = validator.validate(&as_json) {
+            panic!("{changes:?}\nemitted:\n{block}\nrejected by the schema: {error}");
+        }
+    }
+}
+
+#[test]
+fn the_event_tools_emit_frontmatter_the_frontend_would_accept() {
+    use crate::mcp::frontmatter::{apply, Change, Note};
+
+    let schema: serde_json::Value =
+        serde_json::from_str(METADATA_SCHEMA).expect("the schema should be JSON");
+    let validator = jsonschema::validator_for(&schema).expect("the schema should compile");
+
+    let changes = vec![
+        Change::set(&["events", "Book club", "start"], "2026-03-12 19:00:00+09:00"),
+        Change::set(&["events", "Book club", "end"], "+1.5h"),
+        Change::set(&["events", "Book club", "color"], "indigo"),
+        Change::set(&["events", "Book club", "location"], "the library"),
+        Change::set(&["events", "Standup", "start"], "2026-01-05 09:30:00+09:00"),
+        Change::set(&["events", "Standup", "repeat", "freq"], "weekly"),
+        Change::set(&["events", "Standup", "repeat", "interval"], 1),
+        Change::set(
+            &["events", "Standup", "repeat", "byday"],
+            // Three letters, not iCal's two, and an ordinal is allowed.
+            serde_yaml::Value::Sequence(vec!["mon".into(), "wed".into(), "-1fri".into()]),
+        ),
+        // An IANA zone name, never an offset: a zone maps a date to an offset, and a series
+        // crossing a daylight-saving boundary needs the name to do it.
+        Change::set(&["events", "Standup", "repeat", "tz"], "Asia/Tokyo"),
+        Change::set(
+            &["events", "Standup", "exclusions"],
+            serde_yaml::Value::Sequence(vec!["2026-01-07 09:30:00+09:00".into()]),
+        ),
+    ];
+
+    let note = apply("# Some events\n", &changes).expect("the frontmatter should be written");
+    let block = Note::parse(&note).block;
+    let parsed: serde_yaml::Value =
+        serde_yaml::from_str(&block).expect("the emitted YAML should parse");
+    let as_json = serde_json::to_value(&parsed).expect("it should convert to JSON");
+
+    if let Err(error) = validator.validate(&as_json) {
+        panic!("emitted:\n{block}\nrejected by the schema: {error}");
+    }
+}

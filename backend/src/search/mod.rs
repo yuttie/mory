@@ -1494,14 +1494,14 @@ fn default_limit() -> usize {
 
 #[derive(Debug, Serialize)]
 pub struct SearchResponse {
-    requested_mode: SearchMode,
-    executed_modes: Vec<SearchMode>,
-    commit: String,
-    head: String,
-    lexical: IndexStatus,
-    semantic: SemanticStatus,
-    warnings: Vec<SearchWarning>,
-    hits: Vec<SearchHit>,
+    pub requested_mode: SearchMode,
+    pub executed_modes: Vec<SearchMode>,
+    pub commit: String,
+    pub head: String,
+    pub lexical: IndexStatus,
+    pub semantic: SemanticStatus,
+    pub warnings: Vec<SearchWarning>,
+    pub hits: Vec<SearchHit>,
 }
 
 #[derive(Debug, Serialize)]
@@ -1513,43 +1513,43 @@ pub struct SearchStatusResponse {
 }
 
 #[derive(Debug, Serialize)]
-struct IndexStatus {
-    state: String,
-    indexed_commit: Option<String>,
+pub struct IndexStatus {
+    pub state: String,
+    pub indexed_commit: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    message: Option<String>,
+    pub message: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
-struct SemanticStatus {
-    state: String,
-    indexed: usize,
-    total: usize,
-    failed: usize,
+pub struct SemanticStatus {
+    pub state: String,
+    pub indexed: usize,
+    pub total: usize,
+    pub failed: usize,
 }
 
 #[derive(Debug, Serialize)]
-struct SearchWarning {
-    code: String,
-    message: String,
+pub struct SearchWarning {
+    pub code: String,
+    pub message: String,
 }
 
 #[derive(Debug, Serialize, Clone)]
 pub struct SearchHit {
-    path: String,
-    blob_id: String,
-    passage_id: String,
-    mime_type: String,
+    pub path: String,
+    pub blob_id: String,
+    pub passage_id: String,
+    pub mime_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    title: Option<String>,
+    pub title: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    start_line: Option<usize>,
+    pub start_line: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    end_line: Option<usize>,
-    snippet: String,
-    content_kind: String,
-    sources: Vec<SearchMode>,
-    score: Option<f32>,
+    pub end_line: Option<usize>,
+    pub snippet: String,
+    pub content_kind: String,
+    pub sources: Vec<SearchMode>,
+    pub score: Option<f32>,
 }
 
 #[derive(Debug, Serialize)]
@@ -1558,15 +1558,43 @@ struct SearchErrorBody {
     message: String,
 }
 
-fn search_error(status: StatusCode, code: &str, message: impl Into<String>) -> Response {
-    (
-        status,
-        Json(SearchErrorBody {
+/// A search that could not be answered.
+///
+/// Carries the stable code and message the API has always returned, plus the status it maps to,
+/// so a caller that is not serving HTTP can still tell "your query was wrong" from "the index is
+/// busy, retry" without parsing prose.
+#[derive(Debug)]
+pub struct SearchFailure {
+    pub status: StatusCode,
+    pub code: String,
+    pub message: String,
+}
+
+impl SearchFailure {
+    fn new(status: StatusCode, code: &str, message: impl Into<String>) -> Self {
+        Self {
+            status,
             code: code.to_owned(),
             message: message.into(),
-        }),
-    )
-        .into_response()
+        }
+    }
+}
+
+impl IntoResponse for SearchFailure {
+    fn into_response(self) -> Response {
+        (
+            self.status,
+            Json(SearchErrorBody {
+                code: self.code,
+                message: self.message,
+            }),
+        )
+            .into_response()
+    }
+}
+
+fn search_error(status: StatusCode, code: &str, message: impl Into<String>) -> Response {
+    SearchFailure::new(status, code, message).into_response()
 }
 
 pub async fn get_status(extract::State(state): extract::State<AppState>) -> Response {
@@ -1612,6 +1640,7 @@ pub async fn get_status(extract::State(state): extract::State<AppState>) -> Resp
     .into_response()
 }
 
+/// `POST /v2/search`
 pub async fn post_search(
     extract::State(state): extract::State<AppState>,
     payload: std::result::Result<Json<SearchRequest>, JsonRejection>,
@@ -1626,37 +1655,62 @@ pub async fn post_search(
             )
         },
     };
+    if let Err(failure) = validate_search_request(&request) {
+        return failure.into_response();
+    }
+    match run_search(&state, request).await {
+        Ok(response) => Json(response).into_response(),
+        Err(failure) => failure.into_response(),
+    }
+}
+
+/// The request-shape checks, kept apart from the search itself so every caller applies them.
+pub(crate) fn validate_search_request(
+    request: &SearchRequest,
+) -> std::result::Result<(), SearchFailure> {
     if request.query.trim().is_empty() || request.query.len() > 2048 {
-        return search_error(
+        return Err(SearchFailure::new(
             StatusCode::BAD_REQUEST,
             "invalid_query",
             "Query must contain 1–2,048 UTF-8 bytes.",
-        );
+        ));
     }
     if !(1..=100).contains(&request.limit) {
-        return search_error(
+        return Err(SearchFailure::new(
             StatusCode::BAD_REQUEST,
             "invalid_limit",
             "Limit must be between 1 and 100.",
-        );
+        ));
     }
+    Ok(())
+}
+
+/// Answer a search request, with no HTTP in sight.
+///
+/// Callers apply `validate_search_request` first; everything after that -- the Grep branch, the
+/// mode fallbacks and their warnings, blob-liveness filtering, RRF fusion and diversification --
+/// is here, so the MCP tools and the HTTP endpoint cannot drift apart.
+pub(crate) async fn run_search(
+    state: &AppState,
+    request: SearchRequest,
+) -> std::result::Result<SearchResponse, SearchFailure> {
     if let Err(error) = state.ensure_cache().await {
         tracing::error!("Search cache sync failed: {error:?}");
-        return search_error(
+        return Err(SearchFailure::new(
             StatusCode::INTERNAL_SERVER_ERROR,
             "search_unavailable",
             "Search is temporarily unavailable.",
-        );
+        ));
     }
     let snapshot = match SearchSnapshot::read(&state.cache_db).await {
         Ok(snapshot) => snapshot,
         Err(error) => {
             tracing::error!("Search snapshot failed: {error:?}");
-            return search_error(
+            return Err(SearchFailure::new(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "search_unavailable",
                 "Search is temporarily unavailable.",
-            );
+            ));
         },
     };
     let head = state.head_commit_id().unwrap_or(snapshot.commit);
@@ -1707,7 +1761,7 @@ pub async fn post_search(
                         })
                     })
                     .collect();
-                Json(SearchResponse {
+                Ok(SearchResponse {
                     requested_mode: request.mode,
                     executed_modes: vec![SearchMode::Grep],
                     commit: snapshot.commit.to_string(),
@@ -1717,20 +1771,19 @@ pub async fn post_search(
                     warnings: vec![],
                     hits,
                 })
-                .into_response()
             },
-            Err(GrepError::Invalid) => search_error(
+            Err(GrepError::Invalid) => Err(SearchFailure::new(
                 StatusCode::BAD_REQUEST,
                 "invalid_grep_pattern",
                 "The Grep pattern is invalid.",
-            ),
+            )),
             Err(GrepError::Internal(error)) => {
                 tracing::error!("git grep failed: {error:?}");
-                search_error(
+                Err(SearchFailure::new(
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "grep_failed",
                     "Grep could not be completed.",
-                )
+                ))
             },
         };
     }
@@ -1738,41 +1791,49 @@ pub async fn post_search(
     let parsed = match parse(&request.query) {
         Ok(parsed) => parsed,
         Err(error) => {
-            return search_error(StatusCode::BAD_REQUEST, "invalid_query", error.to_string())
+            return Err(SearchFailure::new(
+                StatusCode::BAD_REQUEST,
+                "invalid_query",
+                error.to_string(),
+            ))
         },
     };
     if request.mode == SearchMode::Semantic && parsed.semantic_text().is_empty() {
-        return search_error(
+        return Err(SearchFailure::new(
             StatusCode::BAD_REQUEST,
             "semantic_query_has_only_filters",
             "Semantic search needs a positive title or body term.",
-        );
+        ));
     }
     if request.mode == SearchMode::Semantic && !state.search.config.semantic_enabled {
-        return search_error(
+        return Err(SearchFailure::new(
             StatusCode::SERVICE_UNAVAILABLE,
             "semantic_disabled",
             "Semantic search is disabled on this server.",
-        );
+        ));
     }
     if !state.search.wait_for(snapshot.commit).await {
-        return search_error(
+        return Err(SearchFailure::new(
             StatusCode::SERVICE_UNAVAILABLE,
             "lexical_index_updating",
             "The local text index is updating. Please retry shortly.",
-        );
+        ));
     }
     match state.search.validate_query(snapshot.commit, &parsed) {
         Ok(()) => {},
         Err(QueryValidationError::Generation) => {
-            return search_error(
+            return Err(SearchFailure::new(
                 StatusCode::SERVICE_UNAVAILABLE,
                 "lexical_index_updating",
                 "The local text index changed while validating the query. Please retry.",
-            )
+            ));
         },
         Err(QueryValidationError::Invalid(error)) => {
-            return search_error(StatusCode::BAD_REQUEST, "invalid_query", error.to_string())
+            return Err(SearchFailure::new(
+                StatusCode::BAD_REQUEST,
+                "invalid_query",
+                error.to_string(),
+            ))
         },
     }
     let semantic = state
@@ -1815,11 +1876,11 @@ pub async fn post_search(
         Ok(hits) => hits,
         Err(error) => {
             tracing::error!("Lexical search failed: {error:?}");
-            return search_error(
+            return Err(SearchFailure::new(
                 StatusCode::SERVICE_UNAVAILABLE,
                 "lexical_index_updating",
                 "The local text index changed while searching. Please retry.",
-            );
+            ));
         },
     };
     let current = snapshot.current_blobs();
@@ -1874,11 +1935,11 @@ pub async fn post_search(
             Err(SemanticSearchError::Provider(error)) => {
                 tracing::warn!("Interactive semantic query failed: {error}");
                 if request.mode == SearchMode::Semantic {
-                    return search_error(
+                    return Err(SearchFailure::new(
                         StatusCode::SERVICE_UNAVAILABLE,
                         "semantic_unavailable",
                         "Semantic search is temporarily unavailable.",
-                    );
+                    ));
                 }
                 warnings.push(SearchWarning {
                     code: "semantic_unavailable_fallback".to_owned(),
@@ -1890,11 +1951,11 @@ pub async fn post_search(
             },
             Err(SemanticSearchError::Generation) => {
                 if request.mode == SearchMode::Semantic {
-                    return search_error(
+                    return Err(SearchFailure::new(
                         StatusCode::SERVICE_UNAVAILABLE,
                         "semantic_index_updating",
                         "The semantic candidate map is updating. Please retry shortly.",
-                    );
+                    ));
                 }
                 warnings.push(SearchWarning {
                     code: "semantic_index_updating_fallback".to_owned(),
@@ -1906,11 +1967,11 @@ pub async fn post_search(
             Err(SemanticSearchError::Internal(error)) => {
                 tracing::error!("Semantic scan failed: {error:?}");
                 if request.mode == SearchMode::Semantic {
-                    return search_error(
+                    return Err(SearchFailure::new(
                         StatusCode::INTERNAL_SERVER_ERROR,
                         "semantic_unavailable",
                         "Semantic search is temporarily unavailable.",
-                    );
+                    ));
                 }
                 warnings.push(SearchWarning {
                     code: "semantic_unavailable_fallback".to_owned(),
@@ -1925,7 +1986,7 @@ pub async fn post_search(
         diversify(text_hits, request.limit)
     };
 
-    Json(SearchResponse {
+    Ok(SearchResponse {
         requested_mode: request.mode,
         executed_modes,
         commit: snapshot.commit.to_string(),
@@ -1935,7 +1996,6 @@ pub async fn post_search(
         warnings,
         hits,
     })
-    .into_response()
 }
 
 fn fuse_rrf(text: Vec<SearchHit>, semantic: Vec<SearchHit>) -> Vec<SearchHit> {
