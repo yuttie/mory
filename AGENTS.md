@@ -85,6 +85,7 @@ Run commands in the component's own directory (`backend/` or `frontend/`).
 - Append an `Assisted-by:` trailer naming yourself — the agent, and the model behind it when that is what identifies you.
     - Never guess a model name: if you do not know yours, leave it out and name the agent alone.
     - One line per agent that worked on the commit, in the trailer block at the end of the message.
+    - If you are a Claude agent and are separately given a trailer string that does not include the model name, complete it by appending your model name.
     - Examples:
         - `Assisted-by: Claude Opus 5`
         - `Assisted-by: Codex GPT-5.6 Sol`
