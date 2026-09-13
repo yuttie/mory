@@ -569,41 +569,30 @@ impl SearchManager {
         };
         let snapshot = SearchSnapshot::read(&self.cache_db).await?;
         let now = Utc::now().timestamp();
-        let mut seen = HashSet::new();
-        let mut selected = None;
-        for entry in &snapshot.entries {
-            if entry.path == ".mory"
-                || entry.path.starts_with(".mory/")
-                || !image::supported(&entry.mime_type, std::path::Path::new(&entry.path))
-                || !seen.insert(entry.blob_id.clone())
-            {
-                continue;
-            }
-            let cached = sqlx::query(
-                "SELECT state, next_retry FROM search_image_description
-                 WHERE blob_id = ? AND model = ? AND prompt_version = ?
-                   AND preprocess = ? AND detail = ?;",
+        // One query for every image rather than one per image: a library of a few hundred images
+        // made those lookups nearly all of the database traffic of a pass.
+        let attempts = sqlx::query(
+            "SELECT blob_id, state, next_retry FROM search_image_description
+             WHERE model = ? AND prompt_version = ? AND preprocess = ? AND detail = ?;",
+        )
+        .bind(&model)
+        .bind(image::PROMPT_VERSION)
+        .bind(image::PREPROCESS_VERSION)
+        .bind(image::DETAIL)
+        .map(|row: SqliteRow| {
+            (
+                row.get::<String, _>("blob_id"),
+                ImageAttempt {
+                    state: row.get("state"),
+                    next_retry: row.get("next_retry"),
+                },
             )
-            .bind(&entry.blob_id)
-            .bind(&model)
-            .bind(image::PROMPT_VERSION)
-            .bind(image::PREPROCESS_VERSION)
-            .bind(image::DETAIL)
-            .fetch_optional(&self.cache_db)
-            .await?;
-            let eligible = match cached {
-                None => true,
-                Some(row) if row.get::<String, _>("state") == "pending" => row
-                    .try_get::<i64, _>("next_retry")
-                    .map_or(true, |retry| retry <= now),
-                _ => false,
-            };
-            if eligible {
-                selected = Some(entry.clone());
-                break;
-            }
-        }
-        let Some(selected) = selected else {
+        })
+        .fetch_all(&self.cache_db)
+        .await?
+        .into_iter()
+        .collect::<HashMap<_, _>>();
+        let Some(selected) = next_image(&snapshot.entries, &attempts, now).cloned() else {
             return Ok(());
         };
         let source = {
@@ -1168,6 +1157,32 @@ fn try_background_gate<'a>(
         return None;
     }
     Some(guard)
+}
+
+struct ImageAttempt {
+    state: String,
+    next_retry: Option<i64>,
+}
+
+/// The first image in the listing that has never been described, or whose retry is due.
+fn next_image<'a>(
+    entries: &'a [SnapshotEntry],
+    attempts: &HashMap<String, ImageAttempt>,
+    now: i64,
+) -> Option<&'a SnapshotEntry> {
+    entries
+        .iter()
+        .filter(|entry| {
+            entry.path != ".mory"
+                && !entry.path.starts_with(".mory/")
+                && image::supported(&entry.mime_type, std::path::Path::new(&entry.path))
+        })
+        .find(|entry| match attempts.get(&entry.blob_id) {
+            None => true,
+            Some(attempt) => {
+                attempt.state == "pending" && attempt.next_retry.is_none_or(|retry| retry <= now)
+            },
+        })
 }
 
 /// Pauses background requests to one provider after it answers 429.
@@ -2912,6 +2927,48 @@ mod tests {
         // The request began at 100 but did not finish until 120. Scheduling from the request start
         // would produce an already-expired deadline of 110.
         assert_eq!(failure_timestamps_at(&error, 120), (120, Some(130)));
+    }
+
+    fn image_entry(path: &str, blob_id: &str, mime_type: &str) -> SnapshotEntry {
+        SnapshotEntry {
+            path: path.to_owned(),
+            blob_id: blob_id.to_owned(),
+            mime_type: mime_type.to_owned(),
+            title: None,
+            metadata: "{}".to_owned(),
+        }
+    }
+
+    fn image_attempt(state: &str, next_retry: Option<i64>) -> ImageAttempt {
+        ImageAttempt {
+            state: state.to_owned(),
+            next_retry,
+        }
+    }
+
+    #[test]
+    fn next_image_skips_described_failed_and_waiting_images() {
+        let entries = [
+            image_entry(".mory/logo.png", "config", "image/png"),
+            image_entry("drawing.svg", "vector", "image/svg+xml"),
+            image_entry("ready.png", "ready", "image/png"),
+            image_entry("failed.png", "failed", "image/png"),
+            image_entry("waiting.png", "waiting", "image/png"),
+            image_entry("due.png", "due", "image/png"),
+            image_entry("new.png", "new", "image/png"),
+        ];
+        let attempts = HashMap::from([
+            ("ready".to_owned(), image_attempt("ready", None)),
+            ("failed".to_owned(), image_attempt("failed", None)),
+            ("waiting".to_owned(), image_attempt("pending", Some(101))),
+            ("due".to_owned(), image_attempt("pending", Some(100))),
+        ]);
+
+        let next = |now| next_image(&entries, &attempts, now).map(|entry| entry.path.as_str());
+        assert_eq!(next(100), Some("due.png"));
+        assert_eq!(next(99), Some("new.png"));
+        assert!(next_image(&entries[..5], &attempts, 100).is_none());
+        assert_eq!(next_image(&entries[..5], &attempts, 101).unwrap().path, "waiting.png");
     }
 
     fn rate_limited(retry_after: Option<Duration>) -> std::result::Result<(), ProviderError> {
