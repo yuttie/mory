@@ -2,7 +2,7 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use base64::Engine;
-use reqwest::Client;
+use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 
@@ -47,6 +47,7 @@ pub async fn describe(
         .map_err(|error| ProviderError {
             retryable: request_error_is_retryable(&error),
             retry_after: None,
+            rate_limited: false,
             message: format!("image description request failed: {error}"),
         })?;
     let status = response.status();
@@ -55,6 +56,7 @@ pub async fn describe(
         return Err(ProviderError {
             retryable: status_is_retryable(status),
             retry_after,
+            rate_limited: status == StatusCode::TOO_MANY_REQUESTS,
             message: format!("image description provider returned HTTP {status}"),
         });
     }
@@ -243,6 +245,7 @@ fn permanent(message: &str) -> ProviderError {
     ProviderError {
         retryable: false,
         retry_after: None,
+        rate_limited: false,
         message: message.to_owned(),
     }
 }
@@ -251,6 +254,7 @@ fn retryable_body_failure(message: String) -> ProviderError {
     ProviderError {
         retryable: true,
         retry_after: None,
+        rate_limited: false,
         message,
     }
 }

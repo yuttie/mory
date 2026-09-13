@@ -8,6 +8,9 @@ use serde::{Deserialize, Serialize};
 pub struct ProviderError {
     pub retryable: bool,
     pub retry_after: Option<Duration>,
+    /// Set for HTTP 429, which OpenAI returns both for a rate limit and for an exhausted quota.
+    /// Either one applies to every request, not just the one that failed.
+    pub rate_limited: bool,
     pub message: String,
 }
 
@@ -23,6 +26,7 @@ pub fn recoverable(message: impl Into<String>) -> ProviderError {
     ProviderError {
         retryable: true,
         retry_after: None,
+        rate_limited: false,
         message: message.into(),
     }
 }
@@ -102,6 +106,7 @@ impl EmbeddingProvider for OpenAiEmbeddingProvider {
             .map_err(|error| ProviderError {
                 retryable: request_error_is_retryable(&error),
                 retry_after: None,
+                rate_limited: false,
                 message: format!("embedding request failed: {error}"),
             })?;
         let status = response.status();
@@ -110,6 +115,7 @@ impl EmbeddingProvider for OpenAiEmbeddingProvider {
             return Err(ProviderError {
                 retryable: status_is_retryable(status),
                 retry_after,
+                rate_limited: status == StatusCode::TOO_MANY_REQUESTS,
                 // Do not read the body: provider request IDs and diagnostics stay in server logs.
                 message: format!("embedding provider returned HTTP {status}"),
             });
@@ -117,12 +123,14 @@ impl EmbeddingProvider for OpenAiEmbeddingProvider {
         let body = response.bytes().await.map_err(|error| ProviderError {
             retryable: error.is_body() || error.is_timeout(),
             retry_after: None,
+            rate_limited: false,
             message: format!("embedding response body failed: {error}"),
         })?;
         let response =
             serde_json::from_slice::<EmbeddingResponse>(&body).map_err(|error| ProviderError {
                 retryable: false,
                 retry_after: None,
+                rate_limited: false,
                 message: format!("invalid embedding response: {error}"),
             })?;
         ordered_embeddings(response.data, input.len())
@@ -143,6 +151,7 @@ fn ordered_embeddings(
         return Err(ProviderError {
             retryable: false,
             retry_after: None,
+            rate_limited: false,
             message: "embedding response indices do not match the request".to_owned(),
         });
     }

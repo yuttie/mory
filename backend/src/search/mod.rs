@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use axum::{
@@ -39,6 +39,8 @@ const EMBEDDING_TEMPLATE: &str = "mory-passage-v3:chunker-500-800-80-v3";
 const MAX_EMBEDDING_INPUT_BYTES: usize = 8_192;
 const MAX_EMBEDDING_REQUEST_BYTES: usize = 300_000;
 const MAX_GREP_RECORD_BYTES: usize = 64 * 1024;
+const RATE_LIMIT_BACKOFF: Duration = Duration::from_secs(30);
+const MAX_RATE_LIMIT_BACKOFF: Duration = Duration::from_secs(60 * 60);
 const FAILED_IMAGE_COUNT_SQL: &str =
     "SELECT count(DISTINCT d.blob_id) FROM search_image_description d
      WHERE d.model = ? AND d.prompt_version = ? AND d.preprocess = ? AND d.detail = ?
@@ -152,6 +154,10 @@ pub struct SearchManager {
     provider_gate: AsyncMutex<()>,
     interactive_waiters: AtomicUsize,
     vision_client: reqwest::Client,
+    // Separate because OpenAI rate-limits each model on its own, so a limited vision model must
+    // not stop embeddings. An exhausted quota refuses both, and then both back off.
+    embedding_backoff: ProviderBackoff,
+    image_backoff: ProviderBackoff,
     force_rebuild: AtomicBool,
 }
 
@@ -223,6 +229,8 @@ impl SearchManager {
             provider_gate: AsyncMutex::new(()),
             interactive_waiters: AtomicUsize::new(0),
             vision_client,
+            embedding_backoff: ProviderBackoff::new("Embedding"),
+            image_backoff: ProviderBackoff::new("Image description"),
             force_rebuild: AtomicBool::new(false),
         }))
     }
@@ -550,7 +558,10 @@ impl SearchManager {
     }
 
     async fn ingest_image_description(&self) -> Result<()> {
-        if !self.config.semantic_enabled || self.interactive_waiters.load(Ordering::SeqCst) > 0 {
+        if !self.config.semantic_enabled
+            || self.interactive_waiters.load(Ordering::SeqCst) > 0
+            || self.image_backoff.is_paused()
+        {
             return Ok(());
         }
         let Some(model) = self.config.vision_model.clone() else {
@@ -608,6 +619,7 @@ impl SearchManager {
         };
         let result = image::describe(&self.vision_client, &model, &source).await;
         drop(gate);
+        self.image_backoff.record(&result);
         // A delayed response may outlive a delete. A rename is safe because the blob remains in
         // the selected generation and the next rebuild attaches the cached description to its new path.
         let current = SearchSnapshot::read(&self.cache_db).await?;
@@ -672,7 +684,10 @@ impl SearchManager {
     }
 
     async fn ingest_embedding_batch(&self) -> Result<()> {
-        if !self.config.semantic_enabled || self.interactive_waiters.load(Ordering::SeqCst) > 0 {
+        if !self.config.semantic_enabled
+            || self.interactive_waiters.load(Ordering::SeqCst) > 0
+            || self.embedding_backoff.is_paused()
+        {
             return Ok(());
         }
         let now = Utc::now().timestamp();
@@ -728,6 +743,7 @@ impl SearchManager {
             )
             .await;
         drop(_gate);
+        self.embedding_backoff.record(&response);
         let response = response.and_then(|vectors| {
             validate_embedding_vectors(
                 vectors,
@@ -838,11 +854,15 @@ impl SearchManager {
             )
             .await;
         drop(gate);
+        // A search is never held back by the pause, since the person asking is waiting on it,
+        // but what it learns about the limit applies to indexing too.
+        self.embedding_backoff.record(&result);
         let mut vectors = result?;
         if vectors.len() != 1 {
             return Err(ProviderError {
                 retryable: false,
                 retry_after: None,
+                rate_limited: false,
                 message: "embedding response count mismatch".to_owned(),
             });
         }
@@ -850,6 +870,7 @@ impl SearchManager {
             ProviderError {
                 retryable: false,
                 retry_after: None,
+                rate_limited: false,
                 message: error.to_string(),
             }
         })
@@ -1149,6 +1170,79 @@ fn try_background_gate<'a>(
     Some(guard)
 }
 
+/// Pauses background requests to one provider after it answers 429.
+///
+/// Each item's `next_retry` cannot do this alone. The limit belongs to the account, not the item,
+/// so skipping the item that just failed only sends the next one in a backlog into the same limit.
+struct ProviderBackoff {
+    name: &'static str,
+    state: std::sync::Mutex<BackoffState>,
+}
+
+#[derive(Default)]
+struct BackoffState {
+    paused_until: Option<Instant>,
+    consecutive: u32,
+}
+
+impl ProviderBackoff {
+    fn new(name: &'static str) -> Self {
+        Self {
+            name,
+            state: std::sync::Mutex::default(),
+        }
+    }
+
+    fn is_paused(&self) -> bool {
+        self.is_paused_at(Instant::now())
+    }
+
+    fn is_paused_at(&self, now: Instant) -> bool {
+        self.state
+            .lock()
+            .unwrap()
+            .paused_until
+            .is_some_and(|until| now < until)
+    }
+
+    fn record<T>(&self, result: &std::result::Result<T, ProviderError>) {
+        if let Some(pause) = self.record_at(result, Instant::now()) {
+            tracing::warn!(
+                "{} provider is rate limited; pausing background requests for {}s",
+                self.name,
+                pause.as_secs(),
+            );
+        }
+    }
+
+    fn record_at<T>(
+        &self,
+        result: &std::result::Result<T, ProviderError>,
+        now: Instant,
+    ) -> Option<Duration> {
+        let mut state = self.state.lock().unwrap();
+        match result {
+            Ok(_) => {
+                *state = BackoffState::default();
+                None
+            },
+            Err(error) if error.rate_limited => {
+                state.consecutive = state.consecutive.saturating_add(1);
+                // An exhausted quota answers 429 until it is topped up, so keep doubling instead
+                // of probing it at a fixed interval all day.
+                let pause = RATE_LIMIT_BACKOFF
+                    .saturating_mul(2u32.saturating_pow(state.consecutive - 1))
+                    .min(MAX_RATE_LIMIT_BACKOFF)
+                    .max(error.retry_after.unwrap_or_default());
+                state.paused_until = now.checked_add(pause).or(Some(now + MAX_RATE_LIMIT_BACKOFF));
+                Some(pause)
+            },
+            // Any other failure says nothing about the limit, in either direction.
+            Err(_) => None,
+        }
+    }
+}
+
 fn failure_timestamps(error: &ProviderError) -> (i64, Option<i64>) {
     failure_timestamps_at(error, Utc::now().timestamp())
 }
@@ -1173,6 +1267,7 @@ fn validate_embedding_vectors(
         return Err(ProviderError {
             retryable: false,
             retry_after: None,
+            rate_limited: false,
             message: "embedding response count mismatch".to_owned(),
         });
     }
@@ -2536,6 +2631,8 @@ mod tests {
             provider_gate: AsyncMutex::new(()),
             interactive_waiters: AtomicUsize::new(0),
             vision_client: reqwest::Client::new(),
+            embedding_backoff: ProviderBackoff::new("Embedding"),
+            image_backoff: ProviderBackoff::new("Image description"),
             force_rebuild: AtomicBool::new(false),
         };
 
@@ -2808,12 +2905,165 @@ mod tests {
         let error = ProviderError {
             retryable: true,
             retry_after: Some(Duration::from_secs(10)),
+            rate_limited: false,
             message: "rate limited".to_owned(),
         };
 
         // The request began at 100 but did not finish until 120. Scheduling from the request start
         // would produce an already-expired deadline of 110.
         assert_eq!(failure_timestamps_at(&error, 120), (120, Some(130)));
+    }
+
+    fn rate_limited(retry_after: Option<Duration>) -> std::result::Result<(), ProviderError> {
+        Err(ProviderError {
+            retryable: true,
+            retry_after,
+            rate_limited: true,
+            message: "rate limited".to_owned(),
+        })
+    }
+
+    #[test]
+    fn rate_limit_backoff_doubles_up_to_its_cap() {
+        let backoff = ProviderBackoff::new("Test");
+        let start = Instant::now();
+
+        assert!(!backoff.is_paused_at(start));
+        let pauses = (0..10)
+            .map(|_| backoff.record_at(&rate_limited(None), start).unwrap().as_secs())
+            .collect::<Vec<_>>();
+        assert_eq!(pauses, [30, 60, 120, 240, 480, 960, 1920, 3600, 3600, 3600]);
+        assert!(backoff.is_paused_at(start + Duration::from_secs(3599)));
+        assert!(!backoff.is_paused_at(start + Duration::from_secs(3600)));
+    }
+
+    #[test]
+    fn rate_limit_backoff_honours_a_longer_retry_after() {
+        let backoff = ProviderBackoff::new("Test");
+        let start = Instant::now();
+
+        let pause = backoff.record_at(&rate_limited(Some(Duration::from_secs(90))), start);
+        assert_eq!(pause, Some(Duration::from_secs(90)));
+        let pause = backoff.record_at(&rate_limited(Some(Duration::from_secs(1))), start);
+        assert_eq!(pause, Some(Duration::from_secs(60)));
+    }
+
+    #[test]
+    fn only_a_success_ends_a_rate_limit_backoff() {
+        let backoff = ProviderBackoff::new("Test");
+        let start = Instant::now();
+        backoff.record_at(&rate_limited(None), start);
+
+        let unrelated: std::result::Result<(), ProviderError> = Err(ProviderError {
+            retryable: true,
+            retry_after: None,
+            rate_limited: false,
+            message: "HTTP 503".to_owned(),
+        });
+        assert_eq!(backoff.record_at(&unrelated, start), None);
+        assert!(backoff.is_paused_at(start));
+        assert_eq!(
+            backoff.record_at(&rate_limited(None), start),
+            Some(Duration::from_secs(60)),
+        );
+
+        assert_eq!(backoff.record_at(&Ok(()), start), None);
+        assert!(!backoff.is_paused_at(start));
+        assert_eq!(
+            backoff.record_at(&rate_limited(None), start),
+            Some(Duration::from_secs(30)),
+        );
+    }
+
+    #[tokio::test]
+    async fn a_rate_limit_pauses_embedding_ingestion_for_every_passage() {
+        use sqlx::sqlite::SqlitePoolOptions;
+
+        struct RateLimitedProvider {
+            calls: AtomicUsize,
+        }
+
+        #[async_trait::async_trait]
+        impl EmbeddingProvider for RateLimitedProvider {
+            async fn embed(
+                &self,
+                _input: &[String],
+                _model: &str,
+                _dimensions: usize,
+            ) -> std::result::Result<Vec<Vec<f32>>, ProviderError> {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                Err(ProviderError {
+                    retryable: true,
+                    retry_after: None,
+                    rate_limited: true,
+                    message: "embedding provider returned HTTP 429".to_owned(),
+                })
+            }
+        }
+
+        async fn add_passage(pool: &SqlitePool, passage_id: &str) {
+            sqlx::query(
+                "INSERT INTO search_passage VALUES (
+                    'note.md', 'blob', ?, 'hash', 0, 4, 1, 1, 'text/markdown', NULL, 'text', 'text',
+                    'text'
+                 );",
+            )
+            .bind(passage_id)
+            .execute(pool)
+            .await
+            .unwrap();
+        }
+
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        crate::init_cache_database(&mut pool.acquire().await.unwrap())
+            .await
+            .unwrap();
+        let provider = Arc::new(RateLimitedProvider {
+            calls: AtomicUsize::new(0),
+        });
+        let directory = tempfile::tempdir().unwrap();
+        let manager = SearchManager {
+            config: SearchConfig {
+                index_dir: directory.path().join("index"),
+                semantic_enabled: true,
+                embedding_model: "model".to_owned(),
+                embedding_dimensions: 2,
+                vision_model: None,
+            },
+            repo: Arc::new(std::sync::Mutex::new(
+                Repository::init(directory.path().join("repo")).unwrap(),
+            )),
+            cache_db: pool.clone(),
+            cache_db_writer: pool.clone(),
+            lexical: RwLock::new(None),
+            status: RwLock::new(ManagerStatus {
+                state: "updating".to_owned(),
+                indexed_commit: None,
+                message: None,
+            }),
+            writer: AsyncMutex::new(()),
+            provider: provider.clone(),
+            provider_gate: AsyncMutex::new(()),
+            interactive_waiters: AtomicUsize::new(0),
+            vision_client: reqwest::Client::new(),
+            embedding_backoff: ProviderBackoff::new("Embedding"),
+            image_backoff: ProviderBackoff::new("Image description"),
+            force_rebuild: AtomicBool::new(false),
+        };
+
+        add_passage(&pool, "first").await;
+        manager.ingest_embedding_batch().await.unwrap();
+        assert_eq!(provider.calls.load(Ordering::SeqCst), 1);
+
+        // The failed passage waits for its own retry time anyway. A passage that has never been
+        // tried has no such time, and sending it would hit the same limit.
+        add_passage(&pool, "second").await;
+        manager.ingest_embedding_batch().await.unwrap();
+        assert_eq!(provider.calls.load(Ordering::SeqCst), 1);
     }
 
     #[test]
