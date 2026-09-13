@@ -140,7 +140,7 @@ async fn main() -> Result<()> {
         done_tx,
         cache_writer_conn,
     ));
-    search.spawn();
+    search.spawn(state.cache_sync.done.clone());
 
     let addr = env::var("MORIED_LISTEN").unwrap();
     tracing::debug!("{:?}", addr);

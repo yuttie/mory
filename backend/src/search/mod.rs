@@ -27,7 +27,7 @@ use sha1::{Digest, Sha1};
 use sqlx::{sqlite::SqliteRow, Row, SqlitePool};
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::Command;
-use tokio::sync::{Mutex as AsyncMutex, MutexGuard};
+use tokio::sync::{watch, Mutex as AsyncMutex, MutexGuard, Notify};
 
 use crate::models::AppState;
 use lexical::{IndexInput, LexicalHit, LexicalIndex};
@@ -39,6 +39,9 @@ const EMBEDDING_TEMPLATE: &str = "mory-passage-v3:chunker-500-800-80-v3";
 const MAX_EMBEDDING_INPUT_BYTES: usize = 8_192;
 const MAX_EMBEDDING_REQUEST_BYTES: usize = 300_000;
 const MAX_GREP_RECORD_BYTES: usize = 64 * 1024;
+// How soon background work tries again after standing aside for a search, or after a failure
+// the rate-limit pause does not cover. It is the interval the loop used to poll at.
+const BACKGROUND_RETRY_DELAY: Duration = Duration::from_secs(2);
 const RATE_LIMIT_BACKOFF: Duration = Duration::from_secs(30);
 const MAX_RATE_LIMIT_BACKOFF: Duration = Duration::from_secs(60 * 60);
 const FAILED_IMAGE_COUNT_SQL: &str =
@@ -159,6 +162,7 @@ pub struct SearchManager {
     embedding_backoff: ProviderBackoff,
     image_backoff: ProviderBackoff,
     force_rebuild: AtomicBool,
+    rebuild_requested: Notify,
 }
 
 struct InteractiveWaiter<'a> {
@@ -232,6 +236,7 @@ impl SearchManager {
             embedding_backoff: ProviderBackoff::new("Embedding"),
             image_backoff: ProviderBackoff::new("Image description"),
             force_rebuild: AtomicBool::new(false),
+            rebuild_requested: Notify::new(),
         }))
     }
 
@@ -239,31 +244,40 @@ impl SearchManager {
         self.reconcile_current().await
     }
 
-    pub fn spawn(self: &Arc<Self>) {
+    /// Runs indexing in the background whenever there may be something to do.
+    ///
+    /// `listing` announces each sync of the entry cache, the only thing that changes what there is
+    /// to index. Between those, the loop sleeps until a retry or a rate-limit pause is due, or
+    /// until a search asks for a rebuild, instead of rereading the listing every few seconds.
+    pub fn spawn(self: &Arc<Self>, mut listing: watch::Receiver<Option<Oid>>) {
         let manager = self.clone();
         tokio::spawn(async move {
-            let mut delay = Duration::from_secs(1);
+            // The first pass reads the listing as it stands, so any earlier sync is covered.
+            listing.mark_unchanged();
+            let mut failure_delay = Duration::from_secs(1);
             loop {
-                tokio::time::sleep(delay).await;
-                match manager.reconcile_current().await {
+                let wake = match manager.reconcile_current().await {
                     Ok(()) => {
-                        delay = Duration::from_secs(2);
-                        if manager.config.semantic_enabled
-                            && manager.interactive_waiters.load(Ordering::SeqCst) == 0
-                        {
-                            if let Err(error) = manager.ingest_embedding_batch().await {
+                        failure_delay = Duration::from_secs(1);
+                        let embeddings =
+                            manager.ingest_embedding_batch().await.unwrap_or_else(|error| {
                                 tracing::warn!("Semantic indexing batch failed: {error:?}");
-                            }
-                            if let Err(error) = manager.ingest_image_description().await {
+                                Wake::After(BACKGROUND_RETRY_DELAY)
+                            });
+                        let images =
+                            manager.ingest_image_description().await.unwrap_or_else(|error| {
                                 tracing::warn!("Image description indexing failed: {error:?}");
-                            }
-                        }
+                                Wake::After(BACKGROUND_RETRY_DELAY)
+                            });
+                        embeddings.min(images)
                     },
                     Err(error) => {
                         tracing::warn!("Search index reconciliation failed: {error:?}");
-                        delay = (delay * 2).min(Duration::from_secs(30));
+                        failure_delay = (failure_delay * 2).min(Duration::from_secs(30));
+                        Wake::After(failure_delay)
                     },
-                }
+                };
+                wait_for_work(wake, &mut listing, &manager.rebuild_requested).await;
             }
         });
     }
@@ -496,6 +510,7 @@ impl SearchManager {
             Ok(hits) => Ok(hits),
             Err(error) => {
                 self.force_rebuild.store(true, Ordering::SeqCst);
+                self.rebuild_requested.notify_one();
                 *self.status.write().unwrap() = ManagerStatus {
                     state: "error".to_owned(),
                     indexed_commit: Some(lexical.generation.clone()),
@@ -557,16 +572,21 @@ impl SearchManager {
             .collect())
     }
 
-    async fn ingest_image_description(&self) -> Result<()> {
-        if !self.config.semantic_enabled
-            || self.interactive_waiters.load(Ordering::SeqCst) > 0
-            || self.image_backoff.is_paused()
-        {
-            return Ok(());
-        }
-        let Some(model) = self.config.vision_model.clone() else {
-            return Ok(());
+    async fn ingest_image_description(&self) -> Result<Wake> {
+        let Some(model) = self
+            .config
+            .vision_model
+            .clone()
+            .filter(|_| self.config.semantic_enabled)
+        else {
+            return Ok(Wake::Never);
         };
+        if self.interactive_waiters.load(Ordering::SeqCst) > 0 {
+            return Ok(Wake::After(BACKGROUND_RETRY_DELAY));
+        }
+        if let Some(pause) = self.image_backoff.remaining() {
+            return Ok(Wake::After(pause));
+        }
         let snapshot = SearchSnapshot::read(&self.cache_db).await?;
         let now = Utc::now().timestamp();
         // One query for every image rather than one per image: a library of a few hundred images
@@ -592,8 +612,10 @@ impl SearchManager {
         .await?
         .into_iter()
         .collect::<HashMap<_, _>>();
-        let Some(selected) = next_image(&snapshot.entries, &attempts, now).cloned() else {
-            return Ok(());
+        let selected = match next_image(&snapshot.entries, &attempts, now) {
+            NextImage::Due(entry) => entry.clone(),
+            NextImage::RetryAt(retry) => return Ok(Wake::at(retry, now)),
+            NextImage::Idle => return Ok(Wake::Never),
         };
         let source = {
             let repo = self.repo.lock().unwrap();
@@ -604,7 +626,7 @@ impl SearchManager {
             source
         };
         let Some(gate) = try_background_gate(&self.provider_gate, &self.interactive_waiters) else {
-            return Ok(());
+            return Ok(Wake::After(BACKGROUND_RETRY_DELAY));
         };
         let result = image::describe(&self.vision_client, &model, &source).await;
         drop(gate);
@@ -617,8 +639,9 @@ impl SearchManager {
             .iter()
             .any(|entry| entry.blob_id == selected.blob_id)
         {
-            return Ok(());
+            return Ok(Wake::Now);
         }
+        let wake = wake_after_attempt(&result, &self.image_backoff);
         match result {
             Ok(description) => {
                 sqlx::query(
@@ -669,15 +692,18 @@ impl SearchManager {
                 .await?;
             },
         }
-        Ok(())
+        Ok(wake)
     }
 
-    async fn ingest_embedding_batch(&self) -> Result<()> {
-        if !self.config.semantic_enabled
-            || self.interactive_waiters.load(Ordering::SeqCst) > 0
-            || self.embedding_backoff.is_paused()
-        {
-            return Ok(());
+    async fn ingest_embedding_batch(&self) -> Result<Wake> {
+        if !self.config.semantic_enabled {
+            return Ok(Wake::Never);
+        }
+        if self.interactive_waiters.load(Ordering::SeqCst) > 0 {
+            return Ok(Wake::After(BACKGROUND_RETRY_DELAY));
+        }
+        if let Some(pause) = self.embedding_backoff.remaining() {
+            return Ok(Wake::After(pause));
         }
         let now = Utc::now().timestamp();
         let pending = sqlx::query(
@@ -703,7 +729,19 @@ impl SearchManager {
         .await?;
         if pending.is_empty() {
             self.garbage_collect_embeddings().await?;
-            return Ok(());
+            // Every passage still waiting has a retry time after `now`, or it would be pending.
+            let retry = sqlx::query_scalar::<_, Option<i64>>(
+                "SELECT min(e.next_retry) FROM search_embedding e
+                 JOIN search_passage p ON p.passage_id = e.passage_id AND p.text_hash = e.text_hash
+                 WHERE e.model = ? AND e.dimensions = ? AND e.template = ?
+                   AND e.state = 'pending';",
+            )
+            .bind(&self.config.embedding_model)
+            .bind(self.config.embedding_dimensions as i64)
+            .bind(EMBEDDING_TEMPLATE)
+            .fetch_one(&self.cache_db)
+            .await?;
+            return Ok(retry.map_or(Wake::Never, |retry| Wake::at(retry, now)));
         }
         // UTF-8 bytes conservatively bound model tokens without coupling the cache to a provider
         // tokenizer implementation.
@@ -721,7 +759,7 @@ impl SearchManager {
             .collect::<Vec<_>>();
         let pending = &pending[..input.len()];
         let Some(_gate) = try_background_gate(&self.provider_gate, &self.interactive_waiters) else {
-            return Ok(());
+            return Ok(Wake::After(BACKGROUND_RETRY_DELAY));
         };
         let response = self
             .provider
@@ -740,6 +778,7 @@ impl SearchManager {
                 self.config.embedding_dimensions,
             )
         });
+        let wake = wake_after_attempt(&response, &self.embedding_backoff);
         match response {
             Ok(vectors) => {
                 let mut transaction = self.cache_db_writer.begin().await?;
@@ -828,7 +867,7 @@ impl SearchManager {
                 transaction.commit().await?;
             },
         }
-        Ok(())
+        Ok(wake)
     }
 
     async fn embed_interactive(&self, text: &str) -> std::result::Result<Vec<f32>, ProviderError> {
@@ -1164,25 +1203,100 @@ struct ImageAttempt {
     next_retry: Option<i64>,
 }
 
-/// The first image in the listing that has never been described, or whose retry is due.
+enum NextImage<'a> {
+    /// Never described, or its retry is due.
+    Due(&'a SnapshotEntry),
+    /// Nothing is due; the earliest retry comes at this Unix time.
+    RetryAt(i64),
+    /// Every image is described or has failed for good.
+    Idle,
+}
+
+/// The first image in the listing that can be described now, or else when one can be.
 fn next_image<'a>(
     entries: &'a [SnapshotEntry],
     attempts: &HashMap<String, ImageAttempt>,
     now: i64,
-) -> Option<&'a SnapshotEntry> {
-    entries
-        .iter()
-        .filter(|entry| {
-            entry.path != ".mory"
-                && !entry.path.starts_with(".mory/")
-                && image::supported(&entry.mime_type, std::path::Path::new(&entry.path))
-        })
-        .find(|entry| match attempts.get(&entry.blob_id) {
-            None => true,
-            Some(attempt) => {
-                attempt.state == "pending" && attempt.next_retry.is_none_or(|retry| retry <= now)
+) -> NextImage<'a> {
+    let mut earliest_retry: Option<i64> = None;
+    for entry in entries {
+        if entry.path == ".mory"
+            || entry.path.starts_with(".mory/")
+            || !image::supported(&entry.mime_type, std::path::Path::new(&entry.path))
+        {
+            continue;
+        }
+        match attempts.get(&entry.blob_id) {
+            None => return NextImage::Due(entry),
+            Some(attempt) if attempt.state == "pending" => match attempt.next_retry {
+                Some(retry) if retry > now => {
+                    earliest_retry = Some(earliest_retry.map_or(retry, |at| at.min(retry)));
+                },
+                _ => return NextImage::Due(entry),
             },
-        })
+            Some(_) => {},
+        }
+    }
+    earliest_retry.map_or(NextImage::Idle, NextImage::RetryAt)
+}
+
+/// When the background loop should run its next pass. The variants are ordered soonest first,
+/// so the earliest of several is their `min`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Wake {
+    /// The last pass made progress, and more work may be waiting.
+    Now,
+    After(Duration),
+    /// Only a sync of the listing, or a search asking for a rebuild, can bring more work.
+    Never,
+}
+
+impl Wake {
+    /// At a Unix time in the database's resolution of whole seconds.
+    fn at(timestamp: i64, now: i64) -> Self {
+        Self::After(Duration::from_secs(
+            u64::try_from(timestamp.saturating_sub(now)).unwrap_or(0),
+        ))
+    }
+}
+
+/// After a success more work may be waiting, so go on at once. After a failure, wait out the
+/// provider's pause, or a short delay for failures the pause does not cover.
+fn wake_after_attempt<T>(
+    result: &std::result::Result<T, ProviderError>,
+    backoff: &ProviderBackoff,
+) -> Wake {
+    match result {
+        Ok(_) => Wake::Now,
+        Err(_) => Wake::After(backoff.remaining().unwrap_or(BACKGROUND_RETRY_DELAY)),
+    }
+}
+
+/// Sleeps until `wake` comes due, the listing is synced, or a rebuild is requested.
+async fn wait_for_work(
+    wake: Wake,
+    listing: &mut watch::Receiver<Option<Oid>>,
+    rebuild_requested: &Notify,
+) {
+    let delay = match wake {
+        Wake::Now => return,
+        Wake::After(delay) => Some(delay),
+        Wake::Never => None,
+    };
+    let sleep = async {
+        match delay {
+            Some(delay) => tokio::time::sleep(delay).await,
+            None => std::future::pending().await,
+        }
+    };
+    // A closed channel would report a change on every call and spin the loop, so stop listening
+    // to it. Only shutdown drops the sender.
+    let listing_open = listing.has_changed().is_ok();
+    tokio::select! {
+        () = sleep => {},
+        _ = listing.changed(), if listing_open => {},
+        () = rebuild_requested.notified() => {},
+    }
 }
 
 /// Pauses background requests to one provider after it answers 429.
@@ -1208,16 +1322,18 @@ impl ProviderBackoff {
         }
     }
 
-    fn is_paused(&self) -> bool {
-        self.is_paused_at(Instant::now())
+    /// How much of the pause is left, if requests are paused.
+    fn remaining(&self) -> Option<Duration> {
+        self.remaining_at(Instant::now())
     }
 
-    fn is_paused_at(&self, now: Instant) -> bool {
+    fn remaining_at(&self, now: Instant) -> Option<Duration> {
         self.state
             .lock()
             .unwrap()
             .paused_until
-            .is_some_and(|until| now < until)
+            .and_then(|until| until.checked_duration_since(now))
+            .filter(|remaining| !remaining.is_zero())
     }
 
     fn record<T>(&self, result: &std::result::Result<T, ProviderError>) {
@@ -2649,6 +2765,7 @@ mod tests {
             embedding_backoff: ProviderBackoff::new("Embedding"),
             image_backoff: ProviderBackoff::new("Image description"),
             force_rebuild: AtomicBool::new(false),
+            rebuild_requested: Notify::new(),
         };
 
         let status = manager.semantic_status_for(selected).await.unwrap();
@@ -2947,12 +3064,13 @@ mod tests {
     }
 
     #[test]
-    fn next_image_skips_described_failed_and_waiting_images() {
+    fn next_image_finds_the_first_due_image_or_the_earliest_retry() {
         let entries = [
             image_entry(".mory/logo.png", "config", "image/png"),
             image_entry("drawing.svg", "vector", "image/svg+xml"),
             image_entry("ready.png", "ready", "image/png"),
             image_entry("failed.png", "failed", "image/png"),
+            image_entry("later.png", "later", "image/png"),
             image_entry("waiting.png", "waiting", "image/png"),
             image_entry("due.png", "due", "image/png"),
             image_entry("new.png", "new", "image/png"),
@@ -2960,15 +3078,63 @@ mod tests {
         let attempts = HashMap::from([
             ("ready".to_owned(), image_attempt("ready", None)),
             ("failed".to_owned(), image_attempt("failed", None)),
+            ("later".to_owned(), image_attempt("pending", Some(150))),
             ("waiting".to_owned(), image_attempt("pending", Some(101))),
             ("due".to_owned(), image_attempt("pending", Some(100))),
         ]);
 
-        let next = |now| next_image(&entries, &attempts, now).map(|entry| entry.path.as_str());
-        assert_eq!(next(100), Some("due.png"));
-        assert_eq!(next(99), Some("new.png"));
-        assert!(next_image(&entries[..5], &attempts, 100).is_none());
-        assert_eq!(next_image(&entries[..5], &attempts, 101).unwrap().path, "waiting.png");
+        let next = |entries: &[SnapshotEntry], now| match next_image(entries, &attempts, now) {
+            NextImage::Due(entry) => format!("due {}", entry.path),
+            NextImage::RetryAt(retry) => format!("retry at {retry}"),
+            NextImage::Idle => "idle".to_owned(),
+        };
+        assert_eq!(next(&entries, 100), "due due.png");
+        assert_eq!(next(&entries, 99), "due new.png");
+        assert_eq!(next(&entries[..6], 100), "retry at 101");
+        assert_eq!(next(&entries[..6], 101), "due waiting.png");
+        assert_eq!(next(&entries[..4], 100), "idle");
+    }
+
+    #[test]
+    fn the_soonest_wake_wins() {
+        let seconds = Duration::from_secs;
+        assert_eq!(Wake::Never.min(Wake::After(seconds(5))), Wake::After(seconds(5)));
+        assert_eq!(Wake::After(seconds(5)).min(Wake::After(seconds(2))), Wake::After(seconds(2)));
+        assert_eq!(Wake::After(Duration::ZERO).min(Wake::Now), Wake::Now);
+        assert_eq!(Wake::at(130, 100), Wake::After(seconds(30)));
+        assert_eq!(Wake::at(90, 100), Wake::After(Duration::ZERO));
+    }
+
+    #[tokio::test]
+    async fn background_work_waits_for_a_sync_a_rebuild_or_its_time() {
+        async fn waits(
+            wake: Wake,
+            listing: &mut watch::Receiver<Option<Oid>>,
+            rebuild_requested: &Notify,
+        ) -> bool {
+            let wait = wait_for_work(wake, listing, rebuild_requested);
+            tokio::time::timeout(Duration::from_millis(10), wait)
+                .await
+                .is_err()
+        }
+
+        let (sender, mut listing) = watch::channel(None);
+        let rebuild = Notify::new();
+
+        assert!(waits(Wake::Never, &mut listing, &rebuild).await);
+        sender.send(Some(Oid::zero())).unwrap();
+        assert!(!waits(Wake::Never, &mut listing, &rebuild).await);
+        assert!(waits(Wake::Never, &mut listing, &rebuild).await);
+        rebuild.notify_one();
+        assert!(!waits(Wake::Never, &mut listing, &rebuild).await);
+
+        assert!(waits(Wake::After(Duration::from_secs(60)), &mut listing, &rebuild).await);
+        assert!(!waits(Wake::After(Duration::from_millis(1)), &mut listing, &rebuild).await);
+        assert!(!waits(Wake::Now, &mut listing, &rebuild).await);
+
+        // A closed channel reports a change on every call, which would spin the loop.
+        drop(sender);
+        assert!(waits(Wake::Never, &mut listing, &rebuild).await);
     }
 
     fn rate_limited(retry_after: Option<Duration>) -> std::result::Result<(), ProviderError> {
@@ -2985,13 +3151,16 @@ mod tests {
         let backoff = ProviderBackoff::new("Test");
         let start = Instant::now();
 
-        assert!(!backoff.is_paused_at(start));
+        assert_eq!(backoff.remaining_at(start), None);
         let pauses = (0..10)
             .map(|_| backoff.record_at(&rate_limited(None), start).unwrap().as_secs())
             .collect::<Vec<_>>();
         assert_eq!(pauses, [30, 60, 120, 240, 480, 960, 1920, 3600, 3600, 3600]);
-        assert!(backoff.is_paused_at(start + Duration::from_secs(3599)));
-        assert!(!backoff.is_paused_at(start + Duration::from_secs(3600)));
+        assert_eq!(
+            backoff.remaining_at(start + Duration::from_secs(3599)),
+            Some(Duration::from_secs(1)),
+        );
+        assert_eq!(backoff.remaining_at(start + Duration::from_secs(3600)), None);
     }
 
     #[test]
@@ -3018,47 +3187,115 @@ mod tests {
             message: "HTTP 503".to_owned(),
         });
         assert_eq!(backoff.record_at(&unrelated, start), None);
-        assert!(backoff.is_paused_at(start));
+        assert_eq!(backoff.remaining_at(start), Some(Duration::from_secs(30)));
         assert_eq!(
             backoff.record_at(&rate_limited(None), start),
             Some(Duration::from_secs(60)),
         );
 
         assert_eq!(backoff.record_at(&Ok(()), start), None);
-        assert!(!backoff.is_paused_at(start));
+        assert_eq!(backoff.remaining_at(start), None);
         assert_eq!(
             backoff.record_at(&rate_limited(None), start),
             Some(Duration::from_secs(30)),
         );
     }
 
-    #[tokio::test]
-    async fn a_rate_limit_pauses_embedding_ingestion_for_every_passage() {
-        use sqlx::sqlite::SqlitePoolOptions;
+    #[derive(Clone, Copy)]
+    enum StubAnswer {
+        Vectors,
+        RateLimited,
+        Unavailable,
+    }
 
-        struct RateLimitedProvider {
-            calls: AtomicUsize,
+    struct StubProvider {
+        answer: StubAnswer,
+        calls: AtomicUsize,
+    }
+
+    #[async_trait::async_trait]
+    impl EmbeddingProvider for StubProvider {
+        async fn embed(
+            &self,
+            input: &[String],
+            _model: &str,
+            dimensions: usize,
+        ) -> std::result::Result<Vec<Vec<f32>>, ProviderError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            let (rate_limited, status) = match self.answer {
+                StubAnswer::Vectors => return Ok(vec![vec![1.0; dimensions]; input.len()]),
+                StubAnswer::RateLimited => (true, 429),
+                StubAnswer::Unavailable => (false, 503),
+            };
+            Err(ProviderError {
+                retryable: true,
+                retry_after: None,
+                rate_limited,
+                message: format!("embedding provider returned HTTP {status}"),
+            })
         }
+    }
 
-        #[async_trait::async_trait]
-        impl EmbeddingProvider for RateLimitedProvider {
-            async fn embed(
-                &self,
-                _input: &[String],
-                _model: &str,
-                _dimensions: usize,
-            ) -> std::result::Result<Vec<Vec<f32>>, ProviderError> {
-                self.calls.fetch_add(1, Ordering::SeqCst);
-                Err(ProviderError {
-                    retryable: true,
-                    retry_after: None,
-                    rate_limited: true,
-                    message: "embedding provider returned HTTP 429".to_owned(),
-                })
+    struct StubIndex {
+        manager: SearchManager,
+        provider: Arc<StubProvider>,
+        pool: SqlitePool,
+        _directory: tempfile::TempDir,
+    }
+
+    impl StubIndex {
+        async fn new(answer: StubAnswer) -> Self {
+            let pool = sqlx::sqlite::SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect("sqlite::memory:")
+                .await
+                .unwrap();
+            crate::init_cache_database(&mut pool.acquire().await.unwrap())
+                .await
+                .unwrap();
+            let provider = Arc::new(StubProvider {
+                answer,
+                calls: AtomicUsize::new(0),
+            });
+            let directory = tempfile::tempdir().unwrap();
+            let manager = SearchManager {
+                config: SearchConfig {
+                    index_dir: directory.path().join("index"),
+                    semantic_enabled: true,
+                    embedding_model: "model".to_owned(),
+                    embedding_dimensions: 2,
+                    vision_model: None,
+                },
+                repo: Arc::new(std::sync::Mutex::new(
+                    Repository::init(directory.path().join("repo")).unwrap(),
+                )),
+                cache_db: pool.clone(),
+                cache_db_writer: pool.clone(),
+                lexical: RwLock::new(None),
+                status: RwLock::new(ManagerStatus {
+                    state: "updating".to_owned(),
+                    indexed_commit: None,
+                    message: None,
+                }),
+                writer: AsyncMutex::new(()),
+                provider: provider.clone(),
+                provider_gate: AsyncMutex::new(()),
+                interactive_waiters: AtomicUsize::new(0),
+                vision_client: reqwest::Client::new(),
+                embedding_backoff: ProviderBackoff::new("Embedding"),
+                image_backoff: ProviderBackoff::new("Image description"),
+                force_rebuild: AtomicBool::new(false),
+                rebuild_requested: Notify::new(),
+            };
+            Self {
+                manager,
+                provider,
+                pool,
+                _directory: directory,
             }
         }
 
-        async fn add_passage(pool: &SqlitePool, passage_id: &str) {
+        async fn add_passage(&self, passage_id: &str) {
             sqlx::query(
                 "INSERT INTO search_passage VALUES (
                     'note.md', 'blob', ?, 'hash', 0, 4, 1, 1, 'text/markdown', NULL, 'text', 'text',
@@ -3066,61 +3303,60 @@ mod tests {
                  );",
             )
             .bind(passage_id)
-            .execute(pool)
+            .execute(&self.pool)
             .await
             .unwrap();
         }
 
-        let pool = SqlitePoolOptions::new()
-            .max_connections(1)
-            .connect("sqlite::memory:")
-            .await
-            .unwrap();
-        crate::init_cache_database(&mut pool.acquire().await.unwrap())
-            .await
-            .unwrap();
-        let provider = Arc::new(RateLimitedProvider {
-            calls: AtomicUsize::new(0),
-        });
-        let directory = tempfile::tempdir().unwrap();
-        let manager = SearchManager {
-            config: SearchConfig {
-                index_dir: directory.path().join("index"),
-                semantic_enabled: true,
-                embedding_model: "model".to_owned(),
-                embedding_dimensions: 2,
-                vision_model: None,
-            },
-            repo: Arc::new(std::sync::Mutex::new(
-                Repository::init(directory.path().join("repo")).unwrap(),
-            )),
-            cache_db: pool.clone(),
-            cache_db_writer: pool.clone(),
-            lexical: RwLock::new(None),
-            status: RwLock::new(ManagerStatus {
-                state: "updating".to_owned(),
-                indexed_commit: None,
-                message: None,
-            }),
-            writer: AsyncMutex::new(()),
-            provider: provider.clone(),
-            provider_gate: AsyncMutex::new(()),
-            interactive_waiters: AtomicUsize::new(0),
-            vision_client: reqwest::Client::new(),
-            embedding_backoff: ProviderBackoff::new("Embedding"),
-            image_backoff: ProviderBackoff::new("Image description"),
-            force_rebuild: AtomicBool::new(false),
-        };
+        async fn ingest(&self) -> Wake {
+            self.manager.ingest_embedding_batch().await.unwrap()
+        }
 
-        add_passage(&pool, "first").await;
-        manager.ingest_embedding_batch().await.unwrap();
-        assert_eq!(provider.calls.load(Ordering::SeqCst), 1);
+        fn calls(&self) -> usize {
+            self.provider.calls.load(Ordering::SeqCst)
+        }
+    }
+
+    fn about_seconds(wake: Wake, seconds: u64) -> bool {
+        matches!(wake, Wake::After(delay)
+            if delay <= Duration::from_secs(seconds)
+                && delay >= Duration::from_secs(seconds - 1))
+    }
+
+    #[tokio::test]
+    async fn a_rate_limit_pauses_embedding_ingestion_for_every_passage() {
+        let index = StubIndex::new(StubAnswer::RateLimited).await;
+
+        index.add_passage("first").await;
+        assert!(about_seconds(index.ingest().await, 30));
+        assert_eq!(index.calls(), 1);
 
         // The failed passage waits for its own retry time anyway. A passage that has never been
         // tried has no such time, and sending it would hit the same limit.
-        add_passage(&pool, "second").await;
-        manager.ingest_embedding_batch().await.unwrap();
-        assert_eq!(provider.calls.load(Ordering::SeqCst), 1);
+        index.add_passage("second").await;
+        assert!(about_seconds(index.ingest().await, 30));
+        assert_eq!(index.calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn embedding_ingestion_sleeps_until_its_next_retry() {
+        let index = StubIndex::new(StubAnswer::Unavailable).await;
+
+        assert_eq!(index.ingest().await, Wake::Never);
+        index.add_passage("first").await;
+        assert_eq!(index.ingest().await, Wake::After(BACKGROUND_RETRY_DELAY));
+        assert!(about_seconds(index.ingest().await, 30));
+        assert_eq!(index.calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn embedding_ingestion_goes_on_while_it_makes_progress() {
+        let index = StubIndex::new(StubAnswer::Vectors).await;
+
+        index.add_passage("first").await;
+        assert_eq!(index.ingest().await, Wake::Now);
+        assert_eq!(index.ingest().await, Wake::Never);
+        assert_eq!(index.calls(), 1);
     }
 
     #[test]
