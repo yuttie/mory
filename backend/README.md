@@ -115,6 +115,14 @@ location /api/ {
 }
 ```
 
+Verified against a real deployment behind nginx with exactly that one rule and no
+`/.well-known/` rules at all: claude.ai follows the `resource_metadata` pointer
+and then reads `{MORIED_ROOT_PATH}.well-known/openid-configuration`, both of
+which sit under the mount. Claude Code instead builds the site-root paths, so it
+wants the optional rules below — or the `{MORIED_ROOT_PATH}` fallback, which it
+also accepts. Both identify themselves by client ID metadata document rather
+than by registering.
+
 `Host` matters: rmcp checks it against the authority in `MORIED_PUBLIC_URL` to
 stop DNS rebinding. Pass it through as above, or name the internal hostname in
 `MORIED_MCP_ALLOWED_HOSTS`, or every MCP request is refused with 403.
