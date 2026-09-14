@@ -42,7 +42,7 @@
     "markdown-table-prettify": "^4.1.0",
     "md5": "^2.3.0",
     "mdast-util-to-string": "^4.0.0",
-    "pinia": "^3.0.4",
+    "pinia": "^4.0.3",
     "rehype-autolink-headings": "^7.1.0",
     "rehype-highlight": "^7.0.0",
     "rehype-katex": "^7.0.1",
