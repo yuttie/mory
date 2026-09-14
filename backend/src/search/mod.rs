@@ -31,7 +31,7 @@ use tokio::sync::{watch, Mutex as AsyncMutex, MutexGuard, Notify};
 
 use crate::models::AppState;
 use lexical::{IndexInput, LexicalHit, LexicalIndex};
-use provider::{EmbeddingProvider, OpenAiEmbeddingProvider, ProviderError};
+use provider::{EmbeddingProvider, Failure, OpenAiEmbeddingProvider, ProviderError};
 use query::{parse, ParsedQuery, SearchMode};
 
 const SEARCH_WAIT: Duration = Duration::from_millis(1200);
@@ -584,8 +584,8 @@ impl SearchManager {
         if self.interactive_waiters.load(Ordering::SeqCst) > 0 {
             return Ok(Wake::After(BACKGROUND_RETRY_DELAY));
         }
-        if let Some(pause) = self.image_backoff.remaining() {
-            return Ok(Wake::After(pause));
+        if let Some(wake) = self.image_backoff.blocked() {
+            return Ok(wake);
         }
         let snapshot = SearchSnapshot::read(&self.cache_db).await?;
         let now = Utc::now().timestamp();
@@ -668,7 +668,7 @@ impl SearchManager {
             },
             Err(error) => {
                 tracing::warn!("Image description provider failure: {error}");
-                let state = if error.retryable { "pending" } else { "failed" };
+                let state = if error.retryable() { "pending" } else { "failed" };
                 let (last_attempt, next_retry) = failure_timestamps(&error);
                 sqlx::query(
                     "INSERT INTO search_image_description (
@@ -702,8 +702,8 @@ impl SearchManager {
         if self.interactive_waiters.load(Ordering::SeqCst) > 0 {
             return Ok(Wake::After(BACKGROUND_RETRY_DELAY));
         }
-        if let Some(pause) = self.embedding_backoff.remaining() {
-            return Ok(Wake::After(pause));
+        if let Some(wake) = self.embedding_backoff.blocked() {
+            return Ok(wake);
         }
         let now = Utc::now().timestamp();
         let pending = sqlx::query(
@@ -838,7 +838,7 @@ impl SearchManager {
             },
             Err(error) => {
                 tracing::warn!("Embedding ingestion provider failure: {error}");
-                let state = if error.retryable { "pending" } else { "failed" };
+                let state = if error.retryable() { "pending" } else { "failed" };
                 let (last_attempt, next_retry) = failure_timestamps(&error);
                 let mut transaction = self.cache_db_writer.begin().await?;
                 for item in pending {
@@ -887,19 +887,10 @@ impl SearchManager {
         self.embedding_backoff.record(&result);
         let mut vectors = result?;
         if vectors.len() != 1 {
-            return Err(ProviderError {
-                retryable: false,
-                retry_after: None,
-                message: "embedding response count mismatch".to_owned(),
-            });
+            return Err(provider::failure(Failure::Item, "embedding response count mismatch"));
         }
-        normalize_vector(vectors.remove(0), self.config.embedding_dimensions).map_err(|error| {
-            ProviderError {
-                retryable: false,
-                retry_after: None,
-                message: error.to_string(),
-            }
-        })
+        normalize_vector(vectors.remove(0), self.config.embedding_dimensions)
+            .map_err(|error| provider::failure(Failure::Item, error.to_string()))
     }
 
     async fn search_semantic(
@@ -1259,14 +1250,14 @@ impl Wake {
 }
 
 /// After a success more work may be waiting, so go on at once. After a failure, wait out the
-/// provider's pause, or a short delay for failures the pause does not cover.
+/// provider's pause or stop, or a short delay for a failure of the item alone.
 fn wake_after_attempt<T>(
     result: &std::result::Result<T, ProviderError>,
     backoff: &ProviderBackoff,
 ) -> Wake {
     match result {
         Ok(_) => Wake::Now,
-        Err(_) => Wake::After(backoff.remaining().unwrap_or(BACKGROUND_RETRY_DELAY)),
+        Err(_) => backoff.blocked().unwrap_or(Wake::After(BACKGROUND_RETRY_DELAY)),
     }
 }
 
@@ -1297,8 +1288,8 @@ async fn wait_for_work(
     }
 }
 
-/// Pauses background requests to one provider after a retryable failure: a rate limit, an outage,
-/// a dropped connection, a rejected key.
+/// Holds back background requests to one provider: pauses them after a temporary failure, and
+/// stops them until moried restarts after a failure only an admin can fix.
 ///
 /// Each item's `next_retry` cannot do this alone. Such a failure belongs to the provider, not the
 /// item, so skipping the item that just failed only sends the next one in a backlog into it.
@@ -1311,6 +1302,13 @@ struct ProviderBackoff {
 struct BackoffState {
     paused_until: Option<Instant>,
     consecutive: u32,
+    stopped: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum Hold {
+    Pause(Duration),
+    Stop,
 }
 
 impl ProviderBackoff {
@@ -1321,27 +1319,36 @@ impl ProviderBackoff {
         }
     }
 
-    /// How much of the pause is left, if requests are paused.
-    fn remaining(&self) -> Option<Duration> {
-        self.remaining_at(Instant::now())
+    /// When background requests may go out again, if not now.
+    fn blocked(&self) -> Option<Wake> {
+        self.blocked_at(Instant::now())
     }
 
-    fn remaining_at(&self, now: Instant) -> Option<Duration> {
-        self.state
-            .lock()
-            .unwrap()
+    fn blocked_at(&self, now: Instant) -> Option<Wake> {
+        let state = self.state.lock().unwrap();
+        if state.stopped.is_some() {
+            return Some(Wake::Never);
+        }
+        state
             .paused_until
             .and_then(|until| until.checked_duration_since(now))
             .filter(|remaining| !remaining.is_zero())
+            .map(Wake::After)
     }
 
     fn record<T>(&self, result: &std::result::Result<T, ProviderError>) {
-        if let Some(pause) = self.record_at(result, Instant::now()) {
-            tracing::warn!(
-                "{} provider is failing; pausing background requests for {}s",
-                self.name,
-                pause.as_secs(),
-            );
+        match (self.record_at(result, Instant::now()), result) {
+            (Some(Hold::Pause(pause)), _) => {
+                tracing::warn!(
+                    "{} provider is failing; pausing background requests for {}s",
+                    self.name,
+                    pause.as_secs(),
+                );
+            },
+            (Some(Hold::Stop), Err(error)) => {
+                tracing::error!("{} requests stopped until moried restarts: {error}", self.name);
+            },
+            _ => {},
         }
     }
 
@@ -1349,26 +1356,36 @@ impl ProviderBackoff {
         &self,
         result: &std::result::Result<T, ProviderError>,
         now: Instant,
-    ) -> Option<Duration> {
+    ) -> Option<Hold> {
         let mut state = self.state.lock().unwrap();
-        match result {
+        let error = match result {
             Ok(_) => {
-                *state = BackoffState::default();
-                None
+                // Only a restart ends a stop, so what an admin was told stays true until they act.
+                state.paused_until = None;
+                state.consecutive = 0;
+                return None;
             },
-            Err(error) if error.retryable => {
+            Err(error) => error,
+        };
+        match error.failure {
+            Failure::Temporary => {
                 state.consecutive = state.consecutive.saturating_add(1);
-                // Some of these last until someone acts, such as an exhausted quota, so keep
-                // doubling instead of probing at a fixed interval all day.
+                // A rate limit can outlast a short pause, so keep doubling instead of probing at
+                // a fixed interval.
                 let pause = PROVIDER_BACKOFF
                     .saturating_mul(2u32.saturating_pow(state.consecutive - 1))
                     .min(MAX_PROVIDER_BACKOFF)
                     .max(error.retry_after.unwrap_or_default());
                 state.paused_until = now.checked_add(pause).or(Some(now + MAX_PROVIDER_BACKOFF));
-                Some(pause)
+                Some(Hold::Pause(pause))
             },
-            // A failure caused by the request says nothing about the provider, either way.
-            Err(_) => None,
+            Failure::Admin if state.stopped.is_none() => {
+                state.stopped = Some(error.message.clone());
+                Some(Hold::Stop)
+            },
+            // Already stopped, or a failure of the item alone, which says nothing about the
+            // provider either way.
+            Failure::Admin | Failure::Item => None,
         }
     }
 }
@@ -1378,7 +1395,7 @@ fn failure_timestamps(error: &ProviderError) -> (i64, Option<i64>) {
 }
 
 fn failure_timestamps_at(error: &ProviderError, completed_at: i64) -> (i64, Option<i64>) {
-    let next_retry = error.retryable.then(|| {
+    let next_retry = error.retryable().then(|| {
         let retry_seconds = error
             .retry_after
             .unwrap_or(Duration::from_secs(30))
@@ -1394,11 +1411,7 @@ fn validate_embedding_vectors(
     dimensions: usize,
 ) -> std::result::Result<Vec<Result<Vec<f32>>>, ProviderError> {
     if vectors.len() != expected {
-        return Err(ProviderError {
-            retryable: false,
-            retry_after: None,
-            message: "embedding response count mismatch".to_owned(),
-        });
+        return Err(provider::failure(Failure::Item, "embedding response count mismatch"));
     }
     Ok(vectors
         .into_iter()
@@ -3033,7 +3046,7 @@ mod tests {
     #[test]
     fn retry_after_starts_when_the_failed_response_finishes() {
         let error = ProviderError {
-            retryable: true,
+            failure: Failure::Temporary,
             retry_after: Some(Duration::from_secs(10)),
             message: "rate limited".to_owned(),
         };
@@ -3136,10 +3149,18 @@ mod tests {
 
     fn provider_failure(retry_after: Option<Duration>) -> std::result::Result<(), ProviderError> {
         Err(ProviderError {
-            retryable: true,
+            failure: Failure::Temporary,
             retry_after,
             message: "HTTP 503".to_owned(),
         })
+    }
+
+    fn pause(seconds: u64) -> Option<Hold> {
+        Some(Hold::Pause(Duration::from_secs(seconds)))
+    }
+
+    fn paused(seconds: u64) -> Option<Wake> {
+        Some(Wake::After(Duration::from_secs(seconds)))
     }
 
     #[test]
@@ -3147,16 +3168,14 @@ mod tests {
         let backoff = ProviderBackoff::new("Test");
         let start = Instant::now();
 
-        assert_eq!(backoff.remaining_at(start), None);
+        assert_eq!(backoff.blocked_at(start), None);
         let pauses = (0..10)
-            .map(|_| backoff.record_at(&provider_failure(None), start).unwrap().as_secs())
+            .map(|_| backoff.record_at(&provider_failure(None), start))
             .collect::<Vec<_>>();
-        assert_eq!(pauses, [30, 60, 120, 240, 480, 960, 1920, 3600, 3600, 3600]);
-        assert_eq!(
-            backoff.remaining_at(start + Duration::from_secs(3599)),
-            Some(Duration::from_secs(1)),
-        );
-        assert_eq!(backoff.remaining_at(start + Duration::from_secs(3600)), None);
+        let expected = [30, 60, 120, 240, 480, 960, 1920, 3600, 3600, 3600].map(pause);
+        assert_eq!(pauses, expected);
+        assert_eq!(backoff.blocked_at(start + Duration::from_secs(3599)), paused(1));
+        assert_eq!(backoff.blocked_at(start + Duration::from_secs(3600)), None);
     }
 
     #[test]
@@ -3164,10 +3183,10 @@ mod tests {
         let backoff = ProviderBackoff::new("Test");
         let start = Instant::now();
 
-        let pause = backoff.record_at(&provider_failure(Some(Duration::from_secs(90))), start);
-        assert_eq!(pause, Some(Duration::from_secs(90)));
-        let pause = backoff.record_at(&provider_failure(Some(Duration::from_secs(1))), start);
-        assert_eq!(pause, Some(Duration::from_secs(60)));
+        let hold = backoff.record_at(&provider_failure(Some(Duration::from_secs(90))), start);
+        assert_eq!(hold, pause(90));
+        let hold = backoff.record_at(&provider_failure(Some(Duration::from_secs(1))), start);
+        assert_eq!(hold, pause(60));
     }
 
     #[test]
@@ -3176,24 +3195,33 @@ mod tests {
         let start = Instant::now();
         backoff.record_at(&provider_failure(None), start);
 
-        let unrelated: std::result::Result<(), ProviderError> = Err(ProviderError {
-            retryable: false,
-            retry_after: None,
-            message: "HTTP 400".to_owned(),
-        });
+        let unrelated: std::result::Result<(), ProviderError> =
+            Err(provider::failure(Failure::Item, "HTTP 400"));
         assert_eq!(backoff.record_at(&unrelated, start), None);
-        assert_eq!(backoff.remaining_at(start), Some(Duration::from_secs(30)));
-        assert_eq!(
-            backoff.record_at(&provider_failure(None), start),
-            Some(Duration::from_secs(60)),
-        );
+        assert_eq!(backoff.blocked_at(start), paused(30));
+        assert_eq!(backoff.record_at(&provider_failure(None), start), pause(60));
 
         assert_eq!(backoff.record_at(&Ok(()), start), None);
-        assert_eq!(backoff.remaining_at(start), None);
+        assert_eq!(backoff.blocked_at(start), None);
+        assert_eq!(backoff.record_at(&provider_failure(None), start), pause(30));
+    }
+
+    #[test]
+    fn a_failure_only_an_admin_can_fix_stops_requests_until_restart() {
+        let backoff = ProviderBackoff::new("Test");
+        let start = Instant::now();
+        let refused: std::result::Result<(), ProviderError> =
+            Err(provider::failure(Failure::Admin, "HTTP 401"));
+
+        assert_eq!(backoff.record_at(&refused, start), Some(Hold::Stop));
         assert_eq!(
-            backoff.record_at(&provider_failure(None), start),
-            Some(Duration::from_secs(30)),
+            backoff.blocked_at(start + Duration::from_secs(24 * 60 * 60)),
+            Some(Wake::Never),
         );
+        // A second refusal is not news, and a success from a search does not end the stop.
+        assert_eq!(backoff.record_at(&refused, start), None);
+        assert_eq!(backoff.record_at(&Ok(()), start), None);
+        assert_eq!(backoff.blocked_at(start), Some(Wake::Never));
     }
 
     #[derive(Clone, Copy)]
@@ -3201,6 +3229,7 @@ mod tests {
         Vectors,
         Unavailable,
         Rejected,
+        Refused,
     }
 
     struct StubProvider {
@@ -3217,16 +3246,13 @@ mod tests {
             dimensions: usize,
         ) -> std::result::Result<Vec<Vec<f32>>, ProviderError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
-            let (retryable, status) = match self.answer {
+            let (failure, status) = match self.answer {
                 StubAnswer::Vectors => return Ok(vec![vec![1.0; dimensions]; input.len()]),
-                StubAnswer::Unavailable => (true, 503),
-                StubAnswer::Rejected => (false, 400),
+                StubAnswer::Unavailable => (Failure::Temporary, 503),
+                StubAnswer::Rejected => (Failure::Item, 400),
+                StubAnswer::Refused => (Failure::Admin, 401),
             };
-            Err(ProviderError {
-                retryable,
-                retry_after: None,
-                message: format!("embedding provider returned HTTP {status}"),
-            })
+            Err(provider::failure(failure, format!("embedding provider returned HTTP {status}")))
         }
     }
 
@@ -3353,12 +3379,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_refused_key_stops_embedding_ingestion_and_keeps_the_passages() {
+        let index = StubIndex::new(StubAnswer::Refused).await;
+
+        index.add_passage("first").await;
+        assert_eq!(index.ingest().await, Wake::Never);
+        index.add_passage("second").await;
+        assert_eq!(index.ingest().await, Wake::Never);
+        assert_eq!(index.calls(), 1);
+        let state: String =
+            sqlx::query_scalar("SELECT state FROM search_embedding WHERE passage_id = 'first';")
+                .fetch_one(&index.pool)
+                .await
+                .unwrap();
+        assert_eq!(state, "pending");
+    }
+
+    #[tokio::test]
     async fn a_rejected_batch_is_given_up_without_a_pause() {
         let index = StubIndex::new(StubAnswer::Rejected).await;
 
         index.add_passage("first").await;
         assert_eq!(index.ingest().await, Wake::After(BACKGROUND_RETRY_DELAY));
-        assert_eq!(index.manager.embedding_backoff.remaining(), None);
+        assert_eq!(index.manager.embedding_backoff.blocked(), None);
         assert_eq!(index.ingest().await, Wake::Never);
         assert_eq!(index.calls(), 1);
     }

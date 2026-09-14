@@ -4,14 +4,32 @@ use async_trait::async_trait;
 use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
 
+/// Who a failure is waiting on, which decides what background indexing does next.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Failure {
+    /// This item: its request fails every time, while other items may succeed. It is given up.
+    Item,
+    /// Nobody: a rate limit, an outage or a dropped connection clears up on its own. Requests
+    /// pause, and the item is retried.
+    Temporary,
+    /// An admin: a missing or rejected key, a wrong model, an exhausted quota, or a machine that
+    /// cannot run ImageMagick or write temporary files. Nothing changes until they act, so
+    /// requests stop until moried restarts, and the item is kept for then.
+    Admin,
+}
+
 #[derive(Debug)]
 pub struct ProviderError {
-    /// Whether the same request could succeed later. A failure caused by the request itself is
-    /// not retryable, so a retryable one is about the provider or this machine and applies to
-    /// every request: keep it that way, since background requests pause on it.
-    pub retryable: bool,
+    pub failure: Failure,
     pub retry_after: Option<Duration>,
     pub message: String,
+}
+
+impl ProviderError {
+    /// Whether the item should be kept to try again rather than given up.
+    pub fn retryable(&self) -> bool {
+        self.failure != Failure::Item
+    }
 }
 
 impl std::fmt::Display for ProviderError {
@@ -22,23 +40,74 @@ impl std::fmt::Display for ProviderError {
 
 impl std::error::Error for ProviderError {}
 
-pub fn recoverable(message: impl Into<String>) -> ProviderError {
+pub fn failure(failure: Failure, message: impl Into<String>) -> ProviderError {
     ProviderError {
-        retryable: true,
+        failure,
         retry_after: None,
         message: message.into(),
     }
 }
 
-pub fn status_is_retryable(status: StatusCode) -> bool {
-    matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN)
-        || status == StatusCode::TOO_MANY_REQUESTS
-        || status.is_server_error()
+pub fn request_error_failure(error: &reqwest::Error) -> Failure {
+    if !error.is_builder()
+        && (error.is_connect() || error.is_timeout() || error.is_request() || error.is_body())
+    {
+        Failure::Temporary
+    } else {
+        Failure::Item
+    }
 }
 
-pub fn request_error_is_retryable(error: &reqwest::Error) -> bool {
-    !error.is_builder()
-        && (error.is_connect() || error.is_timeout() || error.is_request() || error.is_body())
+#[derive(Deserialize)]
+struct ErrorBody {
+    error: ErrorDetail,
+}
+
+#[derive(Deserialize)]
+struct ErrorDetail {
+    code: Option<String>,
+}
+
+/// Describes a response that was not a success.
+///
+/// Only the error's `code` is read from the body. OpenAI answers an exhausted quota with the same
+/// 429 as a rate limit, and the code is the only thing that tells them apart.
+pub async fn unsuccessful_response(response: reqwest::Response, provider: &str) -> ProviderError {
+    let status = response.status();
+    let retry_after = retry_after(response.headers());
+    // The code lands in logs and in what the web app shows, so keep only one shaped like a code.
+    let code = response
+        .json::<ErrorBody>()
+        .await
+        .ok()
+        .and_then(|body| body.error.code)
+        .filter(|code| {
+            code.len() <= 64
+                && code
+                    .bytes()
+                    .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
+        });
+    ProviderError {
+        failure: status_failure(status, code.as_deref()),
+        retry_after,
+        message: match code {
+            Some(code) => format!("{provider} returned HTTP {status} ({code})"),
+            None => format!("{provider} returned HTTP {status}"),
+        },
+    }
+}
+
+fn status_failure(status: StatusCode, code: Option<&str>) -> Failure {
+    if matches!(code, Some("insufficient_quota" | "model_not_found")) {
+        return Failure::Admin;
+    }
+    match status {
+        // The endpoints are fixed, so what cannot be found is the configured model.
+        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN | StatusCode::NOT_FOUND => Failure::Admin,
+        StatusCode::TOO_MANY_REQUESTS => Failure::Temporary,
+        status if status.is_server_error() => Failure::Temporary,
+        _ => Failure::Item,
+    }
 }
 
 #[async_trait]
@@ -89,7 +158,7 @@ impl EmbeddingProvider for OpenAiEmbeddingProvider {
         dimensions: usize,
     ) -> Result<Vec<Vec<f32>>, ProviderError> {
         let api_key = std::env::var("MORIED_OPENAI_API_KEY")
-            .map_err(|_| recoverable("OpenAI API key is not configured"))?;
+            .map_err(|_| failure(Failure::Admin, "OpenAI API key is not configured"))?;
         let response = self
             .client
             .post("https://api.openai.com/v1/embeddings")
@@ -102,32 +171,23 @@ impl EmbeddingProvider for OpenAiEmbeddingProvider {
             })
             .send()
             .await
-            .map_err(|error| ProviderError {
-                retryable: request_error_is_retryable(&error),
-                retry_after: None,
-                message: format!("embedding request failed: {error}"),
+            .map_err(|error| {
+                failure(request_error_failure(&error), format!("embedding request failed: {error}"))
             })?;
-        let status = response.status();
-        let retry_after = retry_after(response.headers());
-        if !status.is_success() {
-            return Err(ProviderError {
-                retryable: status_is_retryable(status),
-                retry_after,
-                // Do not read the body: provider request IDs and diagnostics stay in server logs.
-                message: format!("embedding provider returned HTTP {status}"),
-            });
+        if !response.status().is_success() {
+            return Err(unsuccessful_response(response, "embedding provider").await);
         }
-        let body = response.bytes().await.map_err(|error| ProviderError {
-            retryable: error.is_body() || error.is_timeout(),
-            retry_after: None,
-            message: format!("embedding response body failed: {error}"),
+        let body = response.bytes().await.map_err(|error| {
+            let kind = if error.is_body() || error.is_timeout() {
+                Failure::Temporary
+            } else {
+                Failure::Item
+            };
+            failure(kind, format!("embedding response body failed: {error}"))
         })?;
-        let response =
-            serde_json::from_slice::<EmbeddingResponse>(&body).map_err(|error| ProviderError {
-                retryable: false,
-                retry_after: None,
-                message: format!("invalid embedding response: {error}"),
-            })?;
+        let response = serde_json::from_slice::<EmbeddingResponse>(&body).map_err(|error| {
+            failure(Failure::Item, format!("invalid embedding response: {error}"))
+        })?;
         ordered_embeddings(response.data, input.len())
     }
 }
@@ -143,11 +203,10 @@ fn ordered_embeddings(
             .enumerate()
             .any(|(expected_index, item)| item.index != expected_index)
     {
-        return Err(ProviderError {
-            retryable: false,
-            retry_after: None,
-            message: "embedding response indices do not match the request".to_owned(),
-        });
+        return Err(failure(
+            Failure::Item,
+            "embedding response indices do not match the request",
+        ));
     }
     Ok(data.into_iter().map(|item| item.embedding).collect())
 }
@@ -201,11 +260,69 @@ mod tests {
     }
 
     #[test]
-    fn corrected_provider_configuration_remains_retryable() {
-        assert!(recoverable("missing API key").retryable);
-        assert!(status_is_retryable(StatusCode::UNAUTHORIZED));
-        assert!(status_is_retryable(StatusCode::FORBIDDEN));
-        assert!(!status_is_retryable(StatusCode::BAD_REQUEST));
+    fn statuses_are_classified_by_who_can_resolve_them() {
+        let cases = [
+            (StatusCode::UNAUTHORIZED, None, Failure::Admin),
+            (StatusCode::FORBIDDEN, None, Failure::Admin),
+            (StatusCode::NOT_FOUND, Some("model_not_found"), Failure::Admin),
+            (StatusCode::BAD_REQUEST, Some("model_not_found"), Failure::Admin),
+            (StatusCode::TOO_MANY_REQUESTS, Some("insufficient_quota"), Failure::Admin),
+            (StatusCode::TOO_MANY_REQUESTS, Some("rate_limit_exceeded"), Failure::Temporary),
+            (StatusCode::TOO_MANY_REQUESTS, None, Failure::Temporary),
+            (StatusCode::SERVICE_UNAVAILABLE, None, Failure::Temporary),
+            (StatusCode::BAD_REQUEST, None, Failure::Item),
+            (StatusCode::PAYLOAD_TOO_LARGE, None, Failure::Item),
+        ];
+        for (status, code, expected) in cases {
+            assert_eq!(status_failure(status, code), expected, "{status} {code:?}");
+        }
+        assert!(failure(Failure::Admin, "missing API key").retryable());
+        assert!(!failure(Failure::Item, "rejected input").retryable());
+    }
+
+    async fn respond_once(response: &'static str) -> reqwest::Response {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut request = [0; 1024];
+            let _ = stream.read(&mut request).await.unwrap();
+            stream.write_all(response.as_bytes()).await.unwrap();
+        });
+        Client::new()
+            .get(format!("http://{address}"))
+            .send()
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn an_exhausted_quota_is_told_apart_from_a_rate_limit_by_its_code() {
+        let quota = respond_once(concat!(
+            "HTTP/1.1 429 Too Many Requests\r\nContent-Type: application/json\r\n",
+            "Connection: close\r\nContent-Length: 124\r\n\r\n",
+            r#"{"error":{"message":"You exceeded your current quota","type":"insufficient_quota","#,
+            r#""param":null,"code":"insufficient_quota"}}"#,
+        ))
+        .await;
+        let error = unsuccessful_response(quota, "test provider").await;
+        assert_eq!(error.failure, Failure::Admin);
+        assert_eq!(
+            error.message,
+            "test provider returned HTTP 429 Too Many Requests (insufficient_quota)",
+        );
+
+        let limit = respond_once(concat!(
+            "HTTP/1.1 429 Too Many Requests\r\nRetry-After: 20\r\n",
+            "Connection: close\r\nContent-Length: 9\r\n\r\nnot json.",
+        ))
+        .await;
+        let error = unsuccessful_response(limit, "test provider").await;
+        assert_eq!(error.failure, Failure::Temporary);
+        assert_eq!(error.retry_after, Some(Duration::from_secs(20)));
+        assert_eq!(error.message, "test provider returned HTTP 429 Too Many Requests");
     }
 
     #[tokio::test]
@@ -223,10 +340,10 @@ mod tests {
             .unwrap_err();
         server.await.unwrap();
 
-        assert!(request_error_is_retryable(&error));
+        assert_eq!(request_error_failure(&error), Failure::Temporary);
 
         let builder_error = Client::new().get("://invalid").send().await.unwrap_err();
-        assert!(!request_error_is_retryable(&builder_error));
+        assert_eq!(request_error_failure(&builder_error), Failure::Item);
     }
 
     #[test]

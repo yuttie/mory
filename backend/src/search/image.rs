@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 
 use super::provider::{
-    recoverable, request_error_is_retryable, retry_after, status_is_retryable, ProviderError,
+    failure, request_error_failure, unsuccessful_response, Failure, ProviderError,
 };
 
 pub const PROMPT_VERSION: &str = "image-description-v1";
@@ -31,38 +31,31 @@ pub async fn describe(
     source: &[u8],
 ) -> Result<ImageDescription, ProviderError> {
     if source.len() > MAX_SOURCE_BYTES {
-        return Err(permanent("image exceeds the source-byte limit"));
+        return Err(item_failure("image exceeds the source-byte limit"));
     }
     let normalized = normalize(source).await?;
     let encoded = base64::engine::general_purpose::STANDARD.encode(normalized);
     let request = responses_request(model, encoded);
     let api_key = std::env::var("MORIED_OPENAI_API_KEY")
-        .map_err(|_| recoverable("OpenAI API key is not configured"))?;
+        .map_err(|_| failure(Failure::Admin, "OpenAI API key is not configured"))?;
     let response = client
         .post("https://api.openai.com/v1/responses")
         .bearer_auth(api_key)
         .json(&request)
         .send()
         .await
-        .map_err(|error| ProviderError {
-            retryable: request_error_is_retryable(&error),
-            retry_after: None,
-            message: format!("image description request failed: {error}"),
+        .map_err(|error| {
+            let message = format!("image description request failed: {error}");
+            failure(request_error_failure(&error), message)
         })?;
-    let status = response.status();
-    let retry_after = retry_after(response.headers());
-    if !status.is_success() {
-        return Err(ProviderError {
-            retryable: status_is_retryable(status),
-            retry_after,
-            message: format!("image description provider returned HTTP {status}"),
-        });
+    if !response.status().is_success() {
+        return Err(unsuccessful_response(response, "image description provider").await);
     }
     let body = response.bytes().await.map_err(|error| {
         retryable_body_failure(format!("image description response body failed: {error}"))
     })?;
     let response = serde_json::from_slice::<serde_json::Value>(&body)
-        .map_err(|error| permanent(&format!("invalid image description response: {error}")))?;
+        .map_err(|error| item_failure(&format!("invalid image description response: {error}")))?;
     let text = response
         .get("output")
         .and_then(|value| value.as_array())
@@ -76,11 +69,11 @@ pub async fn describe(
         })
         .find(|item| item.get("type").and_then(|value| value.as_str()) == Some("output_text"))
         .and_then(|item| item.get("text").and_then(|value| value.as_str()))
-        .ok_or_else(|| permanent("image description response contained no output text"))?;
+        .ok_or_else(|| item_failure("image description response contained no output text"))?;
     let description = serde_json::from_str::<ImageDescription>(text)
-        .map_err(|error| permanent(&format!("invalid structured image description: {error}")))?;
+        .map_err(|error| item_failure(&format!("invalid structured image description: {error}")))?;
     if description.description.trim().is_empty() && description.visible_text.trim().is_empty() {
-        return Err(permanent("image description was empty"));
+        return Err(item_failure("image description was empty"));
     }
     Ok(description)
 }
@@ -123,13 +116,17 @@ fn responses_request(model: &str, encoded: String) -> ResponsesRequest<'_> {
 
 async fn normalize(source: &[u8]) -> Result<Vec<u8>, ProviderError> {
     let deadline = Instant::now() + PREPROCESS_TIMEOUT;
-    let directory = tempfile::tempdir()
-        .map_err(|error| permanent(&format!("temporary image directory failed: {error}")))?;
+    // Temporary files fail for every image alike, on a full disk or an unwritable directory.
+    let directory = tempfile::tempdir().map_err(|error| {
+        failure(Failure::Admin, format!("temporary image directory failed: {error}"))
+    })?;
     let input = directory.path().join("source");
     let output = directory.path().join("normalized.jpg");
     tokio::fs::write(&input, source)
         .await
-        .map_err(|error| permanent(&format!("temporary image write failed: {error}")))?;
+        .map_err(|error| {
+            failure(Failure::Admin, format!("temporary image write failed: {error}"))
+        })?;
     inspect_dimensions(&input, deadline).await?;
     let mut command = Command::new("magick");
     apply_resource_limits(&mut command);
@@ -146,16 +143,16 @@ async fn normalize(source: &[u8]) -> Result<Vec<u8>, ProviderError> {
         .output();
     let result = tokio::time::timeout(remaining_preprocess_time(deadline)?, command)
         .await
-        .map_err(|_| permanent("image preprocessing exceeded 30 seconds"))?
-        .map_err(|error| recoverable(format!("ImageMagick could not start: {error}")))?;
+        .map_err(|_| item_failure("image preprocessing exceeded 30 seconds"))?
+        .map_err(|error| failure(Failure::Admin, format!("ImageMagick could not start: {error}")))?;
     if !result.status.success() {
-        return Err(permanent("ImageMagick rejected the image"));
+        return Err(item_failure("ImageMagick rejected the image"));
     }
     let bytes = tokio::fs::read(&output)
         .await
-        .map_err(|error| permanent(&format!("normalized image could not be read: {error}")))?;
+        .map_err(|error| item_failure(&format!("normalized image could not be read: {error}")))?;
     if bytes.len() > MAX_OUTPUT_BYTES {
-        return Err(permanent("normalized image exceeds the output-byte limit"));
+        return Err(item_failure("normalized image exceeds the output-byte limit"));
     }
     Ok(bytes)
 }
@@ -197,24 +194,24 @@ async fn inspect_dimensions(input: &Path, deadline: Instant) -> Result<(), Provi
         .output();
     let result = tokio::time::timeout(remaining_preprocess_time(deadline)?, command)
         .await
-        .map_err(|_| permanent("image preprocessing exceeded 30 seconds"))?
-        .map_err(|error| recoverable(format!("ImageMagick could not start: {error}")))?;
+        .map_err(|_| item_failure("image preprocessing exceeded 30 seconds"))?
+        .map_err(|error| failure(Failure::Admin, format!("ImageMagick could not start: {error}")))?;
     if !result.status.success() {
-        return Err(permanent("ImageMagick rejected the image header"));
+        return Err(item_failure("ImageMagick rejected the image header"));
     }
     let dimensions = String::from_utf8(result.stdout)
-        .map_err(|_| permanent("ImageMagick returned invalid image dimensions"))?;
+        .map_err(|_| item_failure("ImageMagick returned invalid image dimensions"))?;
     let mut parts = dimensions.split_whitespace();
     let width = parts
         .next()
         .and_then(|value| value.parse::<u64>().ok())
-        .ok_or_else(|| permanent("ImageMagick returned invalid image dimensions"))?;
+        .ok_or_else(|| item_failure("ImageMagick returned invalid image dimensions"))?;
     let height = parts
         .next()
         .and_then(|value| value.parse::<u64>().ok())
-        .ok_or_else(|| permanent("ImageMagick returned invalid image dimensions"))?;
+        .ok_or_else(|| item_failure("ImageMagick returned invalid image dimensions"))?;
     if parts.next().is_some() {
-        return Err(permanent("ImageMagick returned invalid image dimensions"));
+        return Err(item_failure("ImageMagick returned invalid image dimensions"));
     }
     validate_dimensions(width, height)
 }
@@ -223,7 +220,7 @@ fn remaining_preprocess_time(deadline: Instant) -> Result<Duration, ProviderErro
     deadline
         .checked_duration_since(Instant::now())
         .filter(|remaining| !remaining.is_zero())
-        .ok_or_else(|| permanent("image preprocessing exceeded 30 seconds"))
+        .ok_or_else(|| item_failure("image preprocessing exceeded 30 seconds"))
 }
 
 fn validate_dimensions(width: u64, height: u64) -> Result<(), ProviderError> {
@@ -234,25 +231,17 @@ fn validate_dimensions(width: u64, height: u64) -> Result<(), ProviderError> {
         || height > MAX_DIMENSION
         || pixels.is_none_or(|value| value > MAX_DECODED_PIXELS)
     {
-        return Err(permanent("image exceeds the decoded-pixel limit"));
+        return Err(item_failure("image exceeds the decoded-pixel limit"));
     }
     Ok(())
 }
 
-fn permanent(message: &str) -> ProviderError {
-    ProviderError {
-        retryable: false,
-        retry_after: None,
-        message: message.to_owned(),
-    }
+fn item_failure(message: &str) -> ProviderError {
+    failure(Failure::Item, message)
 }
 
 fn retryable_body_failure(message: String) -> ProviderError {
-    ProviderError {
-        retryable: true,
-        retry_after: None,
-        message,
-    }
+    failure(Failure::Temporary, message)
 }
 
 pub fn supported(mime_type: &str, path: &Path) -> bool {
@@ -351,27 +340,19 @@ mod tests {
     }
 
     #[test]
-    fn malformed_complete_image_response_is_permanent() {
+    fn malformed_complete_image_response_is_an_item_failure() {
         let error = serde_json::from_slice::<serde_json::Value>(b"{not json")
-            .map_err(|error| permanent(&format!("invalid image description response: {error}")))
+            .map_err(|error| item_failure(&format!("invalid image description response: {error}")))
             .unwrap_err();
 
-        assert!(!error.retryable);
+        assert_eq!(error.failure, Failure::Item);
     }
 
     #[test]
-    fn corrected_image_tool_configuration_remains_retryable() {
-        let error = recoverable("ImageMagick could not start");
-
-        assert!(error.retryable);
-        assert!(!permanent("image exceeds the decoded-pixel limit").retryable);
-    }
-
-    #[test]
-    fn interrupted_image_response_body_is_retryable() {
+    fn interrupted_image_response_body_is_temporary() {
         let error = retryable_body_failure("response ended early".to_owned());
 
-        assert!(error.retryable);
+        assert_eq!(error.failure, Failure::Temporary);
     }
 
     #[tokio::test]
