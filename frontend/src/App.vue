@@ -70,6 +70,10 @@
                             <v-icon size="small">{{ mdiBell }}</v-icon>
                         </template>
                     </v-list-item>
+                    <IndexingStopsItem
+                        v-if="indexingStops.length > 0"
+                        v-bind:stops="indexingStops"
+                    />
                     <v-menu location="right">
                         <template v-slot:activator="{ props }">
                             <v-list-item
@@ -312,6 +316,11 @@
                         <v-icon size="small">{{ mdiBell }}</v-icon>
                     </template>
                 </v-list-item>
+                <IndexingStopsItem
+                    v-if="indexingStops.length > 0"
+                    v-bind:stops="indexingStops"
+                    location="bottom"
+                />
                 <v-menu location="right">
                     <template v-slot:activator="{ props }">
                         <v-list-item
@@ -513,6 +522,16 @@
         >
             <v-app-bar-nav-icon v-on:click="mobileDrawer = !mobileDrawer" />
             <v-toolbar-title>{{ $route.name?.replace(/With.*$/, '') ?? '' }}</v-toolbar-title>
+            <!-- The drawer is hidden on a phone, so point at the notice it holds. -->
+            <v-btn
+                v-if="indexingStops.length > 0"
+                icon
+                color="error"
+                title="Indexing stopped"
+                v-on:click="mobileDrawer = true"
+            >
+                <v-icon>{{ mdiAlertCircleOutline }}</v-icon>
+            </v-btn>
         </v-app-bar>
 
         <input type="file" multiple class="d-none" ref="fileInputEl">
@@ -558,9 +577,13 @@
 </template>
 
 <script lang="ts" setup>
+/* global document */
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 
+import { useRoute } from 'vue-router';
+
 import {
+    mdiAlertCircleOutline,
     mdiAutorenew,
     mdiBell,
     mdiBroom,
@@ -590,13 +613,15 @@ import {
 import { useAppStore } from '@/stores/app';
 
 import { loadConfigValue, saveConfigValue } from '@/config';
-import type { Claim, ListEntry2, UploadEntry } from '@/api';
+import type { Claim, IndexingStop, ListEntry2, UploadEntry } from '@/api';
+import IndexingStopsItem from '@/components/IndexingStopsItem.vue';
 import { useFilesStore } from '@/stores/files';
 import { jwtDecode } from 'jwt-decode';
 
 // Composables
 const appStore = useAppStore();
 const fileStore = useFilesStore();
+const route = useRoute();
 
 // Reactive states
 const notificationPermission = ref<'granted'| 'denied' | 'default'>('Notification' in window ? Notification.permission : 'denied');
@@ -608,6 +633,7 @@ const templates = ref([] as string[]);
 const uploadList = ref([] as UploadEntry[]);
 const uploadMenuIsVisible = ref(false);
 const errors = ref([]);
+const indexingStops = ref<IndexingStop[]>([]);
 
 // Template Refs
 const app = ref(null);
@@ -723,6 +749,8 @@ onMounted(() => {
     }
 
     loadTemplates();
+    refreshIndexingStops();
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     // Handle drag and drop of files
     // TODO v-onで書き直す
@@ -766,6 +794,7 @@ onMounted(() => {
 
 onUnmounted(() => {
     unloadCustomCss();
+    document.removeEventListener('visibilitychange', onVisibilityChange);
 });
 
 // Methods
@@ -785,6 +814,28 @@ async function requestNotificationPermission() {
 
 function tokenExpired(callback: () => void) {
     appStore.invalidateToken(callback);
+}
+
+// A stop lasts until moried restarts, so noticing it the next time the app is looked at is soon
+// enough. Polling would keep an idle tab talking to the server for a state that rarely changes.
+async function refreshIndexingStops(): Promise<void> {
+    if (!appStore.hasToken) {
+        indexingStops.value = [];
+        return;
+    }
+    try {
+        const response = await fileStore.indexing();
+        indexingStops.value = Array.isArray(response?.stopped) ? response.stopped : [];
+    }
+    catch {
+        // A failed check says nothing about indexing, so keep showing what was last known.
+    }
+}
+
+function onVisibilityChange() {
+    if (document.visibilityState === 'visible') {
+        refreshIndexingStops();
+    }
 }
 
 function loadTemplates() {
@@ -956,6 +1007,14 @@ function copyToClipboard(text: string) {
 // Watchers
 watch(miniMainSidebar, (newMiniMainSidebar: boolean) => {
   saveConfigValue("mini-main-sidebar", newMiniMainSidebar);
+});
+
+watch(() => appStore.hasToken, () => {
+    refreshIndexingStops();
+});
+
+watch(() => route.name, () => {
+    refreshIndexingStops();
 });
 </script>
 

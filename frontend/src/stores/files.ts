@@ -3,7 +3,13 @@ import type { ShallowRef } from 'vue';
 import { defineStore } from 'pinia';
 
 import * as api from '@/api';
-import type { ListEntry2, SearchRequest, SearchResponse, SearchStatusResponse } from '@/api';
+import type {
+    IndexingResponse,
+    ListEntry2,
+    SearchRequest,
+    SearchResponse,
+    SearchStatusResponse,
+} from '@/api';
 import {
     applyEntryDelta,
     clearEntries,
@@ -318,6 +324,10 @@ export const useFilesStore = defineStore('files', () => {
         return api.getSearchStatus(signal);
     }
 
+    function indexing(signal?: AbortSignal): Promise<IndexingResponse> {
+        return api.getIndexing(signal);
+    }
+
     // Whether a path is taken, asked of the repository rather than of the listing so that a
     // stale listing cannot report a free path as taken or vice versa.
     function exists(path: string): Promise<boolean> {
@@ -343,6 +353,7 @@ export const useFilesStore = defineStore('files', () => {
         upload,
         search,
         searchStatus,
+        indexing,
         exists,
         invalidate,
         clear,

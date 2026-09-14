@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use axum::{
@@ -27,11 +27,11 @@ use sha1::{Digest, Sha1};
 use sqlx::{sqlite::SqliteRow, Row, SqlitePool};
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::Command;
-use tokio::sync::{Mutex as AsyncMutex, MutexGuard};
+use tokio::sync::{watch, Mutex as AsyncMutex, MutexGuard, Notify};
 
 use crate::models::AppState;
 use lexical::{IndexInput, LexicalHit, LexicalIndex};
-use provider::{EmbeddingProvider, OpenAiEmbeddingProvider, ProviderError};
+use provider::{EmbeddingProvider, Failure, OpenAiEmbeddingProvider, ProviderError};
 use query::{parse, ParsedQuery, SearchMode};
 
 const SEARCH_WAIT: Duration = Duration::from_millis(1200);
@@ -39,6 +39,11 @@ const EMBEDDING_TEMPLATE: &str = "mory-passage-v3:chunker-500-800-80-v3";
 const MAX_EMBEDDING_INPUT_BYTES: usize = 8_192;
 const MAX_EMBEDDING_REQUEST_BYTES: usize = 300_000;
 const MAX_GREP_RECORD_BYTES: usize = 64 * 1024;
+// How soon background work tries again after standing aside for a search, or after a failure
+// the provider pause does not cover. It is the interval the loop used to poll at.
+const BACKGROUND_RETRY_DELAY: Duration = Duration::from_secs(2);
+const PROVIDER_BACKOFF: Duration = Duration::from_secs(30);
+const MAX_PROVIDER_BACKOFF: Duration = Duration::from_secs(60 * 60);
 const FAILED_IMAGE_COUNT_SQL: &str =
     "SELECT count(DISTINCT d.blob_id) FROM search_image_description d
      WHERE d.model = ? AND d.prompt_version = ? AND d.preprocess = ? AND d.detail = ?
@@ -152,7 +157,12 @@ pub struct SearchManager {
     provider_gate: AsyncMutex<()>,
     interactive_waiters: AtomicUsize,
     vision_client: reqwest::Client,
+    // Separate because OpenAI rate-limits each model on its own, so a limited vision model must
+    // not hold back embeddings. An outage or an exhausted quota refuses both, and both back off.
+    embedding_backoff: ProviderBackoff,
+    image_backoff: ProviderBackoff,
     force_rebuild: AtomicBool,
+    rebuild_requested: Notify,
 }
 
 struct InteractiveWaiter<'a> {
@@ -223,7 +233,10 @@ impl SearchManager {
             provider_gate: AsyncMutex::new(()),
             interactive_waiters: AtomicUsize::new(0),
             vision_client,
+            embedding_backoff: ProviderBackoff::new("Embedding"),
+            image_backoff: ProviderBackoff::new("Image description"),
             force_rebuild: AtomicBool::new(false),
+            rebuild_requested: Notify::new(),
         }))
     }
 
@@ -231,31 +244,40 @@ impl SearchManager {
         self.reconcile_current().await
     }
 
-    pub fn spawn(self: &Arc<Self>) {
+    /// Runs indexing in the background whenever there may be something to do.
+    ///
+    /// `listing` announces each sync of the entry cache, the only thing that changes what there is
+    /// to index. Between those, the loop sleeps until a retry or a provider pause is due, or
+    /// until a search asks for a rebuild, instead of rereading the listing every few seconds.
+    pub fn spawn(self: &Arc<Self>, mut listing: watch::Receiver<Option<Oid>>) {
         let manager = self.clone();
         tokio::spawn(async move {
-            let mut delay = Duration::from_secs(1);
+            // The first pass reads the listing as it stands, so any earlier sync is covered.
+            listing.mark_unchanged();
+            let mut failure_delay = Duration::from_secs(1);
             loop {
-                tokio::time::sleep(delay).await;
-                match manager.reconcile_current().await {
+                let wake = match manager.reconcile_current().await {
                     Ok(()) => {
-                        delay = Duration::from_secs(2);
-                        if manager.config.semantic_enabled
-                            && manager.interactive_waiters.load(Ordering::SeqCst) == 0
-                        {
-                            if let Err(error) = manager.ingest_embedding_batch().await {
+                        failure_delay = Duration::from_secs(1);
+                        let embeddings =
+                            manager.ingest_embedding_batch().await.unwrap_or_else(|error| {
                                 tracing::warn!("Semantic indexing batch failed: {error:?}");
-                            }
-                            if let Err(error) = manager.ingest_image_description().await {
+                                Wake::After(BACKGROUND_RETRY_DELAY)
+                            });
+                        let images =
+                            manager.ingest_image_description().await.unwrap_or_else(|error| {
                                 tracing::warn!("Image description indexing failed: {error:?}");
-                            }
-                        }
+                                Wake::After(BACKGROUND_RETRY_DELAY)
+                            });
+                        embeddings.min(images)
                     },
                     Err(error) => {
                         tracing::warn!("Search index reconciliation failed: {error:?}");
-                        delay = (delay * 2).min(Duration::from_secs(30));
+                        failure_delay = (failure_delay * 2).min(Duration::from_secs(30));
+                        Wake::After(failure_delay)
                     },
-                }
+                };
+                wait_for_work(wake, &mut listing, &manager.rebuild_requested).await;
             }
         });
     }
@@ -449,6 +471,19 @@ impl SearchManager {
             .is_some_and(|index| index.generation == wanted)
     }
 
+    /// Indexing work that has stopped until moried restarts, and why.
+    fn indexing_stops(&self) -> Vec<IndexingStop> {
+        [
+            ("embeddings", &self.embedding_backoff),
+            ("image_descriptions", &self.image_backoff),
+        ]
+        .into_iter()
+        .filter_map(|(work, backoff)| {
+            backoff.stopped().map(|message| IndexingStop { work, message })
+        })
+        .collect()
+    }
+
     fn lexical_status(&self) -> IndexStatus {
         let status = self.status.read().unwrap().clone();
         IndexStatus {
@@ -488,6 +523,7 @@ impl SearchManager {
             Ok(hits) => Ok(hits),
             Err(error) => {
                 self.force_rebuild.store(true, Ordering::SeqCst);
+                self.rebuild_requested.notify_one();
                 *self.status.write().unwrap() = ManagerStatus {
                     state: "error".to_owned(),
                     indexed_commit: Some(lexical.generation.clone()),
@@ -549,51 +585,50 @@ impl SearchManager {
             .collect())
     }
 
-    async fn ingest_image_description(&self) -> Result<()> {
-        if !self.config.semantic_enabled || self.interactive_waiters.load(Ordering::SeqCst) > 0 {
-            return Ok(());
-        }
-        let Some(model) = self.config.vision_model.clone() else {
-            return Ok(());
+    async fn ingest_image_description(&self) -> Result<Wake> {
+        let Some(model) = self
+            .config
+            .vision_model
+            .clone()
+            .filter(|_| self.config.semantic_enabled)
+        else {
+            return Ok(Wake::Never);
         };
+        if self.interactive_waiters.load(Ordering::SeqCst) > 0 {
+            return Ok(Wake::After(BACKGROUND_RETRY_DELAY));
+        }
+        if let Some(wake) = self.image_backoff.blocked() {
+            return Ok(wake);
+        }
         let snapshot = SearchSnapshot::read(&self.cache_db).await?;
         let now = Utc::now().timestamp();
-        let mut seen = HashSet::new();
-        let mut selected = None;
-        for entry in &snapshot.entries {
-            if entry.path == ".mory"
-                || entry.path.starts_with(".mory/")
-                || !image::supported(&entry.mime_type, std::path::Path::new(&entry.path))
-                || !seen.insert(entry.blob_id.clone())
-            {
-                continue;
-            }
-            let cached = sqlx::query(
-                "SELECT state, next_retry FROM search_image_description
-                 WHERE blob_id = ? AND model = ? AND prompt_version = ?
-                   AND preprocess = ? AND detail = ?;",
+        // One query for every image rather than one per image: a library of a few hundred images
+        // made those lookups nearly all of the database traffic of a pass.
+        let attempts = sqlx::query(
+            "SELECT blob_id, state, next_retry FROM search_image_description
+             WHERE model = ? AND prompt_version = ? AND preprocess = ? AND detail = ?;",
+        )
+        .bind(&model)
+        .bind(image::PROMPT_VERSION)
+        .bind(image::PREPROCESS_VERSION)
+        .bind(image::DETAIL)
+        .map(|row: SqliteRow| {
+            (
+                row.get::<String, _>("blob_id"),
+                ImageAttempt {
+                    state: row.get("state"),
+                    next_retry: row.get("next_retry"),
+                },
             )
-            .bind(&entry.blob_id)
-            .bind(&model)
-            .bind(image::PROMPT_VERSION)
-            .bind(image::PREPROCESS_VERSION)
-            .bind(image::DETAIL)
-            .fetch_optional(&self.cache_db)
-            .await?;
-            let eligible = match cached {
-                None => true,
-                Some(row) if row.get::<String, _>("state") == "pending" => row
-                    .try_get::<i64, _>("next_retry")
-                    .map_or(true, |retry| retry <= now),
-                _ => false,
-            };
-            if eligible {
-                selected = Some(entry.clone());
-                break;
-            }
-        }
-        let Some(selected) = selected else {
-            return Ok(());
+        })
+        .fetch_all(&self.cache_db)
+        .await?
+        .into_iter()
+        .collect::<HashMap<_, _>>();
+        let selected = match next_image(&snapshot.entries, &attempts, now) {
+            NextImage::Due(entry) => entry.clone(),
+            NextImage::RetryAt(retry) => return Ok(Wake::at(retry, now)),
+            NextImage::Idle => return Ok(Wake::Never),
         };
         let source = {
             let repo = self.repo.lock().unwrap();
@@ -604,10 +639,11 @@ impl SearchManager {
             source
         };
         let Some(gate) = try_background_gate(&self.provider_gate, &self.interactive_waiters) else {
-            return Ok(());
+            return Ok(Wake::After(BACKGROUND_RETRY_DELAY));
         };
         let result = image::describe(&self.vision_client, &model, &source).await;
         drop(gate);
+        self.image_backoff.record(&result);
         // A delayed response may outlive a delete. A rename is safe because the blob remains in
         // the selected generation and the next rebuild attaches the cached description to its new path.
         let current = SearchSnapshot::read(&self.cache_db).await?;
@@ -616,8 +652,9 @@ impl SearchManager {
             .iter()
             .any(|entry| entry.blob_id == selected.blob_id)
         {
-            return Ok(());
+            return Ok(Wake::Now);
         }
+        let wake = wake_after_attempt(&result, &self.image_backoff);
         match result {
             Ok(description) => {
                 sqlx::query(
@@ -644,7 +681,7 @@ impl SearchManager {
             },
             Err(error) => {
                 tracing::warn!("Image description provider failure: {error}");
-                let state = if error.retryable { "pending" } else { "failed" };
+                let state = if error.retryable() { "pending" } else { "failed" };
                 let (last_attempt, next_retry) = failure_timestamps(&error);
                 sqlx::query(
                     "INSERT INTO search_image_description (
@@ -668,12 +705,18 @@ impl SearchManager {
                 .await?;
             },
         }
-        Ok(())
+        Ok(wake)
     }
 
-    async fn ingest_embedding_batch(&self) -> Result<()> {
-        if !self.config.semantic_enabled || self.interactive_waiters.load(Ordering::SeqCst) > 0 {
-            return Ok(());
+    async fn ingest_embedding_batch(&self) -> Result<Wake> {
+        if !self.config.semantic_enabled {
+            return Ok(Wake::Never);
+        }
+        if self.interactive_waiters.load(Ordering::SeqCst) > 0 {
+            return Ok(Wake::After(BACKGROUND_RETRY_DELAY));
+        }
+        if let Some(wake) = self.embedding_backoff.blocked() {
+            return Ok(wake);
         }
         let now = Utc::now().timestamp();
         let pending = sqlx::query(
@@ -699,7 +742,19 @@ impl SearchManager {
         .await?;
         if pending.is_empty() {
             self.garbage_collect_embeddings().await?;
-            return Ok(());
+            // Every passage still waiting has a retry time after `now`, or it would be pending.
+            let retry = sqlx::query_scalar::<_, Option<i64>>(
+                "SELECT min(e.next_retry) FROM search_embedding e
+                 JOIN search_passage p ON p.passage_id = e.passage_id AND p.text_hash = e.text_hash
+                 WHERE e.model = ? AND e.dimensions = ? AND e.template = ?
+                   AND e.state = 'pending';",
+            )
+            .bind(&self.config.embedding_model)
+            .bind(self.config.embedding_dimensions as i64)
+            .bind(EMBEDDING_TEMPLATE)
+            .fetch_one(&self.cache_db)
+            .await?;
+            return Ok(retry.map_or(Wake::Never, |retry| Wake::at(retry, now)));
         }
         // UTF-8 bytes conservatively bound model tokens without coupling the cache to a provider
         // tokenizer implementation.
@@ -717,7 +772,7 @@ impl SearchManager {
             .collect::<Vec<_>>();
         let pending = &pending[..input.len()];
         let Some(_gate) = try_background_gate(&self.provider_gate, &self.interactive_waiters) else {
-            return Ok(());
+            return Ok(Wake::After(BACKGROUND_RETRY_DELAY));
         };
         let response = self
             .provider
@@ -728,6 +783,7 @@ impl SearchManager {
             )
             .await;
         drop(_gate);
+        self.embedding_backoff.record(&response);
         let response = response.and_then(|vectors| {
             validate_embedding_vectors(
                 vectors,
@@ -735,6 +791,7 @@ impl SearchManager {
                 self.config.embedding_dimensions,
             )
         });
+        let wake = wake_after_attempt(&response, &self.embedding_backoff);
         match response {
             Ok(vectors) => {
                 let mut transaction = self.cache_db_writer.begin().await?;
@@ -794,7 +851,7 @@ impl SearchManager {
             },
             Err(error) => {
                 tracing::warn!("Embedding ingestion provider failure: {error}");
-                let state = if error.retryable { "pending" } else { "failed" };
+                let state = if error.retryable() { "pending" } else { "failed" };
                 let (last_attempt, next_retry) = failure_timestamps(&error);
                 let mut transaction = self.cache_db_writer.begin().await?;
                 for item in pending {
@@ -823,7 +880,7 @@ impl SearchManager {
                 transaction.commit().await?;
             },
         }
-        Ok(())
+        Ok(wake)
     }
 
     async fn embed_interactive(&self, text: &str) -> std::result::Result<Vec<f32>, ProviderError> {
@@ -838,21 +895,15 @@ impl SearchManager {
             )
             .await;
         drop(gate);
+        // A search is never held back by the pause, since the person asking is waiting on it,
+        // but what it learns about the limit applies to indexing too.
+        self.embedding_backoff.record(&result);
         let mut vectors = result?;
         if vectors.len() != 1 {
-            return Err(ProviderError {
-                retryable: false,
-                retry_after: None,
-                message: "embedding response count mismatch".to_owned(),
-            });
+            return Err(provider::failure(Failure::Item, "embedding response count mismatch"));
         }
-        normalize_vector(vectors.remove(0), self.config.embedding_dimensions).map_err(|error| {
-            ProviderError {
-                retryable: false,
-                retry_after: None,
-                message: error.to_string(),
-            }
-        })
+        normalize_vector(vectors.remove(0), self.config.embedding_dimensions)
+            .map_err(|error| provider::failure(Failure::Item, error.to_string()))
     }
 
     async fn search_semantic(
@@ -1149,12 +1200,220 @@ fn try_background_gate<'a>(
     Some(guard)
 }
 
+struct ImageAttempt {
+    state: String,
+    next_retry: Option<i64>,
+}
+
+enum NextImage<'a> {
+    /// Never described, or its retry is due.
+    Due(&'a SnapshotEntry),
+    /// Nothing is due; the earliest retry comes at this Unix time.
+    RetryAt(i64),
+    /// Every image is described or has failed for good.
+    Idle,
+}
+
+/// The first image in the listing that can be described now, or else when one can be.
+fn next_image<'a>(
+    entries: &'a [SnapshotEntry],
+    attempts: &HashMap<String, ImageAttempt>,
+    now: i64,
+) -> NextImage<'a> {
+    let mut earliest_retry: Option<i64> = None;
+    for entry in entries {
+        if entry.path == ".mory"
+            || entry.path.starts_with(".mory/")
+            || !image::supported(&entry.mime_type, std::path::Path::new(&entry.path))
+        {
+            continue;
+        }
+        match attempts.get(&entry.blob_id) {
+            None => return NextImage::Due(entry),
+            Some(attempt) if attempt.state == "pending" => match attempt.next_retry {
+                Some(retry) if retry > now => {
+                    earliest_retry = Some(earliest_retry.map_or(retry, |at| at.min(retry)));
+                },
+                _ => return NextImage::Due(entry),
+            },
+            Some(_) => {},
+        }
+    }
+    earliest_retry.map_or(NextImage::Idle, NextImage::RetryAt)
+}
+
+/// When the background loop should run its next pass. The variants are ordered soonest first,
+/// so the earliest of several is their `min`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Wake {
+    /// The last pass made progress, and more work may be waiting.
+    Now,
+    After(Duration),
+    /// Only a sync of the listing, or a search asking for a rebuild, can bring more work.
+    Never,
+}
+
+impl Wake {
+    /// At a Unix time in the database's resolution of whole seconds.
+    fn at(timestamp: i64, now: i64) -> Self {
+        Self::After(Duration::from_secs(
+            u64::try_from(timestamp.saturating_sub(now)).unwrap_or(0),
+        ))
+    }
+}
+
+/// After a success more work may be waiting, so go on at once. After a failure, wait out the
+/// provider's pause or stop, or a short delay for a failure of the item alone.
+fn wake_after_attempt<T>(
+    result: &std::result::Result<T, ProviderError>,
+    backoff: &ProviderBackoff,
+) -> Wake {
+    match result {
+        Ok(_) => Wake::Now,
+        Err(_) => backoff.blocked().unwrap_or(Wake::After(BACKGROUND_RETRY_DELAY)),
+    }
+}
+
+/// Sleeps until `wake` comes due, the listing is synced, or a rebuild is requested.
+async fn wait_for_work(
+    wake: Wake,
+    listing: &mut watch::Receiver<Option<Oid>>,
+    rebuild_requested: &Notify,
+) {
+    let delay = match wake {
+        Wake::Now => return,
+        Wake::After(delay) => Some(delay),
+        Wake::Never => None,
+    };
+    let sleep = async {
+        match delay {
+            Some(delay) => tokio::time::sleep(delay).await,
+            None => std::future::pending().await,
+        }
+    };
+    // A closed channel would report a change on every call and spin the loop, so stop listening
+    // to it. Only shutdown drops the sender.
+    let listing_open = listing.has_changed().is_ok();
+    tokio::select! {
+        () = sleep => {},
+        _ = listing.changed(), if listing_open => {},
+        () = rebuild_requested.notified() => {},
+    }
+}
+
+/// Holds back background requests to one provider: pauses them after a temporary failure, and
+/// stops them until moried restarts after a failure only an admin can fix.
+///
+/// Each item's `next_retry` cannot do this alone. Such a failure belongs to the provider, not the
+/// item, so skipping the item that just failed only sends the next one in a backlog into it.
+struct ProviderBackoff {
+    name: &'static str,
+    state: std::sync::Mutex<BackoffState>,
+}
+
+#[derive(Default)]
+struct BackoffState {
+    paused_until: Option<Instant>,
+    consecutive: u32,
+    stopped: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum Hold {
+    Pause(Duration),
+    Stop,
+}
+
+impl ProviderBackoff {
+    fn new(name: &'static str) -> Self {
+        Self {
+            name,
+            state: std::sync::Mutex::default(),
+        }
+    }
+
+    /// Why requests have stopped until restart, if they have.
+    fn stopped(&self) -> Option<String> {
+        self.state.lock().unwrap().stopped.clone()
+    }
+
+    /// When background requests may go out again, if not now.
+    fn blocked(&self) -> Option<Wake> {
+        self.blocked_at(Instant::now())
+    }
+
+    fn blocked_at(&self, now: Instant) -> Option<Wake> {
+        let state = self.state.lock().unwrap();
+        if state.stopped.is_some() {
+            return Some(Wake::Never);
+        }
+        state
+            .paused_until
+            .and_then(|until| until.checked_duration_since(now))
+            .filter(|remaining| !remaining.is_zero())
+            .map(Wake::After)
+    }
+
+    fn record<T>(&self, result: &std::result::Result<T, ProviderError>) {
+        match (self.record_at(result, Instant::now()), result) {
+            (Some(Hold::Pause(pause)), _) => {
+                tracing::warn!(
+                    "{} provider is failing; pausing background requests for {}s",
+                    self.name,
+                    pause.as_secs(),
+                );
+            },
+            (Some(Hold::Stop), Err(error)) => {
+                tracing::error!("{} requests stopped until moried restarts: {error}", self.name);
+            },
+            _ => {},
+        }
+    }
+
+    fn record_at<T>(
+        &self,
+        result: &std::result::Result<T, ProviderError>,
+        now: Instant,
+    ) -> Option<Hold> {
+        let mut state = self.state.lock().unwrap();
+        let error = match result {
+            Ok(_) => {
+                // Only a restart ends a stop, so what an admin was told stays true until they act.
+                state.paused_until = None;
+                state.consecutive = 0;
+                return None;
+            },
+            Err(error) => error,
+        };
+        match error.failure {
+            Failure::Temporary => {
+                state.consecutive = state.consecutive.saturating_add(1);
+                // A rate limit can outlast a short pause, so keep doubling instead of probing at
+                // a fixed interval.
+                let pause = PROVIDER_BACKOFF
+                    .saturating_mul(2u32.saturating_pow(state.consecutive - 1))
+                    .min(MAX_PROVIDER_BACKOFF)
+                    .max(error.retry_after.unwrap_or_default());
+                state.paused_until = now.checked_add(pause).or(Some(now + MAX_PROVIDER_BACKOFF));
+                Some(Hold::Pause(pause))
+            },
+            Failure::Admin if state.stopped.is_none() => {
+                state.stopped = Some(error.message.clone());
+                Some(Hold::Stop)
+            },
+            // Already stopped, or a failure of the item alone, which says nothing about the
+            // provider either way.
+            Failure::Admin | Failure::Item => None,
+        }
+    }
+}
+
 fn failure_timestamps(error: &ProviderError) -> (i64, Option<i64>) {
     failure_timestamps_at(error, Utc::now().timestamp())
 }
 
 fn failure_timestamps_at(error: &ProviderError, completed_at: i64) -> (i64, Option<i64>) {
-    let next_retry = error.retryable.then(|| {
+    let next_retry = error.retryable().then(|| {
         let retry_seconds = error
             .retry_after
             .unwrap_or(Duration::from_secs(30))
@@ -1170,11 +1429,7 @@ fn validate_embedding_vectors(
     dimensions: usize,
 ) -> std::result::Result<Vec<Result<Vec<f32>>>, ProviderError> {
     if vectors.len() != expected {
-        return Err(ProviderError {
-            retryable: false,
-            retry_after: None,
-            message: "embedding response count mismatch".to_owned(),
-        });
+        return Err(provider::failure(Failure::Item, "embedding response count mismatch"));
     }
     Ok(vectors
         .into_iter()
@@ -1505,6 +1760,17 @@ pub struct SearchResponse {
 }
 
 #[derive(Debug, Serialize)]
+pub struct IndexingResponse {
+    stopped: Vec<IndexingStop>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct IndexingStop {
+    work: &'static str,
+    message: String,
+}
+
+#[derive(Debug, Serialize)]
 pub struct SearchStatusResponse {
     commit: String,
     head: String,
@@ -1638,6 +1904,18 @@ pub async fn get_status(extract::State(state): extract::State<AppState>) -> Resp
         semantic,
     })
     .into_response()
+}
+
+/// `GET /v2/search/indexing`
+///
+/// What indexing has stopped for until moried restarts. It reads only memory, so the web app can
+/// ask whenever it is looked at again without touching the database or waiting for a sync.
+pub async fn get_indexing(
+    extract::State(state): extract::State<AppState>,
+) -> Json<IndexingResponse> {
+    Json(IndexingResponse {
+        stopped: state.search.indexing_stops(),
+    })
 }
 
 /// `POST /v2/search`
@@ -2536,7 +2814,10 @@ mod tests {
             provider_gate: AsyncMutex::new(()),
             interactive_waiters: AtomicUsize::new(0),
             vision_client: reqwest::Client::new(),
+            embedding_backoff: ProviderBackoff::new("Embedding"),
+            image_backoff: ProviderBackoff::new("Image description"),
             force_rebuild: AtomicBool::new(false),
+            rebuild_requested: Notify::new(),
         };
 
         let status = manager.semantic_status_for(selected).await.unwrap();
@@ -2806,7 +3087,7 @@ mod tests {
     #[test]
     fn retry_after_starts_when_the_failed_response_finishes() {
         let error = ProviderError {
-            retryable: true,
+            failure: Failure::Temporary,
             retry_after: Some(Duration::from_secs(10)),
             message: "rate limited".to_owned(),
         };
@@ -2814,6 +3095,379 @@ mod tests {
         // The request began at 100 but did not finish until 120. Scheduling from the request start
         // would produce an already-expired deadline of 110.
         assert_eq!(failure_timestamps_at(&error, 120), (120, Some(130)));
+    }
+
+    fn image_entry(path: &str, blob_id: &str, mime_type: &str) -> SnapshotEntry {
+        SnapshotEntry {
+            path: path.to_owned(),
+            blob_id: blob_id.to_owned(),
+            mime_type: mime_type.to_owned(),
+            title: None,
+            metadata: "{}".to_owned(),
+        }
+    }
+
+    fn image_attempt(state: &str, next_retry: Option<i64>) -> ImageAttempt {
+        ImageAttempt {
+            state: state.to_owned(),
+            next_retry,
+        }
+    }
+
+    #[test]
+    fn next_image_finds_the_first_due_image_or_the_earliest_retry() {
+        let entries = [
+            image_entry(".mory/logo.png", "config", "image/png"),
+            image_entry("drawing.svg", "vector", "image/svg+xml"),
+            image_entry("ready.png", "ready", "image/png"),
+            image_entry("failed.png", "failed", "image/png"),
+            image_entry("later.png", "later", "image/png"),
+            image_entry("waiting.png", "waiting", "image/png"),
+            image_entry("due.png", "due", "image/png"),
+            image_entry("new.png", "new", "image/png"),
+        ];
+        let attempts = HashMap::from([
+            ("ready".to_owned(), image_attempt("ready", None)),
+            ("failed".to_owned(), image_attempt("failed", None)),
+            ("later".to_owned(), image_attempt("pending", Some(150))),
+            ("waiting".to_owned(), image_attempt("pending", Some(101))),
+            ("due".to_owned(), image_attempt("pending", Some(100))),
+        ]);
+
+        let next = |entries: &[SnapshotEntry], now| match next_image(entries, &attempts, now) {
+            NextImage::Due(entry) => format!("due {}", entry.path),
+            NextImage::RetryAt(retry) => format!("retry at {retry}"),
+            NextImage::Idle => "idle".to_owned(),
+        };
+        assert_eq!(next(&entries, 100), "due due.png");
+        assert_eq!(next(&entries, 99), "due new.png");
+        assert_eq!(next(&entries[..6], 100), "retry at 101");
+        assert_eq!(next(&entries[..6], 101), "due waiting.png");
+        assert_eq!(next(&entries[..4], 100), "idle");
+    }
+
+    #[test]
+    fn the_soonest_wake_wins() {
+        let seconds = Duration::from_secs;
+        assert_eq!(Wake::Never.min(Wake::After(seconds(5))), Wake::After(seconds(5)));
+        assert_eq!(Wake::After(seconds(5)).min(Wake::After(seconds(2))), Wake::After(seconds(2)));
+        assert_eq!(Wake::After(Duration::ZERO).min(Wake::Now), Wake::Now);
+        assert_eq!(Wake::at(130, 100), Wake::After(seconds(30)));
+        assert_eq!(Wake::at(90, 100), Wake::After(Duration::ZERO));
+    }
+
+    #[tokio::test]
+    async fn background_work_waits_for_a_sync_a_rebuild_or_its_time() {
+        async fn waits(
+            wake: Wake,
+            listing: &mut watch::Receiver<Option<Oid>>,
+            rebuild_requested: &Notify,
+        ) -> bool {
+            let wait = wait_for_work(wake, listing, rebuild_requested);
+            tokio::time::timeout(Duration::from_millis(10), wait)
+                .await
+                .is_err()
+        }
+
+        let (sender, mut listing) = watch::channel(None);
+        let rebuild = Notify::new();
+
+        assert!(waits(Wake::Never, &mut listing, &rebuild).await);
+        sender.send(Some(Oid::zero())).unwrap();
+        assert!(!waits(Wake::Never, &mut listing, &rebuild).await);
+        assert!(waits(Wake::Never, &mut listing, &rebuild).await);
+        rebuild.notify_one();
+        assert!(!waits(Wake::Never, &mut listing, &rebuild).await);
+
+        assert!(waits(Wake::After(Duration::from_secs(60)), &mut listing, &rebuild).await);
+        assert!(!waits(Wake::After(Duration::from_millis(1)), &mut listing, &rebuild).await);
+        assert!(!waits(Wake::Now, &mut listing, &rebuild).await);
+
+        // A closed channel reports a change on every call, which would spin the loop.
+        drop(sender);
+        assert!(waits(Wake::Never, &mut listing, &rebuild).await);
+    }
+
+    fn provider_failure(retry_after: Option<Duration>) -> std::result::Result<(), ProviderError> {
+        Err(ProviderError {
+            failure: Failure::Temporary,
+            retry_after,
+            message: "HTTP 503".to_owned(),
+        })
+    }
+
+    fn pause(seconds: u64) -> Option<Hold> {
+        Some(Hold::Pause(Duration::from_secs(seconds)))
+    }
+
+    fn paused(seconds: u64) -> Option<Wake> {
+        Some(Wake::After(Duration::from_secs(seconds)))
+    }
+
+    #[test]
+    fn provider_backoff_doubles_up_to_its_cap() {
+        let backoff = ProviderBackoff::new("Test");
+        let start = Instant::now();
+
+        assert_eq!(backoff.blocked_at(start), None);
+        let pauses = (0..10)
+            .map(|_| backoff.record_at(&provider_failure(None), start))
+            .collect::<Vec<_>>();
+        let expected = [30, 60, 120, 240, 480, 960, 1920, 3600, 3600, 3600].map(pause);
+        assert_eq!(pauses, expected);
+        assert_eq!(backoff.blocked_at(start + Duration::from_secs(3599)), paused(1));
+        assert_eq!(backoff.blocked_at(start + Duration::from_secs(3600)), None);
+    }
+
+    #[test]
+    fn provider_backoff_honours_a_longer_retry_after() {
+        let backoff = ProviderBackoff::new("Test");
+        let start = Instant::now();
+
+        let hold = backoff.record_at(&provider_failure(Some(Duration::from_secs(90))), start);
+        assert_eq!(hold, pause(90));
+        let hold = backoff.record_at(&provider_failure(Some(Duration::from_secs(1))), start);
+        assert_eq!(hold, pause(60));
+    }
+
+    #[test]
+    fn only_a_success_ends_a_provider_backoff() {
+        let backoff = ProviderBackoff::new("Test");
+        let start = Instant::now();
+        backoff.record_at(&provider_failure(None), start);
+
+        let unrelated: std::result::Result<(), ProviderError> =
+            Err(provider::failure(Failure::Item, "HTTP 400"));
+        assert_eq!(backoff.record_at(&unrelated, start), None);
+        assert_eq!(backoff.blocked_at(start), paused(30));
+        assert_eq!(backoff.record_at(&provider_failure(None), start), pause(60));
+
+        assert_eq!(backoff.record_at(&Ok(()), start), None);
+        assert_eq!(backoff.blocked_at(start), None);
+        assert_eq!(backoff.record_at(&provider_failure(None), start), pause(30));
+    }
+
+    #[test]
+    fn a_failure_only_an_admin_can_fix_stops_requests_until_restart() {
+        let backoff = ProviderBackoff::new("Test");
+        let start = Instant::now();
+        let refused: std::result::Result<(), ProviderError> =
+            Err(provider::failure(Failure::Admin, "HTTP 401"));
+
+        assert_eq!(backoff.record_at(&refused, start), Some(Hold::Stop));
+        assert_eq!(
+            backoff.blocked_at(start + Duration::from_secs(24 * 60 * 60)),
+            Some(Wake::Never),
+        );
+        // A second refusal is not news, and a success from a search does not end the stop.
+        assert_eq!(backoff.record_at(&refused, start), None);
+        assert_eq!(backoff.record_at(&Ok(()), start), None);
+        assert_eq!(backoff.blocked_at(start), Some(Wake::Never));
+    }
+
+    #[derive(Clone, Copy)]
+    enum StubAnswer {
+        Vectors,
+        Unavailable,
+        Rejected,
+        Refused,
+    }
+
+    struct StubProvider {
+        answer: StubAnswer,
+        calls: AtomicUsize,
+    }
+
+    #[async_trait::async_trait]
+    impl EmbeddingProvider for StubProvider {
+        async fn embed(
+            &self,
+            input: &[String],
+            _model: &str,
+            dimensions: usize,
+        ) -> std::result::Result<Vec<Vec<f32>>, ProviderError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            let (failure, status) = match self.answer {
+                StubAnswer::Vectors => return Ok(vec![vec![1.0; dimensions]; input.len()]),
+                StubAnswer::Unavailable => (Failure::Temporary, 503),
+                StubAnswer::Rejected => (Failure::Item, 400),
+                StubAnswer::Refused => (Failure::Admin, 401),
+            };
+            Err(provider::failure(failure, format!("embedding provider returned HTTP {status}")))
+        }
+    }
+
+    struct StubIndex {
+        manager: SearchManager,
+        provider: Arc<StubProvider>,
+        pool: SqlitePool,
+        _directory: tempfile::TempDir,
+    }
+
+    impl StubIndex {
+        async fn new(answer: StubAnswer) -> Self {
+            let pool = sqlx::sqlite::SqlitePoolOptions::new()
+                .max_connections(1)
+                .connect("sqlite::memory:")
+                .await
+                .unwrap();
+            crate::init_cache_database(&mut pool.acquire().await.unwrap())
+                .await
+                .unwrap();
+            let provider = Arc::new(StubProvider {
+                answer,
+                calls: AtomicUsize::new(0),
+            });
+            let directory = tempfile::tempdir().unwrap();
+            let manager = SearchManager {
+                config: SearchConfig {
+                    index_dir: directory.path().join("index"),
+                    semantic_enabled: true,
+                    embedding_model: "model".to_owned(),
+                    embedding_dimensions: 2,
+                    vision_model: None,
+                },
+                repo: Arc::new(std::sync::Mutex::new(
+                    Repository::init(directory.path().join("repo")).unwrap(),
+                )),
+                cache_db: pool.clone(),
+                cache_db_writer: pool.clone(),
+                lexical: RwLock::new(None),
+                status: RwLock::new(ManagerStatus {
+                    state: "updating".to_owned(),
+                    indexed_commit: None,
+                    message: None,
+                }),
+                writer: AsyncMutex::new(()),
+                provider: provider.clone(),
+                provider_gate: AsyncMutex::new(()),
+                interactive_waiters: AtomicUsize::new(0),
+                vision_client: reqwest::Client::new(),
+                embedding_backoff: ProviderBackoff::new("Embedding"),
+                image_backoff: ProviderBackoff::new("Image description"),
+                force_rebuild: AtomicBool::new(false),
+                rebuild_requested: Notify::new(),
+            };
+            Self {
+                manager,
+                provider,
+                pool,
+                _directory: directory,
+            }
+        }
+
+        async fn add_passage(&self, passage_id: &str) {
+            sqlx::query(
+                "INSERT INTO search_passage VALUES (
+                    'note.md', 'blob', ?, 'hash', 0, 4, 1, 1, 'text/markdown', NULL, 'text', 'text',
+                    'text'
+                 );",
+            )
+            .bind(passage_id)
+            .execute(&self.pool)
+            .await
+            .unwrap();
+        }
+
+        async fn ingest(&self) -> Wake {
+            self.manager.ingest_embedding_batch().await.unwrap()
+        }
+
+        fn calls(&self) -> usize {
+            self.provider.calls.load(Ordering::SeqCst)
+        }
+    }
+
+    fn about_seconds(wake: Wake, seconds: u64) -> bool {
+        matches!(wake, Wake::After(delay)
+            if delay <= Duration::from_secs(seconds)
+                && delay >= Duration::from_secs(seconds - 1))
+    }
+
+    #[tokio::test]
+    async fn a_provider_failure_pauses_embedding_ingestion_for_every_passage() {
+        let index = StubIndex::new(StubAnswer::Unavailable).await;
+
+        index.add_passage("first").await;
+        assert!(about_seconds(index.ingest().await, 30));
+        assert_eq!(index.calls(), 1);
+
+        // The failed passage waits for its own retry time anyway. A passage that has never been
+        // tried has no such time, and sending it would meet the same failure.
+        index.add_passage("second").await;
+        assert!(about_seconds(index.ingest().await, 30));
+        assert_eq!(index.calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn embedding_ingestion_sleeps_until_its_next_retry() {
+        let index = StubIndex::new(StubAnswer::Vectors).await;
+
+        assert_eq!(index.ingest().await, Wake::Never);
+        index.add_passage("first").await;
+        sqlx::query(
+            "INSERT INTO search_embedding VALUES (
+                'first', 'hash', 'model', 2, ?, NULL, NULL, 'pending', 0, ?, 0
+             );",
+        )
+        .bind(EMBEDDING_TEMPLATE)
+        .bind(Utc::now().timestamp() + 30)
+        .execute(&index.pool)
+        .await
+        .unwrap();
+        assert!(about_seconds(index.ingest().await, 30));
+        assert_eq!(index.calls(), 0);
+    }
+
+    #[tokio::test]
+    async fn a_refused_key_stops_embedding_ingestion_and_keeps_the_passages() {
+        let index = StubIndex::new(StubAnswer::Refused).await;
+
+        index.add_passage("first").await;
+        assert_eq!(index.ingest().await, Wake::Never);
+        index.add_passage("second").await;
+        assert_eq!(index.ingest().await, Wake::Never);
+        assert_eq!(index.calls(), 1);
+        let state: String =
+            sqlx::query_scalar("SELECT state FROM search_embedding WHERE passage_id = 'first';")
+                .fetch_one(&index.pool)
+                .await
+                .unwrap();
+        assert_eq!(state, "pending");
+
+        let response = IndexingResponse {
+            stopped: index.manager.indexing_stops(),
+        };
+        assert_eq!(
+            serde_json::to_value(response).unwrap(),
+            serde_json::json!({
+                "stopped": [{
+                    "work": "embeddings",
+                    "message": "embedding provider returned HTTP 401",
+                }],
+            }),
+        );
+    }
+
+    #[tokio::test]
+    async fn a_rejected_batch_is_given_up_without_a_pause() {
+        let index = StubIndex::new(StubAnswer::Rejected).await;
+
+        index.add_passage("first").await;
+        assert_eq!(index.ingest().await, Wake::After(BACKGROUND_RETRY_DELAY));
+        assert_eq!(index.manager.embedding_backoff.blocked(), None);
+        assert_eq!(index.ingest().await, Wake::Never);
+        assert_eq!(index.calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn embedding_ingestion_goes_on_while_it_makes_progress() {
+        let index = StubIndex::new(StubAnswer::Vectors).await;
+
+        index.add_passage("first").await;
+        assert_eq!(index.ingest().await, Wake::Now);
+        assert_eq!(index.ingest().await, Wake::Never);
+        assert_eq!(index.calls(), 1);
     }
 
     #[test]
