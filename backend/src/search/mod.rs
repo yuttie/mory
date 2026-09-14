@@ -471,6 +471,19 @@ impl SearchManager {
             .is_some_and(|index| index.generation == wanted)
     }
 
+    /// Indexing work that has stopped until moried restarts, and why.
+    fn indexing_stops(&self) -> Vec<IndexingStop> {
+        [
+            ("embeddings", &self.embedding_backoff),
+            ("image_descriptions", &self.image_backoff),
+        ]
+        .into_iter()
+        .filter_map(|(work, backoff)| {
+            backoff.stopped().map(|message| IndexingStop { work, message })
+        })
+        .collect()
+    }
+
     fn lexical_status(&self) -> IndexStatus {
         let status = self.status.read().unwrap().clone();
         IndexStatus {
@@ -1319,6 +1332,11 @@ impl ProviderBackoff {
         }
     }
 
+    /// Why requests have stopped until restart, if they have.
+    fn stopped(&self) -> Option<String> {
+        self.state.lock().unwrap().stopped.clone()
+    }
+
     /// When background requests may go out again, if not now.
     fn blocked(&self) -> Option<Wake> {
         self.blocked_at(Instant::now())
@@ -1742,6 +1760,17 @@ pub struct SearchResponse {
 }
 
 #[derive(Debug, Serialize)]
+pub struct IndexingResponse {
+    stopped: Vec<IndexingStop>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct IndexingStop {
+    work: &'static str,
+    message: String,
+}
+
+#[derive(Debug, Serialize)]
 pub struct SearchStatusResponse {
     commit: String,
     head: String,
@@ -1875,6 +1904,18 @@ pub async fn get_status(extract::State(state): extract::State<AppState>) -> Resp
         semantic,
     })
     .into_response()
+}
+
+/// `GET /v2/search/indexing`
+///
+/// What indexing has stopped for until moried restarts. It reads only memory, so the web app can
+/// ask whenever it is looked at again without touching the database or waiting for a sync.
+pub async fn get_indexing(
+    extract::State(state): extract::State<AppState>,
+) -> Json<IndexingResponse> {
+    Json(IndexingResponse {
+        stopped: state.search.indexing_stops(),
+    })
 }
 
 /// `POST /v2/search`
@@ -3393,6 +3434,19 @@ mod tests {
                 .await
                 .unwrap();
         assert_eq!(state, "pending");
+
+        let response = IndexingResponse {
+            stopped: index.manager.indexing_stops(),
+        };
+        assert_eq!(
+            serde_json::to_value(response).unwrap(),
+            serde_json::json!({
+                "stopped": [{
+                    "work": "embeddings",
+                    "message": "embedding provider returned HTTP 401",
+                }],
+            }),
+        );
     }
 
     #[tokio::test]

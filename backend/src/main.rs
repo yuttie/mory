@@ -179,6 +179,7 @@ async fn main() -> Result<()> {
         .route("/imported-events", get(v2::get_imported_events))
         .route("/search", post(search::post_search))
         .route("/search/status", get(search::get_status))
+        .route("/search/indexing", get(search::get_indexing))
         .route("/assess-task", post(v2::post_assess_task))
         .route("/ai-action", post(v2::post_ai_action))
         .with_state(state.clone())
