@@ -30,7 +30,7 @@
     "@jsdevtools/rehype-url-inspector": "^2.0.2",
     "@mdi/js": "^7.4.47",
     "@replit/codemirror-emacs": "^6.1.0",
-    "@replit/codemirror-vim": "^6.3.0",
+    "@replit/codemirror-vim": "^6.4.0",
     "ajv": "^8.9.0",
     "axios": "1.18.0",
     "color": "^5.0.0",
