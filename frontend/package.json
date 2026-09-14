@@ -36,7 +36,7 @@
     "color": "^5.0.0",
     "date-fns": "^4.4.0",
     "dayjs": "^1.11.23",
-    "highlight.js": "^11.11.1",
+    "highlight.js": "^11.12.0",
     "jwt-decode": "^4.0.0",
     "less": "^4.1.1",
     "markdown-table-prettify": "^3.4.0",
