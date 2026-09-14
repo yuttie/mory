@@ -1,5 +1,5 @@
 # build stage (always runs natively on the build machine)
-FROM --platform=$BUILDPLATFORM node:20-alpine AS build-stage
+FROM --platform=$BUILDPLATFORM node:22-alpine AS build-stage
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
