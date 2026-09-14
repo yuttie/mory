@@ -8,6 +8,7 @@ const TOKEN = 'eyJhbGciOiJub25lIn0.eyJzdWIiOiJlMmUiLCJlbWFpbCI6ImVAZS5pbnZhbGlkI
 interface BackendOptions {
     onSearch?: (route: Route) => Promise<void>;
     onStatus?: (route: Route) => Promise<void>;
+    stoppedIndexing?: { work: string, message: string }[];
 }
 
 async function mockBackend(context: BrowserContext, options: BackendOptions = {}): Promise<void> {
@@ -29,6 +30,10 @@ async function mockBackend(context: BrowserContext, options: BackendOptions = {}
                     semantic: { state: 'disabled', indexed: 0, total: 0, failed: 0 },
                 },
             });
+            return;
+        }
+        if (url.pathname === '/api/v2/search/indexing') {
+            await route.fulfill({ json: { stopped: options.stoppedIndexing ?? [] } });
             return;
         }
         if (url.pathname === '/api/v2/search' && options.onSearch !== undefined) {
@@ -65,6 +70,28 @@ function emptySearchResponse(request: { mode: string }): object {
         hits: [],
     };
 }
+
+test('says why indexing stopped and that a restart resumes it', async ({ context, page }) => {
+    await mockBackend(context, {
+        stoppedIndexing: [
+            { work: 'embeddings', message: 'embedding provider returned HTTP 401 Unauthorized' },
+        ],
+    });
+    await page.goto('/search?mode=text');
+
+    await page.getByText('Indexing stopped').first().click();
+
+    await expect(page.getByText('embedding provider returned HTTP 401 Unauthorized')).toBeVisible();
+    await expect(page.getByText('restart moried to resume indexing')).toBeVisible();
+});
+
+test('shows no indexing notice while indexing runs', async ({ context, page }) => {
+    await mockBackend(context);
+    await page.goto('/search?mode=text');
+
+    await expect(page.getByRole('textbox', { name: 'Search' })).toBeVisible();
+    await expect(page.getByText('Indexing stopped')).toHaveCount(0);
+});
 
 test('allows slash input and submits the query with Enter', async ({ context, page }) => {
     let submitted: { query: string, mode: string } | undefined;

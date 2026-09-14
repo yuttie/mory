@@ -357,6 +357,22 @@ export async function getSearchStatus(signal?: AbortSignal): Promise<SearchStatu
   return response.data;
 }
 
+// Indexing that has stopped on a failure only an admin can fix, such as a rejected API key. It
+// stays stopped until moried restarts.
+export interface IndexingStop {
+    work: 'embeddings' | 'image_descriptions';
+    message: string;
+}
+
+export interface IndexingResponse {
+    stopped: IndexingStop[];
+}
+
+export async function getIndexing(signal?: AbortSignal): Promise<IndexingResponse> {
+    const response = await getAxios().get<IndexingResponse>('/v2/search/indexing', { signal });
+    return response.data;
+}
+
 export interface TaskData {
     tasks: { backlog: Task[], scheduled: { [key: string]: Task[] } };
     groups: { name: string, filter: string }[];
