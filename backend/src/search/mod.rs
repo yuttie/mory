@@ -40,10 +40,10 @@ const MAX_EMBEDDING_INPUT_BYTES: usize = 8_192;
 const MAX_EMBEDDING_REQUEST_BYTES: usize = 300_000;
 const MAX_GREP_RECORD_BYTES: usize = 64 * 1024;
 // How soon background work tries again after standing aside for a search, or after a failure
-// the rate-limit pause does not cover. It is the interval the loop used to poll at.
+// the provider pause does not cover. It is the interval the loop used to poll at.
 const BACKGROUND_RETRY_DELAY: Duration = Duration::from_secs(2);
-const RATE_LIMIT_BACKOFF: Duration = Duration::from_secs(30);
-const MAX_RATE_LIMIT_BACKOFF: Duration = Duration::from_secs(60 * 60);
+const PROVIDER_BACKOFF: Duration = Duration::from_secs(30);
+const MAX_PROVIDER_BACKOFF: Duration = Duration::from_secs(60 * 60);
 const FAILED_IMAGE_COUNT_SQL: &str =
     "SELECT count(DISTINCT d.blob_id) FROM search_image_description d
      WHERE d.model = ? AND d.prompt_version = ? AND d.preprocess = ? AND d.detail = ?
@@ -158,7 +158,7 @@ pub struct SearchManager {
     interactive_waiters: AtomicUsize,
     vision_client: reqwest::Client,
     // Separate because OpenAI rate-limits each model on its own, so a limited vision model must
-    // not stop embeddings. An exhausted quota refuses both, and then both back off.
+    // not hold back embeddings. An outage or an exhausted quota refuses both, and both back off.
     embedding_backoff: ProviderBackoff,
     image_backoff: ProviderBackoff,
     force_rebuild: AtomicBool,
@@ -247,7 +247,7 @@ impl SearchManager {
     /// Runs indexing in the background whenever there may be something to do.
     ///
     /// `listing` announces each sync of the entry cache, the only thing that changes what there is
-    /// to index. Between those, the loop sleeps until a retry or a rate-limit pause is due, or
+    /// to index. Between those, the loop sleeps until a retry or a provider pause is due, or
     /// until a search asks for a rebuild, instead of rereading the listing every few seconds.
     pub fn spawn(self: &Arc<Self>, mut listing: watch::Receiver<Option<Oid>>) {
         let manager = self.clone();
@@ -890,7 +890,6 @@ impl SearchManager {
             return Err(ProviderError {
                 retryable: false,
                 retry_after: None,
-                rate_limited: false,
                 message: "embedding response count mismatch".to_owned(),
             });
         }
@@ -898,7 +897,6 @@ impl SearchManager {
             ProviderError {
                 retryable: false,
                 retry_after: None,
-                rate_limited: false,
                 message: error.to_string(),
             }
         })
@@ -1299,10 +1297,11 @@ async fn wait_for_work(
     }
 }
 
-/// Pauses background requests to one provider after it answers 429.
+/// Pauses background requests to one provider after a retryable failure: a rate limit, an outage,
+/// a dropped connection, a rejected key.
 ///
-/// Each item's `next_retry` cannot do this alone. The limit belongs to the account, not the item,
-/// so skipping the item that just failed only sends the next one in a backlog into the same limit.
+/// Each item's `next_retry` cannot do this alone. Such a failure belongs to the provider, not the
+/// item, so skipping the item that just failed only sends the next one in a backlog into it.
 struct ProviderBackoff {
     name: &'static str,
     state: std::sync::Mutex<BackoffState>,
@@ -1339,7 +1338,7 @@ impl ProviderBackoff {
     fn record<T>(&self, result: &std::result::Result<T, ProviderError>) {
         if let Some(pause) = self.record_at(result, Instant::now()) {
             tracing::warn!(
-                "{} provider is rate limited; pausing background requests for {}s",
+                "{} provider is failing; pausing background requests for {}s",
                 self.name,
                 pause.as_secs(),
             );
@@ -1357,18 +1356,18 @@ impl ProviderBackoff {
                 *state = BackoffState::default();
                 None
             },
-            Err(error) if error.rate_limited => {
+            Err(error) if error.retryable => {
                 state.consecutive = state.consecutive.saturating_add(1);
-                // An exhausted quota answers 429 until it is topped up, so keep doubling instead
-                // of probing it at a fixed interval all day.
-                let pause = RATE_LIMIT_BACKOFF
+                // Some of these last until someone acts, such as an exhausted quota, so keep
+                // doubling instead of probing at a fixed interval all day.
+                let pause = PROVIDER_BACKOFF
                     .saturating_mul(2u32.saturating_pow(state.consecutive - 1))
-                    .min(MAX_RATE_LIMIT_BACKOFF)
+                    .min(MAX_PROVIDER_BACKOFF)
                     .max(error.retry_after.unwrap_or_default());
-                state.paused_until = now.checked_add(pause).or(Some(now + MAX_RATE_LIMIT_BACKOFF));
+                state.paused_until = now.checked_add(pause).or(Some(now + MAX_PROVIDER_BACKOFF));
                 Some(pause)
             },
-            // Any other failure says nothing about the limit, in either direction.
+            // A failure caused by the request says nothing about the provider, either way.
             Err(_) => None,
         }
     }
@@ -1398,7 +1397,6 @@ fn validate_embedding_vectors(
         return Err(ProviderError {
             retryable: false,
             retry_after: None,
-            rate_limited: false,
             message: "embedding response count mismatch".to_owned(),
         });
     }
@@ -3037,7 +3035,6 @@ mod tests {
         let error = ProviderError {
             retryable: true,
             retry_after: Some(Duration::from_secs(10)),
-            rate_limited: false,
             message: "rate limited".to_owned(),
         };
 
@@ -3137,23 +3134,22 @@ mod tests {
         assert!(waits(Wake::Never, &mut listing, &rebuild).await);
     }
 
-    fn rate_limited(retry_after: Option<Duration>) -> std::result::Result<(), ProviderError> {
+    fn provider_failure(retry_after: Option<Duration>) -> std::result::Result<(), ProviderError> {
         Err(ProviderError {
             retryable: true,
             retry_after,
-            rate_limited: true,
-            message: "rate limited".to_owned(),
+            message: "HTTP 503".to_owned(),
         })
     }
 
     #[test]
-    fn rate_limit_backoff_doubles_up_to_its_cap() {
+    fn provider_backoff_doubles_up_to_its_cap() {
         let backoff = ProviderBackoff::new("Test");
         let start = Instant::now();
 
         assert_eq!(backoff.remaining_at(start), None);
         let pauses = (0..10)
-            .map(|_| backoff.record_at(&rate_limited(None), start).unwrap().as_secs())
+            .map(|_| backoff.record_at(&provider_failure(None), start).unwrap().as_secs())
             .collect::<Vec<_>>();
         assert_eq!(pauses, [30, 60, 120, 240, 480, 960, 1920, 3600, 3600, 3600]);
         assert_eq!(
@@ -3164,39 +3160,38 @@ mod tests {
     }
 
     #[test]
-    fn rate_limit_backoff_honours_a_longer_retry_after() {
+    fn provider_backoff_honours_a_longer_retry_after() {
         let backoff = ProviderBackoff::new("Test");
         let start = Instant::now();
 
-        let pause = backoff.record_at(&rate_limited(Some(Duration::from_secs(90))), start);
+        let pause = backoff.record_at(&provider_failure(Some(Duration::from_secs(90))), start);
         assert_eq!(pause, Some(Duration::from_secs(90)));
-        let pause = backoff.record_at(&rate_limited(Some(Duration::from_secs(1))), start);
+        let pause = backoff.record_at(&provider_failure(Some(Duration::from_secs(1))), start);
         assert_eq!(pause, Some(Duration::from_secs(60)));
     }
 
     #[test]
-    fn only_a_success_ends_a_rate_limit_backoff() {
+    fn only_a_success_ends_a_provider_backoff() {
         let backoff = ProviderBackoff::new("Test");
         let start = Instant::now();
-        backoff.record_at(&rate_limited(None), start);
+        backoff.record_at(&provider_failure(None), start);
 
         let unrelated: std::result::Result<(), ProviderError> = Err(ProviderError {
-            retryable: true,
+            retryable: false,
             retry_after: None,
-            rate_limited: false,
-            message: "HTTP 503".to_owned(),
+            message: "HTTP 400".to_owned(),
         });
         assert_eq!(backoff.record_at(&unrelated, start), None);
         assert_eq!(backoff.remaining_at(start), Some(Duration::from_secs(30)));
         assert_eq!(
-            backoff.record_at(&rate_limited(None), start),
+            backoff.record_at(&provider_failure(None), start),
             Some(Duration::from_secs(60)),
         );
 
         assert_eq!(backoff.record_at(&Ok(()), start), None);
         assert_eq!(backoff.remaining_at(start), None);
         assert_eq!(
-            backoff.record_at(&rate_limited(None), start),
+            backoff.record_at(&provider_failure(None), start),
             Some(Duration::from_secs(30)),
         );
     }
@@ -3204,8 +3199,8 @@ mod tests {
     #[derive(Clone, Copy)]
     enum StubAnswer {
         Vectors,
-        RateLimited,
         Unavailable,
+        Rejected,
     }
 
     struct StubProvider {
@@ -3222,15 +3217,14 @@ mod tests {
             dimensions: usize,
         ) -> std::result::Result<Vec<Vec<f32>>, ProviderError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
-            let (rate_limited, status) = match self.answer {
+            let (retryable, status) = match self.answer {
                 StubAnswer::Vectors => return Ok(vec![vec![1.0; dimensions]; input.len()]),
-                StubAnswer::RateLimited => (true, 429),
-                StubAnswer::Unavailable => (false, 503),
+                StubAnswer::Unavailable => (true, 503),
+                StubAnswer::Rejected => (false, 400),
             };
             Err(ProviderError {
-                retryable: true,
+                retryable,
                 retry_after: None,
-                rate_limited,
                 message: format!("embedding provider returned HTTP {status}"),
             })
         }
@@ -3324,15 +3318,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_rate_limit_pauses_embedding_ingestion_for_every_passage() {
-        let index = StubIndex::new(StubAnswer::RateLimited).await;
+    async fn a_provider_failure_pauses_embedding_ingestion_for_every_passage() {
+        let index = StubIndex::new(StubAnswer::Unavailable).await;
 
         index.add_passage("first").await;
         assert!(about_seconds(index.ingest().await, 30));
         assert_eq!(index.calls(), 1);
 
         // The failed passage waits for its own retry time anyway. A passage that has never been
-        // tried has no such time, and sending it would hit the same limit.
+        // tried has no such time, and sending it would meet the same failure.
         index.add_passage("second").await;
         assert!(about_seconds(index.ingest().await, 30));
         assert_eq!(index.calls(), 1);
@@ -3340,12 +3334,32 @@ mod tests {
 
     #[tokio::test]
     async fn embedding_ingestion_sleeps_until_its_next_retry() {
-        let index = StubIndex::new(StubAnswer::Unavailable).await;
+        let index = StubIndex::new(StubAnswer::Vectors).await;
 
         assert_eq!(index.ingest().await, Wake::Never);
         index.add_passage("first").await;
-        assert_eq!(index.ingest().await, Wake::After(BACKGROUND_RETRY_DELAY));
+        sqlx::query(
+            "INSERT INTO search_embedding VALUES (
+                'first', 'hash', 'model', 2, ?, NULL, NULL, 'pending', 0, ?, 0
+             );",
+        )
+        .bind(EMBEDDING_TEMPLATE)
+        .bind(Utc::now().timestamp() + 30)
+        .execute(&index.pool)
+        .await
+        .unwrap();
         assert!(about_seconds(index.ingest().await, 30));
+        assert_eq!(index.calls(), 0);
+    }
+
+    #[tokio::test]
+    async fn a_rejected_batch_is_given_up_without_a_pause() {
+        let index = StubIndex::new(StubAnswer::Rejected).await;
+
+        index.add_passage("first").await;
+        assert_eq!(index.ingest().await, Wake::After(BACKGROUND_RETRY_DELAY));
+        assert_eq!(index.manager.embedding_backoff.remaining(), None);
+        assert_eq!(index.ingest().await, Wake::Never);
         assert_eq!(index.calls(), 1);
     }
 
