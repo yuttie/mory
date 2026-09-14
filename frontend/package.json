@@ -73,7 +73,7 @@
     "@types/less": "^3.0.2",
     "@types/md5": "^2.2.1",
     "@types/node": "^26.5.0",
-    "@vitejs/plugin-vue": "^6.0.0",
+    "@vitejs/plugin-vue": "^6.0.8",
     "eslint": "^9.9.0",
     "eslint-plugin-vue": "^10.2.0",
     "fake-indexeddb": "^6.2.5",
