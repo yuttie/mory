@@ -735,7 +735,7 @@ async function loadHighlightjsTheme(themeName: string): Promise<string> {
         return module.default;
     }
     catch (err) {
-        throw new Error(`Failed to load Highlight.js theme CSS: ${err}`);
+        throw new Error(`Failed to load Highlight.js theme CSS: ${err}`, { cause: err });
     }
 }
 
