@@ -438,11 +438,30 @@ struct EventSummary {
     declaration: serde_json::Value,
 }
 
+/// One of a task's dates, which the web app draws on the calendar as an event of its own.
+#[derive(Debug, PartialEq, Serialize)]
+struct TaskDateSummary {
+    path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    title: Option<String>,
+    /// `due_by` or `deadline`.
+    field: &'static str,
+    /// The value exactly as the task declares it.
+    date: String,
+    /// The task's `status.kind`. A done or canceled task's dates are still listed, as the calendar
+    /// still draws them, so this is what tells a date that stands from one that is settled.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    status: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 struct EventsOutput {
     commit: String,
     window: (String, String),
     events: Vec<EventSummary>,
+    /// Always present, even when empty, so "no deadlines this week" is an answer rather than a
+    /// field the caller has to wonder about.
+    task_dates: Vec<TaskDateSummary>,
     /// Said once per call rather than trusted to the tool description, because a recurring event
     /// listed without occurrences is exactly the result a model would otherwise misread.
     note: &'static str,
@@ -471,6 +490,67 @@ fn declared_starts(event: &serde_yaml::Value) -> Vec<String> {
         );
     }
     starts
+}
+
+/// The task fields the calendar draws as events.
+const TASK_DATE_FIELDS: [&str; 2] = ["due_by", "deadline"];
+
+/// Every task due date and deadline whose day falls inside the window.
+///
+/// The web app's calendar and home page draw these as events, derived by `taskDatesFromEntries`
+/// in `frontend/src/events.ts`; without them here, a model asked what is coming up this week
+/// would miss every deadline in it. The same rules apply: only a note on a path the task tree
+/// accepts, one entry per field holding a date, and a finished task's dates kept. There is nothing
+/// to expand -- a task has at most one of each -- so the no-third-expander rule is not at stake.
+fn task_dates_in_window(
+    entries: &[crate::models::ListEntry],
+    from: chrono::NaiveDate,
+    to: chrono::NaiveDate,
+) -> Vec<TaskDateSummary> {
+    let mut dates = Vec::new();
+    for entry in entries {
+        let path = entry.path.to_string_lossy();
+        // A `task:` block on any other path is not in the task tree, and the calendar skips it.
+        let in_task_tree = path
+            .strip_prefix(TASKS_DIR)
+            .is_some_and(|rest| check_tree_naming(rest).is_ok());
+        if !in_task_tree {
+            continue;
+        }
+        let Some(task) = entry.metadata.as_ref().and_then(|value| value.get("task")) else {
+            continue;
+        };
+
+        for field in TASK_DATE_FIELDS {
+            // Frontmatter is whatever the file said: a value that is not a date is a task without
+            // that date, never an error that would lose the rest of the week.
+            let Some(date) = task.get(field).and_then(|value| value.as_str()) else {
+                continue;
+            };
+            let Some(day) = leading_date(date) else {
+                continue;
+            };
+            if day < from || to < day {
+                continue;
+            }
+            dates.push((day, TaskDateSummary {
+                path: path.clone().into_owned(),
+                title: entry.title.clone(),
+                field,
+                date: date.to_owned(),
+                status: task_status_of(entry.metadata.as_ref()),
+            }));
+        }
+    }
+
+    dates.sort_by(|(a_day, a), (b_day, b)| {
+        a_day
+            .cmp(b_day)
+            .then_with(|| a.date.cmp(&b.date))
+            .then_with(|| a.path.cmp(&b.path))
+            .then_with(|| a.field.cmp(b.field))
+    });
+    dates.into_iter().map(|(_, summary)| summary).collect()
 }
 
 pub async fn list_events(
@@ -547,13 +627,18 @@ pub async fn list_events(
             .then_with(|| a.name.cmp(&b.name))
     });
 
+    let task_dates = task_dates_in_window(&entries, from, to);
+
     json_result(&EventsOutput {
         commit: commit.to_string(),
         window: (from.to_string(), to.to_string()),
         events,
+        task_dates,
         note: "Events marked `recurs` carry a repeat rule whose occurrences are not expanded \
                here; read `declaration.repeat` and work out the dates from it. Every other event \
-               is listed only when a declared occurrence falls inside the window.",
+               is listed only when a declared occurrence falls inside the window. `task_dates` \
+               holds each task due_by and deadline inside the window, which the calendar draws \
+               as events too; one whose `status` is done or canceled is settled.",
     })
 }
 
@@ -951,6 +1036,81 @@ mod tests {
             declared_starts(&yaml("repeat:\n  freq: weekly")),
             Vec::<String>::new(),
         );
+    }
+
+    const TASK_A: &str = ".tasks/6f1c2c1e-2b1a-4d6e-9f3a-1b2c3d4e5f60.md";
+    const TASK_B: &str = ".tasks/report-0b7e8a52-3c4d-4e5f-8a6b-7c8d9e0f1a2b.md";
+
+    fn listed(path: &str, frontmatter: &str) -> crate::models::ListEntry {
+        crate::models::ListEntry {
+            path: path.into(),
+            size: 1,
+            mime_type: "text/markdown".to_owned(),
+            metadata: Some(yaml(frontmatter)),
+            title: Some(format!("title of {path}")),
+            time: chrono::DateTime::parse_from_rfc3339("2026-09-01T00:00:00+09:00").unwrap(),
+        }
+    }
+
+    fn day(text: &str) -> chrono::NaiveDate {
+        leading_date(text).expect("the fixture should be a date")
+    }
+
+    fn fields_of(dates: &[TaskDateSummary]) -> Vec<(&str, &str, &str)> {
+        dates.iter().map(|d| (d.path.as_str(), d.field, d.date.as_str())).collect()
+    }
+
+    #[test]
+    fn task_dates_are_listed_in_date_order_when_their_day_is_in_the_window() {
+        let entries = [
+            listed(
+                TASK_A,
+                "task: {status: {kind: todo}, due_by: 2026-09-23, deadline: 2026-09-30}",
+            ),
+            listed(
+                TASK_B,
+                "task: {status: {kind: in_progress}, deadline: '2026-09-21 18:00:00+09:00'}",
+            ),
+        ];
+
+        let dates = task_dates_in_window(&entries, day("2026-09-21"), day("2026-09-27"));
+
+        // The deadline on the 30th is outside the window; both ends of the window are inclusive.
+        assert_eq!(fields_of(&dates), vec![
+            (TASK_B, "deadline", "2026-09-21 18:00:00+09:00"),
+            (TASK_A, "due_by", "2026-09-23"),
+        ]);
+        assert_eq!(dates[0].title.as_deref(), Some(format!("title of {TASK_B}").as_str()));
+        assert_eq!(dates[0].status.as_deref(), Some("in_progress"));
+    }
+
+    #[test]
+    fn a_settled_task_keeps_its_dates_and_says_it_is_settled() {
+        // The calendar still draws them, faded, so leaving them out would make the two disagree.
+        let entries = [listed(TASK_A, "task: {status: {kind: done}, deadline: 2026-09-22}")];
+
+        let dates = task_dates_in_window(&entries, day("2026-09-21"), day("2026-09-27"));
+
+        assert_eq!(fields_of(&dates), vec![(TASK_A, "deadline", "2026-09-22")]);
+        assert_eq!(dates[0].status.as_deref(), Some("done"));
+    }
+
+    #[test]
+    fn task_dates_come_only_from_the_task_tree_and_only_from_dates() {
+        let entries = [
+            // Not under `.tasks/`, and not a task the tree or the calendar knows.
+            listed("notes/6f1c2c1e-2b1a-4d6e-9f3a-1b2c3d4e5f60.md", "task: {deadline: 2026-09-22}"),
+            // Under `.tasks/`, but not named the way the tree needs.
+            listed(".tasks/untitled.md", "task: {deadline: 2026-09-22}"),
+            // Frontmatter is whatever the file said.
+            listed(TASK_A, "task: {due_by: tomorrow, deadline: 20260922}"),
+            listed(TASK_B, "task: a string"),
+            listed(".tasks/1d2e3f4a-5b6c-4d7e-8f9a-0b1c2d3e4f5a.md", "due_by: 2026-09-22"),
+        ];
+
+        let dates = task_dates_in_window(&entries, day("2026-09-21"), day("2026-09-27"));
+
+        assert_eq!(dates, Vec::new());
     }
 
     #[test]
