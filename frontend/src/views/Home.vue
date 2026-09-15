@@ -91,6 +91,9 @@
         </div>
 
         <!-- Events Section -->
+        <!-- An imported event is labelled with its calendar and drawn without its description:
+             a feed's description is someone else's text, often HTML or a long invite boilerplate,
+             and its day on the calendar renders it properly. -->
         <div class="events-section ma-3">
             <h2 class="mb-3 text-center">Events</h2>
             <div class="events-grid">
@@ -106,7 +109,7 @@
                         <div v-else>
                             <div
                                 v-for="event in todayEvents"
-                                v-bind:key="event.name + event.start"
+                                v-bind:key="eventKey(event)"
                                 class="event-item mb-2 pa-2 clickable-event"
                                 v-bind:style="{ 'border-left': `8px solid ${getEventColor(event)}` }"
                                 v-on:click="navigateToEvent(event)"
@@ -118,8 +121,8 @@
                                         v-bind:style="{ 'background-color': event.color }"
                                     >{{ event.taskDate === 'due_by' ? 'Due' : 'Deadline' }}</span>{{ event.name }}
                                 </div>
-                                <div class="event-time text-medium-emphasis text-caption">{{ formatEventTime(event) }}</div>
-                                <div v-if="event.note" class="event-note text-caption mt-1">{{ event.note }}</div>
+                                <div class="event-time text-medium-emphasis text-caption">{{ formatEventTime(event) }}<span v-if="event.calendar !== undefined && event.source === 'ical'"> · {{ calendars.nameOf.get(event.calendar) ?? event.calendar }}</span></div>
+                                <div v-if="event.note && event.source !== 'ical'" class="event-note text-caption mt-1">{{ event.note }}</div>
                             </div>
                         </div>
                     </v-card-text>
@@ -137,7 +140,7 @@
                         <div v-else>
                             <div
                                 v-for="event in tomorrowEvents"
-                                v-bind:key="event.name + event.start"
+                                v-bind:key="eventKey(event)"
                                 class="event-item mb-2 pa-2 clickable-event"
                                 v-bind:style="{ 'border-left': `8px solid ${getEventColor(event)}` }"
                                 v-on:click="navigateToEvent(event)"
@@ -149,8 +152,8 @@
                                         v-bind:style="{ 'background-color': event.color }"
                                     >{{ event.taskDate === 'due_by' ? 'Due' : 'Deadline' }}</span>{{ event.name }}
                                 </div>
-                                <div class="event-time text-medium-emphasis text-caption">{{ formatEventTime(event) }}</div>
-                                <div v-if="event.note" class="event-note text-caption mt-1">{{ event.note }}</div>
+                                <div class="event-time text-medium-emphasis text-caption">{{ formatEventTime(event) }}<span v-if="event.calendar !== undefined && event.source === 'ical'"> · {{ calendars.nameOf.get(event.calendar) ?? event.calendar }}</span></div>
+                                <div v-if="event.note && event.source !== 'ical'" class="event-note text-caption mt-1">{{ event.note }}</div>
                             </div>
                         </div>
                     </v-card-text>
@@ -168,7 +171,7 @@
                         <div v-else>
                             <div
                                 v-for="event in dayAfterTomorrowEvents"
-                                v-bind:key="event.name + event.start"
+                                v-bind:key="eventKey(event)"
                                 class="event-item mb-2 pa-2 clickable-event"
                                 v-bind:style="{ 'border-left': `8px solid ${getEventColor(event)}` }"
                                 v-on:click="navigateToEvent(event)"
@@ -180,8 +183,8 @@
                                         v-bind:style="{ 'background-color': event.color }"
                                     >{{ event.taskDate === 'due_by' ? 'Due' : 'Deadline' }}</span>{{ event.name }}
                                 </div>
-                                <div class="event-time text-medium-emphasis text-caption">{{ formatEventTime(event) }}</div>
-                                <div v-if="event.note" class="event-note text-caption mt-1">{{ event.note }}</div>
+                                <div class="event-time text-medium-emphasis text-caption">{{ formatEventTime(event) }}<span v-if="event.calendar !== undefined && event.source === 'ical'"> · {{ calendars.nameOf.get(event.calendar) ?? event.calendar }}</span></div>
+                                <div v-if="event.note && event.source !== 'ical'" class="event-note text-caption mt-1">{{ event.note }}</div>
                             </div>
                         </div>
                     </v-card-text>
@@ -337,8 +340,10 @@ import {
 
 import type { ListEntry2 } from '@/api';
 
-import { eventsFromEntries, taskDatesFromEntries } from '@/events';
-import { useCalendarsStore } from '@/stores/calendars';
+import { DEFAULT_EVENT_COLOR, eventsFromEntries, mergeImported, taskDatesFromEntries } from '@/events';
+import type { CalendarEvent } from '@/events';
+import { useLocalStorage } from '@/composables/localStorage';
+import { HIDDEN_CALENDARS_STORAGE_KEY, useCalendarsStore } from '@/stores/calendars';
 import { useFilesStore } from '@/stores/files';
 import { by } from '@/utils';
 import dayjs from 'dayjs';
@@ -361,9 +366,18 @@ function getEventEndTime(event: any): dayjs.Dayjs {
 
 function getEventColor(event: any): string {
     const toPropName = (s: string) => s.replace(/-./g, (match: string) => match[1].toUpperCase());
-    const color = Object.hasOwn(materialColors, toPropName(event.color))
-        ? Color((materialColors as any)[toPropName(event.color)].base)
-        : Color(event.color);
+    // `Color` throws on anything it cannot parse, and a note's `color:` is free text. Throwing
+    // here happens during render, so one typo would blank every day's events rather than
+    // mis-colour one -- the same guard `Calendar.vue` has.
+    let color;
+    try {
+        color = Object.hasOwn(materialColors, toPropName(event.color))
+            ? Color((materialColors as any)[toPropName(event.color)].base)
+            : Color(event.color);
+    }
+    catch {
+        color = Color(DEFAULT_EVENT_COLOR);
+    }
 
     const now = dayjs();
     const time = getEventEndTime(event);
@@ -465,23 +479,32 @@ const categorizedEntries = computed(() => {
 });
 
 // Events computation, shared with the calendar view.
-// Only the next three days are ever rendered, below, so that is all a rule needs expanding over.
+// Only the next three days are ever rendered, below, so that is all a rule needs expanding over,
+// and all the imported calendars need fetching for.
 const eventWindow = computed(() => ({
     from: dayjs().format('YYYY-MM-DD'),
     to: dayjs().add(2, 'days').format('YYYY-MM-DD'),
 }));
+// Shared with the calendar view, so a calendar hidden there is not drawn here either: the choice
+// is "not in this browser", not "not on that one page".
+const hiddenCalendarIds = useLocalStorage<string[]>(HIDDEN_CALENDARS_STORAGE_KEY, []);
 // A task's due date and deadline are events here for the same reason they are on the calendar:
 // what falls in the next three days is exactly what this section is for. They come from
 // `task.due_by` and `task.deadline` rather than from an `events:` block, so they need their own
-// derivation over the same listing.
-const events = computed(() => [
-    ...eventsFromEntries(files.entries, eventWindow.value).events,
-    ...taskDatesFromEntries(
-        files.entries,
-        eventWindow.value,
-        { colorOf: calendars.taskDateColors },
-    ).events,
-]);
+// derivation over the same listing. Imported events are merged in last, through the same function
+// the calendar uses, so a note converted from one shadows it here exactly as it does there.
+const events = computed(() => mergeImported(
+    [
+        ...eventsFromEntries(files.entries, eventWindow.value).events,
+        ...taskDatesFromEntries(
+            files.entries,
+            eventWindow.value,
+            { colorOf: calendars.taskDateColors },
+        ).events,
+    ],
+    calendars.events,
+    { colorOf: calendars.colorOf, hidden: new Set(hiddenCalendarIds.value) },
+));
 
 const today = dayjs().format('YYYY-MM-DD');
 const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
@@ -579,8 +602,14 @@ onMounted(() => {
     load();
     loadTasks();
     calendars.loadSubscriptions().catch(() => {
-        // Only the configured task-date colours are wanted here, and there are defaults for those;
-        // no imported events are fetched or drawn on this page.
+        // Only names and colours are wanted from it, and there are defaults for those; the
+        // imported events themselves come back from the backend, which reads the same file.
+    });
+    calendars.load(eventWindow.value.from, eventWindow.value.to).catch((err) => {
+        // A calendar that fails is already reported per calendar in the response; this is the
+        // request itself failing, which must not take the note events down with it.
+        errorText.value = `Could not load imported events: ${err}`;
+        error.value = true;
     });
 });
 
@@ -738,15 +767,39 @@ function navigateToTask(task: { uuid: string }) {
         });
 }
 
-function navigateToEvent(event: { notePath?: string; taskId?: string }) {
+// Unique where `name + start` is not: the same invite arrives in two subscribed calendars, and a
+// task can be due on the day of its deadline.
+function eventKey(event: CalendarEvent): string {
+    // JSON rather than a join, so no separator can appear inside a name and make two keys meet.
+    return JSON.stringify([
+        event.source,
+        event.notePath ?? event.calendar ?? '',
+        event.taskId ?? event.uid ?? '',
+        event.taskDate ?? '',
+        event.name,
+        event.start,
+    ]);
+}
+
+function navigateToEvent(event: CalendarEvent) {
     // A due date or deadline belongs to its task, not to the file under `.tasks/` holding it.
     if (event.taskId !== undefined) {
         navigateToTask({ uuid: event.taskId });
         return;
     }
-    // Navigate to the Note view for the event's source note. Optional because an imported event
-    // has no note behind it; Home draws none of those, so this is a guard rather than a case.
+    // An imported event has no note behind it. Its day on the calendar is where it can be read in
+    // full and converted into one.
     if (event.notePath === undefined) {
+        const date = dayjs(event.start);
+        router.push({
+            name: 'CalendarWithDate',
+            params: {
+                type: 'day',
+                year: date.format('YYYY'),
+                month: date.format('MM'),
+                day: date.format('DD'),
+            },
+        });
         return;
     }
     router.push({

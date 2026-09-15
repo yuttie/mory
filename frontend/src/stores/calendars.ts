@@ -24,6 +24,10 @@ import { useFilesStore } from '@/stores/files';
 
 export const CALENDARS_PATH = '.mory/calendars.yaml';
 
+/// Where a browser keeps the imported calendars it is not drawing. Every view that draws imported
+/// events reads the same key, so hiding a calendar is one choice rather than one per page.
+export const HIDDEN_CALENDARS_STORAGE_KEY = 'hidden-imported-calendars';
+
 export interface CalendarSubscription {
     id: string;
     name: string;

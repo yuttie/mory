@@ -250,7 +250,7 @@ import {
 import { DEFAULT_EVENT_COLOR, DEFAULT_IMPORTED_COLOR, eventsFromEntries, mergeImported, taskDatesFromEntries } from '@/events';
 import type { CalendarEvent } from '@/events';
 import { buildOccurrenceNote, buildSeriesNote, canConvertSeries } from '@/event-note';
-import { useCalendarsStore } from '@/stores/calendars';
+import { HIDDEN_CALENDARS_STORAGE_KEY, useCalendarsStore } from '@/stores/calendars';
 import { LAGGING_RETRY_MS, useFilesStore } from '@/stores/files';
 import { useLocalStorage } from '@/composables/localStorage';
 import Color from 'color';
@@ -287,7 +287,7 @@ const selectedOpen = ref(false);
 // `.mory/calendars.yaml`, while this only stops what arrived from being drawn here. Ids of
 // calendars that are gone are kept rather than pruned, so a subscription that fails to load once
 // does not come back shown.
-const hiddenCalendarIds = useLocalStorage<string[]>('hidden-imported-calendars', []);
+const hiddenCalendarIds = useLocalStorage<string[]>(HIDDEN_CALENDARS_STORAGE_KEY, []);
 
 // Template Refs
 const calendar = ref<any>(null);
