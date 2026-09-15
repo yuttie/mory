@@ -340,7 +340,7 @@ import {
 
 import type { ListEntry2 } from '@/api';
 
-import { DEFAULT_EVENT_COLOR, eventsFromEntries, mergeImported, taskDatesFromEntries } from '@/events';
+import { DEFAULT_EVENT_COLOR, eventEndsAt, eventsFromEntries, mergeImported, taskDatesFromEntries } from '@/events';
 import type { CalendarEvent } from '@/events';
 import { useLocalStorage } from '@/composables/localStorage';
 import { HIDDEN_CALENDARS_STORAGE_KEY, useCalendarsStore } from '@/stores/calendars';
@@ -354,15 +354,6 @@ import type { Task } from '@/task';
 import Color from 'color';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import materialColors from 'vuetify/util/colors';
-
-function getEventEndTime(event: any): dayjs.Dayjs {
-    if (typeof event.end !== 'undefined') {
-        return dayjs(event.end);
-    }
-    else {
-        return dayjs(event.start).endOf('day');
-    }
-}
 
 function getEventColor(event: any): string {
     const toPropName = (s: string) => s.replace(/-./g, (match: string) => match[1].toUpperCase());
@@ -380,7 +371,7 @@ function getEventColor(event: any): string {
     }
 
     const now = dayjs();
-    const time = getEventEndTime(event);
+    const time = eventEndsAt(event);
     if (time < now || event.finished) {
         return color.fade(0.75).string();
     }

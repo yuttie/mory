@@ -247,7 +247,7 @@ import {
 } from '@mdi/js';
 
 
-import { DEFAULT_EVENT_COLOR, DEFAULT_IMPORTED_COLOR, eventsFromEntries, mergeImported, taskDatesFromEntries } from '@/events';
+import { DEFAULT_EVENT_COLOR, DEFAULT_IMPORTED_COLOR, eventEndsAt, eventsFromEntries, mergeImported, taskDatesFromEntries } from '@/events';
 import type { CalendarEvent } from '@/events';
 import { buildOccurrenceNote, buildSeriesNote, canConvertSeries } from '@/event-note';
 import { HIDDEN_CALENDARS_STORAGE_KEY, useCalendarsStore } from '@/stores/calendars';
@@ -584,15 +584,6 @@ function showEvent (nativeEvent: Event, { event }: { event: any }) {
     nativeEvent.stopPropagation();
 }
 
-function getEventEndTime(event: any): dayjs.Dayjs {
-    if (typeof event.end !== 'undefined') {
-        return dayjs(event.end);
-    }
-    else {
-        return dayjs(event.start).endOf('day');
-    }
-}
-
 function getEventColor(event: any): string {
     const toPropName = (s: string) => s.replace(/-./g, (match: string) => match[1].toUpperCase());
     // `Color` throws on anything it cannot parse, and both a note's `color:` and a calendar's
@@ -609,7 +600,7 @@ function getEventColor(event: any): string {
     }
 
     const now = dayjs();
-    const time = getEventEndTime(event);
+    const time = eventEndsAt(event);
     if (time < now || event.finished) {
         return color.fade(0.75).string();
     }
@@ -620,7 +611,7 @@ function getEventColor(event: any): string {
 
 function getEventTextColor(event: any): string {
     const now = dayjs();
-    const time = getEventEndTime(event);
+    const time = eventEndsAt(event);
     if (time < now || event.finished) {
         return Color('#000000').fade(0.7).string();
     }
