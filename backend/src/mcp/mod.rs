@@ -146,8 +146,11 @@ impl Mory {
                        `repeat` rule is returned with `recurs: true` and its rule, but its \
                        occurrences are NOT expanded -- read the rule and work the dates out \
                        from it. Every other event appears only when one of its declared \
-                       occurrences falls inside the window. Events subscribed from an external \
-                       calendar are a separate tool, list_imported_events.",
+                       occurrences falls inside the window.\n\nEach task due_by and deadline \
+                       inside the window is listed too, under `task_dates`: the calendar draws \
+                       them as events, so a question about what is coming up needs them. Events \
+                       subscribed from an external calendar are a separate tool, \
+                       list_imported_events.",
         annotations(title = "List events", read_only_hint = true, open_world_hint = false)
     )]
     pub async fn list_events(
@@ -345,7 +348,7 @@ impl Mory {
                        Requires the notes:write scope.\n\nThese are bare dates (`2026-03-15`) \
                        or datetimes carrying their offset (`2026-03-15 09:00:00+09:00`). due_by \
                        and deadline are drawn on the calendar in their own colours, so they are \
-                       events as well as fields.",
+                       events as well as fields, and list_events returns them.",
         annotations(title = "Set a task's dates", read_only_hint = false,
                     destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
