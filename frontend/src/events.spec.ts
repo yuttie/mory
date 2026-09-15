@@ -9,6 +9,7 @@ import {
     DEFAULT_DUE_COLOR,
     DEFAULT_EVENT_COLOR,
     DEFAULT_IMPORTED_COLOR,
+    eventEndsAt,
     eventsFromEntries,
     taskDatesFromEntries,
     mergeImported,
@@ -68,6 +69,39 @@ describe('normalizeEndTime', () => {
 
     it('reports an unusable end as null', () => {
         expect(normalizeEndTime('not a time', '2024-05-01 10:00')).toBeNull();
+    });
+});
+
+describe('eventEndsAt', () => {
+    const LAST_MOMENT = 'YYYY-MM-DD HH:mm:ss.SSS';
+
+    it('ends a one-day event with the day, not as it begins', () => {
+        // The shape the backend sends a one-day imported event in: its inclusive end is the start.
+        const end = eventEndsAt({ start: '2026-09-21', end: '2026-09-21' });
+        expect(end.format(LAST_MOMENT)).toBe('2026-09-21 23:59:59.999');
+        expect(end.isAfter(dayjs('2026-09-21 09:00'))).toBe(true);
+    });
+
+    it('ends a multi-day event with its last day', () => {
+        expect(eventEndsAt({ start: '2026-09-19', end: '2026-09-23' }).format(LAST_MOMENT))
+            .toBe('2026-09-23 23:59:59.999');
+    });
+
+    it('takes a date end as the whole day even after a timed start', () => {
+        expect(eventEndsAt({ start: '2026-09-21 10:00', end: '2026-09-22' }).format(LAST_MOMENT))
+            .toBe('2026-09-22 23:59:59.999');
+    });
+
+    it('ends a timed event at the moment it names', () => {
+        expect(eventEndsAt({ start: '2026-09-21 10:00', end: '2026-09-21 11:30' })
+            .format(LAST_MOMENT)).toBe('2026-09-21 11:30:00.000');
+    });
+
+    it('lets an event with no end last until the end of its day', () => {
+        expect(eventEndsAt({ start: '2026-09-21 10:00' }).format(LAST_MOMENT))
+            .toBe('2026-09-21 23:59:59.999');
+        expect(eventEndsAt({ start: '2026-09-21' }).format(LAST_MOMENT))
+            .toBe('2026-09-21 23:59:59.999');
     });
 });
 

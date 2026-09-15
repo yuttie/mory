@@ -150,7 +150,10 @@ export function normalizeEndTime(
 /// An event with no end lasts until the end of the day it starts on.
 export function eventEndsAt(event: { start: string; end?: string }): dayjs.Dayjs {
     if (event.end !== undefined) {
-        return dayjs(event.end);
+        // `end` is inclusive -- `ical.rs` pulls a feed's exclusive DTEND back a day to make it so --
+        // and a date names the whole of that day. Parsed as it stands it is the day's first moment,
+        // and every event ending on a date was drawn as over from midnight on its own last day.
+        return isDateOnly(event.end) ? dayjs(event.end).endOf('day') : dayjs(event.end);
     }
     else {
         return dayjs(event.start).endOf('day');
