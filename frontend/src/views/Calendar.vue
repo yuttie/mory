@@ -120,12 +120,13 @@
                     v-bind:color="selectedEvent.color"
                     theme="dark"
                     flat
+                    class="event-card-toolbar"
                 >
                     <v-toolbar-title>{{ selectedEvent.name }}</v-toolbar-title>
                     <v-spacer></v-spacer>
                     <v-chip
                         v-if="selectedEvent.source === 'ical'"
-                        class="mr-2"
+                        class="mr-2 flex-shrink-0"
                         size="small"
                         variant="flat"
                     >
@@ -133,13 +134,13 @@
                     </v-chip>
                     <v-chip
                         v-else-if="selectedEvent.source === 'task'"
-                        class="mr-2"
+                        class="mr-2 flex-shrink-0"
                         size="small"
                         variant="flat"
                     >
                         {{ selectedEvent.taskDate === 'due_by' ? 'Due' : 'Deadline' }}
                     </v-chip>
-                    <v-icon v-if="selectedEvent.finished" class="mr-4">{{ mdiCheck }}</v-icon>
+                    <v-icon v-if="selectedEvent.finished" class="mr-4 flex-shrink-0">{{ mdiCheck }}</v-icon>
                 </v-toolbar>
                 <v-card-text>
                     <v-list>
@@ -669,5 +670,32 @@ watch(eventWindow, (window) => {
 
 .event-card {
     user-select: text;
+}
+
+// The popup is where an event's whole name is read, but a toolbar fixes its height inline and cuts
+// the title to one line. It stays a toolbar rather than becoming a plain sheet so that styling
+// aimed at toolbars, including `.mory/custom.css`, still applies to it.
+.event-card-toolbar {
+    :deep(.v-toolbar__content) {
+        // The height Vuetify gives a toolbar at the app's global compact density, kept as a floor
+        // so a one-line title looks as it did.
+        height: auto !important;
+        min-height: 48px;
+    }
+
+    :deep(.v-toolbar-title) {
+        // Vuetify's zero basis leaves the title out of the popup's natural width, so the popup
+        // would stay as narrow as the event it opened from and wrap even a short name.
+        flex-basis: auto;
+        // Keeps a wrapped title off the toolbar's edges; a one-line title still sits within the
+        // minimum height above.
+        padding-block: 8px;
+    }
+
+    :deep(.v-toolbar-title__placeholder) {
+        white-space: normal;
+        // A long URL or unbroken word must wrap too, not widen the popup past its max-width.
+        overflow-wrap: anywhere;
+    }
 }
 </style>
