@@ -145,6 +145,11 @@ that a rewrite would silently expand into independent copies.
 have disagreed before; a third with nothing comparing it to the frontend would be a disagreement
 nobody could see. It returns the rule as declared and says so in the result.
 
+`list_events` does return each task's `due_by` and `deadline` inside the window, under
+`task_dates`, because the calendar draws them as events. Nothing there is expanded, but
+`task_dates_in_window` is still a second copy of which tasks and values `taskDatesFromEntries`
+accepts, in another language and with nothing comparing the two: change one, change the other.
+
 ## The `events:` frontmatter
 
 An event is a base occurrence (`start`), a list of occurrences (`instances`, or its older spelling `times`), or a rule (`repeat`) with adjustments to what it generates — and may be more than one of those at once. Alongside `end`, `finished`, `color` and `note`:
