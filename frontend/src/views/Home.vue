@@ -337,7 +337,7 @@ import {
 
 import type { ListEntry2 } from '@/api';
 
-import { eventsFromEntries, taskDatesFromEntries } from '@/events';
+import { DEFAULT_EVENT_COLOR, eventsFromEntries, taskDatesFromEntries } from '@/events';
 import { useCalendarsStore } from '@/stores/calendars';
 import { useFilesStore } from '@/stores/files';
 import { by } from '@/utils';
@@ -361,9 +361,18 @@ function getEventEndTime(event: any): dayjs.Dayjs {
 
 function getEventColor(event: any): string {
     const toPropName = (s: string) => s.replace(/-./g, (match: string) => match[1].toUpperCase());
-    const color = Object.hasOwn(materialColors, toPropName(event.color))
-        ? Color((materialColors as any)[toPropName(event.color)].base)
-        : Color(event.color);
+    // `Color` throws on anything it cannot parse, and a note's `color:` is free text. Throwing
+    // here happens during render, so one typo would blank every day's events rather than
+    // mis-colour one -- the same guard `Calendar.vue` has.
+    let color;
+    try {
+        color = Object.hasOwn(materialColors, toPropName(event.color))
+            ? Color((materialColors as any)[toPropName(event.color)].base)
+            : Color(event.color);
+    }
+    catch {
+        color = Color(DEFAULT_EVENT_COLOR);
+    }
 
     const now = dayjs();
     const time = getEventEndTime(event);
