@@ -123,11 +123,15 @@
                     <div ref="shadowDomRootElement" style="user-select: text">
                     </div>
                 </div>
+                <!-- Ordered after the app bar, so the bar spans the whole width above it: layout
+                     items of equal order are stacked by their place in the component tree, and
+                     this one is inside `v-main`, ahead of the bar. -->
                 <v-navigation-drawer
                     location="end"
                     v-bind:rail="miniSubSidebar"
                     permanent
                     width="312"
+                    order="1"
                     class="sidebar"
                 >
                     <v-list nav>
@@ -1879,7 +1883,9 @@ $navigation-drawer-width: 56px;
 
 .editable-viewer {
     position: relative;
-    height: 100vh;
+    // The window less the layout's bars, as in the Calendar view: `100vh` pushed the bottom of both
+    // panes under the edge of the window by the height of the app bar.
+    height: calc(100dvh - var(--v-layout-top, 0px) - var(--v-layout-bottom, 0px));
     display: flex;
 }
 
