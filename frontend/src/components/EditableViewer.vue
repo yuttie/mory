@@ -6,6 +6,131 @@
             </div>
         </template>
         <template v-else>
+            <AppBarContent>
+                <v-toolbar-title class="ms-5">{{ title }}</v-toolbar-title>
+                <v-btn-toggle
+                    v-bind:model-value="selectedMode"
+                    mandatory
+                    color="primary"
+                    class="me-1"
+                    v-on:update:model-value="setMode"
+                >
+                    <v-btn v-bind:value="0" icon title="Viewer"><v-icon>{{ mdiFileDocument }}</v-icon></v-btn>
+                    <v-btn v-bind:value="1" icon title="Editor and viewer"><v-icon>{{ mdiFileDocumentEdit }}</v-icon></v-btn>
+                    <v-btn v-bind:value="2" icon title="Editor"><v-icon>{{ mdiPencil }}</v-icon></v-btn>
+                </v-btn-toggle>
+                <!-- A phone's app bar cannot fit every action beside the title, so the ones not
+                     needed while writing wait in a menu there. -->
+                <template v-if="$vuetify.display.smAndUp">
+                    <v-btn icon v-bind:title="lockScroll ? 'Unlock scroll' : 'Lock scroll'" v-on:click="lockScroll = !lockScroll">
+                        <v-icon>{{ lockScroll ? mdiLock : mdiLockOpen }}</v-icon>
+                    </v-btn>
+                    <v-btn icon title="Compare with upstream" v-on:click="notifyUpstreamState">
+                        <v-icon>{{ mdiCompareVertical }}</v-icon>
+                    </v-btn>
+                    <v-btn icon title="Reload" v-bind:disabled="needSave" v-on:click="reload">
+                        <v-icon>{{ mdiReload }}</v-icon>
+                    </v-btn>
+                </template>
+                <v-btn
+                    icon
+                    title="Save"
+                    v-bind:color="needSave ? 'pink' : undefined"
+                    v-bind:active="needSave"
+                    v-bind:disabled="!needSave"
+                    v-on:click.stop="saveIfNeeded"
+                >
+                    <v-icon>{{ mdiContentSave }}</v-icon>
+                </v-btn>
+                <v-menu
+                    v-model="renameMenuIsVisible"
+                    v-bind:close-on-content-click="false"
+                >
+                    <template v-slot:activator="{ props: menuProps }">
+                        <v-btn
+                            v-bind="menuProps"
+                            icon
+                            title="Rename"
+                            v-bind:disabled="!noteHasUpstream"
+                        >
+                            <v-icon>{{ mdiRenameBox }}</v-icon>
+                        </v-btn>
+                    </template>
+                    <v-card
+                        min-width="30em"
+                    >
+                        <v-card-text>
+                            <v-text-field
+                                label="New path"
+                                v-model="newPath"
+                                v-bind:rules="[newPathValidationResult]"
+                                v-on:focus="$event.target.select()"
+                                v-on:keydown="onNewPathKeydown"
+                                v-on:input="onNewPathInput"
+                                autofocus
+                            ></v-text-field>
+                        </v-card-text>
+                        <v-card-actions>
+                            <v-spacer></v-spacer>
+                            <v-btn
+                                variant="text"
+                                v-on:click="renameMenuIsVisible = false;"
+                            >Cancel</v-btn>
+                            <v-btn
+                                variant="text"
+                                color="primary"
+                                v-on:click="rename(); renameMenuIsVisible = false;"
+                                v-bind:disabled="newPathConflicting"
+                            >Rename</v-btn>
+                        </v-card-actions>
+                    </v-card>
+                </v-menu>
+                <v-btn
+                    v-if="$vuetify.display.smAndUp"
+                    icon
+                    class="me-1"
+                    v-bind:title="sidebarIsVisible ? 'Hide metadata and contents' : 'Show metadata and contents'"
+                    v-bind:active="sidebarIsVisible"
+                    v-on:click="sidebarIsVisible = !sidebarIsVisible"
+                >
+                    <v-icon>{{ mdiPageLayoutSidebarRight }}</v-icon>
+                </v-btn>
+                <v-menu v-else location="bottom end">
+                    <template v-slot:activator="{ props: menuProps }">
+                        <v-btn
+                            v-bind="menuProps"
+                            icon
+                            title="More"
+                            class="me-1"
+                        >
+                            <v-icon>{{ mdiDotsVertical }}</v-icon>
+                        </v-btn>
+                    </template>
+                    <v-list>
+                        <v-list-item
+                            v-bind:title="lockScroll ? 'Unlock scroll' : 'Lock scroll'"
+                            v-bind:prepend-icon="lockScroll ? mdiLock : mdiLockOpen"
+                            v-on:click="lockScroll = !lockScroll"
+                        ></v-list-item>
+                        <v-list-item
+                            title="Compare with upstream"
+                            v-bind:prepend-icon="mdiCompareVertical"
+                            v-on:click="notifyUpstreamState"
+                        ></v-list-item>
+                        <v-list-item
+                            title="Reload"
+                            v-bind:prepend-icon="mdiReload"
+                            v-bind:disabled="needSave"
+                            v-on:click="reload"
+                        ></v-list-item>
+                        <v-list-item
+                            v-bind:title="sidebarIsVisible ? 'Hide metadata and contents' : 'Show metadata and contents'"
+                            v-bind:prepend-icon="mdiPageLayoutSidebarRight"
+                            v-on:click="sidebarIsVisible = !sidebarIsVisible"
+                        ></v-list-item>
+                    </v-list>
+                </v-menu>
+            </AppBarContent>
             <v-dialog
                 v-model="showConfirmationDialog"
                 max-width="25em"
@@ -123,201 +248,118 @@
                     <div ref="shadowDomRootElement" style="user-select: text">
                     </div>
                 </div>
+                <!-- Ordered after the app bar, so the bar spans the whole width above it: layout
+                     items of equal order are stacked by their place in the component tree, and
+                     this one is inside `v-main`, ahead of the bar. -->
                 <v-navigation-drawer
+                    v-bind:model-value="sidebarIsVisible"
                     location="end"
-                    v-bind:rail="miniSubSidebar"
                     permanent
-                    width="312"
+                    width="256"
+                    order="1"
                     class="sidebar"
                 >
-                    <v-list nav>
-                        <v-list-item
-                            v-on:click.stop="miniSubSidebar = !miniSubSidebar"
+                    <div class="sidebar-contents">
+                        <v-expansion-panels
+                            variant="accordion"
+                            multiple
+                            elevation="0"
+                            tile
+                            v-model="sidebarPanelState"
                         >
-                            <template v-slot:prepend>
-                                <v-icon>{{ miniSubSidebar ? mdiChevronDoubleLeft : mdiChevronDoubleRight }}</v-icon>
-                            </template>
-                        </v-list-item>
-                    </v-list>
-                    <v-row
-                        no-gutters
-                        class="flex-nowrap"
-                    >
-                        <v-col style="overflow: hidden;">
-                            <div class="sidebar-contents">
-                                <v-expansion-panels
-                                    variant="accordion"
-                                    multiple
-                                    elevation="0"
-                                    tile
-                                    v-model="sidebarPanelState"
-                                >
-                                    <v-expansion-panel
-                                        class="metadata"
-                                        v-if="rendered.metadata"
-                                    >
-                                        <v-expansion-panel-title>
-                                            <span>
-                                                Metadata
-                                                <template v-if="Object.hasOwn(rendered.metadata, 'validationErrors')">
-                                                    <v-tooltip location="bottom" color="success">
-                                                        <template v-slot:activator="{ props: tooltipProps }">
-                                                            <v-icon color="success" v-bind="tooltipProps">
-                                                                {{ mdiCheck }}
-                                                            </v-icon>
-                                                        </template>
-                                                        <span>YAML parse succeeded</span>
-                                                    </v-tooltip>
-                                                    <template v-if="rendered.metadata.validationErrors === null">
-                                                        <v-tooltip location="bottom" color="success">
-                                                            <template v-slot:activator="{ props: tooltipProps }">
-                                                                <v-icon color="success" v-bind="tooltipProps">
-                                                                    {{ mdiCheck }}
-                                                                </v-icon>
-                                                            </template>
-                                                            <span>Schema validation succeeded</span>
-                                                        </v-tooltip>
+                            <v-expansion-panel
+                                class="metadata"
+                                v-if="rendered.metadata"
+                            >
+                                <v-expansion-panel-title>
+                                    <span>
+                                        Metadata
+                                        <template v-if="Object.hasOwn(rendered.metadata, 'validationErrors')">
+                                            <v-tooltip location="bottom" color="success">
+                                                <template v-slot:activator="{ props: tooltipProps }">
+                                                    <v-icon color="success" v-bind="tooltipProps">
+                                                        {{ mdiCheck }}
+                                                    </v-icon>
+                                                </template>
+                                                <span>YAML parse succeeded</span>
+                                            </v-tooltip>
+                                            <template v-if="rendered.metadata.validationErrors === null">
+                                                <v-tooltip location="bottom" color="success">
+                                                    <template v-slot:activator="{ props: tooltipProps }">
+                                                        <v-icon color="success" v-bind="tooltipProps">
+                                                            {{ mdiCheck }}
+                                                        </v-icon>
                                                     </template>
-                                                    <template v-else>
-                                                        <v-tooltip location="bottom" color="error">
-                                                            <template v-slot:activator="{ props: tooltipProps }">
-                                                                <v-icon color="error" v-bind="tooltipProps">
-                                                                    {{ mdiAlert }}
-                                                                </v-icon>
-                                                            </template>
-                                                            <span>Schema validation failed</span>
-                                                        </v-tooltip>
-                                                    </template>
-                                                </template>
-                                                <template v-else>
-                                                    <v-tooltip location="bottom" color="error">
-                                                        <template v-slot:activator="{ props: tooltipProps }">
-                                                            <v-icon color="error" v-bind="tooltipProps">
-                                                                {{ mdiAlert }}
-                                                            </v-icon>
-                                                        </template>
-                                                        <span>YAML parse failed</span>
-                                                    </v-tooltip>
-                                                </template>
-                                            </span>
-                                        </v-expansion-panel-title>
-                                        <v-expansion-panel-text>
-                                            <template v-if="Object.hasOwn(rendered.metadata, 'validationErrors')">
-                                                <template v-if="rendered.metadata.validationErrors !== null">
-                                                    <ul>
-                                                        <li v-for="error of rendered.metadata.validationErrors" v-bind:key="error.dataPath + error.schemaPath">
-                                                            <span class="font-weight-bold">{{error.dataPath}}: <span class="text-error">error:</span> {{error.message}}</span> (schema path: {{error.schemaPath}})
-                                                        </li>
-                                                    </ul>
-                                                </template>
-                                                <pre class="metadata-content">{{ JSON.stringify(rendered.metadata.value, null, 2) }}</pre>
+                                                    <span>Schema validation succeeded</span>
+                                                </v-tooltip>
                                             </template>
                                             <template v-else>
-                                                <span class="text-error font-weight-bold">{{ rendered.metadata.parseError.toString() }}</span>
+                                                <v-tooltip location="bottom" color="error">
+                                                    <template v-slot:activator="{ props: tooltipProps }">
+                                                        <v-icon color="error" v-bind="tooltipProps">
+                                                            {{ mdiAlert }}
+                                                        </v-icon>
+                                                    </template>
+                                                    <span>Schema validation failed</span>
+                                                </v-tooltip>
                                             </template>
-                                        </v-expansion-panel-text>
-                                    </v-expansion-panel>
-                                    <v-expansion-panel
-                                        class="toc"
-                                    >
-                                        <v-expansion-panel-title>
-                                            Table of Contents
-                                        </v-expansion-panel-title>
-                                        <v-expansion-panel-text>
-                                            <ol class="tree" ref="tocEl">
-                                                <li v-for="h1 of toc" v-bind:key="h1.href" class="level1">
-                                                    <a v-bind:href="h1.href" v-on:click="jumpTo(h1.href)">{{ h1.title }}</a>
+                                        </template>
+                                        <template v-else>
+                                            <v-tooltip location="bottom" color="error">
+                                                <template v-slot:activator="{ props: tooltipProps }">
+                                                    <v-icon color="error" v-bind="tooltipProps">
+                                                        {{ mdiAlert }}
+                                                    </v-icon>
+                                                </template>
+                                                <span>YAML parse failed</span>
+                                            </v-tooltip>
+                                        </template>
+                                    </span>
+                                </v-expansion-panel-title>
+                                <v-expansion-panel-text>
+                                    <template v-if="Object.hasOwn(rendered.metadata, 'validationErrors')">
+                                        <template v-if="rendered.metadata.validationErrors !== null">
+                                            <ul>
+                                                <li v-for="error of rendered.metadata.validationErrors" v-bind:key="error.dataPath + error.schemaPath">
+                                                    <span class="font-weight-bold">{{error.dataPath}}: <span class="text-error">error:</span> {{error.message}}</span> (schema path: {{error.schemaPath}})
+                                                </li>
+                                            </ul>
+                                        </template>
+                                        <pre class="metadata-content">{{ JSON.stringify(rendered.metadata.value, null, 2) }}</pre>
+                                    </template>
+                                    <template v-else>
+                                        <span class="text-error font-weight-bold">{{ rendered.metadata.parseError.toString() }}</span>
+                                    </template>
+                                </v-expansion-panel-text>
+                            </v-expansion-panel>
+                            <v-expansion-panel
+                                class="toc"
+                            >
+                                <v-expansion-panel-title>
+                                    Table of Contents
+                                </v-expansion-panel-title>
+                                <v-expansion-panel-text>
+                                    <ol class="tree" ref="tocEl">
+                                        <li v-for="h1 of toc" v-bind:key="h1.href" class="level1">
+                                            <a v-bind:href="h1.href" v-on:click="jumpTo(h1.href)">{{ h1.title }}</a>
+                                            <ol>
+                                                <li v-for="h2 of h1.children" v-bind:key="h2.href" class="level2">
+                                                    <a v-bind:href="h2.href" v-on:click="jumpTo(h2.href)">{{ h2.title }}</a>
                                                     <ol>
-                                                        <li v-for="h2 of h1.children" v-bind:key="h2.href" class="level2">
-                                                            <a v-bind:href="h2.href" v-on:click="jumpTo(h2.href)">{{ h2.title }}</a>
-                                                            <ol>
-                                                                <li v-for="h3 of h2.children" v-bind:key="h3.href" class="level3">
-                                                                    <a v-bind:href="h3.href" v-on:click="jumpTo(h3.href)">{{ h3.title }}</a>
-                                                                </li>
-                                                            </ol>
+                                                        <li v-for="h3 of h2.children" v-bind:key="h3.href" class="level3">
+                                                            <a v-bind:href="h3.href" v-on:click="jumpTo(h3.href)">{{ h3.title }}</a>
                                                         </li>
                                                     </ol>
                                                 </li>
                                             </ol>
-                                        </v-expansion-panel-text>
-                                    </v-expansion-panel>
-                                </v-expansion-panels>
-                            </div>
-                        </v-col>
-                        <!-- Plain element rather than a nested <v-navigation-drawer>: in Vuetify 3+
-                             drawers register with the application layout, so nesting one inside
-                             another drawer would break both out of the sidebar. -->
-                        <div class="mode-rail">
-                            <v-list
-                                nav
-                                mandatory
-                                color="primary"
-                                v-bind:selected="[selectedMode]"
-                            >
-                                <v-list-item v-bind:value="0" v-on:click="editorIsVisible = false; viewerIsVisible = true; "><template v-slot:prepend><v-icon size="small">{{ mdiFileDocument     }}</v-icon></template></v-list-item>
-                                <v-list-item v-bind:value="1" v-on:click="editorIsVisible = true;  viewerIsVisible = true; "><template v-slot:prepend><v-icon size="small">{{ mdiFileDocumentEdit }}</v-icon></template></v-list-item>
-                                <v-list-item v-bind:value="2" v-on:click="editorIsVisible = true;  viewerIsVisible = false;"><template v-slot:prepend><v-icon size="small">{{ mdiPencil           }}</v-icon></template></v-list-item>
-                            </v-list>
-
-                            <v-divider></v-divider>
-
-                            <v-list nav>
-                                <v-list-item v-on:click="lockScroll = !lockScroll;">
-                                    <template v-slot:prepend>
-                                        <template v-if="lockScroll">
-                                            <v-icon size="small">{{ mdiLock }}</v-icon>
-                                        </template>
-                                        <template v-else>
-                                            <v-icon size="small">{{ mdiLockOpen }}</v-icon>
-                                        </template>
-                                    </template>
-                                </v-list-item>
-
-                                <v-list-item v-on:click="notifyUpstreamState">
-                                    <template v-slot:prepend><v-icon size="small">{{ mdiCompareVertical }}</v-icon></template>
-                                </v-list-item>
-                                <v-list-item                                       v-bind:disabled="needSave"         v-bind:style="needSave ? { opacity: '0.3' } : {}" v-on:click="reload"                                      ><template v-slot:prepend><v-icon size="small">{{ mdiReload      }}</v-icon></template></v-list-item>
-                                <v-list-item color="pink" v-bind:active="needSave" v-bind:disabled="!needSave"        v-bind:style="!needSave ? { opacity: '0.3' } : {}" v-on:click.stop="saveIfNeeded"><template v-slot:prepend><v-icon size="small">{{ mdiContentSave }}</v-icon></template></v-list-item>
-                                <v-list-item link         id="rename-toggle"       v-bind:disabled="!noteHasUpstream" v-bind:style="!noteHasUpstream ? { opacity: '0.3' } : {}"                      ><template v-slot:prepend><v-icon size="small">{{ mdiRenameBox   }}</v-icon></template></v-list-item>
-                            </v-list>
-                        </div>
-                    </v-row>
+                                        </li>
+                                    </ol>
+                                </v-expansion-panel-text>
+                            </v-expansion-panel>
+                        </v-expansion-panels>
+                    </div>
                 </v-navigation-drawer>
             </div>
-            <v-menu
-                v-model="renameMenuIsVisible"
-                activator="#rename-toggle"
-                v-bind:close-on-content-click="false"
-            >
-                <v-card
-                    min-width="30em"
-                >
-                    <v-card-text>
-                        <v-text-field
-                            label="New path"
-                            v-model="newPath"
-                            v-bind:rules="[newPathValidationResult]"
-                            v-on:focus="$event.target.select()"
-                            v-on:keydown="onNewPathKeydown"
-                            v-on:input="onNewPathInput"
-                            autofocus
-                        ></v-text-field>
-                    </v-card-text>
-                    <v-card-actions>
-                        <v-spacer></v-spacer>
-                        <v-btn
-                            variant="text"
-                            v-on:click="renameMenuIsVisible = false;"
-                        >Cancel</v-btn>
-                        <v-btn
-                            variant="text"
-                            color="primary"
-                            v-on:click="rename(); renameMenuIsVisible = false;"
-                            v-bind:disabled="newPathConflicting"
-                        >Rename</v-btn>
-                    </v-card-actions>
-                </v-card>
-            </v-menu>
             <AiActionAdHocDialog
                 v-model="adHocDialogIsVisible"
                 v-bind:existing-ids="aiActions.map((action) => action.id)"
@@ -350,15 +392,14 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount, onUnmounted, nextTick } from 'vue';
 
 import {
     mdiAlert,
     mdiCheck,
-    mdiChevronDoubleLeft,
-    mdiChevronDoubleRight,
     mdiCompareVertical,
     mdiContentSave,
+    mdiDotsVertical,
     mdiFileDocument,
     mdiFileDocumentEdit,
     mdiFormatBold,
@@ -369,6 +410,7 @@ import {
     mdiLinkVariant,
     mdiLock,
     mdiLockOpen,
+    mdiPageLayoutSidebarRight,
     mdiPencil,
     mdiReload,
     mdiRenameBox,
@@ -385,6 +427,7 @@ import metadataSchema from '@/metadata-schema.json';
 import Ajv from 'ajv';
 import type { DefinedError } from 'ajv';
 import AiActionAdHocDialog from './AiActionAdHocDialog.vue';
+import AppBarContent from './AppBarContent.vue';
 import AiActionInputDialog from './AiActionInputDialog.vue';
 import AiActionMenu from './AiActionMenu.vue';
 import { runAiAction as runAiActionRequest } from '@/api';
@@ -428,7 +471,7 @@ const lockScroll = ref(loadConfigValue('lock-scroll', false));
 const noteHasUpstream = ref(false);
 const editorIsVisible = ref(false);
 const viewerIsVisible = ref(true);
-const miniSubSidebar = ref(true);
+const sidebarIsVisible = ref(false);
 const sidebarPanelState = ref([0]);
 const renameMenuIsVisible = ref(false);
 const newPath = ref(null as null | string);
@@ -698,6 +741,13 @@ onMounted(async () => {
     viewer.value.addEventListener('scroll', handleDocumentScroll);
 });
 
+// Not in `onUnmounted`, where Vue has already cleared the template ref. The error that threw there
+// cut short the rest of the render that unmounted the note, so the next view's `mounted` work, such
+// as teleporting its controls into the app bar, never happened.
+onBeforeUnmount(() => {
+    viewer.value.removeEventListener('scroll', handleDocumentScroll);
+});
+
 onUnmounted(() => {
     window.removeEventListener('focus', notifyUpstreamState);
     window.removeEventListener('focus', focusOrBlurEditor);
@@ -715,8 +765,6 @@ onUnmounted(() => {
         chunkRenderController.abort();
         chunkRenderController = null;
     }
-
-    viewer.value.removeEventListener('scroll', handleDocumentScroll);
 });
 
 // Methods
@@ -1548,6 +1596,12 @@ async function reload() {
     await load(notePath.value);
 }
 
+// Shows the panes a mode button in the app bar stands for, numbered as `selectedMode` numbers them.
+function setMode(mode: number) {
+    editorIsVisible.value = mode !== 0;
+    viewerIsVisible.value = mode !== 2;
+}
+
 function toggleEditor() {
     if (viewerIsVisible.value) {
         if (editorIsVisible.value) {
@@ -1875,11 +1929,11 @@ watch(notePath, async (newPath, oldPath) => {
 </script>
 
 <style scoped lang="scss">
-$navigation-drawer-width: 56px;
-
 .editable-viewer {
     position: relative;
-    height: 100vh;
+    // The window less the layout's bars, as in the Calendar view: `100vh` pushed the bottom of both
+    // panes under the edge of the window by the height of the app bar.
+    height: calc(100dvh - var(--v-layout-top, 0px) - var(--v-layout-bottom, 0px));
     display: flex;
 }
 
@@ -1959,18 +2013,7 @@ $navigation-drawer-width: 56px;
 .sidebar {
 }
 
-/* Icon rail on the inner edge of the right sidebar; sized to match the collapsed
-   (rail) width of the sidebar so that only this column is visible when collapsed */
-.mode-rail {
-    /* Allow shrinking by the drawer's border width so the row never overflows */
-    flex: 0 1 $navigation-drawer-width;
-    width: $navigation-drawer-width;
-    border-left: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
-}
-
 .sidebar-contents {
-    width: 256px;  /* Keep this in sync with the width of v-navigation-drawer */
-
     /* Correct z-order of right sidebar's border and v-expansion-panels inside this element */
     position: relative;
     z-index: 0;

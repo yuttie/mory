@@ -3,9 +3,12 @@
         id="search"
         class="d-flex flex-column"
     >
-        <v-sheet class="pt-13 pb-3 px-3">
-            <v-form v-on:submit.prevent="submit">
-                <div class="d-flex ga-2 align-start">
+        <AppBarContent>
+            <v-form
+                class="flex-grow-1 ms-2 me-1"
+                v-on:submit.prevent="submit"
+            >
+                <div class="d-flex ga-2 align-center">
                     <v-text-field
                         ref="queryEl"
                         v-model="draftQuery"
@@ -33,6 +36,8 @@
                     />
                 </div>
             </v-form>
+        </AppBarContent>
+        <v-sheet class="pb-3 px-3">
             <p class="text-caption text-medium-emphasis mt-2 mb-0">
                 {{ modeHelp }}
             </p>
@@ -139,6 +144,7 @@ import type {
 } from '@/api';
 import { routeForMime } from '@/file-route';
 import { useFilesStore } from '@/stores/files';
+import AppBarContent from '@/components/AppBarContent.vue';
 
 const emit = defineEmits<{
     (e: 'tokenExpired', callback: () => void): void;
@@ -490,6 +496,11 @@ watch(draftMode, (mode) => {
 
 .mode-select {
     max-width: 10rem;
+
+    // A phone's app bar has little room for the two, and the query needs it more than a mode name.
+    @media (max-width: 599px) {
+        max-width: 7rem;
+    }
 }
 
 .result-meta {

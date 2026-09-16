@@ -31,13 +31,6 @@
         >
             <div class="d-flex flex-column h-100">
                 <v-list nav class="flex-grow-0 flex-shrink-0">
-                    <v-list-item
-                        v-on:click="miniMainSidebar = !miniMainSidebar"
-                    >
-                        <template v-slot:prepend>
-                            <v-icon>{{ miniMainSidebar ? mdiChevronDoubleRight : mdiChevronDoubleLeft }}</v-icon>
-                        </template>
-                    </v-list-item>
                     <v-list-item title="mory">
                         <template v-slot:prepend>
                             <v-img
@@ -514,17 +507,29 @@
             </v-list>
         </v-navigation-drawer>
 
-        <!-- App bar for mobile -->
         <v-app-bar
-            v-if="$vuetify.display.xs"
             scroll-behavior="elevate"
             color="white"
         >
-            <v-app-bar-nav-icon v-on:click="mobileDrawer = !mobileDrawer" />
-            <v-toolbar-title>{{ $route.name?.replace(/With.*$/, '') ?? '' }}</v-toolbar-title>
+            <!-- A phone opens its drawer from here; a desktop, whose drawer is always there,
+                 collapses it to a rail. -->
+            <v-app-bar-nav-icon
+                v-on:click="$vuetify.display.xs ? mobileDrawer = !mobileDrawer : miniMainSidebar = !miniMainSidebar"
+            />
+            <v-toolbar-title v-if="appStore.appBarClaims === 0">
+                {{ $route.name?.replace(/With.*$/, '') ?? '' }}
+            </v-toolbar-title>
+            <!-- Where a view puts its own controls, through <AppBarContent>. It draws no box of its
+                 own, so what lands here is laid out as the toolbar's own children are. Only
+                 Vuetify's spacing, written as `.v-toolbar__content > …`, misses them: a view
+                 spaces its controls from the edges and gives a title its margin itself. -->
+            <div
+                id="app-bar-content"
+                class="app-bar-content"
+            />
             <!-- The drawer is hidden on a phone, so point at the notice it holds. -->
             <v-btn
-                v-if="indexingStops.length > 0"
+                v-if="$vuetify.display.xs && indexingStops.length > 0"
                 icon
                 color="error"
                 title="Indexing stopped"
@@ -590,8 +595,6 @@ import {
     mdiCalendarOutline,
     mdiCheck,
     mdiCheckboxMultipleMarkedOutline,
-    mdiChevronDoubleLeft,
-    mdiChevronDoubleRight,
     mdiCloudUploadOutline,
     mdiCogOutline,
     mdiExclamationThick,
@@ -1041,6 +1044,10 @@ watch(() => route.name, () => {
             background-color: hsla(212, 100%, 50%, 0.33);
         }
     }
+}
+
+.app-bar-content {
+    display: contents;
 }
 
 #nav {
