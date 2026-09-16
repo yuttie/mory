@@ -189,11 +189,6 @@ const initializeTimeEnabled = () => {
     }
 };
 
-// Watch for changes to the value prop and re-initialize timeEnabled
-watch(() => props.modelValue, () => {
-    initializeTimeEnabled();
-}, { immediate: true });
-
 // Parse the input value to extract date and time parts
 const parseDateTime = (value: string | null | undefined): { date: string | null; time: string | null; timezone: string | null } => {
     if (!value) {
@@ -228,6 +223,13 @@ const parseDateTime = (value: string | null | undefined): { date: string | null;
     
     return { date: null, time: null, timezone: null };
 };
+
+// Watch for changes to the value prop and re-initialize timeEnabled. Only once `parseDateTime` is
+// defined: the first run is immediate, and a value already set when the field mounts, as a done
+// task's completion time is, would otherwise reach the arrow function before its initialization.
+watch(() => props.modelValue, () => {
+    initializeTimeEnabled();
+}, { immediate: true });
 
 // Computed properties for date and time values
 const dateValue = computed<string | null>({
