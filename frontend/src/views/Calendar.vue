@@ -671,6 +671,16 @@ watch(eventWindow, (window) => {
     // the whole app instead of shrinking the grid. The window, less whatever the layout's bars
     // take, is the height the grid has to fit into.
     height: calc(100dvh - var(--v-layout-top, 0px) - var(--v-layout-bottom, 0px));
+
+    // An alert names the notes the view could not draw, so it keeps its height and the grid gives
+    // up the room. Vuetify's own `flex: 1 1 0%` would squeeze it to nothing instead, and since it
+    // clips what it cannot fit, the errors would be there but unreadable. Beyond a share of the
+    // view it scrolls itself: the grid has to stay a calendar however long the list is.
+    > .v-alert {
+        flex: 0 0 auto;
+        max-height: 40%;
+        overflow-y: auto;
+    }
 }
 
 .event-card {
