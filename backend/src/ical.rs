@@ -32,8 +32,8 @@ use chrono::{DateTime, Duration, FixedOffset, NaiveDate, Offset, TimeZone};
 // Resolving a `TZID` goes through `CalendarDateTime::try_into_utc`, so the IANA database is never
 // named directly and `chrono-tz` stays a transitive dependency rather than a declared one.
 use icalendar::{
-    Calendar, CalendarDateTime, Component, DatePerhapsTime, Event, EventLike, Frequency, NWeekday,
-    RRuleSet, Tz, Weekday,
+    Calendar, CalendarComponent, CalendarDateTime, Component, DatePerhapsTime, Event, EventLike,
+    Frequency, NWeekday, Property, RRuleSet, Tz, Weekday,
 };
 use serde::Serialize;
 
@@ -158,9 +158,82 @@ pub struct Expansion {
 }
 
 pub fn parse_calendar(ics: &str) -> Result<Calendar> {
-    ics.parse::<Calendar>()
+    let mut calendar = ics
+        .parse::<Calendar>()
         .map_err(|e| anyhow::anyhow!("{e}"))
-        .context("failed to parse the calendar")
+        .context("failed to parse the calendar")?;
+    anchor_floating_until(&mut calendar);
+    Ok(calendar)
+}
+
+// --- repairing what expansion would otherwise refuse -----------------------------------------
+
+/// Rewrites a floating `UNTIL` as UTC wherever expansion anchors `DTSTART` to a named zone.
+///
+/// RFC 5545 §3.3.10 requires `UNTIL` to carry the same value type as `DTSTART`, so an all-day
+/// series bounded by a bare date is what a correct feed writes -- and what Google writes. But
+/// `build_recurrence_set` anchors a date-only `DTSTART` to the feed's `X-WR-TIMEZONE` and passes
+/// the `RRULE` through untouched, so `rrule` is left holding a zoned start against a floating
+/// cut-off and refuses the rule: "Allowed timezones for `UNTIL` with the given start date timezone
+/// are: `["UTC"]`". The whole series is then dropped, error and all -- four of one subscribed
+/// calendar's, every one of them written exactly as the RFC says.
+///
+/// So the cut-off is converted the way the start already is: read as wall clock in the zone the
+/// start is anchored to. A bare date means the end of that day, which keeps the last occurrence on
+/// the `UNTIL` date itself, as Google draws it.
+fn anchor_floating_until(calendar: &mut Calendar) {
+    let calendar_tz = calendar.get_timezone().map(str::to_string);
+    for component in &mut calendar.components {
+        let CalendarComponent::Event(event) = component else { continue };
+        let Some(rrule) = event.property_value("RRULE").map(str::to_string) else { continue };
+        let Some(until) = until_of(&rrule) else { continue };
+        // Already an instant, which is every well-formed timed series and needs nothing.
+        if until.ends_with('Z') {
+            continue;
+        }
+        let Some(tzid) = anchoring_zone(event, calendar_tz.as_deref()) else { continue };
+        let Some(date_time) = floating_until(until) else { continue };
+        // Through `CalendarDateTime` rather than `chrono-tz` directly, as everywhere else here, so
+        // the IANA database stays a transitive dependency.
+        let Some(utc) = (CalendarDateTime::WithTimezone { date_time, tzid }).try_into_utc() else {
+            continue;
+        };
+        let anchored = rrule.replace(until, &utc.format("%Y%m%dT%H%M%SZ").to_string());
+        event.append_property(Property::new("RRULE", anchored));
+    }
+}
+
+/// The `UNTIL` value in a raw `RRULE`, borrowed from it so the rewrite can replace just that part.
+fn until_of(rrule: &str) -> Option<&str> {
+    rrule
+        .split(';')
+        .find_map(|part| part.strip_prefix("UNTIL="))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+}
+
+/// The zone `build_recurrence_set` will expand this event's `DTSTART` in, when it names one.
+///
+/// A floating start is left alone: `rrule` accepts a floating `UNTIL` alongside it, and guessing a
+/// zone for a feed that deliberately named none would move every occurrence.
+fn anchoring_zone(event: &Event, calendar_tz: Option<&str>) -> Option<String> {
+    let dtstart = event.properties().get("DTSTART")?;
+    if let Some(tzid) = dtstart.params().get("TZID") {
+        return Some(tzid.value().to_string());
+    }
+    match DatePerhapsTime::from_property(dtstart) {
+        Some(DatePerhapsTime::Date(_)) => calendar_tz.map(str::to_string),
+        _ => None,
+    }
+}
+
+/// A floating `UNTIL` as wall clock: a bare date means the end of that day, so that the date
+/// itself still occurs.
+fn floating_until(until: &str) -> Option<chrono::NaiveDateTime> {
+    if let Ok(date_time) = chrono::NaiveDateTime::parse_from_str(until, "%Y%m%dT%H%M%S") {
+        return Some(date_time);
+    }
+    NaiveDate::parse_from_str(until, "%Y%m%d").ok()?.and_hms_opt(23, 59, 59)
 }
 
 // --- datetime formatting -------------------------------------------------------------------
