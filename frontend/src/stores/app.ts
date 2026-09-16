@@ -18,6 +18,9 @@ export const useAppStore = defineStore('app', () => {
   const serviceWorkerConfigured = ref(false);
   const serviceWorkerHasToken = ref(false);
   const draggingViewerContent = ref(false);
+  // How many mounted views are showing their own controls in the app bar, through <AppBarContent>.
+  // While any is, the app bar leaves out its generic title.
+  const appBarClaims = ref(0);
 
   // Getters
   const hasToken = computed(() => !!token.value);
@@ -123,6 +126,7 @@ export const useAppStore = defineStore('app', () => {
     serviceWorkerConfigured,
     serviceWorkerHasToken,
     draggingViewerContent,
+    appBarClaims,
     // Getters
     hasToken,
     // Actions

@@ -516,7 +516,17 @@
             <v-app-bar-nav-icon
                 v-on:click="$vuetify.display.xs ? mobileDrawer = !mobileDrawer : miniMainSidebar = !miniMainSidebar"
             />
-            <v-toolbar-title>{{ $route.name?.replace(/With.*$/, '') ?? '' }}</v-toolbar-title>
+            <v-toolbar-title v-if="appStore.appBarClaims === 0">
+                {{ $route.name?.replace(/With.*$/, '') ?? '' }}
+            </v-toolbar-title>
+            <!-- Where a view puts its own controls, through <AppBarContent>. It draws no box of its
+                 own, so what lands here is laid out as the toolbar's own children are. Only
+                 Vuetify's spacing, written as `.v-toolbar__content > …`, misses them: a view
+                 spaces its controls from the edges and gives a title its margin itself. -->
+            <div
+                id="app-bar-content"
+                class="app-bar-content"
+            />
             <!-- The drawer is hidden on a phone, so point at the notice it holds. -->
             <v-btn
                 v-if="$vuetify.display.xs && indexingStops.length > 0"
@@ -1034,6 +1044,10 @@ watch(() => route.name, () => {
             background-color: hsla(212, 100%, 50%, 0.33);
         }
     }
+}
+
+.app-bar-content {
+    display: contents;
 }
 
 #nav {

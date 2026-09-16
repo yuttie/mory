@@ -1,32 +1,66 @@
 <template>
     <div id="calendar" class="d-flex flex-column">
-        <v-toolbar flat border color="transparent" class="flex-grow-0">
-            <v-btn variant="outlined" v-on:click="setToday" class="mr-3">Today</v-btn>
-            <v-btn icon variant="text" size="small" v-on:click="navigateCalendar('prev')">
+        <AppBarContent>
+            <!-- A phone's app bar has no room to spell out every control beside the month, and the
+                 month is what says where the calendar is. -->
+            <v-btn
+                v-if="$vuetify.display.xs"
+                icon
+                size="small"
+                title="Today"
+                class="ml-1"
+                v-on:click="setToday"
+            >
+                <v-icon>{{ mdiCalendarToday }}</v-icon>
+            </v-btn>
+            <v-btn v-else variant="outlined" v-on:click="setToday" class="ml-1 mr-3">Today</v-btn>
+            <v-btn icon size="small" v-on:click="navigateCalendar('prev')">
                 <v-icon>{{ mdiChevronLeft }}</v-icon>
             </v-btn>
-            <v-btn icon variant="text" size="small" v-on:click="navigateCalendar('next')" class="mr-3">
+            <v-btn icon size="small" v-on:click="navigateCalendar('next')">
                 <v-icon>{{ mdiChevronRight }}</v-icon>
             </v-btn>
-            <v-toolbar-title v-if="calendar" class="mr-3">
-                {{ calendar.title }}
+            <!-- Drawn even before the calendar has mounted and has a title to give it, because it
+                 is also what holds the controls after it at the end of the bar. -->
+            <v-toolbar-title
+                v-bind:class="$vuetify.display.xs ? 'ms-2 me-1' : 'ms-8 me-3'"
+            >
+                {{ calendar?.title }}
             </v-toolbar-title>
-            <v-spacer></v-spacer>
+            <v-menu v-if="$vuetify.display.xs" location="bottom end">
+                <template v-slot:activator="{ props }">
+                    <v-btn
+                        v-bind="props"
+                        size="small"
+                        class="mr-1"
+                    >
+                        {{ calendarTypes.find((type) => type.value === calendarType)?.title }}
+                    </v-btn>
+                </template>
+                <v-list>
+                    <v-list-item
+                        v-for="type of calendarTypes"
+                        v-bind:key="type.value"
+                        v-bind:title="type.title"
+                        v-bind:active="type.value === calendarType"
+                        v-on:click="setCalendarType(type.value)"
+                    ></v-list-item>
+                </v-list>
+            </v-menu>
             <v-btn-toggle
+                v-else
                 v-bind:model-value="calendarType"
                 mandatory
                 variant="outlined"
                 class="mr-2"
                 v-on:update:model-value="setCalendarType"
             >
-                <v-btn value="day">
-                    Day
-                </v-btn>
-                <v-btn value="week">
-                    Week
-                </v-btn>
-                <v-btn value="month">
-                    Month
+                <v-btn
+                    v-for="type of calendarTypes"
+                    v-bind:key="type.value"
+                    v-bind:value="type.value"
+                >
+                    {{ type.title }}
                 </v-btn>
             </v-btn-toggle>
             <v-menu
@@ -39,7 +73,7 @@
                         v-bind="props"
                         icon
                         size="small"
-                        variant="text"
+                        class="mr-1"
                         title="Choose which imported calendars are shown"
                     >
                         <v-badge
@@ -89,7 +123,7 @@
                 color="primary"
                 v-bind:active="isLoading || calendars.isLoading"
             ></v-progress-linear>
-        </v-toolbar>
+        </AppBarContent>
         <v-calendar
             ref="calendar"
             v-bind:type="calendarType"
@@ -235,6 +269,7 @@ import { useRoute, useRouter } from 'vue-router';
 import {
     mdiCalendarImport,
     mdiCalendarMultiple,
+    mdiCalendarToday,
     mdiCheck,
     mdiCheckboxMarkedOutline,
     mdiChevronLeft,
@@ -258,6 +293,7 @@ import Color from 'color';
 import materialColors from 'vuetify/util/colors';
 import dayjs from 'dayjs';
 import { renderMarkdown } from '@/markdown';
+import AppBarContent from '@/components/AppBarContent.vue';
 
 // Emits
 const emit = defineEmits<{
@@ -271,6 +307,12 @@ const files = useFilesStore();
 const calendars = useCalendarsStore();
 
 type CalendarType = 'month' | 'week' | 'day';
+
+const calendarTypes: { value: CalendarType, title: string }[] = [
+    { value: 'day', title: 'Day' },
+    { value: 'week', title: 'Week' },
+    { value: 'month', title: 'Month' },
+];
 
 // Reactive states
 const isLoading = ref(false);
