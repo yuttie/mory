@@ -1,50 +1,51 @@
 <template>
     <div id="tasks-next" class="d-flex" v-bind:class="{ 'flex-column': !$vuetify.display.smAndUp, 'flex-row': $vuetify.display.smAndUp }">
+        <!-- Outside the check for a loaded store, so the app bar does not show the route's name
+             until the tasks arrive. -->
+        <AppBarContent>
+            <v-toolbar-title class="ms-5">
+                <span v-if="store.isLoaded">{{ filteredTasksCount }} tasks left</span>
+            </v-toolbar-title>
+            <v-menu
+                v-bind:close-on-content-click="false"
+            >
+                <template v-slot:activator="{ props: menuProps }">
+                    <v-btn
+                        icon
+                        class="mr-1"
+                        v-bind="menuProps"
+                    >
+                        <v-icon>{{ mdiDotsVertical }}</v-icon>
+                    </v-btn>
+                </template>
+                <v-list>
+                    <v-list-subheader>Statistics</v-list-subheader>
+                    <v-list-item>
+                        <v-list-item-title v-for="[kind, label] of Object.entries(STATUS_LABEL)" v-bind:key="kind">
+                            {{ label }}: {{ store.allTasks.filter((t) => t.metadata?.task?.status?.kind === kind).length }}
+                        </v-list-item-title>
+                    </v-list-item>
+                </v-list>
+                <v-divider></v-divider>
+                <v-list>
+                    <v-list-subheader>Config</v-list-subheader>
+                    <v-list-item>
+                        <template v-slot:prepend>
+                            <v-switch
+                                v-model="hideCompletedInTreeView"
+                                hide-details
+                                class="mt-0 mr-2"
+                            ></v-switch>
+                        </template>
+                        <v-list-item-title>
+                            Hide completed tasks in tree view
+                        </v-list-item-title>
+                    </v-list-item>
+                </v-list>
+            </v-menu>
+        </AppBarContent>
         <template v-if="store.isLoaded">
             <v-sheet class="d-flex flex-column task-tree-container"><!-- NOTE: Necessary for <TaskTree> to have vertical scrollbar -->
-                <v-toolbar flat class="flex-grow-0">
-                    <v-toolbar-title>
-                        <span>{{ filteredTasksCount }} tasks left</span>
-                    </v-toolbar-title>
-                    <v-spacer />
-                    <v-menu
-                        v-bind:close-on-content-click="false"
-                    >
-                        <template v-slot:activator="{ props: menuProps }">
-                            <v-btn
-                                icon
-                                variant="text"
-                                v-bind="menuProps"
-                            >
-                                <v-icon>{{ mdiDotsVertical }}</v-icon>
-                            </v-btn>
-                        </template>
-                        <v-list>
-                            <v-list-subheader>Statistics</v-list-subheader>
-                            <v-list-item>
-                                <v-list-item-title v-for="[kind, label] of Object.entries(STATUS_LABEL)" v-bind:key="kind">
-                                    {{ label }}: {{ store.allTasks.filter((t) => t.metadata?.task?.status?.kind === kind).length }}
-                                </v-list-item-title>
-                            </v-list-item>
-                        </v-list>
-                        <v-divider></v-divider>
-                        <v-list>
-                            <v-list-subheader>Config</v-list-subheader>
-                            <v-list-item>
-                                <template v-slot:prepend>
-                                    <v-switch
-                                        v-model="hideCompletedInTreeView"
-                                        hide-details
-                                        class="mt-0 mr-2"
-                                    ></v-switch>
-                                </template>
-                                <v-list-item-title>
-                                    Hide completed tasks in tree view
-                                </v-list-item-title>
-                            </v-list-item>
-                        </v-list>
-                    </v-menu>
-                </v-toolbar>
                 <TaskTree
                     v-bind:items="filteredForestWithTags"
                     v-bind:active="activeNodeId"
@@ -204,6 +205,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useLocalStorage } from '@/composables/localStorage';
+import AppBarContent from '@/components/AppBarContent.vue';
 
 import {
     mdiCalendarMultiselectOutline,
