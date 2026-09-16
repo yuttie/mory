@@ -665,7 +665,12 @@ watch(eventWindow, (window) => {
 
 <style scoped lang="scss">
 #calendar {
-    height: 100%;
+    // Not `height: 100%`: that resolves against `v-main`, which Vuetify gives `flex: 1 0 auto`
+    // inside a wrapper with only a `min-height`, so it grows with whatever is inside it. The view
+    // was then as tall as its own contents, and a busy month or an alert under the grid scrolled
+    // the whole app instead of shrinking the grid. The window, less whatever the layout's bars
+    // take, is the height the grid has to fit into.
+    height: calc(100dvh - var(--v-layout-top, 0px) - var(--v-layout-bottom, 0px));
 }
 
 .event-card {
