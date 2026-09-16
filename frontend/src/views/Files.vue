@@ -1,6 +1,6 @@
 <template>
     <div id="files" class="d-flex flex-column">
-        <v-sheet class="pt-13 pb-3">
+        <AppBarContent>
             <v-menu
                 v-model="showingTagList"
                 v-bind:close-on-content-click="false"
@@ -19,7 +19,7 @@
                         autocomplete="off"
                         hide-details="auto"
                         ref="queryEl"
-                        class="mx-3 flex-grow-0"
+                        class="ms-2 me-1 flex-grow-1"
                     >
                         <template v-slot:prepend-inner>
                             <v-icon>{{ mdiMagnify }}</v-icon>
@@ -43,7 +43,7 @@
                     </v-card-text>
                 </v-card>
             </v-menu>
-        </v-sheet>
+        </AppBarContent>
         <v-data-table
             v-bind:headers="headers"
             v-bind:items="matchedEntries"
@@ -127,6 +127,7 @@ import { compareTags } from '@/api';
 
 import { useFilesStore } from '@/stores/files';
 import { routeForMime } from '@/file-route';
+import AppBarContent from '@/components/AppBarContent.vue';
 
 import dayjs from 'dayjs';
 
