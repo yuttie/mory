@@ -31,13 +31,6 @@
         >
             <div class="d-flex flex-column h-100">
                 <v-list nav class="flex-grow-0 flex-shrink-0">
-                    <v-list-item
-                        v-on:click="miniMainSidebar = !miniMainSidebar"
-                    >
-                        <template v-slot:prepend>
-                            <v-icon>{{ miniMainSidebar ? mdiChevronDoubleRight : mdiChevronDoubleLeft }}</v-icon>
-                        </template>
-                    </v-list-item>
                     <v-list-item title="mory">
                         <template v-slot:prepend>
                             <v-img
@@ -514,17 +507,19 @@
             </v-list>
         </v-navigation-drawer>
 
-        <!-- App bar for mobile -->
         <v-app-bar
-            v-if="$vuetify.display.xs"
             scroll-behavior="elevate"
             color="white"
         >
-            <v-app-bar-nav-icon v-on:click="mobileDrawer = !mobileDrawer" />
+            <!-- A phone opens its drawer from here; a desktop, whose drawer is always there,
+                 collapses it to a rail. -->
+            <v-app-bar-nav-icon
+                v-on:click="$vuetify.display.xs ? mobileDrawer = !mobileDrawer : miniMainSidebar = !miniMainSidebar"
+            />
             <v-toolbar-title>{{ $route.name?.replace(/With.*$/, '') ?? '' }}</v-toolbar-title>
             <!-- The drawer is hidden on a phone, so point at the notice it holds. -->
             <v-btn
-                v-if="indexingStops.length > 0"
+                v-if="$vuetify.display.xs && indexingStops.length > 0"
                 icon
                 color="error"
                 title="Indexing stopped"
@@ -590,8 +585,6 @@ import {
     mdiCalendarOutline,
     mdiCheck,
     mdiCheckboxMultipleMarkedOutline,
-    mdiChevronDoubleLeft,
-    mdiChevronDoubleRight,
     mdiCloudUploadOutline,
     mdiCogOutline,
     mdiExclamationThick,
