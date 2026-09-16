@@ -33,11 +33,16 @@ const routes: Array<RouteRecordRaw> = [
                 params: { type: 'month', year: yyyy, month: mm, day: dd },
             };
         },
-    },
-    {
-        path: '/calendar/:type/:year/:month/:day',
-        name: 'CalendarWithDate',
-        component: Calendar,
+        // Nested rather than a sibling so a link to `/calendar` stays active
+        // once the redirect lands: RouterLink counts a link as active only
+        // when its record is among the current route's matched records.
+        children: [
+            {
+                path: ':type/:year/:month/:day',
+                name: 'CalendarWithDate',
+                component: Calendar,
+            },
+        ],
     },
     {
         path: '/tasks',
@@ -53,11 +58,14 @@ const routes: Array<RouteRecordRaw> = [
                 params: { selectedNodeId: '_', tab: 'descendants', viewMode: 'status' },
             };
         },
-    },
-    {
-        path: '/tasks-next/:selectedNodeId/:tab/:viewMode',
-        name: 'TasksNextWithParams',
-        component: TasksNext,
+        // Nested for the same reason as the calendar's routes.
+        children: [
+            {
+                path: ':selectedNodeId/:tab/:viewMode',
+                name: 'TasksNextWithParams',
+                component: TasksNext,
+            },
+        ],
     },
     {
         path: '/create',
