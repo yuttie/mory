@@ -37,9 +37,19 @@ export interface NoteNode extends ForestNode {
     latest: string;
 }
 
-// The nested shape v-treeview consumes. `children` is absent, not empty, on a leaf.
+// What a row hands to its list item. v-treeview spreads the `props` key of an item onto the row,
+// and `to` is what makes that row an `<a href>` rather than a div listening for a click -- so a
+// middle click, a Ctrl-click, "Open link in new tab" and the status bar all behave as they do on
+// any other link.
+export interface NoteRowProps {
+    to: RouteLocationRaw;
+}
+
+// The nested shape v-treeview consumes. `children` is absent, not empty, on a leaf, and `props` is
+// absent on a directory, which is not a link because it has nowhere to go.
 export interface NoteTreeItem extends NoteNode {
     children?: NoteTreeItem[];
+    props?: NoteRowProps;
 }
 
 export function isHiddenPath(path: string): boolean {
