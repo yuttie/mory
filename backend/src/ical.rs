@@ -1,6 +1,6 @@
 //! Turning an iCalendar feed into the events mory draws, and into the note one converts to.
 //!
-//! Three things about real feeds shape this module, all of them observed in Google's own output
+//! Four things about real feeds shape this module, all of them observed in Google's own output
 //! rather than inferred from RFC 5545:
 //!
 //!   * A **modified occurrence** of a series is its own `VEVENT`, sharing the series `UID` and
@@ -10,6 +10,11 @@
 //!     `STATUS:CANCELLED`. Both mean "this date does not happen", so both become an exclusion.
 //!   * `DTEND` is **exclusive**, and for an all-day event that means the day after the last one.
 //!     mory's `end` is inclusive, so an all-day end is pulled back a day on the way in.
+//!   * A rule may be **unusable while its occurrences are not**. An event given an end date whose
+//!     start is then moved past it keeps the overrides it already had, and Google goes on drawing
+//!     them although the rule can now generate nothing. A rule naming a zone that cannot be
+//!     resolved is unusable the same way. Either way the overrides are still drawn: they are the
+//!     occurrences someone took the trouble to edit.
 //!
 //! Expansion is delegated to `rrule`, through `icalendar`'s `recurrence` feature, which already
 //! assembles `DTSTART`/`RRULE`/`RDATE`/`EXDATE` into an `RRuleSet` and applies RFC 5545 §3.6.1 --
@@ -33,7 +38,8 @@ use chrono::{DateTime, Duration, FixedOffset, NaiveDate, Offset, TimeZone};
 // named directly and `chrono-tz` stays a transitive dependency rather than a declared one.
 use icalendar::{
     Calendar, CalendarComponent, CalendarDateTime, Component, DatePerhapsTime, Event, EventLike,
-    Frequency, NWeekday, Property, RRuleSet, Tz, Weekday,
+    Frequency, NWeekday, Property, RRuleSet, RecurrenceError, Tz, Weekday,
+    rrule::{RRuleError, ValidationError},
 };
 use serde::Serialize;
 
@@ -579,22 +585,22 @@ pub fn expand(
             // Overrides with no base: the series itself is outside whatever the feed published,
             // so each override stands alone as its own occurrence.
             None => {
-                for event in &series.overrides {
-                    if is_cancelled(event) {
-                        continue;
-                    }
-                    if let Some(occurrence) = standalone(event, calendar_id, &uid, from, to) {
-                        expansion.events.push(occurrence);
-                    }
-                }
+                standalone_overrides(&series.overrides, calendar_id, &uid, from, to, &mut expansion);
                 continue;
             }
         };
 
-        if let Err(warning) = expand_series(
+        if let Err(failure) = expand_series(
             base, &series.overrides, calendar, calendar_id, &uid, from, to, &mut expansion,
         ) {
-            expansion.warnings.push(warning);
+            // The rule is what was lost, not the occurrences the feed wrote out itself. Those are
+            // exactly the ones someone moved or renamed, which is why they are in the feed twice
+            // -- and they are what Google draws for such a series whatever became of the rule.
+            // Both failures happen before anything is pushed, so nothing is drawn twice.
+            standalone_overrides(&series.overrides, calendar_id, &uid, from, to, &mut expansion);
+            if let SeriesFailure::Unreadable(warning) = failure {
+                expansion.warnings.push(warning);
+            }
         }
     }
     expansion
@@ -618,6 +624,26 @@ fn occurrence_key(event: &Event, occurrence: DateTime<Tz>) -> String {
         format_date(occurrence.date_naive())
     } else {
         occurrence.timestamp().to_string()
+    }
+}
+
+/// Every override of one series drawn on its own, for a series whose rule yielded nothing to
+/// attach them to.
+fn standalone_overrides(
+    overrides: &[&Event],
+    calendar_id: &str,
+    uid: &str,
+    from: DateTime<FixedOffset>,
+    to: DateTime<FixedOffset>,
+    into: &mut Expansion,
+) {
+    for event in overrides {
+        if is_cancelled(event) {
+            continue;
+        }
+        if let Some(occurrence) = standalone(event, calendar_id, uid, from, to) {
+            into.events.push(occurrence);
+        }
     }
 }
 
@@ -664,6 +690,18 @@ fn standalone(
     })
 }
 
+/// Why a series contributed no occurrences of its own.
+enum SeriesFailure {
+    /// The rule reads perfectly well and generates nothing: `UNTIL` before `DTSTART`, which
+    /// `rrule` refuses as invalid rather than expanding to the empty set. Google's own feeds carry
+    /// them -- an event given an end date whose start was then moved past it -- and Google draws
+    /// what is left without complaining, because nothing is missing.
+    Empty,
+    /// The rule could not be read at all, so occurrences may well be missing. Named for the reader
+    /// rather than dropped silently.
+    Unreadable(String),
+}
+
 #[allow(clippy::too_many_arguments)]
 fn expand_series(
     base: &Event,
@@ -674,18 +712,26 @@ fn expand_series(
     from: DateTime<FixedOffset>,
     to: DateTime<FixedOffset>,
     into: &mut Expansion,
-) -> Result<(), String> {
+) -> Result<(), SeriesFailure> {
     let calendar_event = calendar
         .calendar_events()
         .find(|candidate| candidate.get_uid() == Some(uid)
             && candidate.get_recurrence_id().is_none())
-        .ok_or_else(|| format!("{uid}: the series vanished between grouping and expansion"))?;
+        .ok_or_else(|| {
+            SeriesFailure::Unreadable(
+                format!("{uid}: the series vanished between grouping and expansion"),
+            )
+        })?;
 
     // Through `CalendarEvent` rather than the bare event, so an all-day DTSTART is anchored to the
     // feed's own X-WR-TIMEZONE instead of to whatever zone this server happens to run in.
-    let set = calendar_event
-        .get_recurrence()
-        .map_err(|e| format!("{uid}: {e}"))?;
+    let set = match calendar_event.get_recurrence() {
+        Ok(set) => set,
+        Err(RecurrenceError::Rule(RRuleError::ValidationError(
+            ValidationError::UntilBeforeStart { .. },
+        ))) => return Err(SeriesFailure::Empty),
+        Err(e) => return Err(SeriesFailure::Unreadable(format!("{uid}: {e}"))),
+    };
 
     // Every datetime this series contributes is rendered in its own zone.
     let dtstart_tz = set.get_dt_start().timezone();

@@ -1474,6 +1474,58 @@ fn a_feed_using_a_non_iana_timezone_is_reported_rather_than_dropped_silently() {
     assert!(expansion.warnings[0].contains("win@example"));
 }
 
+/// The shape Google leaves behind when a series is given an end date and its start is then moved
+/// past it: a rule that can generate nothing, and one occurrence that was edited into an all-day
+/// event before the move. Google draws that occurrence.
+const MOVED_PAST_ITS_END: &str = "\
+BEGIN:VEVENT\r
+DTSTART;TZID=Asia/Tokyo:20260515T083000\r
+DTEND;TZID=Asia/Tokyo:20260515T173000\r
+RRULE:FREQ=DAILY;UNTIL=20260424T145959Z\r
+UID:moved@example\r
+SUMMARY:新規採用職員研修\r
+END:VEVENT\r
+BEGIN:VEVENT\r
+DTSTART;VALUE=DATE:20260515\r
+DTEND;VALUE=DATE:20260516\r
+RECURRENCE-ID;TZID=Asia/Tokyo:20260515T083000\r
+UID:moved@example\r
+SUMMARY:新規採用職員研修(北嶋)\r
+END:VEVENT\r
+";
+
+#[test]
+fn a_rule_that_ends_before_it_starts_keeps_its_overrides_and_says_nothing() {
+    let calendar = calendar_of(MOVED_PAST_ITS_END);
+    let (from, to) = window("2026-05-01", "2026-05-31");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    // An empty rule is not an unreadable one. Nothing is missing, so there is nothing to report --
+    // and the occurrence someone edited is still drawn, as it is in Google's own view of the feed.
+    assert!(expansion.warnings.is_empty(), "{:?}", expansion.warnings);
+    assert_eq!(starts(&expansion), vec!["2026-05-15"]);
+    assert_eq!(expansion.events[0].name, "新規採用職員研修(北嶋)");
+}
+
+#[test]
+fn an_unreadable_rule_keeps_its_overrides_and_is_still_reported() {
+    // The Windows zone name of the test above, now with an occurrence the feed spelled out. The
+    // rule is genuinely lost, so the reader is still told -- but what the feed wrote out survives.
+    let calendar = calendar_of(
+        "BEGIN:VEVENT\r\nDTSTART;TZID=W. Europe Standard Time:20240501T090000\r\n\
+         RRULE:FREQ=DAILY\r\nUID:win@example\r\nSUMMARY:Outlook\r\nEND:VEVENT\r\n\
+         BEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20240503\r\nDTEND;VALUE=DATE:20240504\r\n\
+         RECURRENCE-ID;TZID=W. Europe Standard Time:20240503T090000\r\n\
+         UID:win@example\r\nSUMMARY:Offsite\r\nEND:VEVENT\r\n",
+    );
+    let (from, to) = window("2024-05-01", "2024-05-07");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    assert_eq!(starts(&expansion), vec!["2024-05-03"]);
+    assert_eq!(expansion.warnings.len(), 1);
+    assert!(expansion.warnings[0].contains("win@example"));
+}
+
 #[test]
 fn an_all_day_series_bounded_by_a_date_keeps_every_occurrence() {
     // RFC 5545 §3.3.10 gives a DATE `DTSTART` a DATE `UNTIL`, which is what Google writes. The
