@@ -11,7 +11,7 @@ import { loadConfigValue } from '@/config';
 import { Compartment, EditorState, Extension, Prec } from '@codemirror/state';
 import { EditorView, keymap, highlightSpecialChars, drawSelection, dropCursor, rectangularSelection, crosshairCursor, lineNumbers, highlightActiveLine, highlightActiveLineGutter, scrollPastEnd } from '@codemirror/view';
 import { defaultHighlightStyle, syntaxHighlighting, indentOnInput, indentUnit, bracketMatching, foldGutter, foldKeymap } from '@codemirror/language';
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { defaultKeymap, emacsStyleKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { autocompletion, completionKeymap, closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 
@@ -172,7 +172,6 @@ onMounted(async () => {
 
     // Add keybinding
     if (keybinding !== 'emacs' && enableEmacsStyleBindings) {
-        const { emacsStyleKeymap } = await import('@codemirror/commands');
         extensions.unshift(keymap.of(emacsStyleKeymap.filter(({ key }) => /^Ctrl-(b|f|p|n|a|e|d|h)$/.test(key))));
     }
     const keybindingExtension = await getKeybindingExtension(keybinding);
