@@ -354,7 +354,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount, onUnmounted, nextTick } from 'vue';
 
 import {
     mdiAlert,
@@ -702,6 +702,13 @@ onMounted(async () => {
     viewer.value.addEventListener('scroll', handleDocumentScroll);
 });
 
+// Not in `onUnmounted`, where Vue has already cleared the template ref. The error that threw there
+// cut short the rest of the render that unmounted the note, so the next view's `mounted` work, such
+// as teleporting its controls into the app bar, never happened.
+onBeforeUnmount(() => {
+    viewer.value.removeEventListener('scroll', handleDocumentScroll);
+});
+
 onUnmounted(() => {
     window.removeEventListener('focus', notifyUpstreamState);
     window.removeEventListener('focus', focusOrBlurEditor);
@@ -719,8 +726,6 @@ onUnmounted(() => {
         chunkRenderController.abort();
         chunkRenderController = null;
     }
-
-    viewer.value.removeEventListener('scroll', handleDocumentScroll);
 });
 
 // Methods
