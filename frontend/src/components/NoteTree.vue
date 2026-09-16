@@ -1,5 +1,9 @@
 <template>
-    <div class="note-tree">
+    <div
+        class="note-tree"
+        v-on:click.capture="onClickInTree"
+        v-on:keydown.capture="onKeydownInTree"
+    >
         <EntryTree
             v-bind:items="items"
             v-bind:open="open"
@@ -91,7 +95,14 @@ const forest = computed(() => buildNoteForest(subset.entries.value, props.prefix
 const items = computed<NoteTreeItem[]>(() => toNestedForest<NoteNode, NoteTreeItem>(
     forest.value,
     forest.value.roots.slice(0, visibleRoots.value),
-    (node, children) => (children === undefined ? { ...node } : { ...node, children }),
+    (node, children) => {
+        const target = noteRouteFor(node);
+        const item: NoteTreeItem = {
+            ...node,
+            ...(target !== null ? { props: { to: target } } : {}),
+        };
+        return children === undefined ? item : { ...item, children };
+    },
 ));
 
 const remaining = computed(() => Math.max(0, forest.value.roots.length - visibleRoots.value));
@@ -141,8 +152,25 @@ function reveal(path: string | null) {
     }
 }
 
+// Which kind of input is being served, watched on the way down so that it is known by the time
+// the row reports its activation -- which says only that a row was activated, never by what.
+//
+// A click is the anchor's own business: vue-router follows a plain left click, and deliberately
+// leaves a Ctrl-, Shift- or middle-click to the browser, which opens a new tab or window and must
+// not move this one. The keyboard is the caller the tree still navigates for, because v-treeview
+// handles Enter itself and the keypress never reaches the anchor.
+let clicking = false;
+
+function onClickInTree() {
+    clicking = true;
+}
+
+function onKeydownInTree() {
+    clicking = false;
+}
+
 function onActivate(id: string | undefined) {
-    if (id === undefined) {
+    if (id === undefined || clicking) {
         return;
     }
     const node = forest.value.byId.get(id);
