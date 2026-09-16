@@ -51,6 +51,50 @@
         }
       }
     },
+    "all-day-until-date.ics": {
+      "events": [
+        {
+          "calendar": "fixture",
+          "end": "2023-04-17",
+          "name": "Third Monday each April",
+          "recurrence_id": "2023-04-17",
+          "start": "2023-04-17",
+          "uid": "all-day-until-date@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2024-04-15",
+          "name": "Third Monday each April",
+          "recurrence_id": "2024-04-15",
+          "start": "2024-04-15",
+          "uid": "all-day-until-date@example"
+        },
+        {
+          "calendar": "fixture",
+          "end": "2025-04-21",
+          "name": "Third Monday each April",
+          "recurrence_id": "2025-04-21",
+          "start": "2025-04-21",
+          "uid": "all-day-until-date@example"
+        }
+      ],
+      "series": {
+        "all-day-until-date@example": {
+          "end": "2023-04-17",
+          "name": "Third Monday each April",
+          "repeat": {
+            "byday": [
+              "3mon"
+            ],
+            "freq": "monthly",
+            "interval": 12,
+            "until": "2025-04-21",
+            "wkst": "mon"
+          },
+          "start": "2023-04-17"
+        }
+      }
+    },
     "dtstart-off-rule.ics": {
       "events": [
         {

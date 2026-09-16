@@ -1,6 +1,6 @@
 //! Turning an iCalendar feed into the events mory draws, and into the note one converts to.
 //!
-//! Three things about real feeds shape this module, all of them observed in Google's own output
+//! Four things about real feeds shape this module, all of them observed in Google's own output
 //! rather than inferred from RFC 5545:
 //!
 //!   * A **modified occurrence** of a series is its own `VEVENT`, sharing the series `UID` and
@@ -10,6 +10,11 @@
 //!     `STATUS:CANCELLED`. Both mean "this date does not happen", so both become an exclusion.
 //!   * `DTEND` is **exclusive**, and for an all-day event that means the day after the last one.
 //!     mory's `end` is inclusive, so an all-day end is pulled back a day on the way in.
+//!   * A rule may be **unusable while its occurrences are not**. An event given an end date whose
+//!     start is then moved past it keeps the overrides it already had, and Google goes on drawing
+//!     them although the rule can now generate nothing. A rule naming a zone that cannot be
+//!     resolved is unusable the same way. Either way the overrides are still drawn: they are the
+//!     occurrences someone took the trouble to edit.
 //!
 //! Expansion is delegated to `rrule`, through `icalendar`'s `recurrence` feature, which already
 //! assembles `DTSTART`/`RRULE`/`RDATE`/`EXDATE` into an `RRuleSet` and applies RFC 5545 §3.6.1 --
@@ -32,8 +37,9 @@ use chrono::{DateTime, Duration, FixedOffset, NaiveDate, Offset, TimeZone};
 // Resolving a `TZID` goes through `CalendarDateTime::try_into_utc`, so the IANA database is never
 // named directly and `chrono-tz` stays a transitive dependency rather than a declared one.
 use icalendar::{
-    Calendar, CalendarDateTime, Component, DatePerhapsTime, Event, EventLike, Frequency, NWeekday,
-    RRuleSet, Tz, Weekday,
+    Calendar, CalendarComponent, CalendarDateTime, Component, DatePerhapsTime, Event, EventLike,
+    Frequency, NWeekday, Property, RRuleSet, RecurrenceError, Tz, Weekday,
+    rrule::{RRuleError, ValidationError},
 };
 use serde::Serialize;
 
@@ -158,9 +164,82 @@ pub struct Expansion {
 }
 
 pub fn parse_calendar(ics: &str) -> Result<Calendar> {
-    ics.parse::<Calendar>()
+    let mut calendar = ics
+        .parse::<Calendar>()
         .map_err(|e| anyhow::anyhow!("{e}"))
-        .context("failed to parse the calendar")
+        .context("failed to parse the calendar")?;
+    anchor_floating_until(&mut calendar);
+    Ok(calendar)
+}
+
+// --- repairing what expansion would otherwise refuse -----------------------------------------
+
+/// Rewrites a floating `UNTIL` as UTC wherever expansion anchors `DTSTART` to a named zone.
+///
+/// RFC 5545 §3.3.10 requires `UNTIL` to carry the same value type as `DTSTART`, so an all-day
+/// series bounded by a bare date is what a correct feed writes -- and what Google writes. But
+/// `build_recurrence_set` anchors a date-only `DTSTART` to the feed's `X-WR-TIMEZONE` and passes
+/// the `RRULE` through untouched, so `rrule` is left holding a zoned start against a floating
+/// cut-off and refuses the rule: "Allowed timezones for `UNTIL` with the given start date timezone
+/// are: `["UTC"]`". The whole series is then dropped, error and all -- four of one subscribed
+/// calendar's, every one of them written exactly as the RFC says.
+///
+/// So the cut-off is converted the way the start already is: read as wall clock in the zone the
+/// start is anchored to. A bare date means the end of that day, which keeps the last occurrence on
+/// the `UNTIL` date itself, as Google draws it.
+fn anchor_floating_until(calendar: &mut Calendar) {
+    let calendar_tz = calendar.get_timezone().map(str::to_string);
+    for component in &mut calendar.components {
+        let CalendarComponent::Event(event) = component else { continue };
+        let Some(rrule) = event.property_value("RRULE").map(str::to_string) else { continue };
+        let Some(until) = until_of(&rrule) else { continue };
+        // Already an instant, which is every well-formed timed series and needs nothing.
+        if until.ends_with('Z') {
+            continue;
+        }
+        let Some(tzid) = anchoring_zone(event, calendar_tz.as_deref()) else { continue };
+        let Some(date_time) = floating_until(until) else { continue };
+        // Through `CalendarDateTime` rather than `chrono-tz` directly, as everywhere else here, so
+        // the IANA database stays a transitive dependency.
+        let Some(utc) = (CalendarDateTime::WithTimezone { date_time, tzid }).try_into_utc() else {
+            continue;
+        };
+        let anchored = rrule.replace(until, &utc.format("%Y%m%dT%H%M%SZ").to_string());
+        event.append_property(Property::new("RRULE", anchored));
+    }
+}
+
+/// The `UNTIL` value in a raw `RRULE`, borrowed from it so the rewrite can replace just that part.
+fn until_of(rrule: &str) -> Option<&str> {
+    rrule
+        .split(';')
+        .find_map(|part| part.strip_prefix("UNTIL="))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+}
+
+/// The zone `build_recurrence_set` will expand this event's `DTSTART` in, when it names one.
+///
+/// A floating start is left alone: `rrule` accepts a floating `UNTIL` alongside it, and guessing a
+/// zone for a feed that deliberately named none would move every occurrence.
+fn anchoring_zone(event: &Event, calendar_tz: Option<&str>) -> Option<String> {
+    let dtstart = event.properties().get("DTSTART")?;
+    if let Some(tzid) = dtstart.params().get("TZID") {
+        return Some(tzid.value().to_string());
+    }
+    match DatePerhapsTime::from_property(dtstart) {
+        Some(DatePerhapsTime::Date(_)) => calendar_tz.map(str::to_string),
+        _ => None,
+    }
+}
+
+/// A floating `UNTIL` as wall clock: a bare date means the end of that day, so that the date
+/// itself still occurs.
+fn floating_until(until: &str) -> Option<chrono::NaiveDateTime> {
+    if let Ok(date_time) = chrono::NaiveDateTime::parse_from_str(until, "%Y%m%dT%H%M%S") {
+        return Some(date_time);
+    }
+    NaiveDate::parse_from_str(until, "%Y%m%d").ok()?.and_hms_opt(23, 59, 59)
 }
 
 // --- datetime formatting -------------------------------------------------------------------
@@ -506,22 +585,22 @@ pub fn expand(
             // Overrides with no base: the series itself is outside whatever the feed published,
             // so each override stands alone as its own occurrence.
             None => {
-                for event in &series.overrides {
-                    if is_cancelled(event) {
-                        continue;
-                    }
-                    if let Some(occurrence) = standalone(event, calendar_id, &uid, from, to) {
-                        expansion.events.push(occurrence);
-                    }
-                }
+                standalone_overrides(&series.overrides, calendar_id, &uid, from, to, &mut expansion);
                 continue;
             }
         };
 
-        if let Err(warning) = expand_series(
+        if let Err(failure) = expand_series(
             base, &series.overrides, calendar, calendar_id, &uid, from, to, &mut expansion,
         ) {
-            expansion.warnings.push(warning);
+            // The rule is what was lost, not the occurrences the feed wrote out itself. Those are
+            // exactly the ones someone moved or renamed, which is why they are in the feed twice
+            // -- and they are what Google draws for such a series whatever became of the rule.
+            // Both failures happen before anything is pushed, so nothing is drawn twice.
+            standalone_overrides(&series.overrides, calendar_id, &uid, from, to, &mut expansion);
+            if let SeriesFailure::Unreadable(warning) = failure {
+                expansion.warnings.push(warning);
+            }
         }
     }
     expansion
@@ -545,6 +624,26 @@ fn occurrence_key(event: &Event, occurrence: DateTime<Tz>) -> String {
         format_date(occurrence.date_naive())
     } else {
         occurrence.timestamp().to_string()
+    }
+}
+
+/// Every override of one series drawn on its own, for a series whose rule yielded nothing to
+/// attach them to.
+fn standalone_overrides(
+    overrides: &[&Event],
+    calendar_id: &str,
+    uid: &str,
+    from: DateTime<FixedOffset>,
+    to: DateTime<FixedOffset>,
+    into: &mut Expansion,
+) {
+    for event in overrides {
+        if is_cancelled(event) {
+            continue;
+        }
+        if let Some(occurrence) = standalone(event, calendar_id, uid, from, to) {
+            into.events.push(occurrence);
+        }
     }
 }
 
@@ -591,6 +690,18 @@ fn standalone(
     })
 }
 
+/// Why a series contributed no occurrences of its own.
+enum SeriesFailure {
+    /// The rule reads perfectly well and generates nothing: `UNTIL` before `DTSTART`, which
+    /// `rrule` refuses as invalid rather than expanding to the empty set. Google's own feeds carry
+    /// them -- an event given an end date whose start was then moved past it -- and Google draws
+    /// what is left without complaining, because nothing is missing.
+    Empty,
+    /// The rule could not be read at all, so occurrences may well be missing. Named for the reader
+    /// rather than dropped silently.
+    Unreadable(String),
+}
+
 #[allow(clippy::too_many_arguments)]
 fn expand_series(
     base: &Event,
@@ -601,18 +712,26 @@ fn expand_series(
     from: DateTime<FixedOffset>,
     to: DateTime<FixedOffset>,
     into: &mut Expansion,
-) -> Result<(), String> {
+) -> Result<(), SeriesFailure> {
     let calendar_event = calendar
         .calendar_events()
         .find(|candidate| candidate.get_uid() == Some(uid)
             && candidate.get_recurrence_id().is_none())
-        .ok_or_else(|| format!("{uid}: the series vanished between grouping and expansion"))?;
+        .ok_or_else(|| {
+            SeriesFailure::Unreadable(
+                format!("{uid}: the series vanished between grouping and expansion"),
+            )
+        })?;
 
     // Through `CalendarEvent` rather than the bare event, so an all-day DTSTART is anchored to the
     // feed's own X-WR-TIMEZONE instead of to whatever zone this server happens to run in.
-    let set = calendar_event
-        .get_recurrence()
-        .map_err(|e| format!("{uid}: {e}"))?;
+    let set = match calendar_event.get_recurrence() {
+        Ok(set) => set,
+        Err(RecurrenceError::Rule(RRuleError::ValidationError(
+            ValidationError::UntilBeforeStart { .. },
+        ))) => return Err(SeriesFailure::Empty),
+        Err(e) => return Err(SeriesFailure::Unreadable(format!("{uid}: {e}"))),
+    };
 
     // Every datetime this series contributes is rendered in its own zone.
     let dtstart_tz = set.get_dt_start().timezone();
