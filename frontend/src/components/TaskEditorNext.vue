@@ -325,12 +325,53 @@
                 </div>
                 <div class="note-pane flex-grow-1 pl-3">
                     <!-- Note -->
-                    <v-textarea
+                    <div class="d-flex align-center mb-1">
+                        <v-label>
+                            <v-icon class="mr-1">
+                                {{ mdiNoteTextOutline }}
+                            </v-icon>
+                            Note
+                        </v-label>
+                        <v-spacer />
+                        <v-btn-toggle
+                            v-model="notePanes"
+                            mandatory
+                            color="primary"
+                            density="compact"
+                            variant="text"
+                        >
+                            <v-btn
+                                value="viewer"
+                                icon
+                                title="Viewer"
+                                size="small"
+                            >
+                                <v-icon>{{ mdiFileDocument }}</v-icon>
+                            </v-btn>
+                            <v-btn
+                                value="both"
+                                icon
+                                title="Editor and viewer"
+                                size="small"
+                            >
+                                <v-icon>{{ mdiFileDocumentEdit }}</v-icon>
+                            </v-btn>
+                            <v-btn
+                                value="editor"
+                                icon
+                                title="Editor"
+                                size="small"
+                            >
+                                <v-icon>{{ mdiPencil }}</v-icon>
+                            </v-btn>
+                        </v-btn-toggle>
+                    </div>
+                    <EditableViewer
                         v-model="form.note"
-                        label="Note"
-                        variant="outlined"
-                        no-resize
-                        class="full-height-textarea"
+                        v-bind:editor-visible="notePanes !== 'viewer'"
+                        v-bind:viewer-visible="notePanes !== 'editor'"
+                        v-bind:lock-scroll="lockScroll"
+                        class="border"
                     />
                 </div>
                 <div v-if="(taskAssessment || assessmentLoading) && form.title.length >= 3" class="assessment-pane pl-3">
@@ -418,6 +459,8 @@ import {
     mdiClose,
     mdiContentSave,
     mdiDelete,
+    mdiFileDocument,
+    mdiFileDocumentEdit,
     mdiFileTreeOutline,
     mdiFormatHeader1,
     mdiHelpCircleOutline,
@@ -425,6 +468,8 @@ import {
     mdiLock,
     mdiLockOpenVariant,
     mdiNoteEditOutline,
+    mdiNoteTextOutline,
+    mdiPencil,
     mdiPercentOutline,
     mdiPencilBoxOutline,
     mdiPlus,
@@ -437,10 +482,13 @@ import {
 
 import { assessTask, type TaskAssessmentResponse } from '@/api';
 
+import EditableViewer from '@/components/EditableViewer.vue';
 import { extractFileUuid } from '@/api/task';
 import type { UUID, Task, Status, StatusKind, WaitingStatus, BlockedStatus, OnHoldStatus, DoneStatus, CanceledStatus } from '@/task';
 import { STATUS_LABEL, nextOptions, makeDefaultStatus, canTransition } from '@/task';
 import { useFetchTask } from '@/composables/fetchTask';
+import { useLocalStorage } from '@/composables/localStorage';
+import { loadConfigValue } from '@/config';
 
 import dayjs from 'dayjs';
 
@@ -496,6 +544,9 @@ const form = reactive<EditableTask>({
 });
 const uiValid = ref(true);
 const statusOptionRestricted = ref(true);
+// Kept across tasks and visits, as one way of working with notes rather than a property of a task.
+const notePanes = useLocalStorage<'viewer' | 'both' | 'editor'>('task-editor-note-panes', 'both');
+const lockScroll = loadConfigValue('lock-scroll', false);
 
 // Task assessment data
 const taskAssessment = ref<TaskAssessmentResponse | null>(null);
@@ -900,6 +951,15 @@ defineExpose({
     overflow-y: auto;
 }
 
+// Sized from zero rather than from its content: the editor's lines and the rendered note are wider
+// than the textarea was, and would squeeze the fields beside them.
+.note-pane {
+    display: flex;
+    flex-direction: column;
+    flex-basis: 0;
+    min-width: 0;
+}
+
 @media (max-width: 1263px) { /* lg breakpoint in Vuetify 2 */
     .controls {
         display: block;
@@ -912,6 +972,12 @@ defineExpose({
         overflow: hidden;
         flex: 1 0 0;
     }
+
+    // Stacked below the fields, the pane has no height to fill, and the editor and viewer each
+    // scroll within the one they are given.
+    .note-pane {
+        height: 80dvh;
+    }
 }
 
 .date-list {
@@ -923,18 +989,6 @@ defineExpose({
     break-inside: avoid;
     -webkit-column-break-inside: avoid;
     padding-inline-start: 0.1em;
-}
-
-.full-height-textarea {
-    height: 100%;
-}
-
-:deep(.full-height-textarea .v-input__control) {
-    height: 100%;
-}
-
-:deep(.full-height-textarea .v-field) {
-    height: 100%;
 }
 
 .assessment-pane {
