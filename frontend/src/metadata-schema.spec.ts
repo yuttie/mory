@@ -1,4 +1,4 @@
-// The schema is compiled at runtime by `EditableViewer.vue` with a bare `new Ajv()`, which is
+// The schema is compiled at runtime by `views/Note.vue` with a bare `new Ajv()`, which is
 // draft-07 with strict mode on. Strict mode *throws at compile time* on an unknown keyword, so a
 // keyword from a later draft would break the note editor's validation wholesale rather than just
 // misjudging one note. Compiling it here is the guard against that.
