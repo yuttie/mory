@@ -1,70 +1,72 @@
 <template>
-    <div class="editable-viewer" v-bind:class="panesState">
-        <div class="editor-pane"
-            v-on:transitionend="onEditorPaneResize"
-        >
-            <!-- Laid out as a flex row so the vertical divider before the
-                 AI Actions menu can stretch to the toolbar's height. -->
-            <v-sheet border class="d-flex flex-wrap align-center flex-grow-0">
-                <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="insertText('## ')">
-                    <v-icon>{{ mdiFormatHeader2 }}</v-icon>
-                </v-btn>
-                <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="insertText('* ')">
-                    <v-icon>{{ mdiFormatListBulleted }}</v-icon>
-                </v-btn>
-                <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="encloseText('*', '*')">
-                    <v-icon>{{ mdiFormatItalic }}</v-icon>
-                </v-btn>
-                <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="encloseText('**', '**')">
-                    <v-icon>{{ mdiFormatBold }}</v-icon>
-                </v-btn>
-                <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="encloseText('`', '`')">
-                    <v-icon>{{ mdiXml }}</v-icon>
-                </v-btn>
-                <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="encloseText('> ', '')">
-                    <v-icon>{{ mdiFormatQuoteClose }}</v-icon>
-                </v-btn>
-                <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="encloseText('[', ']()')">
-                    <v-icon>{{ mdiLinkVariant }}</v-icon>
-                </v-btn>
-                <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="formatTable">
-                    <v-icon>{{ mdiTableCheck }}</v-icon>
-                </v-btn>
-                <v-divider vertical></v-divider>
-                <AiActionMenu
-                    v-bind:actions="aiActions"
-                    v-bind:running="aiActionRunning"
-                    v-on:open="reloadAiActions"
-                    v-on:ad-hoc="openAdHocDialog"
-                    v-on:run="runAiAction"
-                ></AiActionMenu>
-            </v-sheet>
-            <template v-if="useSimpleEditor">
-                <textarea
-                    v-bind:value="modelValue"
-                    v-bind:readonly="aiActionRunning"
-                    v-on:input="onEditorChange($event.target.value)"
-                    class="editor simple-editor"
-                    ref="editor"
-                ></textarea>
-            </template>
-            <template v-else>
-                <Editor
-                    v-bind:value="modelValue"
-                    v-bind:mode="language"
-                    v-bind:readonly="aiActionRunning"
-                    v-on:change="onEditorChange"
-                    v-on:scroll="onEditorScroll"
-                    ref="editor"
-                ></Editor>
-            </template>
-        </div>
-        <div class="viewer-pane"
-            ref="viewer"
-            v-on:scroll="handleDocumentScroll"
-            v-on:transitionend="onViewerPaneResize"
-        >
-            <div ref="shadowDomRootElement" style="user-select: text">
+    <div class="editable-viewer">
+        <div class="panes" v-bind:class="panesState">
+            <div class="editor-pane"
+                v-on:transitionend="onEditorPaneResize"
+            >
+                <!-- Laid out as a flex row so the vertical divider before the
+                     AI Actions menu can stretch to the toolbar's height. -->
+                <v-sheet border class="d-flex flex-wrap align-center flex-grow-0">
+                    <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="insertText('## ')">
+                        <v-icon>{{ mdiFormatHeader2 }}</v-icon>
+                    </v-btn>
+                    <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="insertText('* ')">
+                        <v-icon>{{ mdiFormatListBulleted }}</v-icon>
+                    </v-btn>
+                    <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="encloseText('*', '*')">
+                        <v-icon>{{ mdiFormatItalic }}</v-icon>
+                    </v-btn>
+                    <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="encloseText('**', '**')">
+                        <v-icon>{{ mdiFormatBold }}</v-icon>
+                    </v-btn>
+                    <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="encloseText('`', '`')">
+                        <v-icon>{{ mdiXml }}</v-icon>
+                    </v-btn>
+                    <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="encloseText('> ', '')">
+                        <v-icon>{{ mdiFormatQuoteClose }}</v-icon>
+                    </v-btn>
+                    <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="encloseText('[', ']()')">
+                        <v-icon>{{ mdiLinkVariant }}</v-icon>
+                    </v-btn>
+                    <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="formatTable">
+                        <v-icon>{{ mdiTableCheck }}</v-icon>
+                    </v-btn>
+                    <v-divider vertical></v-divider>
+                    <AiActionMenu
+                        v-bind:actions="aiActions"
+                        v-bind:running="aiActionRunning"
+                        v-on:open="reloadAiActions"
+                        v-on:ad-hoc="openAdHocDialog"
+                        v-on:run="runAiAction"
+                    ></AiActionMenu>
+                </v-sheet>
+                <template v-if="useSimpleEditor">
+                    <textarea
+                        v-bind:value="modelValue"
+                        v-bind:readonly="aiActionRunning"
+                        v-on:input="onEditorChange($event.target.value)"
+                        class="editor simple-editor"
+                        ref="editor"
+                    ></textarea>
+                </template>
+                <template v-else>
+                    <Editor
+                        v-bind:value="modelValue"
+                        v-bind:mode="language"
+                        v-bind:readonly="aiActionRunning"
+                        v-on:change="onEditorChange"
+                        v-on:scroll="onEditorScroll"
+                        ref="editor"
+                    ></Editor>
+                </template>
+            </div>
+            <div class="viewer-pane"
+                ref="viewer"
+                v-on:scroll="handleDocumentScroll"
+                v-on:transitionend="onViewerPaneResize"
+            >
+                <div ref="shadowDomRootElement" style="user-select: text">
+                </div>
             </div>
         </div>
         <AiActionAdHocDialog
@@ -100,7 +102,6 @@ import {
     mdiXml,
 } from '@mdi/js';
 
-import { useDisplay } from 'vuetify';
 import { useAppStore } from '@/stores/app';
 
 import AiActionAdHocDialog from './AiActionAdHocDialog.vue';
@@ -137,7 +138,6 @@ const emit = defineEmits<{
 }>();
 
 // Composables
-const { smAndUp, mdAndUp, lgAndUp } = useDisplay();
 const appStore = useAppStore();
 const files = useFilesStore();
 
@@ -187,9 +187,6 @@ const panesState = computed(() => {
         onlyEditor: props.editorVisible && !props.viewerVisible,
         onlyViewer: !props.editorVisible && props.viewerVisible,
         both: props.editorVisible && props.viewerVisible,
-        smAndUp: smAndUp.value,
-        mdAndUp: mdAndUp.value,
-        lgAndUp: lgAndUp.value,
     };
 });
 
@@ -930,13 +927,27 @@ defineExpose({
 </script>
 
 <style scoped lang="scss">
+// Wide enough for two panes of 350px or more. Measured on the component rather than the window, since
+// what it is given depends on where it is placed: the whole of a note page, or a column of a task.
+$side-by-side-width: 700px;
+
 .editable-viewer {
     flex: 1 1 0;
     overflow: hidden;
+    // Also sizes it by where it is placed, never by what it shows: an unbroken URL in either pane
+    // would otherwise widen every flex row it sits in, up to the screen around it.
+    container-type: inline-size;
+
+    display: flex;
+}
+
+.panes {
+    flex: 1 1 0;
+    min-width: 0;
 
     display: flex;
     flex-direction: column;
-    &.mdAndUp {
+    @container (min-width: #{$side-by-side-width}) {
         flex-direction: row;
     }
 }
@@ -973,26 +984,23 @@ defineExpose({
     }
 }
 
-.editable-viewer.onlyEditor {
+.panes.onlyEditor {
     .viewer-pane {
         display: none;
     }
 }
 
-.editable-viewer.onlyViewer {
+.panes.onlyViewer {
     .editor-pane {
         display: none;
     }
 }
 
-.editable-viewer.both {
-    &:not(.mdAndUp) {
-        .editor-pane {
-            border-bottom: thin solid #ccc;
-        }
-    }
-    &.mdAndUp {
-        .editor-pane {
+.panes.both {
+    .editor-pane {
+        border-bottom: thin solid #ccc;
+        @container (min-width: #{$side-by-side-width}) {
+            border-bottom: none;
             border-right: thin solid #ccc;
         }
     }
