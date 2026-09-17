@@ -11,51 +11,41 @@
                 <v-btn-toggle
                     v-bind:model-value="selectedMode"
                     mandatory
-                    class="me-1"
+                    class="mr-1"
                     border
                     divided
                     v-on:update:model-value="setMode"
                 >
-                    <v-btn v-bind:value="0" icon title="Viewer"><v-icon size="small">{{ mdiFileDocument }}</v-icon></v-btn>
-                    <v-btn v-bind:value="1" icon title="Editor and viewer"><v-icon size="small">{{ mdiFileDocumentEdit }}</v-icon></v-btn>
-                    <v-btn v-bind:value="2" icon title="Editor"><v-icon size="small">{{ mdiPencil }}</v-icon></v-btn>
+                    <v-btn class="px-5" v-bind:value="0" icon title="Viewer"           ><v-icon size="small">{{ mdiFileDocument     }}</v-icon></v-btn>
+                    <v-btn class="px-5" v-bind:value="1" icon title="Editor and viewer"><v-icon size="small">{{ mdiFileDocumentEdit }}</v-icon></v-btn>
+                    <v-btn class="px-5" v-bind:value="2" icon title="Editor"           ><v-icon size="small">{{ mdiPencil           }}</v-icon></v-btn>
                 </v-btn-toggle>
                 <!-- A phone's app bar cannot fit every action beside the title, so the ones not
                      needed while writing wait in a menu there. -->
                 <template v-if="$vuetify.display.smAndUp">
-                    <v-btn icon v-bind:title="lockScroll ? 'Unlock scroll' : 'Lock scroll'" v-on:click="lockScroll = !lockScroll">
-                        <v-icon size="small">{{ lockScroll ? mdiLock : mdiLockOpen }}</v-icon>
-                    </v-btn>
-                    <v-btn icon title="Compare with upstream" v-on:click="notifyUpstreamState">
-                        <v-icon size="small">{{ mdiCompareVertical }}</v-icon>
-                    </v-btn>
-                    <v-btn icon title="Reload" v-bind:disabled="needSave" v-on:click="reload">
-                        <v-icon size="small">{{ mdiReload }}</v-icon>
-                    </v-btn>
+                    <v-icon-btn v-bind:icon="lockScroll ? mdiLock : mdiLockOpen" v-bind:title="lockScroll ? 'Unlock scroll' : 'Lock scroll'" v-on:click="lockScroll = !lockScroll"></v-icon-btn>
+                    <v-icon-btn v-bind:icon="mdiCompareVertical" title="Compare with upstream" v-on:click="notifyUpstreamState"></v-icon-btn>
+                    <v-icon-btn v-bind:icon="mdiReload" title="Reload" v-bind:disabled="needSave" v-on:click="reload"></v-icon-btn>
                 </template>
-                <v-btn
-                    icon
+                <v-icon-btn
+                    v-bind:icon="mdiContentSave"
                     title="Save"
                     v-bind:color="needSave ? 'pink' : undefined"
                     v-bind:active="needSave"
                     v-bind:disabled="!needSave"
                     v-on:click.stop="saveIfNeeded"
-                >
-                    <v-icon size="small">{{ mdiContentSave }}</v-icon>
-                </v-btn>
+                ></v-icon-btn>
                 <v-menu
                     v-model="renameMenuIsVisible"
                     v-bind:close-on-content-click="false"
                 >
                     <template v-slot:activator="{ props: menuProps }">
-                        <v-btn
+                        <v-icon-btn
                             v-bind="menuProps"
-                            icon
+                            v-bind:icon="mdiRenameBox"
                             title="Rename"
                             v-bind:disabled="!noteHasUpstream"
-                        >
-                            <v-icon size="small">{{ mdiRenameBox }}</v-icon>
-                        </v-btn>
+                        ></v-icon-btn>
                     </template>
                     <v-card
                         min-width="30em"
@@ -86,26 +76,22 @@
                         </v-card-actions>
                     </v-card>
                 </v-menu>
-                <v-btn
+                <v-icon-btn
                     v-if="$vuetify.display.smAndUp"
-                    icon
-                    class="me-1"
+                    v-bind:icon="mdiPageLayoutSidebarRight"
+                    class="mr-2"
                     v-bind:title="sidebarIsVisible ? 'Hide metadata and contents' : 'Show metadata and contents'"
                     v-bind:active="sidebarIsVisible"
                     v-on:click="sidebarIsVisible = !sidebarIsVisible"
-                >
-                    <v-icon size="small">{{ mdiPageLayoutSidebarRight }}</v-icon>
-                </v-btn>
+                ></v-icon-btn>
                 <v-menu v-else location="bottom end">
                     <template v-slot:activator="{ props: menuProps }">
-                        <v-btn
+                        <v-icon-btn
                             v-bind="menuProps"
-                            icon
+                            v-bind:icon="mdiDotsVertical"
                             title="More"
-                            class="me-1"
-                        >
-                            <v-icon size="small">{{ mdiDotsVertical }}</v-icon>
-                        </v-btn>
+                            class="mr-2"
+                        ></v-icon-btn>
                     </template>
                     <v-list>
                         <v-list-item
