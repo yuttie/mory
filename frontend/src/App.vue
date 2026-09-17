@@ -108,6 +108,9 @@
                                 </template>
                                 <v-list-item-title>{{ path.replace(/\.template$/i, '') }}</v-list-item-title>
                                 <template v-slot:append>
+                                    <!-- v-icon-btn has no `to`. The click still bubbles to the list item, whose own link
+                                         would create a note from the template instead; the router skips a click whose
+                                         default is already prevented. -->
                                     <v-tooltip location="top">
                                         <template v-slot:activator="{ props }">
                                             <v-icon-btn
@@ -116,7 +119,7 @@
                                                 icon-size="small"
                                                 variant="text"
                                                 v-bind="props"
-                                                v-bind:to="{ name: 'Note', params: { path: path.split('/') } }"
+                                                v-on:click.prevent="$router.push({ name: 'Note', params: { path: path.split('/') } })"
                                             ></v-icon-btn>
                                         </template>
                                         <span>Edit template</span>
@@ -353,6 +356,9 @@
                             </template>
                             <v-list-item-title>{{ path.replace(/\.template$/i, '') }}</v-list-item-title>
                             <template v-slot:append>
+                                <!-- v-icon-btn has no `to`. The click still bubbles to the list item, whose own link
+                                     would create a note from the template instead; the router skips a click whose
+                                     default is already prevented. -->
                                 <v-tooltip location="top">
                                     <template v-slot:activator="{ props }">
                                         <v-icon-btn
@@ -361,7 +367,7 @@
                                             icon-size="small"
                                             variant="text"
                                             v-bind="props"
-                                            v-bind:to="{ name: 'Note', params: { path: path.split('/') } }"
+                                            v-on:click.prevent="$router.push({ name: 'Note', params: { path: path.split('/') } })"
                                         ></v-icon-btn>
                                     </template>
                                     <span>Edit template</span>
