@@ -56,7 +56,8 @@
             v-bind:sort-by="[{ key: 'time', order: 'desc' }]"
             must-sort
             show-select
-            class="flex-grow-1"
+            fixed-header
+            class="file-table flex-grow-1"
         >
             <template v-slot:top>
                 <v-toolbar flat color="transparent" style="border-bottom: thin solid rgba(0, 0, 0, 0.12);">
@@ -482,7 +483,15 @@ watch(queryText, (q: string | null) => {
 
 <style scoped lang="scss">
 #files {
-    height: 100%;
+    // The window less the layout's bars, as in the Calendar view: `height: 100%` resolves against
+    // `v-main`, which grows with its contents, so a hundred rows scrolled the whole app.
+    height: calc(100dvh - var(--v-layout-top, 0px) - var(--v-layout-bottom, 0px));
+}
+
+// A flex item does not shrink below its contents by default. Letting the table shrink leaves the
+// rows to its own scrolling wrapper, so the toolbar above and the pagination footer below stay put.
+.file-table {
+    min-height: 0;
 }
 
 .all-tags {
