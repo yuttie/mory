@@ -4,8 +4,6 @@
             <div class="editor-pane"
                 v-on:transitionend="onEditorPaneResize"
             >
-                <!-- Laid out as a flex row so the vertical divider before the
-                     AI Actions menu can stretch to the toolbar's height. -->
                 <v-sheet class="d-flex flex-wrap align-center flex-grow-0">
                     <v-icon-btn v-bind:icon="mdiFormatHeader2"      v-bind:disabled="aiActionRunning" v-on:click="insertText('## ')"      ></v-icon-btn>
                     <v-icon-btn v-bind:icon="mdiFormatListBulleted" v-bind:disabled="aiActionRunning" v-on:click="insertText('* ')"       ></v-icon-btn>
