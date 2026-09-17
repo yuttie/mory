@@ -7,6 +7,18 @@
     <link rel="icon" type="image/png" href="/favicon.png" sizes="512x512">
     <link rel="apple-touch-icon" href="/img/icons/apple-touch-icon-180x180.png">
     <link rel="manifest" href="/manifest.json">
+    <!-- Cascade layers rank in the order the page first names them, and only `vuetify/styles`
+         names Vuetify's; a component's stylesheet names just its own layer. Both the dev server
+         and the build's chunking can load a component's CSS first, and then the reset outranks
+         every component: its `button { font: inherit }` beat each button's own size. Mirrors the
+         head of node_modules/vuetify/lib/styles/main.css; drop it once
+         https://github.com/vuetifyjs/vuetify/issues/23135 is fixed. -->
+    <style>
+        @layer vuetify-core.reset, vuetify-core.base, vuetify-components, vuetify-overrides,
+            vuetify-utilities.theme-base, vuetify-utilities.typography, vuetify-utilities.helpers,
+            vuetify-utilities.theme-background, vuetify-utilities.theme-foreground,
+            vuetify-final.transitions, vuetify-final.trumps;
+    </style>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
     <title>%VITE_APP_NAME%</title>
   </head>

@@ -573,7 +573,6 @@
                         v-on:click="appStore.login(loginUsername, loginPassword)"
                         color="primary"
                         block
-                        variant="outlined"
                     >Login</v-btn>
                 </form>
             </div>
