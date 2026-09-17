@@ -1,48 +1,52 @@
 <template>
     <div id="files" class="d-flex flex-column">
         <AppBarContent>
-            <v-menu
-                v-model="showingTagList"
-                v-bind:close-on-content-click="false"
-                location="bottom"
+            <v-text-field
+                v-model="queryText"
+                variant="filled"
+                rounded
+                single-line
+                clearable
+                v-on:click:clear="clearQuery"
+                type="text"
+                label="Search"
+                autocomplete="off"
+                hide-details="auto"
+                ref="queryEl"
+                class="ms-2 me-1 flex-grow-1"
             >
-                <template v-slot:activator="{ props: menuProps }">
-                    <v-text-field
-                        v-model="queryText"
-                        variant="filled"
-                        rounded
-                        single-line
-                        clearable
-                        v-on:click:clear="clearQuery"
-                        type="text"
-                        label="Search"
-                        autocomplete="off"
-                        hide-details="auto"
-                        ref="queryEl"
-                        class="ms-2 me-1 flex-grow-1"
-                    >
-                        <template v-slot:prepend-inner>
-                            <v-icon size="small">{{ mdiMagnify }}</v-icon>
-                        </template>
-                        <template v-slot:append>
-                            <v-icon size="small" v-bind="menuProps">{{ mdiTag }}</v-icon>
-                        </template>
-                    </v-text-field>
+                <template v-slot:prepend-inner>
+                    <v-icon size="small">{{ mdiMagnify }}</v-icon>
                 </template>
-                <v-card>
-                    <v-card-text class="all-tags d-flex flex-row align-center flex-wrap">
-                        <v-chip
-                            size="small"
-                            class="ma-1"
-                            v-for="tag of tags"
-                            v-bind:key="tag"
-                            v-bind:color="tagColor(tag)"
-                            v-bind:variant="tagOutlined(tag) ? 'outlined' : 'flat'"
-                            v-on:click="handleTagClick(tag, $event)"
-                        >{{ tag }}</v-chip>
-                    </v-card-text>
-                </v-card>
-            </v-menu>
+                <template v-slot:append>
+                    <v-menu
+                        v-model="showingTagList"
+                        v-bind:close-on-content-click="false"
+                        location="bottom"
+                    >
+                        <template v-slot:activator="{ props: menuProps }">
+                            <v-icon-btn
+                                v-bind:icon="mdiTag"
+                                v-bind="menuProps"
+                                class="mr-2"
+                            ></v-icon-btn>
+                        </template>
+                        <v-card>
+                            <v-card-text class="all-tags d-flex flex-row align-center flex-wrap">
+                                <v-chip
+                                    size="small"
+                                    class="ma-1"
+                                    v-for="tag of tags"
+                                    v-bind:key="tag"
+                                    v-bind:color="tagColor(tag)"
+                                    v-bind:variant="tagOutlined(tag) ? 'outlined' : 'flat'"
+                                    v-on:click="handleTagClick(tag, $event)"
+                                >{{ tag }}</v-chip>
+                            </v-card-text>
+                        </v-card>
+                    </v-menu>
+                </template>
+            </v-text-field>
         </AppBarContent>
         <v-defaults-provider v-bind:defaults="{ VPagination: { size: 'small' } }">
             <v-data-table
@@ -62,14 +66,13 @@
             >
                 <template v-slot:top>
                     <v-toolbar flat color="transparent" style="border-bottom: thin solid rgba(0, 0, 0, 0.12);">
-                        <v-btn
+                        <v-icon-btn
+                            v-bind:icon="mdiDelete"
+                            icon-color="pink"
                             v-bind:disabled="selected.length === 0"
                             v-on:click="deleteSelected"
-                            icon
-                            color="pink"
-                        >
-                            <v-icon size="small">{{ mdiDelete }}</v-icon>
-                        </v-btn>
+                            class="ml-1"
+                        ></v-icon-btn>
                         <v-spacer></v-spacer>
                     </v-toolbar>
                 </template>
