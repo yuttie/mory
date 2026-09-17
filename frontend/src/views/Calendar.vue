@@ -6,18 +6,17 @@
             <v-btn
                 v-if="$vuetify.display.xs"
                 icon
-                size="small"
                 title="Today"
                 class="ml-1"
                 v-on:click="setToday"
             >
-                <v-icon>{{ mdiCalendarToday }}</v-icon>
+                <v-icon size="small">{{ mdiCalendarToday }}</v-icon>
             </v-btn>
             <v-btn v-else variant="outlined" v-on:click="setToday" class="ml-1 mr-3">Today</v-btn>
-            <v-btn icon size="small" v-on:click="navigateCalendar('prev')">
+            <v-btn icon v-on:click="navigateCalendar('prev')">
                 <v-icon>{{ mdiChevronLeft }}</v-icon>
             </v-btn>
-            <v-btn icon size="small" v-on:click="navigateCalendar('next')">
+            <v-btn icon v-on:click="navigateCalendar('next')">
                 <v-icon>{{ mdiChevronRight }}</v-icon>
             </v-btn>
             <!-- Drawn even before the calendar has mounted and has a title to give it, because it
@@ -31,7 +30,6 @@
                 <template v-slot:activator="{ props }">
                     <v-btn
                         v-bind="props"
-                        size="small"
                         class="mr-1"
                     >
                         {{ calendarTypes.find((type) => type.value === calendarType)?.title }}
@@ -72,7 +70,6 @@
                     <v-btn
                         v-bind="props"
                         icon
-                        size="small"
                         class="mr-1"
                         title="Choose which imported calendars are shown"
                     >
@@ -81,7 +78,7 @@
                             v-bind:content="hiddenCalendars.size"
                             color="grey"
                         >
-                            <v-icon>{{ mdiCalendarMultiple }}</v-icon>
+                            <v-icon size="small">{{ mdiCalendarMultiple }}</v-icon>
                         </v-badge>
                     </v-btn>
                 </template>

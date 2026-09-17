@@ -22,10 +22,10 @@
                         class="ms-2 me-1 flex-grow-1"
                     >
                         <template v-slot:prepend-inner>
-                            <v-icon>{{ mdiMagnify }}</v-icon>
+                            <v-icon size="small">{{ mdiMagnify }}</v-icon>
                         </template>
                         <template v-slot:append>
-                            <v-icon v-bind="menuProps">{{ mdiTag }}</v-icon>
+                            <v-icon size="small" v-bind="menuProps">{{ mdiTag }}</v-icon>
                         </template>
                     </v-text-field>
                 </template>
@@ -66,7 +66,7 @@
                         icon
                         color="pink"
                     >
-                        <v-icon>{{ mdiDelete }}</v-icon>
+                        <v-icon size="small">{{ mdiDelete }}</v-icon>
                     </v-btn>
                     <v-spacer></v-spacer>
                 </v-toolbar>

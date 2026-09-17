@@ -15,7 +15,7 @@
                         class="mr-1"
                         v-bind="menuProps"
                     >
-                        <v-icon>{{ mdiDotsVertical }}</v-icon>
+                        <v-icon size="small">{{ mdiDotsVertical }}</v-icon>
                     </v-btn>
                 </template>
                 <v-list>

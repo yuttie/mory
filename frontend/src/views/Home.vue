@@ -278,14 +278,12 @@
                         <div class="text-center mb-3">
                             <v-btn
                                 variant="text"
-                                size="x-small"
                                 v-on:click="changeSortOrder(category[0], 'title')"
-                            ><v-icon size="x-small" v-if="sortOrders.get(category[0])[0] === 'title'">{{ sortOrders.get(category[0])[1] ? mdiSortDescending : mdiSortAscending }}</v-icon>sort by title</v-btn>
+                            ><v-icon v-if="sortOrders.get(category[0])[0] === 'title'">{{ sortOrders.get(category[0])[1] ? mdiSortDescending : mdiSortAscending }}</v-icon>sort by title</v-btn>
                             <v-btn
                                 variant="text"
-                                size="x-small"
                                 v-on:click="changeSortOrder(category[0], 'time')"
-                            ><v-icon size="x-small" v-if="sortOrders.get(category[0])[0] === 'time'">{{ sortOrders.get(category[0])[1] ? mdiSortDescending : mdiSortAscending }}</v-icon>sort by time</v-btn>
+                            ><v-icon v-if="sortOrders.get(category[0])[0] === 'time'">{{ sortOrders.get(category[0])[1] ? mdiSortDescending : mdiSortAscending }}</v-icon>sort by time</v-btn>
                         </div>
                         <ul>
                             <li

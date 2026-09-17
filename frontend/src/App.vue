@@ -112,12 +112,12 @@
                                         <template v-slot:activator="{ props }">
                                             <v-btn
                                                 icon
-                                                size="x-small"
+                                                size="small"
                                                 variant="text"
                                                 v-bind="props"
                                                 v-bind:to="{ name: 'Note', params: { path: path.split('/') } }"
                                             >
-                                                <v-icon>{{ mdiPencil }}</v-icon>
+                                                <v-icon size="small">{{ mdiPencil }}</v-icon>
                                             </v-btn>
                                         </template>
                                         <span>Edit template</span>
@@ -359,12 +359,12 @@
                                     <template v-slot:activator="{ props }">
                                         <v-btn
                                             icon
-                                            size="x-small"
+                                            size="small"
                                             variant="text"
                                             v-bind="props"
                                             v-bind:to="{ name: 'Note', params: { path: path.split('/') } }"
                                         >
-                                            <v-icon>{{ mdiPencil }}</v-icon>
+                                            <v-icon size="small">{{ mdiPencil }}</v-icon>
                                         </v-btn>
                                     </template>
                                     <span>Edit template</span>
