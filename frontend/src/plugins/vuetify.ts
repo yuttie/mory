@@ -12,10 +12,13 @@ export default createVuetify({
       rounded: "lg",
       size: "32",
     },
+    // A v-btn underneath, which has no iconSize: its icon takes the size as a nested default.
     VAppBarNavIcon: {
-      iconSize: "20",
       rounded: "lg",
       size: "32",
+      VIcon: {
+        size: "20",
+      },
     },
   },
   icons: {
