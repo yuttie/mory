@@ -12,8 +12,7 @@
                     <v-text-field
                         ref="queryEl"
                         v-model="draftQuery"
-                        variant="filled"
-                        rounded
+                        variant="solo"
                         single-line
                         clearable
                         type="text"
@@ -30,7 +29,7 @@
                         item-title="title"
                         item-value="value"
                         label="Mode"
-                        variant="filled"
+                        variant="outlined"
                         hide-details
                         class="mode-select"
                     />

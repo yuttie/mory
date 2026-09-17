@@ -3,8 +3,7 @@
         <AppBarContent>
             <v-text-field
                 v-model="queryText"
-                variant="filled"
-                rounded
+                variant="solo"
                 single-line
                 clearable
                 v-on:click:clear="clearQuery"
