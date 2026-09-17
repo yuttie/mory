@@ -60,7 +60,7 @@
                         v-on:click="requestNotificationPermission"
                     >
                         <template v-slot:prepend>
-                            <v-icon size="small">{{ mdiBell }}</v-icon>
+                            <v-icon>{{ mdiBell }}</v-icon>
                         </template>
                     </v-list-item>
                     <IndexingStopsItem
@@ -76,7 +76,7 @@
                                 v-bind="props"
                             >
                                 <template v-slot:prepend>
-                                    <v-icon size="small">{{ mdiPlus }}</v-icon>
+                                    <v-icon>{{ mdiPlus }}</v-icon>
                                 </template>
                             </v-list-item>
                         </template>
@@ -84,7 +84,7 @@
                             <v-list-subheader>Create</v-list-subheader>
                             <v-list-item to="/create">
                                 <template v-slot:prepend>
-                                    <v-icon size="small">{{ mdiFileOutline }}</v-icon>
+                                    <v-icon>{{ mdiFileOutline }}</v-icon>
                                 </template>
                                 <v-list-item-title>New note</v-list-item-title>
                             </v-list-item>
@@ -93,7 +93,7 @@
                                 v-bind:to="{ name: 'Create', query: { from: Array.isArray($route.params.path) ? $route.params.path.join('/') : $route.params.path } }"
                             >
                                 <template v-slot:prepend>
-                                    <v-icon size="small">{{ mdiFileMultipleOutline }}</v-icon>
+                                    <v-icon>{{ mdiFileMultipleOutline }}</v-icon>
                                 </template>
                                 <v-list-item-title>Copy of this note</v-list-item-title>
                             </v-list-item>
@@ -104,21 +104,23 @@
                                 v-bind:to="{ name: 'Create', query: { from: path } }"
                             >
                                 <template v-slot:prepend>
-                                    <v-icon size="small">{{ mdiFileDocumentOutline }}</v-icon>
+                                    <v-icon>{{ mdiFileDocumentOutline }}</v-icon>
                                 </template>
                                 <v-list-item-title>{{ path.replace(/\.template$/i, '') }}</v-list-item-title>
                                 <template v-slot:append>
+                                    <!-- v-icon-btn has no `to`. The click still bubbles to the list item, whose own link
+                                         would create a note from the template instead; the router skips a click whose
+                                         default is already prevented. -->
                                     <v-tooltip location="top">
                                         <template v-slot:activator="{ props }">
-                                            <v-btn
-                                                icon
+                                            <v-icon-btn
+                                                v-bind:icon="mdiPencil"
                                                 size="small"
+                                                icon-size="small"
                                                 variant="text"
                                                 v-bind="props"
-                                                v-bind:to="{ name: 'Note', params: { path: path.split('/') } }"
-                                            >
-                                                <v-icon size="small">{{ mdiPencil }}</v-icon>
-                                            </v-btn>
+                                                v-on:click.prevent="$router.push({ name: 'Note', params: { path: path.split('/') } })"
+                                            ></v-icon-btn>
                                         </template>
                                         <span>Edit template</span>
                                     </v-tooltip>
@@ -146,7 +148,7 @@
                                         <template v-slot:badge>
                                             <v-icon>{{ uploadListBadgeIcon }}</v-icon>
                                         </template>
-                                        <v-icon size="small">{{ mdiCloudUploadOutline }}</v-icon>
+                                        <v-icon>{{ mdiCloudUploadOutline }}</v-icon>
                                     </v-badge>
                                 </template>
                             </v-list-item>
@@ -156,7 +158,7 @@
                                 <v-list-item
                                     v-on:click="chooseFile"
                                 >
-                                    <template v-slot:prepend><v-icon size="small">{{ mdiUpload }}</v-icon></template>
+                                    <template v-slot:prepend><v-icon>{{ mdiUpload }}</v-icon></template>
                                     <v-list-item-title>Upload</v-list-item-title>
                                 </v-list-item>
                             </v-list>
@@ -173,7 +175,6 @@
                                 >
                                     <template v-slot:prepend>
                                         <v-icon
-                                            size="small"
                                             v-bind:color="uploadStatusColor(entry.status)"
                                         >{{ uploadStatusIcon(entry.status) }}</v-icon>
                                     </template>
@@ -184,7 +185,7 @@
                                 <v-list-item
                                     v-on:click="cleanUploadList"
                                 >
-                                    <template v-slot:prepend><v-icon size="small">{{ mdiBroom }}</v-icon></template>
+                                    <template v-slot:prepend><v-icon>{{ mdiBroom }}</v-icon></template>
                                     <v-list-item-title>Clear all</v-list-item-title>
                                 </v-list-item>
                             </v-list>
@@ -198,11 +199,11 @@
                     nav
                     class="flex-grow-0 flex-shrink-0"
                 >
-                    <v-list-item color="primary" to="/"><template v-slot:prepend><v-icon size="small">{{ mdiHomeOutline }}</v-icon></template><v-list-item-title>Home</v-list-item-title></v-list-item>
-                    <v-list-item color="primary" to="/calendar"><template v-slot:prepend><v-icon size="small">{{ mdiCalendarOutline }}</v-icon></template><v-list-item-title>Calendar</v-list-item-title></v-list-item>
-                    <v-list-item color="primary" to="/tasks-next"><template v-slot:prepend><v-icon size="small">{{ mdiCheckboxMultipleMarkedOutline }}</v-icon></template><v-list-item-title>Tasks</v-list-item-title></v-list-item>
-                    <v-list-item color="primary" to="/files"><template v-slot:prepend><v-icon size="small">{{ mdiFolderOutline }}</v-icon></template><v-list-item-title>Files</v-list-item-title></v-list-item>
-                    <v-list-item color="primary" to="/search"><template v-slot:prepend><v-icon size="small">{{ mdiMagnify }}</v-icon></template><v-list-item-title>Search</v-list-item-title></v-list-item>
+                    <v-list-item color="primary" to="/"><template v-slot:prepend><v-icon>{{ mdiHomeOutline }}</v-icon></template><v-list-item-title>Home</v-list-item-title></v-list-item>
+                    <v-list-item color="primary" to="/calendar"><template v-slot:prepend><v-icon>{{ mdiCalendarOutline }}</v-icon></template><v-list-item-title>Calendar</v-list-item-title></v-list-item>
+                    <v-list-item color="primary" to="/tasks-next"><template v-slot:prepend><v-icon>{{ mdiCheckboxMultipleMarkedOutline }}</v-icon></template><v-list-item-title>Tasks</v-list-item-title></v-list-item>
+                    <v-list-item color="primary" to="/files"><template v-slot:prepend><v-icon>{{ mdiFolderOutline }}</v-icon></template><v-list-item-title>Files</v-list-item-title></v-list-item>
+                    <v-list-item color="primary" to="/search"><template v-slot:prepend><v-icon>{{ mdiMagnify }}</v-icon></template><v-list-item-title>Search</v-list-item-title></v-list-item>
                 </v-list>
 
                 <v-divider></v-divider>
@@ -239,19 +240,19 @@
                             <v-list>
                                 <v-list-item to="/tasks">
                                     <template v-slot:prepend>
-                                        <v-icon size="small">{{ mdiCheckboxMultipleMarkedOutline }}</v-icon>
+                                        <v-icon>{{ mdiCheckboxMultipleMarkedOutline }}</v-icon>
                                     </template>
                                     <v-list-item-title>Tasks (deprecated)</v-list-item-title>
                                 </v-list-item>
                                 <v-list-item to="/config">
                                     <template v-slot:prepend>
-                                        <v-icon size="small">{{ mdiCogOutline }}</v-icon>
+                                        <v-icon>{{ mdiCogOutline }}</v-icon>
                                     </template>
                                     <v-list-item-title>Config</v-list-item-title>
                                 </v-list-item>
                                 <v-list-item to="/about">
                                     <template v-slot:prepend>
-                                        <v-icon size="small">{{ mdiInformationOutline }}</v-icon>
+                                        <v-icon>{{ mdiInformationOutline }}</v-icon>
                                     </template>
                                     <v-list-item-title>About</v-list-item-title>
                                 </v-list-item>
@@ -260,7 +261,7 @@
                                     v-on:click="appStore.logout()"
                                 >
                                     <template v-slot:prepend>
-                                        <v-icon size="small">{{ mdiLogout }}</v-icon>
+                                        <v-icon>{{ mdiLogout }}</v-icon>
                                     </template>
                                     <v-list-item-title>Logout</v-list-item-title>
                                 </v-list-item>
@@ -306,7 +307,7 @@
                     v-on:click="requestNotificationPermission"
                 >
                     <template v-slot:prepend>
-                        <v-icon size="small">{{ mdiBell }}</v-icon>
+                        <v-icon>{{ mdiBell }}</v-icon>
                     </template>
                 </v-list-item>
                 <IndexingStopsItem
@@ -323,7 +324,7 @@
                             v-bind="props"
                         >
                             <template v-slot:prepend>
-                                <v-icon size="small">{{ mdiPlus }}</v-icon>
+                                <v-icon>{{ mdiPlus }}</v-icon>
                             </template>
                         </v-list-item>
                     </template>
@@ -331,7 +332,7 @@
                         <v-list-subheader>Create</v-list-subheader>
                         <v-list-item to="/create">
                             <template v-slot:prepend>
-                                <v-icon size="small">{{ mdiFileOutline }}</v-icon>
+                                <v-icon>{{ mdiFileOutline }}</v-icon>
                             </template>
                             <v-list-item-title>New note</v-list-item-title>
                         </v-list-item>
@@ -340,7 +341,7 @@
                             v-bind:to="{ name: 'Create', query: { from: Array.isArray($route.params.path) ? $route.params.path.join('/') : $route.params.path } }"
                         >
                             <template v-slot:prepend>
-                                <v-icon size="small">{{ mdiFileMultipleOutline }}</v-icon>
+                                <v-icon>{{ mdiFileMultipleOutline }}</v-icon>
                             </template>
                             <v-list-item-title>Copy of this note</v-list-item-title>
                         </v-list-item>
@@ -351,21 +352,23 @@
                             v-bind:to="{ name: 'Create', query: { from: path } }"
                         >
                             <template v-slot:prepend>
-                                <v-icon size="small">{{ mdiFileDocumentOutline }}</v-icon>
+                                <v-icon>{{ mdiFileDocumentOutline }}</v-icon>
                             </template>
                             <v-list-item-title>{{ path.replace(/\.template$/i, '') }}</v-list-item-title>
                             <template v-slot:append>
+                                <!-- v-icon-btn has no `to`. The click still bubbles to the list item, whose own link
+                                     would create a note from the template instead; the router skips a click whose
+                                     default is already prevented. -->
                                 <v-tooltip location="top">
                                     <template v-slot:activator="{ props }">
-                                        <v-btn
-                                            icon
+                                        <v-icon-btn
+                                            v-bind:icon="mdiPencil"
                                             size="small"
+                                            icon-size="small"
                                             variant="text"
                                             v-bind="props"
-                                            v-bind:to="{ name: 'Note', params: { path: path.split('/') } }"
-                                        >
-                                            <v-icon size="small">{{ mdiPencil }}</v-icon>
-                                        </v-btn>
+                                            v-on:click.prevent="$router.push({ name: 'Note', params: { path: path.split('/') } })"
+                                        ></v-icon-btn>
                                     </template>
                                     <span>Edit template</span>
                                 </v-tooltip>
@@ -393,7 +396,7 @@
                                     <template v-slot:badge>
                                         <v-icon>{{ uploadListBadgeIcon }}</v-icon>
                                     </template>
-                                    <v-icon size="small">{{ mdiCloudUploadOutline }}</v-icon>
+                                    <v-icon>{{ mdiCloudUploadOutline }}</v-icon>
                                 </v-badge>
                             </template>
                         </v-list-item>
@@ -403,7 +406,7 @@
                             <v-list-item
                                 v-on:click="chooseFile"
                             >
-                                <template v-slot:prepend><v-icon size="small">{{ mdiUpload }}</v-icon></template>
+                                <template v-slot:prepend><v-icon>{{ mdiUpload }}</v-icon></template>
                                 <v-list-item-title>Upload</v-list-item-title>
                             </v-list-item>
                         </v-list>
@@ -420,7 +423,6 @@
                             >
                                 <template v-slot:prepend>
                                     <v-icon
-                                        size="small"
                                         v-bind:color="uploadStatusColor(entry.status)"
                                     >{{ uploadStatusIcon(entry.status) }}</v-icon>
                                 </template>
@@ -431,7 +433,7 @@
                             <v-list-item
                                 v-on:click="cleanUploadList"
                             >
-                                <template v-slot:prepend><v-icon size="small">{{ mdiBroom }}</v-icon></template>
+                                <template v-slot:prepend><v-icon>{{ mdiBroom }}</v-icon></template>
                                 <v-list-item-title>Clear all</v-list-item-title>
                             </v-list-item>
                         </v-list>
@@ -444,11 +446,11 @@
             <v-list
                 nav
             >
-                <v-list-item color="primary" to="/"><template v-slot:prepend><v-icon size="small">{{ mdiHomeOutline }}</v-icon></template><v-list-item-title>Home</v-list-item-title></v-list-item>
-                <v-list-item color="primary" to="/calendar"><template v-slot:prepend><v-icon size="small">{{ mdiCalendarOutline }}</v-icon></template><v-list-item-title>Calendar</v-list-item-title></v-list-item>
-                <v-list-item color="primary" to="/tasks-next"><template v-slot:prepend><v-icon size="small">{{ mdiCheckboxMultipleMarkedOutline }}</v-icon></template><v-list-item-title>Tasks</v-list-item-title></v-list-item>
-                <v-list-item color="primary" to="/files"><template v-slot:prepend><v-icon size="small">{{ mdiFolderOutline }}</v-icon></template><v-list-item-title>Files</v-list-item-title></v-list-item>
-                <v-list-item color="primary" to="/search"><template v-slot:prepend><v-icon size="small">{{ mdiMagnify }}</v-icon></template><v-list-item-title>Search</v-list-item-title></v-list-item>
+                <v-list-item color="primary" to="/"><template v-slot:prepend><v-icon>{{ mdiHomeOutline }}</v-icon></template><v-list-item-title>Home</v-list-item-title></v-list-item>
+                <v-list-item color="primary" to="/calendar"><template v-slot:prepend><v-icon>{{ mdiCalendarOutline }}</v-icon></template><v-list-item-title>Calendar</v-list-item-title></v-list-item>
+                <v-list-item color="primary" to="/tasks-next"><template v-slot:prepend><v-icon>{{ mdiCheckboxMultipleMarkedOutline }}</v-icon></template><v-list-item-title>Tasks</v-list-item-title></v-list-item>
+                <v-list-item color="primary" to="/files"><template v-slot:prepend><v-icon>{{ mdiFolderOutline }}</v-icon></template><v-list-item-title>Files</v-list-item-title></v-list-item>
+                <v-list-item color="primary" to="/search"><template v-slot:prepend><v-icon>{{ mdiMagnify }}</v-icon></template><v-list-item-title>Search</v-list-item-title></v-list-item>
             </v-list>
 
             <v-divider></v-divider>
@@ -476,19 +478,19 @@
                         <v-list>
                             <v-list-item to="/tasks">
                                 <template v-slot:prepend>
-                                    <v-icon size="small">{{ mdiCheckboxMultipleMarkedOutline }}</v-icon>
+                                    <v-icon>{{ mdiCheckboxMultipleMarkedOutline }}</v-icon>
                                 </template>
                                 <v-list-item-title>Tasks (deprecated)</v-list-item-title>
                             </v-list-item>
                             <v-list-item to="/config">
                                 <template v-slot:prepend>
-                                    <v-icon size="small">{{ mdiCogOutline }}</v-icon>
+                                    <v-icon>{{ mdiCogOutline }}</v-icon>
                                 </template>
                                 <v-list-item-title>Config</v-list-item-title>
                             </v-list-item>
                             <v-list-item to="/about">
                                 <template v-slot:prepend>
-                                    <v-icon size="small">{{ mdiInformationOutline }}</v-icon>
+                                    <v-icon>{{ mdiInformationOutline }}</v-icon>
                                 </template>
                                 <v-list-item-title>About</v-list-item-title>
                             </v-list-item>
@@ -497,7 +499,7 @@
                                 v-on:click="appStore.logout()"
                             >
                                 <template v-slot:prepend>
-                                    <v-icon size="small">{{ mdiLogout }}</v-icon>
+                                    <v-icon>{{ mdiLogout }}</v-icon>
                                 </template>
                                 <v-list-item-title>Logout</v-list-item-title>
                             </v-list-item>
@@ -515,6 +517,7 @@
                  collapses it to a rail. -->
             <v-app-bar-nav-icon
                 v-on:click="$vuetify.display.xs ? mobileDrawer = !mobileDrawer : miniMainSidebar = !miniMainSidebar"
+                class="mx-2"
             />
             <v-toolbar-title v-if="appStore.appBarClaims === 0">
                 {{ $route.name?.replace(/With.*$/, '') ?? '' }}

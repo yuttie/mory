@@ -1,38 +1,34 @@
 <template>
-    <v-btn
-        icon
-        variant="text"
-        rounded="0"
-        v-bind:loading="running"
-        v-bind:disabled="running"
-        title="AI Actions"
-    >
-        <v-icon>{{ mdiAutoFix }}</v-icon>
-        <v-menu
-            activator="parent"
-            v-on:update:model-value="onMenuToggle"
-        >
-            <v-list>
-                <v-list-item v-on:click="$emit('adHoc')">
-                    <v-list-item-title>Ad hoc&hellip;</v-list-item-title>
+    <v-menu v-on:update:model-value="onMenuToggle">
+        <template v-slot:activator="{ props: menuProps }">
+            <v-icon-btn
+                v-bind="menuProps"
+                v-bind:icon="mdiAutoFix"
+                v-bind:loading="running"
+                v-bind:disabled="running"
+                title="AI Actions"
+            ></v-icon-btn>
+        </template>
+        <v-list>
+            <v-list-item v-on:click="$emit('adHoc')">
+                <v-list-item-title>Ad hoc&hellip;</v-list-item-title>
+            </v-list-item>
+            <v-divider></v-divider>
+            <template v-if="nodes.length === 0">
+                <v-list-item disabled>
+                    <v-list-item-title class="text-medium-emphasis">
+                        No AI Actions defined
+                    </v-list-item-title>
                 </v-list-item>
-                <v-divider></v-divider>
-                <template v-if="nodes.length === 0">
-                    <v-list-item disabled>
-                        <v-list-item-title class="text-medium-emphasis">
-                            No AI Actions defined
-                        </v-list-item-title>
-                    </v-list-item>
-                </template>
-                <template v-else>
-                    <AiActionMenuItems
-                        v-bind:nodes="nodes"
-                        v-on:run="$emit('run', $event)"
-                    ></AiActionMenuItems>
-                </template>
-            </v-list>
-        </v-menu>
-    </v-btn>
+            </template>
+            <template v-else>
+                <AiActionMenuItems
+                    v-bind:nodes="nodes"
+                    v-on:run="$emit('run', $event)"
+                ></AiActionMenuItems>
+            </template>
+        </v-list>
+    </v-menu>
 </template>
 
 <script lang="ts" setup>

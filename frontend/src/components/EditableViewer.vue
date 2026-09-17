@@ -4,34 +4,15 @@
             <div class="editor-pane"
                 v-on:transitionend="onEditorPaneResize"
             >
-                <!-- Laid out as a flex row so the vertical divider before the
-                     AI Actions menu can stretch to the toolbar's height. -->
-                <v-sheet border class="d-flex flex-wrap align-center flex-grow-0">
-                    <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="insertText('## ')">
-                        <v-icon>{{ mdiFormatHeader2 }}</v-icon>
-                    </v-btn>
-                    <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="insertText('* ')">
-                        <v-icon>{{ mdiFormatListBulleted }}</v-icon>
-                    </v-btn>
-                    <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="encloseText('*', '*')">
-                        <v-icon>{{ mdiFormatItalic }}</v-icon>
-                    </v-btn>
-                    <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="encloseText('**', '**')">
-                        <v-icon>{{ mdiFormatBold }}</v-icon>
-                    </v-btn>
-                    <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="encloseText('`', '`')">
-                        <v-icon>{{ mdiXml }}</v-icon>
-                    </v-btn>
-                    <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="encloseText('> ', '')">
-                        <v-icon>{{ mdiFormatQuoteClose }}</v-icon>
-                    </v-btn>
-                    <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="encloseText('[', ']()')">
-                        <v-icon>{{ mdiLinkVariant }}</v-icon>
-                    </v-btn>
-                    <v-btn icon variant="text" rounded="0" v-bind:disabled="aiActionRunning" v-on:click="formatTable">
-                        <v-icon>{{ mdiTableCheck }}</v-icon>
-                    </v-btn>
-                    <v-divider vertical></v-divider>
+                <v-sheet class="d-flex flex-wrap align-center flex-grow-0">
+                    <v-icon-btn v-bind:icon="mdiFormatHeader2"      v-bind:disabled="aiActionRunning" v-on:click="insertText('## ')"      ></v-icon-btn>
+                    <v-icon-btn v-bind:icon="mdiFormatListBulleted" v-bind:disabled="aiActionRunning" v-on:click="insertText('* ')"       ></v-icon-btn>
+                    <v-icon-btn v-bind:icon="mdiFormatItalic"       v-bind:disabled="aiActionRunning" v-on:click="encloseText('*', '*')"  ></v-icon-btn>
+                    <v-icon-btn v-bind:icon="mdiFormatBold"         v-bind:disabled="aiActionRunning" v-on:click="encloseText('**', '**')"></v-icon-btn>
+                    <v-icon-btn v-bind:icon="mdiXml"                v-bind:disabled="aiActionRunning" v-on:click="encloseText('`', '`')"  ></v-icon-btn>
+                    <v-icon-btn v-bind:icon="mdiFormatQuoteClose"   v-bind:disabled="aiActionRunning" v-on:click="encloseText('> ', '')"  ></v-icon-btn>
+                    <v-icon-btn v-bind:icon="mdiLinkVariant"        v-bind:disabled="aiActionRunning" v-on:click="encloseText('[', ']()')"></v-icon-btn>
+                    <v-icon-btn v-bind:icon="mdiTableCheck"         v-bind:disabled="aiActionRunning" v-on:click="formatTable"            ></v-icon-btn>
                     <AiActionMenu
                         v-bind:actions="aiActions"
                         v-bind:running="aiActionRunning"

@@ -7,6 +7,27 @@ export default createVuetify({
     global: {
       density: "compact",
     },
+    VIconBtn: {
+      iconSize: "20",
+      rounded: "lg",
+      size: "32",
+    },
+    // The calendar draws its day numbers as VIconBtn too, and the defaults above are for
+    // toolbars: keep those numbers the 40 px circles they were.
+    VCalendar: {
+      VIconBtn: {
+        rounded: undefined,
+        size: "default",
+      },
+    },
+    // A v-btn underneath, which has no iconSize: its icon takes the size as a nested default.
+    VAppBarNavIcon: {
+      rounded: "lg",
+      size: "32",
+      VIcon: {
+        size: "20",
+      },
+    },
   },
   icons: {
     defaultSet: 'mdi',
