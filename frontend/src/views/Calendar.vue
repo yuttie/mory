@@ -21,15 +21,18 @@
             <v-toolbar-title
                 v-bind:class="$vuetify.display.xs ? 'ms-2 me-1' : 'ms-8 me-3'"
             >
-                {{ calendar?.title }}
+                {{ $vuetify.display.xs ? shortTitle : calendar?.title }}
             </v-toolbar-title>
             <v-menu v-if="$vuetify.display.xs" location="bottom end">
                 <template v-slot:activator="{ props }">
+                    <!-- Without its minimum width, since a one-letter label is there to give the month
+                         room. -->
                     <v-btn
                         v-bind="props"
+                        min-width="0"
                         class="mr-1"
                     >
-                        {{ calendarTypes.find((type) => type.value === calendarType)?.title }}
+                        {{ calendarTypes.find((type) => type.value === calendarType)?.short }}
                     </v-btn>
                 </template>
                 <v-list>
@@ -303,10 +306,11 @@ const calendars = useCalendarsStore();
 
 type CalendarType = 'month' | 'week' | 'day';
 
-const calendarTypes: { value: CalendarType, title: string }[] = [
-    { value: 'day', title: 'Day' },
-    { value: 'week', title: 'Week' },
-    { value: 'month', title: 'Month' },
+// `short` labels the type on a phone's app bar, which has no room for the word.
+const calendarTypes: { value: CalendarType, title: string, short: string }[] = [
+    { value: 'day', title: 'Day', short: 'D' },
+    { value: 'week', title: 'Week', short: 'W' },
+    { value: 'month', title: 'Month', short: 'M' },
 ];
 
 // Reactive states
@@ -356,6 +360,22 @@ const events = computed(() => mergeImported(
     { colorOf: calendars.colorOf, hidden: hiddenCalendars.value },
 ));
 const eventErrors = computed(() => [...derived.value.errors, ...taskDates.value.errors]);
+// The calendar's title for a phone, whose app bar cannot fit a month spelled out in full. Only a
+// range within one month is spelled out; the calendar already abbreviates the ones across months.
+// Built from the calendar's own range and formatters, so it names the days the calendar shows.
+const shortTitle = computed((): string => {
+    if (!calendar.value) {
+        return '';
+    }
+    const { start, end } = calendar.value.renderProps;
+    if (start.year !== end.year || start.month !== end.month) {
+        return calendar.value.title;
+    }
+    const short = calendar.value.monthShortFormatter(start, true);
+    const long = calendar.value.monthLongFormatter(start, false);
+    // A period marks an abbreviation, and "May" is not one.
+    return `${short === long ? short : `${short}.`} ${start.year}`;
+});
 
 // Watchers
 // Lifecycle hooks
