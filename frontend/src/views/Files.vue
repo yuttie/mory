@@ -44,63 +44,65 @@
                 </v-card>
             </v-menu>
         </AppBarContent>
-        <v-data-table
-            v-bind:headers="headers"
-            v-bind:items="matchedEntries"
-            v-model="selected"
-            v-bind:items-per-page="100"
-            v-bind:items-per-page-options="[100, 200, 500, 1000, -1]"
-            items-per-page-text=""
-            v-bind:mobile-breakpoint="0"
-            item-value="path"
-            v-bind:sort-by="[{ key: 'time', order: 'desc' }]"
-            must-sort
-            show-select
-            fixed-header
-            class="file-table flex-grow-1"
-        >
-            <template v-slot:top>
-                <v-toolbar flat color="transparent" style="border-bottom: thin solid rgba(0, 0, 0, 0.12);">
-                    <v-btn
-                        v-bind:disabled="selected.length === 0"
-                        v-on:click="deleteSelected"
-                        icon
-                        color="pink"
-                    >
-                        <v-icon size="small">{{ mdiDelete }}</v-icon>
-                    </v-btn>
-                    <v-spacer></v-spacer>
-                </v-toolbar>
-            </template>
-            <template v-slot:item.path="{ item }">
-                <div class="path truncate" style="max-width: 20em;" v-bind:title="item.title ?? item.path">
-                    <v-icon class="mr-1" v-bind:color="item.iconColor">{{ item.icon }}</v-icon>
-                    <router-link v-bind:to="routeForMime(item.path, item.mimeType)">{{ item.title ?? item.path }}</router-link>
-                </div>
-            </template>
-            <template v-slot:item.time="{ item }">
-                <div class="modified text-no-wrap">{{ item.time.format('YYYY-MM-DD HH:mm:ss') }}</div>
-            </template>
-            <template v-slot:item.size="{ item }">
-                <div class="size text-no-wrap">{{ formatFileSize(item.size) }}</div>
-            </template>
-            <template v-slot:item.mimeType="{ item }">
-                <div class="mime-type text-no-wrap">{{ item.mimeType }}</div>
-            </template>
-            <template v-slot:item.tags="{ item }">
-                <div class="tags">
-                    <v-chip
-                        size="small"
-                        class="ma-1"
-                        v-for="tag of item.tags"
-                        v-bind:key="tag"
-                        v-bind:color="tagColor(tag)"
-                        v-bind:variant="tagOutlined(tag) ? 'outlined' : 'flat'"
-                        v-on:click="handleTagClick(tag, $event)"
-                    >{{ tag }}</v-chip>
-                </div>
-            </template>
-        </v-data-table>
+        <v-defaults-provider v-bind:defaults="{ VPagination: { size: 'small' } }">
+            <v-data-table
+                v-bind:headers="headers"
+                v-bind:items="matchedEntries"
+                v-model="selected"
+                v-bind:items-per-page="100"
+                v-bind:items-per-page-options="[100, 200, 500, 1000, -1]"
+                items-per-page-text=""
+                v-bind:mobile-breakpoint="0"
+                item-value="path"
+                v-bind:sort-by="[{ key: 'time', order: 'desc' }]"
+                must-sort
+                show-select
+                fixed-header
+                class="file-table flex-grow-1"
+            >
+                <template v-slot:top>
+                    <v-toolbar flat color="transparent" style="border-bottom: thin solid rgba(0, 0, 0, 0.12);">
+                        <v-btn
+                            v-bind:disabled="selected.length === 0"
+                            v-on:click="deleteSelected"
+                            icon
+                            color="pink"
+                        >
+                            <v-icon size="small">{{ mdiDelete }}</v-icon>
+                        </v-btn>
+                        <v-spacer></v-spacer>
+                    </v-toolbar>
+                </template>
+                <template v-slot:item.path="{ item }">
+                    <div class="path truncate" style="max-width: 20em;" v-bind:title="item.title ?? item.path">
+                        <v-icon class="mr-1" v-bind:color="item.iconColor">{{ item.icon }}</v-icon>
+                        <router-link v-bind:to="routeForMime(item.path, item.mimeType)">{{ item.title ?? item.path }}</router-link>
+                    </div>
+                </template>
+                <template v-slot:item.time="{ item }">
+                    <div class="modified text-no-wrap">{{ item.time.format('YYYY-MM-DD HH:mm:ss') }}</div>
+                </template>
+                <template v-slot:item.size="{ item }">
+                    <div class="size text-no-wrap">{{ formatFileSize(item.size) }}</div>
+                </template>
+                <template v-slot:item.mimeType="{ item }">
+                    <div class="mime-type text-no-wrap">{{ item.mimeType }}</div>
+                </template>
+                <template v-slot:item.tags="{ item }">
+                    <div class="tags">
+                        <v-chip
+                            size="small"
+                            class="ma-1"
+                            v-for="tag of item.tags"
+                            v-bind:key="tag"
+                            v-bind:color="tagColor(tag)"
+                            v-bind:variant="tagOutlined(tag) ? 'outlined' : 'flat'"
+                            v-on:click="handleTagClick(tag, $event)"
+                        >{{ tag }}</v-chip>
+                    </div>
+                </template>
+            </v-data-table>
+        </v-defaults-provider>
         <v-overlay v-bind:model-value="isLoading" z-index="10" scrim="transparent" class="align-center justify-center">
             <v-progress-circular indeterminate color="blue-grey-lighten-3" size="64"></v-progress-circular>
         </v-overlay>
@@ -492,6 +494,22 @@ watch(queryText, (q: string | null) => {
 // rows to its own scrolling wrapper, so the toolbar above and the pagination footer below stay put.
 .file-table {
     min-height: 0;
+
+    // On a 360 px phone the footer wrapped, taking a second row from the list. The small buttons
+    // set above were not enough alone, so it also gives up spacing that is not a control: the
+    // margin around each button, half the padding beside the page info, and the padding after the
+    // per-page label this view leaves empty. Then even "2101-2170 of 2170" fits on one row.
+    :deep(.v-pagination__list > li) {
+        margin: 0;
+    }
+
+    :deep(.v-data-table-footer__info) {
+        padding: 0 8px;
+    }
+
+    :deep(.v-data-table-footer__items-per-page > span:empty) {
+        display: none;
+    }
 }
 
 .all-tags {
