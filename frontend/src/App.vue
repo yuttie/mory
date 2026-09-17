@@ -110,15 +110,14 @@
                                 <template v-slot:append>
                                     <v-tooltip location="top">
                                         <template v-slot:activator="{ props }">
-                                            <v-btn
-                                                icon
+                                            <v-icon-btn
+                                                v-bind:icon="mdiPencil"
                                                 size="small"
+                                                icon-size="small"
                                                 variant="text"
                                                 v-bind="props"
                                                 v-bind:to="{ name: 'Note', params: { path: path.split('/') } }"
-                                            >
-                                                <v-icon size="small">{{ mdiPencil }}</v-icon>
-                                            </v-btn>
+                                            ></v-icon-btn>
                                         </template>
                                         <span>Edit template</span>
                                     </v-tooltip>
@@ -356,15 +355,14 @@
                             <template v-slot:append>
                                 <v-tooltip location="top">
                                     <template v-slot:activator="{ props }">
-                                        <v-btn
-                                            icon
+                                        <v-icon-btn
+                                            v-bind:icon="mdiPencil"
                                             size="small"
+                                            icon-size="small"
                                             variant="text"
                                             v-bind="props"
                                             v-bind:to="{ name: 'Note', params: { path: path.split('/') } }"
-                                        >
-                                            <v-icon size="small">{{ mdiPencil }}</v-icon>
-                                        </v-btn>
+                                        ></v-icon-btn>
                                     </template>
                                     <span>Edit template</span>
                                 </v-tooltip>
