@@ -25,15 +25,11 @@
             </v-toolbar-title>
             <v-menu v-if="$vuetify.display.xs" location="bottom end">
                 <template v-slot:activator="{ props }">
-                    <!-- Without its minimum width, since a one-letter label is there to give the month
-                         room. -->
-                    <v-btn
+                    <v-icon-btn
                         v-bind="props"
-                        min-width="0"
+                        v-bind:text="calendarTypes.find((type) => type.value === calendarType)?.short"
                         class="mr-1"
-                    >
-                        {{ calendarTypes.find((type) => type.value === calendarType)?.short }}
-                    </v-btn>
+                    ></v-icon-btn>
                 </template>
                 <v-list>
                     <v-list-item
