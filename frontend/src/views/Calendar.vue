@@ -3,22 +3,19 @@
         <AppBarContent>
             <!-- A phone's app bar has no room to spell out every control beside the month, and the
                  month is what says where the calendar is. -->
-            <v-btn
-                v-if="$vuetify.display.xs"
-                icon
-                title="Today"
-                class="ml-1"
-                v-on:click="setToday"
-            >
-                <v-icon size="small">{{ mdiCalendarToday }}</v-icon>
-            </v-btn>
-            <v-btn v-else variant="outlined" v-on:click="setToday" class="ml-1 mr-3">Today</v-btn>
-            <v-btn icon v-on:click="navigateCalendar('prev')">
-                <v-icon>{{ mdiChevronLeft }}</v-icon>
-            </v-btn>
-            <v-btn icon v-on:click="navigateCalendar('next')">
-                <v-icon>{{ mdiChevronRight }}</v-icon>
-            </v-btn>
+            <template v-if="$vuetify.display.xs">
+                <v-icon-btn
+                    v-bind:icon="mdiCalendarToday"
+                    title="Today"
+                    class="ml-1"
+                    v-on:click="setToday"
+                ></v-icon-btn>
+            </template>
+            <template v-else>
+                <v-btn variant="outlined" v-on:click="setToday" class="ml-1 mr-3">Today</v-btn>
+            </template>
+            <v-icon-btn v-bind:icon="mdiChevronLeft" v-on:click="navigateCalendar('prev')"></v-icon-btn>
+            <v-icon-btn v-bind:icon="mdiChevronRight" v-on:click="navigateCalendar('next')"></v-icon-btn>
             <!-- Drawn even before the calendar has mounted and has a title to give it, because it
                  is also what holds the controls after it at the end of the bar. -->
             <v-toolbar-title
@@ -69,8 +66,9 @@
                 <template v-slot:activator="{ props }">
                     <v-btn
                         v-bind="props"
-                        icon
-                        class="mr-1"
+                        rounded="lg"
+                        size="32"
+                        class="mr-2"
                         title="Choose which imported calendars are shown"
                     >
                         <v-badge
@@ -78,7 +76,7 @@
                             v-bind:content="hiddenCalendars.size"
                             color="grey"
                         >
-                            <v-icon size="small">{{ mdiCalendarMultiple }}</v-icon>
+                            <v-icon size="20">{{ mdiCalendarMultiple }}</v-icon>
                         </v-badge>
                     </v-btn>
                 </template>
