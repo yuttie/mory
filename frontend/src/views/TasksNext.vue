@@ -10,13 +10,11 @@
                 v-bind:close-on-content-click="false"
             >
                 <template v-slot:activator="{ props: menuProps }">
-                    <v-btn
-                        icon
-                        class="mr-1"
+                    <v-icon-btn
+                        v-bind:icon="mdiDotsVertical"
                         v-bind="menuProps"
-                    >
-                        <v-icon size="small">{{ mdiDotsVertical }}</v-icon>
-                    </v-btn>
+                        class="mr-2"
+                    ></v-icon-btn>
                 </template>
                 <v-list>
                     <v-list-subheader>Statistics</v-list-subheader>
@@ -127,13 +125,11 @@
                                 v-bind:close-on-content-click="false"
                             >
                                 <template v-slot:activator="{ props: menuProps }">
-                                    <v-btn
-                                        icon
-                                        variant="text"
+                                    <v-icon-btn
+                                        v-bind:icon="mdiDotsVertical"
                                         v-bind="menuProps"
-                                    >
-                                        <v-icon>{{ mdiDotsVertical }}</v-icon>
-                                    </v-btn>
+                                        class="mr-2"
+                                    ></v-icon-btn>
                                 </template>
                                 <v-list>
                                     <v-list-subheader>Descendants statistics</v-list-subheader>
