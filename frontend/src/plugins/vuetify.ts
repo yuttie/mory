@@ -7,6 +7,16 @@ export default createVuetify({
     global: {
       density: "compact",
     },
+    VIconBtn: {
+      iconSize: "20",
+      rounded: "lg",
+      size: "32",
+    },
+    VAppBarNavIcon: {
+      iconSize: "20",
+      rounded: "lg",
+      size: "32",
+    },
   },
   icons: {
     defaultSet: 'mdi',

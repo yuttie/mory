@@ -515,6 +515,7 @@
                  collapses it to a rail. -->
             <v-app-bar-nav-icon
                 v-on:click="$vuetify.display.xs ? mobileDrawer = !mobileDrawer : miniMainSidebar = !miniMainSidebar"
+                class="mx-2"
             />
             <v-toolbar-title v-if="appStore.appBarClaims === 0">
                 {{ $route.name?.replace(/With.*$/, '') ?? '' }}
