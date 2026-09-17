@@ -11,25 +11,26 @@
                 <v-btn-toggle
                     v-bind:model-value="selectedMode"
                     mandatory
-                    color="primary"
                     class="me-1"
+                    border
+                    divided
                     v-on:update:model-value="setMode"
                 >
-                    <v-btn v-bind:value="0" icon title="Viewer"><v-icon>{{ mdiFileDocument }}</v-icon></v-btn>
-                    <v-btn v-bind:value="1" icon title="Editor and viewer"><v-icon>{{ mdiFileDocumentEdit }}</v-icon></v-btn>
-                    <v-btn v-bind:value="2" icon title="Editor"><v-icon>{{ mdiPencil }}</v-icon></v-btn>
+                    <v-btn v-bind:value="0" icon title="Viewer"><v-icon size="small">{{ mdiFileDocument }}</v-icon></v-btn>
+                    <v-btn v-bind:value="1" icon title="Editor and viewer"><v-icon size="small">{{ mdiFileDocumentEdit }}</v-icon></v-btn>
+                    <v-btn v-bind:value="2" icon title="Editor"><v-icon size="small">{{ mdiPencil }}</v-icon></v-btn>
                 </v-btn-toggle>
                 <!-- A phone's app bar cannot fit every action beside the title, so the ones not
                      needed while writing wait in a menu there. -->
                 <template v-if="$vuetify.display.smAndUp">
                     <v-btn icon v-bind:title="lockScroll ? 'Unlock scroll' : 'Lock scroll'" v-on:click="lockScroll = !lockScroll">
-                        <v-icon>{{ lockScroll ? mdiLock : mdiLockOpen }}</v-icon>
+                        <v-icon size="small">{{ lockScroll ? mdiLock : mdiLockOpen }}</v-icon>
                     </v-btn>
                     <v-btn icon title="Compare with upstream" v-on:click="notifyUpstreamState">
-                        <v-icon>{{ mdiCompareVertical }}</v-icon>
+                        <v-icon size="small">{{ mdiCompareVertical }}</v-icon>
                     </v-btn>
                     <v-btn icon title="Reload" v-bind:disabled="needSave" v-on:click="reload">
-                        <v-icon>{{ mdiReload }}</v-icon>
+                        <v-icon size="small">{{ mdiReload }}</v-icon>
                     </v-btn>
                 </template>
                 <v-btn
@@ -40,7 +41,7 @@
                     v-bind:disabled="!needSave"
                     v-on:click.stop="saveIfNeeded"
                 >
-                    <v-icon>{{ mdiContentSave }}</v-icon>
+                    <v-icon size="small">{{ mdiContentSave }}</v-icon>
                 </v-btn>
                 <v-menu
                     v-model="renameMenuIsVisible"
@@ -53,7 +54,7 @@
                             title="Rename"
                             v-bind:disabled="!noteHasUpstream"
                         >
-                            <v-icon>{{ mdiRenameBox }}</v-icon>
+                            <v-icon size="small">{{ mdiRenameBox }}</v-icon>
                         </v-btn>
                     </template>
                     <v-card
@@ -93,7 +94,7 @@
                     v-bind:active="sidebarIsVisible"
                     v-on:click="sidebarIsVisible = !sidebarIsVisible"
                 >
-                    <v-icon>{{ mdiPageLayoutSidebarRight }}</v-icon>
+                    <v-icon size="small">{{ mdiPageLayoutSidebarRight }}</v-icon>
                 </v-btn>
                 <v-menu v-else location="bottom end">
                     <template v-slot:activator="{ props: menuProps }">
@@ -103,7 +104,7 @@
                             title="More"
                             class="me-1"
                         >
-                            <v-icon>{{ mdiDotsVertical }}</v-icon>
+                            <v-icon size="small">{{ mdiDotsVertical }}</v-icon>
                         </v-btn>
                     </template>
                     <v-list>
