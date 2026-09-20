@@ -51,7 +51,7 @@
                                     width="24"
                                     class="logo-swap__logo"
                                 ></v-img>
-                                <v-icon class="logo-swap__icon">{{ mdiMenu }}</v-icon>
+                                <v-icon class="logo-swap__icon">{{ mdiForwardburger }}</v-icon>
                             </div>
                         </template>
                         <template v-slot:append>
@@ -637,13 +637,13 @@ import {
     mdiFileMultipleOutline,
     mdiFileOutline,
     mdiFolderOutline,
+    mdiForwardburger,
     mdiHelp,
     mdiHomeOutline,
     mdiInformationOutline,
     mdiLock,
     mdiLogout,
     mdiMagnify,
-    mdiMenu,
     mdiPencil,
     mdiPlus,
     mdiUpload,
