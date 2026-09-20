@@ -23,9 +23,11 @@
                 style="z-index: 100; margin-bottom: 2px;"
             >{{ error.message }}</v-alert>
         </template>
-        <!-- Navigation drawer for desktop -->
+        <!-- Navigation drawer from `md` up, where the screen has room to give it a column of
+             its own. Below that it would take a quarter of the width from the view, so the one
+             below stands in and slides over the view instead. -->
         <v-navigation-drawer
-            v-if="!$vuetify.display.xs"
+            v-if="$vuetify.display.mdAndUp"
             v-bind:rail="miniMainSidebar"
             permanent
         >
@@ -253,7 +255,7 @@
             </div>
         </v-navigation-drawer>
 
-        <!-- Navigation drawer for mobile -->
+        <!-- Navigation drawer below `md` -->
         <v-navigation-drawer
             v-else
             temporary
@@ -460,10 +462,11 @@
             scroll-behavior="elevate"
             color="white"
         >
-            <!-- A phone's drawer is gone from the screen once closed, so the icon that opens it
-                 stays here. A desktop's drawer is always in view and carries its own controls. -->
+            <!-- Below `md` the drawer is gone from the screen once closed, so the icon that opens
+                 it stays here. Above that the drawer is always in view and carries its own
+                 controls. -->
             <v-app-bar-nav-icon
-                v-if="$vuetify.display.xs"
+                v-if="$vuetify.display.smAndDown"
                 v-on:click="mobileDrawer = !mobileDrawer"
                 class="mx-2"
             />
@@ -478,9 +481,9 @@
                 id="app-bar-content"
                 class="app-bar-content"
             />
-            <!-- The drawer is hidden on a phone, so point at the notice it holds. -->
+            <!-- The drawer is hidden below `md`, so point at the notice it holds. -->
             <v-btn
-                v-if="$vuetify.display.xs && indexingStops.length > 0"
+                v-if="$vuetify.display.smAndDown && indexingStops.length > 0"
                 icon
                 color="error"
                 title="Indexing stopped"
