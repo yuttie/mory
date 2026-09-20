@@ -163,9 +163,9 @@
                         <v-card>
                             <v-list>
                                 <v-list-item
-                                    v-on:click="chooseFile"
                                     v-bind:prepend-icon="mdiUpload"
                                     title="Upload"
+                                    v-on:click="chooseFile"
                                 ></v-list-item>
                             </v-list>
                             <v-divider v-if="uploadList.length > 0"></v-divider>
@@ -187,9 +187,9 @@
                                     </template>
                                 </v-list-item>
                                 <v-list-item
-                                    v-on:click="cleanUploadList"
                                     v-bind:prepend-icon="mdiBroom"
                                     title="Clear all"
+                                    v-on:click="cleanUploadList"
                                 ></v-list-item>
                             </v-list>
                         </v-card>
@@ -377,9 +377,9 @@
                     <v-card>
                         <v-list>
                             <v-list-item
-                                v-on:click="chooseFile"
                                 v-bind:prepend-icon="mdiUpload"
                                 title="Upload"
+                                v-on:click="chooseFile"
                             ></v-list-item>
                         </v-list>
                         <v-divider v-if="uploadList.length > 0"></v-divider>
@@ -401,9 +401,9 @@
                                 </template>
                             </v-list-item>
                             <v-list-item
-                                v-on:click="cleanUploadList"
                                 v-bind:prepend-icon="mdiBroom"
                                 title="Clear all"
+                                v-on:click="cleanUploadList"
                             ></v-list-item>
                         </v-list>
                     </v-card>
