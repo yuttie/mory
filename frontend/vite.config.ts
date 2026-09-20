@@ -3,7 +3,7 @@ import vue from '@vitejs/plugin-vue';
 import vuetify from 'vite-plugin-vuetify';
 import { visualizer } from "rollup-plugin-visualizer";
 import Components from 'unplugin-vue-components/vite';
-import { name as appName, version as appVersion, author as appAuthor } from './package.json';
+import { name as appName, version as appVersion, author as appAuthor } from './package.json' with { type: 'json' };
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd());
