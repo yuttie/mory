@@ -47,6 +47,7 @@
                     v-on:click.stop="saveIfNeeded"
                 ></v-icon-btn>
                 <v-icon-btn
+                    v-if="$vuetify.display.smAndUp"
                     v-bind:icon="mdiRenameBox"
                     title="Rename"
                     v-bind:disabled="!noteHasUpstream"
@@ -87,6 +88,12 @@
                             v-on:click="reload"
                         ></v-list-item>
                         <v-list-item
+                            title="Rename"
+                            v-bind:prepend-icon="mdiRenameBox"
+                            v-bind:disabled="!noteHasUpstream"
+                            v-on:click="renameDialogIsVisible = true"
+                        ></v-list-item>
+                        <v-list-item
                             v-bind:title="sidebarIsVisible ? 'Hide metadata and contents' : 'Show metadata and contents'"
                             v-bind:prepend-icon="mdiPageLayoutSidebarRight"
                             v-on:click="sidebarIsVisible = !sidebarIsVisible"
@@ -94,10 +101,11 @@
                     </v-list>
                 </v-menu>
             </AppBarContent>
-            <!-- A dialog rather than the menu this used to hang off the Rename button, which at
-                 30em wide overflowed a phone. The button sets the flag rather than standing as
-                 the dialog's activator, because a dialog with one animates open from it, and the
-                 field cannot take focus while that animation still hides the content. -->
+            <!-- A dialog rather than the menu this used to hang off the Rename button: the form
+                 is wider than a phone, and on a phone there is no button for it to hang off,
+                 since the overflow menu opens it instead. Both controls set the flag rather than
+                 standing as its activator, because a dialog with one animates open from it, and
+                 the field cannot take focus while that animation still hides the content. -->
             <v-dialog
                 v-model="renameDialogIsVisible"
                 max-width="30em"
