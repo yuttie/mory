@@ -3,13 +3,13 @@ import vue from '@vitejs/plugin-vue';
 import vuetify from 'vite-plugin-vuetify';
 import { visualizer } from "rollup-plugin-visualizer";
 import Components from 'unplugin-vue-components/vite';
-import { name as appName, version as appVersion, author as appAuthor } from './package.json' with { type: 'json' };
+import pkg from './package.json' with { type: 'json' };
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd());
-  process.env.VITE_APP_NAME = appName;
-  process.env.VITE_APP_VERSION = appVersion;
-  process.env.VITE_APP_AUTHOR = appAuthor.name;
+  process.env.VITE_APP_NAME = pkg.name;
+  process.env.VITE_APP_VERSION = pkg.version;
+  process.env.VITE_APP_AUTHOR = pkg.author.name;
   process.env.VITE_APP_BUILD_YEAR = String(new Date().getFullYear());
 
   return {
