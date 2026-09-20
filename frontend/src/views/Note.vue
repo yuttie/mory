@@ -8,11 +8,11 @@
         <template v-else>
             <AppBarContent>
                 <v-toolbar-title class="ms-5">{{ title }}</v-toolbar-title>
-                <!-- Three panes side by side need room the title also wants. A phone gets one
-                     button instead, showing the pane the tap would bring up; the pair it swaps
-                     between are the two a phone is wide enough for. -->
+                <!-- Three panes side by side need room the title also wants. Below `md` the bar
+                     gets one button instead, showing the pane the tap would bring up; the pair it
+                     swaps between are the two a narrow screen is wide enough for. -->
                 <v-icon-btn
-                    v-if="$vuetify.display.xs"
+                    v-if="$vuetify.display.smAndDown"
                     v-bind:icon="editorIsVisible ? mdiFileDocument : mdiPencil"
                     v-bind:title="editorIsVisible ? 'Viewer' : 'Editor'"
                     class="mr-1"
@@ -31,13 +31,9 @@
                     <v-btn class="px-5" v-bind:value="1" icon title="Editor and viewer"><v-icon size="small">{{ mdiFileDocumentEdit }}</v-icon></v-btn>
                     <v-btn class="px-5" v-bind:value="2" icon title="Editor"           ><v-icon size="small">{{ mdiPencil           }}</v-icon></v-btn>
                 </v-btn-toggle>
-                <!-- A phone's app bar cannot fit every action beside the title, so the ones not
-                     needed while writing wait in a menu there. -->
-                <template v-if="$vuetify.display.smAndUp">
-                    <v-icon-btn v-bind:icon="lockScroll ? mdiLock : mdiLockOpen" v-bind:title="lockScroll ? 'Unlock scroll' : 'Lock scroll'" v-on:click="lockScroll = !lockScroll"></v-icon-btn>
-                    <v-icon-btn v-bind:icon="mdiCompareVertical" title="Compare with upstream" v-on:click="notifyUpstreamState"></v-icon-btn>
-                    <v-icon-btn v-bind:icon="mdiReload" title="Reload" v-bind:disabled="needSave" v-on:click="reload"></v-icon-btn>
-                </template>
+                <!-- The mode, Save and the sidebar are what writing a note needs, so they keep
+                     their place in the bar at every width; the rest wait in a menu until the bar
+                     is wide enough to spell them out. -->
                 <v-icon-btn
                     v-bind:icon="mdiContentSave"
                     title="Save"
@@ -47,20 +43,23 @@
                     v-on:click.stop="saveIfNeeded"
                 ></v-icon-btn>
                 <v-icon-btn
-                    v-if="$vuetify.display.smAndUp"
-                    v-bind:icon="mdiRenameBox"
-                    title="Rename"
-                    v-bind:disabled="!noteHasUpstream"
-                    v-on:click="renameDialogIsVisible = true"
-                ></v-icon-btn>
-                <v-icon-btn
-                    v-if="$vuetify.display.smAndUp"
                     v-bind:icon="mdiPageLayoutSidebarRight"
-                    class="mr-2"
                     v-bind:title="sidebarIsVisible ? 'Hide metadata and contents' : 'Show metadata and contents'"
                     v-bind:active="sidebarIsVisible"
                     v-on:click="sidebarIsVisible = !sidebarIsVisible"
                 ></v-icon-btn>
+                <template v-if="$vuetify.display.mdAndUp">
+                    <v-icon-btn v-bind:icon="lockScroll ? mdiLock : mdiLockOpen" v-bind:title="lockScroll ? 'Unlock scroll' : 'Lock scroll'" v-on:click="lockScroll = !lockScroll"></v-icon-btn>
+                    <v-icon-btn v-bind:icon="mdiCompareVertical" title="Compare with upstream" v-on:click="notifyUpstreamState"></v-icon-btn>
+                    <v-icon-btn v-bind:icon="mdiReload" title="Reload" v-bind:disabled="needSave" v-on:click="reload"></v-icon-btn>
+                    <v-icon-btn
+                        v-bind:icon="mdiRenameBox"
+                        title="Rename"
+                        class="mr-2"
+                        v-bind:disabled="!noteHasUpstream"
+                        v-on:click="renameDialogIsVisible = true"
+                    ></v-icon-btn>
+                </template>
                 <v-menu v-else location="bottom end">
                     <template v-slot:activator="{ props: menuProps }">
                         <v-icon-btn
@@ -93,16 +92,11 @@
                             v-bind:disabled="!noteHasUpstream"
                             v-on:click="renameDialogIsVisible = true"
                         ></v-list-item>
-                        <v-list-item
-                            v-bind:title="sidebarIsVisible ? 'Hide metadata and contents' : 'Show metadata and contents'"
-                            v-bind:prepend-icon="mdiPageLayoutSidebarRight"
-                            v-on:click="sidebarIsVisible = !sidebarIsVisible"
-                        ></v-list-item>
                     </v-list>
                 </v-menu>
             </AppBarContent>
             <!-- A dialog rather than the menu this used to hang off the Rename button: the form
-                 is wider than a phone, and on a phone there is no button for it to hang off,
+                 is wider than a phone, and below `md` there is no button for it to hang off,
                  since the overflow menu opens it instead. Both controls set the flag rather than
                  standing as its activator, because a dialog with one animates open from it, and
                  the field cannot take focus while that animation still hides the content. -->
