@@ -31,16 +31,39 @@
         >
             <div class="d-flex flex-column h-100">
                 <v-list nav class="flex-grow-0 flex-shrink-0">
-                    <v-list-item title="mory">
+                    <!-- The rail is too narrow for a control beside the logo, so the logo becomes
+                         one: hovering it swaps the nav icon in, and the open drawer carries the
+                         button that collapses it again at its right. -->
+                    <v-list-item
+                        title="mory"
+                        v-bind:link="miniMainSidebar"
+                        v-bind:class="{ 'drawer-header--rail': miniMainSidebar }"
+                        v-bind:aria-label="miniMainSidebar ? 'Open the navigation drawer' : undefined"
+                        v-on:click="miniMainSidebar = false"
+                    >
                         <template v-slot:prepend>
-                            <v-img
-                                src="/img/logo.svg"
-                                aspect-ratio="1"
-                                max-width="24"
-                                max-height="24"
-                                width="24"
-                                class="mr-2"
-                            ></v-img>
+                            <div class="logo-swap mr-2">
+                                <v-img
+                                    src="/img/logo.svg"
+                                    aspect-ratio="1"
+                                    max-width="24"
+                                    max-height="24"
+                                    width="24"
+                                    class="logo-swap__logo"
+                                ></v-img>
+                                <v-icon class="logo-swap__icon">{{ mdiMenu }}</v-icon>
+                            </div>
+                        </template>
+                        <template v-slot:append>
+                            <!-- The click would otherwise bubble to the row above, whose own
+                                 handler opens the drawer it has just collapsed. -->
+                            <v-icon-btn
+                                v-if="!miniMainSidebar"
+                                v-bind:icon="mdiBackburger"
+                                variant="text"
+                                title="Collapse the navigation drawer"
+                                v-on:click.stop="miniMainSidebar = true"
+                            ></v-icon-btn>
                         </template>
                     </v-list-item>
                 </v-list>
@@ -513,10 +536,11 @@
             scroll-behavior="elevate"
             color="white"
         >
-            <!-- A phone opens its drawer from here; a desktop, whose drawer is always there,
-                 collapses it to a rail. -->
+            <!-- A phone's drawer is gone from the screen once closed, so the icon that opens it
+                 stays here. A desktop's drawer is always in view and carries its own controls. -->
             <v-app-bar-nav-icon
-                v-on:click="$vuetify.display.xs ? mobileDrawer = !mobileDrawer : miniMainSidebar = !miniMainSidebar"
+                v-if="$vuetify.display.xs"
+                v-on:click="mobileDrawer = !mobileDrawer"
                 class="mx-2"
             />
             <v-toolbar-title v-if="appStore.appBarClaims === 0">
@@ -592,6 +616,7 @@ import { useRoute } from 'vue-router';
 import {
     mdiAlertCircleOutline,
     mdiAutorenew,
+    mdiBackburger,
     mdiBell,
     mdiBroom,
     mdiCalendarOutline,
@@ -610,6 +635,7 @@ import {
     mdiLock,
     mdiLogout,
     mdiMagnify,
+    mdiMenu,
     mdiPencil,
     mdiPlus,
     mdiUpload,
@@ -1055,6 +1081,38 @@ watch(() => route.name, () => {
 #nav {
     a {
         text-decoration: none;
+    }
+}
+
+// The logo and the nav icon share one box, so the swap changes nothing around them.
+.logo-swap {
+    position: relative;
+    width: 24px;
+    height: 24px;
+
+    &__logo,
+    &__icon {
+        transition: opacity 0.15s ease-in-out;
+    }
+
+    &__icon {
+        position: absolute;
+        top: 0;
+        left: 0;
+        opacity: 0;
+    }
+}
+
+.drawer-header--rail {
+    &:hover,
+    &:focus-visible {
+        .logo-swap__logo {
+            opacity: 0;
+        }
+
+        .logo-swap__icon {
+            opacity: 1;
+        }
     }
 }
 
