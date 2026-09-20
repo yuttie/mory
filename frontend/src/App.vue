@@ -313,6 +313,14 @@
                             class="mr-2"
                         ></v-img>
                     </template>
+                    <template v-slot:append>
+                        <v-icon-btn
+                            v-bind:icon="mdiBackburger"
+                            variant="text"
+                            title="Close the navigation drawer"
+                            v-on:click="mobileDrawer = false"
+                        ></v-icon-btn>
+                    </template>
                 </v-list-item>
             </v-list>
 
