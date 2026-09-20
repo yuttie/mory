@@ -217,6 +217,7 @@
                     >
                         <v-expansion-panel
                             class="metadata"
+                            value="metadata"
                             v-if="rendered.metadata"
                         >
                             <v-expansion-panel-title>
@@ -282,6 +283,7 @@
                         </v-expansion-panel>
                         <v-expansion-panel
                             class="toc"
+                            value="toc"
                         >
                             <v-expansion-panel-title>
                                 Table of Contents
@@ -386,7 +388,7 @@ const noteHasUpstream = ref(false);
 const editorIsVisible = ref(false);
 const viewerIsVisible = ref(true);
 const sidebarIsVisible = ref(false);
-const sidebarPanelState = ref([0]);
+const sidebarPanelState = ref(["toc"]);
 const renameDialogIsVisible = ref(false);
 const newPath = ref(null as null | string);
 const newPathConflicting = ref(true);
