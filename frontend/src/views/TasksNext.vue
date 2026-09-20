@@ -27,7 +27,7 @@
                 <v-divider></v-divider>
                 <v-list>
                     <v-list-subheader>Config</v-list-subheader>
-                    <v-list-item>
+                    <v-list-item title="Hide completed tasks in tree view">
                         <template v-slot:prepend>
                             <v-switch
                                 v-model="hideCompletedInTreeView"
@@ -35,9 +35,6 @@
                                 class="mt-0 mr-2"
                             ></v-switch>
                         </template>
-                        <v-list-item-title>
-                            Hide completed tasks in tree view
-                        </v-list-item-title>
                     </v-list-item>
                 </v-list>
             </v-menu>
@@ -142,7 +139,7 @@
                                 <v-divider></v-divider>
                                 <v-list>
                                     <v-list-subheader>Config</v-list-subheader>
-                                    <v-list-item>
+                                    <v-list-item title="Hide completed tasks in item view">
                                         <template v-slot:prepend>
                                             <v-switch
                                                 v-model="hideCompletedInItemView"
@@ -150,9 +147,6 @@
                                                 class="mt-0 mr-2"
                                             ></v-switch>
                                         </template>
-                                        <v-list-item-title>
-                                            Hide completed tasks in item view
-                                        </v-list-item-title>
                                     </v-list-item>
                                 </v-list>
                             </v-menu>
