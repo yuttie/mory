@@ -8,7 +8,18 @@
         <template v-else>
             <AppBarContent>
                 <v-toolbar-title class="ms-5">{{ title }}</v-toolbar-title>
+                <!-- Three panes side by side need room the title also wants. A phone gets one
+                     button instead, showing the pane the tap would bring up; the pair it swaps
+                     between are the two a phone is wide enough for. -->
+                <v-icon-btn
+                    v-if="$vuetify.display.xs"
+                    v-bind:icon="editorIsVisible ? mdiFileDocument : mdiPencil"
+                    v-bind:title="editorIsVisible ? 'Viewer' : 'Editor'"
+                    class="mr-1"
+                    v-on:click="setMode(editorIsVisible ? 0 : 2)"
+                ></v-icon-btn>
                 <v-btn-toggle
+                    v-else
                     v-bind:model-value="selectedMode"
                     mandatory
                     class="mr-1"
