@@ -90,8 +90,8 @@
                 v-for="item of response?.hits ?? []"
                 v-bind:key="`${item.path}:${item.passage_id}`"
                 v-bind:to="routeForMime(item.path, item.mime_type)"
+                v-bind:title="item.title || item.path"
             >
-                <v-list-item-title>{{ item.title || item.path }}</v-list-item-title>
                 <v-list-item-subtitle class="result-meta">
                     {{ item.path }}<template v-if="lineLabel(item)">
                         · {{ lineLabel(item) }}
@@ -108,9 +108,10 @@
                     {{ item.snippet }}
                 </div>
             </v-list-item>
-            <v-list-item v-if="hasSearched && !isLoading && response?.hits.length === 0">
-                <v-list-item-title>No results</v-list-item-title>
-            </v-list-item>
+            <v-list-item
+                v-if="hasSearched && !isLoading && response?.hits.length === 0"
+                title="No results"
+            ></v-list-item>
         </v-list>
 
         <v-overlay

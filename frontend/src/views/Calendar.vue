@@ -172,50 +172,29 @@
                 </v-toolbar>
                 <v-card-text>
                     <v-list>
-                        <v-list-item>
-                            <template v-slot:prepend>
-                                <v-icon>{{ mdiClockStart }}</v-icon>
-                            </template>
+                        <v-list-item v-bind:prepend-icon="mdiClockStart">
                             {{ selectedEvent.start }}
                         </v-list-item>
-                        <v-list-item v-if="selectedEvent.end">
-                            <template v-slot:prepend>
-                                <v-icon>{{ mdiClockEnd }}</v-icon>
-                            </template>
+                        <v-list-item v-if="selectedEvent.end" v-bind:prepend-icon="mdiClockEnd">
                             {{ selectedEvent.end }}
                         </v-list-item>
-                        <v-list-item v-if="selectedEvent.location">
-                            <template v-slot:prepend>
-                                <v-icon>{{ mdiMapMarkerOutline }}</v-icon>
-                            </template>
+                        <v-list-item v-if="selectedEvent.location" v-bind:prepend-icon="mdiMapMarkerOutline">
                             {{ selectedEvent.location }}
                         </v-list-item>
-                        <v-list-item v-if="selectedEvent.url">
-                            <template v-slot:prepend>
-                                <v-icon>{{ mdiLinkVariant }}</v-icon>
-                            </template>
+                        <v-list-item v-if="selectedEvent.url" v-bind:prepend-icon="mdiLinkVariant">
                             <a
                                 v-bind:href="selectedEvent.url"
                                 rel="noopener"
                                 target="_blank"
                             >{{ selectedEvent.url }}</a>
                         </v-list-item>
-                        <v-list-item v-if="selectedEvent.taskId">
-                            <template v-slot:prepend>
-                                <v-icon>{{ mdiCheckboxMarkedOutline }}</v-icon>
-                            </template>
+                        <v-list-item v-if="selectedEvent.taskId" v-bind:prepend-icon="mdiCheckboxMarkedOutline">
                             <router-link v-bind:to="{ name: 'TasksNextWithParams', params: { selectedNodeId: selectedEvent.taskId, tab: 'selected', viewMode: 'status' } }">{{ selectedEvent.name }}</router-link>
                         </v-list-item>
-                        <v-list-item v-else-if="selectedEvent.notePath">
-                            <template v-slot:prepend>
-                                <v-icon>{{ mdiFileDocumentOutline }}</v-icon>
-                            </template>
+                        <v-list-item v-else-if="selectedEvent.notePath" v-bind:prepend-icon="mdiFileDocumentOutline">
                             <router-link v-bind:to="{ name: 'Note', params: { path: selectedEvent.notePath.split('/') } }">{{ selectedEvent.notePath }}</router-link>
                         </v-list-item>
-                        <v-list-item v-else-if="selectedEvent.calendar">
-                            <template v-slot:prepend>
-                                <v-icon>{{ mdiCalendarImport }}</v-icon>
-                            </template>
+                        <v-list-item v-else-if="selectedEvent.calendar" v-bind:prepend-icon="mdiCalendarImport">
                             {{ calendars.nameOf.get(selectedEvent.calendar) ?? selectedEvent.calendar }}
                         </v-list-item>
                     </v-list>

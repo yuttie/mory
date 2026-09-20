@@ -10,9 +10,10 @@
             ></v-icon-btn>
         </template>
         <v-list>
-            <v-list-item v-on:click="$emit('adHoc')">
-                <v-list-item-title>Ad hoc&hellip;</v-list-item-title>
-            </v-list-item>
+            <v-list-item
+                title="Ad hoc&hellip;"
+                v-on:click="$emit('adHoc')"
+            ></v-list-item>
             <v-divider></v-divider>
             <template v-if="nodes.length === 0">
                 <v-list-item disabled>

@@ -1,8 +1,7 @@
 <template>
     <template v-for="node of nodes" v-bind:key="node.action ? `action:${node.action.id}` : `group:${node.label}`">
         <template v-if="node.children">
-            <v-list-item>
-                <v-list-item-title>{{ node.label }}</v-list-item-title>
+            <v-list-item v-bind:title="node.label">
                 <template v-slot:append>
                     <v-icon size="small">{{ mdiChevronRight }}</v-icon>
                 </template>
@@ -21,9 +20,10 @@
             </v-list-item>
         </template>
         <template v-else>
-            <v-list-item v-on:click="$emit('run', node.action!)">
-                <v-list-item-title>{{ node.label }}</v-list-item-title>
-            </v-list-item>
+            <v-list-item
+                v-bind:title="node.label"
+                v-on:click="$emit('run', node.action!)"
+            ></v-list-item>
         </template>
     </template>
 </template>
