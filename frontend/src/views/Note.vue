@@ -46,47 +46,12 @@
                     v-bind:disabled="!needSave"
                     v-on:click.stop="saveIfNeeded"
                 ></v-icon-btn>
-                <v-menu
-                    v-model="renameMenuIsVisible"
-                    v-bind:close-on-content-click="false"
-                >
-                    <template v-slot:activator="{ props: menuProps }">
-                        <v-icon-btn
-                            v-bind="menuProps"
-                            v-bind:icon="mdiRenameBox"
-                            title="Rename"
-                            v-bind:disabled="!noteHasUpstream"
-                        ></v-icon-btn>
-                    </template>
-                    <v-card
-                        min-width="30em"
-                    >
-                        <v-card-text>
-                            <v-text-field
-                                label="New path"
-                                v-model="newPath"
-                                v-bind:rules="[newPathValidationResult]"
-                                v-on:focus="$event.target.select()"
-                                v-on:keydown="onNewPathKeydown"
-                                v-on:input="onNewPathInput"
-                                autofocus
-                            ></v-text-field>
-                        </v-card-text>
-                        <v-card-actions>
-                            <v-spacer></v-spacer>
-                            <v-btn
-                                variant="text"
-                                v-on:click="renameMenuIsVisible = false;"
-                            >Cancel</v-btn>
-                            <v-btn
-                                variant="text"
-                                color="primary"
-                                v-on:click="rename(); renameMenuIsVisible = false;"
-                                v-bind:disabled="newPathConflicting"
-                            >Rename</v-btn>
-                        </v-card-actions>
-                    </v-card>
-                </v-menu>
+                <v-icon-btn
+                    v-bind:icon="mdiRenameBox"
+                    title="Rename"
+                    v-bind:disabled="!noteHasUpstream"
+                    v-on:click="renameDialogIsVisible = true"
+                ></v-icon-btn>
                 <v-icon-btn
                     v-if="$vuetify.display.smAndUp"
                     v-bind:icon="mdiPageLayoutSidebarRight"
@@ -129,6 +94,41 @@
                     </v-list>
                 </v-menu>
             </AppBarContent>
+            <!-- A dialog rather than the menu this used to hang off the Rename button, which at
+                 30em wide overflowed a phone. The button sets the flag rather than standing as
+                 the dialog's activator, because a dialog with one animates open from it, and the
+                 field cannot take focus while that animation still hides the content. -->
+            <v-dialog
+                v-model="renameDialogIsVisible"
+                max-width="30em"
+            >
+                <v-card>
+                    <v-card-text>
+                        <v-text-field
+                            ref="newPathField"
+                            label="New path"
+                            v-model="newPath"
+                            v-bind:rules="[newPathValidationResult]"
+                            v-on:focus="$event.target.select()"
+                            v-on:keydown="onNewPathKeydown"
+                            v-on:input="onNewPathInput"
+                        ></v-text-field>
+                    </v-card-text>
+                    <v-card-actions>
+                        <v-spacer></v-spacer>
+                        <v-btn
+                            variant="text"
+                            v-on:click="renameDialogIsVisible = false;"
+                        >Cancel</v-btn>
+                        <v-btn
+                            variant="text"
+                            color="primary"
+                            v-on:click="rename(); renameDialogIsVisible = false;"
+                            v-bind:disabled="newPathConflicting"
+                        >Rename</v-btn>
+                    </v-card-actions>
+                </v-card>
+            </v-dialog>
             <v-dialog
                 v-model="showConfirmationDialog"
                 max-width="25em"
@@ -380,7 +380,7 @@ const editorIsVisible = ref(false);
 const viewerIsVisible = ref(true);
 const sidebarIsVisible = ref(false);
 const sidebarPanelState = ref([0]);
-const renameMenuIsVisible = ref(false);
+const renameDialogIsVisible = ref(false);
 const newPath = ref(null as null | string);
 const newPathConflicting = ref(true);
 const isLoading = ref(false);
@@ -397,6 +397,7 @@ let skipNextPathWatch = false;
 
 // Template Refs
 const editableViewer = ref<InstanceType<typeof EditableViewer> | null>(null);
+const newPathField = ref<{ focus: () => void } | null>(null);
 const tocEl = ref<HTMLElement | null>(null);
 
 // Computed properties
@@ -908,7 +909,7 @@ function onBeforeunload(e: any) {
 }
 
 function handleKeydown(e: KeyboardEvent) {
-    if (renameMenuIsVisible.value) {
+    if (renameDialogIsVisible.value) {
         return;
     }
     if (e.key === 'e') {
@@ -1087,10 +1088,15 @@ function rename() {
 }
 
 // Watchers
-watch(renameMenuIsVisible, (isVisible: boolean) => {
+watch(renameDialogIsVisible, async (isVisible: boolean) => {
     if (isVisible) {
         newPath.value = notePath.value;
         newPathConflicting.value = true;
+        // The control that opened the dialog took focus as it was pressed and still holds it,
+        // so the field claims it back once the dialog has put it in the DOM. `autofocus` does
+        // not survive that, and the dialog's own `after-enter` never fires.
+        await nextTick();
+        newPathField.value?.focus();
     }
 });
 
