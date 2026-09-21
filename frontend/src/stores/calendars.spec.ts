@@ -1,6 +1,7 @@
 import { IDBFactory, IDBKeyRange as FakeIDBKeyRange } from 'fake-indexeddb';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import YAML from 'yaml';
 
 import type { EntriesResponse, ImportedEventsResponse } from '@/api';
 
@@ -350,5 +351,108 @@ describe('task date colours', () => {
         const [, content] = apiMocks.addNote.mock.calls[0];
         expect(content).toContain('#0d47a1');
         expect(content).toContain('#880e4f');
+    });
+});
+
+describe('event categories', () => {
+    const WITH_CATEGORIES = `${YAML_FILE}categories:
+    meeting:
+        color: "#1565c0"
+        name: "[MTG] {{name}}"
+    meeting/1on1:
+    trip:
+        color: "#2e7d32"
+`;
+
+    it('reads them out of the same file, in its order', async () => {
+        apiMocks.getNote.mockResolvedValue({ data: WITH_CATEGORIES });
+        const { useCalendarsStore } = await load();
+        const store = useCalendarsStore();
+
+        await store.loadSubscriptions();
+
+        expect(store.categories).toEqual([
+            { id: 'meeting', color: '#1565c0', name: '[MTG] {{name}}' },
+            { id: 'meeting/1on1' },
+            { id: 'trip', color: '#2e7d32' },
+        ]);
+        expect(store.categoryMap?.get('meeting/1on1')).toEqual({});
+    });
+
+    // Hand-edited YAML: a category that is not a mapping is dropped, and a field that is not usable
+    // text is left to fall back.
+    it('drops what is not usable', async () => {
+        apiMocks.getNote.mockResolvedValue({
+            data: `${YAML_FILE}categories:\n    meeting: blue\n    trip:\n        color: 12\n        name: "  "\n`,
+        });
+        const { useCalendarsStore } = await load();
+        const store = useCalendarsStore();
+
+        await store.loadSubscriptions();
+
+        expect(store.categories).toEqual([{ id: 'trip' }]);
+    });
+
+    // Every category a note names would otherwise be reported as unknown on the first paint.
+    it('has no map to check against until the file is read', async () => {
+        const { useCalendarsStore } = await load();
+        const store = useCalendarsStore();
+
+        expect(store.categoryMap).toBeUndefined();
+    });
+
+    it('has none, rather than unknown ones, when there is no file', async () => {
+        apiMocks.getNote.mockRejectedValue(missing());
+        const { useCalendarsStore } = await load();
+        const store = useCalendarsStore();
+
+        await store.loadSubscriptions();
+
+        expect(store.categoryMap).toEqual(new Map());
+    });
+
+    it('has no map to check against when the file cannot be read', async () => {
+        apiMocks.getNote.mockRejectedValue(new Error('offline'));
+        const { useCalendarsStore } = await load();
+        const store = useCalendarsStore();
+
+        await expect(store.loadSubscriptions()).rejects.toThrow('offline');
+        expect(store.categoryMap).toBeUndefined();
+    });
+
+    it('keeps them when only the subscriptions are saved', async () => {
+        apiMocks.getNote.mockResolvedValue({ data: WITH_CATEGORIES });
+        const { useCalendarsStore } = await load();
+        const store = useCalendarsStore();
+
+        await store.loadSubscriptions();
+        await store.saveSubscriptions([{
+            id: 'work',
+            name: 'Work',
+            url: 'https://example.invalid/work.ics',
+            enabled: true,
+        }]);
+
+        const [, content] = apiMocks.addNote.mock.calls[0];
+        expect(content).toContain('[MTG] {{name}}');
+        expect(content).toContain('meeting/1on1: {}');
+        expect(content).toContain('#2e7d32');
+    });
+
+    it('keeps the subscriptions when only the categories are saved', async () => {
+        apiMocks.getNote.mockResolvedValue({ data: WITH_CATEGORIES });
+        const { useCalendarsStore } = await load();
+        const store = useCalendarsStore();
+
+        await store.loadSubscriptions();
+        await store.saveCategories([{ id: 'meeting', color: '#0d47a1' }]);
+
+        const [path, content] = apiMocks.addNote.mock.calls[0];
+        expect(path).toBe('.mory/calendars.yaml');
+        expect(content).toContain('https://example.invalid/work.ics');
+        expect(content).toContain('#0d47a1');
+        expect(content).not.toContain('trip');
+        // Read back as written, so what the settings save is what the calendar then draws.
+        expect(YAML.parse(content).categories).toEqual({ meeting: { color: '#0d47a1' } });
     });
 });
