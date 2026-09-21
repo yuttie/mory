@@ -311,7 +311,7 @@ import {
 import { LAGGING_RETRY_MS, useFilesStore } from '@/stores/files';
 import { useLocalStorage } from '@/composables/localStorage';
 import Color from 'color';
-import materialColors from 'vuetify/util/colors';
+import { parseEventColor } from '@/event-color';
 import dayjs from 'dayjs';
 import { renderMarkdown } from '@/markdown';
 import AppBarContent from '@/components/AppBarContent.vue';
@@ -692,19 +692,9 @@ function showEvent (nativeEvent: Event, { event }: { event: any }) {
 }
 
 function getEventColor(event: any): string {
-    const toPropName = (s: string) => s.replace(/-./g, (match: string) => match[1].toUpperCase());
-    // `Color` throws on anything it cannot parse, and both a note's `color:` and a calendar's
-    // configured colour are free text. Throwing here happens inside v-calendar's render, so one
-    // typo would blank the whole view rather than mis-colour one event.
-    let color;
-    try {
-        color = Object.hasOwn(materialColors, toPropName(event.color))
-            ? Color((materialColors as any)[toPropName(event.color)].base)
-            : Color(event.color);
-    }
-    catch {
-        color = Color(DEFAULT_EVENT_COLOR);
-    }
+    // Both a note's `color:` and a calendar's configured colour are free text, and this runs inside
+    // v-calendar's render: an unreadable one draws in the default rather than blanking the view.
+    const color = parseEventColor(event.color) ?? Color(DEFAULT_EVENT_COLOR);
 
     const now = dayjs();
     const time = eventEndsAt(event);

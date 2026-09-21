@@ -355,22 +355,12 @@ import type { Task } from '@/task';
 
 import Color from 'color';
 import { formatDistanceToNow, parseISO } from 'date-fns';
-import materialColors from 'vuetify/util/colors';
+import { parseEventColor } from '@/event-color';
 
 function getEventColor(event: any): string {
-    const toPropName = (s: string) => s.replace(/-./g, (match: string) => match[1].toUpperCase());
-    // `Color` throws on anything it cannot parse, and a note's `color:` is free text. Throwing
-    // here happens during render, so one typo would blank every day's events rather than
-    // mis-colour one -- the same guard `Calendar.vue` has.
-    let color;
-    try {
-        color = Object.hasOwn(materialColors, toPropName(event.color))
-            ? Color((materialColors as any)[toPropName(event.color)].base)
-            : Color(event.color);
-    }
-    catch {
-        color = Color(DEFAULT_EVENT_COLOR);
-    }
+    // A note's `color:` is free text and this runs during render: an unreadable one draws in the
+    // default rather than blanking every day's events.
+    const color = parseEventColor(event.color) ?? Color(DEFAULT_EVENT_COLOR);
 
     const now = dayjs();
     const time = eventEndsAt(event);
