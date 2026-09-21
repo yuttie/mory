@@ -269,10 +269,10 @@
 <script lang="ts" setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 
-import Color from 'color';
 import { mdiDelete, mdiPencil, mdiPlus } from '@mdi/js';
 
 import ColorField from '@/components/ColorField.vue';
+import { parseEventColor } from '@/event-color';
 import {
     DEFAULT_DEADLINE_COLOR,
     DEFAULT_DUE_COLOR,
@@ -430,12 +430,10 @@ async function saveTaskDateColors() {
         if (value === '') {
             continue;
         }
-        // `Color` throws on anything it cannot parse, and the views fall back to the default when
-        // it does -- so a typo would silently save and then appear to have been ignored.
-        try {
-            Color(value);
-        }
-        catch {
+        // The views fall back to the default on a colour they cannot read, so a typo would
+        // silently save and then appear to have been ignored. Read the way the views read it, so
+        // a palette name such as `light-green` is not refused while the calendar draws it.
+        if (parseEventColor(value) === null) {
             colorError.value = `"${value}" is not a colour this can draw.`;
             return;
         }
@@ -496,12 +494,8 @@ async function saveCategory() {
     }
     const color = categoryDraft.color.trim();
     if (color !== '') {
-        // The same check the task date colours get: the views fall back to the default on a
-        // colour they cannot parse, so a typo would save and then appear to be ignored.
-        try {
-            Color(color);
-        }
-        catch {
+        // The same check the task date colours get.
+        if (parseEventColor(color) === null) {
             categoryDraftError.value = `"${color}" is not a colour this can draw.`;
             return;
         }
