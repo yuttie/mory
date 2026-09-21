@@ -341,7 +341,11 @@ import type { ListEntry2 } from '@/api';
 import { DEFAULT_EVENT_COLOR, eventEndsAt, eventsFromEntries, mergeImported, taskDatesFromEntries } from '@/events';
 import type { CalendarEvent } from '@/events';
 import { useLocalStorage } from '@/composables/localStorage';
-import { HIDDEN_CALENDARS_STORAGE_KEY, useCalendarsStore } from '@/stores/calendars';
+import {
+    HIDDEN_CALENDARS_STORAGE_KEY,
+    HIDDEN_CATEGORIES_STORAGE_KEY,
+    useCalendarsStore,
+} from '@/stores/calendars';
 import { useFilesStore } from '@/stores/files';
 import { by } from '@/utils';
 import dayjs from 'dayjs';
@@ -477,6 +481,8 @@ const eventWindow = computed(() => ({
 // Shared with the calendar view, so a calendar hidden there is not drawn here either: the choice
 // is "not in this browser", not "not on that one page".
 const hiddenCalendarIds = useLocalStorage<string[]>(HIDDEN_CALENDARS_STORAGE_KEY, []);
+// Categories hidden on the calendar are not drawn here either, for the same reason.
+const hiddenCategoryIds = useLocalStorage<string[]>(HIDDEN_CATEGORIES_STORAGE_KEY, []);
 // A task's due date and deadline are events here for the same reason they are on the calendar:
 // what falls in the next three days is exactly what this section is for. They come from
 // `task.due_by` and `task.deadline` rather than from an `events:` block, so they need their own
@@ -496,7 +502,11 @@ const events = computed(() => mergeImported(
         ).events,
     ],
     calendars.events,
-    { colorOf: calendars.colorOf, hidden: new Set(hiddenCalendarIds.value) },
+    {
+        colorOf: calendars.colorOf,
+        hidden: new Set(hiddenCalendarIds.value),
+        hiddenCategories: new Set(hiddenCategoryIds.value),
+    },
 ));
 
 const today = dayjs().format('YYYY-MM-DD');

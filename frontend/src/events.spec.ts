@@ -13,6 +13,7 @@ import {
     categoryLineage,
     eventEndsAt,
     eventsFromEntries,
+    isInHiddenCategory,
     taskDatesFromEntries,
     mergeImported,
     normalizeEndTime,
@@ -556,6 +557,37 @@ describe('mergeImported', () => {
         expect(merged).toHaveLength(1);
         expect(merged[0].source).toBe('note');
     });
+
+    it('drops the note events of a hidden category and keeps the rest', () => {
+        const { events } = derive([
+            entry('a.md', {
+                Sync: { start: '2024-05-01 10:00', category: 'meeting/1on1' },
+                Offsite: { start: '2024-05-02', category: 'trip' },
+                Lunch: { start: '2024-05-03 12:00' },
+            }),
+        ]);
+
+        const merged = mergeImported(events, [], { hiddenCategories: new Set(['meeting']) });
+
+        expect(merged.map((event) => event.name)).toEqual(['Offsite', 'Lunch']);
+    });
+
+    // The note still claims the series while hidden, or hiding it would put the feed's copy back.
+    it('keeps an imported event shadowed by a note in a hidden category', () => {
+        const { events } = derive([
+            entry('a.md', {
+                Standup: {
+                    start: '2024-05-01 09:00',
+                    category: 'meeting',
+                    ical: { calendar: 'work', uid: 'a@example' },
+                },
+            }),
+        ]);
+
+        const merged = mergeImported(events, [imported()], { hiddenCategories: new Set(['meeting']) });
+
+        expect(merged).toEqual([]);
+    });
 });
 
 // The module's own contract: "anything invalid is reported and skipped, never fatal. A typo in one
@@ -865,6 +897,15 @@ describe('nested categories', () => {
     });
 
     // An ancestor alone would draw `meeting/1no1` as a meeting, and the typo would go unseen.
+    it('hides a category with its ancestor, and not with its descendant', () => {
+        const hidden = new Set(['meeting']);
+        expect(isInHiddenCategory('meeting', hidden)).toBe(true);
+        expect(isInHiddenCategory('meeting/1on1', hidden)).toBe(true);
+        expect(isInHiddenCategory('meetings', hidden)).toBe(false);
+        expect(isInHiddenCategory('meeting', new Set(['meeting/1on1']))).toBe(false);
+        expect(isInHiddenCategory(undefined, hidden)).toBe(false);
+    });
+
     it('needs the id itself to be configured', () => {
         expect(resolveCategory('meeting/1no1', categories)).toBeNull();
 

@@ -76,6 +76,17 @@ export function categoryLineage(id: string): string[] {
     return lineage;
 }
 
+/// Whether an event is in a hidden category, or in one nested under a hidden category.
+export function isInHiddenCategory(
+    categoryId: string | undefined,
+    hidden: ReadonlySet<string> | undefined,
+): boolean {
+    if (categoryId === undefined || hidden === undefined || hidden.size === 0) {
+        return false;
+    }
+    return categoryLineage(categoryId).some((id) => hidden.has(id));
+}
+
 /// The defaults the category `id` supplies, or `null` when no category of that id is configured.
 ///
 /// Each field comes from the nearest of the id and its ancestors that sets it, so `meeting/1on1`
@@ -593,10 +604,17 @@ function occurrenceKey(calendar: string | undefined, uid: string, recurrenceId: 
 /// A note carrying `ical.uid` shadows the whole series; one that also carries `recurrence_id`
 /// shadows only that occurrence and leaves the rest imported. Both are compared by instant, since
 /// the note and the feed need not spell the same moment the same way.
+///
+/// `hidden` names calendars whose imported events are not drawn; `hiddenCategories` names
+/// categories whose note events are not.
 export function mergeImported(
     noteEvents: readonly CalendarEvent[],
     imported: readonly ImportedOccurrence[],
-    options: { colorOf?: Map<string, string>; hidden?: ReadonlySet<string> } = {},
+    options: {
+        colorOf?: Map<string, string>;
+        hidden?: ReadonlySet<string>;
+        hiddenCategories?: ReadonlySet<string>;
+    } = {},
 ): CalendarEvent[] {
     const wholeSeries = new Set<string>();
     const occurrences = new Set<string>();
@@ -612,7 +630,11 @@ export function mergeImported(
         }
     }
 
-    const merged = [...noteEvents];
+    // Hidden only after every note event has claimed what it shadows. Dropped any earlier, a note
+    // converted from an imported event would take its claim with it, and hiding its category
+    // would bring the feed's copy back in its place.
+    const merged = noteEvents.filter(
+        (event) => !isInHiddenCategory(event.categoryId, options.hiddenCategories));
     for (const occurrence of imported) {
         // Hiding a calendar hides only what it imports. A note converted from it is mory's own
         // event now, and stays drawn like any other note event.
