@@ -64,9 +64,35 @@ export function applyNameTemplate(template: string | undefined, name: string): s
     return template.replace(/\{\{\s*name\s*\}\}/gi, () => name);
 }
 
+/// A category id and its ancestors, nearest first: `a/b/c`, `a/b`, `a`.
+///
+/// Categories nest by path, as notes and tags do, so a finer kind of event is written as a child of
+/// the kind it belongs to and falls back on what that one says.
+export function categoryLineage(id: string): string[] {
+    const lineage = [id];
+    for (let slash = id.lastIndexOf('/'); slash > 0; slash = id.lastIndexOf('/', slash - 1)) {
+        lineage.push(id.slice(0, slash));
+    }
+    return lineage;
+}
+
 /// The defaults the category `id` supplies, or `null` when no category of that id is configured.
+///
+/// Each field comes from the nearest of the id and its ancestors that sets it, so `meeting/1on1`
+/// can change the colour and keep `meeting`'s template. The id itself must be configured, even with
+/// nothing of its own: were an ancestor enough, `meeting/1no1` would quietly draw as a meeting and
+/// the typo would never be reported. Ancestors need not be.
 export function resolveCategory(id: string, categories: EventCategories): EventCategory | null {
-    return categories.get(id) ?? null;
+    if (!categories.has(id)) {
+        return null;
+    }
+    const resolved: EventCategory = {};
+    for (const ancestor of categoryLineage(id)) {
+        const category = categories.get(ancestor);
+        resolved.color ??= category?.color;
+        resolved.name ??= category?.name;
+    }
+    return resolved;
 }
 
 // What the views hand to `<v-calendar>`, and what `Home.vue` filters by day.

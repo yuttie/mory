@@ -10,11 +10,13 @@ import {
     DEFAULT_EVENT_COLOR,
     DEFAULT_IMPORTED_COLOR,
     applyNameTemplate,
+    categoryLineage,
     eventEndsAt,
     eventsFromEntries,
     taskDatesFromEntries,
     mergeImported,
     normalizeEndTime,
+    resolveCategory,
     toWallClock,
 } from '@/events';
 
@@ -835,6 +837,54 @@ describe('event categories', () => {
             color: DEFAULT_EVENT_COLOR,
             categoryId: 'meeting',
         })]);
+    });
+});
+
+describe('nested categories', () => {
+    const categories = new Map([
+        ['meeting', { color: '#1565c0', name: '[MTG] {{name}}' }],
+        ['meeting/1on1', { color: '#6a1b9a' }],
+        ['meeting/1on1/skip', {}],
+        ['work/review', { name: 'Review: {{name}}' }],
+    ]);
+
+    it('lists an id and its ancestors, nearest first', () => {
+        expect(categoryLineage('a/b/c')).toEqual(['a/b/c', 'a/b', 'a']);
+        expect(categoryLineage('meeting')).toEqual(['meeting']);
+    });
+
+    it('takes each field from the nearest category that sets it', () => {
+        expect(resolveCategory('meeting/1on1', categories))
+            .toEqual({ color: '#6a1b9a', name: '[MTG] {{name}}' });
+        expect(resolveCategory('meeting/1on1/skip', categories))
+            .toEqual({ color: '#6a1b9a', name: '[MTG] {{name}}' });
+    });
+
+    it('does not need an ancestor to be configured', () => {
+        expect(resolveCategory('work/review', categories)).toEqual({ name: 'Review: {{name}}' });
+    });
+
+    // An ancestor alone would draw `meeting/1no1` as a meeting, and the typo would go unseen.
+    it('needs the id itself to be configured', () => {
+        expect(resolveCategory('meeting/1no1', categories)).toBeNull();
+
+        const { events, errors } = eventsFromEntries([
+            entry('a.md', { Sync: { start: '2024-05-01 10:00', category: 'meeting/1no1' } }),
+        ], ANY_WINDOW, { categories });
+        expect(events[0]).toMatchObject({ name: 'Sync', color: DEFAULT_EVENT_COLOR });
+        expect(errors).toEqual([['category', 'meeting/1no1', 'Sync', 'a.md', null]]);
+    });
+
+    it('draws a nested category with what it inherits', () => {
+        const { events } = eventsFromEntries([
+            entry('a.md', { Sync: { start: '2024-05-01 10:00', category: 'meeting/1on1' } }),
+        ], ANY_WINDOW, { categories });
+
+        expect(events[0]).toMatchObject({
+            name: '[MTG] Sync',
+            color: '#6a1b9a',
+            categoryId: 'meeting/1on1',
+        });
     });
 });
 
