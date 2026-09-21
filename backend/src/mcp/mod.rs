@@ -148,9 +148,10 @@ impl Mory {
                        from it. Every other event appears only when one of its declared \
                        occurrences falls inside the window.\n\nEach task due_by and deadline \
                        inside the window is listed too, under `task_dates`: the calendar draws \
-                       them as events, so a question about what is coming up needs them. Events \
-                       subscribed from an external calendar are a separate tool, \
-                       list_imported_events.",
+                       them as events, so a question about what is coming up needs them. The \
+                       event categories configured in `.mory/calendars.yaml` are listed under \
+                       `categories`, as declared. Events subscribed from an external calendar are \
+                       a separate tool, list_imported_events.",
         annotations(title = "List events", read_only_hint = true, open_world_hint = false)
     )]
     pub async fn list_events(

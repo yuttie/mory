@@ -462,6 +462,13 @@ struct EventsOutput {
     /// Always present, even when empty, so "no deadlines this week" is an answer rather than a
     /// field the caller has to wonder about.
     task_dates: Vec<TaskDateSummary>,
+    /// The event categories `.mory/calendars.yaml` configures, keyed by id, exactly as declared.
+    /// Always present, for the same reason as `task_dates`.
+    categories: serde_json::Value,
+    /// Why `categories` is empty when the file could not be read, so an unreadable file is not
+    /// mistaken for one that configures none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    categories_error: Option<String>,
     /// Said once per call rather than trusted to the tool description, because a recurring event
     /// listed without occurrences is exactly the result a model would otherwise misread.
     note: &'static str,
@@ -629,16 +636,37 @@ pub async fn list_events(
 
     let task_dates = task_dates_in_window(&entries, from, to);
 
+    // Handed over as declared rather than applied to each event: resolving a nested id and
+    // filling in a template here would be a second copy of what `frontend/src/events.ts` does,
+    // in another language and with nothing comparing the two.
+    let (categories, categories_error) = match crate::v2::read_calendar_config(state).await {
+        Ok(config) => (
+            config
+                .categories()
+                .and_then(|categories| serde_json::to_value(categories).ok())
+                .unwrap_or_else(|| serde_json::json!({})),
+            None,
+        ),
+        Err(e) => (serde_json::json!({}), Some(format!("{e:#}"))),
+    };
+
     json_result(&EventsOutput {
         commit: commit.to_string(),
         window: (from.to_string(), to.to_string()),
         events,
         task_dates,
+        categories,
+        categories_error,
         note: "Events marked `recurs` carry a repeat rule whose occurrences are not expanded \
                here; read `declaration.repeat` and work out the dates from it. Every other event \
                is listed only when a declared occurrence falls inside the window. `task_dates` \
                holds each task due_by and deadline inside the window, which the calendar draws \
-               as events too; one whose `status` is done or canceled is settled.",
+               as events too; one whose `status` is done or canceled is settled. An event's \
+               `category` names an entry of `categories`, which the calendar draws it with: that \
+               entry's `color` unless the event sets its own, and its `name` template, in which \
+               `{{name}}` stands for the event's name. A nested id such as `meeting/1on1` takes \
+               what it does not set from `meeting`. `declaration` is the note as written, with \
+               none of this applied.",
     })
 }
 
