@@ -81,6 +81,10 @@
                 "name": { "type": "string" },
                 "location": { "type": "string" },
                 "url": { "type": "string" },
+                "category": {
+                    "description": "The id of a category under categories: in .mory/calendars.yaml, which supplies a default color and a name template.",
+                    "type": "string"
+                },
                 "repeat": { "$ref": "#/definitions/event-repeat" },
                 "exclusions": {
                     "type": "array",

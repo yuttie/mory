@@ -36,6 +36,39 @@ import dayjs from 'dayjs';
 // The colour an event falls back to when neither it nor its parent names one.
 export const DEFAULT_EVENT_COLOR = '#666666';
 
+/// What a category, configured under `categories:` in `.mory/calendars.yaml`, supplies to the
+/// events that name it: a default for the same keys an event has.
+///
+/// Only how an event is drawn, never when or where it happens -- those stay in the note, which has
+/// to say everything about its events on its own.
+export interface EventCategory {
+    color?: string;
+    /// A template for the drawn name, in which `{{name}}` stands for the event's own.
+    name?: string;
+}
+
+/// The configured categories by id.
+export type EventCategories = ReadonlyMap<string, EventCategory>;
+
+/// The name an event is drawn with, given its category's template.
+///
+/// `{{name}}` is the notation `.mory/ai-actions.toml` already uses for `{{input}}`, with the same
+/// tolerance for inner whitespace and case, so mory has one way to write a placeholder rather than
+/// two. Any other placeholder is left as written, which shows a misspelt one on the calendar.
+export function applyNameTemplate(template: string | undefined, name: string): string {
+    if (template === undefined) {
+        return name;
+    }
+    // A function rather than `name` itself: a `$&` in an event's name would otherwise be read as
+    // a replacement pattern.
+    return template.replace(/\{\{\s*name\s*\}\}/gi, () => name);
+}
+
+/// The defaults the category `id` supplies, or `null` when no category of that id is configured.
+export function resolveCategory(id: string, categories: EventCategories): EventCategory | null {
+    return categories.get(id) ?? null;
+}
+
 // What the views hand to `<v-calendar>`, and what `Home.vue` filters by day.
 //
 // Note that `timed` is not a field here on purpose: v-calendar reads a property of that name off
@@ -62,6 +95,9 @@ export interface CalendarEvent {
     calendar?: string;
     uid?: string;
     recurrenceId?: string;
+    /// The category the note names, configured or not. Not `category`, for the reason `timed` is
+    /// absent: v-calendar reads a property of that name in its category mode.
+    categoryId?: string;
 }
 
 // `[property, offending value, event name, note path, note title]` -- the shape `Calendar.vue`
@@ -169,9 +205,19 @@ export function eventEndsAt(event: { start: string; end?: string }): dayjs.Dayjs
 // belongs to the event as a whole rather than to any one of its occurrences.
 type EventParent = EventFields & { ical?: EventIcal };
 
+// What an event's `category:` came to: the id it names, and the defaults behind it -- absent when
+// that id is not configured, so the event is drawn plainly rather than lost.
+//
+// Passed beside `parent` rather than on it: the base occurrence's parent carries only `ical`.
+interface EventCategoryRef {
+    id: string;
+    defaults?: EventCategory;
+}
+
 function buildOccurrence(
     time: EventOccurrence,
     parent: EventParent,
+    category: EventCategoryRef | undefined,
     eventName: string,
     entry: ListEntry2,
     errors: EventError[],
@@ -189,12 +235,15 @@ function buildOccurrence(
         return null;
     }
 
+    // The template wraps the name as resolved, so a renamed occurrence keeps its category's prefix.
+    // A non-string name is handed on untouched, for `validateEvent` to refuse as before.
+    const name = time.name || eventName;
     const event: CalendarEvent = {
-        name: time.name || eventName,
+        name: typeof name === 'string' ? applyNameTemplate(category?.defaults?.name, name) : name,
         start: toWallClock(time.start),
         end: normalizedEnd === undefined ? undefined : toWallClock(normalizedEnd),
         finished: time.finished,
-        color: time.color || parent.color || DEFAULT_EVENT_COLOR,
+        color: time.color || parent.color || category?.defaults?.color || DEFAULT_EVENT_COLOR,
         note: time.note || parent.note,
         location: time.location || parent.location,
         url: time.url || parent.url,
@@ -207,6 +256,7 @@ function buildOccurrence(
                 uid: parent.ical.uid,
                 recurrenceId: parent.ical.recurrence_id,
             }),
+        ...(category === undefined ? {} : { categoryId: category.id }),
     };
     return validateEvent(event) ? event : null;
 }
@@ -259,6 +309,7 @@ function durationOf(detail: MetadataEvent): string | undefined {
 function expandSeries(
     eventName: string,
     detail: MetadataEvent,
+    category: EventCategoryRef | undefined,
     entry: ListEntry2,
     window: EventWindow,
     into: CalendarEvent[],
@@ -321,6 +372,7 @@ function expandSeries(
             // does; `occurrence` is only the fallback for one that changes other fields.
             { ...override, at: undefined, start: override?.start ?? occurrence },
             parent,
+            category,
             eventName,
             entry,
             errors,
@@ -351,16 +403,51 @@ function expandSeries(
     }
 }
 
+// Which category an event names, and what that category supplies.
+//
+// A category that is not a string, or names nothing configured, is reported and the event drawn
+// without it: losing the event over a typo would be worse than losing its colour, and saying
+// nothing is how the typo survives. With no configuration to hand at all -- before it has loaded,
+// or when it could not be read -- nothing is reported, since every category would look unknown.
+function categoryOf(
+    detail: MetadataEvent,
+    categories: EventCategories | undefined,
+    eventName: string,
+    entry: ListEntry2,
+    errors: EventError[],
+): EventCategoryRef | undefined {
+    const id: unknown = detail.category;
+    // An empty `category:` is YAML null, and reads as none -- as an empty `color:` does.
+    if (id === undefined || id === null) {
+        return undefined;
+    }
+    if (typeof id !== 'string') {
+        errors.push(['category', id, eventName, entry.path, entry.title]);
+        return undefined;
+    }
+    if (categories === undefined) {
+        return { id };
+    }
+    const defaults = resolveCategory(id, categories);
+    if (defaults === null) {
+        errors.push(['category', id, eventName, entry.path, entry.title]);
+        return { id };
+    }
+    return { id, defaults };
+}
+
 function eventsOfEntry(
     eventName: string,
     detail: MetadataEvent,
     entry: ListEntry2,
     window: EventWindow,
+    categories: EventCategories | undefined,
     into: CalendarEvent[],
     errors: EventError[],
 ): void {
+    const category = categoryOf(detail, categories, eventName, entry, errors);
     const push = (occurrence: EventOccurrence, parent: EventParent) => {
-        const event = buildOccurrence(occurrence, parent, eventName, entry, errors);
+        const event = buildOccurrence(occurrence, parent, category, eventName, entry, errors);
         if (event !== null) {
             into.push(event);
         }
@@ -379,7 +466,7 @@ function eventsOfEntry(
     }
     if (detail.start !== undefined) {
         if (detail.repeat !== undefined) {
-            expandSeries(eventName, detail, entry, window, into, errors);
+            expandSeries(eventName, detail, category, entry, window, into, errors);
         }
         else {
             push(detail, { ical: detail.ical });
@@ -391,9 +478,13 @@ function eventsOfEntry(
 }
 
 /// Every event declared by every entry in the listing, expanded over `window`.
+///
+/// `categories` is the configuration once it has loaded. Without it, an event's category is
+/// recorded but neither applied nor checked.
 export function eventsFromEntries(
     entries: readonly ListEntry2[],
     window: EventWindow,
+    options: { categories?: EventCategories } = {},
 ): DerivedEvents {
     const events: CalendarEvent[] = [];
     const errors: EventError[] = [];
@@ -413,7 +504,8 @@ export function eventsFromEntries(
 
         for (const [eventName, detail] of Object.entries(declared)) {
             if (typeof detail === 'object' && detail !== null) {
-                eventsOfEntry(eventName, detail, entry, window, events, errors);
+                eventsOfEntry(
+                    eventName, detail, entry, window, options.categories, events, errors);
             }
         }
     }
