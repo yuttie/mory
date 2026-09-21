@@ -375,7 +375,9 @@ impl Mory {
                        a `repeat` rule, weekdays are three letters (`wed`), not iCal's two, and \
                        may carry an ordinal: `3wed` is the third Wednesday, which needs `freq: \
                        monthly` or `yearly`. `tz` is an IANA zone name such as `Asia/Tokyo`, \
-                       never an offset.",
+                       never an offset.\n\n`category` names an event category configured in \
+                       `.mory/calendars.yaml`, which list_events lists; one that is not \
+                       configured is refused rather than invented.",
         annotations(title = "Add an event", read_only_hint = false, destructive_hint = false,
                     idempotent_hint = false, open_world_hint = false)
     )]
@@ -398,7 +400,7 @@ impl Mory {
                        comments and hand-formatting included, is untouched. The same spelling \
                        rules as add_event apply: three-letter weekdays with an optional \
                        ordinal, an IANA zone name for `tz`, offsets on datetimes and none on \
-                       dates.",
+                       dates, and a `category` that is already configured.",
         annotations(title = "Update an event", read_only_hint = false, destructive_hint = false,
                     idempotent_hint = true, open_world_hint = false)
     )]

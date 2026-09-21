@@ -2403,6 +2403,7 @@ fn the_event_tools_emit_frontmatter_the_frontend_would_accept() {
             &["events", "Standup", "exclusions"],
             serde_yaml::Value::Sequence(vec!["2026-01-07 09:30:00+09:00".into()]),
         ),
+        Change::set(&["events", "Standup", "category"], "meeting/1on1"),
     ];
 
     let note = apply("# Some events\n", &changes).expect("the frontmatter should be written");
@@ -2463,4 +2464,19 @@ fn a_calendar_configuration_without_categories_has_none() {
     let config = crate::v2::parse_calendar_config("calendars: []\n").expect("valid");
     assert!(config.categories().is_none());
     assert!(crate::v2::parse_calendar_config("").expect("empty").categories().is_none());
+}
+
+#[test]
+fn category_ids_come_in_the_file_order_and_none_from_a_malformed_block() {
+    let config = crate::v2::parse_calendar_config("\
+categories:
+    trip:
+    meeting:
+    meeting/1on1: {}
+")
+    .expect("a valid configuration");
+    assert_eq!(config.category_ids(), ["trip", "meeting", "meeting/1on1"]);
+
+    let config = crate::v2::parse_calendar_config("categories: [meeting]\n").expect("valid");
+    assert!(config.category_ids().is_empty());
 }
