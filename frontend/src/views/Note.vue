@@ -8,7 +8,18 @@
         <template v-else>
             <AppBarContent>
                 <v-toolbar-title class="ms-5">{{ title }}</v-toolbar-title>
+                <!-- Three panes side by side need room the title also wants. Below `md` the bar
+                     gets one button instead, showing the pane the tap would bring up; the pair it
+                     swaps between are the two a narrow screen is wide enough for. -->
+                <v-icon-btn
+                    v-if="$vuetify.display.smAndDown"
+                    v-bind:icon="editorIsVisible ? mdiFileDocument : mdiPencil"
+                    v-bind:title="editorIsVisible ? 'Viewer' : 'Editor'"
+                    class="mr-1"
+                    v-on:click="setMode(editorIsVisible ? 0 : 2)"
+                ></v-icon-btn>
                 <v-btn-toggle
+                    v-else
                     v-bind:model-value="selectedMode"
                     mandatory
                     class="mr-1"
@@ -20,13 +31,9 @@
                     <v-btn class="px-5" v-bind:value="1" icon title="Editor and viewer"><v-icon size="small">{{ mdiFileDocumentEdit }}</v-icon></v-btn>
                     <v-btn class="px-5" v-bind:value="2" icon title="Editor"           ><v-icon size="small">{{ mdiPencil           }}</v-icon></v-btn>
                 </v-btn-toggle>
-                <!-- A phone's app bar cannot fit every action beside the title, so the ones not
-                     needed while writing wait in a menu there. -->
-                <template v-if="$vuetify.display.smAndUp">
-                    <v-icon-btn v-bind:icon="lockScroll ? mdiLock : mdiLockOpen" v-bind:title="lockScroll ? 'Unlock scroll' : 'Lock scroll'" v-on:click="lockScroll = !lockScroll"></v-icon-btn>
-                    <v-icon-btn v-bind:icon="mdiCompareVertical" title="Compare with upstream" v-on:click="notifyUpstreamState"></v-icon-btn>
-                    <v-icon-btn v-bind:icon="mdiReload" title="Reload" v-bind:disabled="needSave" v-on:click="reload"></v-icon-btn>
-                </template>
+                <!-- The mode, Save and the sidebar are what writing a note needs, so they keep
+                     their place in the bar at every width; the rest wait in a menu until the bar
+                     is wide enough to spell them out. -->
                 <v-icon-btn
                     v-bind:icon="mdiContentSave"
                     title="Save"
@@ -35,55 +42,24 @@
                     v-bind:disabled="!needSave"
                     v-on:click.stop="saveIfNeeded"
                 ></v-icon-btn>
-                <v-menu
-                    v-model="renameMenuIsVisible"
-                    v-bind:close-on-content-click="false"
-                >
-                    <template v-slot:activator="{ props: menuProps }">
-                        <v-icon-btn
-                            v-bind="menuProps"
-                            v-bind:icon="mdiRenameBox"
-                            title="Rename"
-                            v-bind:disabled="!noteHasUpstream"
-                        ></v-icon-btn>
-                    </template>
-                    <v-card
-                        min-width="30em"
-                    >
-                        <v-card-text>
-                            <v-text-field
-                                label="New path"
-                                v-model="newPath"
-                                v-bind:rules="[newPathValidationResult]"
-                                v-on:focus="$event.target.select()"
-                                v-on:keydown="onNewPathKeydown"
-                                v-on:input="onNewPathInput"
-                                autofocus
-                            ></v-text-field>
-                        </v-card-text>
-                        <v-card-actions>
-                            <v-spacer></v-spacer>
-                            <v-btn
-                                variant="text"
-                                v-on:click="renameMenuIsVisible = false;"
-                            >Cancel</v-btn>
-                            <v-btn
-                                variant="text"
-                                color="primary"
-                                v-on:click="rename(); renameMenuIsVisible = false;"
-                                v-bind:disabled="newPathConflicting"
-                            >Rename</v-btn>
-                        </v-card-actions>
-                    </v-card>
-                </v-menu>
                 <v-icon-btn
-                    v-if="$vuetify.display.smAndUp"
                     v-bind:icon="mdiPageLayoutSidebarRight"
-                    class="mr-2"
                     v-bind:title="sidebarIsVisible ? 'Hide metadata and contents' : 'Show metadata and contents'"
                     v-bind:active="sidebarIsVisible"
                     v-on:click="sidebarIsVisible = !sidebarIsVisible"
                 ></v-icon-btn>
+                <template v-if="$vuetify.display.mdAndUp">
+                    <v-icon-btn v-bind:icon="lockScroll ? mdiLock : mdiLockOpen" v-bind:title="lockScroll ? 'Unlock scroll' : 'Lock scroll'" v-on:click="lockScroll = !lockScroll"></v-icon-btn>
+                    <v-icon-btn v-bind:icon="mdiCompareVertical" title="Compare with upstream" v-on:click="notifyUpstreamState"></v-icon-btn>
+                    <v-icon-btn v-bind:icon="mdiReload" title="Reload" v-bind:disabled="needSave" v-on:click="reload"></v-icon-btn>
+                    <v-icon-btn
+                        v-bind:icon="mdiRenameBox"
+                        title="Rename"
+                        class="mr-2"
+                        v-bind:disabled="!noteHasUpstream"
+                        v-on:click="renameDialogIsVisible = true"
+                    ></v-icon-btn>
+                </template>
                 <v-menu v-else location="bottom end">
                     <template v-slot:activator="{ props: menuProps }">
                         <v-icon-btn
@@ -111,13 +87,50 @@
                             v-on:click="reload"
                         ></v-list-item>
                         <v-list-item
-                            v-bind:title="sidebarIsVisible ? 'Hide metadata and contents' : 'Show metadata and contents'"
-                            v-bind:prepend-icon="mdiPageLayoutSidebarRight"
-                            v-on:click="sidebarIsVisible = !sidebarIsVisible"
+                            title="Rename"
+                            v-bind:prepend-icon="mdiRenameBox"
+                            v-bind:disabled="!noteHasUpstream"
+                            v-on:click="renameDialogIsVisible = true"
                         ></v-list-item>
                     </v-list>
                 </v-menu>
             </AppBarContent>
+            <!-- A dialog rather than the menu this used to hang off the Rename button: the form
+                 is wider than a phone, and below `md` there is no button for it to hang off,
+                 since the overflow menu opens it instead. Both controls set the flag rather than
+                 standing as its activator, because a dialog with one animates open from it, and
+                 the field cannot take focus while that animation still hides the content. -->
+            <v-dialog
+                v-model="renameDialogIsVisible"
+                max-width="30em"
+            >
+                <v-card>
+                    <v-card-text>
+                        <v-text-field
+                            ref="newPathField"
+                            label="New path"
+                            v-model="newPath"
+                            v-bind:rules="[newPathValidationResult]"
+                            v-on:focus="$event.target.select()"
+                            v-on:keydown="onNewPathKeydown"
+                            v-on:input="onNewPathInput"
+                        ></v-text-field>
+                    </v-card-text>
+                    <v-card-actions>
+                        <v-spacer></v-spacer>
+                        <v-btn
+                            variant="text"
+                            v-on:click="renameDialogIsVisible = false;"
+                        >Cancel</v-btn>
+                        <v-btn
+                            variant="text"
+                            color="primary"
+                            v-on:click="rename(); renameDialogIsVisible = false;"
+                            v-bind:disabled="newPathConflicting"
+                        >Rename</v-btn>
+                    </v-card-actions>
+                </v-card>
+            </v-dialog>
             <v-dialog
                 v-model="showConfirmationDialog"
                 max-width="25em"
@@ -369,7 +382,7 @@ const editorIsVisible = ref(false);
 const viewerIsVisible = ref(true);
 const sidebarIsVisible = ref(false);
 const sidebarPanelState = ref([0]);
-const renameMenuIsVisible = ref(false);
+const renameDialogIsVisible = ref(false);
 const newPath = ref(null as null | string);
 const newPathConflicting = ref(true);
 const isLoading = ref(false);
@@ -386,6 +399,7 @@ let skipNextPathWatch = false;
 
 // Template Refs
 const editableViewer = ref<InstanceType<typeof EditableViewer> | null>(null);
+const newPathField = ref<{ focus: () => void } | null>(null);
 const tocEl = ref<HTMLElement | null>(null);
 
 // Computed properties
@@ -897,7 +911,7 @@ function onBeforeunload(e: any) {
 }
 
 function handleKeydown(e: KeyboardEvent) {
-    if (renameMenuIsVisible.value) {
+    if (renameDialogIsVisible.value) {
         return;
     }
     if (e.key === 'e') {
@@ -1076,10 +1090,15 @@ function rename() {
 }
 
 // Watchers
-watch(renameMenuIsVisible, (isVisible: boolean) => {
+watch(renameDialogIsVisible, async (isVisible: boolean) => {
     if (isVisible) {
         newPath.value = notePath.value;
         newPathConflicting.value = true;
+        // The control that opened the dialog took focus as it was pressed and still holds it,
+        // so the field claims it back once the dialog has put it in the DOM. `autofocus` does
+        // not survive that, and the dialog's own `after-enter` never fires.
+        await nextTick();
+        newPathField.value?.focus();
     }
 });
 
