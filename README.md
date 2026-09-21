@@ -21,6 +21,11 @@ else's calendar. Any one of them can be adopted with a single button, which
 writes an ordinary Markdown note for it; from then on the event is yours to
 edit, and the read-only original steps aside.
 
+Events of one kind can share a category — meetings, trips — configured once in
+the repository with a colour and a name template such as `[MTG] {{name}}`, and
+shown or hidden together on the calendar. A note only names its category, so it
+reads the same without the app.
+
 mory is a **personal tool for private use only**. It is intentionally designed
 without multi-user support or collaboration features. This single-user focus
 helps keep the app **simple** and ensures your data remains **private and under
