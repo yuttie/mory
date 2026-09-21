@@ -484,7 +484,11 @@ const hiddenCalendarIds = useLocalStorage<string[]>(HIDDEN_CALENDARS_STORAGE_KEY
 // the calendar uses, so a note converted from one shadows it here exactly as it does there.
 const events = computed(() => mergeImported(
     [
-        ...eventsFromEntries(files.entries, eventWindow.value).events,
+        ...eventsFromEntries(
+            files.entries,
+            eventWindow.value,
+            { categories: calendars.categoryMap },
+        ).events,
         ...taskDatesFromEntries(
             files.entries,
             eventWindow.value,

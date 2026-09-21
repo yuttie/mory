@@ -168,6 +168,14 @@
                     >
                         {{ selectedEvent.taskDate === 'due_by' ? 'Due' : 'Deadline' }}
                     </v-chip>
+                    <v-chip
+                        v-if="selectedEvent.categoryId"
+                        class="mr-2 flex-shrink-0"
+                        size="small"
+                        variant="flat"
+                    >
+                        {{ selectedEvent.categoryId }}
+                    </v-chip>
                     <v-icon v-if="selectedEvent.finished" class="mr-4 flex-shrink-0">{{ mdiCheck }}</v-icon>
                 </v-toolbar>
                 <v-card-text>
@@ -320,7 +328,11 @@ const eventWindow = computed(() => {
         to: cursor.endOf(unit).add(1, 'month').format('YYYY-MM-DD'),
     };
 });
-const derived = computed(() => eventsFromEntries(files.entries, eventWindow.value));
+const derived = computed(() => eventsFromEntries(
+    files.entries,
+    eventWindow.value,
+    { categories: calendars.categoryMap },
+));
 // A task's dates are not an `events:` block, so they come from their own derivation over the same
 // listing.
 const taskDates = computed(() => taskDatesFromEntries(
