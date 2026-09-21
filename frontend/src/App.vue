@@ -23,9 +23,11 @@
                 style="z-index: 100; margin-bottom: 2px;"
             >{{ error.message }}</v-alert>
         </template>
-        <!-- Navigation drawer for desktop -->
+        <!-- Navigation drawer from `md` up, where the screen has room to give it a column of
+             its own. Below that it would take a quarter of the width from the view, so the one
+             below stands in and slides over the view instead. -->
         <v-navigation-drawer
-            v-if="!$vuetify.display.xs"
+            v-if="$vuetify.display.mdAndUp"
             v-bind:rail="miniMainSidebar"
             permanent
         >
@@ -253,217 +255,233 @@
             </div>
         </v-navigation-drawer>
 
-        <!-- Navigation drawer for mobile -->
+        <!-- Navigation drawer below `md` -->
         <v-navigation-drawer
             v-else
             temporary
             v-model="mobileDrawer"
         >
-            <v-list nav>
-                <v-list-item title="mory">
-                    <template v-slot:prepend>
-                        <v-img
-                            src="/img/logo.svg"
-                            aspect-ratio="1"
-                            max-width="24"
-                            max-height="24"
-                            width="24"
-                            class="mr-2"
-                        ></v-img>
-                    </template>
-                    <template v-slot:append>
-                        <v-icon-btn
-                            v-bind:icon="mdiBackburger"
-                            variant="text"
-                            title="Close the navigation drawer"
-                            v-on:click="mobileDrawer = false"
-                        ></v-icon-btn>
-                    </template>
-                </v-list-item>
-            </v-list>
-
-            <v-divider></v-divider>
-
-            <v-list
-                nav
-            >
-                <v-list-item
-                    variant="text"
-                    title="Enable notification"
-                    base-color="error"
-                    style="min-width: 36px"
-                    v-if="needRequestForNotificationPermission"
-                    v-bind:prepend-icon="mdiBell"
-                    v-on:click="requestNotificationPermission"
-                ></v-list-item>
-                <IndexingStopsItem
-                    v-if="indexingStops.length > 0"
-                    v-bind:stops="indexingStops"
-                    location="bottom"
-                />
-                <v-menu location="right">
-                    <template v-slot:activator="{ props }">
-                        <v-list-item
-                            variant="text"
-                            title="Add note"
-                            style="min-width: 36px"
-                            v-bind="props"
-                            v-bind:prepend-icon="mdiPlus"
-                        ></v-list-item>
-                    </template>
-                    <v-list>
-                        <v-list-subheader>Create</v-list-subheader>
-                        <v-list-item to="/create" v-bind:prepend-icon="mdiFileOutline" title="New note"></v-list-item>
-                        <v-list-item
-                            v-if="$route.name === 'Note'"
-                            v-bind:to="{ name: 'Create', query: { from: Array.isArray($route.params.path) ? $route.params.path.join('/') : $route.params.path } }"
-                            v-bind:prepend-icon="mdiFileMultipleOutline"
-                            title="Copy of this note"
-                        ></v-list-item>
-                        <v-list-subheader>Templates</v-list-subheader>
-                        <v-list-item
-                            v-for="path in templates"
-                            v-bind:key="path"
-                            v-bind:to="{ name: 'Create', query: { from: path } }"
-                            v-bind:prepend-icon="mdiFileDocumentOutline"
-                            v-bind:title="path.replace(/\.template$/i, '')"
-                        >
-                            <template v-slot:append>
-                                <!-- v-icon-btn has no `to`. The click still bubbles to the list item, whose own link
-                                     would create a note from the template instead; the router skips a click whose
-                                     default is already prevented. -->
-                                <v-tooltip location="top">
-                                    <template v-slot:activator="{ props }">
-                                        <v-icon-btn
-                                            v-bind:icon="mdiPencil"
-                                            size="small"
-                                            icon-size="small"
-                                            variant="text"
-                                            v-bind="props"
-                                            v-on:click.prevent="$router.push({ name: 'Note', params: { path: path.split('/') } })"
-                                        ></v-icon-btn>
-                                    </template>
-                                    <span>Edit template</span>
-                                </v-tooltip>
-                            </template>
-                        </v-list-item>
-                    </v-list>
-                </v-menu>
-                <v-menu
-                    v-bind:close-on-content-click="false"
-                    v-model="uploadMenuIsVisible"
-                    location="right"
+            <div class="d-flex flex-column h-100">
+                <v-list
+                    nav
+                    class="flex-grow-0 flex-shrink-0"
                 >
-                    <template v-slot:activator="{ props }">
-                        <v-list-item
-                            variant="text"
-                            title="Upload file"
-                            style="min-width: 36px"
-                            v-bind="props"
-                        >
-                            <template v-slot:prepend>
-                                <v-badge
-                                    v-bind:color="uploadListBadgeColor"
-                                    v-bind:model-value="uploadList.length > 0"
-                                >
-                                    <template v-slot:badge>
-                                        <v-icon>{{ uploadListBadgeIcon }}</v-icon>
-                                    </template>
-                                    <v-icon>{{ mdiCloudUploadOutline }}</v-icon>
-                                </v-badge>
-                            </template>
-                        </v-list-item>
-                    </template>
-                    <v-card>
-                        <v-list>
+                    <v-list-item title="mory">
+                        <template v-slot:prepend>
+                            <v-img
+                                src="/img/logo.svg"
+                                aspect-ratio="1"
+                                max-width="24"
+                                max-height="24"
+                                width="24"
+                                class="mr-2"
+                            ></v-img>
+                        </template>
+                        <template v-slot:append>
+                            <v-icon-btn
+                                v-bind:icon="mdiBackburger"
+                                variant="text"
+                                title="Close the navigation drawer"
+                                v-on:click="mobileDrawer = false"
+                            ></v-icon-btn>
+                        </template>
+                    </v-list-item>
+                </v-list>
+
+                <v-divider></v-divider>
+
+                <v-list
+                    nav
+                    class="flex-grow-0 flex-shrink-0"
+                >
+                    <v-list-item
+                        variant="text"
+                        title="Enable notification"
+                        base-color="error"
+                        style="min-width: 36px"
+                        v-if="needRequestForNotificationPermission"
+                        v-bind:prepend-icon="mdiBell"
+                        v-on:click="requestNotificationPermission"
+                    ></v-list-item>
+                    <IndexingStopsItem
+                        v-if="indexingStops.length > 0"
+                        v-bind:stops="indexingStops"
+                        location="bottom"
+                    />
+                    <v-menu location="right">
+                        <template v-slot:activator="{ props }">
                             <v-list-item
-                                v-bind:prepend-icon="mdiUpload"
-                                title="Upload"
-                                v-on:click="chooseFile"
+                                variant="text"
+                                title="Add note"
+                                style="min-width: 36px"
+                                v-bind="props"
+                                v-bind:prepend-icon="mdiPlus"
                             ></v-list-item>
-                        </v-list>
-                        <v-divider v-if="uploadList.length > 0"></v-divider>
-                        <v-list
-                            v-if="uploadList.length > 0"
-                        >
-                            <v-list-subheader>Uploaded files</v-list-subheader>
+                        </template>
+                        <v-list>
+                            <v-list-subheader>Create</v-list-subheader>
+                            <v-list-item to="/create" v-bind:prepend-icon="mdiFileOutline" title="New note"></v-list-item>
                             <v-list-item
-                                v-for="entry of uploadList"
-                                v-bind:key="entry.uuid"
-                                v-bind:title="entry.filename"
-                                v-on:click="copyToClipboard(entry.filename)"
-                                style="white-space: nowrap;"
+                                v-if="$route.name === 'Note'"
+                                v-bind:to="{ name: 'Create', query: { from: Array.isArray($route.params.path) ? $route.params.path.join('/') : $route.params.path } }"
+                                v-bind:prepend-icon="mdiFileMultipleOutline"
+                                title="Copy of this note"
+                            ></v-list-item>
+                            <v-list-subheader>Templates</v-list-subheader>
+                            <v-list-item
+                                v-for="path in templates"
+                                v-bind:key="path"
+                                v-bind:to="{ name: 'Create', query: { from: path } }"
+                                v-bind:prepend-icon="mdiFileDocumentOutline"
+                                v-bind:title="path.replace(/\.template$/i, '')"
                             >
-                                <template v-slot:prepend>
-                                    <v-icon
-                                        v-bind:color="uploadStatusColor(entry.status)"
-                                    >{{ uploadStatusIcon(entry.status) }}</v-icon>
+                                <template v-slot:append>
+                                    <!-- v-icon-btn has no `to`. The click still bubbles to the list item, whose own link
+                                         would create a note from the template instead; the router skips a click whose
+                                         default is already prevented. -->
+                                    <v-tooltip location="top">
+                                        <template v-slot:activator="{ props }">
+                                            <v-icon-btn
+                                                v-bind:icon="mdiPencil"
+                                                size="small"
+                                                icon-size="small"
+                                                variant="text"
+                                                v-bind="props"
+                                                v-on:click.prevent="$router.push({ name: 'Note', params: { path: path.split('/') } })"
+                                            ></v-icon-btn>
+                                        </template>
+                                        <span>Edit template</span>
+                                    </v-tooltip>
                                 </template>
                             </v-list-item>
+                        </v-list>
+                    </v-menu>
+                    <v-menu
+                        v-bind:close-on-content-click="false"
+                        v-model="uploadMenuIsVisible"
+                        location="right"
+                    >
+                        <template v-slot:activator="{ props }">
                             <v-list-item
-                                v-bind:prepend-icon="mdiBroom"
-                                title="Clear all"
-                                v-on:click="cleanUploadList"
-                            ></v-list-item>
-                        </v-list>
-                    </v-card>
-                </v-menu>
-            </v-list>
+                                variant="text"
+                                title="Upload file"
+                                style="min-width: 36px"
+                                v-bind="props"
+                            >
+                                <template v-slot:prepend>
+                                    <v-badge
+                                        v-bind:color="uploadListBadgeColor"
+                                        v-bind:model-value="uploadList.length > 0"
+                                    >
+                                        <template v-slot:badge>
+                                            <v-icon>{{ uploadListBadgeIcon }}</v-icon>
+                                        </template>
+                                        <v-icon>{{ mdiCloudUploadOutline }}</v-icon>
+                                    </v-badge>
+                                </template>
+                            </v-list-item>
+                        </template>
+                        <v-card>
+                            <v-list>
+                                <v-list-item
+                                    v-bind:prepend-icon="mdiUpload"
+                                    title="Upload"
+                                    v-on:click="chooseFile"
+                                ></v-list-item>
+                            </v-list>
+                            <v-divider v-if="uploadList.length > 0"></v-divider>
+                            <v-list
+                                v-if="uploadList.length > 0"
+                            >
+                                <v-list-subheader>Uploaded files</v-list-subheader>
+                                <v-list-item
+                                    v-for="entry of uploadList"
+                                    v-bind:key="entry.uuid"
+                                    v-bind:title="entry.filename"
+                                    v-on:click="copyToClipboard(entry.filename)"
+                                    style="white-space: nowrap;"
+                                >
+                                    <template v-slot:prepend>
+                                        <v-icon
+                                            v-bind:color="uploadStatusColor(entry.status)"
+                                        >{{ uploadStatusIcon(entry.status) }}</v-icon>
+                                    </template>
+                                </v-list-item>
+                                <v-list-item
+                                    v-bind:prepend-icon="mdiBroom"
+                                    title="Clear all"
+                                    v-on:click="cleanUploadList"
+                                ></v-list-item>
+                            </v-list>
+                        </v-card>
+                    </v-menu>
+                </v-list>
 
-            <v-divider></v-divider>
+                <v-divider></v-divider>
 
-            <v-list
-                nav
-            >
-                <v-list-item color="primary" to="/"           v-bind:prepend-icon="mdiHomeOutline"                   title="Home"    ></v-list-item>
-                <v-list-item color="primary" to="/calendar"   v-bind:prepend-icon="mdiCalendarOutline"               title="Calendar"></v-list-item>
-                <v-list-item color="primary" to="/tasks-next" v-bind:prepend-icon="mdiCheckboxMultipleMarkedOutline" title="Tasks"   ></v-list-item>
-                <v-list-item color="primary" to="/files"      v-bind:prepend-icon="mdiFolderOutline"                 title="Files"   ></v-list-item>
-                <v-list-item color="primary" to="/search"     v-bind:prepend-icon="mdiMagnify"                       title="Search"  ></v-list-item>
-            </v-list>
+                <v-list
+                    nav
+                    class="flex-grow-0 flex-shrink-0"
+                >
+                    <v-list-item color="primary" to="/"           v-bind:prepend-icon="mdiHomeOutline"                   title="Home"    ></v-list-item>
+                    <v-list-item color="primary" to="/calendar"   v-bind:prepend-icon="mdiCalendarOutline"               title="Calendar"></v-list-item>
+                    <v-list-item color="primary" to="/tasks-next" v-bind:prepend-icon="mdiCheckboxMultipleMarkedOutline" title="Tasks"   ></v-list-item>
+                    <v-list-item color="primary" to="/files"      v-bind:prepend-icon="mdiFolderOutline"                 title="Files"   ></v-list-item>
+                    <v-list-item color="primary" to="/search"     v-bind:prepend-icon="mdiMagnify"                       title="Search"  ></v-list-item>
+                </v-list>
 
-            <v-divider></v-divider>
+                <v-divider></v-divider>
 
-            <v-list nav>
-                <NoteTree />
-            </v-list>
+                <v-list
+                    nav
+                    class="flex-shrink-1 overflow-y-auto"
+                >
+                    <NoteTree />
+                </v-list>
 
-            <v-divider></v-divider>
+                <v-spacer />
 
-            <v-list nav>
-                <v-menu location="top">
-                    <template v-slot:activator="{ props }">
-                        <v-list-item
-                            v-bind="props"
-                            v-bind:title="username ?? undefined"
-                            v-bind:subtitle="email ?? undefined"
-                        >
-                            <template v-slot:prepend>
-                                <Gravatar v-bind:email="email" style="margin-right: 8px"></Gravatar>
-                            </template>
-                        </v-list-item>
-                    </template>
-                    <v-card>
-                        <v-list>
-                            <v-list-item to="/tasks" v-bind:prepend-icon="mdiCheckboxMultipleMarkedOutline" title="Tasks (deprecated)"></v-list-item>
-                            <v-list-item to="/config" v-bind:prepend-icon="mdiCogOutline" title="Config"></v-list-item>
-                            <v-list-item to="/about" v-bind:prepend-icon="mdiInformationOutline" title="About"></v-list-item>
-                            <v-divider></v-divider>
-                            <v-list-item v-bind:prepend-icon="mdiLogout" title="Logout" v-on:click="appStore.logout()"></v-list-item>
-                        </v-list>
-                    </v-card>
-                </v-menu>
-            </v-list>
+                <v-divider></v-divider>
+
+                <v-list
+                    nav
+                    class="flex-shrink-0"
+                >
+                    <v-menu location="top">
+                        <template v-slot:activator="{ props }">
+                            <v-list-item
+                                v-bind="props"
+                                v-bind:title="username ?? undefined"
+                                v-bind:subtitle="email ?? undefined"
+                            >
+                                <template v-slot:prepend>
+                                    <Gravatar v-bind:email="email" style="margin-right: 8px"></Gravatar>
+                                </template>
+                            </v-list-item>
+                        </template>
+                        <v-card>
+                            <v-list>
+                                <v-list-item to="/tasks" v-bind:prepend-icon="mdiCheckboxMultipleMarkedOutline" title="Tasks (deprecated)"></v-list-item>
+                                <v-list-item to="/config" v-bind:prepend-icon="mdiCogOutline" title="Config"></v-list-item>
+                                <v-list-item to="/about" v-bind:prepend-icon="mdiInformationOutline" title="About"></v-list-item>
+                                <v-divider></v-divider>
+                                <v-list-item v-bind:prepend-icon="mdiLogout" title="Logout" v-on:click="appStore.logout()"></v-list-item>
+                            </v-list>
+                        </v-card>
+                    </v-menu>
+                </v-list>
+            </div>
         </v-navigation-drawer>
 
         <v-app-bar
             scroll-behavior="elevate"
             color="white"
         >
-            <!-- A phone's drawer is gone from the screen once closed, so the icon that opens it
-                 stays here. A desktop's drawer is always in view and carries its own controls. -->
+            <!-- Below `md` the drawer is gone from the screen once closed, so the icon that opens
+                 it stays here. Above that the drawer is always in view and carries its own
+                 controls. -->
             <v-app-bar-nav-icon
-                v-if="$vuetify.display.xs"
+                v-if="$vuetify.display.smAndDown"
                 v-on:click="mobileDrawer = !mobileDrawer"
                 class="mx-2"
             />
@@ -478,9 +496,9 @@
                 id="app-bar-content"
                 class="app-bar-content"
             />
-            <!-- The drawer is hidden on a phone, so point at the notice it holds. -->
+            <!-- The drawer is hidden below `md`, so point at the notice it holds. -->
             <v-btn
-                v-if="$vuetify.display.xs && indexingStops.length > 0"
+                v-if="$vuetify.display.smAndDown && indexingStops.length > 0"
                 icon
                 color="error"
                 title="Indexing stopped"

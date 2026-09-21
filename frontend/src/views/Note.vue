@@ -194,10 +194,15 @@
             <!-- Ordered after the app bar, so the bar spans the whole width above it: layout
                  items of equal order are stacked by their place in the component tree, and
                  this one is inside `v-main`, ahead of the bar. -->
+            <!-- Below `md` the drawer is wide enough to leave the note a column too narrow to
+                 read, so there it slides over the note rather than squeezing it. Two-way, because
+                 a temporary drawer closes itself on the scrim or Escape, and the button that
+                 opened it would otherwise go on claiming it is open. -->
             <v-navigation-drawer
-                v-bind:model-value="sidebarIsVisible"
+                v-model="sidebarIsVisible"
                 location="end"
-                permanent
+                v-bind:permanent="$vuetify.display.mdAndUp"
+                v-bind:temporary="$vuetify.display.smAndDown"
                 width="256"
                 order="1"
                 class="sidebar"
