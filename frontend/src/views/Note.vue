@@ -1136,10 +1136,33 @@ watch(notePath, async (newPath, oldPath) => {
 .sidebar {
 }
 
+// The drawer scrolls as one, as it always did, but a title no longer leaves with the content it
+// labels: each one holds the top of the sidebar until the next arrives. The panels were sized to
+// divide the drawer between them and scroll one by one, which read better and cost three rules
+// that reached past Vuetify's classes into its behaviour -- how `v-show` spells a hidden text,
+// which element the expand transition measures, and how tall a title is.
 .sidebar-contents {
     /* Correct z-order of right sidebar's border and v-expansion-panels inside this element */
     position: relative;
     z-index: 0;
+    height: 100%;
+    // Scrolling here rather than in the drawer gives a sticky title a scrollport to stick to.
+    // Vertical only, or a wide line would carry the titles out of the sidebar sideways.
+    overflow-x: hidden;
+    overflow-y: auto;
+
+    :deep(.v-expansion-panel-title) {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        // Opaque, as the panel behind it is: the text scrolls underneath.
+        background-color: rgb(var(--v-theme-surface));
+    }
+}
+
+.metadata-content {
+    // Clipped by the sidebar otherwise, which scrolls in one direction only.
+    overflow-x: auto;
 }
 
 .toc {
