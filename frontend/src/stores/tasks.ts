@@ -46,6 +46,12 @@ export function tagNameOf(id: string): string {
     return id.slice(TAG_GROUP_PREFIX.length);
 }
 
+// The catch-all gathers tasks by the absence of a tag, so its name is not a tag to give a task
+// created from it: written into the frontmatter, "Untagged" would become one.
+export function isUntaggedGroupId(id: string): boolean {
+    return id === tagGroupId(UNTAGGED);
+}
+
 function firstTagOf(node: TaskNode): string {
     const tags = node.metadata?.tags;
     if (Array.isArray(tags) && tags.length > 0 && tags[0]) {

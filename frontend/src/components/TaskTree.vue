@@ -28,11 +28,11 @@
         </template>
         <template v-slot:append="{ item }">
             <v-btn
-                v-if="showAddChild && !item.metadata?.tag_group"
+                v-if="showAddChild"
                 variant="flat"
                 size="x-small"
                 class="add-child-btn"
-                title="Add child task"
+                v-bind:title="item.metadata?.tag_group ? 'Add task' : 'Add child task'"
                 v-on:click.stop="$emit('add-child-task', item.uuid)"
             >
                 <v-icon size="small">{{ mdiPlus }}</v-icon>
@@ -90,6 +90,8 @@ defineProps<{
 defineEmits<{
     (e: 'update:open', value: UUID[]): void;
     (e: 'update:active', value: UUID | undefined): void;
+    // For a tag group, the group's id: the new task is a root task carrying that tag, since a
+    // group is not a task to nest it under.
     (e: 'add-child-task', value: UUID): void;
 }>();
 </script>

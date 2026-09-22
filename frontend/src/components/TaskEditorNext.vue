@@ -531,7 +531,9 @@ const emit = defineEmits<{
 // Reactive states
 const form = reactive<EditableTask>({
     title: '',
-    tags: [],
+    // Seeded here because nothing resets the form for a new task: the watcher on `task` skips a
+    // task that stays absent, and the one on `selectedTag` fires only when it changes.
+    tags: props.selectedTag ? [props.selectedTag] : [],
     status: { kind: 'todo' },
     progress: 0,
     importance: 3,
