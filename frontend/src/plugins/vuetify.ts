@@ -36,6 +36,7 @@ export default createVuetify({
       size: "20",
     },
     VBtn: {
+      density: "comfortable",
       VIcon: {
         size: "16",
       },
