@@ -9,7 +9,6 @@
                 variant="text"
                 title="Indexing stopped"
                 base-color="error"
-                style="min-width: 36px"
             >
                 <template #prepend>
                     <v-icon size="small">

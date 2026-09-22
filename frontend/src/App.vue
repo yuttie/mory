@@ -80,7 +80,6 @@
                         variant="text"
                         title="Enable notification"
                         base-color="error"
-                        style="min-width: 36px"
                         v-if="needRequestForNotificationPermission"
                         v-bind:prepend-icon="mdiBell"
                         v-on:click="requestNotificationPermission"
@@ -94,7 +93,6 @@
                             <v-list-item
                                 variant="text"
                                 title="Add note"
-                                style="min-width: 36px"
                                 v-bind="props"
                                 v-bind:prepend-icon="mdiPlus"
                             ></v-list-item>
@@ -146,7 +144,6 @@
                             <v-list-item
                                 variant="text"
                                 title="Upload file"
-                                style="min-width: 36px"
                                 v-bind="props"
                             >
                                 <template v-slot:prepend>
@@ -303,7 +300,6 @@
                         variant="text"
                         title="Enable notification"
                         base-color="error"
-                        style="min-width: 36px"
                         v-if="needRequestForNotificationPermission"
                         v-bind:prepend-icon="mdiBell"
                         v-on:click="requestNotificationPermission"
@@ -318,7 +314,6 @@
                             <v-list-item
                                 variant="text"
                                 title="Add note"
-                                style="min-width: 36px"
                                 v-bind="props"
                                 v-bind:prepend-icon="mdiPlus"
                             ></v-list-item>
@@ -370,7 +365,6 @@
                             <v-list-item
                                 variant="text"
                                 title="Upload file"
-                                style="min-width: 36px"
                                 v-bind="props"
                             >
                                 <template v-slot:prepend>
