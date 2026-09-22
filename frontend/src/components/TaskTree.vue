@@ -28,7 +28,7 @@
         </template>
         <template v-slot:append="{ item }">
             <v-btn
-                v-if="!item.metadata?.tag_group"
+                v-if="showAddChild && !item.metadata?.tag_group"
                 variant="flat"
                 size="x-small"
                 class="add-child-btn"
@@ -81,6 +81,9 @@ defineProps<{
     items: TaskTreeItem[];
     open: UUID[];
     active?: UUID;
+    // Off unless the parent handles `add-child-task`: a tree used only to pick a task, such as
+    // the parent selection dialog's, would otherwise show a button that does nothing.
+    showAddChild?: boolean;
 }>();
 
 // Emits
