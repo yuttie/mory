@@ -146,8 +146,9 @@ const filteredItems = computed<TaskTreeItem[]>(() => {
 
 
 
+// Moving to where the task already is would do nothing, and the dialog opens on exactly that.
 const canMove = computed<boolean>(() => {
-    return props.taskUuid !== null && selectedParent.value !== undefined;
+    return props.taskUuid !== null && selectedParent.value !== currentParent.value;
 });
 
 // Methods  
