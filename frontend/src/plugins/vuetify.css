@@ -25,6 +25,11 @@
     .v-treeview:not(.v-treeview--fluid) .v-treeview-item__level {
         width: 24px;
     }
+    /* Vuetify has no way to drop the icon button's 50%, so repeat .v-btn's radius instead,
+       leaving out the grouped buttons Vuetify squares off. */
+    .v-btn--icon:not(.v-btn-group .v-btn) {
+        border-radius: 4px;
+    }
     /* A badge is round until its content makes it a stadium. Vuetify sizes its height in rem but
        its minimum width and padding in px, values that only agree at the 16px root they were
        written for: under the 14px root above, a short badge came out 20px wide and 17.5px tall.
