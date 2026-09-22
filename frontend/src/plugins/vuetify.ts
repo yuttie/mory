@@ -26,8 +26,18 @@ export default createVuetify({
     VAppBarNavIcon: {
       rounded: "lg",
       size: "32",
+      VBtn: {
+        VIcon: {
+          size: "20",
+        },
+      },
+    },
+    VIcon: {
+      size: "20",
+    },
+    VBtn: {
       VIcon: {
-        size: "20",
+        size: "16",
       },
     },
   },
