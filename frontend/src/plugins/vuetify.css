@@ -11,6 +11,14 @@
     .v-list {
         padding-inline: 8px;
     }
+    .v-list-item {
+        padding: 0 6px;
+    }
+    /* A tree starts its first level from the 16px padding Vuetify gives an item, so point it at
+       the padding above instead: otherwise that one level is indented 10px further than the rest. */
+    .v-treeview {
+        --indent-padding: 6px;
+    }
     /* A badge is round until its content makes it a stadium. Vuetify sizes its height in rem but
        its minimum width and padding in px, values that only agree at the 16px root they were
        written for: under the 14px root above, a short badge came out 20px wide and 17.5px tall.
