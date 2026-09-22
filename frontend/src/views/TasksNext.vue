@@ -45,6 +45,7 @@
                     v-bind:items="filteredForestWithTags"
                     v-bind:active="activeNodeId"
                     v-model:open="openNodes"
+                    show-add-child
                     v-on:update:active="onTaskSelectionChangeInTree"
                     v-on:add-child-task="onAddChildTask"
                     style="flex: 1 1 0"
