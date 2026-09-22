@@ -206,7 +206,7 @@ import {
     mdiTrafficLightOutline,
 } from '@mdi/js';
 
-import { type TaskNode, type TaskTreeItem } from '@/task-forest';
+import { type TaskNode, type TaskTreeItem, buildTaskPath } from '@/task-forest';
 import { isTagGroupId, isUntaggedGroupId, tagGroupId, tagNameOf, useTasksStore } from '@/stores/tasks';
 
 import { type UUID, type StatusKind, type Task, STATUS_LABEL } from '@/task';
@@ -726,7 +726,11 @@ function onAddChildTask(parentUuid: UUID) {
     navigateToState(parentUuid, 'selected', descendantsViewMode.value);
     // Then generate new UUID and set path for the task under this parent
     const taskUuid = crypto.randomUUID();
-    newTaskPath.value = getNewTaskPathForParent(taskUuid, parentNode);
+    // A tag group is not a directory. Its task is a root task, and selecting the group is what
+    // gives it the tag.
+    newTaskPath.value = isTagGroupId(parentUuid)
+        ? buildTaskPath([], taskUuid)
+        : getNewTaskPathForParent(taskUuid, parentNode);
 }
 
 function getNewTaskPathForParent(taskUuid: string, parentNode: TaskNode): string {
