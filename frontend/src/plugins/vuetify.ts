@@ -1,4 +1,6 @@
 import 'vuetify/styles';
+// After Vuetify's styles, which declare the layer order its overrides layer relies on.
+import './vuetify.css';
 import { createVuetify } from 'vuetify';
 import { aliases, mdi } from 'vuetify/iconsets/mdi-svg';
 
