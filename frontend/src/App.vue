@@ -29,10 +29,12 @@
         <v-navigation-drawer
             v-if="$vuetify.display.mdAndUp"
             v-bind:rail="miniMainSidebar"
+            rail-width="48"
             permanent
+            class="rail-drawer"
         >
             <div class="d-flex flex-column h-100">
-                <v-list nav class="flex-grow-0 flex-shrink-0">
+                <v-list class="flex-grow-0 flex-shrink-0">
                     <!-- The rail is too narrow for a control beside the logo, so the logo becomes
                          one: hovering it swaps the nav icon in, and the open drawer carries the
                          button that collapses it again at its right. -->
@@ -73,7 +75,6 @@
                 <v-divider></v-divider>
 
                 <v-list
-                    nav
                     class="flex-grow-0 flex-shrink-0"
                 >
                     <v-list-item
@@ -203,7 +204,6 @@
                 <v-divider></v-divider>
 
                 <v-list
-                    nav
                     class="flex-grow-0 flex-shrink-0"
                 >
                     <v-list-item color="primary" to="/"           v-bind:prepend-icon="mdiHomeOutline"                   title="Home"    ></v-list-item>
@@ -218,7 +218,6 @@
                 <v-fade-transition>
                     <v-list
                         v-show="!miniMainSidebar"
-                        nav
                         class="flex-shrink-1 overflow-y-auto"
                     >
                         <v-list-subheader>Notes</v-list-subheader>
@@ -230,13 +229,14 @@
 
                 <v-divider></v-divider>
 
-                <v-list nav class="flex-shrink-0">
+                <v-list class="flex-shrink-0">
                     <v-menu location="top">
                         <template v-slot:activator="{ props }">
                             <v-list-item
                                 v-bind="props"
                                 v-bind:title="username ?? undefined"
                                 v-bind:subtitle="email ?? undefined"
+                                class="account-item"
                             >
                                 <template v-slot:prepend>
                                     <Gravatar
@@ -268,7 +268,6 @@
         >
             <div class="d-flex flex-column h-100">
                 <v-list
-                    nav
                     class="flex-grow-0 flex-shrink-0"
                 >
                     <v-list-item title="mory">
@@ -296,7 +295,6 @@
                 <v-divider></v-divider>
 
                 <v-list
-                    nav
                     class="flex-grow-0 flex-shrink-0"
                 >
                     <v-list-item
@@ -427,7 +425,6 @@
                 <v-divider></v-divider>
 
                 <v-list
-                    nav
                     class="flex-grow-0 flex-shrink-0"
                 >
                     <v-list-item color="primary" to="/"           v-bind:prepend-icon="mdiHomeOutline"                   title="Home"    ></v-list-item>
@@ -440,7 +437,6 @@
                 <v-divider></v-divider>
 
                 <v-list
-                    nav
                     class="flex-shrink-1 overflow-y-auto"
                 >
                     <NoteTree />
@@ -451,7 +447,6 @@
                 <v-divider></v-divider>
 
                 <v-list
-                    nav
                     class="flex-shrink-0"
                 >
                     <v-menu location="top">
@@ -460,6 +455,7 @@
                                 v-bind="props"
                                 v-bind:title="username ?? undefined"
                                 v-bind:subtitle="email ?? undefined"
+                                class="account-item"
                             >
                                 <template v-slot:prepend>
                                     <Gravatar
@@ -1034,6 +1030,21 @@ watch(() => route.name, () => {
     a {
         text-decoration: none;
     }
+}
+
+// A rail 48px wide leaves one 32px item between the 8px insets, so the items in it are as wide as
+// they are tall. The drawer's thin border eats into that width by an amount that depends on the
+// screen's pixel ratio, so the inset that gives way to it is the far one: the near one stays 8px
+// and the icons sit at the same place whether the drawer is a rail or open. Wider than a rail,
+// the drawer keeps the 8px inset of every other list.
+.rail-drawer .v-list {
+    padding-inline-start: 8px;
+    padding-inline-end: min(8px, calc(100% - 40px));
+}
+
+// The line height `nav` gave titles, so a title and a subtitle fit the 32px every other item is.
+.account-item :deep(.v-list-item-title) {
+    line-height: 1.25rem;
 }
 
 // The logo and the nav icon share one box, so the swap changes nothing around them.
