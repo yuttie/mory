@@ -341,7 +341,11 @@ import type { ListEntry2 } from '@/api';
 import { DEFAULT_EVENT_COLOR, eventEndsAt, eventsFromEntries, mergeImported, taskDatesFromEntries } from '@/events';
 import type { CalendarEvent } from '@/events';
 import { useLocalStorage } from '@/composables/localStorage';
-import { HIDDEN_CALENDARS_STORAGE_KEY, useCalendarsStore } from '@/stores/calendars';
+import {
+    HIDDEN_CALENDARS_STORAGE_KEY,
+    HIDDEN_CATEGORIES_STORAGE_KEY,
+    useCalendarsStore,
+} from '@/stores/calendars';
 import { useFilesStore } from '@/stores/files';
 import { by } from '@/utils';
 import dayjs from 'dayjs';
@@ -351,22 +355,12 @@ import type { Task } from '@/task';
 
 import Color from 'color';
 import { formatDistanceToNow, parseISO } from 'date-fns';
-import materialColors from 'vuetify/util/colors';
+import { parseEventColor } from '@/event-color';
 
 function getEventColor(event: any): string {
-    const toPropName = (s: string) => s.replace(/-./g, (match: string) => match[1].toUpperCase());
-    // `Color` throws on anything it cannot parse, and a note's `color:` is free text. Throwing
-    // here happens during render, so one typo would blank every day's events rather than
-    // mis-colour one -- the same guard `Calendar.vue` has.
-    let color;
-    try {
-        color = Object.hasOwn(materialColors, toPropName(event.color))
-            ? Color((materialColors as any)[toPropName(event.color)].base)
-            : Color(event.color);
-    }
-    catch {
-        color = Color(DEFAULT_EVENT_COLOR);
-    }
+    // A note's `color:` is free text and this runs during render: an unreadable one draws in the
+    // default rather than blanking every day's events.
+    const color = parseEventColor(event.color) ?? Color(DEFAULT_EVENT_COLOR);
 
     const now = dayjs();
     const time = eventEndsAt(event);
@@ -477,6 +471,8 @@ const eventWindow = computed(() => ({
 // Shared with the calendar view, so a calendar hidden there is not drawn here either: the choice
 // is "not in this browser", not "not on that one page".
 const hiddenCalendarIds = useLocalStorage<string[]>(HIDDEN_CALENDARS_STORAGE_KEY, []);
+// Categories hidden on the calendar are not drawn here either, for the same reason.
+const hiddenCategoryIds = useLocalStorage<string[]>(HIDDEN_CATEGORIES_STORAGE_KEY, []);
 // A task's due date and deadline are events here for the same reason they are on the calendar:
 // what falls in the next three days is exactly what this section is for. They come from
 // `task.due_by` and `task.deadline` rather than from an `events:` block, so they need their own
@@ -484,7 +480,11 @@ const hiddenCalendarIds = useLocalStorage<string[]>(HIDDEN_CALENDARS_STORAGE_KEY
 // the calendar uses, so a note converted from one shadows it here exactly as it does there.
 const events = computed(() => mergeImported(
     [
-        ...eventsFromEntries(files.entries, eventWindow.value).events,
+        ...eventsFromEntries(
+            files.entries,
+            eventWindow.value,
+            { categories: calendars.categoryMap },
+        ).events,
         ...taskDatesFromEntries(
             files.entries,
             eventWindow.value,
@@ -492,7 +492,11 @@ const events = computed(() => mergeImported(
         ).events,
     ],
     calendars.events,
-    { colorOf: calendars.colorOf, hidden: new Set(hiddenCalendarIds.value) },
+    {
+        colorOf: calendars.colorOf,
+        hidden: new Set(hiddenCalendarIds.value),
+        hiddenCategories: new Set(hiddenCategoryIds.value),
+    },
 ));
 
 const today = dayjs().format('YYYY-MM-DD');

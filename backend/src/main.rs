@@ -1617,10 +1617,30 @@ Important:
         pub end: String,
     }
 
-    #[derive(serde::Deserialize)]
-    struct CalendarSubscriptions {
+    /// `.mory/calendars.yaml`, as far as the backend reads it.
+    #[derive(serde::Deserialize, Default)]
+    pub(crate) struct CalendarConfig {
         #[serde(default)]
         calendars: Vec<CalendarSubscription>,
+        /// The event categories, keyed by id. Only the web app draws with them, so they are
+        /// taken as whatever the file holds: a malformed block must not stop the imported events
+        /// from loading.
+        #[serde(default)]
+        categories: serde_yaml::Value,
+    }
+
+    impl CalendarConfig {
+        /// The `categories:` block as declared, or `None` when there is no usable one.
+        pub(crate) fn categories(&self) -> Option<&serde_yaml::Mapping> {
+            self.categories.as_mapping()
+        }
+
+        /// The ids of the configured event categories, in the file's order.
+        pub(crate) fn category_ids(&self) -> Vec<&str> {
+            self.categories()
+                .map(|categories| categories.keys().filter_map(|id| id.as_str()).collect())
+                .unwrap_or_default()
+        }
     }
 
     #[derive(serde::Deserialize)]
@@ -1892,19 +1912,23 @@ Important:
         Ok(body)
     }
 
-    async fn read_subscriptions(state: &AppState) -> Result<Vec<CalendarSubscription>> {
+    /// The calendar configuration at HEAD, read once for every caller so the imported events and
+    /// the MCP tools cannot read the file two different ways.
+    pub(crate) async fn read_calendar_config(state: &AppState) -> Result<CalendarConfig> {
         let Some((_, content)) = find_entry_blob(state, CALENDARS_PATH).await else {
             // No file means no calendars, which is the normal state before any are added.
-            return Ok(Vec::new());
+            return Ok(CalendarConfig::default());
         };
         let text = String::from_utf8(content.to_vec())
             .context("the calendar list is not UTF-8")?;
+        parse_calendar_config(&text)
+    }
+
+    pub(crate) fn parse_calendar_config(text: &str) -> Result<CalendarConfig> {
         if text.trim().is_empty() {
-            return Ok(Vec::new());
+            return Ok(CalendarConfig::default());
         }
-        let parsed: CalendarSubscriptions = serde_yaml::from_str(&text)
-            .context("the calendar list is not valid YAML")?;
-        Ok(parsed.calendars)
+        serde_yaml::from_str(text).context("the calendar list is not valid YAML")
     }
 
     /// Events from every subscribed calendar that fall inside the requested window.
@@ -1928,7 +1952,7 @@ Important:
         from: DateTime<chrono::FixedOffset>,
         to: DateTime<chrono::FixedOffset>,
     ) -> Result<ImportedEventsResponse> {
-        let subscriptions = read_subscriptions(state).await?;
+        let subscriptions = read_calendar_config(state).await?.calendars;
 
         let mut response = ImportedEventsResponse {
             calendars: Vec::new(),

@@ -105,6 +105,9 @@ export interface EventOccurrence extends EventFields {
 
 export interface MetadataEvent extends EventFields {
   start?: string;
+  // The id of a category in `.mory/calendars.yaml`. Belongs to the event as a whole, so its
+  // overrides and instances are always the same kind of thing as the event they belong to.
+  category?: string;
   repeat?: EventRepeat;
   exclusions?: string[];
   overrides?: EventOccurrence[];

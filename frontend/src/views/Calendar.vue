@@ -58,7 +58,7 @@
                 </v-btn>
             </v-btn-toggle>
             <v-menu
-                v-if="calendars.available.length > 0"
+                v-if="calendars.available.length > 0 || categoryList.length > 0"
                 v-bind:close-on-content-click="false"
                 location="bottom end"
             >
@@ -68,11 +68,11 @@
                         rounded="lg"
                         size="32"
                         class="mr-2"
-                        title="Choose which imported calendars are shown"
+                        title="Choose which calendars and categories are shown"
                     >
                         <v-badge
-                            v-bind:model-value="hiddenCalendars.size > 0"
-                            v-bind:content="hiddenCalendars.size"
+                            v-bind:model-value="hiddenCount > 0"
+                            v-bind:content="hiddenCount"
                             color="grey"
                         >
                             <v-icon size="20">{{ mdiCalendarMultiple }}</v-icon>
@@ -81,31 +81,58 @@
                 </template>
                 <v-card min-width="16em">
                     <v-list class="py-0">
-                        <v-list-subheader>Imported calendars</v-list-subheader>
-                        <v-list-item
-                            v-for="subscription of calendars.available"
-                            v-bind:key="subscription.id"
-                            v-bind:title="subscription.name"
-                            v-on:click="toggleCalendar(subscription.id)"
-                        >
-                            <template v-slot:prepend>
-                                <v-checkbox-btn
-                                    v-bind:model-value="!hiddenCalendars.has(subscription.id)"
-                                    class="mr-1"
-                                    tabindex="-1"
-                                ></v-checkbox-btn>
-                                <v-avatar
-                                    v-bind:color="calendars.colorOf.get(subscription.id) || DEFAULT_IMPORTED_COLOR"
-                                    class="mr-3"
-                                    size="12"
-                                ></v-avatar>
-                            </template>
-                        </v-list-item>
+                        <template v-if="calendars.available.length > 0">
+                            <v-list-subheader>Imported calendars</v-list-subheader>
+                            <v-list-item
+                                v-for="subscription of calendars.available"
+                                v-bind:key="subscription.id"
+                                v-bind:title="subscription.name"
+                                v-on:click="toggleCalendar(subscription.id)"
+                            >
+                                <template v-slot:prepend>
+                                    <v-checkbox-btn
+                                        v-bind:model-value="!hiddenCalendars.has(subscription.id)"
+                                        class="mr-1"
+                                        tabindex="-1"
+                                    ></v-checkbox-btn>
+                                    <v-avatar
+                                        v-bind:color="calendars.colorOf.get(subscription.id) || DEFAULT_IMPORTED_COLOR"
+                                        class="mr-3"
+                                        size="12"
+                                    ></v-avatar>
+                                </template>
+                            </v-list-item>
+                        </template>
+                        <template v-if="categoryList.length > 0">
+                            <v-list-subheader>Categories</v-list-subheader>
+                            <!-- A category under a hidden one is hidden with it, and ticking it
+                                 alone could not show it, so it is shown unticked and disabled. -->
+                            <v-list-item
+                                v-for="category of categoryList"
+                                v-bind:key="category.id"
+                                v-bind:disabled="isInHiddenCategory(category.id, hiddenCategories) && !hiddenCategories.has(category.id)"
+                                v-bind:title="category.id"
+                                v-on:click="toggleCategory(category.id)"
+                            >
+                                <template v-slot:prepend>
+                                    <v-checkbox-btn
+                                        v-bind:model-value="!isInHiddenCategory(category.id, hiddenCategories)"
+                                        class="mr-1"
+                                        tabindex="-1"
+                                    ></v-checkbox-btn>
+                                    <v-avatar
+                                        v-bind:color="categoryColorOf(category.id)"
+                                        class="mr-3"
+                                        size="12"
+                                    ></v-avatar>
+                                </template>
+                            </v-list-item>
+                        </template>
                         <v-divider></v-divider>
                         <v-list-item
-                            v-bind:disabled="hiddenCalendars.size === 0"
+                            v-bind:disabled="hiddenCount === 0"
                             title="Show all"
-                            v-on:click="showAllCalendars"
+                            v-on:click="showAll"
                         ></v-list-item>
                     </v-list>
                 </v-card>
@@ -167,6 +194,14 @@
                         variant="flat"
                     >
                         {{ selectedEvent.taskDate === 'due_by' ? 'Due' : 'Deadline' }}
+                    </v-chip>
+                    <v-chip
+                        v-if="selectedEvent.categoryId"
+                        class="mr-2 flex-shrink-0"
+                        size="small"
+                        variant="flat"
+                    >
+                        {{ selectedEvent.categoryId }}
                     </v-chip>
                     <v-icon v-if="selectedEvent.finished" class="mr-4 flex-shrink-0">{{ mdiCheck }}</v-icon>
                 </v-toolbar>
@@ -256,14 +291,27 @@ import {
 } from '@mdi/js';
 
 
-import { DEFAULT_EVENT_COLOR, DEFAULT_IMPORTED_COLOR, eventEndsAt, eventsFromEntries, mergeImported, taskDatesFromEntries } from '@/events';
+import {
+    DEFAULT_EVENT_COLOR,
+    DEFAULT_IMPORTED_COLOR,
+    eventEndsAt,
+    eventsFromEntries,
+    isInHiddenCategory,
+    mergeImported,
+    resolveCategory,
+    taskDatesFromEntries,
+} from '@/events';
 import type { CalendarEvent } from '@/events';
 import { buildOccurrenceNote, buildSeriesNote, canConvertSeries } from '@/event-note';
-import { HIDDEN_CALENDARS_STORAGE_KEY, useCalendarsStore } from '@/stores/calendars';
+import {
+    HIDDEN_CALENDARS_STORAGE_KEY,
+    HIDDEN_CATEGORIES_STORAGE_KEY,
+    useCalendarsStore,
+} from '@/stores/calendars';
 import { LAGGING_RETRY_MS, useFilesStore } from '@/stores/files';
 import { useLocalStorage } from '@/composables/localStorage';
 import Color from 'color';
-import materialColors from 'vuetify/util/colors';
+import { parseEventColor } from '@/event-color';
 import dayjs from 'dayjs';
 import { renderMarkdown } from '@/markdown';
 import AppBarContent from '@/components/AppBarContent.vue';
@@ -305,6 +353,9 @@ const selectedOpen = ref(false);
 // calendars that are gone are kept rather than pruned, so a subscription that fails to load once
 // does not come back shown.
 const hiddenCalendarIds = useLocalStorage<string[]>(HIDDEN_CALENDARS_STORAGE_KEY, []);
+// The same kind of preference for categories, kept the same way -- ids of categories that are gone
+// included, so one renamed back is not suddenly shown.
+const hiddenCategoryIds = useLocalStorage<string[]>(HIDDEN_CATEGORIES_STORAGE_KEY, []);
 
 // Template Refs
 const calendar = ref<any>(null);
@@ -320,7 +371,11 @@ const eventWindow = computed(() => {
         to: cursor.endOf(unit).add(1, 'month').format('YYYY-MM-DD'),
     };
 });
-const derived = computed(() => eventsFromEntries(files.entries, eventWindow.value));
+const derived = computed(() => eventsFromEntries(
+    files.entries,
+    eventWindow.value,
+    { categories: calendars.categoryMap },
+));
 // A task's dates are not an `events:` block, so they come from their own derivation over the same
 // listing.
 const taskDates = computed(() => taskDatesFromEntries(
@@ -329,10 +384,17 @@ const taskDates = computed(() => taskDatesFromEntries(
     { colorOf: calendars.taskDateColors },
 ));
 const hiddenCalendars = computed(() => new Set(hiddenCalendarIds.value));
+const hiddenCategories = computed(() => new Set(hiddenCategoryIds.value));
+const categoryList = computed(() => calendars.categories ?? []);
+const hiddenCount = computed(() => hiddenCalendars.value.size + hiddenCategories.value.size);
 const events = computed(() => mergeImported(
     [...derived.value.events, ...taskDates.value.events],
     calendars.events,
-    { colorOf: calendars.colorOf, hidden: hiddenCalendars.value },
+    {
+        colorOf: calendars.colorOf,
+        hidden: hiddenCalendars.value,
+        hiddenCategories: hiddenCategories.value,
+    },
 ));
 const eventErrors = computed(() => [...derived.value.errors, ...taskDates.value.errors]);
 // The calendar's title for a phone, whose app bar cannot fit a month spelled out in full. Only a
@@ -574,8 +636,20 @@ function toggleCalendar(id: string) {
         : [...hiddenCalendarIds.value, id];
 }
 
-function showAllCalendars() {
+function toggleCategory(id: string) {
+    hiddenCategoryIds.value = hiddenCategories.value.has(id)
+        ? hiddenCategoryIds.value.filter((hidden) => hidden !== id)
+        : [...hiddenCategoryIds.value, id];
+}
+
+function categoryColorOf(id: string): string {
+    return (calendars.categoryMap && resolveCategory(id, calendars.categoryMap)?.color)
+        || DEFAULT_EVENT_COLOR;
+}
+
+function showAll() {
     hiddenCalendarIds.value = [];
+    hiddenCategoryIds.value = [];
 }
 
 function setToday() {
@@ -618,19 +692,9 @@ function showEvent (nativeEvent: Event, { event }: { event: any }) {
 }
 
 function getEventColor(event: any): string {
-    const toPropName = (s: string) => s.replace(/-./g, (match: string) => match[1].toUpperCase());
-    // `Color` throws on anything it cannot parse, and both a note's `color:` and a calendar's
-    // configured colour are free text. Throwing here happens inside v-calendar's render, so one
-    // typo would blank the whole view rather than mis-colour one event.
-    let color;
-    try {
-        color = Object.hasOwn(materialColors, toPropName(event.color))
-            ? Color((materialColors as any)[toPropName(event.color)].base)
-            : Color(event.color);
-    }
-    catch {
-        color = Color(DEFAULT_EVENT_COLOR);
-    }
+    // Both a note's `color:` and a calendar's configured colour are free text, and this runs inside
+    // v-calendar's render: an unreadable one draws in the default rather than blanking the view.
+    const color = parseEventColor(event.color) ?? Color(DEFAULT_EVENT_COLOR);
 
     const now = dayjs();
     const time = eventEndsAt(event);

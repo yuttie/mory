@@ -106,6 +106,7 @@ These follow from the philosophy above; keep them intact.
 - `GET /v2/entries` serves the listing together with its commit ID, and serves only the changes when given `since`.
 - The frontend files store (`frontend/src/stores/files.ts`) is the single entry point for file operations. Every consumer reads the one shared listing from it; nothing calls the entries API or IndexedDB directly.
 - A task's `due_by` and `deadline` are drawn as events too, derived from the same listing by `taskDatesFromEntries` in `frontend/src/events.ts` rather than from an `events:` block. Each has its own colour, configurable under `task_dates:` in `.mory/calendars.yaml`.
+- An event may name a category (`category: meeting`), configured under `categories:` in `.mory/calendars.yaml` with a default `color` and a `name` template (`[MTG] {{name}}`). A category changes only how an event is drawn, never when or where it happens, so the note still says everything about its events on its own. A nested id (`meeting/1on1`) takes each field it leaves unset from its nearest configured ancestor, but must be configured itself, so a misspelt one is reported rather than drawn as its parent. `resolveCategory` in `frontend/src/events.ts` is the one place this is worked out.
 - External calendars are subscribed in `.mory/calendars.yaml` and served by `GET /v2/imported-events`. Their events are read-only and never stored: they are a live view of someone else's calendar, so the repository is deliberately not their home. Converting one writes an ordinary note under `.events/`, which then shadows the imported original by `ical.uid` — or by `uid` and `recurrence_id` together, when the note claims a single occurrence.
 
 ## The MCP server
@@ -145,6 +146,9 @@ that a rewrite would silently expand into independent copies.
 have disagreed before; a third with nothing comparing it to the frontend would be a disagreement
 nobody could see. It returns the rule as declared and says so in the result.
 
+The event categories are returned the same way: as `.mory/calendars.yaml` declares them, never
+applied to the events. Resolving them in Rust would be a second copy of `resolveCategory`.
+
 `list_events` does return each task's `due_by` and `deadline` inside the window, under
 `task_dates`, because the calendar draws them as events. Nothing there is expanded, but
 `task_dates_in_window` is still a second copy of which tasks and values `taskDatesFromEntries`
@@ -157,6 +161,7 @@ An event is a base occurrence (`start`), a list of occurrences (`instances`, or 
 - `repeat` — `freq` (`daily`/`weekly`/`monthly`/`yearly`), `interval`, `byday`, `bymonthday`, `bymonth`, `wkst`, `tz`, and at most one of `until` or `count`.
 - `exclusions` — occurrences to remove. `overrides` — entries carrying `at` plus the changed keys. `instances` — occurrences with their own `start`.
 - `location`, `url`, `name` (overrides the map key for one occurrence), and `ical` provenance.
+- `category` — a category id from `.mory/calendars.yaml`. It belongs to the event as a whole: overrides and instances cannot change it.
 
 Three details are easy to get wrong:
 

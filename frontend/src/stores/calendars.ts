@@ -19,7 +19,7 @@ import type {
     ImportedSeries,
 } from '@/api';
 import { getImportedEvents } from '@/api';
-import type { TaskDateColors } from '@/events';
+import type { EventCategories, EventCategory, TaskDateColors } from '@/events';
 import { useFilesStore } from '@/stores/files';
 
 export const CALENDARS_PATH = '.mory/calendars.yaml';
@@ -27,6 +27,10 @@ export const CALENDARS_PATH = '.mory/calendars.yaml';
 /// Where a browser keeps the imported calendars it is not drawing. Every view that draws imported
 /// events reads the same key, so hiding a calendar is one choice rather than one per page.
 export const HIDDEN_CALENDARS_STORAGE_KEY = 'hidden-imported-calendars';
+
+/// Where a browser keeps the event categories it is not drawing, shared by every view in the same
+/// way. Hiding a category hides the categories nested under it too.
+export const HIDDEN_CATEGORIES_STORAGE_KEY = 'hidden-event-categories';
 
 export interface CalendarSubscription {
     id: string;
@@ -40,6 +44,15 @@ export interface CalendarSubscription {
 // than in this browser's storage because they are the same kind of thing as a calendar's colour:
 // how one source of dates is told from another, and something the user would otherwise have to set
 // again on every device.
+
+/// An event category as configured under `categories:`: its id, and the defaults it supplies.
+///
+/// Kept as a list rather than a map so the settings show them in the order the file has them.
+/// They live here for the reason the task date colours do: how one kind of event is told from
+/// another is the same kind of thing as a calendar's colour.
+export interface ConfiguredCategory extends EventCategory {
+    id: string;
+}
 
 /// A calendar as a view needs to list it: what to call it, and what colour it draws in.
 export interface CalendarSummary {
@@ -62,6 +75,9 @@ export const useCalendarsStore = defineStore('calendars', () => {
 
     const subscriptions = ref<CalendarSubscription[]>([]);
     const taskDateColors = ref<TaskDateColors>({});
+    // `null` until the file has been read, and again when reading it fails: with no configuration
+    // to hand, every category a note names would look unknown and be reported as a typo.
+    const categories = ref<ConfiguredCategory[] | null>(null);
     const hasLoadedSubscriptions = ref(false);
 
     const loaded = shallowRef<Loaded>(EMPTY);
@@ -106,6 +122,14 @@ export const useCalendarsStore = defineStore('calendars', () => {
         return names;
     });
 
+    /// The categories by id, as the event derivation takes them; `undefined` until they are known.
+    const categoryMap = computed<EventCategories | undefined>(() => {
+        if (categories.value === null) {
+            return undefined;
+        }
+        return new Map(categories.value.map(({ id, ...defaults }) => [id, defaults]));
+    });
+
     /// The calendars whose events this window could contain, in the order they are configured.
     ///
     /// The backend reports exactly the enabled subscriptions, so this is what a view may offer to
@@ -148,12 +172,14 @@ export const useCalendarsStore = defineStore('calendars', () => {
                 enabled: entry.enabled !== false,
             }));
             taskDateColors.value = readTaskDateColors(parsed?.task_dates);
+            categories.value = readCategories(parsed?.categories);
         }
         catch (error) {
             // No file means no calendars, which is the normal state before any are added -- the
             // same reading `ai-actions.ts` gives a 404 on its own config.
             subscriptions.value = [];
             taskDateColors.value = {};
+            categories.value = isMissing(error) ? [] : null;
             if (!isMissing(error)) {
                 throw error;
             }
@@ -178,8 +204,15 @@ export const useCalendarsStore = defineStore('calendars', () => {
         await writeConfiguration();
     }
 
-    // The whole file, from whatever the store holds. Both halves are written every time, so
-    // editing one never drops the other.
+    /// Set the event categories. Like the task date colours, they change how events are drawn,
+    /// not which ones the backend returns.
+    async function saveCategories(next: ConfiguredCategory[]): Promise<void> {
+        categories.value = next;
+        await writeConfiguration();
+    }
+
+    // The whole file, from whatever the store holds. Every part is written every time, so editing
+    // one never drops another.
     async function writeConfiguration(): Promise<void> {
         const document = {
             calendars: subscriptions.value.map((subscription) => ({
@@ -191,6 +224,12 @@ export const useCalendarsStore = defineStore('calendars', () => {
             })),
             ...(Object.keys(taskDateColors.value).length > 0
                 ? { task_dates: { ...taskDateColors.value } }
+                : {}),
+            ...(categories.value !== null && categories.value.length > 0
+                ? {
+                    categories: Object.fromEntries(categories.value.map(
+                        ({ id, ...defaults }) => [id, defaults])),
+                }
                 : {}),
         };
         await files.write(CALENDARS_PATH, YAML.stringify(document, { indent: 4 }));
@@ -260,6 +299,8 @@ export const useCalendarsStore = defineStore('calendars', () => {
     return {
         subscriptions,
         taskDateColors,
+        categories,
+        categoryMap,
         hasLoadedSubscriptions,
         available,
         events,
@@ -272,6 +313,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
         loadSubscriptions,
         saveSubscriptions,
         saveTaskDateColors,
+        saveCategories,
         invalidate,
         load,
     };
@@ -291,6 +333,34 @@ function readTaskDateColors(value: unknown): TaskDateColors {
         }
     }
     return colors;
+}
+
+// Hand-edited YAML too. A category with nothing after its id is one that sets nothing of its own
+// and inherits it all, so it is kept; one that is not a mapping at all is dropped, and the notes
+// naming it are then reported rather than drawn with half a category.
+function readCategories(value: unknown): ConfiguredCategory[] {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        return [];
+    }
+    const categories: ConfiguredCategory[] = [];
+    for (const [id, entry] of Object.entries(value)) {
+        if (entry === null) {
+            categories.push({ id });
+            continue;
+        }
+        if (typeof entry !== 'object' || Array.isArray(entry)) {
+            continue;
+        }
+        const category: ConfiguredCategory = { id };
+        for (const field of ['color', 'name'] as const) {
+            const text = (entry as Record<string, unknown>)[field];
+            if (typeof text === 'string' && text.trim() !== '') {
+                category[field] = text.trim();
+            }
+        }
+        categories.push(category);
+    }
+    return categories;
 }
 
 function isMissing(error: unknown): boolean {

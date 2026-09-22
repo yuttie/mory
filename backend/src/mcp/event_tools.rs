@@ -197,6 +197,11 @@ pub struct EventArgs {
     pub location: Option<String>,
     #[serde(default)]
     pub url: Option<String>,
+    /// The id of an event category configured under `categories:` in `.mory/calendars.yaml`.
+    /// The web app draws the event in the category's colour, unless the event sets its own, and
+    /// with the category's name template. Must be configured already; `list_events` lists them.
+    #[serde(default)]
+    pub category: Option<String>,
     /// A recurrence rule.
     #[serde(default)]
     pub repeat: Option<Repeat>,
@@ -210,8 +215,9 @@ pub struct EventArgs {
     pub clear: Option<Vec<String>>,
 }
 
-const EVENT_KEYS: [&str; 9] = [
-    "start", "end", "finished", "color", "note", "location", "url", "repeat", "exclusions",
+const EVENT_KEYS: [&str; 10] = [
+    "start", "end", "finished", "color", "note", "location", "url", "category", "repeat",
+    "exclusions",
 ];
 
 /// The changes an `EventArgs` asks for, under `events.<name>`.
@@ -244,6 +250,7 @@ fn event_changes(args: &EventArgs) -> Result<Vec<Change>, String> {
         ("note", &args.note),
         ("location", &args.location),
         ("url", &args.url),
+        ("category", &args.category),
     ] {
         if let Some(value) = value {
             set(key, value.as_str().into());
@@ -259,6 +266,28 @@ fn event_changes(args: &EventArgs) -> Result<Vec<Change>, String> {
         );
     }
     Ok(changes)
+}
+
+/// Refuses a category `.mory/calendars.yaml` does not configure.
+///
+/// The web app would draw the event without it and report it as unknown, so an unconfigured id is
+/// a typo or an invention either way. A nested id must be configured itself, as the web app
+/// requires: were its parent enough, a misspelt child would never be reported.
+fn check_category(id: &str, configured: &[&str]) -> Result<(), String> {
+    if configured.contains(&id) {
+        return Ok(());
+    }
+    if configured.is_empty() {
+        return Err(format!(
+            "No event categories are configured, so {id:?} would be reported as unknown. They \
+             are defined under `categories:` in `.mory/calendars.yaml`, which the web app's \
+             settings edit.",
+        ));
+    }
+    Err(format!(
+        "{id:?} is not a configured event category. Use one of: {}.",
+        configured.join(", "),
+    ))
 }
 
 /// Whether the note already declares an event by this name.
@@ -324,6 +353,19 @@ async fn apply_event(
     };
     if changes.is_empty() {
         return Ok(tool_error("Nothing to change. Pass a field to set, or name one in `clear`."));
+    }
+    if let Some(category) = &args.category {
+        let config = match crate::v2::read_calendar_config(state).await {
+            Ok(config) => config,
+            Err(e) => {
+                return Ok(tool_error(format!(
+                    "Could not read `.mory/calendars.yaml` to check the category: {e:#}",
+                )));
+            }
+        };
+        if let Err(message) = check_category(category, &config.category_ids()) {
+            return Ok(tool_error(message));
+        }
     }
     let edited = match frontmatter::apply(text, &changes) {
         Ok(edited) => edited,
@@ -472,5 +514,46 @@ mod tests {
             .filter_map(|key| key.as_str())
             .collect::<Vec<_>>();
         assert_eq!(keys, ["freq", "interval", "byday", "tz"]);
+    }
+
+    #[test]
+    fn a_category_must_be_configured_and_names_the_ones_that_are() {
+        let configured = ["meeting", "meeting/1on1", "trip"];
+        assert!(check_category("meeting", &configured).is_ok());
+        assert!(check_category("meeting/1on1", &configured).is_ok());
+
+        let error = check_category("meetnig", &configured).expect_err("a typo");
+        assert!(error.contains("meeting, meeting/1on1, trip"), "{error}");
+        // Its parent being configured is not enough, as in the web app.
+        assert!(check_category("meeting/1no1", &configured).is_err());
+
+        let error = check_category("meeting", &[]).expect_err("none configured");
+        assert!(error.contains(".mory/calendars.yaml"), "{error}");
+    }
+
+    #[test]
+    fn a_category_is_written_and_cleared_like_any_other_key() {
+        let args: EventArgs = serde_json::from_value(serde_json::json!({
+            "path": "a.md",
+            "name": "Weekly sync",
+            "message": "m",
+            "category": "meeting",
+        }))
+        .expect("valid arguments");
+        let edited = frontmatter::apply(
+            "---\nevents:\n    Weekly sync:\n        start: 2026-09-23\n---\n",
+            &event_changes(&args).expect("valid changes"),
+        )
+        .expect("an edit");
+        assert!(edited.contains("category: meeting"), "{edited}");
+
+        let args: EventArgs = serde_json::from_value(serde_json::json!({
+            "path": "a.md",
+            "name": "Weekly sync",
+            "message": "m",
+            "clear": ["category"],
+        }))
+        .expect("valid arguments");
+        assert!(event_changes(&args).is_ok());
     }
 }

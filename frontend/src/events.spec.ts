@@ -9,11 +9,15 @@ import {
     DEFAULT_DUE_COLOR,
     DEFAULT_EVENT_COLOR,
     DEFAULT_IMPORTED_COLOR,
+    applyNameTemplate,
+    categoryLineage,
     eventEndsAt,
     eventsFromEntries,
+    isInHiddenCategory,
     taskDatesFromEntries,
     mergeImported,
     normalizeEndTime,
+    resolveCategory,
     toWallClock,
 } from '@/events';
 
@@ -553,6 +557,37 @@ describe('mergeImported', () => {
         expect(merged).toHaveLength(1);
         expect(merged[0].source).toBe('note');
     });
+
+    it('drops the note events of a hidden category and keeps the rest', () => {
+        const { events } = derive([
+            entry('a.md', {
+                Sync: { start: '2024-05-01 10:00', category: 'meeting/1on1' },
+                Offsite: { start: '2024-05-02', category: 'trip' },
+                Lunch: { start: '2024-05-03 12:00' },
+            }),
+        ]);
+
+        const merged = mergeImported(events, [], { hiddenCategories: new Set(['meeting']) });
+
+        expect(merged.map((event) => event.name)).toEqual(['Offsite', 'Lunch']);
+    });
+
+    // The note still claims the series while hidden, or hiding it would put the feed's copy back.
+    it('keeps an imported event shadowed by a note in a hidden category', () => {
+        const { events } = derive([
+            entry('a.md', {
+                Standup: {
+                    start: '2024-05-01 09:00',
+                    category: 'meeting',
+                    ical: { calendar: 'work', uid: 'a@example' },
+                },
+            }),
+        ]);
+
+        const merged = mergeImported(events, [imported()], { hiddenCategories: new Set(['meeting']) });
+
+        expect(merged).toEqual([]);
+    });
 });
 
 // The module's own contract: "anything invalid is reported and skipped, never fatal. A typo in one
@@ -718,6 +753,199 @@ describe('an all-day series', () => {
 
         expect(events.map((e) => e.start)).toEqual(['2026-08-01', '2026-08-02', '2026-08-03']);
         vi.unstubAllEnvs();
+    });
+});
+
+describe('event categories', () => {
+    const categories = new Map([
+        ['meeting', { color: '#1565c0', name: '[MTG] {{name}}' }],
+        ['trip', { color: '#2e7d32' }],
+    ]);
+    const categorised = (entries: ListEntry2[], window = ANY_WINDOW) =>
+        eventsFromEntries(entries, window, { categories });
+
+    it('gives an event its category colour and name', () => {
+        const { events, errors } = categorised([
+            entry('a.md', { 'Weekly sync': { start: '2024-05-01 10:00', category: 'meeting' } }),
+        ]);
+
+        expect(errors).toEqual([]);
+        expect(events).toEqual([expect.objectContaining({
+            name: '[MTG] Weekly sync',
+            color: '#1565c0',
+            categoryId: 'meeting',
+        })]);
+    });
+
+    it('yields to a colour the occurrence or the event names', () => {
+        const { events } = categorised([
+            entry('a.md', {
+                Offsite: {
+                    category: 'trip',
+                    color: 'orange',
+                    instances: [
+                        { start: '2024-05-01' },
+                        { start: '2024-06-01', color: 'red' },
+                    ],
+                },
+                Onsite: { start: '2024-07-01', category: 'trip' },
+            }),
+        ]);
+
+        expect(events.map((e) => e.color)).toEqual(['orange', 'red', '#2e7d32']);
+    });
+
+    it('leaves the name alone when the category has no template', () => {
+        const { events } = categorised([
+            entry('a.md', { Offsite: { start: '2024-05-01', category: 'trip' } }),
+        ]);
+
+        expect(events[0].name).toBe('Offsite');
+    });
+
+    it('wraps the name an occurrence renames itself to', () => {
+        const { events } = categorised([
+            entry('a.md', {
+                Standup: {
+                    category: 'meeting',
+                    start: '2024-05-01 09:00',
+                    repeat: { freq: 'daily' },
+                    overrides: [{ at: '2024-05-02 09:00', name: 'Retro' }],
+                },
+            }),
+        ], { from: '2024-05-01', to: '2024-05-02' });
+
+        expect(events.map((e) => e.name)).toEqual(['[MTG] Standup', '[MTG] Retro']);
+        expect(events.every((e) => e.color === '#1565c0' && e.categoryId === 'meeting'))
+            .toBe(true);
+    });
+
+    it('draws an event whose category is not configured, and reports it', () => {
+        const { events, errors } = categorised([
+            entry('a.md', { 'Weekly sync': { start: '2024-05-01 10:00', category: 'meetnig' } }),
+        ]);
+
+        expect(events).toEqual([expect.objectContaining({
+            name: 'Weekly sync',
+            color: DEFAULT_EVENT_COLOR,
+            categoryId: 'meetnig',
+        })]);
+        expect(errors).toEqual([['category', 'meetnig', 'Weekly sync', 'a.md', null]]);
+    });
+
+    it('reports a category that is not text, and draws the event without one', () => {
+        const { events, errors } = categorised([
+            entry('a.md', {
+                'Weekly sync': { start: '2024-05-01 10:00', category: ['meeting'] as unknown as string },
+            }),
+        ]);
+
+        expect(events).toHaveLength(1);
+        expect(events[0].categoryId).toBeUndefined();
+        expect(errors).toEqual([['category', ['meeting'], 'Weekly sync', 'a.md', null]]);
+    });
+
+    it('reads an empty category as none', () => {
+        const { events, errors } = categorised([
+            entry('a.md', {
+                'Weekly sync': { start: '2024-05-01 10:00', category: null as unknown as string },
+            }),
+        ]);
+
+        expect(errors).toEqual([]);
+        expect(events[0].categoryId).toBeUndefined();
+    });
+
+    // Before the configuration has loaded every category would look unknown, and the calendar
+    // would flash an error for each of them.
+    it('records the category but neither applies nor checks it without a configuration', () => {
+        const { events, errors } = derive([
+            entry('a.md', { 'Weekly sync': { start: '2024-05-01 10:00', category: 'meeting' } }),
+        ]);
+
+        expect(errors).toEqual([]);
+        expect(events).toEqual([expect.objectContaining({
+            name: 'Weekly sync',
+            color: DEFAULT_EVENT_COLOR,
+            categoryId: 'meeting',
+        })]);
+    });
+});
+
+describe('nested categories', () => {
+    const categories = new Map([
+        ['meeting', { color: '#1565c0', name: '[MTG] {{name}}' }],
+        ['meeting/1on1', { color: '#6a1b9a' }],
+        ['meeting/1on1/skip', {}],
+        ['work/review', { name: 'Review: {{name}}' }],
+    ]);
+
+    it('lists an id and its ancestors, nearest first', () => {
+        expect(categoryLineage('a/b/c')).toEqual(['a/b/c', 'a/b', 'a']);
+        expect(categoryLineage('meeting')).toEqual(['meeting']);
+    });
+
+    it('takes each field from the nearest category that sets it', () => {
+        expect(resolveCategory('meeting/1on1', categories))
+            .toEqual({ color: '#6a1b9a', name: '[MTG] {{name}}' });
+        expect(resolveCategory('meeting/1on1/skip', categories))
+            .toEqual({ color: '#6a1b9a', name: '[MTG] {{name}}' });
+    });
+
+    it('does not need an ancestor to be configured', () => {
+        expect(resolveCategory('work/review', categories)).toEqual({ name: 'Review: {{name}}' });
+    });
+
+    // An ancestor alone would draw `meeting/1no1` as a meeting, and the typo would go unseen.
+    it('hides a category with its ancestor, and not with its descendant', () => {
+        const hidden = new Set(['meeting']);
+        expect(isInHiddenCategory('meeting', hidden)).toBe(true);
+        expect(isInHiddenCategory('meeting/1on1', hidden)).toBe(true);
+        expect(isInHiddenCategory('meetings', hidden)).toBe(false);
+        expect(isInHiddenCategory('meeting', new Set(['meeting/1on1']))).toBe(false);
+        expect(isInHiddenCategory(undefined, hidden)).toBe(false);
+    });
+
+    it('needs the id itself to be configured', () => {
+        expect(resolveCategory('meeting/1no1', categories)).toBeNull();
+
+        const { events, errors } = eventsFromEntries([
+            entry('a.md', { Sync: { start: '2024-05-01 10:00', category: 'meeting/1no1' } }),
+        ], ANY_WINDOW, { categories });
+        expect(events[0]).toMatchObject({ name: 'Sync', color: DEFAULT_EVENT_COLOR });
+        expect(errors).toEqual([['category', 'meeting/1no1', 'Sync', 'a.md', null]]);
+    });
+
+    it('draws a nested category with what it inherits', () => {
+        const { events } = eventsFromEntries([
+            entry('a.md', { Sync: { start: '2024-05-01 10:00', category: 'meeting/1on1' } }),
+        ], ANY_WINDOW, { categories });
+
+        expect(events[0]).toMatchObject({
+            name: '[MTG] Sync',
+            color: '#6a1b9a',
+            categoryId: 'meeting/1on1',
+        });
+    });
+});
+
+describe('applyNameTemplate', () => {
+    it('accepts the placeholder with inner whitespace and in any case', () => {
+        expect(applyNameTemplate('[MTG] {{ name }}', 'Sync')).toBe('[MTG] Sync');
+        expect(applyNameTemplate('{{NAME}} (1:1)', 'Sync')).toBe('Sync (1:1)');
+        expect(applyNameTemplate('{{name}} / {{name}}', 'Sync')).toBe('Sync / Sync');
+    });
+
+    it('keeps a replacement pattern in the name literally', () => {
+        expect(applyNameTemplate('[MTG] {{name}}', 'Pay $& back')).toBe('[MTG] Pay $& back');
+    });
+
+    it('leaves any other placeholder as written', () => {
+        expect(applyNameTemplate('{{nmae}} {{location}}', 'Sync')).toBe('{{nmae}} {{location}}');
+    });
+
+    it('returns the name when there is no template', () => {
+        expect(applyNameTemplate(undefined, 'Sync')).toBe('Sync');
     });
 });
 

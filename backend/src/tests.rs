@@ -2403,6 +2403,7 @@ fn the_event_tools_emit_frontmatter_the_frontend_would_accept() {
             &["events", "Standup", "exclusions"],
             serde_yaml::Value::Sequence(vec!["2026-01-07 09:30:00+09:00".into()]),
         ),
+        Change::set(&["events", "Standup", "category"], "meeting/1on1"),
     ];
 
     let note = apply("# Some events\n", &changes).expect("the frontmatter should be written");
@@ -2414,4 +2415,68 @@ fn the_event_tools_emit_frontmatter_the_frontend_would_accept() {
     if let Err(error) = validator.validate(&as_json) {
         panic!("emitted:\n{block}\nrejected by the schema: {error}");
     }
+}
+
+// ---------------------------------------------------------------------------
+// `.mory/calendars.yaml`, as the backend reads it
+// ---------------------------------------------------------------------------
+
+#[test]
+fn the_calendar_configuration_lists_its_categories_in_the_file_order() {
+    let config = crate::v2::parse_calendar_config("\
+calendars: []
+categories:
+    trip:
+        color: '#2e7d32'
+    meeting:
+        name: '[MTG] {{name}}'
+    meeting/1on1:
+")
+    .expect("a valid configuration");
+
+    let ids = config
+        .categories()
+        .expect("a categories block")
+        .keys()
+        .filter_map(|id| id.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(ids, ["trip", "meeting", "meeting/1on1"]);
+}
+
+/// Only the web app draws with categories, so a block it cannot use must not cost the imported
+/// events, which are read from the same file.
+#[test]
+fn a_malformed_category_block_leaves_the_subscriptions_readable() {
+    let config = crate::v2::parse_calendar_config("\
+calendars:
+    - id: work
+      url: https://example.invalid/work.ics
+categories:
+    - meeting
+")
+    .expect("the subscriptions still parse");
+
+    assert!(config.categories().is_none());
+}
+
+#[test]
+fn a_calendar_configuration_without_categories_has_none() {
+    let config = crate::v2::parse_calendar_config("calendars: []\n").expect("valid");
+    assert!(config.categories().is_none());
+    assert!(crate::v2::parse_calendar_config("").expect("empty").categories().is_none());
+}
+
+#[test]
+fn category_ids_come_in_the_file_order_and_none_from_a_malformed_block() {
+    let config = crate::v2::parse_calendar_config("\
+categories:
+    trip:
+    meeting:
+    meeting/1on1: {}
+")
+    .expect("a valid configuration");
+    assert_eq!(config.category_ids(), ["trip", "meeting", "meeting/1on1"]);
+
+    let config = crate::v2::parse_calendar_config("categories: [meeting]\n").expect("valid");
+    assert!(config.category_ids().is_empty());
 }

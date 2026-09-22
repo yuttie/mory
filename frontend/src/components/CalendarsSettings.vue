@@ -100,6 +100,69 @@
                 variant="tonal"
             >{{ colorError }}</v-alert>
 
+            <v-divider class="mt-6 mb-4"></v-divider>
+
+            <v-card-subtitle class="px-0">Event categories</v-card-subtitle>
+            <p class="text-medium-emphasis mb-4">
+                An event joins one by naming it, as in <code>category: meeting</code>, and is drawn
+                in its colour and with its name template unless it sets its own colour. Stored in the
+                same file.
+            </p>
+            <v-list
+                v-if="categoryList.length > 0"
+            >
+                <v-list-item
+                    v-for="(category, index) of categoryList"
+                    v-bind:key="category.id"
+                    v-bind:subtitle="previewOf(category.id)"
+                    v-bind:title="category.id"
+                >
+                    <template v-slot:prepend>
+                        <v-avatar
+                            v-bind:color="resolvedOf(category.id).color || DEFAULT_EVENT_COLOR"
+                            size="16"
+                        ></v-avatar>
+                    </template>
+                    <template v-slot:append>
+                        <v-btn
+                            icon
+                            size="small"
+                            variant="text"
+                            v-on:click="openCategoryDialog(index)"
+                        >
+                            <v-icon>{{ mdiPencil }}</v-icon>
+                        </v-btn>
+                        <v-btn
+                            icon
+                            size="small"
+                            variant="text"
+                            v-on:click="removeCategory(index)"
+                        >
+                            <v-icon>{{ mdiDelete }}</v-icon>
+                        </v-btn>
+                    </template>
+                </v-list-item>
+            </v-list>
+            <p
+                v-else
+                class="text-medium-emphasis"
+            >
+                No categories yet.
+            </p>
+            <v-btn
+                v-bind:prepend-icon="mdiPlus"
+                class="mt-4"
+                v-on:click="openCategoryDialog(null)"
+            >
+                Add category
+            </v-btn>
+            <v-alert
+                v-if="categoryError"
+                class="mt-4"
+                type="error"
+                variant="tonal"
+            >{{ categoryError }}</v-alert>
+
             <v-alert
                 v-if="error"
                 class="mt-4"
@@ -154,20 +217,73 @@
                 </v-card-actions>
             </v-card>
         </v-dialog>
+
+        <v-dialog
+            v-model="categoryDialogOpen"
+            max-width="40em"
+        >
+            <v-card>
+                <v-card-title>{{ editingCategoryIndex === null ? 'Add category' : 'Edit category' }}</v-card-title>
+                <v-card-text>
+                    <v-text-field
+                        v-model="categoryDraft.id"
+                        hint="What an event writes after category:. A slash nests it: meeting/1on1 takes whatever it leaves empty from meeting. Notes naming an identifier that no longer exists are reported on the calendar."
+                        label="Identifier"
+                        persistent-hint
+                    ></v-text-field>
+                    <v-text-field
+                        v-model="categoryDraft.name"
+                        v-bind:placeholder="inheritedDraft.name"
+                        class="mt-4"
+                        hint="{{name}} stands for the event's own name, as in [MTG] {{name}}. Leave it empty to inherit, or to keep names as they are."
+                        label="Name template"
+                        persistent-hint
+                        persistent-placeholder
+                    ></v-text-field>
+                    <ColorField
+                        v-model="categoryDraft.color"
+                        v-bind:fallback="inheritedDraft.color ?? DEFAULT_EVENT_COLOR"
+                        class="mt-4"
+                        label="Colour"
+                    ></ColorField>
+                    <v-alert
+                        v-if="categoryDraftError"
+                        type="error"
+                        variant="tonal"
+                    >{{ categoryDraftError }}</v-alert>
+                </v-card-text>
+                <v-card-actions>
+                    <v-spacer></v-spacer>
+                    <v-btn v-on:click="categoryDialogOpen = false">Cancel</v-btn>
+                    <v-btn
+                        v-bind:loading="isSavingCategories"
+                        variant="tonal"
+                        v-on:click="saveCategory"
+                    >Save</v-btn>
+                </v-card-actions>
+            </v-card>
+        </v-dialog>
     </v-card>
 </template>
 
 <script lang="ts" setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 
-import Color from 'color';
 import { mdiDelete, mdiPencil, mdiPlus } from '@mdi/js';
 
 import ColorField from '@/components/ColorField.vue';
-import { DEFAULT_DEADLINE_COLOR, DEFAULT_DUE_COLOR, DEFAULT_IMPORTED_COLOR } from '@/events';
-import type { TaskDateColors } from '@/events';
+import { parseEventColor } from '@/event-color';
+import {
+    DEFAULT_DEADLINE_COLOR,
+    DEFAULT_DUE_COLOR,
+    DEFAULT_EVENT_COLOR,
+    DEFAULT_IMPORTED_COLOR,
+    applyNameTemplate,
+    resolveCategory,
+} from '@/events';
+import type { EventCategory, TaskDateColors } from '@/events';
 import { CALENDARS_PATH, useCalendarsStore } from '@/stores/calendars';
-import type { CalendarSubscription } from '@/stores/calendars';
+import type { CalendarSubscription, ConfiguredCategory } from '@/stores/calendars';
 
 // The two fields, with what each falls back to when it is left empty.
 const TASK_DATE_FIELDS = [
@@ -197,10 +313,34 @@ const colorError = ref('');
 // Edited as text, so an empty field can mean "the default" rather than an unset key.
 const taskDateDraft = reactive<Record<'due_by' | 'deadline', string>>({ due_by: '', deadline: '' });
 
+const categoryDialogOpen = ref(false);
+const editingCategoryIndex = ref<number | null>(null);
+const isSavingCategories = ref(false);
+const categoryError = ref('');
+const categoryDraftError = ref('');
+// Text, for the same reason as the task date colours: empty means "inherit".
+const categoryDraft = reactive({ id: '', name: '', color: '' });
+
 // Computed properties
 const taskDateColorsChanged = computed(() => TASK_DATE_FIELDS.some(
     (field) => taskDateDraft[field.name].trim() !== (calendars.taskDateColors[field.name] ?? ''),
 ));
+
+// `null` while the file is unread or unreadable; there is nothing to list either way.
+const categoryList = computed(() => calendars.categories ?? []);
+
+const categoryMap = computed(() => calendars.categoryMap ?? new Map<string, EventCategory>());
+
+// What the category being edited would inherit from its ancestors, shown where its own fields are
+// empty. Resolved as the calendar resolves it, with the draft standing in as a category of its own
+// that sets nothing.
+const inheritedDraft = computed((): EventCategory => {
+    const id = categoryDraft.id.trim();
+    if (id === '') {
+        return {};
+    }
+    return resolveCategory(id, new Map([...categoryMap.value, [id, {}]])) ?? {};
+});
 
 // Lifecycle hooks
 onMounted(() => {
@@ -290,12 +430,10 @@ async function saveTaskDateColors() {
         if (value === '') {
             continue;
         }
-        // `Color` throws on anything it cannot parse, and the views fall back to the default when
-        // it does -- so a typo would silently save and then appear to have been ignored.
-        try {
-            Color(value);
-        }
-        catch {
+        // The views fall back to the default on a colour they cannot read, so a typo would
+        // silently save and then appear to have been ignored. Read the way the views read it, so
+        // a palette name such as `light-green` is not refused while the calendar draws it.
+        if (parseEventColor(value) === null) {
             colorError.value = `"${value}" is not a colour this can draw.`;
             return;
         }
@@ -312,6 +450,89 @@ async function saveTaskDateColors() {
     }
     finally {
         isSavingColors.value = false;
+    }
+}
+
+function resolvedOf(id: string): EventCategory {
+    return resolveCategory(id, categoryMap.value) ?? {};
+}
+
+// How an event's name reads under the category, with a stand-in for the name.
+function previewOf(id: string): string {
+    const template = resolvedOf(id).name;
+    return template === undefined ? 'Names unchanged' : applyNameTemplate(template, 'Weekly sync');
+}
+
+function openCategoryDialog(index: number | null) {
+    editingCategoryIndex.value = index;
+    categoryDraftError.value = '';
+    const existing = index === null ? null : categoryList.value[index];
+    Object.assign(categoryDraft, {
+        id: existing?.id ?? '',
+        name: existing?.name ?? '',
+        color: existing?.color ?? '',
+    });
+    categoryDialogOpen.value = true;
+}
+
+async function saveCategory() {
+    const id = categoryDraft.id.trim();
+    if (id === '') {
+        categoryDraftError.value = 'A category needs an identifier.';
+        return;
+    }
+    // An empty part would nest under a category no one could name.
+    if (id.split('/').some((part) => part.trim() === '')) {
+        categoryDraftError.value = 'An identifier cannot start or end with a slash, or have two in a row.';
+        return;
+    }
+    const clash = categoryList.value
+        .some((category, index) => category.id === id && index !== editingCategoryIndex.value);
+    if (clash) {
+        categoryDraftError.value = `Another category already uses the identifier "${id}".`;
+        return;
+    }
+    const color = categoryDraft.color.trim();
+    if (color !== '') {
+        // The same check the task date colours get.
+        if (parseEventColor(color) === null) {
+            categoryDraftError.value = `"${color}" is not a colour this can draw.`;
+            return;
+        }
+    }
+
+    const name = categoryDraft.name.trim();
+    const entry: ConfiguredCategory = {
+        id,
+        ...(color === '' ? {} : { color }),
+        ...(name === '' ? {} : { name }),
+    };
+    const next = [...categoryList.value];
+    if (editingCategoryIndex.value === null) {
+        next.push(entry);
+    }
+    else {
+        next[editingCategoryIndex.value] = entry;
+    }
+    await persistCategories(next, () => { categoryDialogOpen.value = false; });
+}
+
+async function removeCategory(index: number) {
+    await persistCategories(categoryList.value.filter((_, at) => at !== index));
+}
+
+async function persistCategories(next: ConfiguredCategory[], onSaved?: () => void) {
+    isSavingCategories.value = true;
+    categoryError.value = '';
+    try {
+        await calendars.saveCategories(next);
+        onSaved?.();
+    }
+    catch (err) {
+        categoryError.value = `Could not save ${CALENDARS_PATH}: ${err}`;
+    }
+    finally {
+        isSavingCategories.value = false;
     }
 }
 

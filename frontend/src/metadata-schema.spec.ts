@@ -121,4 +121,11 @@ describe('metadata schema, events', () => {
             events: { A: { start: '2024-05-01 09:00', ical: { calendar: 'work' } } },
         })).toBe(false);
     });
+
+    it('accepts a category by its id, and only as text', () => {
+        const at = (category: unknown) => ({ events: { A: { start: '2024-05-01 09:00', category } } });
+        expect(ok(at('meeting'))).toBe(true);
+        expect(ok(at('meeting/1on1'))).toBe(true);
+        expect(ok(at(['meeting']))).toBe(false);
+    });
 });
