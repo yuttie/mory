@@ -224,6 +224,12 @@ describe('tag-aware accessors', () => {
         });
     });
 
+    it('tells the catch-all group apart from a real tag', async () => {
+        const { tagGroupId, isUntaggedGroupId } = await storeWith(sample);
+        expect(isUntaggedGroupId(tagGroupId('Untagged'))).toBe(true);
+        expect(isUntaggedGroupId(tagGroupId('work'))).toBe(false);
+    });
+
     it('lists the members of a tag group as its children', async () => {
         const { store, tagGroupId } = await storeWith(sample);
         expect(store.childrenOf(tagGroupId('work')).map((t) => t.title)).toEqual(['Gamma', 'Alpha']);

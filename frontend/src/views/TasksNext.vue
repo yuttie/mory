@@ -81,7 +81,7 @@
                             v-bind:known-contacts="knownContacts"
                             v-bind:parent-task-title="selectedNodeParentTitle"
                             v-bind:ancestor-titles-for-task-assessment="selectedNodeAncestorTitlesForTaskAssessment"
-                            v-bind:selected-tag="newTaskPath && selectedNode && isTagGroupSelected ? selectedTagName : undefined"
+                            v-bind:selected-tag="newTaskPath ? newTaskTag : undefined"
                             class="ma-4"
                             v-on:save="onSelectedTaskSave"
                             v-on:delete="onSelectedTaskDelete"
@@ -207,7 +207,7 @@ import {
 } from '@mdi/js';
 
 import { type TaskNode, type TaskTreeItem } from '@/task-forest';
-import { isTagGroupId, tagGroupId, tagNameOf, useTasksStore } from '@/stores/tasks';
+import { isTagGroupId, isUntaggedGroupId, tagGroupId, tagNameOf, useTasksStore } from '@/stores/tasks';
 
 import { type UUID, type StatusKind, type Task, STATUS_LABEL } from '@/task';
 import axios from 'axios';
@@ -271,6 +271,14 @@ const selectedTagName = computed<string | null>(() => {
         return tagNameOf(selectedNode.value.uuid);
     }
     return null;
+});
+
+// The tag a task created from the selected group starts with. The Untagged group has none to give.
+const newTaskTag = computed<string | undefined>(() => {
+    if (activeNodeId.value === undefined || isUntaggedGroupId(activeNodeId.value)) {
+        return undefined;
+    }
+    return selectedTagName.value ?? undefined;
 });
 
 // Helper function to get ancestor titles for a task
