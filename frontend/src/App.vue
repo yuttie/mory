@@ -239,7 +239,10 @@
                                 v-bind:subtitle="email ?? undefined"
                             >
                                 <template v-slot:prepend>
-                                    <Gravatar v-bind:email="email" style="margin-right: 8px"></Gravatar>
+                                    <Gravatar
+                                        v-bind:email="email"
+                                        v-bind:size="20"
+                                    ></Gravatar>
                                 </template>
                             </v-list-item>
                         </template>
@@ -459,7 +462,10 @@
                                 v-bind:subtitle="email ?? undefined"
                             >
                                 <template v-slot:prepend>
-                                    <Gravatar v-bind:email="email" style="margin-right: 8px"></Gravatar>
+                                    <Gravatar
+                                        v-bind:email="email"
+                                        v-bind:size="20"
+                                    ></Gravatar>
                                 </template>
                             </v-list-item>
                         </template>
