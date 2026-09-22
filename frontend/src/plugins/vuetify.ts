@@ -44,6 +44,7 @@ export default createVuetify({
     VListItem: {
       minHeight: 32,
       rounded: 4,
+      prependGap: 12,
     },
   },
   icons: {
