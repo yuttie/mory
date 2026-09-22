@@ -4,6 +4,9 @@
     html {
         font-size: 14px;
     }
+    .v-field {
+        font-size: 14px;
+    }
     /* The inset `nav` gives a list, without the rounded items, gaps and smaller type that come with it. */
     .v-list {
         padding-inline: 8px;
