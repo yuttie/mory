@@ -155,7 +155,12 @@
                                         v-bind:model-value="uploadList.length > 0"
                                     >
                                         <template v-slot:badge>
-                                            <v-icon>{{ uploadListBadgeIcon }}</v-icon>
+                                            <!-- The global 20px would be an inline size, which beats
+                                                 the badge's own icon size; a named size is a class,
+                                                 which the badge's rule outranks. -->
+                                            <v-icon size="default">
+                                                {{ uploadListBadgeIcon }}
+                                            </v-icon>
                                         </template>
                                         <v-icon>{{ mdiCloudUploadOutline }}</v-icon>
                                     </v-badge>
@@ -374,7 +379,12 @@
                                         v-bind:model-value="uploadList.length > 0"
                                     >
                                         <template v-slot:badge>
-                                            <v-icon>{{ uploadListBadgeIcon }}</v-icon>
+                                            <!-- The global 20px would be an inline size, which beats
+                                                 the badge's own icon size; a named size is a class,
+                                                 which the badge's rule outranks. -->
+                                            <v-icon size="default">
+                                                {{ uploadListBadgeIcon }}
+                                            </v-icon>
                                         </template>
                                         <v-icon>{{ mdiCloudUploadOutline }}</v-icon>
                                     </v-badge>
