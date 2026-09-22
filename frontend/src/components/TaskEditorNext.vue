@@ -698,6 +698,14 @@ watch(
     { immediate: true },
 );
 
+// A new task moved under another parent keeps its UUID, and the watcher above keeps what has been
+// typed. A new UUID is another new task, from Add pressed while one was open, and starts afresh.
+watch(uuid, () => {
+    if (!task.value) {
+        resetFromTask(task.value);
+    }
+});
+
 // Watch for changes in selectedTag during new task creation
 watch(
     () => props.selectedTag,
