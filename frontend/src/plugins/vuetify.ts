@@ -41,6 +41,9 @@ export default createVuetify({
         size: "16",
       },
     },
+    VListItem: {
+      minHeight: 32,
+    },
   },
   icons: {
     defaultSet: 'mdi',
