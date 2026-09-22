@@ -32,7 +32,11 @@
                 </v-card>
 
                 <!-- Task tree for parent selection -->
-                <div style="border: 1px solid #e0e0e0; border-radius: 4px; max-height: 400px; overflow-y: auto;">
+                <!-- Positioned, so that it is on the offsetParent chain `revealSelected` walks. -->
+                <div
+                    ref="treeContainer"
+                    style="position: relative; border: 1px solid #e0e0e0; border-radius: 4px; max-height: 400px; overflow-y: auto;"
+                >
                     <TaskTree
                         v-bind:items="filteredItems"
                         v-bind:open="openNodes"
@@ -64,7 +68,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
 import { mdiFolder, mdiCheck } from '@mdi/js';
 
 import TaskTree from './TaskTree.vue';
@@ -88,8 +92,33 @@ const emit = defineEmits<{
 // Reactive state
 const selectedParent = ref<UUID | null>(null);
 const openNodes = ref<UUID[]>([]);
+const treeContainer = ref<HTMLElement | null>(null);
+
+// The tasks from a root down to `uuid`'s parent: empty for a root task, null for one not in the
+// tree.
+function ancestorsOf(items: TaskTreeItem[], uuid: UUID): UUID[] | null {
+    for (const item of items) {
+        if (item.uuid === uuid) {
+            return [];
+        }
+        const below = ancestorsOf(item.children ?? [], uuid);
+        if (below !== null) {
+            return [item.uuid, ...below];
+        }
+    }
+    return null;
+}
 
 // Computed properties
+const currentAncestors = computed<UUID[]>(() => {
+    if (props.taskUuid === null) {
+        return [];
+    }
+    return ancestorsOf(props.items, props.taskUuid) ?? [];
+});
+
+const currentParent = computed<UUID | null>(() => currentAncestors.value.at(-1) ?? null);
+
 const filteredItems = computed<TaskTreeItem[]>(() => {
     if (!props.taskUuid) return props.items;
     
@@ -134,13 +163,44 @@ function confirmMove(): void {
     }
 }
 
-// Watch for dialog open to reset state
-watch(() => props.modelValue, (isOpen) => {
-    if (isOpen) {
-        selectedParent.value = null;
-        // Open all root nodes by default for better visibility
-        openNodes.value = props.items.map(item => item.uuid);
+// Scroll the tree so the selected row sits in its middle.
+//
+// Measured with offsetTop rather than getBoundingClientRect: this runs while the dialog is still
+// scaling in, and the transform skews bounding boxes but not layout offsets.
+function revealSelected(): void {
+    const container = treeContainer.value;
+    if (!container) {
+        return;
     }
+    const row = container.querySelector<HTMLElement>('.v-list-item--active');
+    if (!row) {
+        // A root task's parent is the card above the tree, so start the tree from its top.
+        container.scrollTop = 0;
+        return;
+    }
+    let top = 0;
+    let el: HTMLElement | null = row;
+    while (el !== null && el !== container) {
+        top += el.offsetTop;
+        el = el.offsetParent as HTMLElement | null;
+    }
+    container.scrollTop = top - (container.clientHeight - row.offsetHeight) / 2;
+}
+
+// Start from where the task is now, so its current parent is what the dialog shows first.
+watch(() => props.modelValue, async (isOpen) => {
+    if (!isOpen) {
+        return;
+    }
+    selectedParent.value = currentParent.value;
+    // Every root is open for an overview; the current parent's ancestors are open too, or its row
+    // would not be drawn at all.
+    openNodes.value = [...new Set([
+        ...props.items.map((item) => item.uuid),
+        ...currentAncestors.value.slice(0, -1),
+    ])];
+    await nextTick();
+    revealSelected();
 });
 </script>
 
