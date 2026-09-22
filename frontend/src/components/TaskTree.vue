@@ -29,8 +29,8 @@
         <template v-slot:append="{ item }">
             <v-btn
                 v-if="showAddChild"
-                variant="flat"
-                size="x-small"
+                icon
+                variant="text"
                 class="add-child-btn"
                 v-bind:title="item.metadata?.tag_group ? 'Add task' : 'Add child task'"
                 v-on:click.stop="$emit('add-child-task', item.uuid)"
