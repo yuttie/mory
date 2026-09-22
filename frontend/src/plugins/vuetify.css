@@ -13,10 +13,17 @@
     .v-list-item {
         padding: 0 6px;
     }
-    /* A tree starts its first level from the 16px padding Vuetify gives an item, so point it at
-       the padding above instead: otherwise that one level is indented 10px further than the rest. */
+    /* A tree indents each level by the width of an expand button and gives a leaf a spacer that
+       wide, both measured for Vuetify's 28px button, and starts the first level from its 16px item
+       padding. The buttons here are 24px, the `VBtn` default under `VListItem`, and the padding is
+       the 6px above: without these, a leaf's icon sits 4px right of a branch's, and the first
+       level is indented 10px further than the rest. */
     .v-treeview {
         --indent-padding: 6px;
+        --v-list-group-prepend: 24px;
+    }
+    .v-treeview:not(.v-treeview--fluid) .v-treeview-item__level {
+        width: 24px;
     }
     /* A badge is round until its content makes it a stadium. Vuetify sizes its height in rem but
        its minimum width and padding in px, values that only agree at the 16px root they were

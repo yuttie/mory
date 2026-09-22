@@ -45,6 +45,9 @@ export default createVuetify({
       minHeight: 32,
       rounded: 4,
       prependGap: 12,
+      VBtn: {
+        size: 24,
+      },
     },
   },
   icons: {
