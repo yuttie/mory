@@ -269,8 +269,8 @@
                                 <template v-if="Object.hasOwn(rendered.metadata, 'validationErrors')">
                                     <template v-if="rendered.metadata.validationErrors !== null">
                                         <ul>
-                                            <li v-for="error of rendered.metadata.validationErrors" v-bind:key="error.dataPath + error.schemaPath">
-                                                <span class="font-weight-bold">{{error.dataPath}}: <span class="text-error">error:</span> {{error.message}}</span> (schema path: {{error.schemaPath}})
+                                            <li v-for="error of rendered.metadata.validationErrors" v-bind:key="error.instancePath + error.schemaPath">
+                                                <span class="font-weight-bold">{{error.instancePath}}: <span class="text-error">error:</span> {{error.message}}</span> (schema path: {{error.schemaPath}})
                                             </li>
                                         </ul>
                                     </template>
