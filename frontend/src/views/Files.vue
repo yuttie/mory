@@ -76,9 +76,9 @@
                     </v-toolbar>
                 </template>
                 <template v-slot:item.path="{ item }">
-                    <div class="path truncate" style="max-width: 20em;" v-bind:title="item.title ?? item.path">
+                    <div class="path" v-bind:title="item.title ?? item.path">
                         <v-icon class="mr-1" v-bind:color="item.iconColor">{{ item.icon }}</v-icon>
-                        <router-link v-bind:to="routeForMime(item.path, item.mimeType)">{{ item.title ?? item.path }}</router-link>
+                        <router-link v-bind:to="routeForMime(item.path, item.mimeType)" class="truncate">{{ item.title ?? item.path }}</router-link>
                     </div>
                 </template>
                 <template v-slot:item.time="{ item }">
@@ -526,7 +526,16 @@ watch(queryText, (q: string | null) => {
     user-select: text;
 }
 
+// The title's track asks for the whole title but can give all of it up, so the column widens as
+// far as the table has room and the title is cut only at the column's own edge, never at a fixed
+// width with room to spare. The floor is for a table wider than the screen, as the unwrapped tags
+// often make it: every column then shrinks to its minimum, which here would be the icon alone.
+// The icon's track is not `auto`, which would take the spare width and push the title right.
 .path {
+    display: grid;
+    grid-template-columns: max-content minmax(0, max-content);
+    align-items: center;
+    min-width: 20em;
     white-space: nowrap;
 
     a {
