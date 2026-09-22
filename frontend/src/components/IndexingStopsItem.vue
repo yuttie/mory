@@ -11,7 +11,7 @@
                 base-color="error"
             >
                 <template #prepend>
-                    <v-icon size="small">
+                    <v-icon>
                         {{ mdiAlertCircleOutline }}
                     </v-icon>
                 </template>
