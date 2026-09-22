@@ -26,6 +26,8 @@
         <!-- Navigation drawer from `md` up, where the screen has room to give it a column of
              its own. Below that it would take a quarter of the width from the view, so the one
              below stands in and slides over the view instead. -->
+        <!-- The rail holds one row between the insets: 8 + 32 + 8, the metrics `vuetify.css`
+             names. A prop cannot read a custom property, so the sum is written out. -->
         <v-navigation-drawer
             v-if="$vuetify.display.mdAndUp"
             v-bind:rail="miniMainSidebar"
@@ -1031,14 +1033,17 @@ watch(() => route.name, () => {
     }
 }
 
-// A rail 48px wide leaves one 32px item between the 8px insets, so the items in it are as wide as
-// they are tall. The drawer's thin border eats into that width by an amount that depends on the
-// screen's pixel ratio, so the inset that gives way to it is the far one: the near one stays 8px
-// and the icons sit at the same place whether the drawer is a rail or open. Wider than a rail,
-// the drawer keeps the 8px inset of every other list.
+// A rail is one row wide between the insets, so the items in it are as wide as they are tall. The
+// drawer's thin border eats into that width by an amount that depends on the screen's pixel ratio,
+// so the inset that gives way to it is the far one: the near one stays put and the icons sit at
+// the same place whether the drawer is a rail or open. Wider than a rail, the drawer keeps the
+// inset of every other list.
 .rail-drawer .v-list {
-    padding-inline-start: 8px;
-    padding-inline-end: min(8px, calc(100% - 40px));
+    padding-inline-start: var(--mory-list-inset);
+    padding-inline-end: min(
+        var(--mory-list-inset),
+        calc(100% - (var(--mory-list-inset) + var(--mory-row-height)))
+    );
 }
 
 // The line height `nav` gave titles, so a title and a subtitle fit the 32px every other item is.

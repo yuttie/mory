@@ -1,41 +1,61 @@
 /* Vuetify orders this layer after its components and before its utilities, so a rule here beats
    the component styles whatever their specificity, and `px-0` can still take it back from one list. */
 @layer vuetify-overrides {
+    /* The metrics the rules below share, named so that a change lands in one place and so that a
+       rule reads as the decision it carries out rather than a number. `App.vue` draws the rail
+       from them too.
+
+       Vuetify's matching defaults are component props rather than CSS, so the same values appear
+       once more by hand in `vuetify.ts`: a row's height and rounding, and the size of the buttons
+       inside one. Change a value here, change it there.
+
+       Anything unlayered redeclaring these retunes the app, `.mory/custom.css` included. */
+    :root {
+        /* The inset every list gets, as `nav` gave it. */
+        --mory-list-inset: 8px;
+        /* A row's own padding within that inset, and where a tree's first level starts. */
+        --mory-row-inset: 6px;
+        /* A row, and the buttons that have to fit inside one. */
+        --mory-row-height: 32px;
+        --mory-row-button-size: 24px;
+        /* .v-btn's own radius, which a list item and an icon button both take. */
+        --mory-corner-radius: 4px;
+    }
     html {
         font-size: 14px;
     }
+    /* Vuetify fixes a field's text at 16px, which stands out from the text around it. */
     .v-field {
-        font-size: 14px;
+        font-size: 1rem;
     }
     .v-list {
-        padding-inline: 8px;
+        padding-inline: var(--mory-list-inset);
     }
     .v-list-item {
-        padding: 0 6px;
+        padding: 0 var(--mory-row-inset);
     }
     /* A tree indents each level by the width of an expand button and gives a leaf a spacer that
-       wide, both measured for Vuetify's 28px button, and starts the first level from its 16px item
-       padding. The buttons here are 24px, the `VBtn` default under `VListItem`, and the padding is
-       the 6px above: without these, a leaf's icon sits 4px right of a branch's, and the first
-       level is indented 10px further than the rest. */
+       wide, both measured for Vuetify's own 28px button, and starts the first level from the 16px
+       padding it gives an item. Point all three at the metrics above, or a leaf's icon sits 4px
+       right of a branch's and the first level is indented 10px further than the rest. */
     .v-treeview {
-        --indent-padding: 6px;
-        --v-list-group-prepend: 24px;
+        --indent-padding: var(--mory-row-inset);
+        --v-list-group-prepend: var(--mory-row-button-size);
     }
     .v-treeview:not(.v-treeview--fluid) .v-treeview-item__level {
-        width: 24px;
+        width: var(--mory-row-button-size);
     }
     /* Vuetify has no way to drop the icon button's 50%, so repeat .v-btn's radius instead,
        leaving out the grouped buttons Vuetify squares off. */
     .v-btn--icon:not(.v-btn-group .v-btn) {
-        border-radius: 4px;
+        border-radius: var(--mory-corner-radius);
     }
     /* A badge is round until its content makes it a stadium. Vuetify sizes its height in rem but
        its minimum width and padding in px, values that only agree at the 16px root they were
        written for: under the 14px root above, a short badge came out 20px wide and 17.5px tall.
-       Give the width floor the same 1.25rem as the height, and the padding the same 6px in rem, so
-       a short badge is round and a longer one still stretches into a stadium. A dot badge has its
-       own size and no content, so it keeps Vuetify's. */
+       These two are Vuetify's own numbers in the unit its height is written in, rather than
+       anything to tune here: the height's 1.25rem and the padding's 6px. A dot badge has its own
+       size and no content, so it keeps Vuetify's. */
     .v-badge:not(.v-badge--dot) .v-badge__badge {
         min-width: 1.25rem;
         padding-inline: 0.375rem;

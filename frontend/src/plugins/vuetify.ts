@@ -41,6 +41,8 @@ export default createVuetify({
         size: "16",
       },
     },
+    // These four are the metrics `vuetify.css` names as custom properties, which a prop cannot
+    // read: keep them in step with the `:root` block there.
     VListItem: {
       minHeight: 32,
       rounded: 4,
