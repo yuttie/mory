@@ -1,6 +1,9 @@
 /* Vuetify orders this layer after its components and before its utilities, so a rule here beats
    the component styles whatever their specificity, and `px-0` can still take it back from one list. */
 @layer vuetify-overrides {
+    html {
+        font-size: 14px;
+    }
     /* The inset `nav` gives a list, without the rounded items, gaps and smaller type that come with it. */
     .v-list {
         padding-inline: 8px;
