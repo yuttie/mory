@@ -8,4 +8,14 @@
     .v-list {
         padding-inline: 8px;
     }
+    /* A badge is round until its content makes it a stadium. Vuetify sizes its height in rem but
+       its minimum width and padding in px, values that only agree at the 16px root they were
+       written for: under the 14px root above, a short badge came out 20px wide and 17.5px tall.
+       Give the width floor the same 1.25rem as the height, and the padding the same 6px in rem, so
+       a short badge is round and a longer one still stretches into a stadium. A dot badge has its
+       own size and no content, so it keeps Vuetify's. */
+    .v-badge:not(.v-badge--dot) .v-badge__badge {
+        min-width: 1.25rem;
+        padding-inline: 0.375rem;
+    }
 }
