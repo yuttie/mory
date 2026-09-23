@@ -27,16 +27,14 @@
             </span>
         </template>
         <template v-slot:append="{ item }">
-            <v-btn
+            <v-icon-btn
+                v-bind:icon="mdiPlus"
                 v-if="showAddChild"
-                icon
                 variant="text"
                 class="add-child-btn"
                 v-bind:title="item.metadata?.tag_group ? 'Add task' : 'Add child task'"
                 v-on:click.stop="$emit('add-child-task', item.uuid)"
-            >
-                <v-icon>{{ mdiPlus }}</v-icon>
-            </v-btn>
+            ></v-icon-btn>
         </template>
     </EntryTree>
 </template>

@@ -63,9 +63,8 @@
                 location="bottom end"
             >
                 <template v-slot:activator="{ props }">
-                    <v-btn
+                    <v-icon-btn
                         v-bind="props"
-                        rounded="lg"
                         class="mr-2"
                         title="Choose which calendars and categories are shown"
                     >
@@ -76,7 +75,7 @@
                         >
                             <v-icon>{{ mdiCalendarMultiple }}</v-icon>
                         </v-badge>
-                    </v-btn>
+                    </v-icon-btn>
                 </template>
                 <v-card min-width="16em">
                     <v-list class="py-0">

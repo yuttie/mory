@@ -130,15 +130,13 @@
                                 <v-icon>{{ mdiTrafficLightOutline }}</v-icon>
                             </template>
                         </v-select>
-                        <v-btn
-                            icon
+                        <v-icon-btn
+                            v-bind:icon="statusOptionRestricted ? mdiLock : mdiLockOpenVariant"
                             variant="text"
                             v-on:click="statusOptionRestricted = !statusOptionRestricted"
                             title="Show all statuses"
                             color="primary"
-                        >
-                            <v-icon>{{ statusOptionRestricted ? mdiLock : mdiLockOpenVariant }}</v-icon>
-                        </v-btn>
+                        ></v-icon-btn>
                     </div>
                     <!-- Status-specific fields -->
                     <div v-if="form.status.kind === 'waiting'" class="ml-10">
@@ -420,16 +418,14 @@
                                     >
                                         <div class="d-flex align-center">
                                             <span class="text-caption flex-grow-1">{{ suggestion }}</span>
-                                            <v-btn
-                                                icon
+                                            <v-icon-btn
+                                                v-bind:icon="mdiPlus"
                                                 variant="text"
                                                 class="ml-1"
                                                 v-on:click="addNoteContent(suggestion)"
                                                 title="Add to note"
                                                 color="primary"
-                                            >
-                                                <v-icon>{{ mdiPlus }}</v-icon>
-                                            </v-btn>
+                                            ></v-icon-btn>
                                         </div>
                                     </div>
                                 </div>

@@ -15,20 +15,16 @@
                     v-bind:subtitle="action.id"
                 >
                     <template v-slot:append>
-                        <v-btn
-                            icon
+                        <v-icon-btn
+                            v-bind:icon="mdiPencil"
                             variant="text"
                             v-on:click="openEditDialog(action)"
-                        >
-                            <v-icon>{{ mdiPencil }}</v-icon>
-                        </v-btn>
-                        <v-btn
-                            icon
+                        ></v-icon-btn>
+                        <v-icon-btn
+                            v-bind:icon="mdiDelete"
                             variant="text"
                             v-on:click="openDeleteDialog(action)"
-                        >
-                            <v-icon>{{ mdiDelete }}</v-icon>
-                        </v-btn>
+                        ></v-icon-btn>
                     </template>
                 </v-list-item>
             </v-list>

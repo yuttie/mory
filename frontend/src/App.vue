@@ -495,15 +495,13 @@
                 class="app-bar-content"
             />
             <!-- The drawer is hidden below `md`, so point at the notice it holds. -->
-            <v-btn
+            <v-icon-btn
+                v-bind:icon="mdiAlertCircleOutline"
                 v-if="$vuetify.display.smAndDown && indexingStops.length > 0"
-                icon
                 color="error"
                 title="Indexing stopped"
                 v-on:click="mobileDrawer = true"
-            >
-                <v-icon>{{ mdiAlertCircleOutline }}</v-icon>
-            </v-btn>
+            ></v-icon-btn>
         </v-app-bar>
 
         <input type="file" multiple class="d-none" ref="fileInputEl">
