@@ -27,13 +27,11 @@ export default createVuetify({
     VAppBarNavIcon: {
       size: "32",
     },
-    // Every size is a rule in `vuetify.css`, which can name the context it holds for. What is left
-    // here shapes a list item and has no CSS to write, so it repeats the metrics that file names:
-    // keep these in step with its `:root` block.
     VListItem: {
-      minHeight: 32,
-      rounded: 4,
-      prependGap: 12,
+      // Without this, Vuetify stamps a `rounded-0` on every row, and a utility class outranks the
+      // layer `vuetify.css` writes in. `true` only says "not squared off"; the radius itself is
+      // the rule there.
+      rounded: true,
       // A v-icon-btn in a row is sized by the rule for an icon button in a slot, but its icon
       // it passes inline, which no rule reaches: that one is said here, as a button's icon size.
       VIconBtn: {

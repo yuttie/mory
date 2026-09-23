@@ -30,9 +30,11 @@
         --mory-list-inset: 8px;
         /* A row's own padding within that inset, and where a tree's first level starts. */
         --mory-row-inset: 6px;
-        /* A row, and a button, which is one row tall. */
+        /* A row, and the gap between what it starts with and what it says. */
         --mory-row-height: 32px;
-        --mory-button-height: 32px;
+        --mory-row-gap: 12px;
+        /* A button, which is one row tall. */
+        --mory-button-height: var(--mory-row-height);
         /* A button that is only an icon inside a row: it fits the row rather than setting it. */
         --mory-row-button-size: 24px;
         /* An icon, and the smaller one a button holds beside or instead of a label. */
@@ -103,6 +105,9 @@
     }
     .v-list-item {
         padding: 0 var(--mory-row-inset);
+        min-height: var(--mory-row-height);
+        border-radius: var(--mory-corner-radius);
+        --v-list-prepend-gap: var(--mory-row-gap);
     }
     /* A tree indents each level by the width of an expand button and gives a leaf a spacer that
        wide, both measured for Vuetify's own 28px button, and starts the first level from the 16px
