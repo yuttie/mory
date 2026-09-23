@@ -33,7 +33,6 @@
                         <v-card>
                             <v-card-text class="all-tags d-flex flex-row align-center flex-wrap">
                                 <v-chip
-                                    size="small"
                                     class="ma-1"
                                     v-for="tag of tags"
                                     v-bind:key="tag"
@@ -93,7 +92,6 @@
                 <template v-slot:item.tags="{ item }">
                     <div class="tags">
                         <v-chip
-                            size="small"
                             class="ma-1"
                             v-for="tag of item.tags"
                             v-bind:key="tag"

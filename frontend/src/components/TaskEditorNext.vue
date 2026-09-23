@@ -105,7 +105,6 @@
                             <v-chip
                                 v-bind="chipProps"
                                 label
-                                size="small"
                                 closable
                                 v-on:click:close="form.tags = form.tags.filter((t) => t !== item.value)"
                             >

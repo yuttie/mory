@@ -180,7 +180,6 @@
                     <v-chip
                         v-if="selectedEvent.source === 'ical'"
                         class="mr-2 flex-shrink-0"
-                        size="small"
                         variant="flat"
                     >
                         iCal
@@ -188,7 +187,6 @@
                     <v-chip
                         v-else-if="selectedEvent.source === 'task'"
                         class="mr-2 flex-shrink-0"
-                        size="small"
                         variant="flat"
                     >
                         {{ selectedEvent.taskDate === 'due_by' ? 'Due' : 'Deadline' }}
@@ -196,7 +194,6 @@
                     <v-chip
                         v-if="selectedEvent.categoryId"
                         class="mr-2 flex-shrink-0"
-                        size="small"
                         variant="flat"
                     >
                         {{ selectedEvent.categoryId }}
