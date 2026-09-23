@@ -38,7 +38,6 @@
                             <v-chip
                                 v-bind="chipProps"
                                 closable
-                                size="small"
                                 v-on:click:close="removeTag(item.value)"
                             >
                                 <span>{{ item.value }}</span>

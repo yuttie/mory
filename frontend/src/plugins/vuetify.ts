@@ -1,4 +1,6 @@
 import 'vuetify/styles';
+// After Vuetify's styles, which declare the layer order its overrides layer relies on.
+import './vuetify.css';
 import { createVuetify } from 'vuetify';
 import { aliases, mdi } from 'vuetify/iconsets/mdi-svg';
 
@@ -7,25 +9,21 @@ export default createVuetify({
     global: {
       density: "compact",
     },
+    // A v-icon-btn puts even a named icon size through a table of its own and passes the number
+    // it lands on as an inline size, which no rule can reach. So this one repeats what
+    // `vuetify.css` gives every other icon -- keep it in step with `--mory-icon-size`.
     VIconBtn: {
       iconSize: "20",
-      rounded: "lg",
-      size: "32",
     },
-    // The calendar draws its day numbers as VIconBtn too, and the defaults above are for
-    // toolbars: keep those numbers the 40 px circles they were.
-    VCalendar: {
+    VListItem: {
+      // Without this, Vuetify stamps a `rounded-0` on every row, and a utility class outranks the
+      // layer `vuetify.css` writes in. `true` only says "not squared off"; the radius itself is
+      // the rule there.
+      rounded: true,
+      // A v-icon-btn in a row is sized by the rule for an icon button in a slot, but its icon
+      // it passes inline, which no rule reaches: that one is said here, as a button's icon size.
       VIconBtn: {
-        rounded: undefined,
-        size: "default",
-      },
-    },
-    // A v-btn underneath, which has no iconSize: its icon takes the size as a nested default.
-    VAppBarNavIcon: {
-      rounded: "lg",
-      size: "32",
-      VIcon: {
-        size: "20",
+        iconSize: "16",
       },
     },
   },

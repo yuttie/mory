@@ -19,7 +19,6 @@
                         v-bind:color="resolved"
                         class="swatch"
                         icon
-                        size="x-small"
                         title="Pick a colour"
                         variant="flat"
                     ></v-btn>

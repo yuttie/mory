@@ -26,13 +26,17 @@
         <!-- Navigation drawer from `md` up, where the screen has room to give it a column of
              its own. Below that it would take a quarter of the width from the view, so the one
              below stands in and slides over the view instead. -->
+        <!-- The rail holds one row between the insets: 8 + 32 + 8, the metrics `vuetify.css`
+             names. A prop cannot read a custom property, so the sum is written out. -->
         <v-navigation-drawer
             v-if="$vuetify.display.mdAndUp"
             v-bind:rail="miniMainSidebar"
+            rail-width="48"
             permanent
+            class="rail-drawer"
         >
             <div class="d-flex flex-column h-100">
-                <v-list nav class="flex-grow-0 flex-shrink-0">
+                <v-list class="flex-grow-0 flex-shrink-0">
                     <!-- The rail is too narrow for a control beside the logo, so the logo becomes
                          one: hovering it swaps the nav icon in, and the open drawer carries the
                          button that collapses it again at its right. -->
@@ -44,13 +48,10 @@
                         v-on:click="miniMainSidebar = false"
                     >
                         <template v-slot:prepend>
-                            <div class="logo-swap mr-2">
+                            <div class="logo-swap">
                                 <v-img
                                     src="/img/logo.svg"
                                     aspect-ratio="1"
-                                    max-width="24"
-                                    max-height="24"
-                                    width="24"
                                     class="logo-swap__logo"
                                 ></v-img>
                                 <v-icon class="logo-swap__icon">{{ mdiForwardburger }}</v-icon>
@@ -73,14 +74,12 @@
                 <v-divider></v-divider>
 
                 <v-list
-                    nav
                     class="flex-grow-0 flex-shrink-0"
                 >
                     <v-list-item
                         variant="text"
                         title="Enable notification"
                         base-color="error"
-                        style="min-width: 36px"
                         v-if="needRequestForNotificationPermission"
                         v-bind:prepend-icon="mdiBell"
                         v-on:click="requestNotificationPermission"
@@ -94,7 +93,6 @@
                             <v-list-item
                                 variant="text"
                                 title="Add note"
-                                style="min-width: 36px"
                                 v-bind="props"
                                 v-bind:prepend-icon="mdiPlus"
                             ></v-list-item>
@@ -124,8 +122,6 @@
                                         <template v-slot:activator="{ props }">
                                             <v-icon-btn
                                                 v-bind:icon="mdiPencil"
-                                                size="small"
-                                                icon-size="small"
                                                 variant="text"
                                                 v-bind="props"
                                                 v-on:click.prevent="$router.push({ name: 'Note', params: { path: path.split('/') } })"
@@ -146,7 +142,6 @@
                             <v-list-item
                                 variant="text"
                                 title="Upload file"
-                                style="min-width: 36px"
                                 v-bind="props"
                             >
                                 <template v-slot:prepend>
@@ -155,7 +150,12 @@
                                         v-bind:model-value="uploadList.length > 0"
                                     >
                                         <template v-slot:badge>
-                                            <v-icon>{{ uploadListBadgeIcon }}</v-icon>
+                                            <!-- The global 20px would be an inline size, which beats
+                                                 the badge's own icon size; a named size is a class,
+                                                 which the badge's rule outranks. -->
+                                            <v-icon>
+                                                {{ uploadListBadgeIcon }}
+                                            </v-icon>
                                         </template>
                                         <v-icon>{{ mdiCloudUploadOutline }}</v-icon>
                                     </v-badge>
@@ -201,7 +201,6 @@
                 <v-divider></v-divider>
 
                 <v-list
-                    nav
                     class="flex-grow-0 flex-shrink-0"
                 >
                     <v-list-item color="primary" to="/"           v-bind:prepend-icon="mdiHomeOutline"                   title="Home"    ></v-list-item>
@@ -216,7 +215,6 @@
                 <v-fade-transition>
                     <v-list
                         v-show="!miniMainSidebar"
-                        nav
                         class="flex-shrink-1 overflow-y-auto"
                     >
                         <v-list-subheader>Notes</v-list-subheader>
@@ -228,16 +226,20 @@
 
                 <v-divider></v-divider>
 
-                <v-list nav class="flex-shrink-0">
+                <v-list class="flex-shrink-0">
                     <v-menu location="top">
                         <template v-slot:activator="{ props }">
                             <v-list-item
                                 v-bind="props"
                                 v-bind:title="username ?? undefined"
                                 v-bind:subtitle="email ?? undefined"
+                                class="account-item"
                             >
                                 <template v-slot:prepend>
-                                    <Gravatar v-bind:email="email" style="margin-right: 8px"></Gravatar>
+                                    <Gravatar
+                                        v-bind:email="email"
+                                        v-bind:size="20"
+                                    ></Gravatar>
                                 </template>
                             </v-list-item>
                         </template>
@@ -263,7 +265,6 @@
         >
             <div class="d-flex flex-column h-100">
                 <v-list
-                    nav
                     class="flex-grow-0 flex-shrink-0"
                 >
                     <v-list-item title="mory">
@@ -271,10 +272,7 @@
                             <v-img
                                 src="/img/logo.svg"
                                 aspect-ratio="1"
-                                max-width="24"
-                                max-height="24"
-                                width="24"
-                                class="mr-2"
+                                class="drawer-logo"
                             ></v-img>
                         </template>
                         <template v-slot:append>
@@ -291,14 +289,12 @@
                 <v-divider></v-divider>
 
                 <v-list
-                    nav
                     class="flex-grow-0 flex-shrink-0"
                 >
                     <v-list-item
                         variant="text"
                         title="Enable notification"
                         base-color="error"
-                        style="min-width: 36px"
                         v-if="needRequestForNotificationPermission"
                         v-bind:prepend-icon="mdiBell"
                         v-on:click="requestNotificationPermission"
@@ -313,7 +309,6 @@
                             <v-list-item
                                 variant="text"
                                 title="Add note"
-                                style="min-width: 36px"
                                 v-bind="props"
                                 v-bind:prepend-icon="mdiPlus"
                             ></v-list-item>
@@ -343,8 +338,6 @@
                                         <template v-slot:activator="{ props }">
                                             <v-icon-btn
                                                 v-bind:icon="mdiPencil"
-                                                size="small"
-                                                icon-size="small"
                                                 variant="text"
                                                 v-bind="props"
                                                 v-on:click.prevent="$router.push({ name: 'Note', params: { path: path.split('/') } })"
@@ -365,7 +358,6 @@
                             <v-list-item
                                 variant="text"
                                 title="Upload file"
-                                style="min-width: 36px"
                                 v-bind="props"
                             >
                                 <template v-slot:prepend>
@@ -374,7 +366,12 @@
                                         v-bind:model-value="uploadList.length > 0"
                                     >
                                         <template v-slot:badge>
-                                            <v-icon>{{ uploadListBadgeIcon }}</v-icon>
+                                            <!-- The global 20px would be an inline size, which beats
+                                                 the badge's own icon size; a named size is a class,
+                                                 which the badge's rule outranks. -->
+                                            <v-icon>
+                                                {{ uploadListBadgeIcon }}
+                                            </v-icon>
                                         </template>
                                         <v-icon>{{ mdiCloudUploadOutline }}</v-icon>
                                     </v-badge>
@@ -420,7 +417,6 @@
                 <v-divider></v-divider>
 
                 <v-list
-                    nav
                     class="flex-grow-0 flex-shrink-0"
                 >
                     <v-list-item color="primary" to="/"           v-bind:prepend-icon="mdiHomeOutline"                   title="Home"    ></v-list-item>
@@ -433,7 +429,6 @@
                 <v-divider></v-divider>
 
                 <v-list
-                    nav
                     class="flex-shrink-1 overflow-y-auto"
                 >
                     <NoteTree />
@@ -444,7 +439,6 @@
                 <v-divider></v-divider>
 
                 <v-list
-                    nav
                     class="flex-shrink-0"
                 >
                     <v-menu location="top">
@@ -453,9 +447,13 @@
                                 v-bind="props"
                                 v-bind:title="username ?? undefined"
                                 v-bind:subtitle="email ?? undefined"
+                                class="account-item"
                             >
                                 <template v-slot:prepend>
-                                    <Gravatar v-bind:email="email" style="margin-right: 8px"></Gravatar>
+                                    <Gravatar
+                                        v-bind:email="email"
+                                        v-bind:size="20"
+                                    ></Gravatar>
                                 </template>
                             </v-list-item>
                         </template>
@@ -497,15 +495,13 @@
                 class="app-bar-content"
             />
             <!-- The drawer is hidden below `md`, so point at the notice it holds. -->
-            <v-btn
+            <v-icon-btn
+                v-bind:icon="mdiAlertCircleOutline"
                 v-if="$vuetify.display.smAndDown && indexingStops.length > 0"
-                icon
                 color="error"
                 title="Indexing stopped"
                 v-on:click="mobileDrawer = true"
-            >
-                <v-icon>{{ mdiAlertCircleOutline }}</v-icon>
-            </v-btn>
+            ></v-icon-btn>
         </v-app-bar>
 
         <input type="file" multiple class="d-none" ref="fileInputEl">
@@ -515,7 +511,7 @@
                 <v-alert type="error" v-show="appStore.loginError">
                     {{ appStore.loginError }}
                 </v-alert>
-                <v-icon size="x-large" class="mx-auto">{{ mdiLock }}</v-icon>
+                <v-icon class="mx-auto">{{ mdiLock }}</v-icon>
                 <h2>Login</h2>
                 <form>
                     <v-text-field
@@ -1026,11 +1022,38 @@ watch(() => route.name, () => {
     }
 }
 
-// The logo and the nav icon share one box, so the swap changes nothing around them.
+// A rail is one row wide between the insets, so the items in it are as wide as they are tall. The
+// drawer's thin border eats into that width by an amount that depends on the screen's pixel ratio,
+// so the inset that gives way to it is the far one: the near one stays put and the icons sit at
+// the same place whether the drawer is a rail or open. Wider than a rail, the drawer keeps the
+// inset of every other list.
+.rail-drawer .v-list {
+    padding-inline-start: var(--mory-list-inset);
+    padding-inline-end: min(
+        var(--mory-list-inset),
+        calc(100% - (var(--mory-list-inset) + var(--mory-row-height)))
+    );
+}
+
+// The line height `nav` gave titles, so a title and a subtitle fit the 32px every other item is.
+.account-item :deep(.v-list-item-title) {
+    line-height: 1.25rem;
+}
+
+// The logo and the nav icon share one box, so the swap changes nothing around them. It is the
+// size of every other icon, to sit centred in the rail like them.
+.logo-swap,
+.drawer-logo {
+    width: var(--mory-icon-size);
+    height: var(--mory-icon-size);
+}
+
 .logo-swap {
     position: relative;
-    width: 24px;
-    height: 24px;
+
+    &__logo {
+        width: 100%;
+    }
 
     &__logo,
     &__icon {
@@ -1075,6 +1098,12 @@ watch(() => route.name, () => {
 }
 
 .login-overlay {
+    // The lock is the screen's illustration rather than an icon in a row, so it is drawn at the
+    // size this screen wants it.
+    .v-icon {
+        font-size: 2rem;
+    }
+
     position: fixed;
     top: 0;
     left: 0;

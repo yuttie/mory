@@ -15,7 +15,7 @@
                 class="ms-2 me-1 flex-grow-1"
             >
                 <template v-slot:prepend-inner>
-                    <v-icon size="small">{{ mdiMagnify }}</v-icon>
+                    <v-icon>{{ mdiMagnify }}</v-icon>
                 </template>
                 <template v-slot:append>
                     <v-menu
@@ -33,7 +33,6 @@
                         <v-card>
                             <v-card-text class="all-tags d-flex flex-row align-center flex-wrap">
                                 <v-chip
-                                    size="small"
                                     class="ma-1"
                                     v-for="tag of tags"
                                     v-bind:key="tag"
@@ -93,7 +92,6 @@
                 <template v-slot:item.tags="{ item }">
                     <div class="tags">
                         <v-chip
-                            size="small"
                             class="ma-1"
                             v-for="tag of item.tags"
                             v-bind:key="tag"

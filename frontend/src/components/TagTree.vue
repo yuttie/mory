@@ -10,10 +10,10 @@
         open-on-click
     >
         <template v-slot:prepend="{ item, isOpen }">
-            <v-icon v-if="item.children" size="small">
+            <v-icon v-if="item.children">
                 {{ isOpen ? mdiFolderOpen : mdiFolder }}
             </v-icon>
-            <v-icon v-else size="small">
+            <v-icon v-else>
                 {{ mdiFileDocumentOutline }}
             </v-icon>
         </template>

@@ -34,22 +34,16 @@
                             hide-details
                             v-on:update:model-value="setEnabled(index, $event)"
                         ></v-switch>
-                        <v-btn
-                            icon
-                            size="small"
+                        <v-icon-btn
+                            v-bind:icon="mdiPencil"
                             variant="text"
                             v-on:click="openEditDialog(index)"
-                        >
-                            <v-icon>{{ mdiPencil }}</v-icon>
-                        </v-btn>
-                        <v-btn
-                            icon
-                            size="small"
+                        ></v-icon-btn>
+                        <v-icon-btn
+                            v-bind:icon="mdiDelete"
                             variant="text"
                             v-on:click="remove(index)"
-                        >
-                            <v-icon>{{ mdiDelete }}</v-icon>
-                        </v-btn>
+                        ></v-icon-btn>
                     </template>
                 </v-list-item>
             </v-list>
@@ -124,22 +118,16 @@
                         ></v-avatar>
                     </template>
                     <template v-slot:append>
-                        <v-btn
-                            icon
-                            size="small"
+                        <v-icon-btn
+                            v-bind:icon="mdiPencil"
                             variant="text"
                             v-on:click="openCategoryDialog(index)"
-                        >
-                            <v-icon>{{ mdiPencil }}</v-icon>
-                        </v-btn>
-                        <v-btn
-                            icon
-                            size="small"
+                        ></v-icon-btn>
+                        <v-icon-btn
+                            v-bind:icon="mdiDelete"
                             variant="text"
                             v-on:click="removeCategory(index)"
-                        >
-                            <v-icon>{{ mdiDelete }}</v-icon>
-                        </v-btn>
+                        ></v-icon-btn>
                     </template>
                 </v-list-item>
             </v-list>

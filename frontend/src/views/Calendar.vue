@@ -63,10 +63,8 @@
                 location="bottom end"
             >
                 <template v-slot:activator="{ props }">
-                    <v-btn
+                    <v-icon-btn
                         v-bind="props"
-                        rounded="lg"
-                        size="32"
                         class="mr-2"
                         title="Choose which calendars and categories are shown"
                     >
@@ -75,9 +73,9 @@
                             v-bind:content="hiddenCount"
                             color="grey"
                         >
-                            <v-icon size="20">{{ mdiCalendarMultiple }}</v-icon>
+                            <v-icon>{{ mdiCalendarMultiple }}</v-icon>
                         </v-badge>
-                    </v-btn>
+                    </v-icon-btn>
                 </template>
                 <v-card min-width="16em">
                     <v-list class="py-0">
@@ -182,7 +180,6 @@
                     <v-chip
                         v-if="selectedEvent.source === 'ical'"
                         class="mr-2 flex-shrink-0"
-                        size="small"
                         variant="flat"
                     >
                         iCal
@@ -190,7 +187,6 @@
                     <v-chip
                         v-else-if="selectedEvent.source === 'task'"
                         class="mr-2 flex-shrink-0"
-                        size="small"
                         variant="flat"
                     >
                         {{ selectedEvent.taskDate === 'due_by' ? 'Due' : 'Deadline' }}
@@ -198,7 +194,6 @@
                     <v-chip
                         v-if="selectedEvent.categoryId"
                         class="mr-2 flex-shrink-0"
-                        size="small"
                         variant="flat"
                     >
                         {{ selectedEvent.categoryId }}

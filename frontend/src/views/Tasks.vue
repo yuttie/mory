@@ -209,26 +209,18 @@
                             <div class="date-header d-flex flex-row">
                                 <span>{{ isToday(date) ? `Today (${date})` : isTomorrow(date) ? `Tomorrow (${date})` : date }}</span>
                                 <v-spacer></v-spacer>
-                                <v-btn
+                                <v-icon-btn
+                                    v-bind:icon="mdiSortBoolAscendingVariant"
                                     variant="text"
-                                    size="small"
                                     title="Sort"
-                                    style="min-width: unset;"
-                                    class="px-2"
                                     v-on:click="sortDailyTasks(date)"
-                                >
-                                    <v-icon size="small">{{ mdiSortBoolAscendingVariant }}</v-icon>
-                                </v-btn>
-                                <v-btn
+                                ></v-icon-btn>
+                                <v-icon-btn
+                                    v-bind:icon="mdiInboxArrowDown"
                                     variant="text"
-                                    size="small"
                                     title="Move to today"
-                                    style="min-width: unset;"
-                                    class="px-2"
                                     v-on:click="moveUndoneToToday(date)"
-                                >
-                                    <v-icon size="small">{{ mdiInboxArrowDown }}</v-icon>
-                                </v-btn>
+                                ></v-icon-btn>
                             </div>
                             <draggable
                                 group="tasks"

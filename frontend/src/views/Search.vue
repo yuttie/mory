@@ -54,7 +54,6 @@
                 v-if="errorText"
                 type="error"
                 variant="tonal"
-                density="compact"
                 closable
                 class="mb-2"
                 v-on:click:close="errorText = ''"
@@ -65,7 +64,6 @@
                 v-if="statusMessage"
                 v-bind:type="statusType"
                 variant="tonal"
-                density="compact"
                 class="mb-2"
             >
                 {{ statusMessage }}
@@ -75,7 +73,6 @@
                 v-bind:key="warning.code"
                 type="warning"
                 variant="tonal"
-                density="compact"
                 class="mb-2"
             >
                 {{ warning.message }}

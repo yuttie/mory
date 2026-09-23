@@ -14,7 +14,7 @@
             v-on:update:active="onActivate"
         >
             <template v-slot:prepend="{ item }">
-                <v-icon size="small">
+                <v-icon>
                     {{ item.children ? mdiFolder : mdiFileDocumentOutline }}
                 </v-icon>
             </template>
@@ -22,7 +22,6 @@
         <v-btn
             v-if="remaining > 0"
             variant="text"
-            size="small"
             class="show-older"
             block
             v-on:click="showOlder"

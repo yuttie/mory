@@ -39,7 +39,7 @@
                         class="mr-3"
                         v-on:click="onChangeParent"
                     >
-                        <v-icon size="small" class="mr-1">{{ mdiFileTreeOutline }}</v-icon>
+                        <v-icon class="mr-1">{{ mdiFileTreeOutline }}</v-icon>
                         <span v-if="$vuetify.display.mdAndUp">Change Parent</span>
                     </v-btn>
                     <v-btn
@@ -105,7 +105,6 @@
                             <v-chip
                                 v-bind="chipProps"
                                 label
-                                size="small"
                                 closable
                                 v-on:click:close="form.tags = form.tags.filter((t) => t !== item.value)"
                             >
@@ -130,16 +129,13 @@
                                 <v-icon>{{ mdiTrafficLightOutline }}</v-icon>
                             </template>
                         </v-select>
-                        <v-btn
-                            icon
+                        <v-icon-btn
+                            v-bind:icon="statusOptionRestricted ? mdiLock : mdiLockOpenVariant"
                             variant="text"
-                            size="small"
                             v-on:click="statusOptionRestricted = !statusOptionRestricted"
                             title="Show all statuses"
                             color="primary"
-                        >
-                            <v-icon size="small">{{ statusOptionRestricted ? mdiLock : mdiLockOpenVariant }}</v-icon>
-                        </v-btn>
+                        ></v-icon-btn>
                     </div>
                     <!-- Status-specific fields -->
                     <div v-if="form.status.kind === 'waiting'" class="ml-10">
@@ -247,7 +243,6 @@
                     <v-progress-linear
                         v-model="progress"
                         v-bind:rules="[range(0, 100, 'Progress must be 0..100')]"
-                        height="25"
                         striped
                     >
                         <template v-slot:default="{ value }">
@@ -337,14 +332,12 @@
                             v-model="notePanes"
                             mandatory
                             color="primary"
-                            density="compact"
                             variant="text"
                         >
                             <v-btn
                                 value="viewer"
                                 icon
                                 title="Viewer"
-                                size="small"
                             >
                                 <v-icon>{{ mdiFileDocument }}</v-icon>
                             </v-btn>
@@ -352,7 +345,6 @@
                                 value="both"
                                 icon
                                 title="Editor and viewer"
-                                size="small"
                             >
                                 <v-icon>{{ mdiFileDocumentEdit }}</v-icon>
                             </v-btn>
@@ -360,7 +352,6 @@
                                 value="editor"
                                 icon
                                 title="Editor"
-                                size="small"
                             >
                                 <v-icon>{{ mdiPencil }}</v-icon>
                             </v-btn>
@@ -378,7 +369,7 @@
                     <!-- Task Assessment -->
                     <v-card variant="outlined" class="pa-3">
                         <v-card-subtitle class="pa-0 pb-2">
-                            <v-icon size="small" class="mr-1">{{ mdiLightbulbOnOutline }}</v-icon>
+                            <v-icon class="mr-1">{{ mdiLightbulbOnOutline }}</v-icon>
                             Task Assessment
                             <v-progress-circular
                                 v-if="assessmentLoading"
@@ -394,7 +385,6 @@
                                 <v-rating
                                     v-bind:model-value="taskAssessment.quality_score / 2"
                                     readonly
-                                    size="16"
                                     length="5"
                                     half-increments
                                     color="amber"
@@ -425,17 +415,14 @@
                                     >
                                         <div class="d-flex align-center">
                                             <span class="text-caption flex-grow-1">{{ suggestion }}</span>
-                                            <v-btn
-                                                icon
+                                            <v-icon-btn
+                                                v-bind:icon="mdiPlus"
                                                 variant="text"
-                                                size="x-small"
                                                 class="ml-1"
                                                 v-on:click="addNoteContent(suggestion)"
                                                 title="Add to note"
                                                 color="primary"
-                                            >
-                                                <v-icon size="x-small">{{ mdiPlus }}</v-icon>
-                                            </v-btn>
+                                            ></v-icon-btn>
                                         </div>
                                     </div>
                                 </div>
@@ -952,9 +939,21 @@ defineExpose({
     flex-direction: row;
 }
 
+// The widths are of the content, with the pane's padding added outside them. Vuetify's reset has
+// every element inherit its box-sizing, though, so each field inside would take content-box too and
+// grow its padding outside its 40px minimum: a compact field came out 56px tall. Restore it on the
+// children, which is where the inheritance starts again.
+.props-pane,
+.assessment-pane {
+    box-sizing: content-box;
+
+    > * {
+        box-sizing: border-box;
+    }
+}
+
 .props-pane {
     max-width: 350px;
-    box-sizing: content-box;
     overflow-y: auto;
 }
 
@@ -1000,7 +999,6 @@ defineExpose({
 
 .assessment-pane {
     max-width: 300px;
-    box-sizing: content-box;
     overflow-y: auto;
 
     .v-card {
