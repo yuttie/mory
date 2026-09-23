@@ -84,6 +84,10 @@
     }
     /* Both kinds of icon button: a v-icon-btn, and a v-btn carrying nothing but an icon. What a
        v-icon-btn sizes inline -- its icon -- is said for this context in `vuetify.ts` instead. */
+    .v-icon-btn {
+        width: var(--mory-button-height);
+        height: var(--mory-button-height);
+    }
     :is(.v-list-item__prepend, .v-list-item__append) :is(.v-btn--icon, .v-icon-btn) {
         width: var(--mory-row-button-size);
         height: var(--mory-row-button-size);
@@ -95,8 +99,13 @@
         border-radius: var(--mory-corner-radius);
     }
     /* A calendar's day numbers are the exception: they read as dates on a page rather than
-       controls in a bar, and a circle is how a day is marked. The selector repeats the one above
-       because `:not()` lends that rule the weight of what it excludes. */
+       controls in a bar, so they keep the size the component gives them and the circle a day is
+       marked with. The selector repeats the one above because `:not()` lends that rule the weight
+       of what it excludes. */
+    .v-calendar .v-icon-btn {
+        width: var(--v-icon-btn-width);
+        height: var(--v-icon-btn-height);
+    }
     .v-calendar :is(.v-btn--icon, .v-icon-btn):not(.v-btn-group .v-btn) {
         border-radius: 50%;
     }

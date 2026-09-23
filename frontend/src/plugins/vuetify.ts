@@ -11,21 +11,9 @@ export default createVuetify({
     },
     // A v-icon-btn puts even a named icon size through a table of its own and passes the number
     // it lands on as an inline size, which no rule can reach. So this one repeats what
-    // `vuetify.css` gives every other icon -- keep it in step with `--mory-icon-size` -- and the
-    // button repeats the height it gives every button.
+    // `vuetify.css` gives every other icon -- keep it in step with `--mory-icon-size`.
     VIconBtn: {
       iconSize: "20",
-      size: "32",
-    },
-    // The calendar draws its day numbers as VIconBtn too, and the defaults above are for
-    // toolbars: keep those numbers the 40 px they were. Round is `vuetify.css`'s to say.
-    VCalendar: {
-      VIconBtn: {
-        size: "default",
-      },
-    },
-    VAppBarNavIcon: {
-      size: "32",
     },
     VListItem: {
       // Without this, Vuetify stamps a `rounded-0` on every row, and a utility class outranks the
