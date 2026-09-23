@@ -52,9 +52,6 @@
                                 <v-img
                                     src="/img/logo.svg"
                                     aspect-ratio="1"
-                                    max-width="20"
-                                    max-height="20"
-                                    width="20"
                                     class="logo-swap__logo"
                                 ></v-img>
                                 <v-icon class="logo-swap__icon">{{ mdiForwardburger }}</v-icon>
@@ -275,9 +272,7 @@
                             <v-img
                                 src="/img/logo.svg"
                                 aspect-ratio="1"
-                                max-width="20"
-                                max-height="20"
-                                width="20"
+                                class="drawer-logo"
                             ></v-img>
                         </template>
                         <template v-slot:append>
@@ -1049,10 +1044,18 @@ watch(() => route.name, () => {
 
 // The logo and the nav icon share one box, so the swap changes nothing around them. It is the
 // size of every other icon, to sit centred in the rail like them.
+.logo-swap,
+.drawer-logo {
+    width: var(--mory-icon-size);
+    height: var(--mory-icon-size);
+}
+
 .logo-swap {
     position: relative;
-    width: 20px;
-    height: 20px;
+
+    &__logo {
+        width: 100%;
+    }
 
     &__logo,
     &__icon {
