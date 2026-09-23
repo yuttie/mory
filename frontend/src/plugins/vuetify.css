@@ -9,8 +9,9 @@
      -- and is written here as a rule naming it.
    - The same control has the same dimensions wherever it appears: a row and a button are both a
      row tall, and an icon is one size.
-   - A button whose only content is an icon, in a list item's prepend or append, is smaller than a
-     button elsewhere: it has to fit a row rather than decide its height.
+   - A button whose only content is an icon is square, and is written as a v-icon-btn wherever the
+     component allows it. In a list item's prepend or append it is smaller than a button
+     elsewhere: it has to fit the row rather than decide its height.
    - Vuetify's own values are kept where they are right -- a badge's glyph, a tree's indent -- and
      restated here only because this layer would otherwise override them.
    - A picture is not a control: a progress circle, an avatar drawn as a colour swatch or an
@@ -79,12 +80,18 @@
     .v-btn--icon {
         width: var(--mory-button-height);
     }
-    :is(.v-list-item__prepend, .v-list-item__append) .v-btn--icon {
+    /* Both kinds of icon button: a v-icon-btn, and a v-btn carrying nothing but an icon. They take
+       the same corners here as well, since a v-icon-btn is a circle by default and would sit oddly
+       beside the tree's expand buttons. Its icon it sizes inline, which no rule reaches, so that
+       one is said for this context in `vuetify.ts`. */
+    :is(.v-list-item__prepend, .v-list-item__append) :is(.v-btn--icon, .v-icon-btn) {
         width: var(--mory-row-button-size);
         height: var(--mory-row-button-size);
+        border-radius: var(--mory-corner-radius);
     }
     /* Vuetify has no way to drop the icon button's 50%, so repeat .v-btn's radius instead,
-       leaving out the grouped buttons Vuetify squares off. */
+       leaving out the grouped buttons Vuetify squares off. A v-icon-btn takes its shape from a
+       utility class, which outranks this layer, so its own is set in `vuetify.ts`. */
     .v-btn--icon:not(.v-btn-group .v-btn) {
         border-radius: var(--mory-corner-radius);
     }

@@ -37,6 +37,13 @@ export default createVuetify({
       minHeight: 32,
       rounded: 4,
       prependGap: 12,
+      // A v-icon-btn in a row is sized by the rule for an icon button in a slot, but its icon and
+      // its corners it settles itself -- one inline, the other as a utility class -- so they are
+      // said here: the icon a button's icon size, and the corners the ones the rule gives it.
+      VIconBtn: {
+        iconSize: "16",
+        rounded: undefined,
+      },
     },
   },
   icons: {
