@@ -80,20 +80,23 @@
     .v-btn--icon {
         width: var(--mory-button-height);
     }
-    /* Both kinds of icon button: a v-icon-btn, and a v-btn carrying nothing but an icon. They take
-       the same corners here as well, since a v-icon-btn is a circle by default and would sit oddly
-       beside the tree's expand buttons. Its icon it sizes inline, which no rule reaches, so that
-       one is said for this context in `vuetify.ts`. */
+    /* Both kinds of icon button: a v-icon-btn, and a v-btn carrying nothing but an icon. What a
+       v-icon-btn sizes inline -- its icon -- is said for this context in `vuetify.ts` instead. */
     :is(.v-list-item__prepend, .v-list-item__append) :is(.v-btn--icon, .v-icon-btn) {
         width: var(--mory-row-button-size);
         height: var(--mory-row-button-size);
+    }
+    /* An icon button is a circle to Vuetify, which sits oddly beside every other button and the
+       rows it shares. It takes .v-btn's radius instead, wherever it is, leaving out the grouped
+       buttons Vuetify squares off. */
+    :is(.v-btn--icon, .v-icon-btn):not(.v-btn-group .v-btn) {
         border-radius: var(--mory-corner-radius);
     }
-    /* Vuetify has no way to drop the icon button's 50%, so repeat .v-btn's radius instead,
-       leaving out the grouped buttons Vuetify squares off. A v-icon-btn takes its shape from a
-       utility class, which outranks this layer, so its own is set in `vuetify.ts`. */
-    .v-btn--icon:not(.v-btn-group .v-btn) {
-        border-radius: var(--mory-corner-radius);
+    /* A calendar's day numbers are the exception: they read as dates on a page rather than
+       controls in a bar, and a circle is how a day is marked. The selector repeats the one above
+       because `:not()` lends that rule the weight of what it excludes. */
+    .v-calendar :is(.v-btn--icon, .v-icon-btn):not(.v-btn-group .v-btn) {
+        border-radius: 50%;
     }
     .v-list {
         padding-inline: var(--mory-list-inset);

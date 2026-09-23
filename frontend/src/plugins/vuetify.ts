@@ -15,19 +15,16 @@ export default createVuetify({
     // button repeats the height it gives every button.
     VIconBtn: {
       iconSize: "20",
-      rounded: "lg",
       size: "32",
     },
     // The calendar draws its day numbers as VIconBtn too, and the defaults above are for
-    // toolbars: keep those numbers the 40 px circles they were.
+    // toolbars: keep those numbers the 40 px they were. Round is `vuetify.css`'s to say.
     VCalendar: {
       VIconBtn: {
-        rounded: undefined,
         size: "default",
       },
     },
     VAppBarNavIcon: {
-      rounded: "lg",
       size: "32",
     },
     // Every size is a rule in `vuetify.css`, which can name the context it holds for. What is left
@@ -37,12 +34,10 @@ export default createVuetify({
       minHeight: 32,
       rounded: 4,
       prependGap: 12,
-      // A v-icon-btn in a row is sized by the rule for an icon button in a slot, but its icon and
-      // its corners it settles itself -- one inline, the other as a utility class -- so they are
-      // said here: the icon a button's icon size, and the corners the ones the rule gives it.
+      // A v-icon-btn in a row is sized by the rule for an icon button in a slot, but its icon
+      // it passes inline, which no rule reaches: that one is said here, as a button's icon size.
       VIconBtn: {
         iconSize: "16",
-        rounded: undefined,
       },
     },
   },
