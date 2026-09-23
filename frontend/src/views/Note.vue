@@ -44,11 +44,11 @@
                 <v-icon-btn
                     v-bind:icon="mdiPageLayoutSidebarRight"
                     v-bind:title="sidebarIsVisible ? 'Hide metadata and contents' : 'Show metadata and contents'"
-                    v-bind:active="sidebarIsVisible"
+                    v-bind:active="sidebarIsVisible ? true : undefined"
                     v-on:click="sidebarIsVisible = !sidebarIsVisible"
                 ></v-icon-btn>
                 <template v-if="$vuetify.display.mdAndUp">
-                    <v-icon-btn v-bind:icon="lockScroll ? mdiLock : mdiLockOpen" v-bind:title="lockScroll ? 'Unlock scroll' : 'Lock scroll'" v-on:click="lockScroll = !lockScroll"></v-icon-btn>
+                    <v-icon-btn v-bind:icon="lockScroll ? mdiLock : mdiLockOpen" v-bind:title="lockScroll ? 'Unlock scroll' : 'Lock scroll'" v-bind:active="lockScroll ? true : undefined" v-on:click="lockScroll = !lockScroll"></v-icon-btn>
                     <v-icon-btn v-bind:icon="mdiCompareVertical" title="Compare with upstream" v-on:click="notifyUpstreamState"></v-icon-btn>
                     <v-icon-btn v-bind:icon="mdiReload" title="Reload" v-bind:disabled="needSave" v-on:click="reload"></v-icon-btn>
                     <v-icon-btn
