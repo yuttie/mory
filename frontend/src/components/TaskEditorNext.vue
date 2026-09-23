@@ -385,7 +385,6 @@
                                 <v-rating
                                     v-bind:model-value="taskAssessment.quality_score / 2"
                                     readonly
-                                    size="16"
                                     length="5"
                                     half-increments
                                     color="amber"
