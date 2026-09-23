@@ -332,7 +332,6 @@
                             v-model="notePanes"
                             mandatory
                             color="primary"
-                            variant="text"
                         >
                             <v-btn
                                 value="viewer"

@@ -96,6 +96,7 @@
                                 v-bind:model-value="descendantsViewMode"
                                 v-on:update:model-value="onViewModeChange"
                                 mandatory
+                                class="ml-2"
                             >
                                 <v-btn
                                     v-for="{ text, icon, value } of viewModeOptions"

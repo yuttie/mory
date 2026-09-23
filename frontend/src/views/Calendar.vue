@@ -45,7 +45,6 @@
                 v-else
                 v-bind:model-value="calendarType"
                 mandatory
-                variant="outlined"
                 class="mr-2"
                 v-on:update:model-value="setCalendarType"
             >

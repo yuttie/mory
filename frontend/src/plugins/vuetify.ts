@@ -26,6 +26,9 @@ export default createVuetify({
         iconSize: "16",
       },
     },
+    VBtnToggle: {
+        variant: "outlined",
+    },
   },
   icons: {
     defaultSet: 'mdi',

@@ -24,7 +24,6 @@
                     mandatory
                     class="mr-1"
                     border
-                    divided
                     v-on:update:model-value="setMode"
                 >
                     <v-btn class="px-5" v-bind:value="0" icon title="Viewer"           ><v-icon>{{ mdiFileDocument     }}</v-icon></v-btn>
