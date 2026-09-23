@@ -19,7 +19,7 @@
             >
                 <v-tooltip location="bottom">
                     <template v-slot:activator="{ props: tooltipProps }">
-                        <v-icon size="small" v-bind="tooltipProps">{{ mdiNoteTextOutline }}</v-icon>
+                        <v-icon v-bind="tooltipProps">{{ mdiNoteTextOutline }}</v-icon>
                     </template>
                     <div class="note-tooltip">{{ value.note }}</div>
                 </v-tooltip>
@@ -32,7 +32,7 @@
                 <v-tooltip location="bottom">
                     <template v-slot:activator="{ props: tooltipProps }">
                         <span v-bind="tooltipProps">
-                            <v-icon size="small" v-bind:style="startAtStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ startAtText }}
+                            <v-icon v-bind:style="startAtStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ startAtText }}
                         </span>
                     </template>
                     <div>{{ startAt }}</div>
@@ -46,7 +46,7 @@
                 <v-tooltip location="bottom">
                     <template v-slot:activator="{ props: tooltipProps }">
                         <span v-bind="tooltipProps">
-                            <v-icon size="small" v-bind:style="dueByStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ dueByText }}
+                            <v-icon v-bind:style="dueByStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ dueByText }}
                         </span>
                     </template>
                     <div>{{ dueBy }}</div>
@@ -60,7 +60,7 @@
                 <v-tooltip location="bottom">
                     <template v-slot:activator="{ props: tooltipProps }">
                         <span v-bind="tooltipProps">
-                            <v-icon size="small" v-bind:style="deadlineStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ deadlineText }}
+                            <v-icon v-bind:style="deadlineStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ deadlineText }}
                         </span>
                     </template>
                     <div>{{ deadline }}</div>

@@ -3,7 +3,7 @@
         <template v-if="node.children">
             <v-list-item v-bind:title="node.label">
                 <template v-slot:append>
-                    <v-icon size="small">{{ mdiChevronRight }}</v-icon>
+                    <v-icon>{{ mdiChevronRight }}</v-icon>
                 </template>
                 <v-menu
                     activator="parent"

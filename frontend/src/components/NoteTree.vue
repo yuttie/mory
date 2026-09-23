@@ -22,7 +22,6 @@
         <v-btn
             v-if="remaining > 0"
             variant="text"
-            size="small"
             class="show-older"
             block
             v-on:click="showOlder"

@@ -8,13 +8,13 @@
         v-on:update:active="$emit('update:active', $event)"
     >
         <template v-slot:prepend="{ item }">
-            <v-icon v-if="item.metadata?.tag_group" size="small">
+            <v-icon v-if="item.metadata?.tag_group">
                 {{ mdiTag }}
             </v-icon>
-            <v-icon v-else-if="item.children" size="small" v-bind:color="getTaskColor(item)">
+            <v-icon v-else-if="item.children" v-bind:color="getTaskColor(item)">
                 {{ item.metadata?.task?.status?.kind === 'done' ? mdiFolderCheck : item.metadata?.task?.status?.kind === 'canceled' ? mdiFolderOff : mdiFolder }}
             </v-icon>
-            <v-icon v-else size="small" v-bind:color="getTaskColor(item)">
+            <v-icon v-else v-bind:color="getTaskColor(item)">
                 {{ item.metadata?.task?.status?.kind === 'done' ? mdiCheckboxMarkedOutline : item.metadata?.task?.status?.kind === 'canceled' ? mdiCheckboxBlankOffOutline : mdiCheckboxBlankOutline }}
             </v-icon>
         </template>
@@ -35,7 +35,7 @@
                 v-bind:title="item.metadata?.tag_group ? 'Add task' : 'Add child task'"
                 v-on:click.stop="$emit('add-child-task', item.uuid)"
             >
-                <v-icon size="small">{{ mdiPlus }}</v-icon>
+                <v-icon>{{ mdiPlus }}</v-icon>
             </v-btn>
         </template>
     </EntryTree>

@@ -18,7 +18,6 @@
                         <v-btn
                             icon
                             variant="text"
-                            size="small"
                             v-on:click="openEditDialog(action)"
                         >
                             <v-icon>{{ mdiPencil }}</v-icon>
@@ -26,7 +25,6 @@
                         <v-btn
                             icon
                             variant="text"
-                            size="small"
                             v-on:click="openDeleteDialog(action)"
                         >
                             <v-icon>{{ mdiDelete }}</v-icon>

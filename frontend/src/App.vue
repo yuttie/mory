@@ -125,8 +125,6 @@
                                         <template v-slot:activator="{ props }">
                                             <v-icon-btn
                                                 v-bind:icon="mdiPencil"
-                                                size="small"
-                                                icon-size="small"
                                                 variant="text"
                                                 v-bind="props"
                                                 v-on:click.prevent="$router.push({ name: 'Note', params: { path: path.split('/') } })"
@@ -158,7 +156,7 @@
                                             <!-- The global 20px would be an inline size, which beats
                                                  the badge's own icon size; a named size is a class,
                                                  which the badge's rule outranks. -->
-                                            <v-icon size="default">
+                                            <v-icon>
                                                 {{ uploadListBadgeIcon }}
                                             </v-icon>
                                         </template>
@@ -345,8 +343,6 @@
                                         <template v-slot:activator="{ props }">
                                             <v-icon-btn
                                                 v-bind:icon="mdiPencil"
-                                                size="small"
-                                                icon-size="small"
                                                 variant="text"
                                                 v-bind="props"
                                                 v-on:click.prevent="$router.push({ name: 'Note', params: { path: path.split('/') } })"
@@ -378,7 +374,7 @@
                                             <!-- The global 20px would be an inline size, which beats
                                                  the badge's own icon size; a named size is a class,
                                                  which the badge's rule outranks. -->
-                                            <v-icon size="default">
+                                            <v-icon>
                                                 {{ uploadListBadgeIcon }}
                                             </v-icon>
                                         </template>
@@ -522,7 +518,7 @@
                 <v-alert type="error" v-show="appStore.loginError">
                     {{ appStore.loginError }}
                 </v-alert>
-                <v-icon size="x-large" class="mx-auto">{{ mdiLock }}</v-icon>
+                <v-icon class="mx-auto">{{ mdiLock }}</v-icon>
                 <h2>Login</h2>
                 <form>
                     <v-text-field
@@ -1101,6 +1097,12 @@ watch(() => route.name, () => {
 }
 
 .login-overlay {
+    // The lock is the screen's illustration rather than an icon in a row, so it is drawn at the
+    // size this screen wants it.
+    .v-icon {
+        font-size: 2rem;
+    }
+
     position: fixed;
     top: 0;
     left: 0;

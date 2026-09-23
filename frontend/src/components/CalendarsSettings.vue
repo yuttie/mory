@@ -36,7 +36,6 @@
                         ></v-switch>
                         <v-btn
                             icon
-                            size="small"
                             variant="text"
                             v-on:click="openEditDialog(index)"
                         >
@@ -44,7 +43,6 @@
                         </v-btn>
                         <v-btn
                             icon
-                            size="small"
                             variant="text"
                             v-on:click="remove(index)"
                         >
@@ -126,7 +124,6 @@
                     <template v-slot:append>
                         <v-btn
                             icon
-                            size="small"
                             variant="text"
                             v-on:click="openCategoryDialog(index)"
                         >
@@ -134,7 +131,6 @@
                         </v-btn>
                         <v-btn
                             icon
-                            size="small"
                             variant="text"
                             v-on:click="removeCategory(index)"
                         >

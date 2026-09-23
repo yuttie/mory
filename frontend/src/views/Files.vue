@@ -15,7 +15,7 @@
                 class="ms-2 me-1 flex-grow-1"
             >
                 <template v-slot:prepend-inner>
-                    <v-icon size="small">{{ mdiMagnify }}</v-icon>
+                    <v-icon>{{ mdiMagnify }}</v-icon>
                 </template>
                 <template v-slot:append>
                     <v-menu

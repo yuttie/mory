@@ -22,7 +22,7 @@
     >
       <v-tooltip location="bottom">
         <template v-slot:activator="{ props: tooltipProps }">
-          <v-icon size="small" v-bind="tooltipProps">{{ mdiNoteTextOutline }}</v-icon>
+          <v-icon v-bind="tooltipProps">{{ mdiNoteTextOutline }}</v-icon>
         </template>
         <div class="note-tooltip">{{ value.note }}</div>
       </v-tooltip>
@@ -35,13 +35,13 @@
       <v-tooltip location="bottom">
         <template v-slot:activator="{ props: tooltipProps }">
           <span v-bind="tooltipProps">
-            <v-icon size="small" v-bind:style="deadlineStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ deadlineText }}
+            <v-icon v-bind:style="deadlineStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ deadlineText }}
           </span>
         </template>
         <div>{{ value.deadline }}</div>
       </v-tooltip>
     </span>
-    <v-btn v-if="!migrated" size="x-small" variant="outlined" v-on:click.stop="onMigrate">Migrate</v-btn>
+    <v-btn v-if="!migrated" variant="outlined" v-on:click.stop="onMigrate">Migrate</v-btn>
   </div>
 </template>
 

@@ -39,7 +39,7 @@
                         class="mr-3"
                         v-on:click="onChangeParent"
                     >
-                        <v-icon size="small" class="mr-1">{{ mdiFileTreeOutline }}</v-icon>
+                        <v-icon class="mr-1">{{ mdiFileTreeOutline }}</v-icon>
                         <span v-if="$vuetify.display.mdAndUp">Change Parent</span>
                     </v-btn>
                     <v-btn
@@ -133,12 +133,11 @@
                         <v-btn
                             icon
                             variant="text"
-                            size="small"
                             v-on:click="statusOptionRestricted = !statusOptionRestricted"
                             title="Show all statuses"
                             color="primary"
                         >
-                            <v-icon size="small">{{ statusOptionRestricted ? mdiLock : mdiLockOpenVariant }}</v-icon>
+                            <v-icon>{{ statusOptionRestricted ? mdiLock : mdiLockOpenVariant }}</v-icon>
                         </v-btn>
                     </div>
                     <!-- Status-specific fields -->
@@ -337,14 +336,12 @@
                             v-model="notePanes"
                             mandatory
                             color="primary"
-                            density="compact"
                             variant="text"
                         >
                             <v-btn
                                 value="viewer"
                                 icon
                                 title="Viewer"
-                                size="small"
                             >
                                 <v-icon>{{ mdiFileDocument }}</v-icon>
                             </v-btn>
@@ -352,7 +349,6 @@
                                 value="both"
                                 icon
                                 title="Editor and viewer"
-                                size="small"
                             >
                                 <v-icon>{{ mdiFileDocumentEdit }}</v-icon>
                             </v-btn>
@@ -360,7 +356,6 @@
                                 value="editor"
                                 icon
                                 title="Editor"
-                                size="small"
                             >
                                 <v-icon>{{ mdiPencil }}</v-icon>
                             </v-btn>
@@ -378,7 +373,7 @@
                     <!-- Task Assessment -->
                     <v-card variant="outlined" class="pa-3">
                         <v-card-subtitle class="pa-0 pb-2">
-                            <v-icon size="small" class="mr-1">{{ mdiLightbulbOnOutline }}</v-icon>
+                            <v-icon class="mr-1">{{ mdiLightbulbOnOutline }}</v-icon>
                             Task Assessment
                             <v-progress-circular
                                 v-if="assessmentLoading"
@@ -428,13 +423,12 @@
                                             <v-btn
                                                 icon
                                                 variant="text"
-                                                size="x-small"
                                                 class="ml-1"
                                                 v-on:click="addNoteContent(suggestion)"
                                                 title="Add to note"
                                                 color="primary"
                                             >
-                                                <v-icon size="x-small">{{ mdiPlus }}</v-icon>
+                                                <v-icon>{{ mdiPlus }}</v-icon>
                                             </v-btn>
                                         </div>
                                     </div>

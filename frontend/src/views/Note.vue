@@ -27,9 +27,9 @@
                     divided
                     v-on:update:model-value="setMode"
                 >
-                    <v-btn class="px-5" v-bind:value="0" icon title="Viewer"           ><v-icon size="small">{{ mdiFileDocument     }}</v-icon></v-btn>
-                    <v-btn class="px-5" v-bind:value="1" icon title="Editor and viewer"><v-icon size="small">{{ mdiFileDocumentEdit }}</v-icon></v-btn>
-                    <v-btn class="px-5" v-bind:value="2" icon title="Editor"           ><v-icon size="small">{{ mdiPencil           }}</v-icon></v-btn>
+                    <v-btn class="px-5" v-bind:value="0" icon title="Viewer"           ><v-icon>{{ mdiFileDocument     }}</v-icon></v-btn>
+                    <v-btn class="px-5" v-bind:value="1" icon title="Editor and viewer"><v-icon>{{ mdiFileDocumentEdit }}</v-icon></v-btn>
+                    <v-btn class="px-5" v-bind:value="2" icon title="Editor"           ><v-icon>{{ mdiPencil           }}</v-icon></v-btn>
                 </v-btn-toggle>
                 <!-- The mode, Save and the sidebar are what writing a note needs, so they keep
                      their place in the bar at every width; the rest wait in a menu until the bar

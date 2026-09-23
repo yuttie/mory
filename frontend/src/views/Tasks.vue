@@ -211,23 +211,21 @@
                                 <v-spacer></v-spacer>
                                 <v-btn
                                     variant="text"
-                                    size="small"
                                     title="Sort"
                                     style="min-width: unset;"
                                     class="px-2"
                                     v-on:click="sortDailyTasks(date)"
                                 >
-                                    <v-icon size="small">{{ mdiSortBoolAscendingVariant }}</v-icon>
+                                    <v-icon>{{ mdiSortBoolAscendingVariant }}</v-icon>
                                 </v-btn>
                                 <v-btn
                                     variant="text"
-                                    size="small"
                                     title="Move to today"
                                     style="min-width: unset;"
                                     class="px-2"
                                     v-on:click="moveUndoneToToday(date)"
                                 >
-                                    <v-icon size="small">{{ mdiInboxArrowDown }}</v-icon>
+                                    <v-icon>{{ mdiInboxArrowDown }}</v-icon>
                                 </v-btn>
                             </div>
                             <draggable

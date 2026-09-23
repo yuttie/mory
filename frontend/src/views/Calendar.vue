@@ -66,7 +66,6 @@
                     <v-btn
                         v-bind="props"
                         rounded="lg"
-                        size="32"
                         class="mr-2"
                         title="Choose which calendars and categories are shown"
                     >
@@ -75,7 +74,7 @@
                             v-bind:content="hiddenCount"
                             color="grey"
                         >
-                            <v-icon size="20">{{ mdiCalendarMultiple }}</v-icon>
+                            <v-icon>{{ mdiCalendarMultiple }}</v-icon>
                         </v-badge>
                     </v-btn>
                 </template>
