@@ -942,9 +942,21 @@ defineExpose({
     flex-direction: row;
 }
 
+// The widths are of the content, with the pane's padding added outside them. Vuetify's reset has
+// every element inherit its box-sizing, though, so each field inside would take content-box too and
+// grow its padding outside its 40px minimum: a compact field came out 56px tall. Restore it on the
+// children, which is where the inheritance starts again.
+.props-pane,
+.assessment-pane {
+    box-sizing: content-box;
+
+    > * {
+        box-sizing: border-box;
+    }
+}
+
 .props-pane {
     max-width: 350px;
-    box-sizing: content-box;
     overflow-y: auto;
 }
 
@@ -990,7 +1002,6 @@ defineExpose({
 
 .assessment-pane {
     max-width: 300px;
-    box-sizing: content-box;
     overflow-y: auto;
 
     .v-card {
