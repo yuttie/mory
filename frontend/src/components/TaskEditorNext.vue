@@ -243,7 +243,6 @@
                     <v-progress-linear
                         v-model="progress"
                         v-bind:rules="[range(0, 100, 'Progress must be 0..100')]"
-                        height="25"
                         striped
                     >
                         <template v-slot:default="{ value }">

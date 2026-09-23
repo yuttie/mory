@@ -40,6 +40,8 @@
         /* An icon, and the smaller one a button holds beside or instead of a label. */
         --mory-icon-size: 20px;
         --mory-button-icon-size: 16px;
+        /* A progress bar with its value written on it: tall enough for the text. */
+        --mory-labelled-progress-height: 24px;
         /* .v-btn's own radius, which a list item and an icon button both take. */
         --mory-corner-radius: 4px;
     }
@@ -138,5 +140,13 @@
     .v-badge:not(.v-badge--dot) .v-badge__badge {
         min-width: 1.25rem;
         padding-inline: 0.375rem;
+    }
+    /* A progress bar that carries its value as text is an input -- the task editor's progress --
+       and needs the height to hold it; the ones without text are loading bars, and keep Vuetify's
+       thin line. Vuetify writes the height inline, so this is the one rule here that needs
+       `!important`, and it sets the variable as well because the stripes are sized from it. */
+    .v-progress-linear:has(> .v-progress-linear__content) {
+        height: var(--mory-labelled-progress-height) !important;
+        --v-progress-linear-height: var(--mory-labelled-progress-height) !important;
     }
 }
