@@ -9,6 +9,10 @@ export default createVuetify({
     global: {
       density: "compact",
     },
+    // A v-icon-btn puts even a named icon size through a table of its own and passes the number
+    // it lands on as an inline size, which no rule can reach. So this one repeats what
+    // `vuetify.css` gives every other icon -- keep it in step with `--mory-icon-size` -- and the
+    // button repeats the height it gives every button.
     VIconBtn: {
       iconSize: "20",
       rounded: "lg",
@@ -22,34 +26,17 @@ export default createVuetify({
         size: "default",
       },
     },
-    // A v-btn underneath, which has no iconSize: its icon takes the size as a nested default.
     VAppBarNavIcon: {
       rounded: "lg",
       size: "32",
-      VBtn: {
-        VIcon: {
-          size: "20",
-        },
-      },
     },
-    VIcon: {
-      size: "20",
-    },
-    VBtn: {
-      density: "comfortable",
-      VIcon: {
-        size: "16",
-      },
-    },
-    // These four are the metrics `vuetify.css` names as custom properties, which a prop cannot
-    // read: keep them in step with the `:root` block there.
+    // Every size is a rule in `vuetify.css`, which can name the context it holds for. What is left
+    // here shapes a list item and has no CSS to write, so it repeats the metrics that file names:
+    // keep these in step with its `:root` block.
     VListItem: {
       minHeight: 32,
       rounded: 4,
       prependGap: 12,
-      VBtn: {
-        size: 24,
-      },
     },
   },
   icons: {

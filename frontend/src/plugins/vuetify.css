@@ -1,23 +1,42 @@
 /* Vuetify orders this layer after its components and before its utilities, so a rule here beats
-   the component styles whatever their specificity, and `px-0` can still take it back from one list. */
+   the component styles whatever their specificity, and `px-0` can still take it back from one list.
+
+   The principles the rules below carry out:
+
+   - A size belongs to a context, never to a call site. A template says what a control is, not how
+     big it is: no `size=` and no `density=` outside this file and `vuetify.ts`. Where something
+     has to differ, the difference belongs to a context -- a slot, a component, an area of the app
+     -- and is written here as a rule naming it.
+   - The same control has the same dimensions wherever it appears: a row and a button are both a
+     row tall, and an icon is one size.
+   - A button whose only content is an icon, in a list item's prepend or append, is smaller than a
+     button elsewhere: it has to fit a row rather than decide its height.
+   - Vuetify's own values are kept where they are right -- a badge's glyph, a tree's indent -- and
+     restated here only because this layer would otherwise override them.
+   - A picture is not a control: a progress circle, an avatar drawn as a colour swatch or an
+     illustration is sized where it is drawn, because its size says what it is.
+
+   The sizes live here rather than in `vuetify.ts` because a rule can name a slot and a prop
+   cannot, and because of how the two meet: a named size (`small`) is a class, which a rule here
+   outranks, while a numeric one (`size="24"`) is an inline style, which it cannot. `vuetify.ts`
+   keeps what has no CSS to write: the global density, and the props that shape a list item.
+
+   What a control is made of is Vuetify's, so these rules name its parts. An upgrade that renames
+   one silently drops the rule, which is the cost of reaching a slot at all. */
 @layer vuetify-overrides {
-    /* The metrics the rules below share, named so that a change lands in one place and so that a
-       rule reads as the decision it carries out rather than a number. `App.vue` draws the rail
-       from them too.
-
-       Vuetify's matching defaults are component props rather than CSS, so the same values appear
-       once more by hand in `vuetify.ts`: a row's height and rounding, and the size of the buttons
-       inside one. Change a value here, change it there.
-
-       Anything unlayered redeclaring these retunes the app, `.mory/custom.css` included. */
     :root {
         /* The inset every list gets, as `nav` gave it. */
         --mory-list-inset: 8px;
         /* A row's own padding within that inset, and where a tree's first level starts. */
         --mory-row-inset: 6px;
-        /* A row, and the buttons that have to fit inside one. */
+        /* A row, and a button, which is one row tall. */
         --mory-row-height: 32px;
+        --mory-button-height: 32px;
+        /* A button that is only an icon inside a row: it fits the row rather than setting it. */
         --mory-row-button-size: 24px;
+        /* An icon, and the smaller one a button holds beside or instead of a label. */
+        --mory-icon-size: 20px;
+        --mory-button-icon-size: 16px;
         /* .v-btn's own radius, which a list item and an icon button both take. */
         --mory-corner-radius: 4px;
     }
@@ -27,6 +46,47 @@
     /* Vuetify fixes a field's text at 16px, which stands out from the text around it. */
     .v-field {
         font-size: 1rem;
+    }
+    .v-icon {
+        font-size: var(--mory-icon-size);
+    }
+    /* Beside a label, or as the whole of a button, an icon is drawn smaller than one standing on
+       its own in a row. */
+    .v-btn .v-icon {
+        font-size: var(--mory-button-icon-size);
+    }
+    /* A toolbar's controls carry a full-size icon. Most are v-icon-btn, which sizes its own; the
+       few written as a v-btn -- the app bar's menu button, an icon that needs a badge around it --
+       stand in the same row and are drawn to match. */
+    :is(.v-toolbar, .v-app-bar) .v-btn .v-icon {
+        font-size: var(--mory-icon-size);
+    }
+    /* A badge draws its glyph at three quarters of its own text, which is the size that fits the
+       badge; the rule above would otherwise push it past the edge. */
+    .v-badge__badge .v-icon {
+        font-size: 0.75rem;
+    }
+    /* Vuetify works a button's height out from its size and density props. These say it outright,
+       so a button is a row tall wherever it sits and whatever a density would have made it, and a
+       group is as tall as the buttons in it. */
+    .v-btn,
+    .v-btn-group {
+        height: var(--mory-button-height);
+    }
+    .v-btn {
+        --v-btn-height: var(--mory-button-height);
+    }
+    .v-btn--icon {
+        width: var(--mory-button-height);
+    }
+    :is(.v-list-item__prepend, .v-list-item__append) .v-btn--icon {
+        width: var(--mory-row-button-size);
+        height: var(--mory-row-button-size);
+    }
+    /* Vuetify has no way to drop the icon button's 50%, so repeat .v-btn's radius instead,
+       leaving out the grouped buttons Vuetify squares off. */
+    .v-btn--icon:not(.v-btn-group .v-btn) {
+        border-radius: var(--mory-corner-radius);
     }
     .v-list {
         padding-inline: var(--mory-list-inset);
@@ -44,11 +104,6 @@
     }
     .v-treeview:not(.v-treeview--fluid) .v-treeview-item__level {
         width: var(--mory-row-button-size);
-    }
-    /* Vuetify has no way to drop the icon button's 50%, so repeat .v-btn's radius instead,
-       leaving out the grouped buttons Vuetify squares off. */
-    .v-btn--icon:not(.v-btn-group .v-btn) {
-        border-radius: var(--mory-corner-radius);
     }
     /* A badge is round until its content makes it a stadium. Vuetify sizes its height in rem but
        its minimum width and padding in px, values that only agree at the 16px root they were
