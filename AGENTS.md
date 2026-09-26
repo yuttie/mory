@@ -81,6 +81,7 @@ Run commands in the component's own directory (`backend/` or `frontend/`).
         - `feat(frontend/views/Home): ...`
         - `feat(frontend/api): ...`
 - In the subject and body, record any numbers you measured when they matter to the change.
+- Wrap the commit body at approximately 72 columns.
 - The rules in this file always win. Consult past commit messages only where these rules leave a case ambiguous.
 - Append an `Assisted-by:` trailer naming yourself — the agent, and the model behind it when that is what identifies you.
     - Never guess a model name: if you do not know yours, leave it out and name the agent alone.
