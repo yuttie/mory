@@ -571,7 +571,7 @@ const initialForm = computed<EditableTask>(() => {
     return {
         title: t.title ?? '',
         tags: Array.isArray(t.tags) ? [...t.tags] : [],
-        status: (t.status === undefined || t.status === null) ? { kind: 'todo' } : { ...t.status },
+        status: (t.status === undefined || t.status === null) ? { kind: 'backlog' } : { ...t.status },
         progress: t.progress ?? 0,
         importance: t.importance ?? 3,
         urgency: t.urgency ?? 3,
@@ -761,7 +761,7 @@ function resetFromTask(t?: Task | undefined | null): void {
     else {
         form.title = t.title ?? '';
         form.tags = Array.isArray(t.tags) ? [...t.tags] : [];
-        form.status = (t.status === undefined || t.status === null) ? { kind :'todo' } : { ...t.status };
+        form.status = (t.status === undefined || t.status === null) ? { kind: 'backlog' } : { ...t.status };
         form.progress = t.progress ?? 0;
         form.importance  = t.importance ?? 3;
         form.urgency = t.urgency ?? 3;
