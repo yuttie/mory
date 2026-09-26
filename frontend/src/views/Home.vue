@@ -709,7 +709,9 @@ async function createQuickTask() {
             uuid: taskUuid,
             title: quickTaskName.value.trim(),
             tags: ['quick-create'],
-            status: { kind: 'todo' },
+            // Scheduling it for today or tomorrow is the commitment that makes it To do; without
+            // one it waits in the backlog like any other new task.
+            status: { kind: scheduledDates.length > 0 ? 'todo' : 'backlog' },
             progress: 0,
             importance: 3,
             urgency: 3,
