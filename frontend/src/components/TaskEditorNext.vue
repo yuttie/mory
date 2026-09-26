@@ -844,6 +844,7 @@ function statusEqual(a: Status, b: Status): boolean {
     if (a.kind !== b.kind) { return false; }
 
     switch (a.kind) {
+        case 'backlog':
         case 'todo':
         case 'in_progress':
             return true; // These only have 'kind' property

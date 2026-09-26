@@ -408,6 +408,7 @@ function sortTasksByDueDate(tasks: TaskNode[]): TaskNode[] {
 
 const taskStatuses = computed(() => {
     const statuses = {
+        backlog: [] as TaskNode[],
         todo: [] as TaskNode[],
         inProgress: [] as TaskNode[],
         waiting: [] as TaskNode[],
@@ -420,6 +421,7 @@ const taskStatuses = computed(() => {
     for (const task of selectedNodeDescendants.value) {
         const kind: StatusKind = task.metadata?.task?.status?.kind ?? 'todo';
         switch (kind) {
+            case 'backlog': statuses.backlog.push(task); break;
             case 'todo': statuses.todo.push(task); break;
             case 'in_progress': statuses.inProgress.push(task); break;
             case 'waiting': statuses.waiting.push(task); break;
@@ -432,6 +434,7 @@ const taskStatuses = computed(() => {
 
     // Sort each status group by due date/deadline
     return {
+        backlog: sortTasksByDueDate(statuses.backlog),
         todo: sortTasksByDueDate(statuses.todo),
         inProgress: sortTasksByDueDate(statuses.inProgress),
         waiting: sortTasksByDueDate(statuses.waiting),

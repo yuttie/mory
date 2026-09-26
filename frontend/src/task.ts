@@ -4,6 +4,10 @@ import type { UUID } from '@/api';
 
 export { UUID };
 
+export interface BacklogStatus {
+    kind: 'backlog';
+}
+
 export interface TodoStatus {
     kind: 'todo';
 }
@@ -44,6 +48,7 @@ export interface CanceledStatus {
 }
 
 export type Status =
+    | BacklogStatus
     | TodoStatus
     | InProgressStatus
     | WaitingStatus
@@ -55,6 +60,7 @@ export type Status =
 export type StatusKind = Status['kind'];
 
 export const STATUS_LABEL: Record<StatusKind, string> = {
+    backlog: 'Backlog',
     todo: 'To do',
     in_progress: 'In progress',
     waiting: 'Waiting',
@@ -64,8 +70,11 @@ export const STATUS_LABEL: Record<StatusKind, string> = {
     canceled: 'Canceled',
 };
 
+// Backlog is To do not yet committed to, so the two trade places freely and Backlog can go
+// anywhere To do can.
 export const STATUS_TRANSITION = {
-    todo: ['in_progress', 'waiting', 'blocked', 'on_hold', 'done', 'canceled'],
+    backlog: ['todo', 'in_progress', 'waiting', 'blocked', 'on_hold', 'done', 'canceled'],
+    todo: ['backlog', 'in_progress', 'waiting', 'blocked', 'on_hold', 'done', 'canceled'],
     in_progress: ['waiting', 'blocked', 'on_hold', 'done', 'canceled'],
     waiting: ['in_progress', 'blocked', 'on_hold', 'done', 'canceled'],
     blocked: ['in_progress', 'waiting', 'on_hold', 'done', 'canceled'],
@@ -95,6 +104,7 @@ export function nextOptions(from: Status): readonly StatusKind[] {
 
 export function makeDefaultStatus(kind: StatusKind): Status {
     switch (kind) {
+        case 'backlog': return { kind: 'backlog' };
         case 'todo': return { kind: 'todo' };
         case 'in_progress': return { kind: 'in_progress' };
         case 'waiting': return { kind: 'waiting', waiting_for: '' };
