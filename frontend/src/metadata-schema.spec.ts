@@ -129,3 +129,19 @@ describe('metadata schema, events', () => {
         expect(ok(at(['meeting']))).toBe(false);
     });
 });
+
+describe('metadata schema, tasks', () => {
+    const task = (status: unknown) => ({
+        task: { status, progress: 0, importance: 3, urgency: 3, scheduled_dates: [] },
+    });
+
+    it('accepts a backlog status carrying only its kind', () => {
+        expect(ok(task({ kind: 'backlog' }))).toBe(true);
+        // Like To do, it has nothing to say, so a key left over from another status is an error.
+        expect(ok(task({ kind: 'backlog', hold_reason: 'later' }))).toBe(false);
+    });
+
+    it('rejects a status kind it does not know', () => {
+        expect(ok(task({ kind: 'someday' }))).toBe(false);
+    });
+});

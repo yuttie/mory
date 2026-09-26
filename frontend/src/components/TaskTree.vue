@@ -57,6 +57,9 @@ import type { TaskTreeItem } from '@/task-forest';
 
 function getTaskColor(item: TaskTreeItem): string | undefined {
     switch (item.metadata?.task?.status?.kind) {
+        // A paler To do: the same work, not yet committed to.
+        case "backlog":
+            return "blue-grey-lighten-2";
         case "todo":
             return "blue-grey";
         case "in_progress":

@@ -408,6 +408,7 @@ function sortTasksByDueDate(tasks: TaskNode[]): TaskNode[] {
 
 const taskStatuses = computed(() => {
     const statuses = {
+        backlog: [] as TaskNode[],
         todo: [] as TaskNode[],
         inProgress: [] as TaskNode[],
         waiting: [] as TaskNode[],
@@ -418,8 +419,11 @@ const taskStatuses = computed(() => {
     };
 
     for (const task of selectedNodeDescendants.value) {
-        const kind: StatusKind = task.metadata?.task?.status?.kind ?? 'todo';
+        // A task that names no status is read as Backlog, as the editor reads it, so the column
+        // it sits in and the status it opens with agree.
+        const kind: StatusKind = task.metadata?.task?.status?.kind ?? 'backlog';
         switch (kind) {
+            case 'backlog': statuses.backlog.push(task); break;
             case 'todo': statuses.todo.push(task); break;
             case 'in_progress': statuses.inProgress.push(task); break;
             case 'waiting': statuses.waiting.push(task); break;
@@ -432,6 +436,7 @@ const taskStatuses = computed(() => {
 
     // Sort each status group by due date/deadline
     return {
+        backlog: sortTasksByDueDate(statuses.backlog),
         todo: sortTasksByDueDate(statuses.todo),
         inProgress: sortTasksByDueDate(statuses.inProgress),
         waiting: sortTasksByDueDate(statuses.waiting),
@@ -522,7 +527,7 @@ const filteredTasksCount = computed(() => {
 // Helper function to filter task list based on status
 function filterTasksByStatus(tasks: TaskNode[], hideCompleted: boolean): TaskNode[] {
     return tasks.filter(task => {
-        const kind: StatusKind = task.metadata?.task?.status?.kind ?? 'todo';
+        const kind: StatusKind = task.metadata?.task?.status?.kind ?? 'backlog';
         if (hideCompleted && (kind === 'done' || kind === 'canceled')) return false;
         return true;
     });

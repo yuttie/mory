@@ -129,7 +129,8 @@ impl Mory {
                        Each result carries the note's `task:` block exactly as the file \
                        declares it: status kind, progress, importance, urgency, and whichever \
                        of start_at, due_by, deadline and scheduled_dates it sets.\n\nStatuses \
-                       are todo, in_progress, waiting, blocked, on_hold, done and canceled.",
+                       are backlog, todo, in_progress, waiting, blocked, on_hold, done and \
+                       canceled.",
         annotations(title = "List tasks", read_only_hint = true, open_world_hint = false)
     )]
     pub async fn list_tasks(
@@ -265,7 +266,7 @@ impl Mory {
         description = "Create a task and commit it. Requires the notes:write scope.\n\nA task \
                        is an ordinary note under `.tasks/` carrying a `task:` block. The schema \
                        requires status, progress, importance, urgency and scheduled_dates, so \
-                       whatever is not given is filled in: status todo, progress 0, importance \
+                       whatever is not given is filled in: status backlog, progress 0, importance \
                        and urgency 3, no scheduled dates. The result echoes the whole file back \
                        so those defaults are visible.",
         annotations(title = "Create a task", read_only_hint = false, destructive_hint = false,

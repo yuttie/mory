@@ -1,6 +1,17 @@
 <template>
     <div class="status-view groups">
         <v-card class="group">
+            <v-card-title>Backlog</v-card-title>
+            <div class="task-list">
+                <TaskListItemNext
+                    v-for="task of taskStatuses.backlog"
+                    v-bind:key="task.uuid"
+                    v-bind:value="task"
+                    v-on:click="onTaskClick(task.uuid)"
+                />
+            </div>
+        </v-card>
+        <v-card class="group">
             <v-card-title>To do</v-card-title>
             <div class="task-list">
                 <TaskListItemNext
@@ -87,6 +98,7 @@ import { type UUID } from '@/task';
 // Props
 const props = defineProps<{
     taskStatuses: {
+        backlog: TaskNode[];
         todo: TaskNode[];
         inProgress: TaskNode[];
         waiting: TaskNode[];

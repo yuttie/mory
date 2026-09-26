@@ -115,6 +115,14 @@
                 "overrides": ["repeat"]
             }
         },
+        "backlog-status": {
+            "type": "object",
+            "properties": {
+                "kind": { "const": "backlog" }
+            },
+            "required": ["kind"],
+            "additionalProperties": false
+        },
         "todo-status": {
             "type": "object",
             "properties": {
@@ -184,6 +192,7 @@
         },
         "task-status": {
             "oneOf": [
+                { "$ref": "#/definitions/backlog-status" },
                 { "$ref": "#/definitions/todo-status" },
                 { "$ref": "#/definitions/in-progress-status" },
                 { "$ref": "#/definitions/waiting-status" },
