@@ -617,7 +617,9 @@ const selectedKind = computed<StatusKind>({
 const statusGateError = computed<string | undefined>(() => {
     const from = initialForm.value.status;
     const to = form.status.kind;
-    if (canTransition(from, to)) {
+    // Unlocking offers every status, so it has to lift the gate too: otherwise a status it offers,
+    // such as In progress back to To do, is one the form can never save.
+    if (!statusOptionRestricted.value || canTransition(from, to)) {
         return undefined;
     }
     else {
@@ -737,6 +739,9 @@ function resetFromTask(t?: Task | undefined | null): void {
         clearTimeout(assessmentTimeout);
         assessmentTimeout = null;
     }
+    // Unlocking is an exception for one edit. The editor is reused for the next task and reloads
+    // the saved one, both through here, so neither may inherit it.
+    statusOptionRestricted.value = true;
 
     if (!t) {
         const defaultTags = props.selectedTag ? [props.selectedTag] : [];
