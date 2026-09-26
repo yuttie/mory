@@ -739,6 +739,9 @@ function resetFromTask(t?: Task | undefined | null): void {
         clearTimeout(assessmentTimeout);
         assessmentTimeout = null;
     }
+    // Unlocking is an exception for one edit. The editor is reused for the next task and reloads
+    // the saved one, both through here, so neither may inherit it.
+    statusOptionRestricted.value = true;
 
     if (!t) {
         const defaultTags = props.selectedTag ? [props.selectedTag] : [];
