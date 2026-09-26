@@ -1,3 +1,2 @@
-# Configure compose.yaml, secrets included.
+# Configures compose.yaml, secrets included.
 /.env
-/env.*.list

@@ -1,9 +1,8 @@
 # Runs the published images on one host, published on localhost unless told otherwise, for a
-# reverse proxy in front. It is configured by files next to it: .env, begun from .env.template,
-# for the host, and env.moried.list and env.mory.list for the two containers. Those two hold
-# secrets, so never commit them.
+# reverse proxy in front. It is configured in .env next to this file, begun from .env.template;
+# that file holds secrets, so never commit it.
 #
-#     docker compose up -d                 start, or recreate what changed (env files included)
+#     docker compose up -d                 start, or recreate what changed (.env included)
 #     docker compose up -d --pull always   update: recreates only a service whose image changed
 #     docker compose restart moried        restart without recreating
 #     docker compose logs -f moried
@@ -16,13 +15,15 @@ services:
         # The owner of the directories below, so moried's commits and cache files belong to that
         # user rather than to root.
         user: "${MORY_UID:?see .env.template}:${MORY_GID:?see .env.template}"
-        env_file:
-            # Compose would otherwise expand every `$` in a value, and MORIED_USER_HASH is an
-            # argon2 hash full of them: unquoted, it arrives silently corrupted. `raw` reads the
-            # file as `docker run --env-file` does, so nothing is expanded -- and nothing is
-            # unquoted either: a value copied from backend/.env.template must lose its quotes.
-            - path: env.moried.list
-              format: raw
+        # All of .env, so a variable the backend gains needs no change here.
+        env_file: .env
+        environment:
+            # These name the mounts and the port below, so they are fixed here. An .env begun
+            # from backend/.env.template carries development values for them, which would
+            # otherwise win over the image's.
+            MORIED_GIT_DIR: /repo
+            MORIED_IMAGE_CACHE_DIR: /cache
+            MORIED_LISTEN: 0.0.0.0:3030
         ports:
             - "${MORY_BACKEND_ADDRESS:-127.0.0.1:3030}:3030"
         volumes:
@@ -37,9 +38,10 @@ services:
     mory:
         image: yuttie/mory:latest
         restart: unless-stopped
-        env_file:
-            - path: env.mory.list
-              format: raw
+        # Only what the frontend reads: the rest of .env is the backend's, secrets included.
+        environment:
+            VITE_APP_APPLICATION_ROOT: ${VITE_APP_APPLICATION_ROOT:-/}
+            VITE_APP_API_URL: ${VITE_APP_API_URL:?see .env.template}
         ports:
             - "${MORY_FRONTEND_ADDRESS:-127.0.0.1:8080}:80"
         volumes:
