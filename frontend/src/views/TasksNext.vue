@@ -159,6 +159,7 @@
                                 v-if="descendantsViewMode === 'status'"
                                 v-bind:task-statuses="taskStatuses"
                                 v-on:task-click="onTaskListItemClick"
+                                v-on:status-change="onTaskStatusChange"
                             />
                             <!-- Schedule view -->
                             <TaskScheduleView
@@ -194,7 +195,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useLocalStorage } from '@/composables/localStorage';
 import AppBarContent from '@/components/AppBarContent.vue';
@@ -210,7 +211,7 @@ import {
 import { type TaskNode, type TaskTreeItem, buildTaskPath } from '@/task-forest';
 import { isTagGroupId, isUntaggedGroupId, tagGroupId, tagNameOf, useTasksStore } from '@/stores/tasks';
 
-import { type UUID, type StatusKind, type Task, STATUS_LABEL } from '@/task';
+import { type UUID, type Status, type StatusKind, type Task, STATUS_LABEL } from '@/task';
 import axios from 'axios';
 import dayjs from 'dayjs';
 
@@ -234,6 +235,9 @@ const error = ref<string | null>(null);
 const hideCompletedInTreeView = useLocalStorage('hide-completed-in-tree-view', false);
 const hideCompletedInItemView = useLocalStorage('hide-completed-in-item-view', false);
 const showParentDialog = ref<boolean>(false);
+// Statuses dropped in the status view and still being written, by task. The task is drawn where it
+// was dropped until the listing shows the write, rather than jumping back to its old column.
+const droppedStatuses = reactive(new Map<UUID, StatusKind>());
 
 // URL-derived state (single source of truth)
 const selectedNode = computed<TaskNode | undefined>(() => {
@@ -421,7 +425,7 @@ const taskStatuses = computed(() => {
     for (const task of selectedNodeDescendants.value) {
         // A task that names no status is read as Backlog, as the editor reads it, so the column
         // it sits in and the status it opens with agree.
-        const kind: StatusKind = task.metadata?.task?.status?.kind ?? 'backlog';
+        const kind: StatusKind = droppedStatuses.get(task.uuid) ?? task.metadata?.task?.status?.kind ?? 'backlog';
         switch (kind) {
             case 'backlog': statuses.backlog.push(task); break;
             case 'todo': statuses.todo.push(task); break;
@@ -795,6 +799,28 @@ async function onSelectedTaskSave(task: Task) {
     // Refresh task editor manually because its task-path prop retains the same value
     // (the ref may be momentarily null while the window transition remounts the editor)
     taskEditorRef.value?.refresh();
+}
+
+async function onTaskStatusChange(task: TaskNode, status: Status) {
+    // A second drop before the first is written would read the note the first is still changing.
+    if (droppedStatuses.has(task.uuid)) {
+        return;
+    }
+    droppedStatuses.set(task.uuid, status.kind);
+    try {
+        await store.setStatus(task.path, status);
+        // The editor keeps the task it loaded while another tab is shown, and saving from it
+        // would put the old status back.
+        if (task.uuid === selectedNode.value?.uuid) {
+            taskEditorRef.value?.refresh();
+        }
+    }
+    catch (e) {
+        error.value = `Could not move "${task.title}" to ${STATUS_LABEL[status.kind]}: ${e instanceof Error ? e.message : String(e)}`;
+    }
+    finally {
+        droppedStatuses.delete(task.uuid);
+    }
 }
 
 async function onSelectedTaskDelete(path: string) {

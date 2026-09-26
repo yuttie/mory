@@ -293,6 +293,32 @@ describe('save', () => {
     });
 });
 
+describe('setStatus', () => {
+    it('rewrites the status alone and waits for the listing', async () => {
+        const { store } = await storeWith(sample);
+        const path = `.tasks/${uuid(3)}.md`;
+        const before = '---\n# Why it matters\ntask:\n  status:\n    kind: todo\n  progress: 0\n---\n\n# Alpha\n';
+        apiMocks.getNote.mockResolvedValueOnce({ data: before });
+        const syncs = apiMocks.getEntries.mock.calls.length;
+
+        await store.setStatus(path, { kind: 'blocked', blocked_by: 'the vendor' });
+
+        expect(apiMocks.getNote).toHaveBeenCalledWith(path);
+        expect(apiMocks.addNote).toHaveBeenCalledWith(
+            path,
+            before.replace('    kind: todo\n', '    kind: blocked\n    blocked_by: the vendor\n'),
+        );
+        expect(apiMocks.getEntries.mock.calls.length).toBeGreaterThan(syncs);
+    });
+
+    it('writes nothing when the note cannot be edited in place', async () => {
+        const { store } = await storeWith(sample);
+        apiMocks.getNote.mockResolvedValueOnce({ data: '# No frontmatter\n' });
+        await expect(store.setStatus(`.tasks/${uuid(3)}.md`, { kind: 'todo' })).rejects.toThrow();
+        expect(apiMocks.addNote).not.toHaveBeenCalled();
+    });
+});
+
 describe('remove', () => {
     it('deletes the file and drops the task from the forest', async () => {
         const { store, repo } = await storeWith(sample);

@@ -12,8 +12,8 @@ import {
     toNestedForest,
 } from '@/forest';
 import { buildPathForest, stripExtension } from '@/path-forest';
-import { render } from '@/task';
-import type { Task } from '@/task';
+import { render, replaceStatus } from '@/task';
+import type { Status, Task } from '@/task';
 import { TASKS_DIR, buildTaskPath, taskPolicy } from '@/task-forest';
 import type { TaskNode, TaskTreeItem } from '@/task-forest';
 import { useEntrySubset } from '@/composables/entrySubset';
@@ -185,6 +185,14 @@ export const useTasksStore = defineStore('tasks', () => {
         await subset.settle(path, true);
     }
 
+    // Change the status alone. `save` regenerates the whole note from a `Task`, which only the
+    // editor holds; this reads the note as it stands and rewrites nothing but the status.
+    async function setStatus(path: string, status: Status): Promise<void> {
+        const content = await files.read(path);
+        await files.write(path, replaceStatus(content, status));
+        await subset.settle(path, true);
+    }
+
     async function remove(path: string): Promise<boolean> {
         const deleted = await files.remove(path);
         if (deleted) {
@@ -264,6 +272,7 @@ export const useTasksStore = defineStore('tasks', () => {
         init: subset.init,
         refresh: subset.refresh,
         save,
+        setStatus,
         remove,
         move,
     };
