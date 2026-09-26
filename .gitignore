@@ -1,0 +1,2 @@
+# Configures compose.yaml, secrets included.
+/.env
