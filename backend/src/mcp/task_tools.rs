@@ -17,8 +17,8 @@ use crate::models::AppState;
 /// `additionalProperties: false` on every member is why changing status removes the whole
 /// `status:` mapping first: a task that goes from `waiting` to `todo` carrying its old
 /// `waiting_for` is not a valid task, and the web app validates against this schema.
-const STATUS_KINDS: [&str; 7] = [
-    "todo", "in_progress", "waiting", "blocked", "on_hold", "done", "canceled",
+const STATUS_KINDS: [&str; 8] = [
+    "backlog", "todo", "in_progress", "waiting", "blocked", "on_hold", "done", "canceled",
 ];
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -28,8 +28,8 @@ pub struct UpdateTaskArgs {
     /// The commit message. Say what changed and why.
     pub message: String,
 
-    /// `todo`, `in_progress`, `waiting`, `blocked`, `on_hold`, `done` or `canceled`. Changing it
-    /// replaces the whole status, so the fields the new one needs must come with it.
+    /// `backlog`, `todo`, `in_progress`, `waiting`, `blocked`, `on_hold`, `done` or `canceled`.
+    /// Changing it replaces the whole status, so the fields the new one needs must come with it.
     #[serde(default)]
     pub status: Option<String>,
     /// Required by `waiting`: what is being waited for.
@@ -140,7 +140,7 @@ fn status_changes(args: &UpdateTaskArgs, kind: &str) -> Result<Vec<Change>, Stri
             status.insert("canceled_at".into(), canceled_at.into());
             status.insert("cancel_reason".into(), cancel_reason.into());
         },
-        // `todo` and `in_progress` carry nothing but their kind.
+        // `backlog`, `todo` and `in_progress` carry nothing but their kind.
         _ => {},
     }
     Ok(vec![Change::set(&["task", "status"], Value::Mapping(status))])
@@ -593,7 +593,8 @@ mod tests {
                 .expect_err("{kind} should require its companion");
             assert!(error.contains(wanted), "{kind}: {error}");
         }
-        // And the two that need nothing.
+        // And the three that need nothing.
+        assert!(status_changes(&args("t.md"), "backlog").is_ok());
         assert!(status_changes(&args("t.md"), "todo").is_ok());
         assert!(status_changes(&args("t.md"), "in_progress").is_ok());
         assert!(status_changes(&args("t.md"), "procrastinating").is_err());

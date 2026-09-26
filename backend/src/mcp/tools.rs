@@ -295,8 +295,8 @@ pub async fn list_notes(
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ListTasksArgs {
-    /// Only tasks in this state: `todo`, `in_progress`, `waiting`, `blocked`, `on_hold`, `done`
-    /// or `canceled`. Omit for every state.
+    /// Only tasks in this state: `backlog`, `todo`, `in_progress`, `waiting`, `blocked`,
+    /// `on_hold`, `done` or `canceled`. Omit for every state.
     #[serde(default)]
     pub status: Option<String>,
     /// Only tasks carrying this tag.
@@ -321,8 +321,8 @@ struct TaskSummary {
     tags: Vec<String>,
 }
 
-const TASK_STATUSES: [&str; 7] = [
-    "todo", "in_progress", "waiting", "blocked", "on_hold", "done", "canceled",
+const TASK_STATUSES: [&str; 8] = [
+    "backlog", "todo", "in_progress", "waiting", "blocked", "on_hold", "done", "canceled",
 ];
 
 pub async fn list_tasks(

@@ -129,7 +129,8 @@ impl Mory {
                        Each result carries the note's `task:` block exactly as the file \
                        declares it: status kind, progress, importance, urgency, and whichever \
                        of start_at, due_by, deadline and scheduled_dates it sets.\n\nStatuses \
-                       are todo, in_progress, waiting, blocked, on_hold, done and canceled.",
+                       are backlog, todo, in_progress, waiting, blocked, on_hold, done and \
+                       canceled.",
         annotations(title = "List tasks", read_only_hint = true, open_world_hint = false)
     )]
     pub async fn list_tasks(
