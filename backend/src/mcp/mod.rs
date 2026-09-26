@@ -266,7 +266,7 @@ impl Mory {
         description = "Create a task and commit it. Requires the notes:write scope.\n\nA task \
                        is an ordinary note under `.tasks/` carrying a `task:` block. The schema \
                        requires status, progress, importance, urgency and scheduled_dates, so \
-                       whatever is not given is filled in: status todo, progress 0, importance \
+                       whatever is not given is filled in: status backlog, progress 0, importance \
                        and urgency 3, no scheduled dates. The result echoes the whole file back \
                        so those defaults are visible.",
         annotations(title = "Create a task", read_only_hint = false, destructive_hint = false,

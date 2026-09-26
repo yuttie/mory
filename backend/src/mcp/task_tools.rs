@@ -21,6 +21,10 @@ const STATUS_KINDS: [&str; 8] = [
     "backlog", "todo", "in_progress", "waiting", "blocked", "on_hold", "done", "canceled",
 ];
 
+/// What `create_task` writes when the caller names no status. The web app's editor starts a new
+/// task in the backlog too: To do is a commitment made by moving it there.
+const NEW_TASK_STATUS: &str = "backlog";
+
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct UpdateTaskArgs {
     /// The note's exact repository path.
@@ -408,7 +412,7 @@ pub struct CreateTaskArgs {
     pub body: Option<String>,
     #[serde(default)]
     pub tags: Option<Vec<String>>,
-    /// Defaults to `todo`.
+    /// Defaults to `backlog`.
     #[serde(default)]
     pub status: Option<String>,
     /// Defaults to 0.
@@ -460,7 +464,7 @@ pub async fn create_task(
     let update = UpdateTaskArgs {
         path: String::new(),
         message: String::new(),
-        status: Some(args.status.clone().unwrap_or_else(|| "todo".to_owned())),
+        status: Some(args.status.clone().unwrap_or_else(|| NEW_TASK_STATUS.to_owned())),
         waiting_for: args.waiting_for.clone(),
         blocked_by: args.blocked_by.clone(),
         hold_reason: args.hold_reason.clone(),
@@ -474,7 +478,7 @@ pub async fn create_task(
         Ok(changes) => changes,
         Err(message) => return Ok(tool_error(message)),
     };
-    match status_changes(&update, update.status.as_deref().unwrap_or("todo")) {
+    match status_changes(&update, update.status.as_deref().unwrap_or(NEW_TASK_STATUS)) {
         Ok(status) => changes.extend(status),
         Err(message) => return Ok(tool_error(message)),
     }
