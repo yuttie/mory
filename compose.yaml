@@ -1,0 +1,46 @@
+# Runs the published images on one host, published on localhost unless told otherwise, for a
+# reverse proxy in front. It is configured by files next to it: .env, begun from .env.template,
+# for the host, and env.moried.list and env.mory.list for the two containers. Those two hold
+# secrets, so never commit them.
+#
+#     docker compose up -d                 start, or recreate what changed (env files included)
+#     docker compose up -d --pull always   update: recreates only a service whose image changed
+#     docker compose restart moried        restart without recreating
+#     docker compose logs -f moried
+name: mory
+
+services:
+    moried:
+        image: yuttie/moried:latest
+        restart: unless-stopped
+        # The owner of the directories below, so moried's commits and cache files belong to that
+        # user rather than to root.
+        user: "${MORY_UID:?see .env.template}:${MORY_GID:?see .env.template}"
+        env_file:
+            # Compose would otherwise expand every `$` in a value, and MORIED_USER_HASH is an
+            # argon2 hash full of them: unquoted, it arrives silently corrupted. `raw` reads the
+            # file as `docker run --env-file` does, so nothing is expanded -- and nothing is
+            # unquoted either: a value copied from backend/.env.template must lose its quotes.
+            - path: env.moried.list
+              format: raw
+        ports:
+            - "${MORY_BACKEND_ADDRESS:-127.0.0.1:3030}:3030"
+        volumes:
+            # Host directories rather than named volumes, and none has a default: a named volume
+            # starts out owned by root, as does a directory Docker creates for a missing path,
+            # and moried runs as MORY_UID.
+            - "${MORY_REPO_DIR:?see .env.template}:/repo"
+            - "${MORY_CACHE_DIR:?see .env.template}:/cache"
+            - "${MORY_HOME_DIR:?see .env.template}:/home"
+            - /etc/localtime:/etc/localtime:ro
+
+    mory:
+        image: yuttie/mory:latest
+        restart: unless-stopped
+        env_file:
+            - path: env.mory.list
+              format: raw
+        ports:
+            - "${MORY_FRONTEND_ADDRESS:-127.0.0.1:8080}:80"
+        volumes:
+            - /etc/localtime:/etc/localtime:ro
