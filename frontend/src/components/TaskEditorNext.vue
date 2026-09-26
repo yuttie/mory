@@ -617,7 +617,9 @@ const selectedKind = computed<StatusKind>({
 const statusGateError = computed<string | undefined>(() => {
     const from = initialForm.value.status;
     const to = form.status.kind;
-    if (canTransition(from, to)) {
+    // Unlocking offers every status, so it has to lift the gate too: otherwise a status it offers,
+    // such as In progress back to To do, is one the form can never save.
+    if (!statusOptionRestricted.value || canTransition(from, to)) {
         return undefined;
     }
     else {
