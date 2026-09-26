@@ -1,87 +1,14 @@
 <template>
     <div class="status-view groups">
-        <v-card class="group">
-            <v-card-title>Backlog</v-card-title>
+        <v-card
+            v-for="column of COLUMNS"
+            v-bind:key="column.kind"
+            class="group"
+        >
+            <v-card-title>{{ STATUS_LABEL[column.kind] }}</v-card-title>
             <div class="task-list">
                 <TaskListItemNext
-                    v-for="task of taskStatuses.backlog"
-                    v-bind:key="task.uuid"
-                    v-bind:value="task"
-                    v-on:click="onTaskClick(task.uuid)"
-                />
-            </div>
-        </v-card>
-        <v-card class="group">
-            <v-card-title>To do</v-card-title>
-            <div class="task-list">
-                <TaskListItemNext
-                    v-for="task of taskStatuses.todo"
-                    v-bind:key="task.uuid"
-                    v-bind:value="task"
-                    v-on:click="onTaskClick(task.uuid)"
-                />
-            </div>
-        </v-card>
-        <v-card class="group">
-            <v-card-title>In progress</v-card-title>
-            <div class="task-list">
-                <TaskListItemNext
-                    v-for="task of taskStatuses.inProgress"
-                    v-bind:key="task.uuid"
-                    v-bind:value="task"
-                    v-on:click="onTaskClick(task.uuid)"
-                />
-            </div>
-        </v-card>
-        <v-card class="group">
-            <v-card-title>Waiting</v-card-title>
-            <div class="task-list">
-                <TaskListItemNext
-                    v-for="task of taskStatuses.waiting"
-                    v-bind:key="task.uuid"
-                    v-bind:value="task"
-                    v-on:click="onTaskClick(task.uuid)"
-                />
-            </div>
-        </v-card>
-        <v-card class="group">
-            <v-card-title>Blocked</v-card-title>
-            <div class="task-list">
-                <TaskListItemNext
-                    v-for="task of taskStatuses.blocked"
-                    v-bind:key="task.uuid"
-                    v-bind:value="task"
-                    v-on:click="onTaskClick(task.uuid)"
-                />
-            </div>
-        </v-card>
-        <v-card class="group">
-            <v-card-title>On hold</v-card-title>
-            <div class="task-list">
-                <TaskListItemNext
-                    v-for="task of taskStatuses.onHold"
-                    v-bind:key="task.uuid"
-                    v-bind:value="task"
-                    v-on:click="onTaskClick(task.uuid)"
-                />
-            </div>
-        </v-card>
-        <v-card class="group">
-            <v-card-title>Done</v-card-title>
-            <div class="task-list">
-                <TaskListItemNext
-                    v-for="task of taskStatuses.done"
-                    v-bind:key="task.uuid"
-                    v-bind:value="task"
-                    v-on:click="onTaskClick(task.uuid)"
-                />
-            </div>
-        </v-card>
-        <v-card class="group">
-            <v-card-title>Canceled</v-card-title>
-            <div class="task-list">
-                <TaskListItemNext
-                    v-for="task of taskStatuses.canceled"
+                    v-for="task of taskStatuses[column.key]"
                     v-bind:key="task.uuid"
                     v-bind:value="task"
                     v-on:click="onTaskClick(task.uuid)"
@@ -93,20 +20,34 @@
 
 <script lang="ts" setup>
 import { type TaskNode } from '@/task-forest';
-import { type UUID } from '@/task';
+import { type UUID, type StatusKind, STATUS_LABEL } from '@/task';
+
+type TaskStatuses = {
+    backlog: TaskNode[];
+    todo: TaskNode[];
+    inProgress: TaskNode[];
+    waiting: TaskNode[];
+    blocked: TaskNode[];
+    onHold: TaskNode[];
+    done: TaskNode[];
+    canceled: TaskNode[];
+};
+
+// The columns, left to right, and the list each one draws.
+const COLUMNS: { kind: StatusKind; key: keyof TaskStatuses }[] = [
+    { kind: 'backlog', key: 'backlog' },
+    { kind: 'todo', key: 'todo' },
+    { kind: 'in_progress', key: 'inProgress' },
+    { kind: 'waiting', key: 'waiting' },
+    { kind: 'blocked', key: 'blocked' },
+    { kind: 'on_hold', key: 'onHold' },
+    { kind: 'done', key: 'done' },
+    { kind: 'canceled', key: 'canceled' },
+];
 
 // Props
 const props = defineProps<{
-    taskStatuses: {
-        backlog: TaskNode[];
-        todo: TaskNode[];
-        inProgress: TaskNode[];
-        waiting: TaskNode[];
-        blocked: TaskNode[];
-        onHold: TaskNode[];
-        done: TaskNode[];
-        canceled: TaskNode[];
-    };
+    taskStatuses: TaskStatuses;
 }>();
 
 // Emits
