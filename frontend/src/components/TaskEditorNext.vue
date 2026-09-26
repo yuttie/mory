@@ -520,7 +520,8 @@ const form = reactive<EditableTask>({
     // Seeded here because nothing resets the form for a new task: the watcher on `task` skips a
     // task that stays absent, and the one on `selectedTag` fires only when it changes.
     tags: props.selectedTag ? [props.selectedTag] : [],
-    status: { kind: 'todo' },
+    // A new task starts in the backlog: To do is a commitment the author makes by moving it there.
+    status: { kind: 'backlog' },
     progress: 0,
     importance: 3,
     urgency: 3,
@@ -556,7 +557,7 @@ const initialForm = computed<EditableTask>(() => {
         return {
             title: '',
             tags: defaultTags,
-            status: { kind: 'todo' },
+            status: { kind: 'backlog' },
             progress: 0,
             importance: 3,
             urgency: 3,
@@ -747,7 +748,7 @@ function resetFromTask(t?: Task | undefined | null): void {
         const defaultTags = props.selectedTag ? [props.selectedTag] : [];
         form.title = '';
         form.tags = defaultTags;
-        form.status = { kind: 'todo' };
+        form.status = { kind: 'backlog' };
         form.progress = 0;
         form.importance = 3;
         form.urgency = 3;
