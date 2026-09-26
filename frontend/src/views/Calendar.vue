@@ -160,12 +160,17 @@
             color="primary"
             class="flex-grow-1"
         ></v-calendar>
+        <!-- A menu below its activator is otherwise at least as wide as it, which would make the
+             popup as wide as the event it opens from: a day cell in the month view, the whole day
+             in the day view. A width of its own keeps it the same in every view; the menu still
+             narrows it to fit a phone. -->
         <v-menu
             v-model="selectedOpen"
             v-bind:close-on-content-click="false"
             v-bind:activator="selectedElement"
             location="bottom"
-            max-width="30em"
+            min-width="0"
+            width="30em"
         >
             <v-card v-if="selectedEvent" flat class="event-card">
                 <v-toolbar
@@ -789,8 +794,8 @@ watch(eventWindow, (window) => {
     }
 
     :deep(.v-toolbar-title) {
-        // Vuetify's zero basis leaves the title out of the popup's natural width, so the popup
-        // would stay as narrow as the event it opened from and wrap even a short name.
+        // Vuetify's zero basis would share the free space equally with the spacer, wrapping a name
+        // at half the width it could take.
         flex-basis: auto;
         // Keeps a wrapped title off the toolbar's edges; a one-line title still sits within the
         // minimum height above.
