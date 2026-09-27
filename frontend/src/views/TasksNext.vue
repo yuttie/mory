@@ -303,12 +303,14 @@ const isTagGroupSelected = computed<boolean>(() => {
     return activeNodeId.value !== undefined && isTagGroupId(activeNodeId.value);
 });
 
-// Where the selected node sits, for the app bar. A tag group has nothing above it.
+// The tasks above the selected node, root first. A tag group has none.
+const selectedNodeAncestors = computed<TaskNode[]>(() => {
+    return selectedNode.value ? store.ancestorsOf(selectedNode.value.uuid) : [];
+});
+
+// Where the selected node sits, for the app bar.
 const selectedNodeAncestorTitles = computed<string[]>(() => {
-    if (selectedNode.value === undefined) {
-        return [];
-    }
-    return store.ancestorsOf(selectedNode.value.uuid).map((node) => node.title || 'Untitled');
+    return selectedNodeAncestors.value.map((node) => node.title || 'Untitled');
 });
 
 // The task whose descendants the item view lists. A tag group's members are no task's descendants.
@@ -331,70 +333,29 @@ const newTaskTag = computed<string | undefined>(() => {
     return selectedTagName.value ?? undefined;
 });
 
-// Helper function to get ancestor titles for a task
-function getAncestorTitles(taskUuid: string): string[] {
-    const ancestors: string[] = [];
-    
-    try {
-        // Walk up the parent chain to collect ancestor titles
-        let currentParentId = store.parentOf(taskUuid);
-        
-        while (currentParentId) {
-            // Skip tag group nodes (virtual nodes used for UI organization)
-            if (!isTagGroupId(currentParentId)) {
-                const parentNode = store.node(currentParentId);
-                if (parentNode && parentNode.title) {
-                    ancestors.unshift(parentNode.title); // Add to beginning to maintain hierarchy order
-                }
-            }
-            currentParentId = store.parentOf(currentParentId);
-        }
-    } catch (error) {
-        console.warn('Failed to get ancestor titles:', error);
-    }
-    
-    return ancestors;
-}
-
-// Computed property for parent task title (for UI display)
+// The title of the task the edited one sits under, for the editor's heading.
 const selectedNodeParentTitle = computed<string | undefined>(() => {
-    if (newTaskPath.value && selectedNode.value && !isTagGroupSelected.value) {
-        // For new tasks, the selected node is the parent (unless it's a tag group)
-        if (isTagGroupId(selectedNode.value.uuid)) {
-            return undefined; // Tag groups don't have meaningful titles for new task context
-        } else {
-            return selectedNode.value.title;
-        }
-    } else if (selectedNode.value && !isTagGroupSelected.value && !newTaskPath.value) {
-        // For existing tasks, get their immediate parent title
-        const parentId = store.parentOf(selectedNode.value.uuid);
-        if (parentId && !isTagGroupId(parentId)) {
-            const parentNode = store.node(parentId);
-            return parentNode?.title;
-        }
+    if (selectedNode.value === undefined || isTagGroupSelected.value) {
+        return undefined;
     }
-    return undefined;
+    // A new task goes under the selected one.
+    const parent = newTaskPath.value ? selectedNode.value : selectedNodeAncestors.value.at(-1);
+    return parent?.title ?? undefined;
 });
 
-// Computed property for ancestor titles of the selected node (for task assessment)
+// The titles above the edited task, for its assessment. Untitled ones are left out: the backend
+// takes the titles as strings and refuses the whole request over a null.
 const selectedNodeAncestorTitlesForTaskAssessment = computed<string[]>(() => {
-    if (newTaskPath.value && selectedNode.value && !isTagGroupSelected.value) {
-        // For new tasks, include the selected node as the parent in ancestor chain
-        // But exclude the selected node itself if it's a tag group
-        if (isTagGroupId(selectedNode.value.uuid)) {
-            return getAncestorTitles(selectedNode.value.uuid);
-        } else {
-            // Left out untitled, as its ancestors are: the backend takes the titles as strings and
-            // refuses the whole request over a null.
-            const parentTitle = selectedNode.value.title;
-            const ancestorTitles = getAncestorTitles(selectedNode.value.uuid);
-            return parentTitle ? [...ancestorTitles, parentTitle] : ancestorTitles;
-        }
-    } else if (selectedNode.value && !isTagGroupSelected.value && !newTaskPath.value) {
-        // For existing tasks, get their own ancestors (not including themselves)
-        return getAncestorTitles(selectedNode.value.uuid);
+    if (selectedNode.value === undefined || isTagGroupSelected.value) {
+        return [];
     }
-    return [];
+    // A new task goes under the selected one, which makes that its last ancestor.
+    const ancestors = newTaskPath.value
+        ? [...selectedNodeAncestors.value, selectedNode.value]
+        : selectedNodeAncestors.value;
+    return ancestors
+        .map((node) => node.title)
+        .filter((title): title is string => Boolean(title));
 });
 
 // Utility function to sort tasks by due date/deadline
