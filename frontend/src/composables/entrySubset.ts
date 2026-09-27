@@ -22,8 +22,12 @@ export interface EntrySubset {
     hasLoadedOnce: Ref<boolean>;
     init: () => Promise<void>;
     refresh: () => Promise<ListEntry2[]>;
-    settle: (path: string, expectPresent: boolean) => Promise<void>;
+    settle: (path: string, expected: Expected) => Promise<void>;
 }
+
+// What shows a write: whether its path is there at all, or -- for a file rewritten in place, which
+// is there throughout -- what its entry says.
+type Expected = boolean | ((entry: ListEntry2) => boolean);
 
 export function useEntrySubset(prefix: string): EntrySubset {
     const files = useFilesStore();
@@ -58,24 +62,29 @@ export function useEntrySubset(prefix: string): EntrySubset {
         return files.refresh();
     }
 
-    // Sync, and do not return until `path` is present (or absent, after a delete).
+    // Sync, and do not return until the listing shows the write: `path` present (or absent, after a
+    // delete), or present with an entry `expected` accepts.
     //
     // The backend serves the listing at the commit its cache actually describes, which can lag
     // HEAD when a sync outruns the deadline it waits on. A single refresh can therefore come back
     // without the write that prompted it -- which is exactly how a newly created task used to go
     // missing from the tree. One bounded retry, so a repository being written to continuously
     // cannot spin here.
-    async function settle(path: string, expectPresent: boolean): Promise<void> {
+    async function settle(path: string, expected: Expected): Promise<void> {
         await refresh();
-        if (isPresent(path) === expectPresent) {
+        if (isSettled(path, expected)) {
             return;
         }
         await new Promise((resolve) => setTimeout(resolve, LAGGING_RETRY_MS));
         await refresh();
     }
 
-    function isPresent(path: string): boolean {
-        return files.entries.some((entry) => entry.path === path);
+    function isSettled(path: string, expected: Expected): boolean {
+        const entry = files.entries.find((candidate) => candidate.path === path);
+        if (typeof expected === 'boolean') {
+            return (entry !== undefined) === expected;
+        }
+        return entry !== undefined && expected(entry);
     }
 
     return { entries, hasLoadedOnce, init, refresh, settle };

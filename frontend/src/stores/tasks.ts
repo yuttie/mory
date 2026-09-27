@@ -15,7 +15,7 @@ import { buildPathForest, stripExtension } from '@/path-forest';
 import { render, replaceStatus } from '@/task';
 import type { Status, Task } from '@/task';
 import { TASKS_DIR, buildTaskPath, taskPolicy } from '@/task-forest';
-import type { TaskNode, TaskTreeItem } from '@/task-forest';
+import type { TaskMetadata, TaskNode, TaskTreeItem } from '@/task-forest';
 import { useEntrySubset } from '@/composables/entrySubset';
 import { useFilesStore } from '@/stores/files';
 
@@ -195,7 +195,13 @@ export const useTasksStore = defineStore('tasks', () => {
         if (edited !== content) {
             await files.write(path, edited);
         }
-        await subset.settle(path, true);
+        // The note is listed before the write as after it, so its path shows nothing: the status
+        // the listing gives it does. Returning before that would let a caller drawing the task in
+        // its new column meanwhile hand it back to a listing that still has it in the old one.
+        await subset.settle(
+            path,
+            (entry) => (entry.metadata as TaskMetadata | null)?.task?.status?.kind === status.kind,
+        );
     }
 
     async function remove(path: string): Promise<boolean> {
