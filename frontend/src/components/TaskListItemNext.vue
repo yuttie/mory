@@ -1,3 +1,6 @@
+<!-- Nothing may sit beside the root element, a comment included: a development build keeps template
+     comments as nodes, and a second root node leaves vuedraggable unable to tell which task the
+     dragged element is, so the status view drops nothing. -->
 <template>
     <router-link
         v-bind:to="to"
@@ -116,9 +119,7 @@ dayjs.extend(relativeTime, {
 const props = defineProps<{
     value: TaskNode;
     // Where choosing the task goes. The item is a link to it, so a task can be opened in a new tab
-    // or its address copied, as from the tree. Said here rather than beside the link: a development
-    // build keeps template comments as nodes, and a second root node leaves vuedraggable unable to
-    // tell which task the dragged element is, so the status view drops nothing.
+    // or its address copied, as from the tree.
     to: RouteLocationRaw;
     // The task whose descendants the list holds, if it holds only those.
     listRoot?: UUID;

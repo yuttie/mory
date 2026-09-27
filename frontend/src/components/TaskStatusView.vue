@@ -23,7 +23,9 @@
                  the column it left, and the card clips it: it vanished as soon as it left its
                  column.
                  Each task is a link made undraggable, or the browser would start a drag of its own
-                 to carry off the address, and Sortable's would stop at the first move. -->
+                 to carry off the address, and Sortable's would stop at the first move. Said here,
+                 away from `draggable`, because a comment in the `item` slot is a second node in a
+                 development build, and vuedraggable refuses a slot with more than one. -->
             <draggable
                 class="task-list"
                 item-key="uuid"
@@ -145,7 +147,8 @@ const formRef = ref<InstanceType<typeof VForm> | null>(null);
 
 // How a task was last pressed. On a touch screen a long press is what picks a task up, and on a
 // link it also opens the browser's menu for the link, which takes over the touch and ends the drag.
-// A mouse keeps the menu: its right button picks nothing up.
+// A mouse keeps the menu: its right button picks nothing up. Taken from `pointerdown` because not
+// every browser says on `contextmenu` itself what the pointer was.
 let pressedWith = '';
 
 // Methods
@@ -251,7 +254,7 @@ $space: 12px;
    task's own (see TaskListItemNext): Sortable draws that copy outside this view. */
 
 /* iOS answers a long press on a link with its preview of the link, and fires no event that could be
-   canceled first, as `onContextMenu` does elsewhere. */
+   canceled first, as `onContextMenu` cancels Android's menu. */
 .groups :deep(.task-list-item) {
     -webkit-touch-callout: none;
 }
