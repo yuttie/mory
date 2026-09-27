@@ -126,13 +126,9 @@ const store = useTasksStore();
 
 // Computed properties
 // A list gathers tasks from anywhere in the tree, and a title alone often does not say which
-// project it belongs to: "Write the report" could be under any of them. Below a list's root, that
-// root and everything above it are the same on every item, so the path starts after it.
+// project it belongs to: "Write the report" could be under any of them.
 const ancestorTitles = computed<string[]>(() => {
-    const ancestors = store.ancestorsOf(props.value.uuid);
-    // Past -1 is the start: with no root, or one the task is not under, the whole path is shown.
-    const start = ancestors.findIndex((node) => node.uuid === props.listRoot) + 1;
-    return ancestors.slice(start).map((node) => node.title || 'Untitled');
+    return store.ancestorsOf(props.value.uuid, props.listRoot).map((node) => node.title || 'Untitled');
 });
 
 const done = computed<boolean>(() => {

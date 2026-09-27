@@ -288,6 +288,24 @@ describe('ancestorsOf', () => {
         expect(store.ancestorsOf(uuid(1))).toEqual([]);
     });
 
+    it('lists only the ones under a given ancestor', async () => {
+        const { store } = await storeWith([
+            ...sample,
+            { path: `.tasks/${uuid(1)}/${uuid(2)}/${uuid(7)}.md`, title: 'Grandchild' },
+        ]);
+        expect(store.ancestorsOf(uuid(7), uuid(1)).map((t) => t.title)).toEqual(['Child']);
+        expect(store.ancestorsOf(uuid(7), uuid(2))).toEqual([]);
+    });
+
+    it('lists them all below a task it is not under', async () => {
+        const { store } = await storeWith([
+            ...sample,
+            { path: `.tasks/${uuid(1)}/${uuid(2)}/${uuid(7)}.md`, title: 'Grandchild' },
+        ]);
+        expect(store.ancestorsOf(uuid(7), uuid(3)).map((t) => t.title)).toEqual(['Parent', 'Child']);
+        expect(store.ancestorsOf(uuid(7), uuid(7)).map((t) => t.title)).toEqual(['Parent', 'Child']);
+    });
+
     it('does not count a tag group as an ancestor', async () => {
         const { store, tagGroupId } = await storeWith(sample);
         expect(store.ancestorsOf(uuid(3))).toEqual([]);
