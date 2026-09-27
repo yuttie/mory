@@ -384,7 +384,11 @@ const selectedNodeAncestorTitlesForTaskAssessment = computed<string[]>(() => {
         if (isTagGroupId(selectedNode.value.uuid)) {
             return getAncestorTitles(selectedNode.value.uuid);
         } else {
-            return [...getAncestorTitles(selectedNode.value.uuid), selectedNode.value.title];
+            // Left out untitled, as its ancestors are: the backend takes the titles as strings and
+            // refuses the whole request over a null.
+            const parentTitle = selectedNode.value.title;
+            const ancestorTitles = getAncestorTitles(selectedNode.value.uuid);
+            return parentTitle ? [...ancestorTitles, parentTitle] : ancestorTitles;
         }
     } else if (selectedNode.value && !isTagGroupSelected.value && !newTaskPath.value) {
         // For existing tasks, get their own ancestors (not including themselves)
