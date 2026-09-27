@@ -330,3 +330,27 @@ test('refuses a status the task cannot move to, and says so while it is dragged'
     await expect(column(page, 'To do')).not.toContainText('Alpha');
     expect(repository.writes).toEqual([]);
 });
+
+test.describe('on iOS', () => {
+    // Sortable places the copy that follows the pointer differently on iOS, which it tells by the
+    // user agent alone.
+    test.use({
+        userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+    });
+
+    test('keeps the dragged task in sight over another column', async ({ context, page }) => {
+        await mockBackend(context, { [ALPHA]: note('Alpha', ['kind: todo']) });
+        await page.goto('/tasks-next');
+        await expect(column(page, 'To do')).toContainText('Alpha');
+
+        await startDrag(page, page.locator('.task-list-item', { hasText: 'Alpha' }));
+        const done = await column(page, 'Done').locator('.task-list').boundingBox();
+        if (done === null) {
+            throw new Error('The Done column is not visible.');
+        }
+        await page.mouse.move(done.x + done.width / 2, done.y + done.height / 2, { steps: 10 });
+        await expect(column(page, 'Done')).toHaveCSS('outline-style', 'solid');
+        await expect(page.locator('.task-list-item.sortable-drag')).toBeInViewport();
+        await page.mouse.up();
+    });
+});

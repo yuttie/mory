@@ -18,7 +18,10 @@
                  `force-fallback` because Sortable scrolls near an edge only for a drag it runs
                  itself. A native drag leaves that to the browser, and a touch drag in a browser
                  that has native ones is scrolled by neither -- and on a phone each column is the
-                 width of the screen, so no other column could be reached. -->
+                 width of the screen, so no other column could be reached.
+                 `fallback-on-body` because on iOS Sortable positions that copy absolutely inside
+                 the column it left, and the card clips it: it vanished as soon as it left its
+                 column. -->
             <draggable
                 class="task-list"
                 item-key="uuid"
@@ -26,6 +29,7 @@
                 v-bind:group="GROUPS[column.kind]"
                 v-bind:sort="false"
                 v-bind:force-fallback="true"
+                v-bind:fallback-on-body="true"
                 v-bind:delay="500"
                 v-bind:delay-on-touch-only="true"
                 v-on:start="draggedFrom = column.kind"
@@ -265,18 +269,6 @@ $space: 12px;
 
 .dragging :deep(.vacated) {
     visibility: hidden;
-}
-
-/* The copy that follows the pointer lives in the column it left, and each card stacks its own
-   contents, so without this the columns after it would be drawn over it. */
-.dragging .origin {
-    z-index: 1;
-}
-
-/* That copy is drawn over other tasks, so it needs a ground of its own to be read against. */
-.groups :deep(.task-list-item.sortable-drag) {
-    background: rgb(var(--v-theme-surface));
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 /* The tasks a dragged one passes over are not places it can go, so they must not answer the pointer
