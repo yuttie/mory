@@ -39,12 +39,28 @@
                             vertical
                             class="mx-3"
                         />
-                        <template v-if="selectedNodeAncestorTitles.length > 0">
-                            <span class="app-bar-ancestors text-medium-emphasis">
-                                {{ selectedNodeAncestorTitles.join(' › ') }}
-                            </span>
-                            <span class="app-bar-separator text-medium-emphasis">›</span>
-                        </template>
+                        <!-- Links, so a task up the path is one click away and can be opened in a
+                             new tab. The root clears the selection, which the tree does only when
+                             the selected task is found and clicked again. -->
+                        <span class="app-bar-ancestors text-medium-emphasis">
+                            <router-link
+                                v-bind:to="routeToState(undefined, 'descendants', descendantsViewMode)"
+                                class="app-bar-link"
+                            >All tasks</router-link>
+                            <template
+                                v-for="node of selectedNodeAncestors"
+                                v-bind:key="node.uuid"
+                            >
+                                <span class="app-bar-separator">›</span>
+                                <!-- The tab stays: going up from a list lists the ancestor's
+                                     descendants, and from the editor edits the ancestor. -->
+                                <router-link
+                                    v-bind:to="routeToState(node.uuid, itemViewTab, descendantsViewMode)"
+                                    class="app-bar-link"
+                                >{{ node.title || 'Untitled' }}</router-link>
+                            </template>
+                        </span>
+                        <span class="app-bar-separator text-medium-emphasis">›</span>
                         <span class="app-bar-current">{{ selectedNode.title || 'Untitled' }}</span>
                     </template>
                 </div>
@@ -225,7 +241,7 @@
 
 <script lang="ts" setup>
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { type RouteLocationRaw, useRoute, useRouter } from 'vue-router';
 import { useDisplay } from 'vuetify';
 import { useLocalStorage } from '@/composables/localStorage';
 import AppBarContent from '@/components/AppBarContent.vue';
@@ -306,11 +322,6 @@ const isTagGroupSelected = computed<boolean>(() => {
 // The tasks above the selected node, root first. A tag group has none.
 const selectedNodeAncestors = computed<TaskNode[]>(() => {
     return selectedNode.value ? store.ancestorsOf(selectedNode.value.uuid) : [];
-});
-
-// Where the selected node sits, for the app bar.
-const selectedNodeAncestorTitles = computed<string[]>(() => {
-    return selectedNodeAncestors.value.map((node) => node.title || 'Untitled');
 });
 
 // The task whose descendants the item view lists. A tag group's members are no task's descendants.
@@ -645,17 +656,20 @@ const viewModeOptions = computed(() => [
 ]);
 
 // URL management functions
-function navigateToState(selectedNodeId?: string, tab?: string, viewMode?: string) {
-    const params = {
-        selectedNodeId: selectedNodeId || '_',
-        tab: tab || 'descendants',
-        viewMode: viewMode || 'status'
-    };
-
-    router.push({
+// Apart from navigating, so a link can point where a click would go and still be opened in a new tab.
+function routeToState(selectedNodeId?: string, tab?: string, viewMode?: string): RouteLocationRaw {
+    return {
         name: 'TasksNextWithParams',
-        params: params
-    }).catch(err => {
+        params: {
+            selectedNodeId: selectedNodeId || '_',
+            tab: tab || 'descendants',
+            viewMode: viewMode || 'status',
+        },
+    };
+}
+
+function navigateToState(selectedNodeId?: string, tab?: string, viewMode?: string) {
+    router.push(routeToState(selectedNodeId, tab, viewMode)).catch(err => {
         // Ignore navigation duplicated errors
         if (err.name !== 'NavigationDuplicated') {
             // eslint-disable-next-line no-console
@@ -904,6 +918,17 @@ async function load(primed = false) {
 .app-bar-current {
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* In the path's own colour, so the selected task still stands out from the ones above it. */
+.app-bar-link {
+    color: inherit;
+    text-decoration: none;
+
+    &:hover,
+    &:focus-visible {
+        text-decoration: underline;
+    }
 }
 
 /* The ancestors give way long before the selected task's own title does, which is what the bar is
