@@ -10,6 +10,7 @@
                     v-for="task of eisenhowerQuadrants.doFirst"
                     v-bind:key="task.uuid"
                     v-bind:value="task"
+                    v-bind:list-root="listRoot"
                     v-on:click="onTaskClick(task.uuid)"
                 />
             </div>
@@ -24,6 +25,7 @@
                     v-for="task of eisenhowerQuadrants.schedule"
                     v-bind:key="task.uuid"
                     v-bind:value="task"
+                    v-bind:list-root="listRoot"
                     v-on:click="onTaskClick(task.uuid)"
                 />
             </div>
@@ -38,6 +40,7 @@
                     v-for="task of eisenhowerQuadrants.delegate"
                     v-bind:key="task.uuid"
                     v-bind:value="task"
+                    v-bind:list-root="listRoot"
                     v-on:click="onTaskClick(task.uuid)"
                 />
             </div>
@@ -52,6 +55,7 @@
                     v-for="task of eisenhowerQuadrants.eliminate"
                     v-bind:key="task.uuid"
                     v-bind:value="task"
+                    v-bind:list-root="listRoot"
                     v-on:click="onTaskClick(task.uuid)"
                 />
             </div>
@@ -71,6 +75,7 @@ const props = defineProps<{
         delegate: TaskNode[];
         eliminate: TaskNode[];
     };
+    listRoot?: UUID;
 }>();
 
 // Emits

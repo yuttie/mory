@@ -159,6 +159,7 @@
                                 v-if="descendantsViewMode === 'status'"
                                 v-bind:task-statuses="taskStatuses"
                                 v-bind:known-contacts="knownContacts"
+                                v-bind:list-root="listRoot"
                                 v-on:task-click="onTaskListItemClick"
                                 v-on:status-change="onTaskStatusChange"
                             />
@@ -166,12 +167,14 @@
                             <TaskScheduleView
                                 v-else-if="descendantsViewMode === 'schedule'"
                                 v-bind:scheduled="scheduled"
+                                v-bind:list-root="listRoot"
                                 v-on:task-click="onTaskListItemClick"
                             />
                             <!-- Eisenhower Matrix view -->
                             <TaskEisenhowerView
                                 v-else-if="descendantsViewMode === 'eisenhower'"
                                 v-bind:eisenhower-quadrants="eisenhowerQuadrants"
+                                v-bind:list-root="listRoot"
                                 v-on:task-click="onTaskListItemClick"
                             />
                         </div>
@@ -270,6 +273,11 @@ const activeNodeId = computed<string | undefined>(() => {
 
 const isTagGroupSelected = computed<boolean>(() => {
     return activeNodeId.value !== undefined && isTagGroupId(activeNodeId.value);
+});
+
+// The task whose descendants the item view lists. A tag group's members are no task's descendants.
+const listRoot = computed<UUID | undefined>(() => {
+    return isTagGroupSelected.value ? undefined : activeNodeId.value;
 });
 
 const selectedTagName = computed<string | null>(() => {

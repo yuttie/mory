@@ -87,6 +87,7 @@ import {
     mdiNoteTextOutline,
 } from '@mdi/js';
 
+import type { UUID } from '@/task';
 import type { TaskNode } from '@/task-forest';
 import { useTasksStore } from '@/stores/tasks';
 
@@ -111,6 +112,8 @@ dayjs.extend(relativeTime, {
 // Props
 const props = defineProps<{
     value: TaskNode;
+    // The task whose descendants the list holds, if it holds only those.
+    listRoot?: UUID;
 }>();
 
 // Emits
@@ -123,9 +126,13 @@ const store = useTasksStore();
 
 // Computed properties
 // A list gathers tasks from anywhere in the tree, and a title alone often does not say which
-// project it belongs to: "Write the report" could be under any of them.
+// project it belongs to: "Write the report" could be under any of them. Below a list's root, that
+// root and everything above it are the same on every item, so the path starts after it.
 const ancestorTitles = computed<string[]>(() => {
-    return store.ancestorsOf(props.value.uuid).map((node) => node.title || 'Untitled');
+    const ancestors = store.ancestorsOf(props.value.uuid);
+    // Past -1 is the start: with no root, or one the task is not under, the whole path is shown.
+    const start = ancestors.findIndex((node) => node.uuid === props.listRoot) + 1;
+    return ancestors.slice(start).map((node) => node.title || 'Untitled');
 });
 
 const done = computed<boolean>(() => {

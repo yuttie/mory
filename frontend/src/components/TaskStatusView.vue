@@ -40,6 +40,7 @@
                 <template v-slot:item="{ element: task }">
                     <TaskListItemNext
                         v-bind:value="task"
+                        v-bind:list-root="listRoot"
                         v-on:click="onTaskClick(task.uuid)"
                     />
                 </template>
@@ -97,6 +98,7 @@ import { type UUID, type Status, type StatusKind, STATUS_KINDS, STATUS_LABEL, ca
 defineProps<{
     taskStatuses: Record<StatusKind, TaskNode[]>;
     knownContacts: [string, number][];
+    listRoot?: UUID;
 }>();
 
 // Emits
