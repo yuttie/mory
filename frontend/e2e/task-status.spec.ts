@@ -1,9 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { BrowserContext, Locator, Page } from '@playwright/test';
 import YAML from 'yaml';
-import { API_URL } from './backend';
-
-const TOKEN = 'eyJhbGciOiJub25lIn0.eyJzdWIiOiJlMmUiLCJlbWFpbCI6ImVAZS5pbnZhbGlkIiwiZXhwIjo0MTAyNDQ0ODAwfQ.';
+import { API_URL, TOKEN, signIn } from './backend';
 
 function uuid(n: number): string {
     return `${String(n).padStart(8, '0')}-0000-4000-8000-000000000000`;
@@ -43,9 +41,7 @@ async function mockBackend(context: BrowserContext, notes: Record<string, string
     let commit = 1;
     const commitId = () => String(commit).padStart(40, '0');
 
-    await context.addInitScript((token) => {
-        window.localStorage.setItem('token', JSON.stringify(token));
-    }, TOKEN);
+    await signIn(context);
     await context.route(`${API_URL}**`, async (route) => {
         const request = route.request();
         const path = decodeURIComponent(new URL(request.url()).pathname);
@@ -92,30 +88,54 @@ async function mockBackend(context: BrowserContext, notes: Record<string, string
     return repository;
 }
 
+// The status view on a repository of `notes`, once its tasks are drawn.
+async function openStatusView(context: BrowserContext, page: Page, notes: Record<string, string>): Promise<Repository> {
+    const repository = await mockBackend(context, notes);
+    await page.goto('/tasks-next');
+    await expect(page.locator('.status-view .task-list-item').first()).toBeVisible();
+    return repository;
+}
+
 function column(page: Page, title: string): Locator {
     return page.locator('.status-view .group').filter({
         has: page.locator('.v-card-title', { hasText: new RegExp(`^${title}$`) }),
     });
 }
 
-// Picks the task up, and measures the target only once the drag is under way: an empty column
-// has no height to drop into until a drag opens one.
-async function startDrag(page: Page, item: Locator): Promise<void> {
-    const from = await item.boundingBox();
-    if (from === null) {
-        throw new Error('The task to drag is not visible.');
-    }
-    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(from.x + from.width / 2 + 20, from.y + from.height / 2 + 20, { steps: 5 });
+// A task in the columns. The copy that follows the pointer during a drag is drawn outside them.
+function task(page: Page, title: string): Locator {
+    return page.locator('.status-view .task-list-item', { hasText: title });
 }
 
-async function dropOn(page: Page, target: Locator): Promise<void> {
-    const to = await target.locator('.task-list').boundingBox();
-    if (to === null) {
-        throw new Error('The column to drop on is not visible.');
+// Where `locator` is drawn. Throws rather than let a missing element compare equal to another.
+async function box(locator: Locator): Promise<{ x: number; y: number; width: number; height: number }> {
+    const found = await locator.boundingBox();
+    if (found === null) {
+        throw new Error(`Not drawn: ${locator}`);
     }
-    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 10 });
+    return found;
+}
+
+// Moves the pointer over the middle of `target`, or onto its bottom edge.
+async function moveOver(page: Page, target: Locator, at: 'middle' | 'bottom' = 'middle'): Promise<void> {
+    const { x, y, width, height } = await box(target);
+    await page.mouse.move(x + width / 2, at === 'bottom' ? y + height : y + height / 2, { steps: 10 });
+}
+
+// How far, down and right, the pointer moves to pick up the task it was pressed on.
+const LIFT = 20;
+
+async function startDrag(page: Page, item: Locator): Promise<void> {
+    const { x, y, width, height } = await box(item);
+    await page.mouse.move(x + width / 2, y + height / 2);
+    await page.mouse.down();
+    await page.mouse.move(x + width / 2 + LIFT, y + height / 2 + LIFT, { steps: 5 });
+}
+
+// Measures the target only once the drag is under way: an empty column has no height to drop into
+// until a drag opens one.
+async function dropOn(page: Page, target: Locator): Promise<void> {
+    await moveOver(page, target.locator('.task-list'));
     await page.mouse.up();
 }
 
@@ -123,31 +143,26 @@ const ALPHA = `.tasks/${uuid(1)}.md`;
 const BETA = `.tasks/${uuid(2)}.md`;
 const GAMMA = `.tasks/${uuid(3)}.md`;
 
-// Every column on screen at once, so a drop lands where it is aimed rather than past the edge.
+// Every column on screen at once -- eight 270px columns and their gaps, beside the 300px task tree --
+// so a drop lands where it is aimed rather than past the edge.
 test.use({ viewport: { width: 2800, height: 900 } });
 
 test('moves a task to the status it is dropped on, rewriting nothing but the status', async ({ context, page }) => {
     const before = note('Alpha', ['kind: todo']);
-    const repository = await mockBackend(context, {
+    const repository = await openStatusView(context, page, {
         [ALPHA]: before,
         [BETA]: note('Beta', ['kind: in_progress']),
         [GAMMA]: note('Gamma', ['kind: in_progress']),
     });
-    await page.goto('/tasks-next');
-    await expect(column(page, 'To do')).toContainText('Alpha');
     const target = column(page, 'In progress');
-    const height = (await target.boundingBox())?.height;
+    const { height } = await box(target);
 
-    await startDrag(page, page.locator('.task-list-item', { hasText: 'Alpha' }));
+    await startDrag(page, task(page, 'Alpha'));
     // Held between two tasks: the column is ordered by date, so no gap may open there as if the
     // task could be placed between them. The column is marked instead.
-    const beta = await page.locator('.task-list-item', { hasText: 'Beta' }).boundingBox();
-    if (beta === null) {
-        throw new Error('Beta is not visible.');
-    }
-    await page.mouse.move(beta.x + beta.width / 2, beta.y + beta.height, { steps: 10 });
+    await moveOver(page, task(page, 'Beta'), 'bottom');
     await expect(target).toHaveCSS('outline-style', 'solid');
-    expect((await target.boundingBox())?.height).toBe(height);
+    expect((await box(target)).height).toBe(height);
     await dropOn(page, target);
 
     await expect(target).toContainText('Alpha');
@@ -158,44 +173,35 @@ test('moves a task to the status it is dropped on, rewriting nothing but the sta
 });
 
 test('keeps the dragged task\'s place open, and only that, wherever it is held', async ({ context, page }) => {
-    const repository = await mockBackend(context, {
+    const repository = await openStatusView(context, page, {
         [ALPHA]: note('Alpha', ['kind: todo']),
         [BETA]: note('Beta', ['kind: todo']),
         [GAMMA]: note('Gamma', ['kind: in_progress']),
     });
-    await page.goto('/tasks-next');
     const list = column(page, 'To do').locator('.task-list');
     const items = list.locator('.task-list-item');
     await expect(items).toHaveCount(2);
-    const height = (await list.boundingBox())?.height;
-    // Not `.sortable-drag`, the copy following the pointer.
-    const next = list.locator('.task-list-item:not(.sortable-drag)').nth(1);
-    const place = (await next.boundingBox())?.y;
+    const { height } = await box(list);
+    const next = items.nth(1);
+    const { y: place } = await box(next);
     // The column's height and where the next task sits, together: one gap, at the task's place.
     const unchanged = async () => {
-        await expect.poll(async () => (await list.boundingBox())?.height).toBe(height);
-        await expect.poll(async () => (await next.boundingBox())?.y).toBe(place);
+        await expect.poll(async () => (await box(list)).height).toBe(height);
+        await expect.poll(async () => (await box(next)).y).toBe(place);
     };
 
-    // Moved 20px down, over the next task: a gap that followed the pointer would move below it.
+    // Lifted onto the next task: a gap that followed the pointer would move below it.
+    expect(LIFT).toBeGreaterThan((await box(items.nth(0))).height / 2);
     await startDrag(page, items.nth(0));
     await unchanged();
 
     // Over another column, the task's place is still held open in its own.
-    const gamma = await column(page, 'In progress').locator('.task-list-item', { hasText: 'Gamma' }).boundingBox();
-    if (gamma === null) {
-        throw new Error('Gamma is not visible.');
-    }
-    await page.mouse.move(gamma.x + gamma.width / 2, gamma.y + gamma.height / 2, { steps: 10 });
+    await moveOver(page, task(page, 'Gamma'));
     await expect(column(page, 'In progress')).toHaveCSS('outline-style', 'solid');
     await unchanged();
 
     // And back again, over the next task.
-    const back = await next.boundingBox();
-    if (back === null) {
-        throw new Error('The next task is not visible.');
-    }
-    await page.mouse.move(back.x + back.width / 2, back.y + back.height / 2, { steps: 10 });
+    await moveOver(page, next);
     await unchanged();
     await page.mouse.up();
 
@@ -204,11 +210,9 @@ test('keeps the dragged task\'s place open, and only that, wherever it is held',
 
 test('shows every field of Waiting, and writes the ones filled in', async ({ context, page }) => {
     const before = note('Alpha', ['kind: todo']);
-    const repository = await mockBackend(context, { [ALPHA]: before });
-    await page.goto('/tasks-next');
-    await expect(column(page, 'To do')).toContainText('Alpha');
+    const repository = await openStatusView(context, page, { [ALPHA]: before });
 
-    await startDrag(page, page.locator('.task-list-item', { hasText: 'Alpha' }));
+    await startDrag(page, task(page, 'Alpha'));
     await dropOn(page, column(page, 'Waiting'));
 
     const dialog = page.getByRole('dialog');
@@ -238,11 +242,9 @@ test('shows every field of Waiting, and writes the ones filled in', async ({ con
 });
 
 test('leaves the task where it was when the move is canceled', async ({ context, page }) => {
-    const repository = await mockBackend(context, { [ALPHA]: note('Alpha', ['kind: todo']) });
-    await page.goto('/tasks-next');
-    await expect(column(page, 'To do')).toContainText('Alpha');
+    const repository = await openStatusView(context, page, { [ALPHA]: note('Alpha', ['kind: todo']) });
 
-    await startDrag(page, page.locator('.task-list-item', { hasText: 'Alpha' }));
+    await startDrag(page, task(page, 'Alpha'));
     await dropOn(page, column(page, 'Blocked'));
     const dialog = page.getByRole('dialog');
     await dialog.getByRole('button', { name: 'Cancel' }).click();
@@ -254,11 +256,9 @@ test('leaves the task where it was when the move is canceled', async ({ context,
 });
 
 test('shows Done with the time it was dropped filled in', async ({ context, page }) => {
-    const repository = await mockBackend(context, { [ALPHA]: note('Alpha', ['kind: in_progress']) });
-    await page.goto('/tasks-next');
-    await expect(column(page, 'In progress')).toContainText('Alpha');
+    const repository = await openStatusView(context, page, { [ALPHA]: note('Alpha', ['kind: in_progress']) });
 
-    await startDrag(page, page.locator('.task-list-item', { hasText: 'Alpha' }));
+    await startDrag(page, task(page, 'Alpha'));
     await dropOn(page, column(page, 'Done'));
 
     const dialog = page.getByRole('dialog');
@@ -276,33 +276,31 @@ test('shows Done with the time it was dropped filled in', async ({ context, page
 });
 
 test('keeps the tasks a dragged one passes over from answering the pointer', async ({ context, page }) => {
-    await mockBackend(context, {
+    await openStatusView(context, page, {
         [ALPHA]: note('Alpha', ['kind: todo']),
         [BETA]: note('Beta', ['kind: in_progress'], ['due_by: 2026-10-01']),
     });
-    await page.goto('/tasks-next');
-    // Not `.sortable-drag`, the copy following the pointer: it is never Beta, but say so.
-    const beta = page.locator('.task-list-item:not(.sortable-drag)', { hasText: 'Beta' });
+    const beta = task(page, 'Beta');
     const due = beta.locator('.additional-info').first();
-    const tooltip = page.locator('.v-tooltip .v-overlay__content');
+    // What the date's tooltip says: the row itself says how far off the date is instead.
+    const tooltip = page.getByRole('tooltip').getByText('2026-10-01');
+    const background = () => beta.evaluate((element) => getComputedStyle(element).backgroundColor);
+    const resting = await background();
 
     // At rest a task answers the pointer, which is what a drag must not look like.
     await due.hover();
     await expect(beta).toHaveCSS('cursor', 'pointer');
-    await expect(beta).toHaveCSS('background-color', 'rgb(238, 238, 238)');
+    await expect.poll(background).not.toBe(resting);
     await expect(tooltip).toBeVisible();
     await page.mouse.move(0, 0);
     await expect(tooltip).toBeHidden();
 
-    await startDrag(page, page.locator('.task-list-item', { hasText: 'Alpha' }));
-    const box = await due.boundingBox();
-    if (box === null) {
-        throw new Error('Beta\'s due date is not visible.');
-    }
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 10 });
+    await startDrag(page, task(page, 'Alpha'));
+    await moveOver(page, due);
+    // Long enough for the tooltip to open, were it going to.
     await page.waitForTimeout(500);
     await expect(beta).not.toHaveCSS('cursor', 'pointer');
-    await expect(beta).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await expect.poll(background).toBe(resting);
     await expect(tooltip).toBeHidden();
 
     // Let go over Beta's date: the column still takes the task.
@@ -311,14 +309,14 @@ test('keeps the tasks a dragged one passes over from answering the pointer', asy
 });
 
 test('refuses a status the task cannot move to, and says so while it is dragged', async ({ context, page }) => {
-    const repository = await mockBackend(context, {
+    const repository = await openStatusView(context, page, {
         [ALPHA]: note('Alpha', ['kind: in_progress']),
+        // A task gives the refused column something to drop onto: an empty one has no height,
+        // and a drop that missed it would pass without the refusal being tried.
         [BETA]: note('Beta', ['kind: todo']),
     });
-    await page.goto('/tasks-next');
-    await expect(column(page, 'In progress')).toContainText('Alpha');
 
-    await startDrag(page, page.locator('.task-list-item', { hasText: 'Alpha' }));
+    await startDrag(page, task(page, 'Alpha'));
     // In progress goes forward only: back to To do or Backlog is the editor's, unlocked.
     await expect(column(page, 'To do')).toHaveClass(/refused/);
     await expect(column(page, 'Backlog')).toHaveClass(/refused/);
@@ -339,16 +337,10 @@ test.describe('on iOS', () => {
     });
 
     test('keeps the dragged task in sight over another column', async ({ context, page }) => {
-        await mockBackend(context, { [ALPHA]: note('Alpha', ['kind: todo']) });
-        await page.goto('/tasks-next');
-        await expect(column(page, 'To do')).toContainText('Alpha');
+        await openStatusView(context, page, { [ALPHA]: note('Alpha', ['kind: todo']) });
 
-        await startDrag(page, page.locator('.task-list-item', { hasText: 'Alpha' }));
-        const done = await column(page, 'Done').locator('.task-list').boundingBox();
-        if (done === null) {
-            throw new Error('The Done column is not visible.');
-        }
-        await page.mouse.move(done.x + done.width / 2, done.y + done.height / 2, { steps: 10 });
+        await startDrag(page, task(page, 'Alpha'));
+        await moveOver(page, column(page, 'Done').locator('.task-list'));
         await expect(column(page, 'Done')).toHaveCSS('outline-style', 'solid');
         await expect(page.locator('.task-list-item.sortable-drag')).toBeInViewport();
         await page.mouse.up();
