@@ -810,11 +810,6 @@ async function onTaskStatusChange(task: TaskNode, status: Status) {
     droppedStatuses.set(task.uuid, status.kind);
     try {
         await store.setStatus(task.path, status);
-        // The editor keeps the task it loaded while another tab is shown, and saving from it
-        // would put the old status back.
-        if (task.uuid === selectedNode.value?.uuid) {
-            taskEditorRef.value?.refresh();
-        }
     }
     catch (e) {
         error.value = `Could not move "${task.title}" to ${STATUS_LABEL[status.kind]}: ${e instanceof Error ? e.message : String(e)}`;
