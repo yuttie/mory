@@ -178,7 +178,7 @@ test('leaves no gap where the dragged task was', async ({ context, page }) => {
     expect(repository.writes).toEqual([]);
 });
 
-test('asks what a task is waiting for before moving it to Waiting', async ({ context, page }) => {
+test('shows every field of Waiting, and writes the ones filled in', async ({ context, page }) => {
     const before = note('Alpha', ['kind: todo']);
     const repository = await mockBackend(context, { [ALPHA]: before });
     await page.goto('/tasks-next');
@@ -189,21 +189,31 @@ test('asks what a task is waiting for before moving it to Waiting', async ({ con
 
     const dialog = page.getByRole('dialog');
     await expect(dialog).toContainText('Move to Waiting');
-    await expect(dialog.getByLabel('Waiting for')).toBeFocused();
-    await expect(dialog.getByRole('button', { name: 'Move' })).toBeDisabled();
-    await dialog.getByLabel('Waiting for').fill('the figures');
+    await expect(dialog.getByRole('textbox', { name: 'Waiting for' })).toBeFocused();
+    await expect(dialog.getByRole('textbox', { name: 'Expected by (optional)' })).toBeVisible();
+    await expect(dialog.getByRole('combobox', { name: 'Contact (optional)' })).toBeVisible();
+    await expect(dialog.getByRole('textbox', { name: 'Follow up at (optional)' })).toBeVisible();
+
+    // A required field is checked when the move is asked for, as the editor checks it on save.
+    await dialog.getByRole('button', { name: 'Move' }).click();
+    await expect(dialog).toContainText('Waiting for is required.');
+    expect(repository.writes).toEqual([]);
+
+    await dialog.getByRole('textbox', { name: 'Waiting for' }).fill('the figures');
+    await dialog.getByRole('combobox', { name: 'Contact (optional)' }).fill('Alice');
     await dialog.getByRole('button', { name: 'Move' }).click();
 
     await expect(column(page, 'Waiting')).toContainText('Alpha');
+    // The two dates were left empty, so they are left out rather than written empty.
     await expect.poll(() => repository.writes).toEqual([
         {
             path: ALPHA,
-            content: before.replace('    kind: todo', '    kind: waiting\n    waiting_for: the figures'),
+            content: before.replace('    kind: todo', '    kind: waiting\n    waiting_for: the figures\n    contact: Alice'),
         },
     ]);
 });
 
-test('leaves the task where it was when the reason is not given', async ({ context, page }) => {
+test('leaves the task where it was when the move is canceled', async ({ context, page }) => {
     const repository = await mockBackend(context, { [ALPHA]: note('Alpha', ['kind: todo']) });
     await page.goto('/tasks-next');
     await expect(column(page, 'To do')).toContainText('Alpha');
@@ -219,7 +229,7 @@ test('leaves the task where it was when the reason is not given', async ({ conte
     expect(repository.writes).toEqual([]);
 });
 
-test('stamps the time a task is dropped on Done', async ({ context, page }) => {
+test('shows Done with the time it was dropped filled in', async ({ context, page }) => {
     const repository = await mockBackend(context, { [ALPHA]: note('Alpha', ['kind: in_progress']) });
     await page.goto('/tasks-next');
     await expect(column(page, 'In progress')).toContainText('Alpha');
@@ -227,10 +237,17 @@ test('stamps the time a task is dropped on Done', async ({ context, page }) => {
     await startDrag(page, page.locator('.task-list-item', { hasText: 'Alpha' }));
     await dropOn(page, column(page, 'Done'));
 
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toContainText('Move to Done');
+    await expect(dialog.getByRole('textbox', { name: 'Completed at' })).toHaveValue(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/);
+    await expect(dialog.getByRole('textbox', { name: 'Completion note (optional)' })).toBeFocused();
+    await dialog.getByRole('textbox', { name: 'Completion note (optional)' }).fill('Shipped');
+    await dialog.getByRole('button', { name: 'Move' }).click();
+
     await expect(column(page, 'Done')).toContainText('Alpha');
     await expect.poll(() => repository.writes.length).toBe(1);
     expect(repository.writes[0].content).toMatch(
-        /\n {4}kind: done\n {4}completed_at: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}\n {2}progress: 0\n/,
+        /\n {4}kind: done\n {4}completed_at: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}\n {4}completion_note: Shipped\n {2}progress: 0\n/,
     );
 });
 

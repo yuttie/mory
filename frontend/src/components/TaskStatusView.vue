@@ -41,18 +41,21 @@
             </draggable>
         </v-card>
         <v-dialog
-            v-bind:model-value="awaitingReason !== null"
-            max-width="400px"
-            v-on:update:model-value="awaitingReason = null"
+            v-bind:model-value="awaiting !== null"
+            max-width="500px"
+            v-on:update:model-value="awaiting = null"
         >
-            <v-card v-if="awaitingReason !== null">
-                <v-form v-on:submit.prevent="onReasonSubmit">
-                    <v-card-title>Move to {{ STATUS_LABEL[awaitingReason.kind] }}</v-card-title>
-                    <v-card-subtitle>{{ awaitingReason.task.title }}</v-card-subtitle>
+            <v-card v-if="awaiting !== null">
+                <v-form
+                    ref="formRef"
+                    v-on:submit.prevent="onFieldsSubmit"
+                >
+                    <v-card-title>Move to {{ STATUS_LABEL[awaiting.status.kind] }}</v-card-title>
+                    <v-card-subtitle>{{ awaiting.task.title }}</v-card-subtitle>
                     <v-card-text>
-                        <v-text-field
-                            v-model="reason"
-                            v-bind:label="REASON_LABEL[awaitingReason.kind]"
+                        <TaskStatusFields
+                            v-model="awaiting.status"
+                            v-bind:known-contacts="knownContacts"
                             autofocus
                         />
                     </v-card-text>
@@ -60,14 +63,13 @@
                         <v-spacer />
                         <v-btn
                             variant="text"
-                            v-on:click="awaitingReason = null"
+                            v-on:click="awaiting = null"
                         >
                             Cancel
                         </v-btn>
                         <v-btn
                             type="submit"
                             color="primary"
-                            v-bind:disabled="reason.trim() === ''"
                         >
                             Move
                         </v-btn>
@@ -81,6 +83,7 @@
 <script lang="ts" setup>
 import { ref } from 'vue';
 import draggable from 'vuedraggable';
+import type { VForm } from 'vuetify/components';
 
 import { type TaskNode } from '@/task-forest';
 import { type UUID, type Status, type StatusKind, STATUS_LABEL, canTransition, makeDefaultStatus } from '@/task';
@@ -108,17 +111,10 @@ const COLUMNS: { kind: StatusKind; key: keyof TaskStatuses }[] = [
     { kind: 'canceled', key: 'canceled' },
 ];
 
-// The statuses the schema will not take without a reason, labelled as the editor labels them.
-const REASON_LABEL: Partial<Record<StatusKind, string>> = {
-    waiting: 'Waiting for',
-    blocked: 'Blocked by',
-    on_hold: 'Hold reason',
-    canceled: 'Cancel reason',
-};
-
 // Props
 defineProps<{
     taskStatuses: TaskStatuses;
+    knownContacts: [string, number][];
 }>();
 
 // Emits
@@ -131,8 +127,11 @@ const emit = defineEmits<{
 // The column a drag started in. Its kind stands for the task's status, since that is the column
 // the status put it in; only the kind decides a transition.
 const draggedFrom = ref<StatusKind | null>(null);
-const awaitingReason = ref<{ task: TaskNode; kind: StatusKind } | null>(null);
-const reason = ref('');
+// A drop on a status with fields of its own, shown to be filled in before it is written.
+const awaiting = ref<{ task: TaskNode; status: Status } | null>(null);
+
+// Template refs
+const formRef = ref<InstanceType<typeof VForm> | null>(null);
 
 // Methods
 function onTaskClick(taskUuid: UUID) {
@@ -152,33 +151,32 @@ function onChange(kind: StatusKind, event: { added?: { element: TaskNode } }) {
     if (task === undefined) {
         return;
     }
-    if (REASON_LABEL[kind] === undefined) {
-        emit('status-change', task, statusFor(kind, ''));
+    const status = makeDefaultStatus(kind);
+    // Backlog, To do and In progress are their kind alone. Every other status starts with
+    // something besides, and has fields, required or optional, that are all shown first.
+    if (Object.keys(status).length === 1) {
+        emit('status-change', task, status);
     }
     else {
-        reason.value = '';
-        awaitingReason.value = { task, kind };
+        awaiting.value = { task, status };
     }
 }
 
-function onReasonSubmit() {
-    const awaiting = awaitingReason.value;
-    if (awaiting === null || reason.value.trim() === '') {
+async function onFieldsSubmit() {
+    const current = awaiting.value;
+    const result = await formRef.value?.validate();
+    if (current === null || !result?.valid) {
         return;
     }
-    emit('status-change', awaiting.task, statusFor(awaiting.kind, reason.value.trim()));
-    awaitingReason.value = null;
+    emit('status-change', current.task, withoutBlanks(current.status));
+    awaiting.value = null;
 }
 
-function statusFor(kind: StatusKind, reason: string): Status {
-    const status = makeDefaultStatus(kind);
-    switch (status.kind) {
-        case 'waiting': status.waiting_for = reason; break;
-        case 'blocked': status.blocked_by = reason; break;
-        case 'on_hold': status.hold_reason = reason; break;
-        case 'canceled': status.cancel_reason = reason; break;
-    }
-    return status;
+// An optional field left empty is left out of the note, rather than written as an empty value.
+function withoutBlanks(status: Status): Status {
+    return Object.fromEntries(Object.entries(status).filter(
+        ([, value]) => value !== null && value !== undefined && String(value).trim() !== '',
+    )) as Status;
 }
 </script>
 

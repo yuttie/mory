@@ -158,6 +158,7 @@
                             <TaskStatusView
                                 v-if="descendantsViewMode === 'status'"
                                 v-bind:task-statuses="taskStatuses"
+                                v-bind:known-contacts="knownContacts"
                                 v-on:task-click="onTaskListItemClick"
                                 v-on:status-change="onTaskStatusChange"
                             />
