@@ -4,7 +4,28 @@
              until the tasks arrive. -->
         <AppBarContent>
             <v-toolbar-title class="ms-5">
-                <span v-if="store.isLoaded">{{ filteredTasksCount }} tasks left</span>
+                <div
+                    v-if="store.isLoaded"
+                    class="app-bar-title"
+                >
+                    <!-- First, so it stays put while the selection changes what follows it. -->
+                    <span class="app-bar-count">
+                        {{ filteredTasksCount }} {{ selectedNode && $vuetify.display.xs ? 'left' : 'tasks left' }}
+                    </span>
+                    <template v-if="selectedNode">
+                        <v-divider
+                            vertical
+                            class="mx-3"
+                        />
+                        <template v-if="selectedNodeAncestorTitles.length > 0">
+                            <span class="app-bar-ancestors text-medium-emphasis">
+                                {{ selectedNodeAncestorTitles.join(' › ') }}
+                            </span>
+                            <span class="app-bar-separator text-medium-emphasis">›</span>
+                        </template>
+                        <span class="app-bar-current">{{ selectedNode.title || 'Untitled' }}</span>
+                    </template>
+                </div>
             </v-toolbar-title>
             <v-menu
                 v-bind:close-on-content-click="false"
@@ -273,6 +294,14 @@ const activeNodeId = computed<string | undefined>(() => {
 
 const isTagGroupSelected = computed<boolean>(() => {
     return activeNodeId.value !== undefined && isTagGroupId(activeNodeId.value);
+});
+
+// Where the selected node sits, for the app bar. A tag group has nothing above it.
+const selectedNodeAncestorTitles = computed<string[]>(() => {
+    if (selectedNode.value === undefined) {
+        return [];
+    }
+    return store.ancestorsOf(selectedNode.value.uuid).map((node) => node.title || 'Untitled');
 });
 
 // The task whose descendants the item view lists. A tag group's members are no task's descendants.
@@ -870,6 +899,39 @@ async function load(primed = false) {
 #tasks-next {
     height: 100%;
     user-select: none;
+}
+
+.app-bar-title {
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+}
+
+.app-bar-count,
+.app-bar-separator {
+    flex: none;
+}
+
+.app-bar-separator {
+    margin: 0 0.3em;
+}
+
+.app-bar-ancestors,
+.app-bar-current {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* The ancestors give way long before the selected task's own title does, which is what the bar is
+   about; they keep room for an ellipsis, so the path still reads as one. */
+.app-bar-ancestors {
+    flex: 0 10000 auto;
+    min-width: 1.2em;
+}
+
+.app-bar-current {
+    flex: 0 1 auto;
+    min-width: 0;
 }
 
 /* Mobile responsive adjustments for main container */
