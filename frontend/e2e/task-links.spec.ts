@@ -53,12 +53,24 @@ test.describe('the tree', () => {
         await mockBackend(context, NOTES);
         await page.goto('/tasks-next/_/descendants/schedule');
         await expect(row(page, 'Project')).toHaveAttribute('href', `/tasks-next/${PROJECT}/selected/schedule`);
-        // A tag group is no task to edit, so it lists the tasks it holds.
-        await expect(row(page, 'work')).toHaveAttribute('href', '/tasks-next/tag-group-work/descendants/schedule');
 
         await row(page, 'Project').click();
         await expect(page).toHaveURL(url(PROJECT, 'selected', 'schedule'));
-        // Clicked again, the task stays selected: the root of the path is what clears it.
+    });
+
+    // A tag group is no task to edit.
+    test('links a tag group to the tasks filed under it', async ({ context, page }) => {
+        await mockBackend(context, NOTES);
+        await page.goto('/tasks-next/_/descendants/schedule');
+        await expect(row(page, 'work')).toHaveAttribute('href', '/tasks-next/tag-group-work/descendants/schedule');
+    });
+
+    // The root of the path is what clears the selection. Started from the Descendants tab, so the
+    // click has somewhere to go that clearing it would not.
+    test('opens the selected task when its row is clicked again, rather than clearing the selection', async ({ context, page }) => {
+        await mockBackend(context, NOTES);
+        await page.goto(`/tasks-next/${PROJECT}/descendants/schedule`);
+
         await row(page, 'Project').click();
         await expect(page).toHaveURL(url(PROJECT, 'selected', 'schedule'));
     });
@@ -104,9 +116,13 @@ test.describe('the lists', () => {
             await page.goto(`/tasks-next/_/descendants/${viewMode}`);
             await expect(listed(page, view, 'Errand')).toHaveAttribute('href', `/tasks-next/${ERRAND}/selected/${viewMode}`);
         }
+    });
 
-        // Where a task can be dragged to another column, a click still follows the link.
+    // Sortable swallows the click that ends a drag, and must leave a plain one alone.
+    test('go to a task on a click, though the status view lets it be dragged', async ({ context, page }) => {
+        await mockBackend(context, NOTES);
         await page.goto('/tasks-next/_/descendants/status');
+
         await listed(page, '.status-view', 'Errand').click();
         await expect(page).toHaveURL(url(ERRAND, 'selected', 'status'));
     });
