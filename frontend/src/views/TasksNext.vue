@@ -212,7 +212,7 @@ import {
 import { type TaskNode, type TaskTreeItem, buildTaskPath } from '@/task-forest';
 import { isTagGroupId, isUntaggedGroupId, tagGroupId, tagNameOf, useTasksStore } from '@/stores/tasks';
 
-import { type UUID, type Status, type StatusKind, type Task, STATUS_LABEL } from '@/task';
+import { type UUID, type Status, type StatusKind, type Task, STATUS_KINDS, STATUS_LABEL } from '@/task';
 import axios from 'axios';
 import dayjs from 'dayjs';
 
@@ -411,45 +411,24 @@ function sortTasksByDueDate(tasks: TaskNode[]): TaskNode[] {
     });
 }
 
-const taskStatuses = computed(() => {
-    const statuses = {
-        backlog: [] as TaskNode[],
-        todo: [] as TaskNode[],
-        inProgress: [] as TaskNode[],
-        waiting: [] as TaskNode[],
-        blocked: [] as TaskNode[],
-        onHold: [] as TaskNode[],
-        done: [] as TaskNode[],
-        canceled: [] as TaskNode[],
-    };
+const taskStatuses = computed<Record<StatusKind, TaskNode[]>>(() => {
+    const statuses = Object.fromEntries(
+        STATUS_KINDS.map((kind) => [kind, [] as TaskNode[]]),
+    ) as Record<StatusKind, TaskNode[]>;
 
     for (const task of selectedNodeDescendants.value) {
         // A task that names no status is read as Backlog, as the editor reads it, so the column
         // it sits in and the status it opens with agree.
         const kind: StatusKind = droppedStatuses.get(task.uuid) ?? task.metadata?.task?.status?.kind ?? 'backlog';
-        switch (kind) {
-            case 'backlog': statuses.backlog.push(task); break;
-            case 'todo': statuses.todo.push(task); break;
-            case 'in_progress': statuses.inProgress.push(task); break;
-            case 'waiting': statuses.waiting.push(task); break;
-            case 'blocked': statuses.blocked.push(task); break;
-            case 'on_hold': statuses.onHold.push(task); break;
-            case 'done': statuses.done.push(task); break;
-            case 'canceled': statuses.canceled.push(task); break;
-        }
+        // A kind with no column is not drawn: the frontmatter is whatever the file said.
+        statuses[kind]?.push(task);
     }
 
     // Sort each status group by due date/deadline
-    return {
-        backlog: sortTasksByDueDate(statuses.backlog),
-        todo: sortTasksByDueDate(statuses.todo),
-        inProgress: sortTasksByDueDate(statuses.inProgress),
-        waiting: sortTasksByDueDate(statuses.waiting),
-        blocked: sortTasksByDueDate(statuses.blocked),
-        onHold: sortTasksByDueDate(statuses.onHold),
-        done: sortTasksByDueDate(statuses.done),
-        canceled: sortTasksByDueDate(statuses.canceled),
-    };
+    for (const kind of STATUS_KINDS) {
+        statuses[kind] = sortTasksByDueDate(statuses[kind]);
+    }
+    return statuses;
 });
 
 // Helper function to check if entire subtree should be filtered

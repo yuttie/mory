@@ -25,8 +25,8 @@
             <draggable
                 class="task-list"
                 item-key="uuid"
-                v-bind:model-value="taskStatuses[column.key]"
-                v-bind:group="GROUPS[column.kind]"
+                v-bind:model-value="taskStatuses[column.kind]"
+                v-bind:group="column.group"
                 v-bind:sort="false"
                 v-bind:force-fallback="true"
                 v-bind:fallback-on-body="true"
@@ -91,34 +91,11 @@ import draggable from 'vuedraggable';
 import type { VForm } from 'vuetify/components';
 
 import { type TaskNode } from '@/task-forest';
-import { type UUID, type Status, type StatusKind, STATUS_LABEL, canTransition, makeDefaultStatus } from '@/task';
-
-type TaskStatuses = {
-    backlog: TaskNode[];
-    todo: TaskNode[];
-    inProgress: TaskNode[];
-    waiting: TaskNode[];
-    blocked: TaskNode[];
-    onHold: TaskNode[];
-    done: TaskNode[];
-    canceled: TaskNode[];
-};
-
-// The columns, left to right, and the list each one draws.
-const COLUMNS: { kind: StatusKind; key: keyof TaskStatuses }[] = [
-    { kind: 'backlog', key: 'backlog' },
-    { kind: 'todo', key: 'todo' },
-    { kind: 'in_progress', key: 'inProgress' },
-    { kind: 'waiting', key: 'waiting' },
-    { kind: 'blocked', key: 'blocked' },
-    { kind: 'on_hold', key: 'onHold' },
-    { kind: 'done', key: 'done' },
-    { kind: 'canceled', key: 'canceled' },
-];
+import { type UUID, type Status, type StatusKind, STATUS_KINDS, STATUS_LABEL, canTransition, makeDefaultStatus } from '@/task';
 
 // Props
 defineProps<{
-    taskStatuses: TaskStatuses;
+    taskStatuses: Record<StatusKind, TaskNode[]>;
     knownContacts: [string, number][];
 }>();
 
@@ -135,19 +112,23 @@ const draggedFrom = ref<StatusKind | null>(null);
 // A drop on a status with fields of its own, shown to be filled in before it is written.
 const awaiting = ref<{ task: TaskNode; status: Status } | null>(null);
 
-// One group per column, made once. Sortable tells the column a drag started in from the others by
-// its group, and remakes the group every time the option is set -- which vuedraggable does for
-// every attribute of `<draggable>` whenever any of them changes. Once remade mid-drag, the column
-// stops counting as the task's own, and Sortable moves the task about in it as if it had come from
-// elsewhere. Starting a drag re-renders this view, so nothing passed to `<draggable>` may change
-// from one render to the next: a group written into the template would be a new object each time.
+// The columns, left to right, each with its group, made once. Sortable tells the column a drag
+// started in from the others by its group, and remakes the group every time the option is set --
+// which vuedraggable does for every attribute of `<draggable>` whenever any of them changes. Once
+// remade mid-drag, the column stops counting as the task's own, and Sortable moves the task about
+// in it as if it had come from elsewhere. Starting a drag re-renders this view, so nothing passed
+// to `<draggable>` may change from one render to the next: a group written into the template would
+// be a new object each time.
 // `pull: 'clone'` leaves a copy at the task's place while it is over another column, so that place
 // stays open wherever the task is held (see `onClone`).
-const GROUPS = Object.fromEntries(COLUMNS.map(({ kind }) => [kind, {
-    name: 'tasks',
-    pull: 'clone',
-    put: () => draggedFrom.value !== null && accepts(draggedFrom.value, kind),
-}]));
+const COLUMNS = STATUS_KINDS.map((kind) => ({
+    kind,
+    group: {
+        name: 'tasks',
+        pull: 'clone',
+        put: () => draggedFrom.value !== null && accepts(draggedFrom.value, kind),
+    },
+}));
 
 // Template refs
 const formRef = ref<InstanceType<typeof VForm> | null>(null);

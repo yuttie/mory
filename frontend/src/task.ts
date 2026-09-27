@@ -71,6 +71,9 @@ export const STATUS_LABEL: Record<StatusKind, string> = {
     canceled: 'Canceled',
 };
 
+// Every status, in the order they are listed and drawn.
+export const STATUS_KINDS = Object.keys(STATUS_LABEL) as StatusKind[];
+
 // Backlog is To do not yet committed to, so the two trade places freely and Backlog can go
 // anywhere To do can.
 export const STATUS_TRANSITION = {
