@@ -1,0 +1,164 @@
+<template>
+    <!-- One chain, so the block drawn is the root and takes the caller's class. -->
+    <div v-if="status.kind === 'waiting'">
+        <v-text-field
+            v-bind:model-value="status.waiting_for"
+            v-bind:rules="[required('Waiting for is required.')]"
+            v-bind:autofocus="autofocus"
+            label="Waiting for"
+            required
+            v-on:update:model-value="set('waiting_for', $event)"
+        >
+            <template v-slot:prepend>
+                <v-icon>{{ mdiTarget }}</v-icon>
+            </template>
+        </v-text-field>
+        <DateSelector
+            v-bind:model-value="status.expected_by"
+            v-bind:rules="[optionalDateTime]"
+            label="Expected by (optional)"
+            v-on:update:model-value="set('expected_by', $event)"
+        />
+        <v-combobox
+            v-bind:model-value="status.contact"
+            v-bind:items="contactItems"
+            v-bind:return-object="false"
+            label="Contact (optional)"
+            clearable
+            hide-selected
+            v-on:update:model-value="set('contact', $event)"
+        >
+            <template v-slot:prepend>
+                <v-icon>{{ mdiAccountOutline }}</v-icon>
+            </template>
+        </v-combobox>
+        <DateSelector
+            v-bind:model-value="status.follow_up_at"
+            v-bind:rules="[optionalDateTime]"
+            label="Follow up at (optional)"
+            v-on:update:model-value="set('follow_up_at', $event)"
+        />
+    </div>
+    <div v-else-if="status.kind === 'blocked'">
+        <v-text-field
+            v-bind:model-value="status.blocked_by"
+            v-bind:rules="[required('Blocked by is required.')]"
+            v-bind:autofocus="autofocus"
+            label="Blocked by"
+            required
+            v-on:update:model-value="set('blocked_by', $event)"
+        >
+            <template v-slot:prepend>
+                <v-icon>{{ mdiCancel }}</v-icon>
+            </template>
+        </v-text-field>
+    </div>
+    <div v-else-if="status.kind === 'on_hold'">
+        <v-text-field
+            v-bind:model-value="status.hold_reason"
+            v-bind:rules="[required('Hold reason is required.')]"
+            v-bind:autofocus="autofocus"
+            label="Hold reason"
+            required
+            v-on:update:model-value="set('hold_reason', $event)"
+        >
+            <template v-slot:prepend>
+                <v-icon>{{ mdiHelpCircleOutline }}</v-icon>
+            </template>
+        </v-text-field>
+        <DateSelector
+            v-bind:model-value="status.review_at"
+            v-bind:rules="[optionalDateTime]"
+            label="Review on (optional)"
+            v-on:update:model-value="set('review_at', $event)"
+        />
+    </div>
+    <div v-else-if="status.kind === 'done'">
+        <DateSelector
+            v-bind:model-value="status.completed_at"
+            v-bind:rules="[required('Completed at is required.'), isDateTime('Invalid format.')]"
+            label="Completed at"
+            required
+            v-on:update:model-value="set('completed_at', $event)"
+        />
+        <v-text-field
+            v-bind:model-value="status.completion_note"
+            v-bind:autofocus="autofocus"
+            label="Completion note (optional)"
+            v-on:update:model-value="set('completion_note', $event)"
+        >
+            <template v-slot:prepend>
+                <v-icon>{{ mdiNoteEditOutline }}</v-icon>
+            </template>
+        </v-text-field>
+    </div>
+    <div v-else-if="status.kind === 'canceled'">
+        <DateSelector
+            v-bind:model-value="status.canceled_at"
+            v-bind:rules="[required('Canceled at is required.'), isDateTime('Invalid format.')]"
+            label="Canceled at"
+            required
+            v-on:update:model-value="set('canceled_at', $event)"
+        />
+        <v-text-field
+            v-bind:model-value="status.cancel_reason"
+            v-bind:rules="[required('Cancel reason is required.')]"
+            v-bind:autofocus="autofocus"
+            label="Cancel reason"
+            required
+            v-on:update:model-value="set('cancel_reason', $event)"
+        >
+            <template v-slot:prepend>
+                <v-icon>{{ mdiHelpCircleOutline }}</v-icon>
+            </template>
+        </v-text-field>
+    </div>
+</template>
+
+<script lang="ts" setup>
+// The fields a status carries besides its kind, wherever a status is chosen: in the editor, and
+// when a task is dropped on a column of the status view. One copy, so the two cannot come to ask
+// for different things.
+import { computed } from 'vue';
+
+import {
+    mdiAccountOutline,
+    mdiCancel,
+    mdiHelpCircleOutline,
+    mdiNoteEditOutline,
+    mdiTarget,
+} from '@mdi/js';
+
+import type { Status } from '@/task';
+
+import dayjs from 'dayjs';
+
+// Props
+const props = defineProps<{
+    knownContacts: [string, number][];
+    // Focuses the first field to be typed rather than picked from a calendar.
+    autofocus?: boolean;
+}>();
+
+const status = defineModel<Status>({ required: true });
+
+// Computed properties
+const contactItems = computed<{ title: string; value: string; }[]>(() =>
+    props.knownContacts.map(([contact, count]) => {
+        return {
+            title: `${contact} (${count})`,
+            value: contact,
+        };
+    })
+);
+
+// Methods
+function set(key: string, value: unknown): void {
+    status.value = { ...status.value, [key]: value } as Status;
+}
+
+// Validation
+const required = (msg: string) => (v: unknown) => (v != null && String(v).trim().length > 0) || msg;
+const isDateTime = (msg: string) => (v: unknown) => dayjs(v as dayjs.ConfigType).isValid() || msg;
+const optionalDateTime = (v: string) => v === '' || isDateTime('Invalid format.')(v);
+</script>

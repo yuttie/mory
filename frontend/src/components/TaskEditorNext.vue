@@ -138,103 +138,11 @@
                         ></v-icon-btn>
                     </div>
                     <!-- Status-specific fields -->
-                    <div v-if="form.status.kind === 'waiting'" class="ml-10">
-                        <v-text-field
-                            v-model="form.status.waiting_for"
-                            v-bind:rules="[required('Waiting for is required.')]"
-                            label="Waiting for"
-                            required
-                        >
-                            <template v-slot:prepend>
-                                <v-icon>{{ mdiTarget }}</v-icon>
-                            </template>
-                        </v-text-field>
-                        <DateSelector
-                            v-model="form.status.expected_by"
-                            v-bind:rules="[(v) => v === '' || isDateTime('Invalid format.')(v)]"
-                            label="Expected by (optional)"
-                        />
-                        <v-combobox
-                            v-model="form.status.contact"
-                            v-bind:items="contactItems"
-                            v-bind:return-object="false"
-                            label="Contact (optional)"
-                            clearable
-                            hide-selected
-                        >
-                            <template v-slot:prepend>
-                                <v-icon>{{ mdiAccountOutline }}</v-icon>
-                            </template>
-                        </v-combobox>
-                        <DateSelector
-                            v-model="form.status.follow_up_at"
-                            v-bind:rules="[(v) => v === '' || isDateTime('Invalid format.')(v)]"
-                            label="Follow up at (optional)"
-                        />
-                    </div>
-                    <div v-if="form.status.kind === 'blocked'" class="ml-10">
-                        <v-text-field
-                            v-model="form.status.blocked_by"
-                            v-bind:rules="[required('Blocked by is required.')]"
-                            label="Blocked by"
-                            required
-                        >
-                            <template v-slot:prepend>
-                                <v-icon>{{ mdiCancel }}</v-icon>
-                            </template>
-                        </v-text-field>
-                    </div>
-                    <div v-if="form.status.kind === 'on_hold'" class="ml-10">
-                        <v-text-field
-                            v-model="form.status.hold_reason"
-                            v-bind:rules="[required('Hold reason is required.')]"
-                            label="Hold reason"
-                            required
-                        >
-                            <template v-slot:prepend>
-                                <v-icon>{{ mdiHelpCircleOutline }}</v-icon>
-                            </template>
-                        </v-text-field>
-                        <DateSelector
-                            v-model="form.status.review_at"
-                            v-bind:rules="[(v) => v === '' || isDateTime('Invalid format.')(v)]"
-                            label="Review on (optional)"
-                        />
-                    </div>
-                    <div v-if="form.status.kind === 'done'" class="ml-10">
-                        <DateSelector
-                            v-model="form.status.completed_at"
-                            v-bind:rules="[required('Completed at is required.'), isDateTime('Invalid format.')]"
-                            label="Completed at"
-                            required
-                        />
-                        <v-text-field
-                            v-model="form.status.completion_note"
-                            label="Completion note (optional)"
-                        >
-                            <template v-slot:prepend>
-                                <v-icon>{{ mdiNoteEditOutline }}</v-icon>
-                            </template>
-                        </v-text-field>
-                    </div>
-                    <div v-if="form.status.kind === 'canceled'" class="ml-10">
-                        <DateSelector
-                            v-model="form.status.canceled_at"
-                            v-bind:rules="[required('Canceled at is required.'), isDateTime('Invalid format.')]"
-                            label="Canceled at"
-                            required
-                        />
-                        <v-text-field
-                            v-model="form.status.cancel_reason"
-                            v-bind:rules="[required('Cancel reason is required.')]"
-                            label="Cancel reason"
-                            required
-                        >
-                            <template v-slot:prepend>
-                                <v-icon>{{ mdiHelpCircleOutline }}</v-icon>
-                            </template>
-                        </v-text-field>
-                    </div>
+                    <TaskStatusFields
+                        v-model="form.status"
+                        v-bind:known-contacts="knownContacts"
+                        class="ml-10"
+                    />
                     <!-- Progress -->
                     <v-label>
                         <v-icon>{{ mdiPercentOutline }}</v-icon>
@@ -438,10 +346,8 @@
 import { ref, reactive, computed, watch, toRef, onMounted, onUnmounted } from 'vue';
 
 import {
-    mdiAccountOutline,
     mdiCalendarCursorOutline,
     mdiCalendarOutline,
-    mdiCancel,
     mdiClose,
     mdiContentSave,
     mdiDelete,
@@ -449,11 +355,9 @@ import {
     mdiFileDocumentEdit,
     mdiFileTreeOutline,
     mdiFormatHeader1,
-    mdiHelpCircleOutline,
     mdiLightbulbOnOutline,
     mdiLock,
     mdiLockOpenVariant,
-    mdiNoteEditOutline,
     mdiNoteTextOutline,
     mdiPencil,
     mdiPercentOutline,
@@ -461,7 +365,6 @@ import {
     mdiPlus,
     mdiPriorityHigh,
     mdiTagMultipleOutline,
-    mdiTarget,
     mdiTimerSand,
     mdiTrafficLightOutline,
 } from '@mdi/js';
@@ -626,15 +529,6 @@ const tagItems = computed<{ title: string; value: string; }[]>(() =>
         return {
             title: `${tag} (${count})`,
             value: tag,
-        };
-    })
-);
-
-const contactItems = computed<{ title: string; value: string; }[]>(() =>
-    props.knownContacts.map(([contact, count]) => {
-        return {
-            title: `${contact} (${count})`,
-            value: contact,
         };
     })
 );
