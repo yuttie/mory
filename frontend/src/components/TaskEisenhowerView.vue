@@ -64,22 +64,11 @@ $space: 12px;
     height: 100%;
 }
 
-.matrix-row {
-    display: flex;
-    gap: $space;
-    flex: 1 1 0;
-}
-
 /* Mobile responsive adjustments for Eisenhower matrix */
 @media (max-width: 959px) { /* md breakpoint in Vuetify 2 */
     .eisenhower-matrix {
         padding: $space / 2;
         gap: $space / 2;
-    }
-
-    .matrix-row {
-        flex-direction: column;
-        flex: none;
     }
 }
 
