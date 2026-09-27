@@ -136,9 +136,11 @@ const draggedFrom = ref<StatusKind | null>(null);
 const awaiting = ref<{ task: TaskNode; status: Status } | null>(null);
 
 // One group per column, made once. Sortable tells the column a drag started in from the others by
-// its group, and remakes that from whatever it is handed: given a new object mid-drag, as one
-// written into the template would be on every render, the column stops counting as the task's
-// own, and Sortable moves the task about in it as if it had come from elsewhere.
+// its group, and remakes the group every time the option is set -- which vuedraggable does for
+// every attribute of `<draggable>` whenever any of them changes. Once remade mid-drag, the column
+// stops counting as the task's own, and Sortable moves the task about in it as if it had come from
+// elsewhere. Starting a drag re-renders this view, so nothing passed to `<draggable>` may change
+// from one render to the next: a group written into the template would be a new object each time.
 // `pull: 'clone'` leaves a copy at the task's place while it is over another column, so that place
 // stays open wherever the task is held (see `onClone`).
 const GROUPS = Object.fromEntries(COLUMNS.map(({ kind }) => [kind, {
@@ -161,14 +163,15 @@ function accepts(from: StatusKind, to: StatusKind): boolean {
     return canTransition({ kind: from } as Status, to);
 }
 
-// Marks that copy, so it is drawn as the place the task left rather than as the task.
+// Marks the copy Sortable leaves at a task's place while the task is over another column, so it is
+// drawn as that place, left open, rather than as the task.
 function onClone(event: { clone: { classList: { add: (token: string) => void } } }) {
     event.clone.classList.add('vacated');
 }
 
 function onChange(kind: StatusKind, event: { added?: { element: TaskNode } }) {
-    // A drop reports `removed` on the column it left and `added` on the one it reached; one is
-    // enough.
+    // Only the column a drop reached hears of it: with `pull: 'clone'` vuedraggable reports no
+    // `removed` to the one it left, and with `sort: false` nothing is ever `moved`.
     const task = event.added?.element;
     if (task === undefined) {
         return;
@@ -246,8 +249,8 @@ $space: 12px;
 }
 
 /* Room to drop into, which an empty column otherwise does not have. Only while dragging, so a
-   column at rest looks as it did, and not in the column the task came from, where a drop changes
-   nothing: there it would be the task's empty place kept open. */
+   column at rest looks as it did, and not in the column the task came from: a drop there changes
+   nothing, and the task's place is held open there already. */
 .dragging .group:not(.refused):not(.origin) .task-list {
     min-height: 32px;
 }
