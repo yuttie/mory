@@ -374,7 +374,7 @@ import { assessTask, type TaskAssessmentResponse } from '@/api';
 import EditableViewer from '@/components/EditableViewer.vue';
 import { extractFileUuid } from '@/api/task';
 import type { UUID, Task, Status, StatusKind, WaitingStatus, BlockedStatus, OnHoldStatus, DoneStatus, CanceledStatus } from '@/task';
-import { STATUS_LABEL, nextOptions, makeDefaultStatus, canTransition } from '@/task';
+import { STATUS_LABEL, nextOptions, makeDefaultStatus, canTransition, withoutBlanks } from '@/task';
 import { useFetchTask } from '@/composables/fetchTask';
 import { useLocalStorage } from '@/composables/localStorage';
 import { loadConfigValue } from '@/config';
@@ -689,7 +689,7 @@ async function onSave(): Promise<void> {
         uuid: uuid.value,
         title: form.title.trim(),
         tags: [...form.tags],
-        status: { ...form.status },
+        status: withoutBlanks(form.status),
         progress: form.progress,
         importance: form.importance,
         urgency: form.urgency,

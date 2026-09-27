@@ -130,6 +130,14 @@ export function makeDefaultStatus(kind: StatusKind): Status {
     }
 }
 
+// A status as a note is to hold it: an optional field left empty is left out, rather than written
+// as an empty string or as the null a cleared field gives, which the schema does not allow.
+export function withoutBlanks(status: Status): Status {
+    return Object.fromEntries(Object.entries(status).filter(
+        ([, value]) => value !== null && value !== undefined && String(value).trim() !== '',
+    )) as Status;
+}
+
 export function canTransition(from: StatusKind, to: StatusKind): boolean {
     if (to === from) { return true; }  // Allow no-op (same status)
     return nextOptions(from).includes(to);
