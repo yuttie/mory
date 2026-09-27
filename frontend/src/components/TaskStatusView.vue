@@ -235,19 +235,27 @@ $space: 12px;
     opacity: 0.4;
 }
 
+/* The drag styles of the tasks in the columns. How a task looks while it follows the pointer is the
+   task's own (see TaskListItemNext): Sortable draws that copy outside this view. */
+
+/* A task pressed to be picked up shows no hover shade: it is being taken, not pointed at. */
+.groups :deep(.task-list-item.sortable-chosen) {
+    background: none;
+}
+
 /* A drop decides the column and nothing else, since each column is ordered by date. So a task held
    over another column opens no gap between two of its tasks, as if it could go there; that column
    is marked as a whole instead. The one gap is the place the task left, which stays open in its
    own column wherever it is held: as the task itself while it is over that column (Sortable keeps
-   it at its place there), and as the copy left in its stead while it is over another.
-   Under `.dragging` because Sortable measures the task for the copy that follows the pointer
+   it at its place there), and as the copy left in its stead while it is over another. */
+.groups :deep(:is(.sortable-ghost, .vacated)) {
+    visibility: hidden;
+}
+
+/* Under `.dragging` because Sortable measures the task for the copy that follows the pointer
    before `.dragging` is drawn: hidden at that moment, the copy made from it would be zero-sized. */
 .dragging .group:not(.origin) :deep(.sortable-ghost) {
     display: none;
-}
-
-.dragging :deep(.vacated) {
-    visibility: hidden;
 }
 
 /* The tasks a dragged one passes over are not places it can go, so they must not answer the pointer
