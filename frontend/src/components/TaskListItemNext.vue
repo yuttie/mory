@@ -66,6 +66,14 @@
                     <div>{{ deadline }}</div>
                 </v-tooltip>
             </span>
+            <!-- Below the title rather than before it, so the checkbox stays level with the title
+                 and the titles in a column still line up to be scanned. -->
+            <div
+                v-if="ancestorTitles.length > 0"
+                class="ancestors"
+            >
+                {{ ancestorTitles.join(' › ') }}
+            </div>
         </div>
     </div>
 </template>
@@ -81,7 +89,9 @@ import {
     mdiNoteTextOutline,
 } from '@mdi/js';
 
+import type { UUID } from '@/task';
 import type { TaskNode } from '@/task-forest';
+import { useTasksStore } from '@/stores/tasks';
 
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -104,6 +114,8 @@ dayjs.extend(relativeTime, {
 // Props
 const props = defineProps<{
     value: TaskNode;
+    // The task whose descendants the list holds, if it holds only those.
+    listRoot?: UUID;
 }>();
 
 // Emits
@@ -111,7 +123,16 @@ const emit = defineEmits<{
     (e: 'click', event: Event): void;
 }>();
 
+// Stores
+const store = useTasksStore();
+
 // Computed properties
+// A list gathers tasks from anywhere in the tree, and a title alone often does not say which
+// project it belongs to: "Write the report" could be under any of them.
+const ancestorTitles = computed<string[]>(() => {
+    return store.ancestorsOf(props.value.uuid, props.listRoot).map((node) => node.title || 'Untitled');
+});
+
 const done = computed<boolean>(() => {
     return props.value.metadata?.task?.status?.kind === 'done';
 });
@@ -232,6 +253,10 @@ const deadlineStyle = computed<Record<string, string>>(() => {
 }
 .strikethrough {
     text-decoration-line: line-through;
+}
+.ancestors {
+    font-size: 12px;
+    color: #888;
 }
 .note-tooltip {
     white-space: pre-wrap;

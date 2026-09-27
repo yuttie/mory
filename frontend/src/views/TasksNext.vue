@@ -4,7 +4,50 @@
              until the tasks arrive. -->
         <AppBarContent>
             <v-toolbar-title class="ms-5">
-                <span v-if="store.isLoaded">{{ filteredTasksCount }} tasks left</span>
+                <div
+                    v-if="store.isLoaded"
+                    class="app-bar-title"
+                >
+                    <!-- First, so it stays put while the selection changes what follows it.
+                         Opened by a tap as well as by hovering, since a phone cannot hover. -->
+                    <v-menu
+                        open-on-hover
+                        open-on-click
+                        location="bottom start"
+                    >
+                        <template v-slot:activator="{ props: statisticsProps }">
+                            <span
+                                v-bind="statisticsProps"
+                                class="app-bar-count"
+                            >
+                                {{ tasksLeftText }}
+                            </span>
+                        </template>
+                        <!-- Counted from the Status view's columns, so a task naming no status is
+                             Backlog here as it is there. -->
+                        <v-list>
+                            <v-list-subheader>Statistics</v-list-subheader>
+                            <v-list-item>
+                                <v-list-item-title v-for="kind of STATUS_KINDS" v-bind:key="kind">
+                                    {{ STATUS_LABEL[kind] }}: {{ taskStatuses[kind].length }}
+                                </v-list-item-title>
+                            </v-list-item>
+                        </v-list>
+                    </v-menu>
+                    <template v-if="selectedNode">
+                        <v-divider
+                            vertical
+                            class="mx-3"
+                        />
+                        <template v-if="selectedNodeAncestorTitles.length > 0">
+                            <span class="app-bar-ancestors text-medium-emphasis">
+                                {{ selectedNodeAncestorTitles.join(' › ') }}
+                            </span>
+                            <span class="app-bar-separator text-medium-emphasis">›</span>
+                        </template>
+                        <span class="app-bar-current">{{ selectedNode.title || 'Untitled' }}</span>
+                    </template>
+                </div>
             </v-toolbar-title>
             <v-menu
                 v-bind:close-on-content-click="false"
@@ -16,15 +59,6 @@
                         class="mr-2"
                     ></v-icon-btn>
                 </template>
-                <v-list>
-                    <v-list-subheader>Statistics</v-list-subheader>
-                    <v-list-item>
-                        <v-list-item-title v-for="[kind, label] of Object.entries(STATUS_LABEL)" v-bind:key="kind">
-                            {{ label }}: {{ store.allTasks.filter((t) => t.metadata?.task?.status?.kind === kind).length }}
-                        </v-list-item-title>
-                    </v-list-item>
-                </v-list>
-                <v-divider></v-divider>
                 <v-list>
                     <v-list-subheader>Config</v-list-subheader>
                     <v-list-item title="Hide completed tasks in tree view">
@@ -131,15 +165,6 @@
                                     ></v-icon-btn>
                                 </template>
                                 <v-list>
-                                    <v-list-subheader>Descendants statistics</v-list-subheader>
-                                    <v-list-item>
-                                        <v-list-item-title v-for="[kind, label] of Object.entries(STATUS_LABEL)" v-bind:key="kind">
-                                            {{ label }}: {{ selectedNodeDescendants.filter((t) => t.metadata?.task?.status?.kind === kind).length }}
-                                        </v-list-item-title>
-                                    </v-list-item>
-                                </v-list>
-                                <v-divider></v-divider>
-                                <v-list>
                                     <v-list-subheader>Config</v-list-subheader>
                                     <v-list-item title="Hide completed tasks in item view">
                                         <template v-slot:prepend>
@@ -159,6 +184,7 @@
                                 v-if="descendantsViewMode === 'status'"
                                 v-bind:task-statuses="taskStatuses"
                                 v-bind:known-contacts="knownContacts"
+                                v-bind:list-root="listRoot"
                                 v-on:task-click="onTaskListItemClick"
                                 v-on:status-change="onTaskStatusChange"
                             />
@@ -166,12 +192,14 @@
                             <TaskScheduleView
                                 v-else-if="descendantsViewMode === 'schedule'"
                                 v-bind:scheduled="scheduled"
+                                v-bind:list-root="listRoot"
                                 v-on:task-click="onTaskListItemClick"
                             />
                             <!-- Eisenhower Matrix view -->
                             <TaskEisenhowerView
                                 v-else-if="descendantsViewMode === 'eisenhower'"
                                 v-bind:eisenhower-quadrants="eisenhowerQuadrants"
+                                v-bind:list-root="listRoot"
                                 v-on:task-click="onTaskListItemClick"
                             />
                         </div>
@@ -198,6 +226,7 @@
 <script lang="ts" setup>
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useDisplay } from 'vuetify';
 import { useLocalStorage } from '@/composables/localStorage';
 import AppBarContent from '@/components/AppBarContent.vue';
 
@@ -222,6 +251,8 @@ const store = useTasksStore();
 // Router
 const router = useRouter();
 const route = useRoute();
+
+const display = useDisplay();
 
 // Emits
 const emit = defineEmits<{
@@ -272,6 +303,21 @@ const isTagGroupSelected = computed<boolean>(() => {
     return activeNodeId.value !== undefined && isTagGroupId(activeNodeId.value);
 });
 
+// The tasks above the selected node, root first. A tag group has none.
+const selectedNodeAncestors = computed<TaskNode[]>(() => {
+    return selectedNode.value ? store.ancestorsOf(selectedNode.value.uuid) : [];
+});
+
+// Where the selected node sits, for the app bar.
+const selectedNodeAncestorTitles = computed<string[]>(() => {
+    return selectedNodeAncestors.value.map((node) => node.title || 'Untitled');
+});
+
+// The task whose descendants the item view lists. A tag group's members are no task's descendants.
+const listRoot = computed<UUID | undefined>(() => {
+    return isTagGroupSelected.value ? undefined : activeNodeId.value;
+});
+
 const selectedTagName = computed<string | null>(() => {
     if (activeNodeId.value && isTagGroupSelected.value) {
         return tagNameOf(selectedNode.value.uuid);
@@ -287,66 +333,29 @@ const newTaskTag = computed<string | undefined>(() => {
     return selectedTagName.value ?? undefined;
 });
 
-// Helper function to get ancestor titles for a task
-function getAncestorTitles(taskUuid: string): string[] {
-    const ancestors: string[] = [];
-    
-    try {
-        // Walk up the parent chain to collect ancestor titles
-        let currentParentId = store.parentOf(taskUuid);
-        
-        while (currentParentId) {
-            // Skip tag group nodes (virtual nodes used for UI organization)
-            if (!isTagGroupId(currentParentId)) {
-                const parentNode = store.node(currentParentId);
-                if (parentNode && parentNode.title) {
-                    ancestors.unshift(parentNode.title); // Add to beginning to maintain hierarchy order
-                }
-            }
-            currentParentId = store.parentOf(currentParentId);
-        }
-    } catch (error) {
-        console.warn('Failed to get ancestor titles:', error);
-    }
-    
-    return ancestors;
-}
-
-// Computed property for parent task title (for UI display)
+// The title of the task the edited one sits under, for the editor's heading.
 const selectedNodeParentTitle = computed<string | undefined>(() => {
-    if (newTaskPath.value && selectedNode.value && !isTagGroupSelected.value) {
-        // For new tasks, the selected node is the parent (unless it's a tag group)
-        if (isTagGroupId(selectedNode.value.uuid)) {
-            return undefined; // Tag groups don't have meaningful titles for new task context
-        } else {
-            return selectedNode.value.title;
-        }
-    } else if (selectedNode.value && !isTagGroupSelected.value && !newTaskPath.value) {
-        // For existing tasks, get their immediate parent title
-        const parentId = store.parentOf(selectedNode.value.uuid);
-        if (parentId && !isTagGroupId(parentId)) {
-            const parentNode = store.node(parentId);
-            return parentNode?.title;
-        }
+    if (selectedNode.value === undefined || isTagGroupSelected.value) {
+        return undefined;
     }
-    return undefined;
+    // A new task goes under the selected one.
+    const parent = newTaskPath.value ? selectedNode.value : selectedNodeAncestors.value.at(-1);
+    return parent?.title ?? undefined;
 });
 
-// Computed property for ancestor titles of the selected node (for task assessment)
+// The titles above the edited task, for its assessment. Untitled ones are left out: the backend
+// takes the titles as strings and refuses the whole request over a null.
 const selectedNodeAncestorTitlesForTaskAssessment = computed<string[]>(() => {
-    if (newTaskPath.value && selectedNode.value && !isTagGroupSelected.value) {
-        // For new tasks, include the selected node as the parent in ancestor chain
-        // But exclude the selected node itself if it's a tag group
-        if (isTagGroupId(selectedNode.value.uuid)) {
-            return getAncestorTitles(selectedNode.value.uuid);
-        } else {
-            return [...getAncestorTitles(selectedNode.value.uuid), selectedNode.value.title];
-        }
-    } else if (selectedNode.value && !isTagGroupSelected.value && !newTaskPath.value) {
-        // For existing tasks, get their own ancestors (not including themselves)
-        return getAncestorTitles(selectedNode.value.uuid);
+    if (selectedNode.value === undefined || isTagGroupSelected.value) {
+        return [];
     }
-    return [];
+    // A new task goes under the selected one, which makes that its last ancestor.
+    const ancestors = newTaskPath.value
+        ? [...selectedNodeAncestors.value, selectedNode.value]
+        : selectedNodeAncestors.value;
+    return ancestors
+        .map((node) => node.title)
+        .filter((title): title is string => Boolean(title));
 });
 
 // Utility function to sort tasks by due date/deadline
@@ -498,16 +507,6 @@ const filteredForestWithTags = computed(() => {
     return filterTreeNodes(store.treeWithTagGroups, hideCompletedInTreeView.value);
 });
 
-// Computed property for task count that reflects current filtering
-const filteredTasksCount = computed(() => {
-    return store.allTasks.filter((t) => {
-        const kind = t.metadata?.task?.status?.kind;
-        // Always exclude done and canceled from the "tasks left" count, regardless of filter switches
-        if (kind === 'done' || kind === 'canceled') return false;
-        return true;
-    }).length;
-});
-
 // Helper function to filter task list based on status
 function filterTasksByStatus(tasks: TaskNode[], hideCompleted: boolean): TaskNode[] {
     return tasks.filter(task => {
@@ -517,24 +516,39 @@ function filterTasksByStatus(tasks: TaskNode[], hideCompleted: boolean): TaskNod
     });
 }
 
+// What the Descendants tab lists: the list root's descendants, a tag group's members, or every task.
+// Taken from `listRoot`, so the items' paths start below the task the list is really under.
 const selectedNodeDescendants = computed<TaskNode[]>(() => {
-    let targetTasks;
+    if (listRoot.value !== undefined) {
+        return store.flattenDescendants(listRoot.value);
+    }
     if (isTagGroupSelected.value && selectedTagName.value) {
-        // Show tasks from the selected tag group
-        targetTasks = store.childrenOf(tagGroupId(selectedTagName.value));
+        return store.childrenOf(tagGroupId(selectedTagName.value));
     }
-    else {
-        // Show tasks based on selected node (descendants or all tasks)
-        targetTasks = selectedNode.value && !isTagGroupSelected.value
-            ? store.flattenDescendants(selectedNode.value.uuid)
-            : store.allTasks;
-    }
-
-    return targetTasks;
+    return store.allTasks;
 });
 
 const filteredSelectedNodeDescendants = computed<TaskNode[]>(() => {
     return filterTasksByStatus(selectedNodeDescendants.value, hideCompletedInItemView.value);
+});
+
+// Among the tasks the Descendants tab lists, so the count follows the selection. A task in the
+// backlog is not taken on yet and a done or canceled one is over, so neither is left, whatever the
+// hide-completed switches say. Counted from the Status view's columns, as the popover is, so the
+// two agree on where a task naming no status belongs.
+const tasksLeftCount = computed<number>(() => {
+    return STATUS_KINDS
+        .filter((kind) => kind !== 'backlog' && kind !== 'done' && kind !== 'canceled')
+        .reduce((count, kind) => count + taskStatuses.value[kind].length, 0);
+});
+
+// On a phone the selected node's path follows the count and needs the room: "7 left".
+const tasksLeftText = computed<string>(() => {
+    const count = tasksLeftCount.value;
+    if (selectedNode.value !== undefined && display.xs.value) {
+        return `${count} left`;
+    }
+    return `${count} ${count === 1 ? 'task' : 'tasks'} left`;
 });
 
 const scheduled = computed<Record<string, TaskNode[]>>(() => {
@@ -869,6 +883,39 @@ async function load(primed = false) {
     #tasks-next {
         padding: 4px;
     }
+}
+
+.app-bar-title {
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+}
+
+.app-bar-count,
+.app-bar-separator {
+    flex: none;
+}
+
+.app-bar-separator {
+    margin: 0 0.3em;
+}
+
+.app-bar-ancestors,
+.app-bar-current {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* The ancestors give way long before the selected task's own title does, which is what the bar is
+   about; they keep room for an ellipsis, so the path still reads as one. */
+.app-bar-ancestors {
+    flex: 0 10000 auto;
+    min-width: 1.2em;
+}
+
+.app-bar-current {
+    flex: 0 1 auto;
+    min-width: 0;
 }
 
 .task-tree {

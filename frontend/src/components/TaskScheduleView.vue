@@ -15,6 +15,7 @@
                         v-for="task of scheduled[date]"
                         v-bind:key="task.uuid"
                         v-bind:value="task"
+                        v-bind:list-root="listRoot"
                         v-on:click="onTaskClick(task.uuid)"
                     />
                 </div>
@@ -32,6 +33,7 @@ import dayjs from 'dayjs';
 // Props
 const props = defineProps<{
     scheduled: Record<string, TaskNode[]>;
+    listRoot?: UUID;
 }>();
 
 // Emits
