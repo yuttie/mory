@@ -1,17 +1,13 @@
 <template>
-    <div
-        class="note-tree"
-        v-on:click.capture="onClickInTree"
-        v-on:keydown.capture="onKeydownInTree"
-    >
+    <div class="note-tree">
         <EntryTree
             v-bind:items="items"
             v-bind:open="open"
             v-bind:active="active"
+            v-bind:route-for="noteRouteFor"
             item-value="id"
             open-on-click
             v-on:update:open="open = $event"
-            v-on:update:active="onActivate"
         >
             <template v-slot:prepend="{ item }">
                 <v-icon>
@@ -45,7 +41,7 @@
 // are props rather than baked in.
 
 import { computed, onMounted, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 
 import { mdiFileDocumentOutline, mdiFolder } from '@mdi/js';
 
@@ -74,7 +70,6 @@ const props = withDefaults(defineProps<{
 
 // Composables
 const route = useRoute();
-const router = useRouter();
 const subset = useEntrySubset(props.prefix);
 
 // Reactive states
@@ -94,14 +89,7 @@ const forest = computed(() => buildNoteForest(subset.entries.value, props.prefix
 const items = computed<NoteTreeItem[]>(() => toNestedForest<NoteNode, NoteTreeItem>(
     forest.value,
     forest.value.roots.slice(0, visibleRoots.value),
-    (node, children) => {
-        const target = noteRouteFor(node);
-        const item: NoteTreeItem = {
-            ...node,
-            ...(target !== null ? { props: { to: target } } : {}),
-        };
-        return children === undefined ? item : { ...item, children };
-    },
+    (node, children) => (children === undefined ? { ...node } : { ...node, children }),
 ));
 
 const remaining = computed(() => Math.max(0, forest.value.roots.length - visibleRoots.value));
@@ -149,40 +137,6 @@ function reveal(path: string | null) {
     if (index >= visibleRoots.value) {
         visibleRoots.value = index + 1;
     }
-}
-
-// Which kind of input is being served, watched on the way down so that it is known by the time
-// the row reports its activation -- which says only that a row was activated, never by what.
-//
-// A click is the anchor's own business: vue-router follows a plain left click, and deliberately
-// leaves a Ctrl-, Shift- or middle-click to the browser, which opens a new tab or window and must
-// not move this one. The keyboard is the caller the tree still navigates for, because v-treeview
-// handles Enter itself and the keypress never reaches the anchor.
-let clicking = false;
-
-function onClickInTree() {
-    clicking = true;
-}
-
-function onKeydownInTree() {
-    clicking = false;
-}
-
-function onActivate(id: string | undefined) {
-    if (id === undefined || clicking) {
-        return;
-    }
-    const node = forest.value.byId.get(id);
-    if (node === undefined) {
-        return;
-    }
-    const target = noteRouteFor(node);
-    // A directory only opens. And a row activated *because* the route already points at it must
-    // not navigate again, or revealing would bounce straight back into a push.
-    if (target === null || router.resolve(target).path === route.path) {
-        return;
-    }
-    router.push(target);
 }
 
 // Lifecycle hooks
