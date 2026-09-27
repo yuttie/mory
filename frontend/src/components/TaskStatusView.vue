@@ -256,6 +256,22 @@ $space: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
+/* The tasks a dragged one passes over are not places it can go, so they must not answer the pointer
+   as if they were: no hover shade, no pointing hand, no tooltip from a date or note. Only what is
+   inside a task stops taking the pointer, which is where the tooltips are. The task itself still
+   takes it: Sortable finds the column under the pointer through the task there. */
+.dragging :deep(.task-list-item) {
+    cursor: inherit;
+
+    &:hover {
+        background: none;
+    }
+
+    & * {
+        pointer-events: none;
+    }
+}
+
 .dragging .group:not(.origin):has(.sortable-ghost) {
     outline: 2px solid rgb(var(--v-theme-primary));
 }

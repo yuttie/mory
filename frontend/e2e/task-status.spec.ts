@@ -11,7 +11,7 @@ function uuid(n: number): string {
 
 // Written by hand rather than by the editor -- a comment, two-space indentation, a flow sequence
 // and a key the editor has no field for -- so rewriting anything but the status shows.
-function note(title: string, status: string[]): string {
+function note(title: string, status: string[], task: string[] = []): string {
     return [
         '---',
         '# Kept by hand.',
@@ -19,6 +19,7 @@ function note(title: string, status: string[]): string {
         '  status:',
         ...status.map((line) => `    ${line}`),
         '  progress: 0',
+        ...task.map((line) => `  ${line}`),
         'events:',
         '  review:',
         '    start: 2026-10-01 10:00:00+09:00',
@@ -249,6 +250,41 @@ test('shows Done with the time it was dropped filled in', async ({ context, page
     expect(repository.writes[0].content).toMatch(
         /\n {4}kind: done\n {4}completed_at: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}\n {4}completion_note: Shipped\n {2}progress: 0\n/,
     );
+});
+
+test('keeps the tasks a dragged one passes over from answering the pointer', async ({ context, page }) => {
+    await mockBackend(context, {
+        [ALPHA]: note('Alpha', ['kind: todo']),
+        [BETA]: note('Beta', ['kind: in_progress'], ['due_by: 2026-10-01']),
+    });
+    await page.goto('/tasks-next');
+    // Not `.sortable-drag`, the copy following the pointer: it is never Beta, but say so.
+    const beta = page.locator('.task-list-item:not(.sortable-drag)', { hasText: 'Beta' });
+    const due = beta.locator('.additional-info').first();
+    const tooltip = page.locator('.v-tooltip .v-overlay__content');
+
+    // At rest a task answers the pointer, which is what a drag must not look like.
+    await due.hover();
+    await expect(beta).toHaveCSS('cursor', 'pointer');
+    await expect(beta).toHaveCSS('background-color', 'rgb(238, 238, 238)');
+    await expect(tooltip).toBeVisible();
+    await page.mouse.move(0, 0);
+    await expect(tooltip).toBeHidden();
+
+    await startDrag(page, page.locator('.task-list-item', { hasText: 'Alpha' }));
+    const box = await due.boundingBox();
+    if (box === null) {
+        throw new Error('Beta\'s due date is not visible.');
+    }
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 10 });
+    await page.waitForTimeout(500);
+    await expect(beta).not.toHaveCSS('cursor', 'pointer');
+    await expect(beta).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await expect(tooltip).toBeHidden();
+
+    // Let go over Beta's date: the column still takes the task.
+    await page.mouse.up();
+    await expect(column(page, 'In progress')).toContainText('Alpha');
 });
 
 test('refuses a status the task cannot move to, and says so while it is dragged', async ({ context, page }) => {
