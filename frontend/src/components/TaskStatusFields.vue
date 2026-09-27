@@ -129,9 +129,8 @@ import {
     mdiTarget,
 } from '@mdi/js';
 
+import { isDateTime, optionalDateTime, required } from '@/rules';
 import type { Status } from '@/task';
-
-import dayjs from 'dayjs';
 
 // Props
 const props = defineProps<{
@@ -156,9 +155,4 @@ const contactItems = computed<{ title: string; value: string; }[]>(() =>
 function set(key: string, value: unknown): void {
     status.value = { ...status.value, [key]: value } as Status;
 }
-
-// Validation
-const required = (msg: string) => (v: unknown) => (v != null && String(v).trim().length > 0) || msg;
-const isDateTime = (msg: string) => (v: unknown) => dayjs(v as dayjs.ConfigType).isValid() || msg;
-const optionalDateTime = (v: string) => v === '' || isDateTime('Invalid format.')(v);
 </script>

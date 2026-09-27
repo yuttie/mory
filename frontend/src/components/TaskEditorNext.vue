@@ -178,7 +178,7 @@
                     <!-- Start date -->
                     <DateSelector
                         v-model="form.start_at"
-                        v-bind:rules="[(v) => v === '' || isDateTime('Invalid format.')(v)]"
+                        v-bind:rules="[optionalDateTime]"
                         label="Start date"
                     >
                         <template v-slot:prepend>
@@ -188,7 +188,7 @@
                     <!-- Due date -->
                     <DateSelector
                         v-model="form.due_by"
-                        v-bind:rules="[(v) => v === '' || isDateTime('Invalid format.')(v)]"
+                        v-bind:rules="[optionalDateTime]"
                         label="Due date (soft target)"
                     >
                         <template v-slot:prepend>
@@ -198,7 +198,7 @@
                     <!-- Deadline -->
                     <DateSelector
                         v-model="form.deadline"
-                        v-bind:rules="[(v) => v === '' || isDateTime('Invalid format.')(v)]"
+                        v-bind:rules="[optionalDateTime]"
                         label="Deadline (hard cutoff)"
                     >
                         <template v-slot:prepend>
@@ -378,6 +378,7 @@ import { STATUS_LABEL, nextOptions, makeDefaultStatus, canTransition } from '@/t
 import { useFetchTask } from '@/composables/fetchTask';
 import { useLocalStorage } from '@/composables/localStorage';
 import { loadConfigValue } from '@/config';
+import { optionalDateTime, range, required } from '@/rules';
 
 import dayjs from 'dayjs';
 
@@ -675,12 +676,6 @@ function onBeforeunload(e: any) {
         delete e['returnValue'];  // This guarantees the browser unload happens
     }
 }
-
-// Validation
-const required = (msg: string) => (v: any) => (v != null && String(v).trim().length > 0) || msg;
-const isDateTime = (msg: string) => (v: any) => dayjs(v).isValid() || msg;
-const range = (min: number, max: number, msg: string) => (v: any) =>
-    (typeof v === 'number' && v >= min && v <= max) || msg;
 
 // Save/Delete
 async function onSave(): Promise<void> {
