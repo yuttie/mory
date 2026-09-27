@@ -102,8 +102,8 @@ export interface Task {
     note: string;
 }
 
-export function nextOptions(from: Status): readonly StatusKind[] {
-    return STATUS_TRANSITION[from.kind] ?? [];
+export function nextOptions(from: StatusKind): readonly StatusKind[] {
+    return STATUS_TRANSITION[from] ?? [];
 }
 
 // What a task switched to `kind` starts with. Done and Canceled say when, and that is now.
@@ -121,8 +121,8 @@ export function makeDefaultStatus(kind: StatusKind): Status {
     }
 }
 
-export function canTransition(from: Status, to: StatusKind): boolean {
-    if (to === from.kind) { return true; }  // Allow no-op (same status)
+export function canTransition(from: StatusKind, to: StatusKind): boolean {
+    if (to === from) { return true; }  // Allow no-op (same status)
     return nextOptions(from).includes(to);
 }
 

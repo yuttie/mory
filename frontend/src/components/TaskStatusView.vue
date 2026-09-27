@@ -9,7 +9,7 @@
             class="group"
             v-bind:class="{
                 origin: column.kind === draggedFrom,
-                refused: draggedFrom !== null && !accepts(draggedFrom, column.kind),
+                refused: draggedFrom !== null && !canTransition(draggedFrom, column.kind),
             }"
         >
             <v-card-title>{{ STATUS_LABEL[column.kind] }}</v-card-title>
@@ -121,12 +121,14 @@ const awaiting = ref<{ task: TaskNode; status: Status } | null>(null);
 // be a new object each time.
 // `pull: 'clone'` leaves a copy at the task's place while it is over another column, so that place
 // stays open wherever the task is held (see `onClone`).
+// A drop obeys the transitions the editor offers while locked. Unlocking is an exception made
+// deliberately, one edit at a time, so reopening a finished task stays the editor's to do.
 const COLUMNS = STATUS_KINDS.map((kind) => ({
     kind,
     group: {
         name: 'tasks',
         pull: 'clone',
-        put: () => draggedFrom.value !== null && accepts(draggedFrom.value, kind),
+        put: () => draggedFrom.value !== null && canTransition(draggedFrom.value, kind),
     },
 }));
 
@@ -136,12 +138,6 @@ const formRef = ref<InstanceType<typeof VForm> | null>(null);
 // Methods
 function onTaskClick(taskUuid: UUID) {
     emit('task-click', taskUuid);
-}
-
-// A drop obeys the transitions the editor offers while locked. Unlocking is an exception made
-// deliberately, one edit at a time, so reopening a finished task stays the editor's to do.
-function accepts(from: StatusKind, to: StatusKind): boolean {
-    return canTransition({ kind: from } as Status, to);
 }
 
 // Marks the copy Sortable leaves at a task's place while the task is over another column, so it is

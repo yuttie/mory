@@ -494,7 +494,7 @@ const progress = computed<number>({
 });
 
 const statusOptions = computed<{ kind: StatusKind, label: string }[]>(() => {
-    const allowed = statusOptionRestricted.value ? nextOptions(initialForm.value.status) : [...Object.keys(STATUS_LABEL)];
+    const allowed = statusOptionRestricted.value ? nextOptions(initialForm.value.status.kind) : [...Object.keys(STATUS_LABEL)];
     const opts = [initialForm.value.status.kind, ...allowed] as StatusKind[];
     const items = Array.from(new Set(opts))
         .map((k) => { return { kind: k, label: STATUS_LABEL[k] }; });
@@ -516,7 +516,7 @@ const statusGateError = computed<string | undefined>(() => {
     const to = form.status.kind;
     // Unlocking offers every status, so it has to lift the gate too: otherwise a status it offers,
     // such as In progress back to To do, is one the form can never save.
-    if (!statusOptionRestricted.value || canTransition(from, to)) {
+    if (!statusOptionRestricted.value || canTransition(from.kind, to)) {
         return undefined;
     }
     else {
