@@ -106,6 +106,14 @@ export function nextOptions(from: StatusKind): readonly StatusKind[] {
     return STATUS_TRANSITION[from] ?? [];
 }
 
+// The statuses that carry fields besides their kind, which `TaskStatusFields` shows. The rest are
+// their kind alone.
+const KINDS_WITH_FIELDS: ReadonlySet<StatusKind> = new Set<StatusKind>(['waiting', 'blocked', 'on_hold', 'done', 'canceled']);
+
+export function hasFields(kind: StatusKind): boolean {
+    return KINDS_WITH_FIELDS.has(kind);
+}
+
 // What a task switched to `kind` starts with. Done and Canceled say when, and that is now.
 export function makeDefaultStatus(kind: StatusKind): Status {
     const now = dayjs().format().replace('T', ' ');

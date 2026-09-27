@@ -91,7 +91,7 @@ import draggable from 'vuedraggable';
 import type { VForm } from 'vuetify/components';
 
 import { type TaskNode } from '@/task-forest';
-import { type UUID, type Status, type StatusKind, STATUS_KINDS, STATUS_LABEL, canTransition, makeDefaultStatus } from '@/task';
+import { type UUID, type Status, type StatusKind, STATUS_KINDS, STATUS_LABEL, canTransition, hasFields, makeDefaultStatus } from '@/task';
 
 // Props
 defineProps<{
@@ -154,13 +154,12 @@ function onChange(kind: StatusKind, event: { added?: { element: TaskNode } }) {
         return;
     }
     const status = makeDefaultStatus(kind);
-    // Backlog, To do and In progress are their kind alone. Every other status starts with
-    // something besides, and has fields, required or optional, that are all shown first.
-    if (Object.keys(status).length === 1) {
-        emit('status-change', task, status);
+    // A status with fields has them all shown first, required or optional.
+    if (hasFields(kind)) {
+        awaiting.value = { task, status };
     }
     else {
-        awaiting.value = { task, status };
+        emit('status-change', task, status);
     }
 }
 

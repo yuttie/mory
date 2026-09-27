@@ -1,7 +1,7 @@
 import YAML from 'yaml';
 import { describe, expect, it } from 'vitest';
 
-import { type Task, makeDefaultStatus, render, replaceStatus } from '@/task';
+import { type Task, STATUS_KINDS, hasFields, makeDefaultStatus, render, replaceStatus } from '@/task';
 
 function task(overrides: Partial<Task> = {}): Task {
     return {
@@ -164,5 +164,11 @@ describe('makeDefaultStatus', () => {
     it('leaves what only the author can say empty', () => {
         expect(makeDefaultStatus('todo')).toEqual({ kind: 'todo' });
         expect(makeDefaultStatus('waiting')).toEqual({ kind: 'waiting', waiting_for: '' });
+    });
+});
+
+describe('hasFields', () => {
+    it('is true of the statuses that carry more than their kind', () => {
+        expect(STATUS_KINDS.filter(hasFields)).toEqual(['waiting', 'blocked', 'on_hold', 'done', 'canceled']);
     });
 });
