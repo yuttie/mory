@@ -2,6 +2,7 @@ import YAML from 'yaml';
 import dayjs from 'dayjs';
 
 import type { UUID } from '@/api';
+import { columnOf, editFrontmatter, hasKey, indentBlock, lineEnding, parsesTo, sameValue, splice } from '@/frontmatter';
 
 export { UUID };
 
@@ -162,19 +163,7 @@ export function render(task: Task): string {
 // The whole old mapping goes, not just `kind`: every member of the schema's union is closed, so a
 // `waiting_for` left behind under `kind: todo` would make the task invalid.
 export function replaceStatus(markdown: string, status: Status): string {
-    const opening = /^---\r?\n/.exec(markdown);
-    if (opening === null) {
-        throw new Error('The note has no frontmatter.');
-    }
-    const start = opening[0].length;
-    const closingFence = /^---[ \t]*\r?$/gm;
-    closingFence.lastIndex = start;
-    const closing = closingFence.exec(markdown);
-    if (closing === null) {
-        throw new Error('The note\'s frontmatter is never closed.');
-    }
-    const edited = replaceStatusInYaml(markdown.slice(start, closing.index), status);
-    return markdown.slice(0, start) + edited + markdown.slice(closing.index);
+    return editFrontmatter(markdown, (yaml) => replaceStatusInYaml(yaml, status));
 }
 
 function replaceStatusInYaml(source: string, status: Status): string {
@@ -183,19 +172,17 @@ function replaceStatusInYaml(source: string, status: Status): string {
         throw new Error(`The frontmatter is not valid YAML: ${doc.errors[0].message}`);
     }
     const root = doc.contents;
-    const taskPair = YAML.isMap(root) ? root.items.find((pair) => isKey(pair.key, 'task')) : undefined;
-    const taskKey = taskPair?.key;
+    const taskPair = YAML.isMap(root) ? root.items.find((pair) => hasKey(pair, 'task')) : undefined;
     const task = taskPair?.value;
     // A flow-style `task: {...}` would need the whole mapping rewritten; nothing writes one.
-    if (!YAML.isNode(taskKey) || !taskKey.range || !YAML.isMap(task) || task.flow || !task.range) {
+    if (!taskPair?.key.range || !YAML.isMap(task) || task.flow || !task.range) {
         throw new Error('The frontmatter has no block `task:` mapping to change the status in.');
     }
 
-    const eol = source.includes('\r\n') ? '\r\n' : '\n';
-    const columnOf = (offset: number) => offset - (source.lastIndexOf('\n', offset - 1) + 1);
-    const taskColumn = columnOf(task.range[0]);
+    const eol = lineEnding(source);
+    const taskColumn = columnOf(source, task.range[0]);
     // The author's indentation step, so the new lines sit the way theirs do.
-    const step = taskColumn - columnOf(taskKey.range[0]);
+    const step = taskColumn - columnOf(source, taskPair.key.range[0]);
     // Anything undefined is dropped here as `YAML.stringify` drops it, so the check below compares
     // against what is actually written.
     const value = JSON.parse(JSON.stringify(status)) as Status;
@@ -207,7 +194,7 @@ function replaceStatusInYaml(source: string, status: Status): string {
     }
     const block = YAML.stringify(value, { indent: step, lineWidth: 0 });
 
-    const pair = task.items.find((p) => isKey(p.key, 'status'));
+    const pair = task.items.find((p) => hasKey(p, 'status'));
     let edited: string;
     if (pair === undefined) {
         // First, where `render` puts it. The key that was first moves down a line and keeps its
@@ -224,60 +211,26 @@ function replaceStatusInYaml(source: string, status: Status): string {
         }
         else {
             // The range starts at the first key's column and runs to the end of the last line.
-            const column = columnOf(from);
+            const column = columnOf(source, from);
             const tail = source.slice(from, to).endsWith('\n') ? eol : '';
             edited = splice(source, from, to, indentBlock(block, column, eol).slice(column) + tail);
         }
     }
-    else if (YAML.isNode(pair.key) && pair.key.range && YAML.isNode(pair.value) && pair.value.range) {
+    else if (pair.key.range && YAML.isNode(pair.value) && pair.value.range) {
         // Named without a mapping, as `status:` or `status: null`: rewritten as a block under the
         // key.
         const from = pair.key.range[0];
         const to = pair.value.range[1];
         const tail = source.slice(from, to).endsWith('\n') ? eol : '';
-        const replaced = 'status:' + eol + indentBlock(block, columnOf(from) + step, eol) + tail;
+        const replaced = 'status:' + eol + indentBlock(block, columnOf(source, from) + step, eol) + tail;
         edited = splice(source, from, to, replaced);
     }
     else {
         throw new Error('The task\'s status is written in a form this edit does not handle.');
     }
 
-    const result = YAML.parseDocument(edited);
-    const expected = { ...before, task: { ...before.task, status: value } };
-    if (result.errors.length > 0 || !sameValue(result.toJS(), expected)) {
+    if (!parsesTo(edited, { ...before, task: { ...before.task, status: value } })) {
         throw new Error('Changing the status in place would have changed more than the status.');
     }
     return edited;
-}
-
-function isKey(key: unknown, name: string): boolean {
-    return YAML.isScalar(key) && key.value === name;
-}
-
-function splice(text: string, from: number, to: number, replacement: string): string {
-    return text.slice(0, from) + replacement + text.slice(to);
-}
-
-// Indents every line of a block `YAML.stringify` wrote, leaving blank lines blank.
-function indentBlock(block: string, column: number, eol: string): string {
-    return block.trimEnd()
-        .split('\n')
-        .map((line) => line === '' ? line : ' '.repeat(column) + line)
-        .join(eol);
-}
-
-// Deep equality over the values YAML parses to, ignoring the order of a mapping's keys.
-function sameValue(a: unknown, b: unknown): boolean {
-    if (Array.isArray(a) || Array.isArray(b)) {
-        return Array.isArray(a) && Array.isArray(b) && a.length === b.length &&
-            a.every((item, i) => sameValue(item, b[i]));
-    }
-    if (typeof a === 'object' && typeof b === 'object' && a !== null && b !== null) {
-        const aRecord = a as Record<string, unknown>;
-        const bRecord = b as Record<string, unknown>;
-        const aKeys = Object.keys(aRecord);
-        return aKeys.length === Object.keys(bRecord).length &&
-            aKeys.every((key) => Object.hasOwn(bRecord, key) && sameValue(aRecord[key], bRecord[key]));
-    }
-    return Object.is(a, b);
 }
