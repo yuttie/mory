@@ -1,58 +1,18 @@
 <template>
     <div class="eisenhower-matrix">
-        <v-card class="quadrant urgent-important">
+        <v-card
+            v-for="quadrant of QUADRANTS"
+            v-bind:key="quadrant.key"
+            class="quadrant"
+            v-bind:class="quadrant.class"
+        >
             <v-card-title class="quadrant-header">
-                <span class="quadrant-title">Do First</span>
-                <span class="quadrant-subtitle">Urgent & Important</span>
+                <span class="quadrant-title">{{ quadrant.title }}</span>
+                <span class="quadrant-subtitle">{{ quadrant.subtitle }}</span>
             </v-card-title>
             <div class="task-list">
                 <TaskListItemNext
-                    v-for="task of eisenhowerQuadrants.doFirst"
-                    v-bind:key="task.uuid"
-                    v-bind:value="task"
-                    v-bind:to="routeFor(task)"
-                    v-bind:list-root="listRoot"
-                />
-            </div>
-        </v-card>
-        <v-card class="quadrant important-not-urgent">
-            <v-card-title class="quadrant-header">
-                <span class="quadrant-title">Schedule</span>
-                <span class="quadrant-subtitle">Important, Not Urgent</span>
-            </v-card-title>
-            <div class="task-list">
-                <TaskListItemNext
-                    v-for="task of eisenhowerQuadrants.schedule"
-                    v-bind:key="task.uuid"
-                    v-bind:value="task"
-                    v-bind:to="routeFor(task)"
-                    v-bind:list-root="listRoot"
-                />
-            </div>
-        </v-card>
-        <v-card class="quadrant urgent-not-important">
-            <v-card-title class="quadrant-header">
-                <span class="quadrant-title">Delegate</span>
-                <span class="quadrant-subtitle">Urgent, Not Important</span>
-            </v-card-title>
-            <div class="task-list">
-                <TaskListItemNext
-                    v-for="task of eisenhowerQuadrants.delegate"
-                    v-bind:key="task.uuid"
-                    v-bind:value="task"
-                    v-bind:to="routeFor(task)"
-                    v-bind:list-root="listRoot"
-                />
-            </div>
-        </v-card>
-        <v-card class="quadrant not-urgent-not-important">
-            <v-card-title class="quadrant-header">
-                <span class="quadrant-title">Eliminate</span>
-                <span class="quadrant-subtitle">Not Urgent, Not Important</span>
-            </v-card-title>
-            <div class="task-list">
-                <TaskListItemNext
-                    v-for="task of eisenhowerQuadrants.eliminate"
+                    v-for="task of eisenhowerQuadrants[quadrant.key]"
                     v-bind:key="task.uuid"
                     v-bind:value="task"
                     v-bind:to="routeFor(task)"
@@ -80,6 +40,14 @@ defineProps<{
     routeFor: (task: TaskNode) => RouteLocationRaw;
     listRoot?: UUID;
 }>();
+
+// In the order the 2×2 grid places them: left to right, then top to bottom.
+const QUADRANTS = [
+    { key: 'doFirst', title: 'Do First', subtitle: 'Urgent & Important', class: 'urgent-important' },
+    { key: 'schedule', title: 'Schedule', subtitle: 'Important, Not Urgent', class: 'important-not-urgent' },
+    { key: 'delegate', title: 'Delegate', subtitle: 'Urgent, Not Important', class: 'urgent-not-important' },
+    { key: 'eliminate', title: 'Eliminate', subtitle: 'Not Urgent, Not Important', class: 'not-urgent-not-important' },
+] as const;
 </script>
 
 <style scoped lang="scss">
