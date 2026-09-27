@@ -168,15 +168,6 @@
                                     ></v-icon-btn>
                                 </template>
                                 <v-list>
-                                    <v-list-subheader>Descendants statistics</v-list-subheader>
-                                    <v-list-item>
-                                        <v-list-item-title v-for="[kind, label] of Object.entries(STATUS_LABEL)" v-bind:key="kind">
-                                            {{ label }}: {{ selectedNodeDescendants.filter((t) => t.metadata?.task?.status?.kind === kind).length }}
-                                        </v-list-item-title>
-                                    </v-list-item>
-                                </v-list>
-                                <v-divider></v-divider>
-                                <v-list>
                                     <v-list-subheader>Config</v-list-subheader>
                                     <v-list-item title="Hide completed tasks in item view">
                                         <template v-slot:prepend>
