@@ -18,6 +18,7 @@ function note(title: string, { tags = [], scheduledDates = [] }: { tags?: string
 }
 
 const PROJECT = uuid(1);
+// Gives Project a child, so the tree keeps it at the top rather than filing it under Untagged.
 const STEP = uuid(2);
 // A root task with no children, which the tree files under its tag rather than at the top. Scheduled,
 // so the Schedule view lists it too.
@@ -33,8 +34,9 @@ function tree(page: Page): Locator {
     return page.locator('.task-tree-container');
 }
 
+// Strict, so a task drawn twice, at the top and under a tag, fails rather than passes on either.
 function row(page: Page, name: string): Locator {
-    return tree(page).getByRole('treeitem', { name }).first();
+    return tree(page).getByRole('treeitem', { name });
 }
 
 // The task in one of the Descendants tab's views, found by the class of the view's root.
@@ -75,8 +77,7 @@ test.describe('the tree', () => {
         await mockBackend(context, NOTES);
         await page.goto('/tasks-next/_/descendants/status');
 
-        await row(page, 'Project').focus();
-        await page.keyboard.press('Enter');
+        await row(page, 'Project').press('Enter');
         await expect(page).toHaveURL(url(PROJECT, 'selected', 'status'));
     });
 
