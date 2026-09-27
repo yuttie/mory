@@ -34,11 +34,11 @@
                             </v-list-item>
                         </v-list>
                     </v-menu>
+                    <v-divider
+                        vertical
+                        class="mx-3"
+                    />
                     <template v-if="selectedNode">
-                        <v-divider
-                            vertical
-                            class="mx-3"
-                        />
                         <!-- Links, so a task up the path is one click away and can be opened in a
                              new tab. The root clears the selection, which the tree does only when
                              the selected task is found and clicked again. -->
@@ -63,6 +63,12 @@
                         <span class="app-bar-separator text-medium-emphasis">›</span>
                         <span class="app-bar-current">{{ selectedNode.title || 'Untitled' }}</span>
                     </template>
+                    <!-- The root alone, so the path still says what the list holds with nothing
+                         selected, and the root does not come and go with the selection. -->
+                    <span
+                        v-else
+                        class="app-bar-current"
+                    >All tasks</span>
                 </div>
             </v-toolbar-title>
             <v-menu

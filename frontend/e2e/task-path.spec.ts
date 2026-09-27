@@ -54,6 +54,7 @@ test('clears the selection from the root of the path', async ({ context, page })
     // The Selected tab goes with the selection, so the list of every task is what is left.
     await expect(page).toHaveURL(url('_', 'descendants', 'schedule'));
     await expect(page.getByRole('tab', { name: 'All tasks' })).toHaveAttribute('aria-selected', 'true');
+    // The root stays, as where the path is, with nothing to go up to.
     await expect(path(page).getByRole('link')).toHaveCount(0);
-    await expect(path(page).locator('.app-bar-current')).toHaveCount(0);
+    await expect(path(page).locator('.app-bar-current')).toHaveText('All tasks');
 });
