@@ -29,9 +29,9 @@
 
 <script lang="ts" setup generic="Item extends { title?: string | null; children?: Item[] }">
 // The tree plumbing shared by every tree the app draws over the file listing: which items are
-// open, which is active, how the three events reach the parent, and how a row becomes a link. What
-// a row *looks* like is left to the slots, because that is the only part that differs between a
-// task tree and a tree of ordinary notes.
+// open and which is active, how the parent hears of either, and how a row becomes a link. What a
+// row *looks* like is left to the slots, because that is the only part that differs between a task
+// tree and a tree of ordinary notes.
 
 import { type RouteLocationRaw, useRouter } from 'vue-router';
 
@@ -44,8 +44,8 @@ const props = defineProps<{
     itemValue: string;
     // Whether clicking anywhere on a branch row toggles it, rather than only its chevron.
     openOnClick?: boolean;
-    // Where each row goes, or null for one with nowhere to go. Given, the tree goes there itself
-    // rather than reporting activation, so the parent reads what is active from the route.
+    // Where each row goes, or null for one with nowhere to go. Given, each such row is a link and
+    // the tree reports no activation: the parent reads what is active from the route instead.
     routeFor?: (item: Item) => RouteLocationRaw | null;
 }>();
 
@@ -77,7 +77,10 @@ function onActivated(id: string | undefined) {
 // leaves a Ctrl-, Shift- or middle-click to the browser, which opens a new tab or window and must
 // not move this one. The keyboard is the caller the tree still navigates for, because v-treeview
 // handles Enter itself and the keypress never reaches the anchor. Told apart by the event the
-// activation carries, which `update:activated` leaves out.
+// activation carries, which `update:activated` leaves out. `click:activate` is VList's own event:
+// VTreeview does not declare it, and the listener reaches the VList it renders only as a passed-on
+// attribute. Should an upgrade declare it without passing it on, the keyboard would stop without a
+// word; the keyboard test in task-links.spec.ts is what notices.
 function onClickActivate({ id, event }: { id: unknown; event?: { type: string } }) {
     if (props.routeFor === undefined || event?.type !== 'keydown') {
         return;
