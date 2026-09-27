@@ -222,7 +222,6 @@ const deadlineStyle = computed<Record<string, string>>(() => {
     align-items: flex-start;
     font-size: 14px;
     padding: 4px 4px;
-    cursor: pointer;
     word-break: break-all;
     color: inherit;
     text-decoration: none;

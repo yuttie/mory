@@ -70,7 +70,7 @@ import { type TaskNode } from '@/task-forest';
 import { type UUID } from '@/task';
 
 // Props
-const props = defineProps<{
+defineProps<{
     eisenhowerQuadrants: {
         doFirst: TaskNode[];
         schedule: TaskNode[];
