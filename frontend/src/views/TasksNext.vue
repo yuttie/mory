@@ -527,20 +527,16 @@ function filterTasksByStatus(tasks: TaskNode[], hideCompleted: boolean): TaskNod
     });
 }
 
+// What the Descendants tab lists: the list root's descendants, a tag group's members, or every task.
+// Taken from `listRoot`, so the items' paths start below the task the list is really under.
 const selectedNodeDescendants = computed<TaskNode[]>(() => {
-    let targetTasks;
+    if (listRoot.value !== undefined) {
+        return store.flattenDescendants(listRoot.value);
+    }
     if (isTagGroupSelected.value && selectedTagName.value) {
-        // Show tasks from the selected tag group
-        targetTasks = store.childrenOf(tagGroupId(selectedTagName.value));
+        return store.childrenOf(tagGroupId(selectedTagName.value));
     }
-    else {
-        // Show tasks based on selected node (descendants or all tasks)
-        targetTasks = selectedNode.value && !isTagGroupSelected.value
-            ? store.flattenDescendants(selectedNode.value.uuid)
-            : store.allTasks;
-    }
-
-    return targetTasks;
+    return store.allTasks;
 });
 
 const filteredSelectedNodeDescendants = computed<TaskNode[]>(() => {
