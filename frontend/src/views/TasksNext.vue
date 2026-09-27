@@ -8,14 +8,35 @@
                     v-if="store.isLoaded"
                     class="app-bar-title"
                 >
-                    <!-- First, so it stays put while the selection changes what follows it. -->
-                    <span class="app-bar-count">
-                        {{ filteredTasksCount }}
-                        <template v-if="!(selectedNode && $vuetify.display.xs)">
-                            {{ filteredTasksCount === 1 ? 'task' : 'tasks' }}
+                    <!-- First, so it stays put while the selection changes what follows it.
+                         Opened by a tap as well as by hovering, since a phone cannot hover. -->
+                    <v-menu
+                        open-on-hover
+                        open-on-click
+                        location="bottom start"
+                    >
+                        <template v-slot:activator="{ props: statisticsProps }">
+                            <span
+                                v-bind="statisticsProps"
+                                class="app-bar-count"
+                            >
+                                {{ filteredTasksCount }}
+                                <template v-if="!(selectedNode && $vuetify.display.xs)">
+                                    {{ filteredTasksCount === 1 ? 'task' : 'tasks' }}
+                                </template>
+                                left
+                            </span>
                         </template>
-                        left
-                    </span>
+                        <!-- Of the tasks the count is taken from, so the two agree. -->
+                        <v-list>
+                            <v-list-subheader>Statistics</v-list-subheader>
+                            <v-list-item>
+                                <v-list-item-title v-for="[kind, label] of Object.entries(STATUS_LABEL)" v-bind:key="kind">
+                                    {{ label }}: {{ selectedNodeDescendants.filter((t) => t.metadata?.task?.status?.kind === kind).length }}
+                                </v-list-item-title>
+                            </v-list-item>
+                        </v-list>
+                    </v-menu>
                     <template v-if="selectedNode">
                         <v-divider
                             vertical
@@ -41,15 +62,6 @@
                         class="mr-2"
                     ></v-icon-btn>
                 </template>
-                <v-list>
-                    <v-list-subheader>Statistics</v-list-subheader>
-                    <v-list-item>
-                        <v-list-item-title v-for="[kind, label] of Object.entries(STATUS_LABEL)" v-bind:key="kind">
-                            {{ label }}: {{ store.allTasks.filter((t) => t.metadata?.task?.status?.kind === kind).length }}
-                        </v-list-item-title>
-                    </v-list-item>
-                </v-list>
-                <v-divider></v-divider>
                 <v-list>
                     <v-list-subheader>Config</v-list-subheader>
                     <v-list-item title="Hide completed tasks in tree view">
