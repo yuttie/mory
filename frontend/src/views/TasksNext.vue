@@ -878,6 +878,13 @@ async function load(primed = false) {
     user-select: none;
 }
 
+/* Mobile responsive adjustments for main container */
+@media (max-width: 959px) { /* md breakpoint in Vuetify 2 */
+    #tasks-next {
+        padding: 4px;
+    }
+}
+
 .app-bar-title {
     display: flex;
     align-items: center;
@@ -909,13 +916,6 @@ async function load(primed = false) {
 .app-bar-current {
     flex: 0 1 auto;
     min-width: 0;
-}
-
-/* Mobile responsive adjustments for main container */
-@media (max-width: 959px) { /* md breakpoint in Vuetify 2 */
-    #tasks-next {
-        padding: 4px;
-    }
 }
 
 .task-tree {

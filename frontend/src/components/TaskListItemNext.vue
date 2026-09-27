@@ -66,6 +66,8 @@
                     <div>{{ deadline }}</div>
                 </v-tooltip>
             </span>
+            <!-- Below the title rather than before it, so the checkbox stays level with the title
+                 and the titles in a column still line up to be scanned. -->
             <div
                 v-if="ancestorTitles.length > 0"
                 class="ancestors"
@@ -252,8 +254,6 @@ const deadlineStyle = computed<Record<string, string>>(() => {
 .strikethrough {
     text-decoration-line: line-through;
 }
-/* Below the title rather than before it, so the checkbox stays level with the title and the
-   titles in a column still line up to be scanned. */
 .ancestors {
     font-size: 12px;
     color: #888;
