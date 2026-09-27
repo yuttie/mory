@@ -532,13 +532,14 @@ const filteredSelectedNodeDescendants = computed<TaskNode[]>(() => {
     return filterTasksByStatus(selectedNodeDescendants.value, hideCompletedInItemView.value);
 });
 
-// Among the tasks the Descendants tab lists, so the count follows the selection. Done and canceled
-// tasks are never left, whatever the hide-completed switches say.
+// Among the tasks the Descendants tab lists, so the count follows the selection. A task in the
+// backlog is not taken on yet and a done or canceled one is over, so neither is left, whatever the
+// hide-completed switches say. Counted from the Status view's columns, as the popover is, so the
+// two agree on where a task naming no status belongs.
 const tasksLeftCount = computed<number>(() => {
-    return selectedNodeDescendants.value.filter((t) => {
-        const kind = t.metadata?.task?.status?.kind;
-        return kind !== 'done' && kind !== 'canceled';
-    }).length;
+    return STATUS_KINDS
+        .filter((kind) => kind !== 'backlog' && kind !== 'done' && kind !== 'canceled')
+        .reduce((count, kind) => count + taskStatuses.value[kind].length, 0);
 });
 
 // On a phone the selected node's path follows the count and needs the room: "7 left".
