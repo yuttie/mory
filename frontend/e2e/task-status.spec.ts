@@ -157,23 +157,46 @@ test('moves a task to the status it is dropped on, rewriting nothing but the sta
     ]);
 });
 
-test('leaves no gap where the dragged task was', async ({ context, page }) => {
+test('keeps the dragged task\'s place open, and only that, wherever it is held', async ({ context, page }) => {
     const repository = await mockBackend(context, {
         [ALPHA]: note('Alpha', ['kind: todo']),
         [BETA]: note('Beta', ['kind: todo']),
+        [GAMMA]: note('Gamma', ['kind: in_progress']),
     });
     await page.goto('/tasks-next');
     const list = column(page, 'To do').locator('.task-list');
     const items = list.locator('.task-list-item');
     await expect(items).toHaveCount(2);
-    const height = (await list.boundingBox())?.height ?? 0;
-    const row = (await items.nth(0).boundingBox())?.height ?? 0;
+    const height = (await list.boundingBox())?.height;
+    // Not `.sortable-drag`, the copy following the pointer.
+    const next = list.locator('.task-list-item:not(.sortable-drag)').nth(1);
+    const place = (await next.boundingBox())?.y;
+    // The column's height and where the next task sits, together: one gap, at the task's place.
+    const unchanged = async () => {
+        await expect.poll(async () => (await list.boundingBox())?.height).toBe(height);
+        await expect.poll(async () => (await next.boundingBox())?.y).toBe(place);
+    };
 
-    // Moved 20px down, over the second task, so a gap that followed the pointer would open there.
+    // Moved 20px down, over the next task: a gap that followed the pointer would move below it.
     await startDrag(page, items.nth(0));
-    // The column is ordered by date, so the dragged task has no place in it to go back to: its row
-    // closes, rather than stay open or open again wherever the pointer is.
-    await expect.poll(async () => (await list.boundingBox())?.height).toBe(height - row);
+    await unchanged();
+
+    // Over another column, the task's place is still held open in its own.
+    const gamma = await column(page, 'In progress').locator('.task-list-item', { hasText: 'Gamma' }).boundingBox();
+    if (gamma === null) {
+        throw new Error('Gamma is not visible.');
+    }
+    await page.mouse.move(gamma.x + gamma.width / 2, gamma.y + gamma.height / 2, { steps: 10 });
+    await expect(column(page, 'In progress')).toHaveCSS('outline-style', 'solid');
+    await unchanged();
+
+    // And back again, over the next task.
+    const back = await next.boundingBox();
+    if (back === null) {
+        throw new Error('The next task is not visible.');
+    }
+    await page.mouse.move(back.x + back.width / 2, back.y + back.height / 2, { steps: 10 });
+    await unchanged();
     await page.mouse.up();
 
     expect(repository.writes).toEqual([]);

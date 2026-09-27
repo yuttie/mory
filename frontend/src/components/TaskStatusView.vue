@@ -23,13 +23,14 @@
                 class="task-list"
                 item-key="uuid"
                 v-bind:model-value="taskStatuses[column.key]"
-                v-bind:group="{ name: 'tasks', put: () => draggedFrom !== null && accepts(draggedFrom, column.kind) }"
+                v-bind:group="GROUPS[column.kind]"
                 v-bind:sort="false"
                 v-bind:force-fallback="true"
                 v-bind:delay="500"
                 v-bind:delay-on-touch-only="true"
                 v-on:start="draggedFrom = column.kind"
                 v-on:end="draggedFrom = null"
+                v-on:clone="onClone"
                 v-on:change="onChange(column.kind, $event)"
             >
                 <template v-slot:item="{ element: task }">
@@ -130,6 +131,18 @@ const draggedFrom = ref<StatusKind | null>(null);
 // A drop on a status with fields of its own, shown to be filled in before it is written.
 const awaiting = ref<{ task: TaskNode; status: Status } | null>(null);
 
+// One group per column, made once. Sortable tells the column a drag started in from the others by
+// its group, and remakes that from whatever it is handed: given a new object mid-drag, as one
+// written into the template would be on every render, the column stops counting as the task's
+// own, and Sortable moves the task about in it as if it had come from elsewhere.
+// `pull: 'clone'` leaves a copy at the task's place while it is over another column, so that place
+// stays open wherever the task is held (see `onClone`).
+const GROUPS = Object.fromEntries(COLUMNS.map(({ kind }) => [kind, {
+    name: 'tasks',
+    pull: 'clone',
+    put: () => draggedFrom.value !== null && accepts(draggedFrom.value, kind),
+}]));
+
 // Template refs
 const formRef = ref<InstanceType<typeof VForm> | null>(null);
 
@@ -142,6 +155,11 @@ function onTaskClick(taskUuid: UUID) {
 // deliberately, one edit at a time, so reopening a finished task stays the editor's to do.
 function accepts(from: StatusKind, to: StatusKind): boolean {
     return canTransition({ kind: from } as Status, to);
+}
+
+// Marks that copy, so it is drawn as the place the task left rather than as the task.
+function onClone(event: { clone: { classList: { add: (token: string) => void } } }) {
+    event.clone.classList.add('vacated');
 }
 
 function onChange(kind: StatusKind, event: { added?: { element: TaskNode } }) {
@@ -234,14 +252,19 @@ $space: 12px;
     opacity: 0.4;
 }
 
-/* A drop decides the column and nothing else, since each column is ordered by date. So the task
-   being dragged leaves no gap anywhere: not between two tasks of a column it is held over, as if it
-   could go there, and not where it was, as if it could go back to that place. A column it is held
-   over is marked as a whole instead.
+/* A drop decides the column and nothing else, since each column is ordered by date. So a task held
+   over another column opens no gap between two of its tasks, as if it could go there; that column
+   is marked as a whole instead. The one gap is the place the task left, which stays open in its
+   own column wherever it is held: as the task itself while it is over that column (Sortable keeps
+   it at its place there), and as the copy left in its stead while it is over another.
    Under `.dragging` because Sortable measures the task for the copy that follows the pointer
    before `.dragging` is drawn: hidden at that moment, the copy made from it would be zero-sized. */
-.dragging :deep(.sortable-ghost) {
+.dragging .group:not(.origin) :deep(.sortable-ghost) {
     display: none;
+}
+
+.dragging :deep(.vacated) {
+    visibility: hidden;
 }
 
 /* The copy that follows the pointer lives in the column it left, and each card stacks its own
