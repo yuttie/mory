@@ -58,6 +58,16 @@ test.describe('the tree', () => {
         await expect(page).toHaveURL(url(PROJECT, 'selected', 'schedule'));
     });
 
+    // The tree stays while the view changes beside it, so its links have to follow.
+    test('follows a change of view in each row\'s link', async ({ context, page }) => {
+        await mockBackend(context, NOTES);
+        await page.goto('/tasks-next/_/descendants/status');
+
+        await page.getByRole('button', { name: 'Schedule' }).click();
+        await expect(page).toHaveURL(url('_', 'descendants', 'schedule'));
+        await expect(row(page, 'Project')).toHaveAttribute('href', `/tasks-next/${PROJECT}/selected/schedule`);
+    });
+
     // A tag group is no task to edit.
     test('links a tag group to the tasks filed under it', async ({ context, page }) => {
         await mockBackend(context, NOTES);
