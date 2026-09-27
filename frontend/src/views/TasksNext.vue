@@ -100,7 +100,7 @@
                 <TaskTree
                     v-bind:items="filteredForestWithTags"
                     v-bind:active="activeNodeId"
-                    v-bind:route-for="taskRoute"
+                    v-bind:route-for="taskRouteFor"
                     v-model:open="openNodes"
                     show-add-child
                     v-on:add-child-task="onAddChildTask"
@@ -206,7 +206,7 @@
                                 v-if="descendantsViewMode === 'status'"
                                 v-bind:task-statuses="taskStatuses"
                                 v-bind:known-contacts="knownContacts"
-                                v-bind:route-for="taskRoute"
+                                v-bind:route-for="taskRouteFor"
                                 v-bind:list-root="listRoot"
                                 v-on:status-change="onTaskStatusChange"
                             />
@@ -214,14 +214,14 @@
                             <TaskScheduleView
                                 v-else-if="descendantsViewMode === 'schedule'"
                                 v-bind:scheduled="scheduled"
-                                v-bind:route-for="taskRoute"
+                                v-bind:route-for="taskRouteFor"
                                 v-bind:list-root="listRoot"
                             />
                             <!-- Eisenhower Matrix view -->
                             <TaskEisenhowerView
                                 v-else-if="descendantsViewMode === 'eisenhower'"
                                 v-bind:eisenhower-quadrants="eisenhowerQuadrants"
-                                v-bind:route-for="taskRoute"
+                                v-bind:route-for="taskRouteFor"
                                 v-bind:list-root="listRoot"
                             />
                         </div>
@@ -676,7 +676,7 @@ function routeToState(selectedNodeId?: string, tab?: string, viewMode?: string):
 
 // Where choosing a task goes: its editor, keeping the view. A tag group is no task to edit, so it
 // lists the tasks it holds instead.
-function taskRoute(node: TaskNode): RouteLocationRaw {
+function taskRouteFor(node: TaskNode): RouteLocationRaw {
     const tab = isTagGroupId(node.uuid) ? 'descendants' : 'selected';
     return routeToState(node.uuid, tab, descendantsViewMode.value);
 }
