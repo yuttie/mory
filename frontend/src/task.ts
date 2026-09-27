@@ -1,4 +1,5 @@
 import YAML from 'yaml';
+import dayjs from 'dayjs';
 
 import type { UUID } from '@/api';
 
@@ -102,7 +103,9 @@ export function nextOptions(from: Status): readonly StatusKind[] {
     return STATUS_TRANSITION[from.kind] ?? [];
 }
 
+// What a task switched to `kind` starts with. Done and Canceled say when, and that is now.
 export function makeDefaultStatus(kind: StatusKind): Status {
+    const now = dayjs().format().replace('T', ' ');
     switch (kind) {
         case 'backlog': return { kind: 'backlog' };
         case 'todo': return { kind: 'todo' };
@@ -110,8 +113,8 @@ export function makeDefaultStatus(kind: StatusKind): Status {
         case 'waiting': return { kind: 'waiting', waiting_for: '' };
         case 'blocked': return { kind: 'blocked', blocked_by: '' };
         case 'on_hold': return { kind: 'on_hold', hold_reason: '' };
-        case 'done': return { kind: 'done', completed_at: '' };
-        case 'canceled': return { kind: 'canceled', canceled_at: '', cancel_reason: '' };
+        case 'done': return { kind: 'done', completed_at: now };
+        case 'canceled': return { kind: 'canceled', canceled_at: now, cancel_reason: '' };
     }
 }
 

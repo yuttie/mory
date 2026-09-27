@@ -81,7 +81,6 @@
 <script lang="ts" setup>
 import { ref } from 'vue';
 import draggable from 'vuedraggable';
-import dayjs from 'dayjs';
 
 import { type TaskNode } from '@/task-forest';
 import { type UUID, type Status, type StatusKind, STATUS_LABEL, canTransition, makeDefaultStatus } from '@/task';
@@ -172,15 +171,12 @@ function onReasonSubmit() {
 }
 
 function statusFor(kind: StatusKind, reason: string): Status {
-    // Stamped as the editor stamps a status it switches to.
-    const now = dayjs().format().replace('T', ' ');
     const status = makeDefaultStatus(kind);
     switch (status.kind) {
         case 'waiting': status.waiting_for = reason; break;
         case 'blocked': status.blocked_by = reason; break;
         case 'on_hold': status.hold_reason = reason; break;
-        case 'done': status.completed_at = now; break;
-        case 'canceled': status.canceled_at = now; status.cancel_reason = reason; break;
+        case 'canceled': status.cancel_reason = reason; break;
     }
     return status;
 }

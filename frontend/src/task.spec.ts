@@ -1,7 +1,7 @@
 import YAML from 'yaml';
 import { describe, expect, it } from 'vitest';
 
-import { type Task, render, replaceStatus } from '@/task';
+import { type Task, makeDefaultStatus, render, replaceStatus } from '@/task';
 
 function task(overrides: Partial<Task> = {}): Task {
     return {
@@ -140,5 +140,20 @@ describe('replaceStatus', () => {
     it('refuses rather than break an alias that points into the old status', () => {
         const before = '---\ntask:\n    status: &s\n        kind: todo\n    previous: *s\n---\n';
         expect(() => replaceStatus(before, { kind: 'in_progress' })).toThrow();
+    });
+});
+
+describe('makeDefaultStatus', () => {
+    // A datetime carries its offset, as `completed_at` always has.
+    const stamp = expect.stringMatching(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
+
+    it('stamps Done and Canceled with the time they are switched to', () => {
+        expect(makeDefaultStatus('done')).toEqual({ kind: 'done', completed_at: stamp });
+        expect(makeDefaultStatus('canceled')).toEqual({ kind: 'canceled', canceled_at: stamp, cancel_reason: '' });
+    });
+
+    it('leaves what only the author can say empty', () => {
+        expect(makeDefaultStatus('todo')).toEqual({ kind: 'todo' });
+        expect(makeDefaultStatus('waiting')).toEqual({ kind: 'waiting', waiting_for: '' });
     });
 });
