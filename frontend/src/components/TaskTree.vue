@@ -4,6 +4,7 @@
         v-bind:open="open"
         v-bind:active="active"
         item-value="uuid"
+        v-bind:route-for="routeFor"
         v-on:update:open="$emit('update:open', $event)"
         v-on:update:active="$emit('update:active', $event)"
     >
@@ -27,13 +28,15 @@
             </span>
         </template>
         <template v-slot:append="{ item }">
+            <!-- Inside the row, which may be a link. Stopping the click keeps the row from routing,
+                 but the browser would still follow the link, reloading the app, unless prevented. -->
             <v-icon-btn
                 v-bind:icon="mdiPlus"
                 v-if="showAddChild"
                 variant="text"
                 class="add-child-btn"
                 v-bind:title="item.metadata?.tag_group ? 'Add task' : 'Add child task'"
-                v-on:click.stop="$emit('add-child-task', item.uuid)"
+                v-on:click.stop.prevent="$emit('add-child-task', item.uuid)"
             ></v-icon-btn>
         </template>
     </EntryTree>
@@ -50,6 +53,8 @@ import {
     mdiPlus,
     mdiTag,
 } from '@mdi/js';
+
+import type { RouteLocationRaw } from 'vue-router';
 
 import EntryTree from '@/components/EntryTree.vue';
 import type { UUID } from '@/api';
@@ -85,6 +90,9 @@ defineProps<{
     // Off unless the parent handles `add-child-task`: a tree used only to pick a task, such as
     // the parent selection dialog's, would otherwise show a button that does nothing.
     showAddChild?: boolean;
+    // Where each row goes, making it a link; see EntryTree. Absent in a tree used to pick a task,
+    // whose rows only report being chosen.
+    routeFor?: (item: TaskTreeItem) => RouteLocationRaw;
 }>();
 
 // Emits

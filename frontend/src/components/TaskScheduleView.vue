@@ -15,8 +15,8 @@
                         v-for="task of scheduled[date]"
                         v-bind:key="task.uuid"
                         v-bind:value="task"
+                        v-bind:to="routeFor(task)"
                         v-bind:list-root="listRoot"
-                        v-on:click="onTaskClick(task.uuid)"
                     />
                 </div>
             </div>
@@ -26,6 +26,7 @@
 
 <script lang="ts" setup>
 import { computed } from 'vue';
+import type { RouteLocationRaw } from 'vue-router';
 import { type TaskNode } from '@/task-forest';
 import { type UUID } from '@/task';
 import dayjs from 'dayjs';
@@ -33,12 +34,8 @@ import dayjs from 'dayjs';
 // Props
 const props = defineProps<{
     scheduled: Record<string, TaskNode[]>;
+    routeFor: (task: TaskNode) => RouteLocationRaw;
     listRoot?: UUID;
-}>();
-
-// Emits
-const emit = defineEmits<{
-    (e: 'task-click', taskUuid: UUID): void;
 }>();
 
 // Computed properties
@@ -47,10 +44,6 @@ const scheduledDates = computed<string[]>(() => {
 });
 
 // Methods
-function onTaskClick(taskUuid: UUID) {
-    emit('task-click', taskUuid);
-}
-
 function isToday(date: string) {
     return date === dayjs().format('YYYY-MM-DD');
 }

@@ -40,8 +40,8 @@
                     />
                     <template v-if="selectedNode">
                         <!-- Links, so a task up the path is one click away and can be opened in a
-                             new tab. The root clears the selection, which the tree does only when
-                             the selected task is found and clicked again. -->
+                             new tab. The root is what clears the selection: a row in the tree is a
+                             link to its task, so clicking the selected one again keeps it. -->
                         <span class="app-bar-ancestors text-medium-emphasis">
                             <router-link
                                 v-bind:to="routeToState(undefined, 'descendants', descendantsViewMode)"
@@ -100,9 +100,9 @@
                 <TaskTree
                     v-bind:items="filteredForestWithTags"
                     v-bind:active="activeNodeId"
+                    v-bind:route-for="taskRouteFor"
                     v-model:open="openNodes"
                     show-add-child
-                    v-on:update:active="onTaskSelectionChangeInTree"
                     v-on:add-child-task="onAddChildTask"
                     style="flex: 1 1 0"
                 />
@@ -206,23 +206,23 @@
                                 v-if="descendantsViewMode === 'status'"
                                 v-bind:task-statuses="taskStatuses"
                                 v-bind:known-contacts="knownContacts"
+                                v-bind:route-for="taskRouteFor"
                                 v-bind:list-root="listRoot"
-                                v-on:task-click="onTaskListItemClick"
                                 v-on:status-change="onTaskStatusChange"
                             />
                             <!-- Schedule view -->
                             <TaskScheduleView
                                 v-else-if="descendantsViewMode === 'schedule'"
                                 v-bind:scheduled="scheduled"
+                                v-bind:route-for="taskRouteFor"
                                 v-bind:list-root="listRoot"
-                                v-on:task-click="onTaskListItemClick"
                             />
                             <!-- Eisenhower Matrix view -->
                             <TaskEisenhowerView
                                 v-else-if="descendantsViewMode === 'eisenhower'"
                                 v-bind:eisenhower-quadrants="eisenhowerQuadrants"
+                                v-bind:route-for="taskRouteFor"
                                 v-bind:list-root="listRoot"
-                                v-on:task-click="onTaskListItemClick"
                             />
                         </div>
                     </v-window-item>
@@ -674,6 +674,13 @@ function routeToState(selectedNodeId?: string, tab?: string, viewMode?: string):
     };
 }
 
+// Where choosing a task goes: its editor, keeping the view. A tag group is no task to edit, so it
+// lists the tasks it holds instead.
+function taskRouteFor(node: TaskNode): RouteLocationRaw {
+    const tab = isTagGroupId(node.uuid) ? 'descendants' : 'selected';
+    return routeToState(node.uuid, tab, descendantsViewMode.value);
+}
+
 function navigateToState(selectedNodeId?: string, tab?: string, viewMode?: string) {
     router.push(routeToState(selectedNodeId, tab, viewMode)).catch(err => {
         // Ignore navigation duplicated errors
@@ -723,16 +730,6 @@ function onViewModeChange(newViewMode: string) {
 }
 
 // Methods
-function onTaskSelectionChangeInTree(id: UUID | undefined) {
-    const tab = (id && !isTagGroupId(id)) ? 'selected' : 'descendants';
-    navigateToState(id, tab, descendantsViewMode.value);
-}
-
-function onTaskListItemClick(id: UUID) {
-    // Navigate to selected task
-    navigateToState(id, 'selected', descendantsViewMode.value);
-}
-
 function newTask() {
     // Navigate to selected tab first
     navigateToState(selectedNode.value?.uuid, 'selected', descendantsViewMode.value);
