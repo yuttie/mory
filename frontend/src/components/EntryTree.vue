@@ -33,7 +33,7 @@
 // a row *looks* like is left to the slots, because that is the only part that differs between a
 // task tree and a tree of ordinary notes.
 
-import { type RouteLocationRaw, useRoute, useRouter } from 'vue-router';
+import { type RouteLocationRaw, useRouter } from 'vue-router';
 
 // Props
 const props = defineProps<{
@@ -56,7 +56,6 @@ const emit = defineEmits<{
 }>();
 
 // Composables
-const route = useRoute();
 const router = useRouter();
 
 // Methods
@@ -85,12 +84,10 @@ function onClickActivate({ id, event }: { id: unknown; event?: { type: string } 
     }
     const item = findItem(props.items, id);
     const target = item === undefined ? null : props.routeFor(item);
-    // A row already shown is left alone: pushing it again would drop whatever the route carries
-    // beyond its path, such as the mode a note is open in.
-    if (target === null || router.resolve(target).path === route.path) {
-        return;
+    // Even on the row already shown, since a click on it goes there again too.
+    if (target !== null) {
+        router.push(target);
     }
-    router.push(target);
 }
 
 function findItem(items: Item[], id: unknown): Item | undefined {
