@@ -206,23 +206,23 @@
                                 v-if="descendantsViewMode === 'status'"
                                 v-bind:task-statuses="taskStatuses"
                                 v-bind:known-contacts="knownContacts"
+                                v-bind:route-for="taskRoute"
                                 v-bind:list-root="listRoot"
-                                v-on:task-click="onTaskListItemClick"
                                 v-on:status-change="onTaskStatusChange"
                             />
                             <!-- Schedule view -->
                             <TaskScheduleView
                                 v-else-if="descendantsViewMode === 'schedule'"
                                 v-bind:scheduled="scheduled"
+                                v-bind:route-for="taskRoute"
                                 v-bind:list-root="listRoot"
-                                v-on:task-click="onTaskListItemClick"
                             />
                             <!-- Eisenhower Matrix view -->
                             <TaskEisenhowerView
                                 v-else-if="descendantsViewMode === 'eisenhower'"
                                 v-bind:eisenhower-quadrants="eisenhowerQuadrants"
+                                v-bind:route-for="taskRoute"
                                 v-bind:list-root="listRoot"
-                                v-on:task-click="onTaskListItemClick"
                             />
                         </div>
                     </v-window-item>
@@ -730,11 +730,6 @@ function onViewModeChange(newViewMode: string) {
 }
 
 // Methods
-function onTaskListItemClick(id: UUID) {
-    // Navigate to selected task
-    navigateToState(id, 'selected', descendantsViewMode.value);
-}
-
 function newTask() {
     // Navigate to selected tab first
     navigateToState(selectedNode.value?.uuid, 'selected', descendantsViewMode.value);

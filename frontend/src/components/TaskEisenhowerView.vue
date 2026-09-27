@@ -10,8 +10,8 @@
                     v-for="task of eisenhowerQuadrants.doFirst"
                     v-bind:key="task.uuid"
                     v-bind:value="task"
+                    v-bind:to="routeFor(task)"
                     v-bind:list-root="listRoot"
-                    v-on:click="onTaskClick(task.uuid)"
                 />
             </div>
         </v-card>
@@ -25,8 +25,8 @@
                     v-for="task of eisenhowerQuadrants.schedule"
                     v-bind:key="task.uuid"
                     v-bind:value="task"
+                    v-bind:to="routeFor(task)"
                     v-bind:list-root="listRoot"
-                    v-on:click="onTaskClick(task.uuid)"
                 />
             </div>
         </v-card>
@@ -40,8 +40,8 @@
                     v-for="task of eisenhowerQuadrants.delegate"
                     v-bind:key="task.uuid"
                     v-bind:value="task"
+                    v-bind:to="routeFor(task)"
                     v-bind:list-root="listRoot"
-                    v-on:click="onTaskClick(task.uuid)"
                 />
             </div>
         </v-card>
@@ -55,8 +55,8 @@
                     v-for="task of eisenhowerQuadrants.eliminate"
                     v-bind:key="task.uuid"
                     v-bind:value="task"
+                    v-bind:to="routeFor(task)"
                     v-bind:list-root="listRoot"
-                    v-on:click="onTaskClick(task.uuid)"
                 />
             </div>
         </v-card>
@@ -64,6 +64,8 @@
 </template>
 
 <script lang="ts" setup>
+import type { RouteLocationRaw } from 'vue-router';
+
 import { type TaskNode } from '@/task-forest';
 import { type UUID } from '@/task';
 
@@ -75,18 +77,9 @@ const props = defineProps<{
         delegate: TaskNode[];
         eliminate: TaskNode[];
     };
+    routeFor: (task: TaskNode) => RouteLocationRaw;
     listRoot?: UUID;
 }>();
-
-// Emits
-const emit = defineEmits<{
-    (e: 'task-click', taskUuid: UUID): void;
-}>();
-
-// Methods
-function onTaskClick(taskUuid: UUID) {
-    emit('task-click', taskUuid);
-}
 </script>
 
 <style scoped lang="scss">

@@ -1,6 +1,6 @@
 <template>
-    <div
-        v-on:click="$emit('click', $event)"
+    <router-link
+        v-bind:to="to"
         class="task-list-item"
     >
         <v-icon class="mr-1">
@@ -75,11 +75,12 @@
                 {{ ancestorTitles.join(' › ') }}
             </div>
         </div>
-    </div>
+    </router-link>
 </template>
 
 <script lang="ts" setup>
 import { computed } from 'vue';
+import type { RouteLocationRaw } from 'vue-router';
 
 import {
     mdiCalendar,
@@ -114,13 +115,13 @@ dayjs.extend(relativeTime, {
 // Props
 const props = defineProps<{
     value: TaskNode;
+    // Where choosing the task goes. The item is a link to it, so a task can be opened in a new tab
+    // or its address copied, as from the tree. Said here rather than beside the link: a development
+    // build keeps template comments as nodes, and a second root node leaves vuedraggable unable to
+    // tell which task the dragged element is, so the status view drops nothing.
+    to: RouteLocationRaw;
     // The task whose descendants the list holds, if it holds only those.
     listRoot?: UUID;
-}>();
-
-// Emits
-const emit = defineEmits<{
-    (e: 'click', event: Event): void;
 }>();
 
 // Stores
@@ -222,6 +223,8 @@ const deadlineStyle = computed<Record<string, string>>(() => {
     padding: 4px 4px;
     cursor: pointer;
     word-break: break-all;
+    color: inherit;
+    text-decoration: none;
 
     &:hover {
         background: #eeeeee;

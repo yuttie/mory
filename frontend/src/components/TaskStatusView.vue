@@ -21,7 +21,9 @@
                  width of the screen, so no other column could be reached.
                  `fallback-on-body` because on iOS Sortable positions that copy absolutely inside
                  the column it left, and the card clips it: it vanished as soon as it left its
-                 column. -->
+                 column.
+                 Each task is a link made undraggable, or the browser would start a drag of its own
+                 to carry off the address, and Sortable's would stop at the first move. -->
             <draggable
                 class="task-list"
                 item-key="uuid"
@@ -40,8 +42,11 @@
                 <template v-slot:item="{ element: task }">
                     <TaskListItemNext
                         v-bind:value="task"
+                        v-bind:to="routeFor(task)"
                         v-bind:list-root="listRoot"
-                        v-on:click="onTaskClick(task.uuid)"
+                        draggable="false"
+                        v-on:pointerdown="onPointerDown"
+                        v-on:contextmenu="onContextMenu"
                     />
                 </template>
             </draggable>
@@ -88,6 +93,7 @@
 
 <script lang="ts" setup>
 import { ref } from 'vue';
+import type { RouteLocationRaw } from 'vue-router';
 import draggable from 'vuedraggable';
 import type { VForm } from 'vuetify/components';
 
@@ -98,12 +104,12 @@ import { type UUID, type Status, type StatusKind, STATUS_KINDS, STATUS_LABEL, ca
 defineProps<{
     taskStatuses: Record<StatusKind, TaskNode[]>;
     knownContacts: [string, number][];
+    routeFor: (task: TaskNode) => RouteLocationRaw;
     listRoot?: UUID;
 }>();
 
 // Emits
 const emit = defineEmits<{
-    (e: 'task-click', taskUuid: UUID): void;
     (e: 'status-change', task: TaskNode, status: Status): void;
 }>();
 
@@ -137,9 +143,20 @@ const COLUMNS = STATUS_KINDS.map((kind) => ({
 // Template refs
 const formRef = ref<InstanceType<typeof VForm> | null>(null);
 
+// How a task was last pressed. On a touch screen a long press is what picks a task up, and on a
+// link it also opens the browser's menu for the link, which takes over the touch and ends the drag.
+// A mouse keeps the menu: its right button picks nothing up.
+let pressedWith = '';
+
 // Methods
-function onTaskClick(taskUuid: UUID) {
-    emit('task-click', taskUuid);
+function onPointerDown(event: { pointerType: string }) {
+    pressedWith = event.pointerType;
+}
+
+function onContextMenu(event: { preventDefault: () => void }) {
+    if (pressedWith === 'touch') {
+        event.preventDefault();
+    }
 }
 
 // Marks the copy Sortable leaves at a task's place while the task is over another column, so it is
@@ -232,6 +249,12 @@ $space: 12px;
 
 /* The drag styles of the tasks in the columns. How a task looks while it follows the pointer is the
    task's own (see TaskListItemNext): Sortable draws that copy outside this view. */
+
+/* iOS answers a long press on a link with its preview of the link, and fires no event that could be
+   canceled first, as `onContextMenu` does elsewhere. */
+.groups :deep(.task-list-item) {
+    -webkit-touch-callout: none;
+}
 
 /* A task pressed to be picked up shows no hover shade: it is being taken, not pointed at. */
 .groups :deep(.task-list-item.sortable-chosen) {
