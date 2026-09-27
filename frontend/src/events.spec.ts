@@ -352,6 +352,21 @@ describe('eventsFromEntries', () => {
         expect(errors).toEqual([['exclusions', '2024-05-02 17:30', 'Standup', 'a.md', null]]);
     });
 
+    // The rule is expanded over the whole of the last day, so the check has to cover it too.
+    it('reports one on the last day of the window', () => {
+        const { errors } = derive([
+            entry('a.md', {
+                Standup: {
+                    start: '2024-05-01 09:00',
+                    repeat: { freq: 'daily' },
+                    overrides: [{ at: '2024-05-03 17:30', name: 'Retro' }],
+                },
+            }),
+        ], { from: '2024-05-01', to: '2024-05-03' });
+
+        expect(errors).toEqual([['at', '2024-05-03 17:30', 'Standup', 'a.md', null]]);
+    });
+
     it('stays quiet about an adjustment outside the window', () => {
         const { errors } = derive([
             entry('a.md', {

@@ -316,6 +316,16 @@ function instantOf(value: unknown): number | null {
     return parsed.isValid() ? parsed.valueOf() : null;
 }
 
+/// The first and last instants of a window. A bare date as `to` is that whole day, as it is to
+/// `expandRule`: its midnight would leave out the last day the rule was expanded over.
+function boundsOf(window: EventWindow): [number, number] | null {
+    const from = instantOf(window.from);
+    const to = typeof window.to === 'string' && isDateOnly(window.to)
+        ? dayjs(window.to).endOf('day').valueOf()
+        : instantOf(window.to);
+    return from === null || to === null ? null : [from, to];
+}
+
 // How long an occurrence lasts, carried from the base event to the ones a rule generates.
 //
 // A duration is reapplied per occurrence; an absolute end is turned into the gap it describes, so
@@ -422,11 +432,11 @@ function expandSeries(
     // An adjustment landing on no occurrence is almost always a mistyped date, and doing nothing
     // silently is how that survives. Only reported for adjustments inside the window: outside it
     // there is nothing to match by construction.
-    const from = instantOf(window.from);
-    const to = instantOf(window.to);
-    if (from === null || to === null) {
+    const bounds = boundsOf(window);
+    if (bounds === null) {
         return;
     }
+    const [from, to] = bounds;
     const reportUnmatched = (instant: number, property: string, spelling: string) => {
         if (!matched.has(instant) && instant >= from && instant <= to) {
             errors.push([property, spelling, eventName, entry.path, entry.title]);
