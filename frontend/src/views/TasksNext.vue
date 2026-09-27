@@ -20,11 +20,7 @@
                                 v-bind="statisticsProps"
                                 class="app-bar-count"
                             >
-                                {{ filteredTasksCount }}
-                                <template v-if="!(selectedNode && $vuetify.display.xs)">
-                                    {{ filteredTasksCount === 1 ? 'task' : 'tasks' }}
-                                </template>
-                                left
+                                {{ tasksLeftText }}
                             </span>
                         </template>
                         <!-- Of the tasks the count is taken from, so the two agree. -->
@@ -229,6 +225,7 @@
 <script lang="ts" setup>
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useDisplay } from 'vuetify';
 import { useLocalStorage } from '@/composables/localStorage';
 import AppBarContent from '@/components/AppBarContent.vue';
 
@@ -253,6 +250,8 @@ const store = useTasksStore();
 // Router
 const router = useRouter();
 const route = useRoute();
+
+const display = useDisplay();
 
 // Emits
 const emit = defineEmits<{
@@ -507,17 +506,6 @@ const filteredForestWithTags = computed(() => {
     return filterTreeNodes(store.treeWithTagGroups, hideCompletedInTreeView.value);
 });
 
-// The tasks left among those the Descendants tab lists, so the count follows the selection: every
-// task with nothing selected, a task's descendants, or a tag group's members.
-const filteredTasksCount = computed(() => {
-    return selectedNodeDescendants.value.filter((t) => {
-        const kind = t.metadata?.task?.status?.kind;
-        // Always exclude done and canceled from the "tasks left" count, regardless of filter switches
-        if (kind === 'done' || kind === 'canceled') return false;
-        return true;
-    }).length;
-});
-
 // Helper function to filter task list based on status
 function filterTasksByStatus(tasks: TaskNode[], hideCompleted: boolean): TaskNode[] {
     return tasks.filter(task => {
@@ -541,6 +529,24 @@ const selectedNodeDescendants = computed<TaskNode[]>(() => {
 
 const filteredSelectedNodeDescendants = computed<TaskNode[]>(() => {
     return filterTasksByStatus(selectedNodeDescendants.value, hideCompletedInItemView.value);
+});
+
+// Among the tasks the Descendants tab lists, so the count follows the selection. Done and canceled
+// tasks are never left, whatever the hide-completed switches say.
+const tasksLeftCount = computed<number>(() => {
+    return selectedNodeDescendants.value.filter((t) => {
+        const kind = t.metadata?.task?.status?.kind;
+        return kind !== 'done' && kind !== 'canceled';
+    }).length;
+});
+
+// On a phone the selected node's path follows the count and needs the room: "7 left".
+const tasksLeftText = computed<string>(() => {
+    const count = tasksLeftCount.value;
+    if (selectedNode.value !== undefined && display.xs.value) {
+        return `${count} left`;
+    }
+    return `${count} ${count === 1 ? 'task' : 'tasks'} left`;
 });
 
 const scheduled = computed<Record<string, TaskNode[]>>(() => {
