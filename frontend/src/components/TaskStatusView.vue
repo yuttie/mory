@@ -91,7 +91,7 @@ import draggable from 'vuedraggable';
 import type { VForm } from 'vuetify/components';
 
 import { type TaskNode } from '@/task-forest';
-import { type UUID, type Status, type StatusKind, STATUS_KINDS, STATUS_LABEL, canTransition, hasFields, makeDefaultStatus } from '@/task';
+import { type UUID, type Status, type StatusKind, STATUS_KINDS, STATUS_LABEL, canTransition, hasFields, makeDefaultStatus, withoutBlanks } from '@/task';
 
 // Props
 defineProps<{
@@ -171,13 +171,6 @@ async function onFieldsSubmit() {
     }
     emit('status-change', current.task, withoutBlanks(current.status));
     awaiting.value = null;
-}
-
-// An optional field left empty is left out of the note, rather than written as an empty value.
-function withoutBlanks(status: Status): Status {
-    return Object.fromEntries(Object.entries(status).filter(
-        ([, value]) => value !== null && value !== undefined && String(value).trim() !== '',
-    )) as Status;
 }
 </script>
 

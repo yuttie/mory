@@ -17,7 +17,7 @@
             v-bind:model-value="status.expected_by"
             v-bind:rules="[optionalDateTime]"
             label="Expected by (optional)"
-            v-on:update:model-value="set('expected_by', $event)"
+            v-on:update:model-value="set('expected_by', $event ?? undefined)"
         />
         <v-combobox
             v-bind:model-value="status.contact"
@@ -26,7 +26,7 @@
             label="Contact (optional)"
             clearable
             hide-selected
-            v-on:update:model-value="set('contact', $event)"
+            v-on:update:model-value="set('contact', $event ?? undefined)"
         >
             <template v-slot:prepend>
                 <v-icon>{{ mdiAccountOutline }}</v-icon>
@@ -36,7 +36,7 @@
             v-bind:model-value="status.follow_up_at"
             v-bind:rules="[optionalDateTime]"
             label="Follow up at (optional)"
-            v-on:update:model-value="set('follow_up_at', $event)"
+            v-on:update:model-value="set('follow_up_at', $event ?? undefined)"
         />
     </div>
     <div v-else-if="status.kind === 'blocked'">
@@ -70,7 +70,7 @@
             v-bind:model-value="status.review_at"
             v-bind:rules="[optionalDateTime]"
             label="Review on (optional)"
-            v-on:update:model-value="set('review_at', $event)"
+            v-on:update:model-value="set('review_at', $event ?? undefined)"
         />
     </div>
     <div v-else-if="status.kind === 'done'">
@@ -79,7 +79,7 @@
             v-bind:rules="[required('Completed at is required.'), isDateTime('Invalid format.')]"
             label="Completed at"
             required
-            v-on:update:model-value="set('completed_at', $event)"
+            v-on:update:model-value="set('completed_at', $event ?? undefined)"
         />
         <v-text-field
             v-bind:model-value="status.completion_note"
@@ -98,7 +98,7 @@
             v-bind:rules="[required('Canceled at is required.'), isDateTime('Invalid format.')]"
             label="Canceled at"
             required
-            v-on:update:model-value="set('canceled_at', $event)"
+            v-on:update:model-value="set('canceled_at', $event ?? undefined)"
         />
         <v-text-field
             v-bind:model-value="status.cancel_reason"
@@ -151,8 +151,16 @@ const contactItems = computed<{ title: string; value: string; }[]>(() =>
     })
 );
 
+// Any field of any status but its kind, and the values that field takes.
+type Field = Status extends infer S ? (S extends Status ? Exclude<keyof S, 'kind'> : never) : never;
+type FieldValue<K extends Field> = Status extends infer S ? (S extends Status ? (K extends keyof S ? S[K] : never) : never) : never;
+
 // Methods
-function set(key: string, value: unknown): void {
+// Typed by the field, so a misspelt one, or a value it cannot hold, does not compile. Clearing a
+// date or the contact gives null, which no field holds, though neither says so in its types:
+// DateSelector's events reach this template untyped, and Vuetify types a combobox's value as a
+// string. So each such caller turns null into absence itself.
+function set<K extends Field>(key: K, value: FieldValue<K>): void {
     status.value = { ...status.value, [key]: value } as Status;
 }
 </script>

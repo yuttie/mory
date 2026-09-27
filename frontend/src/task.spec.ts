@@ -1,7 +1,7 @@
 import YAML from 'yaml';
 import { describe, expect, it } from 'vitest';
 
-import { type Task, STATUS_KINDS, hasFields, makeDefaultStatus, render, replaceStatus } from '@/task';
+import { type Status, type Task, STATUS_KINDS, hasFields, makeDefaultStatus, render, replaceStatus, withoutBlanks } from '@/task';
 
 function task(overrides: Partial<Task> = {}): Task {
     return {
@@ -170,5 +170,17 @@ describe('makeDefaultStatus', () => {
 describe('hasFields', () => {
     it('is true of the statuses that carry more than their kind', () => {
         expect(STATUS_KINDS.filter(hasFields)).toEqual(['waiting', 'blocked', 'on_hold', 'done', 'canceled']);
+    });
+});
+
+describe('withoutBlanks', () => {
+    it('leaves out an optional field left empty, however it came to be empty', () => {
+        const cleared = { kind: 'waiting', waiting_for: 'Bob', expected_by: null, contact: '  ', follow_up_at: '' } as unknown as Status;
+        expect(withoutBlanks(cleared)).toEqual({ kind: 'waiting', waiting_for: 'Bob' });
+    });
+
+    it('keeps every field that says something', () => {
+        const done: Status = { kind: 'done', completed_at: '2026-09-27', completion_note: 'Shipped' };
+        expect(withoutBlanks(done)).toEqual(done);
     });
 });
