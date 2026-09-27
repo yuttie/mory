@@ -1737,6 +1737,66 @@ fn an_override_that_moves_an_occurrence_is_drawn_at_its_new_time() {
     assert_eq!(override_.start.as_deref(), Some("2015-08-06 16:00:00-07:00"));
 }
 
+/// A monthly series whose September occurrence is moved from the 17th to the 28th.
+const MOVED_MAINTENANCE: &str = "BEGIN:VEVENT\r\nDTSTART;TZID=Asia/Tokyo:20250918T180000\r\n\
+    DTEND;TZID=Asia/Tokyo:20250918T220000\r\nRRULE:FREQ=MONTHLY;BYDAY=3TH\r\n\
+    UID:maintenance@example\r\nSUMMARY:Maintenance\r\nEND:VEVENT\r\n\
+    BEGIN:VEVENT\r\nDTSTART;TZID=Asia/Tokyo:20260928T180000\r\n\
+    DTEND;TZID=Asia/Tokyo:20260928T200000\r\n\
+    RECURRENCE-ID;TZID=Asia/Tokyo:20260917T180000\r\n\
+    UID:maintenance@example\r\nSUMMARY:Maintenance\r\nEND:VEVENT\r\n";
+
+/// An override that moves an occurrence into the window from outside it is drawn there.
+///
+/// Regression: the rule was expanded over the window by where each occurrence was generated, so
+/// one moved in from the 17th was never met. Home, asking for three days, lost it; the calendar,
+/// asking for three months, drew it.
+#[test]
+fn an_occurrence_moved_into_the_window_is_drawn_there() {
+    let calendar = calendar_of(MOVED_MAINTENANCE);
+    let (from, to) = window("2026-09-28", "2026-09-30");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    assert_eq!(starts(&expansion), vec!["2026-09-28 18:00:00+09:00"]);
+    let moved = &expansion.events[0];
+    assert_eq!(moved.end.as_deref(), Some("2026-09-28 20:00:00+09:00"));
+    assert_eq!(moved.recurrence_id, "2026-09-17 18:00:00+09:00");
+    // The popup converts from `series`, which is only sent for a series drawn in the window.
+    assert!(expansion.series.contains_key("maintenance@example"));
+}
+
+/// Moving into the window does not bring back an occurrence the series excludes.
+#[test]
+fn an_occurrence_moved_into_the_window_from_an_excluded_slot_stays_excluded() {
+    let calendar = calendar_of(&MOVED_MAINTENANCE.replacen(
+        "RRULE:",
+        "EXDATE;TZID=Asia/Tokyo:20260917T180000\r\nRRULE:",
+        1,
+    ));
+    let (from, to) = window("2026-09-28", "2026-09-30");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    assert_eq!(starts(&expansion), Vec::<String>::new());
+}
+
+/// A bare date is found in the window the way the series anchors it: midnight in its own zone.
+#[test]
+fn an_all_day_occurrence_moved_into_the_window_is_drawn_there() {
+    let calendar = calendar_of(
+        "BEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20240506\r\nDTEND;VALUE=DATE:20240507\r\n\
+         RRULE:FREQ=WEEKLY;BYDAY=MO\r\nUID:ad@example\r\nSUMMARY:Holiday\r\nEND:VEVENT\r\n\
+         BEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20240516\r\nDTEND;VALUE=DATE:20240517\r\n\
+         RECURRENCE-ID;VALUE=DATE:20240506\r\nUID:ad@example\r\nSUMMARY:Holiday\r\n\
+         END:VEVENT\r\n",
+    );
+    let (from, to) = window("2024-05-16", "2024-05-16");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    assert_eq!(starts(&expansion), vec!["2024-05-16"]);
+    assert_eq!(expansion.events[0].end.as_deref(), Some("2024-05-16"));
+    assert_eq!(expansion.events[0].recurrence_id, "2024-05-06");
+}
+
 /// An all-day series is not given a timezone, because a date is not an instant.
 ///
 /// Regression: `X-WR-TIMEZONE` anchoring made `to_repeat` write `tz: Asia/Tokyo` onto a series
