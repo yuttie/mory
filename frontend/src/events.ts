@@ -24,6 +24,7 @@ import type {
     EventFields,
     EventIcal,
     EventOccurrence,
+    EventRepeat,
     ImportedOccurrence,
     ListEntry2,
     MetadataEvent,
@@ -326,6 +327,30 @@ function boundsOf(window: EventWindow): [number, number] | null {
     return from === null || to === null ? null : [from, to];
 }
 
+/// Whether a rule generates an occurrence at `instant`.
+///
+/// Asked over the days either side rather than of the instant alone: `expandRule` reads its window
+/// as wall clock in the rule's own zone, which need not be the reader's.
+function generates(repeat: EventRepeat, start: string, instant: number): boolean {
+    const day = dayjs(instant);
+    try {
+        return expandRule(
+            repeat,
+            start,
+            day.subtract(1, 'day').format('YYYY-MM-DD'),
+            day.add(1, 'day').format('YYYY-MM-DD'),
+        ).some((occurrence) => instantOf(occurrence) === instant);
+    }
+    catch (error) {
+        // The rule has just expanded over the window, so it is not expected to fail here. If it
+        // does, the occurrence is left out rather than the calendar blanked.
+        if (error instanceof RecurrenceError) {
+            return false;
+        }
+        throw error;
+    }
+}
+
 // How long an occurrence lasts, carried from the base event to the ones a rule generates.
 //
 // A duration is reapplied per occurrence; an absolute end is turned into the gap it describes, so
@@ -429,16 +454,46 @@ function expandSeries(
         }
     }
 
-    // An adjustment landing on no occurrence is almost always a mistyped date, and doing nothing
-    // silently is how that survives. Only reported for adjustments inside the window: outside it
-    // there is nothing to match by construction.
     const bounds = boundsOf(window);
     if (bounds === null) {
         return;
     }
     const [from, to] = bounds;
+
+    // The rule is expanded by where each occurrence was generated, so one an override moved into
+    // the window from outside it is not among them. Home asks for three days, and lost a meeting
+    // moved eleven days later that the calendar, asking for three months, drew.
+    const strays = new Set<number>();
+    for (const [instant, override] of overrides) {
+        const moved = instantOf(override.start);
+        if (matched.has(instant) || excluded.has(instant)
+            || moved === null || moved < from || moved > to) {
+            continue;
+        }
+        // Only a slot the rule still generates, as inside the window.
+        if (!generates(repeat, start, instant)) {
+            strays.add(instant);
+            continue;
+        }
+        matched.add(instant);
+        const event = buildOccurrence(
+            { ...override, at: undefined },
+            parent,
+            category,
+            eventName,
+            entry,
+            errors,
+        );
+        if (event !== null) {
+            into.push(event);
+        }
+    }
+
+    // An adjustment landing on no occurrence is almost always a mistyped date, and doing nothing
+    // silently is how that survives. Only reported for adjustments inside the window, or moved
+    // into it: elsewhere there is nothing to match by construction.
     const reportUnmatched = (instant: number, property: string, spelling: string) => {
-        if (!matched.has(instant) && instant >= from && instant <= to) {
+        if (!matched.has(instant) && (strays.has(instant) || (instant >= from && instant <= to))) {
             errors.push([property, spelling, eventName, entry.path, entry.title]);
         }
     };

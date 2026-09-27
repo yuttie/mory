@@ -727,6 +727,46 @@ describe('an override that moves its occurrence', () => {
 
         expect(events.map((e) => e.start)).toEqual(['2024-05-01 09:00', '2024-05-02 15:00']);
     });
+
+    // The third Thursday of September 2026 is the 17th; this one moved to the 28th.
+    const maintenance = (adjustments: Partial<MetadataEvent>) => entry('a.md', {
+        Maintenance: {
+            start: '2025-09-18 18:00',
+            end: '2025-09-18 22:00',
+            repeat: { freq: 'monthly', byday: ['3thu'] },
+            overrides: [
+                { at: '2026-09-17 18:00', start: '2026-09-28 18:00', end: '2026-09-28 20:00' },
+            ],
+            ...adjustments,
+        },
+    });
+    const home = { from: '2026-09-28', to: '2026-09-30' };
+
+    // The rule is expanded by where each occurrence was generated, so one moved in from the 17th
+    // was never met: Home, asking for three days, lost it while the calendar drew it.
+    it('is drawn when it moves into the window from outside it', () => {
+        const { events, errors } = derive([maintenance({})], home);
+
+        expect(events.map((e) => [e.start, e.end]))
+            .toEqual([['2026-09-28 18:00', '2026-09-28 20:00']]);
+        expect(errors).toEqual([]);
+    });
+
+    it('stays excluded when the occurrence it moves is', () => {
+        const { events, errors } = derive([maintenance({ exclusions: ['2026-09-17 18:00'] })], home);
+
+        expect(events).toEqual([]);
+        expect(errors).toEqual([]);
+    });
+
+    it('is reported when it moves an occurrence the rule does not generate', () => {
+        const { events, errors } = derive([maintenance({
+            overrides: [{ at: '2026-09-16 18:00', start: '2026-09-28 18:00' }],
+        })], home);
+
+        expect(events).toEqual([]);
+        expect(errors).toEqual([['at', '2026-09-16 18:00', 'Maintenance', 'a.md', null]]);
+    });
 });
 
 describe('an all-day series', () => {
