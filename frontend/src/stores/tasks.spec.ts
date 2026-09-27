@@ -1,4 +1,5 @@
 import { IDBFactory, IDBKeyRange as FakeIDBKeyRange } from 'fake-indexeddb';
+import YAML from 'yaml';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -52,20 +53,31 @@ function entry(spec: Spec): ListEntry2 {
 }
 
 // The repository the backend serves, plus the mutations the store issues against it. Writes and
-// renames land in the listing immediately, so `settle` sees them on its first look.
+// renames land in the listing immediately, so `settle` sees them on its first look -- unless
+// `lag(n)` is called, after which the next `n` listings still describe the commit before the next
+// write, as the backend's do while its cache catches up.
 function repository(specs: Spec[]) {
     const files = new Map(specs.map((s) => [s.path, entry(s)]));
     let commit = 0;
+    let lagging = 0;
+    let behind: { commit: number; entries: ListEntry2[]; left: number } | null = null;
 
-    apiMocks.getEntries.mockImplementation(async (): Promise<EntriesResponse> => ({
-        kind: 'full',
-        commit: `c${commit}`,
-        head: `c${commit}`,
-        entries: [...files.values()],
-    }));
-    apiMocks.addNote.mockImplementation(async (path: string) => {
+    apiMocks.getEntries.mockImplementation(async (): Promise<EntriesResponse> => {
+        const served = behind ?? { commit, entries: [...files.values()], left: 0 };
+        if (behind !== null && --behind.left === 0) {
+            behind = null;
+        }
+        return { kind: 'full', commit: `c${served.commit}`, head: `c${commit}`, entries: served.entries };
+    });
+    apiMocks.addNote.mockImplementation(async (path: string, content: string) => {
+        if (lagging > 0) {
+            behind = { commit, entries: [...files.values()], left: lagging };
+            lagging = 0;
+        }
         commit += 1;
-        files.set(path, files.get(path) ?? entry({ path }));
+        // Listed with what the written frontmatter says, as the backend lists it.
+        const metadata = YAML.parse(content.split(/^---$/m)[1] ?? '') ?? null;
+        files.set(path, { ...(files.get(path) ?? entry({ path })), metadata });
         return { data: null };
     });
     apiMocks.renameNote.mockImplementation(async (from: string, to: string) => {
@@ -83,7 +95,12 @@ function repository(specs: Spec[]) {
         return { data: true };
     });
 
-    return { paths: () => [...files.keys()].sort() };
+    return {
+        paths: () => [...files.keys()].sort(),
+        lag: (listings: number) => {
+            lagging = listings;
+        },
+    };
 }
 
 async function load() {
@@ -290,6 +307,57 @@ describe('save', () => {
         const [, content] = apiMocks.addNote.mock.calls[0];
         expect(content).toContain('status:');
         expect(content).toContain('kind: todo');
+    });
+});
+
+describe('setStatus', () => {
+    it('rewrites the status alone and waits for the listing', async () => {
+        const { store } = await storeWith(sample);
+        const path = `.tasks/${uuid(3)}.md`;
+        const before = '---\n# Why it matters\ntask:\n  status:\n    kind: todo\n  progress: 0\n---\n\n# Alpha\n';
+        apiMocks.getNote.mockResolvedValueOnce({ data: before });
+        const syncs = apiMocks.getEntries.mock.calls.length;
+
+        await store.setStatus(path, { kind: 'blocked', blocked_by: 'the vendor' });
+
+        expect(apiMocks.getNote).toHaveBeenCalledWith(path);
+        expect(apiMocks.addNote).toHaveBeenCalledWith(
+            path,
+            before.replace('    kind: todo\n', '    kind: blocked\n    blocked_by: the vendor\n'),
+        );
+        expect(apiMocks.getEntries.mock.calls.length).toBeGreaterThan(syncs);
+    });
+
+    // The case settling on the path alone missed: the note is listed before the write as after it.
+    // Two stale listings, because a refresh already asks twice when the first one lags; settling
+    // is what waits beyond that.
+    it('does not return while the listing still has the old status', async () => {
+        const { store, repo } = await storeWith(sample);
+        const path = `.tasks/${uuid(3)}.md`;
+        apiMocks.getNote.mockResolvedValueOnce({ data: '---\ntask:\n  status:\n    kind: todo\n---\n' });
+        repo.lag(2);
+
+        await store.setStatus(path, { kind: 'in_progress' });
+
+        expect(store.node(uuid(3))?.metadata?.task?.status?.kind).toBe('in_progress');
+    });
+
+    it('writes nothing when the note already has the status, but still syncs', async () => {
+        const { store } = await storeWith([{ path: `.tasks/${uuid(3)}.md`, title: 'Alpha', status: 'blocked' }]);
+        apiMocks.getNote.mockResolvedValueOnce({ data: '---\ntask:\n    status:\n        kind: blocked\n        blocked_by: the vendor\n---\n' });
+        const syncs = apiMocks.getEntries.mock.calls.length;
+
+        await store.setStatus(`.tasks/${uuid(3)}.md`, { kind: 'blocked', blocked_by: 'the vendor' });
+
+        expect(apiMocks.addNote).not.toHaveBeenCalled();
+        expect(apiMocks.getEntries.mock.calls.length).toBeGreaterThan(syncs);
+    });
+
+    it('writes nothing when the note cannot be edited in place', async () => {
+        const { store } = await storeWith(sample);
+        apiMocks.getNote.mockResolvedValueOnce({ data: '# No frontmatter\n' });
+        await expect(store.setStatus(`.tasks/${uuid(3)}.md`, { kind: 'todo' })).rejects.toThrow();
+        expect(apiMocks.addNote).not.toHaveBeenCalled();
     });
 });
 

@@ -237,6 +237,43 @@ describe('settle', () => {
         expect(apiMocks.getEntries.mock.calls.length).toBeLessThanOrEqual(4);
     });
 
+    // A file rewritten in place is listed throughout, so only what its entry says shows the write.
+    it('returns after one request when the entry already says what was written', async () => {
+        const { useEntrySubset } = await load();
+        repository(['.tasks/a.md']);
+        const subset = useEntrySubset('.tasks/');
+        await subset.init();
+
+        apiMocks.getEntries.mockClear();
+        await subset.settle('.tasks/a.md', (e) => e.title === '.tasks/a.md');
+        expect(apiMocks.getEntries).toHaveBeenCalledTimes(1);
+    });
+
+    it('waits for an entry already listed to say what was written', async () => {
+        const { useEntrySubset } = await load();
+        const repo = repository(['.tasks/a.md']);
+        const subset = useEntrySubset('.tasks/');
+        await subset.init();
+
+        let title = 'before';
+        const served = apiMocks.getEntries.getMockImplementation();
+        apiMocks.getEntries.mockImplementation(async (since?: string) => {
+            const response = await served!(since);
+            return response.kind === 'full'
+                ? { ...response, entries: response.entries.map((e) => ({ ...e, title })) }
+                : response;
+        });
+        repo.advance(['.tasks/a.md'], { lagging: true });
+        apiMocks.getEntries.mockClear();
+        const settled = subset.settle('.tasks/a.md', (e) => e.title === 'after');
+
+        await vi.waitFor(() => expect(apiMocks.getEntries).toHaveBeenCalled());
+        title = 'after';
+        repo.catchUp(['.tasks/a.md']);
+        await settled;
+        expect(subset.entries.value.map((e) => e.title)).toEqual(['after']);
+    });
+
     it('waits for a deleted path to disappear', async () => {
         const { useEntrySubset } = await load();
         const repo = repository(['.tasks/gone.md']);

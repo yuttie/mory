@@ -158,7 +158,9 @@
                             <TaskStatusView
                                 v-if="descendantsViewMode === 'status'"
                                 v-bind:task-statuses="taskStatuses"
+                                v-bind:known-contacts="knownContacts"
                                 v-on:task-click="onTaskListItemClick"
+                                v-on:status-change="onTaskStatusChange"
                             />
                             <!-- Schedule view -->
                             <TaskScheduleView
@@ -194,7 +196,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useLocalStorage } from '@/composables/localStorage';
 import AppBarContent from '@/components/AppBarContent.vue';
@@ -210,7 +212,7 @@ import {
 import { type TaskNode, type TaskTreeItem, buildTaskPath } from '@/task-forest';
 import { isTagGroupId, isUntaggedGroupId, tagGroupId, tagNameOf, useTasksStore } from '@/stores/tasks';
 
-import { type UUID, type StatusKind, type Task, STATUS_LABEL } from '@/task';
+import { type UUID, type Status, type StatusKind, type Task, STATUS_KINDS, STATUS_LABEL } from '@/task';
 import axios from 'axios';
 import dayjs from 'dayjs';
 
@@ -234,6 +236,9 @@ const error = ref<string | null>(null);
 const hideCompletedInTreeView = useLocalStorage('hide-completed-in-tree-view', false);
 const hideCompletedInItemView = useLocalStorage('hide-completed-in-item-view', false);
 const showParentDialog = ref<boolean>(false);
+// Statuses dropped in the status view and still being written, by task. The task is drawn where it
+// was dropped until the listing shows the write, rather than jumping back to its old column.
+const droppedStatuses = reactive(new Map<UUID, StatusKind>());
 
 // URL-derived state (single source of truth)
 const selectedNode = computed<TaskNode | undefined>(() => {
@@ -406,45 +411,24 @@ function sortTasksByDueDate(tasks: TaskNode[]): TaskNode[] {
     });
 }
 
-const taskStatuses = computed(() => {
-    const statuses = {
-        backlog: [] as TaskNode[],
-        todo: [] as TaskNode[],
-        inProgress: [] as TaskNode[],
-        waiting: [] as TaskNode[],
-        blocked: [] as TaskNode[],
-        onHold: [] as TaskNode[],
-        done: [] as TaskNode[],
-        canceled: [] as TaskNode[],
-    };
+const taskStatuses = computed<Record<StatusKind, TaskNode[]>>(() => {
+    const statuses = Object.fromEntries(
+        STATUS_KINDS.map((kind) => [kind, [] as TaskNode[]]),
+    ) as Record<StatusKind, TaskNode[]>;
 
     for (const task of selectedNodeDescendants.value) {
         // A task that names no status is read as Backlog, as the editor reads it, so the column
         // it sits in and the status it opens with agree.
-        const kind: StatusKind = task.metadata?.task?.status?.kind ?? 'backlog';
-        switch (kind) {
-            case 'backlog': statuses.backlog.push(task); break;
-            case 'todo': statuses.todo.push(task); break;
-            case 'in_progress': statuses.inProgress.push(task); break;
-            case 'waiting': statuses.waiting.push(task); break;
-            case 'blocked': statuses.blocked.push(task); break;
-            case 'on_hold': statuses.onHold.push(task); break;
-            case 'done': statuses.done.push(task); break;
-            case 'canceled': statuses.canceled.push(task); break;
-        }
+        const kind: StatusKind = droppedStatuses.get(task.uuid) ?? task.metadata?.task?.status?.kind ?? 'backlog';
+        // A kind with no column is not drawn: the frontmatter is whatever the file said.
+        statuses[kind]?.push(task);
     }
 
     // Sort each status group by due date/deadline
-    return {
-        backlog: sortTasksByDueDate(statuses.backlog),
-        todo: sortTasksByDueDate(statuses.todo),
-        inProgress: sortTasksByDueDate(statuses.inProgress),
-        waiting: sortTasksByDueDate(statuses.waiting),
-        blocked: sortTasksByDueDate(statuses.blocked),
-        onHold: sortTasksByDueDate(statuses.onHold),
-        done: sortTasksByDueDate(statuses.done),
-        canceled: sortTasksByDueDate(statuses.canceled),
-    };
+    for (const kind of STATUS_KINDS) {
+        statuses[kind] = sortTasksByDueDate(statuses[kind]);
+    }
+    return statuses;
 });
 
 // Helper function to check if entire subtree should be filtered
@@ -795,6 +779,23 @@ async function onSelectedTaskSave(task: Task) {
     // Refresh task editor manually because its task-path prop retains the same value
     // (the ref may be momentarily null while the window transition remounts the editor)
     taskEditorRef.value?.refresh();
+}
+
+async function onTaskStatusChange(task: TaskNode, status: Status) {
+    // A second drop before the first is written would read the note the first is still changing.
+    if (droppedStatuses.has(task.uuid)) {
+        return;
+    }
+    droppedStatuses.set(task.uuid, status.kind);
+    try {
+        await store.setStatus(task.path, status);
+    }
+    catch (e) {
+        error.value = `Could not move "${task.title}" to ${STATUS_LABEL[status.kind]}: ${e instanceof Error ? e.message : String(e)}`;
+    }
+    finally {
+        droppedStatuses.delete(task.uuid);
+    }
 }
 
 async function onSelectedTaskDelete(path: string) {

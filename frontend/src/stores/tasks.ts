@@ -12,10 +12,10 @@ import {
     toNestedForest,
 } from '@/forest';
 import { buildPathForest, stripExtension } from '@/path-forest';
-import { render } from '@/task';
-import type { Task } from '@/task';
+import { render, replaceStatus } from '@/task';
+import type { Status, Task } from '@/task';
 import { TASKS_DIR, buildTaskPath, taskPolicy } from '@/task-forest';
-import type { TaskNode, TaskTreeItem } from '@/task-forest';
+import type { TaskMetadata, TaskNode, TaskTreeItem } from '@/task-forest';
 import { useEntrySubset } from '@/composables/entrySubset';
 import { useFilesStore } from '@/stores/files';
 
@@ -185,6 +185,25 @@ export const useTasksStore = defineStore('tasks', () => {
         await subset.settle(path, true);
     }
 
+    // Change the status alone. `save` regenerates the whole note from a `Task`, which only the
+    // editor holds; this reads the note as it stands and rewrites nothing but the status.
+    async function setStatus(path: string, status: Status): Promise<void> {
+        const content = await files.read(path);
+        const edited = replaceStatus(content, status);
+        // A note that already says so was changed by something the listing had not caught up
+        // with. Nothing to write, but the listing still wants the sync.
+        if (edited !== content) {
+            await files.write(path, edited);
+        }
+        // The note is listed before the write as after it, so its path shows nothing: the status
+        // the listing gives it does. Returning before that would let a caller drawing the task in
+        // its new column meanwhile hand it back to a listing that still has it in the old one.
+        await subset.settle(
+            path,
+            (entry) => (entry.metadata as TaskMetadata | null)?.task?.status?.kind === status.kind,
+        );
+    }
+
     async function remove(path: string): Promise<boolean> {
         const deleted = await files.remove(path);
         if (deleted) {
@@ -264,6 +283,7 @@ export const useTasksStore = defineStore('tasks', () => {
         init: subset.init,
         refresh: subset.refresh,
         save,
+        setStatus,
         remove,
         move,
     };

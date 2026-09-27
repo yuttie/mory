@@ -1,9 +1,8 @@
 import { expect, test } from '@playwright/test';
 import type { BrowserContext, Route } from '@playwright/test';
-import { API_URL } from './backend';
+import { API_URL, TOKEN, signIn } from './backend';
 
 const COMMIT = 'a'.repeat(40);
-const TOKEN = 'eyJhbGciOiJub25lIn0.eyJzdWIiOiJlMmUiLCJlbWFpbCI6ImVAZS5pbnZhbGlkIiwiZXhwIjo0MTAyNDQ0ODAwfQ.';
 
 interface BackendOptions {
     onSearch?: (route: Route) => Promise<void>;
@@ -12,9 +11,7 @@ interface BackendOptions {
 }
 
 async function mockBackend(context: BrowserContext, options: BackendOptions = {}): Promise<void> {
-    await context.addInitScript((token) => {
-        window.localStorage.setItem('token', JSON.stringify(token));
-    }, TOKEN);
+    await signIn(context);
     await context.route(`${API_URL}**`, async (route) => {
         const url = new URL(route.request().url());
         if (url.pathname === '/api/v2/search/status' && options.onStatus !== undefined) {

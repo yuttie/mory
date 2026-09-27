@@ -138,103 +138,11 @@
                         ></v-icon-btn>
                     </div>
                     <!-- Status-specific fields -->
-                    <div v-if="form.status.kind === 'waiting'" class="ml-10">
-                        <v-text-field
-                            v-model="form.status.waiting_for"
-                            v-bind:rules="[required('Waiting for is required.')]"
-                            label="Waiting for"
-                            required
-                        >
-                            <template v-slot:prepend>
-                                <v-icon>{{ mdiTarget }}</v-icon>
-                            </template>
-                        </v-text-field>
-                        <DateSelector
-                            v-model="form.status.expected_by"
-                            v-bind:rules="[(v) => v === '' || isDateTime('Invalid format.')(v)]"
-                            label="Expected by (optional)"
-                        />
-                        <v-combobox
-                            v-model="form.status.contact"
-                            v-bind:items="contactItems"
-                            v-bind:return-object="false"
-                            label="Contact (optional)"
-                            clearable
-                            hide-selected
-                        >
-                            <template v-slot:prepend>
-                                <v-icon>{{ mdiAccountOutline }}</v-icon>
-                            </template>
-                        </v-combobox>
-                        <DateSelector
-                            v-model="form.status.follow_up_at"
-                            v-bind:rules="[(v) => v === '' || isDateTime('Invalid format.')(v)]"
-                            label="Follow up at (optional)"
-                        />
-                    </div>
-                    <div v-if="form.status.kind === 'blocked'" class="ml-10">
-                        <v-text-field
-                            v-model="form.status.blocked_by"
-                            v-bind:rules="[required('Blocked by is required.')]"
-                            label="Blocked by"
-                            required
-                        >
-                            <template v-slot:prepend>
-                                <v-icon>{{ mdiCancel }}</v-icon>
-                            </template>
-                        </v-text-field>
-                    </div>
-                    <div v-if="form.status.kind === 'on_hold'" class="ml-10">
-                        <v-text-field
-                            v-model="form.status.hold_reason"
-                            v-bind:rules="[required('Hold reason is required.')]"
-                            label="Hold reason"
-                            required
-                        >
-                            <template v-slot:prepend>
-                                <v-icon>{{ mdiHelpCircleOutline }}</v-icon>
-                            </template>
-                        </v-text-field>
-                        <DateSelector
-                            v-model="form.status.review_at"
-                            v-bind:rules="[(v) => v === '' || isDateTime('Invalid format.')(v)]"
-                            label="Review on (optional)"
-                        />
-                    </div>
-                    <div v-if="form.status.kind === 'done'" class="ml-10">
-                        <DateSelector
-                            v-model="form.status.completed_at"
-                            v-bind:rules="[required('Completed at is required.'), isDateTime('Invalid format.')]"
-                            label="Completed at"
-                            required
-                        />
-                        <v-text-field
-                            v-model="form.status.completion_note"
-                            label="Completion note (optional)"
-                        >
-                            <template v-slot:prepend>
-                                <v-icon>{{ mdiNoteEditOutline }}</v-icon>
-                            </template>
-                        </v-text-field>
-                    </div>
-                    <div v-if="form.status.kind === 'canceled'" class="ml-10">
-                        <DateSelector
-                            v-model="form.status.canceled_at"
-                            v-bind:rules="[required('Canceled at is required.'), isDateTime('Invalid format.')]"
-                            label="Canceled at"
-                            required
-                        />
-                        <v-text-field
-                            v-model="form.status.cancel_reason"
-                            v-bind:rules="[required('Cancel reason is required.')]"
-                            label="Cancel reason"
-                            required
-                        >
-                            <template v-slot:prepend>
-                                <v-icon>{{ mdiHelpCircleOutline }}</v-icon>
-                            </template>
-                        </v-text-field>
-                    </div>
+                    <TaskStatusFields
+                        v-model="form.status"
+                        v-bind:known-contacts="knownContacts"
+                        class="ml-10"
+                    />
                     <!-- Progress -->
                     <v-label>
                         <v-icon>{{ mdiPercentOutline }}</v-icon>
@@ -270,7 +178,7 @@
                     <!-- Start date -->
                     <DateSelector
                         v-model="form.start_at"
-                        v-bind:rules="[(v) => v === '' || isDateTime('Invalid format.')(v)]"
+                        v-bind:rules="[optionalDateTime]"
                         label="Start date"
                     >
                         <template v-slot:prepend>
@@ -280,7 +188,7 @@
                     <!-- Due date -->
                     <DateSelector
                         v-model="form.due_by"
-                        v-bind:rules="[(v) => v === '' || isDateTime('Invalid format.')(v)]"
+                        v-bind:rules="[optionalDateTime]"
                         label="Due date (soft target)"
                     >
                         <template v-slot:prepend>
@@ -290,7 +198,7 @@
                     <!-- Deadline -->
                     <DateSelector
                         v-model="form.deadline"
-                        v-bind:rules="[(v) => v === '' || isDateTime('Invalid format.')(v)]"
+                        v-bind:rules="[optionalDateTime]"
                         label="Deadline (hard cutoff)"
                     >
                         <template v-slot:prepend>
@@ -438,10 +346,8 @@
 import { ref, reactive, computed, watch, toRef, onMounted, onUnmounted } from 'vue';
 
 import {
-    mdiAccountOutline,
     mdiCalendarCursorOutline,
     mdiCalendarOutline,
-    mdiCancel,
     mdiClose,
     mdiContentSave,
     mdiDelete,
@@ -449,11 +355,9 @@ import {
     mdiFileDocumentEdit,
     mdiFileTreeOutline,
     mdiFormatHeader1,
-    mdiHelpCircleOutline,
     mdiLightbulbOnOutline,
     mdiLock,
     mdiLockOpenVariant,
-    mdiNoteEditOutline,
     mdiNoteTextOutline,
     mdiPencil,
     mdiPercentOutline,
@@ -461,7 +365,6 @@ import {
     mdiPlus,
     mdiPriorityHigh,
     mdiTagMultipleOutline,
-    mdiTarget,
     mdiTimerSand,
     mdiTrafficLightOutline,
 } from '@mdi/js';
@@ -475,6 +378,7 @@ import { STATUS_LABEL, nextOptions, makeDefaultStatus, canTransition } from '@/t
 import { useFetchTask } from '@/composables/fetchTask';
 import { useLocalStorage } from '@/composables/localStorage';
 import { loadConfigValue } from '@/config';
+import { optionalDateTime, range, required } from '@/rules';
 
 import dayjs from 'dayjs';
 
@@ -591,7 +495,7 @@ const progress = computed<number>({
 });
 
 const statusOptions = computed<{ kind: StatusKind, label: string }[]>(() => {
-    const allowed = statusOptionRestricted.value ? nextOptions(initialForm.value.status) : [...Object.keys(STATUS_LABEL)];
+    const allowed = statusOptionRestricted.value ? nextOptions(initialForm.value.status.kind) : [...Object.keys(STATUS_LABEL)];
     const opts = [initialForm.value.status.kind, ...allowed] as StatusKind[];
     const items = Array.from(new Set(opts))
         .map((k) => { return { kind: k, label: STATUS_LABEL[k] }; });
@@ -604,14 +508,7 @@ const selectedKind = computed<StatusKind>({
         if (k === form.status.kind) {
             return;
         }
-        const status = makeDefaultStatus(k);
-        if (k === 'done') {
-            status.completed_at = dayjs().format().replace('T', ' ');
-        }
-        else if (k === 'canceled') {
-            status.canceled_at = dayjs().format().replace('T', ' ');
-        }
-        form.status = status;
+        form.status = makeDefaultStatus(k);
     },
 });
 
@@ -620,7 +517,7 @@ const statusGateError = computed<string | undefined>(() => {
     const to = form.status.kind;
     // Unlocking offers every status, so it has to lift the gate too: otherwise a status it offers,
     // such as In progress back to To do, is one the form can never save.
-    if (!statusOptionRestricted.value || canTransition(from, to)) {
+    if (!statusOptionRestricted.value || canTransition(from.kind, to)) {
         return undefined;
     }
     else {
@@ -633,15 +530,6 @@ const tagItems = computed<{ title: string; value: string; }[]>(() =>
         return {
             title: `${tag} (${count})`,
             value: tag,
-        };
-    })
-);
-
-const contactItems = computed<{ title: string; value: string; }[]>(() =>
-    props.knownContacts.map(([contact, count]) => {
-        return {
-            title: `${contact} (${count})`,
-            value: contact,
         };
     })
 );
@@ -788,12 +676,6 @@ function onBeforeunload(e: any) {
         delete e['returnValue'];  // This guarantees the browser unload happens
     }
 }
-
-// Validation
-const required = (msg: string) => (v: any) => (v != null && String(v).trim().length > 0) || msg;
-const isDateTime = (msg: string) => (v: any) => dayjs(v).isValid() || msg;
-const range = (min: number, max: number, msg: string) => (v: any) =>
-    (typeof v === 'number' && v >= min && v <= max) || msg;
 
 // Save/Delete
 async function onSave(): Promise<void> {

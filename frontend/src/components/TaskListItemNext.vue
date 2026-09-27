@@ -206,16 +206,11 @@ const deadlineStyle = computed<Record<string, string>>(() => {
         background: #eeeeee;
     }
 
-    &.sortable-chosen {
-        background: unset;
-    }
-
+    /* The copy that follows the pointer while the task is dragged. It is drawn over other tasks,
+       so it needs a ground of its own to be read against. */
     &.sortable-drag {
-        background: unset;
-    }
-
-    &.sortable-ghost {
-        visibility: hidden;
+        background: rgb(var(--v-theme-surface));
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     }
 
     & > * {
