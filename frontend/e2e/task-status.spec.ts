@@ -156,6 +156,28 @@ test('moves a task to the status it is dropped on, rewriting nothing but the sta
     ]);
 });
 
+test('leaves no gap where the dragged task was', async ({ context, page }) => {
+    const repository = await mockBackend(context, {
+        [ALPHA]: note('Alpha', ['kind: todo']),
+        [BETA]: note('Beta', ['kind: todo']),
+    });
+    await page.goto('/tasks-next');
+    const list = column(page, 'To do').locator('.task-list');
+    const items = list.locator('.task-list-item');
+    await expect(items).toHaveCount(2);
+    const height = (await list.boundingBox())?.height ?? 0;
+    const row = (await items.nth(0).boundingBox())?.height ?? 0;
+
+    // Moved 20px down, over the second task, so a gap that followed the pointer would open there.
+    await startDrag(page, items.nth(0));
+    // The column is ordered by date, so the dragged task has no place in it to go back to: its row
+    // closes, rather than stay open or open again wherever the pointer is.
+    await expect.poll(async () => (await list.boundingBox())?.height).toBe(height - row);
+    await page.mouse.up();
+
+    expect(repository.writes).toEqual([]);
+});
+
 test('asks what a task is waiting for before moving it to Waiting', async ({ context, page }) => {
     const before = note('Alpha', ['kind: todo']);
     const repository = await mockBackend(context, { [ALPHA]: before });

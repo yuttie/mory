@@ -230,8 +230,9 @@ $space: 12px;
 }
 
 /* Room to drop into, which an empty column otherwise does not have. Only while dragging, so a
-   column at rest looks as it did. */
-.dragging .group:not(.refused) .task-list {
+   column at rest looks as it did, and not in the column the task came from, where a drop changes
+   nothing: there it would be the task's empty place kept open. */
+.dragging .group:not(.refused):not(.origin) .task-list {
     min-height: 32px;
 }
 
@@ -239,13 +240,13 @@ $space: 12px;
     opacity: 0.4;
 }
 
-/* A drop decides the column and nothing else, since each column is ordered by date. So a task held
-   over another column opens no gap between two of its tasks, as if it could go there; the column
-   is marked as a whole instead.
+/* A drop decides the column and nothing else, since each column is ordered by date. So the task
+   being dragged leaves no gap anywhere: not between two tasks of a column it is held over, as if it
+   could go there, and not where it was, as if it could go back to that place. A column it is held
+   over is marked as a whole instead.
    Under `.dragging` because Sortable measures the task for the copy that follows the pointer
-   before `.origin` is drawn, and `.dragging` is drawn with it: without, the task would be hidden
-   in its own column at that moment, and the copy made from it zero-sized. */
-.dragging .group:not(.origin) :deep(.sortable-ghost) {
+   before `.dragging` is drawn: hidden at that moment, the copy made from it would be zero-sized. */
+.dragging :deep(.sortable-ghost) {
     display: none;
 }
 
