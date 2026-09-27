@@ -682,13 +682,7 @@ function taskRouteFor(node: TaskNode): RouteLocationRaw {
 }
 
 function navigateToState(selectedNodeId?: string, tab?: string, viewMode?: string) {
-    router.push(routeToState(selectedNodeId, tab, viewMode)).catch(err => {
-        // Ignore navigation duplicated errors
-        if (err.name !== 'NavigationDuplicated') {
-            // eslint-disable-next-line no-console
-            console.error('Router navigation error:', err);
-        }
-    });
+    router.push(routeToState(selectedNodeId, tab, viewMode));
 }
 
 // Watchers for opening tree nodes when selected node changes

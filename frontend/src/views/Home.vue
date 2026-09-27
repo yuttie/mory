@@ -754,12 +754,7 @@ function navigateToTask(task: { uuid: string }) {
             tab: 'selected',
             viewMode: 'status'
         }
-    }).catch(err => {
-            // Ignore navigation duplicated errors
-            if (err.name !== 'NavigationDuplicated') {
-                console.error('Router navigation error:', err);
-            }
-        });
+    });
 }
 
 // Unique where `name + start` is not: the same invite arrives in two subscribed calendars, and a
@@ -802,12 +797,7 @@ function navigateToEvent(event: CalendarEvent) {
         params: {
             path: event.notePath.split('/')
         }
-    }).catch(err => {
-            // Ignore navigation duplicated errors
-            if (err.name !== 'NavigationDuplicated') {
-                console.error('Router navigation error:', err);
-            }
-        });
+    });
 }
 
 function openCreatedItem() {
@@ -818,11 +808,6 @@ function openCreatedItem() {
             params: {
                 path: createdItemPath.value.split('/')
             }
-        }).catch(err => {
-            // Ignore navigation duplicated errors
-            if (err.name !== 'NavigationDuplicated') {
-                console.error('Router navigation error:', err);
-            }
         });
     } else if (createdItemType.value === 'task') {
         // Navigate to the TasksNext view for the created task
@@ -832,11 +817,6 @@ function openCreatedItem() {
                 selectedNodeId: createdItemPath.value,
                 tab: 'selected',
                 viewMode: 'status'
-            }
-        }).catch(err => {
-            // Ignore navigation duplicated errors
-            if (err.name !== 'NavigationDuplicated') {
-                console.error('Router navigation error:', err);
             }
         });
     }
