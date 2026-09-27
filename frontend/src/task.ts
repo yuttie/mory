@@ -188,6 +188,12 @@ function replaceStatusInYaml(source: string, status: Status): string {
     // Anything undefined is dropped here as `YAML.stringify` drops it, so the check below compares
     // against what is actually written.
     const value = JSON.parse(JSON.stringify(status)) as Status;
+    const before = doc.toJS();
+    // Already so: the note is left as it is, rather than given the same status spelt afresh -- and
+    // committed with nothing changed, which is what a write of the same text becomes.
+    if (sameValue(before.task.status, value)) {
+        return source;
+    }
     const block = YAML.stringify(value, { indent: step, lineWidth: 0 });
 
     const pair = task.items.find((p) => isKey(p.key, 'status'));
@@ -226,8 +232,7 @@ function replaceStatusInYaml(source: string, status: Status): string {
     }
 
     const result = YAML.parseDocument(edited);
-    const expected = doc.toJS();
-    expected.task.status = value;
+    const expected = { ...before, task: { ...before.task, status: value } };
     if (result.errors.length > 0 || !sameValue(result.toJS(), expected)) {
         throw new Error('Changing the status in place would have changed more than the status.');
     }

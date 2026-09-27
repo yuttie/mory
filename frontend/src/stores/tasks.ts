@@ -189,7 +189,12 @@ export const useTasksStore = defineStore('tasks', () => {
     // editor holds; this reads the note as it stands and rewrites nothing but the status.
     async function setStatus(path: string, status: Status): Promise<void> {
         const content = await files.read(path);
-        await files.write(path, replaceStatus(content, status));
+        const edited = replaceStatus(content, status);
+        // A note that already says so was changed by something the listing had not caught up
+        // with. Nothing to write, but the listing still wants the sync.
+        if (edited !== content) {
+            await files.write(path, edited);
+        }
         await subset.settle(path, true);
     }
 

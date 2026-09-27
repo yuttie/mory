@@ -311,6 +311,17 @@ describe('setStatus', () => {
         expect(apiMocks.getEntries.mock.calls.length).toBeGreaterThan(syncs);
     });
 
+    it('writes nothing when the note already has the status, but still syncs', async () => {
+        const { store } = await storeWith(sample);
+        apiMocks.getNote.mockResolvedValueOnce({ data: '---\ntask:\n    status:\n        kind: blocked\n        blocked_by: the vendor\n---\n' });
+        const syncs = apiMocks.getEntries.mock.calls.length;
+
+        await store.setStatus(`.tasks/${uuid(3)}.md`, { kind: 'blocked', blocked_by: 'the vendor' });
+
+        expect(apiMocks.addNote).not.toHaveBeenCalled();
+        expect(apiMocks.getEntries.mock.calls.length).toBeGreaterThan(syncs);
+    });
+
     it('writes nothing when the note cannot be edited in place', async () => {
         const { store } = await storeWith(sample);
         apiMocks.getNote.mockResolvedValueOnce({ data: '# No frontmatter\n' });

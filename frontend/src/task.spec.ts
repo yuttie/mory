@@ -129,6 +129,15 @@ describe('replaceStatus', () => {
         expect(after).not.toContain('completion_note');
     });
 
+    it('leaves a note alone when it already has the status, however it is spelt', () => {
+        const notes = [
+            '---\ntask:\n    status: {kind: todo}\n---\n',
+            '---\ntask:\n    status:\n        kind: waiting\n        waiting_for: Bob  # asked on Monday\n---\n',
+        ];
+        expect(replaceStatus(notes[0], { kind: 'todo' })).toBe(notes[0]);
+        expect(replaceStatus(notes[1], { kind: 'waiting', waiting_for: 'Bob' })).toBe(notes[1]);
+    });
+
     it('refuses a note it cannot edit in place', () => {
         expect(() => replaceStatus('# No frontmatter\n', { kind: 'todo' })).toThrow();
         expect(() => replaceStatus('---\ntask:\n    status: {kind: todo}\n', { kind: 'todo' })).toThrow();
