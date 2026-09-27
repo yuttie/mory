@@ -277,6 +277,25 @@ describe('tag-aware accessors', () => {
     });
 });
 
+describe('ancestorsOf', () => {
+    it('lists the tasks above one, root first', async () => {
+        const { store } = await storeWith([
+            ...sample,
+            { path: `.tasks/${uuid(1)}/${uuid(2)}/${uuid(7)}.md`, title: 'Grandchild' },
+        ]);
+        expect(store.ancestorsOf(uuid(7)).map((t) => t.title)).toEqual(['Parent', 'Child']);
+        expect(store.ancestorsOf(uuid(2)).map((t) => t.title)).toEqual(['Parent']);
+        expect(store.ancestorsOf(uuid(1))).toEqual([]);
+    });
+
+    it('does not count a tag group as an ancestor', async () => {
+        const { store, tagGroupId } = await storeWith(sample);
+        expect(store.ancestorsOf(uuid(3))).toEqual([]);
+        expect(store.ancestorsOf(tagGroupId('work'))).toEqual([]);
+        expect(store.ancestorsOf('unknown')).toEqual([]);
+    });
+});
+
 describe('save', () => {
     const task = (id: string): Task => ({
         uuid: id,

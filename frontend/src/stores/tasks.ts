@@ -170,6 +170,12 @@ export const useTasksStore = defineStore('tasks', () => {
         return null;
     }
 
+    // The tasks above one, root first. Structural, unlike `parentOf`: a tag group only arranges the
+    // tree and is no task's ancestor.
+    function ancestorsOf(id: string): TaskNode[] {
+        return nodesOf(forest.value, ancestors(forest.value, id).reverse());
+    }
+
     function idByPath(path: string): UUID | undefined {
         return pathToUuid.value.get(path);
     }
@@ -277,6 +283,7 @@ export const useTasksStore = defineStore('tasks', () => {
         node,
         childrenOf,
         parentOf,
+        ancestorsOf,
         idByPath,
         flattenDescendants,
 
