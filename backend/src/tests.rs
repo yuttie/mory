@@ -1963,6 +1963,15 @@ fn an_absurd_duration_is_refused_rather_than_panicking() {
 /// The span the fixtures are expanded over. Wide enough to hold every series in them.
 const FIXTURE_WINDOW: (&str, &str) = ("2015-01-01", "2027-01-01");
 
+/// Fixtures about the window itself, each expanded over its own and recording it in the golden.
+///
+/// Every other occurrence of such a fixture is kept more than a day clear of its window: the
+/// backend widens a window by a day either side, which the note's expansion does not.
+const OWN_WINDOWS: [(&str, (&str, &str)); 1] = [
+    // Narrow, so the occurrence moved into it was generated outside it.
+    ("moved-into-window.ics", ("2024-05-27", "2024-05-29")),
+];
+
 fn fixtures_dir() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -1973,7 +1982,6 @@ fn fixtures_dir() -> std::path::PathBuf {
 #[test]
 fn calendar_fixtures_expand_as_recorded() {
     let dir = fixtures_dir();
-    let (from, to) = window(FIXTURE_WINDOW.0, FIXTURE_WINDOW.1);
 
     let mut names: Vec<String> = std::fs::read_dir(&dir)
         .expect("the fixtures directory should exist")
@@ -1989,6 +1997,12 @@ fn calendar_fixtures_expand_as_recorded() {
     for name in &names {
         let ics = std::fs::read_to_string(dir.join(name)).expect("a readable fixture");
         let calendar = crate::ical::parse_calendar(&ics).expect("a parseable fixture");
+        let own_window = OWN_WINDOWS
+            .iter()
+            .find(|(fixture, _)| *fixture == name.as_str())
+            .map(|(_, span)| *span);
+        let (from, to) = own_window.unwrap_or(FIXTURE_WINDOW);
+        let (from, to) = window(from, to);
         let expansion = crate::ical::expand(&calendar, "fixture", from, to);
 
         assert!(
@@ -1996,13 +2010,14 @@ fn calendar_fixtures_expand_as_recorded() {
             "{name} should expand cleanly: {:?}",
             expansion.warnings,
         );
-        recorded.insert(
-            name.clone(),
-            serde_json::json!({
-                "events": expansion.events,
-                "series": expansion.series,
-            }),
-        );
+        let mut feed = serde_json::json!({
+            "events": expansion.events,
+            "series": expansion.series,
+        });
+        if let Some((from, to)) = own_window {
+            feed["window"] = serde_json::json!({ "from": from, "to": to });
+        }
+        recorded.insert(name.clone(), feed);
     }
 
     let golden_path = dir.join("expansion.json");
