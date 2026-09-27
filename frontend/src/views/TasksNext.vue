@@ -23,12 +23,13 @@
                                 {{ tasksLeftText }}
                             </span>
                         </template>
-                        <!-- Of the tasks the count is taken from, so the two agree. -->
+                        <!-- Counted from the Status view's columns, so a task naming no status is
+                             Backlog here as it is there. -->
                         <v-list>
                             <v-list-subheader>Statistics</v-list-subheader>
                             <v-list-item>
-                                <v-list-item-title v-for="[kind, label] of Object.entries(STATUS_LABEL)" v-bind:key="kind">
-                                    {{ label }}: {{ selectedNodeDescendants.filter((t) => t.metadata?.task?.status?.kind === kind).length }}
+                                <v-list-item-title v-for="kind of STATUS_KINDS" v-bind:key="kind">
+                                    {{ STATUS_LABEL[kind] }}: {{ taskStatuses[kind].length }}
                                 </v-list-item-title>
                             </v-list-item>
                         </v-list>
