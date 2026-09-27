@@ -10,7 +10,11 @@
                 >
                     <!-- First, so it stays put while the selection changes what follows it. -->
                     <span class="app-bar-count">
-                        {{ filteredTasksCount }} {{ selectedNode && $vuetify.display.xs ? 'left' : 'tasks left' }}
+                        {{ filteredTasksCount }}
+                        <template v-if="!(selectedNode && $vuetify.display.xs)">
+                            {{ filteredTasksCount === 1 ? 'task' : 'tasks' }}
+                        </template>
+                        left
                     </span>
                     <template v-if="selectedNode">
                         <v-divider
@@ -535,9 +539,10 @@ const filteredForestWithTags = computed(() => {
     return filterTreeNodes(store.treeWithTagGroups, hideCompletedInTreeView.value);
 });
 
-// Computed property for task count that reflects current filtering
+// The tasks left among those the Descendants tab lists, so the count follows the selection: every
+// task with nothing selected, a task's descendants, or a tag group's members.
 const filteredTasksCount = computed(() => {
-    return store.allTasks.filter((t) => {
+    return selectedNodeDescendants.value.filter((t) => {
         const kind = t.metadata?.task?.status?.kind;
         // Always exclude done and canceled from the "tasks left" count, regardless of filter switches
         if (kind === 'done' || kind === 'canceled') return false;
