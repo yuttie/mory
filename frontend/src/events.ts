@@ -317,7 +317,7 @@ function instantOf(value: unknown): number | null {
 }
 
 /// The first and last instants of a window, in the reader's zone. A bare date as `to` is that
-/// whole day: its midnight would leave out the last day the rule was expanded over.
+/// whole day: its midnight would leave out the window's last day.
 function boundsOf(window: EventWindow): [number, number] | null {
     const from = instantOf(window.from);
     const to = typeof window.to === 'string' && isDateOnly(window.to)
@@ -381,7 +381,21 @@ function expandSeries(
         }
     };
 
-    const generated = expand(window.from, window.to);
+    const bounds = boundsOf(window);
+    if (bounds === null) {
+        return;
+    }
+    const [from, to] = bounds;
+
+    // `expandRule` reads its window as wall clock in the rule's own zone, which is not the reader's
+    // when `tz` names another: Los Angeles's 17:00 on the 27th is Tokyo's 09:00 on the 28th, and
+    // was lost from a Tokyo window starting on the 28th. So the rule is expanded over two days more
+    // either side -- further than any two zones are apart -- and which occurrences the window
+    // holds is decided by instant, below.
+    const generated = expand(
+        dayjs(from).subtract(2, 'day').format('YYYY-MM-DD'),
+        dayjs(to).add(2, 'day').format('YYYY-MM-DD'),
+    );
     if (generated === null) {
         return;
     }
@@ -408,17 +422,11 @@ function expandSeries(
         overrides.set(instant, override);
     }
 
-    const bounds = boundsOf(window);
-    if (bounds === null) {
-        return;
-    }
-    const [from, to] = bounds;
-
-    // Where each occurrence was generated, keyed by instant.
+    // Where each occurrence in the window was generated, keyed by instant.
     const slots = new Map<number, string>();
     for (const occurrence of generated) {
         const instant = instantOf(occurrence);
-        if (instant !== null) {
+        if (instant !== null && instant >= from && instant <= to) {
             slots.set(instant, occurrence);
         }
     }

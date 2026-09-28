@@ -823,6 +823,38 @@ describe('an all-day series', () => {
     });
 });
 
+describe('a rule in a zone other than the reader\'s', () => {
+    // Los Angeles's 17:00 on the 27th is Tokyo's 09:00 on the 28th. The window used to be read as
+    // Los Angeles wall clock, so a Tokyo reader lost the 28th and was given the 1st.
+    const daily = (adjustments: Partial<MetadataEvent> = {}) => entry('a.md', {
+        Standup: {
+            start: '2026-09-01 17:00:00-07:00',
+            repeat: { freq: 'daily', tz: 'America/Los_Angeles' },
+            ...adjustments,
+        },
+    });
+    const home = { from: '2026-09-28', to: '2026-09-30' };
+
+    it('draws what falls in the window in the reader\'s zone', () => {
+        vi.stubEnv('TZ', 'Asia/Tokyo');
+        const { events } = derive([daily()], home);
+
+        expect(events.map((e) => e.start))
+            .toEqual(['2026-09-28 09:00', '2026-09-29 09:00', '2026-09-30 09:00']);
+        vi.unstubAllEnvs();
+    });
+
+    it('matches an exclusion on the window\'s first day rather than reporting it', () => {
+        vi.stubEnv('TZ', 'Asia/Tokyo');
+        const { events, errors } = derive(
+            [daily({ exclusions: ['2026-09-27 17:00:00-07:00'] })], home);
+
+        expect(events.map((e) => e.start)).toEqual(['2026-09-29 09:00', '2026-09-30 09:00']);
+        expect(errors).toEqual([]);
+        vi.unstubAllEnvs();
+    });
+});
+
 describe('event categories', () => {
     const categories = new Map([
         ['meeting', { color: '#1565c0', name: '[MTG] {{name}}' }],

@@ -13,6 +13,7 @@
 // _recorded`), which writes the golden this reads.
 
 import { describe, expect, it } from 'vitest';
+import dayjs from 'dayjs';
 import YAML from 'yaml';
 
 import type { ImportedOccurrence, ImportedSeries, MetadataEvent } from '@/api';
@@ -45,9 +46,19 @@ function noteEntry(content: string) {
     };
 }
 
-/// What a reader sees: name, start and end, in order.
-function shapeOf(events: readonly CalendarEvent[]): string[] {
+/// What a reader sees in `span`: name, start and end, in order.
+///
+/// Only what starts inside the span, in the reader's zone, is compared. The backend widens a window
+/// by a day either side, not knowing the reader's zone, so what it returns at the edges is more
+/// than the note is asked for.
+function shapeOf(events: readonly CalendarEvent[], span: { from: string; to: string }): string[] {
+    const from = dayjs(span.from).valueOf();
+    const to = dayjs(span.to).endOf('day').valueOf();
     return [...events]
+        .filter((event) => {
+            const start = dayjs(event.start).valueOf();
+            return start >= from && start <= to;
+        })
         .sort((a, b) => a.start.localeCompare(b.start))
         .map((event) => `${event.start} .. ${event.end ?? '-'}  ${event.name}`);
 }
@@ -65,15 +76,16 @@ describe.each(Object.keys(feeds))('%s', (name) => {
         const series = feed.series[uid];
         expect(canConvertSeries(series), 'the fixture should be convertible whole').toBe(true);
 
+        const span = feed.window ?? window;
+
         // What the calendar draws before conversion.
-        const imported = shapeOf(mergeImported([], feed.events));
+        const imported = shapeOf(mergeImported([], feed.events), span);
 
         // ...and after: the note the button writes, read back the way any note is.
         const note = buildSeriesNote(feed.events[0], series);
-        const { events, errors } = eventsFromEntries(
-            [noteEntry(note.content)], feed.window ?? window);
+        const { events, errors } = eventsFromEntries([noteEntry(note.content)], span);
 
         expect(errors, 'a converted note should raise nothing').toEqual([]);
-        expect(shapeOf(events)).toEqual(imported);
+        expect(shapeOf(events, span)).toEqual(imported);
     });
 });
