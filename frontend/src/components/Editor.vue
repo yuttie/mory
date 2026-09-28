@@ -16,11 +16,16 @@ import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { autocompletion, completionKeymap, closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 
 // Props
-const props = defineProps<{
+const props = withDefaults(defineProps<{
     value: string;
     mode: string;
     readonly?: boolean;
-}>();
+    lineWrapping?: boolean;
+}>(), {
+    // Vue reads an absent boolean prop as `false`, which here would silently
+    // turn wrapping off.
+    lineWrapping: true,
+});
 
 // Emits
 const emit = defineEmits<{
@@ -41,9 +46,11 @@ let lastKnownScrollTop = 0;
 const PROGRAMMATIC_SCROLL_SUPPRESSION_MS = 100;
 let suppressScrollEventsUntil = 0;
 
-// Lets the buffer be locked and unlocked without rebuilding the editor, which
-// would lose the undo history, the scroll position and the selection.
+// Let the buffer be locked and unlocked, and its lines wrapped or not, without
+// rebuilding the editor, which would lose the undo history, the scroll position
+// and the selection.
 const editableCompartment = new Compartment();
+const lineWrappingCompartment = new Compartment();
 
 // Ctrl+Enter and Shift+Enter toggle the editor and the viewer panes, and that
 // is decided by a window-level handler in the parent. CodeMirror runs its own
@@ -141,7 +148,6 @@ onMounted(async () => {
             ...completionKeymap,
             indentWithTab,
         ]),
-        EditorView.lineWrapping,
         EditorView.updateListener.of((update) => {
             if (update.docChanged) {
                 emit('change', update.state.doc.toString());
@@ -187,8 +193,10 @@ onMounted(async () => {
     }
 
     // Pushed after the awaits above rather than declared with the rest, so the
-    // editor starts in whatever lock state holds once it is actually created.
+    // editor starts in whatever lock and wrapping state holds once it is
+    // actually created.
     extensions.push(editableCompartment.of(editableExtension(props.readonly === true)));
+    extensions.push(lineWrappingCompartment.of(props.lineWrapping ? EditorView.lineWrapping : []));
 
     const state = EditorState.create({
         doc: props.value,
@@ -365,6 +373,16 @@ watch(() => props.readonly, (isReadonly?: boolean) => {
     });
 });
 
+watch(() => props.lineWrapping, (isWrapping: boolean) => {
+    if (!editor) {
+        return;
+    }
+
+    editor.dispatch({
+        effects: lineWrappingCompartment.reconfigure(isWrapping ? EditorView.lineWrapping : []),
+    });
+});
+
 watch(() => props.mode, (_mode: string) => {
     // Mode changes are not dynamically supported in this minimal implementation
     // The mode is set during initialization
@@ -391,6 +409,11 @@ defineExpose({
 
     & > * {
         flex: 1 1 0;
+        // A flex item is otherwise never narrower than its content, and an
+        // unwrapped line would widen it past the pane: the wrapper would then
+        // scroll sideways instead of CodeMirror, taking the line numbers along
+        // and leaving a cursor at the end of a long line out of sight.
+        min-width: 0;
     }
 
     :deep(.cm-editor) {
