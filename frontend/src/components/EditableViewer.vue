@@ -526,12 +526,21 @@ async function updateRenderedChunked() {
             // Store raw HTML for caching and reuse
             newRenderedChunks.push(chunkHtml);
 
-            // Display chunks progressively for better perceived performance
-            if (i === 0 || i === newMarkdownChunks.length - 1) {
-                // First and last chunks render immediately for quick feedback
+            // A chunk whose text is unchanged still moves when one above it
+            // gains or loses lines, and its line numbers must move with it.
+            const showChunk = () => {
                 if (chunkChanged) {
                     updateChunkInDisplay(i, chunkHtml, markdownChunkInfo.startLine);
                 }
+                else {
+                    renumberChunk(i, markdownChunkInfo.startLine);
+                }
+            };
+
+            // Display chunks progressively for better perceived performance
+            if (i === 0 || i === newMarkdownChunks.length - 1) {
+                // First and last chunks render immediately for quick feedback
+                showChunk();
                 updateRenderedState(metadata, parseError, newRenderedChunks);
             } else {
                 // Intermediate chunks render during idle time to avoid blocking UI
@@ -539,9 +548,7 @@ async function updateRenderedChunked() {
                     if ('requestIdleCallback' in window) {
                         requestIdleCallback(() => {
                             if (!controller.signal.aborted) {
-                                if (chunkChanged) {
-                                    updateChunkInDisplay(i, chunkHtml, markdownChunkInfo.startLine);
-                                }
+                                showChunk();
                                 updateRenderedState(metadata, parseError, newRenderedChunks);
                             }
                             resolve();
@@ -550,9 +557,7 @@ async function updateRenderedChunked() {
                         // Fallback for browsers without requestIdleCallback
                         setTimeout(() => {
                             if (!controller.signal.aborted) {
-                                if (chunkChanged) {
-                                    updateChunkInDisplay(i, chunkHtml, markdownChunkInfo.startLine);
-                                }
+                                showChunk();
                                 updateRenderedState(metadata, parseError, newRenderedChunks);
                             }
                             resolve();
@@ -601,19 +606,10 @@ function updateChunkInDisplay(chunkIndex: number, chunkHtml: string, startLine: 
     // Update chunk content
     chunkDiv.innerHTML = chunkHtml;
 
-    // Adjust line numbers for scroll synchronization
-    if (startLine > 1) {
-        const elementsWithDataLine = chunkDiv.querySelectorAll('[data-line]');
-        elementsWithDataLine.forEach((element) => {
-            for (const attribute of ['data-line', 'data-line-end']) {
-                const lineNum = element.getAttribute(attribute);
-                if (lineNum) {
-                    const adjustedLine = parseInt(lineNum) + startLine - 1;
-                    element.setAttribute(attribute, adjustedLine.toString());
-                }
-            }
-        });
-    }
+    // Adjust line numbers for scroll synchronization: the rendered ones count
+    // from the chunk's own first line.
+    chunkDiv.dataset['startLine'] = '1';
+    renumberChunk(chunkIndex, startLine);
 
     // Prevent images from being dragged and dropped within the page
     const images = chunkDiv.querySelectorAll('img');
@@ -625,6 +621,30 @@ function updateChunkInDisplay(chunkIndex: number, chunkHtml: string, startLine: 
             appStore.draggingViewerContent = false;
         });
     }
+}
+
+// Move a displayed chunk's line numbers to count from `startLine`, the line the
+// chunk starts on in the note. The chunk element records the line they count
+// from now, so that renumbering twice, as a render cancelled part-way and
+// started over may do, moves them only once.
+function renumberChunk(chunkIndex: number, startLine: number) {
+    const chunkDiv = chunkElements[chunkIndex];
+    if (!chunkDiv) {
+        return;
+    }
+
+    const shift = startLine - parseInt(chunkDiv.dataset['startLine'] ?? '1');
+    if (shift !== 0) {
+        for (const element of chunkDiv.querySelectorAll('[data-line]')) {
+            for (const attribute of ['data-line', 'data-line-end']) {
+                const line = element.getAttribute(attribute);
+                if (line) {
+                    element.setAttribute(attribute, (parseInt(line) + shift).toString());
+                }
+            }
+        }
+    }
+    chunkDiv.dataset['startLine'] = startLine.toString();
 }
 
 function updateRenderedState(metadata: any, parseError: any, chunks: string[]) {
