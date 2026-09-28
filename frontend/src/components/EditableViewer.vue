@@ -113,6 +113,7 @@ import type { AiAction } from '@/ai-actions';
 import { loadConfigValue } from '@/config';
 import { CliPrettify } from 'markdown-table-prettify';
 import { chunkMarkdownByHeadings } from '@/markdown-utils';
+import { buildScrollMap, lineAtOffset, offsetAtLine, type ScrollAnchor } from '@/scroll-map';
 import { renderMarkdown } from '@/markdown';
 
 // Props
@@ -525,12 +526,21 @@ async function updateRenderedChunked() {
             // Store raw HTML for caching and reuse
             newRenderedChunks.push(chunkHtml);
 
-            // Display chunks progressively for better perceived performance
-            if (i === 0 || i === newMarkdownChunks.length - 1) {
-                // First and last chunks render immediately for quick feedback
+            // A chunk whose text is unchanged still moves when one above it
+            // gains or loses lines, and its line numbers must move with it.
+            const showChunk = () => {
                 if (chunkChanged) {
                     updateChunkInDisplay(i, chunkHtml, markdownChunkInfo.startLine);
                 }
+                else {
+                    renumberChunk(i, markdownChunkInfo.startLine);
+                }
+            };
+
+            // Display chunks progressively for better perceived performance
+            if (i === 0 || i === newMarkdownChunks.length - 1) {
+                // First and last chunks render immediately for quick feedback
+                showChunk();
                 updateRenderedState(metadata, parseError, newRenderedChunks);
             } else {
                 // Intermediate chunks render during idle time to avoid blocking UI
@@ -538,9 +548,7 @@ async function updateRenderedChunked() {
                     if ('requestIdleCallback' in window) {
                         requestIdleCallback(() => {
                             if (!controller.signal.aborted) {
-                                if (chunkChanged) {
-                                    updateChunkInDisplay(i, chunkHtml, markdownChunkInfo.startLine);
-                                }
+                                showChunk();
                                 updateRenderedState(metadata, parseError, newRenderedChunks);
                             }
                             resolve();
@@ -549,9 +557,7 @@ async function updateRenderedChunked() {
                         // Fallback for browsers without requestIdleCallback
                         setTimeout(() => {
                             if (!controller.signal.aborted) {
-                                if (chunkChanged) {
-                                    updateChunkInDisplay(i, chunkHtml, markdownChunkInfo.startLine);
-                                }
+                                showChunk();
                                 updateRenderedState(metadata, parseError, newRenderedChunks);
                             }
                             resolve();
@@ -600,17 +606,10 @@ function updateChunkInDisplay(chunkIndex: number, chunkHtml: string, startLine: 
     // Update chunk content
     chunkDiv.innerHTML = chunkHtml;
 
-    // Adjust line numbers for scroll synchronization
-    if (startLine > 1) {
-        const elementsWithDataLine = chunkDiv.querySelectorAll('[data-line]');
-        elementsWithDataLine.forEach((element) => {
-            const lineNum = element.getAttribute('data-line');
-            if (lineNum) {
-                const adjustedLine = parseInt(lineNum) + startLine - 1;
-                element.setAttribute('data-line', adjustedLine.toString());
-            }
-        });
-    }
+    // Adjust line numbers for scroll synchronization: the rendered ones count
+    // from the chunk's own first line.
+    chunkDiv.dataset['startLine'] = '1';
+    renumberChunk(chunkIndex, startLine);
 
     // Prevent images from being dragged and dropped within the page
     const images = chunkDiv.querySelectorAll('img');
@@ -622,6 +621,30 @@ function updateChunkInDisplay(chunkIndex: number, chunkHtml: string, startLine: 
             appStore.draggingViewerContent = false;
         });
     }
+}
+
+// Move a displayed chunk's line numbers to count from `startLine`, the line the
+// chunk starts on in the note. The chunk element records the line they count
+// from now, so that renumbering twice, as a render cancelled part-way and
+// started over may do, moves them only once.
+function renumberChunk(chunkIndex: number, startLine: number) {
+    const chunkDiv = chunkElements[chunkIndex];
+    if (!chunkDiv) {
+        return;
+    }
+
+    const shift = startLine - parseInt(chunkDiv.dataset['startLine'] ?? '1');
+    if (shift !== 0) {
+        for (const element of chunkDiv.querySelectorAll('[data-line]')) {
+            for (const attribute of ['data-line', 'data-line-end']) {
+                const line = element.getAttribute(attribute);
+                if (line) {
+                    element.setAttribute(attribute, (parseInt(line) + shift).toString());
+                }
+            }
+        }
+    }
+    chunkDiv.dataset['startLine'] = startLine.toString();
 }
 
 function updateRenderedState(metadata: any, parseError: any, chunks: string[]) {
@@ -744,6 +767,43 @@ function sectionIsVisible(heading: { level: number, href: string }): boolean {
     return range[0] < viewportRange[1] && (range[1] || scrollHeight) > viewportRange[0];
 }
 
+// Where each numbered element of the rendered note starts and ends, for scroll
+// sync, as the `scrollTop` that brings that edge to the viewer's top edge.
+// Measured from the viewer itself: `computeOffset()` adds up offsets all the
+// way to the page, so it also counts the toolbar above the viewer, which
+// `scrollTop` does not.
+//
+// Both edges count because the margin between two elements belongs to
+// neither. With tops alone, the lines from one element's top to the next's
+// were spread evenly over the element and the margin below it together: a
+// one-line paragraph and the blank line after it each got half of both.
+//
+// The note's two ends are anchors as well. Nothing is drawn for the
+// frontmatter, so without them the lines above the first element, and those
+// below the last, would have nowhere to sync to, and the other pane would stay
+// wherever it was.
+function collectScrollAnchors(): ScrollAnchor[] {
+    const viewerElement: HTMLElement = viewer.value!;
+    const origin = viewerElement.getBoundingClientRect().top + viewerElement.clientTop - viewerElement.scrollTop;
+    const elements = [...renderedContentDiv.value.querySelectorAll<HTMLElement>('[data-line]')]
+        // An element that is not drawn, such as one a note's custom CSS hides,
+        // measures as a zero rect at the viewport's corner, which would put it
+        // wherever the viewer happens to be scrolled.
+        .filter((el) => el.getClientRects().length > 0)
+        .flatMap((el) => {
+            const rect = el.getBoundingClientRect();
+            return [
+                { line: parseInt(el.dataset['line'] as string), offset: rect.top - origin },
+                { line: parseInt(el.dataset['lineEnd'] as string), offset: rect.bottom - origin },
+            ];
+        });
+    return [
+        { line: 1, offset: 0 },
+        ...elements,
+        { line: props.modelValue.split('\n').length + 1, offset: viewerElement.scrollHeight },
+    ];
+}
+
 function handleDocumentScroll() {
     emit('viewer-scroll');
 
@@ -759,52 +819,8 @@ function handleDocumentScroll() {
         return;
     }
 
-    // Build scroll map
-    const scrollMap: [number, number][] = [...renderedContentDiv.value.querySelectorAll<HTMLElement>('[data-line]')]
-        .map((el) => {
-            const lineNumber = parseInt(el.dataset['line'] as string);
-            const offset = computeOffset(el);
-            return [lineNumber, offset];
-        })
-        .sort((a, b) => {
-            if (a[0] < b[0]) {
-                return -1;
-            }
-            if (a[0] > b[0]) {
-                return 1;
-            }
-            return 0;
-        }) as [number, number][];
-
-    // Remove non-monotonically increasing entries
-    {
-        let i = 0;
-        while (i < scrollMap.length - 1) {
-            if (scrollMap[i][1] > scrollMap[i + 1][1]) {
-                // Delete the (i + 1)-th element
-                scrollMap.splice(i + 1, 1);
-            }
-            else {
-                ++i;
-            }
-        }
-    }
-
-    // Find the interval where the `scrollTop` belongs to
-    const scrollTop = viewer.value.scrollTop;
-    let intervalIndex = null;
-    for (let i = 0; i < scrollMap.length - 1; ++i) {
-        if (scrollMap[i][1] <= scrollTop && scrollTop < scrollMap[i + 1][1]) {
-            intervalIndex = i;
-            break;
-        }
-    }
-    if (intervalIndex !== null) {
-        const [lineNumber1, offset1] = scrollMap[intervalIndex];
-        const [lineNumber2, offset2] = scrollMap[intervalIndex + 1];
-
-        // Scroll to the line
-        const lineNumber = lineNumber1 + (lineNumber2 - lineNumber1) * (scrollTop - offset1) / (offset2 - offset1);
+    const lineNumber = lineAtOffset(buildScrollMap(collectScrollAnchors()), viewer.value.scrollTop);
+    if (lineNumber !== null) {
         editorScrollTo(lineNumber);
     }
 }
@@ -823,51 +839,8 @@ function onEditorScroll(lineNumber: number) {
         return;
     }
 
-    // Build scroll map
-    const scrollMap: [number, number][] = [...renderedContentDiv.value.querySelectorAll<HTMLElement>('[data-line]')]
-        .map((el) => {
-            const lineNumber = parseInt(el.dataset['line'] as string);
-            const offset = computeOffset(el);
-            return [lineNumber, offset];
-        })
-        .sort((a, b) => {
-            if (a[0] < b[0]) {
-                return -1;
-            }
-            if (a[0] > b[0]) {
-                return 1;
-            }
-            return 0;
-        }) as [number, number][];
-
-    // Remove non-monotonically increasing entries
-    {
-        let i = 0;
-        while (i < scrollMap.length - 1) {
-            if (scrollMap[i][1] > scrollMap[i + 1][1]) {
-                // Delete the (i + 1)-th element
-                scrollMap.splice(i + 1, 1);
-            }
-            else {
-                ++i;
-            }
-        }
-    }
-
-    // Find the interval where the given line number belongs to
-    let intervalIndex = null;
-    for (let i = 0; i < scrollMap.length - 1; ++i) {
-        if (scrollMap[i][0] <= lineNumber && lineNumber < scrollMap[i + 1][0]) {
-            intervalIndex = i;
-            break;
-        }
-    }
-    if (intervalIndex !== null) {
-        const [lineNumber1, offset1] = scrollMap[intervalIndex];
-        const [lineNumber2, offset2] = scrollMap[intervalIndex + 1];
-
-        // Scroll by an offset
-        const offset = offset1 + (offset2 - offset1) * (lineNumber - lineNumber1) / (lineNumber2 - lineNumber1);
+    const offset = offsetAtLine(buildScrollMap(collectScrollAnchors()), lineNumber);
+    if (offset !== null) {
         const previousScrollTop = viewer.value.scrollTop;
         const previousScrollLeft = viewer.value.scrollLeft;
         viewer.value.scrollTo({ top: offset, left: 0, behavior: 'auto' });
