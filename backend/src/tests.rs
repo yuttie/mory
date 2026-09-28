@@ -1997,9 +1997,6 @@ fn an_absurd_duration_is_refused_rather_than_panicking() {
 const FIXTURE_WINDOW: (&str, &str) = ("2015-01-01", "2027-01-01");
 
 /// Fixtures about the window itself, each expanded over its own and recording it in the golden.
-///
-/// Every other occurrence of such a fixture is kept more than a day clear of its window: the
-/// backend widens a window by a day either side, which the note's expansion does not.
 const OWN_WINDOWS: &[(&str, (&str, &str))] = &[
     // Narrow, so the occurrence moved into it was generated outside it.
     ("moved-into-window.ics", ("2024-05-27", "2024-05-29")),

@@ -3,7 +3,7 @@
 iCalendar feeds that both components expand, and the golden file recording what the backend makes
 of them.
 
-They exist for one test, in two halves. `backend/src/tests.rs` expands every `.ics` here and
+They exist for one comparison, in two halves. `backend/src/tests.rs` expands every `.ics` here and
 compares the result against `expansion.json`; `frontend/src/differential.spec.ts` reads that same
 file, converts each series to a note exactly as the app does, re-expands it, and asserts the
 occurrences match.
@@ -15,8 +15,11 @@ stops being drawn. A disagreement is invisible until something compares the two.
 
 Every feed is expanded over one wide window, except a feed about the window itself, which names
 its own in `OWN_WINDOWS` in `backend/src/tests.rs`; the golden records it beside that feed, and
-the frontend re-expands over the same. Keep its other occurrences more than a day clear of it: the
-backend widens a window by a day either side, and the note's expansion does not.
+the frontend re-expands over the same. Only what starts inside the window, in the reader's zone,
+is compared: the backend widens a window by a day either side, not knowing the reader's zone.
+
+A wide window hides every way of losing an occurrence at a window's edge, so each side also asks
+again for every occurrence it drew, over that occurrence's day alone, and requires it back.
 
 Regenerate the golden with:
 
