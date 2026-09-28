@@ -60,7 +60,11 @@ function shapeOf(events: readonly CalendarEvent[], span: { from: string; to: str
             return start >= from && start <= to;
         })
         .sort((a, b) => a.start.localeCompare(b.start))
-        .map((event) => `${event.start} .. ${event.end ?? '-'}  ${event.name}`);
+        .map(shapeOfOne);
+}
+
+function shapeOfOne(event: CalendarEvent): string {
+    return `${event.start} .. ${event.end ?? '-'}  ${event.name}`;
 }
 
 describe.each(Object.keys(feeds))('%s', (name) => {
@@ -87,5 +91,19 @@ describe.each(Object.keys(feeds))('%s', (name) => {
 
         expect(errors, 'a converted note should raise nothing').toEqual([]);
         expect(shapeOf(events, span)).toEqual(imported);
+    });
+
+    // How much a view asks for must not change what it is given for a day: Home asks for three
+    // days and the calendar for three months. Asking for years, as above, hides every way of
+    // losing an occurrence at the edge of a window -- moved into it from outside, or read in the
+    // wrong zone -- and this expander has lost occurrences both ways.
+    it('finds each occurrence in a window of its own day', () => {
+        const note = noteEntry(buildSeriesNote(feed.events[0], feed.series[uids[0]]).content);
+        for (const occurrence of mergeImported([], feed.events)) {
+            const day = { from: occurrence.start.slice(0, 10), to: occurrence.start.slice(0, 10) };
+            const { events } = eventsFromEntries([note], day);
+
+            expect(events.map(shapeOfOne)).toContain(shapeOfOne(occurrence));
+        }
     });
 });

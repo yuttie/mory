@@ -2012,10 +2012,9 @@ fn fixtures_dir() -> std::path::PathBuf {
         .join("fixtures/calendar")
 }
 
-#[test]
-fn calendar_fixtures_expand_as_recorded() {
+/// Every feed in the fixtures directory, by file name, in order.
+fn fixture_names() -> Vec<String> {
     let dir = fixtures_dir();
-
     let mut names: Vec<String> = std::fs::read_dir(&dir)
         .expect("the fixtures directory should exist")
         .filter_map(|entry| {
@@ -2025,6 +2024,18 @@ fn calendar_fixtures_expand_as_recorded() {
         .collect();
     names.sort();
     assert!(!names.is_empty(), "no fixtures found in {}", dir.display());
+    names
+}
+
+fn fixture_calendar(name: &str) -> icalendar::Calendar {
+    let ics = std::fs::read_to_string(fixtures_dir().join(name)).expect("a readable fixture");
+    crate::ical::parse_calendar(&ics).expect("a parseable fixture")
+}
+
+#[test]
+fn calendar_fixtures_expand_as_recorded() {
+    let dir = fixtures_dir();
+    let names = fixture_names();
     // A renamed fixture would otherwise lose its window without a word, and go on passing over the
     // wide one -- which holds every slot, so it no longer tests what it is there for.
     for (fixture, _) in OWN_WINDOWS {
@@ -2037,8 +2048,7 @@ fn calendar_fixtures_expand_as_recorded() {
 
     let mut recorded = serde_json::Map::new();
     for name in &names {
-        let ics = std::fs::read_to_string(dir.join(name)).expect("a readable fixture");
-        let calendar = crate::ical::parse_calendar(&ics).expect("a parseable fixture");
+        let calendar = fixture_calendar(name);
         let own_window = OWN_WINDOWS
             .iter()
             .find(|(fixture, _)| *fixture == name.as_str())
@@ -2082,6 +2092,30 @@ fn calendar_fixtures_expand_as_recorded() {
         expected.trim(),
         "the expansion changed; if that is intended, regenerate with UPDATE_CALENDAR_GOLDEN=1",
     );
+}
+
+/// How much a view asks for must not change what it is given for a day.
+///
+/// Home asks for three days and the calendar for three months. Asking for years, as the golden
+/// does, hides every way of losing an occurrence at the edge of a window, and this expander lost
+/// one moved into a window from outside it. `differential.spec.ts` asks the same of a note.
+#[test]
+fn calendar_fixtures_find_each_occurrence_in_its_own_day() {
+    let (from, to) = window(FIXTURE_WINDOW.0, FIXTURE_WINDOW.1);
+    for name in fixture_names() {
+        let calendar = fixture_calendar(&name);
+        for occurrence in crate::ical::expand(&calendar, "fixture", from, to).events {
+            // The date as the feed's own zone writes it; the window is widened past any other.
+            let day = &occurrence.start[..10];
+            let (day_from, day_to) = window(day, day);
+            let found = crate::ical::expand(&calendar, "fixture", day_from, day_to).events;
+            assert!(
+                found.contains(&occurrence),
+                "{name}: {} is lost from its own day",
+                occurrence.start,
+            );
+        }
+    }
 }
 
 /// A header with no second whitespace-separated token used to panic the whole request.
