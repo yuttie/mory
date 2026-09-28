@@ -9,20 +9,43 @@ export interface ScrollAnchor {
     offset: number;
 }
 
-// Order the anchors by line and drop those that would make the offset go back
-// up, so that each direction is a function of the other.
+// Order the anchors by line and keep the most that also run down the note in
+// order, so that each direction is a function of the other.
+//
+// Most elements are drawn in the order of their lines, but not all: a footnote
+// is drawn at the end of the note, and its line is wherever it was defined.
+// Dropping each anchor that comes back up from the one before it would keep the
+// footnote and drop everything after its definition instead, so keep the
+// longest run whose offsets never decrease.
 export function buildScrollMap(anchors: ScrollAnchor[]): ScrollAnchor[] {
-    const map = [...anchors].sort((a, b) => a.line - b.line);
-    let i = 0;
-    while (i < map.length - 1) {
-        if (map[i].offset > map[i + 1].offset) {
-            map.splice(i + 1, 1);
+    const sorted = [...anchors].sort((a, b) => a.line - b.line || a.offset - b.offset);
+
+    // `tails[k]` is the anchor that ends the lowest-reaching run of `k + 1`
+    // anchors found so far, and `previous` links each anchor to the one before
+    // it in its run.
+    const tails: number[] = [];
+    const previous: number[] = [];
+    for (let i = 0; i < sorted.length; ++i) {
+        let low = 0;
+        let high = tails.length;
+        while (low < high) {
+            const middle = (low + high) >> 1;
+            if (sorted[tails[middle]].offset <= sorted[i].offset) {
+                low = middle + 1;
+            }
+            else {
+                high = middle;
+            }
         }
-        else {
-            ++i;
-        }
+        previous[i] = low > 0 ? tails[low - 1] : -1;
+        tails[low] = i;
     }
-    return map;
+
+    const map: ScrollAnchor[] = [];
+    for (let i = tails.length > 0 ? tails[tails.length - 1] : -1; i >= 0; i = previous[i]) {
+        map.push(sorted[i]);
+    }
+    return map.reverse();
 }
 
 // Interpolate `to` at `x` along `from`, or `null` outside the anchors. Where

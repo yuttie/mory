@@ -11,8 +11,23 @@ describe('buildScrollMap', () => {
     });
 
     it('drops an anchor that would make the offset go back up', () => {
-        expect(buildScrollMap([anchor(1, 0), anchor(3, 90), anchor(5, 60), anchor(7, 120)]))
-            .toEqual([anchor(1, 0), anchor(3, 90), anchor(7, 120)]);
+        expect(buildScrollMap([anchor(1, 0), anchor(3, 40), anchor(5, 30), anchor(5, 35), anchor(7, 120)]))
+            .toEqual([anchor(1, 0), anchor(5, 30), anchor(5, 35), anchor(7, 120)]);
+    });
+
+    it('drops a footnote drawn at the end rather than everything after its definition', () => {
+        const footnote = anchor(3, 1000);
+        expect(buildScrollMap([anchor(1, 0), footnote, anchor(5, 40), anchor(7, 80), anchor(9, 120)]))
+            .toEqual([anchor(1, 0), anchor(5, 40), anchor(7, 80), anchor(9, 120)]);
+    });
+
+    it('keeps anchors on one line in the order they are drawn', () => {
+        expect(buildScrollMap([anchor(3, 50), anchor(1, 0), anchor(3, 40)]))
+            .toEqual([anchor(1, 0), anchor(3, 40), anchor(3, 50)]);
+    });
+
+    it('is empty without anchors', () => {
+        expect(buildScrollMap([])).toEqual([]);
     });
 });
 
