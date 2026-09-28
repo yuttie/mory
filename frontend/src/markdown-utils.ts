@@ -24,59 +24,59 @@ import { toString } from 'mdast-util-to-string';
  * @returns Object with frontmatter string and array of chunks with line numbers
  */
 export function chunkMarkdownByHeadings(markdown: string): { frontmatter: string; chunks: Array<{ content: string; startLine: number }> } {
-  const processor = unified()
-    .use(remarkParse)
-    .use(remarkFrontmatter, ['yaml']);
+    const processor = unified()
+        .use(remarkParse)
+        .use(remarkFrontmatter, ['yaml']);
 
-  const tree = processor.parse(markdown) as Root;
-  const chunks: Array<{ content: string; startLine: number }> = [];
+    const tree = processor.parse(markdown) as Root;
+    const chunks: Array<{ content: string; startLine: number }> = [];
 
-  let frontmatter = '';
-  let currentChunkStart = 0;
-  let currentChunkStartLine = 1;
+    let frontmatter = '';
+    let currentChunkStart = 0;
+    let currentChunkStartLine = 1;
 
-  // Extract frontmatter if present
-  const firstNode = tree.children[0];
-  if (firstNode?.type === 'yaml') {
-    if (firstNode.position?.end?.offset != null && firstNode.position?.end?.line != null) {
-      frontmatter = markdown.slice(0, firstNode.position.end.offset);
-      currentChunkStart = firstNode.position.end.offset;
-      currentChunkStartLine = firstNode.position.end.line + 1;
-    }
-  }
-
-  // Split content at H1 or H2 headings
-  for (let i = 0; i < tree.children.length; i++) {
-    const node = tree.children[i];
-
-    // Skip frontmatter node
-    if (node.type === 'yaml') {
-      continue;
-    }
-
-    // Split at H1 or H2 headings
-    if (node.type === 'heading' && (node.depth === 1 || node.depth === 2)) {
-      if (node.position?.start?.offset != null && currentChunkStart < node.position.start.offset) {
-        // Add the chunk before this heading
-        const chunk = markdown.slice(currentChunkStart, node.position.start.offset).trim();
-        if (chunk) {
-          chunks.push({ content: chunk, startLine: currentChunkStartLine });
+    // Extract frontmatter if present
+    const firstNode = tree.children[0];
+    if (firstNode?.type === 'yaml') {
+        if (firstNode.position?.end?.offset != null && firstNode.position?.end?.line != null) {
+            frontmatter = markdown.slice(0, firstNode.position.end.offset);
+            currentChunkStart = firstNode.position.end.offset;
+            currentChunkStartLine = firstNode.position.end.line + 1;
         }
-        currentChunkStart = node.position.start.offset;
-        currentChunkStartLine = node.position.start.line;
-      }
     }
-  }
 
-  // Add the remaining content as the last chunk
-  if (currentChunkStart < markdown.length) {
-    const lastChunk = markdown.slice(currentChunkStart).trim();
-    if (lastChunk) {
-      chunks.push({ content: lastChunk, startLine: currentChunkStartLine });
+    // Split content at H1 or H2 headings
+    for (let i = 0; i < tree.children.length; i++) {
+        const node = tree.children[i];
+
+        // Skip frontmatter node
+        if (node.type === 'yaml') {
+            continue;
+        }
+
+        // Split at H1 or H2 headings
+        if (node.type === 'heading' && (node.depth === 1 || node.depth === 2)) {
+            if (node.position?.start?.offset != null && currentChunkStart < node.position.start.offset) {
+                // Add the chunk before this heading
+                const chunk = markdown.slice(currentChunkStart, node.position.start.offset).trim();
+                if (chunk) {
+                    chunks.push({ content: chunk, startLine: currentChunkStartLine });
+                }
+                currentChunkStart = node.position.start.offset;
+                currentChunkStartLine = node.position.start.line;
+            }
+        }
     }
-  }
 
-  return { frontmatter, chunks };
+    // Add the remaining content as the last chunk
+    if (currentChunkStart < markdown.length) {
+        const lastChunk = markdown.slice(currentChunkStart).trim();
+        if (lastChunk) {
+            chunks.push({ content: lastChunk, startLine: currentChunkStartLine });
+        }
+    }
+
+    return { frontmatter, chunks };
 }
 
 /**
