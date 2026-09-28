@@ -26,8 +26,6 @@ import golden from '../../fixtures/calendar/expansion.json';
 interface Feed {
     events: ImportedOccurrence[];
     series: Record<string, ImportedSeries>;
-    /// Only for a fixture about the window itself; every other feed shares the one below.
-    window?: { from: string; to: string };
 }
 
 const feeds = golden.feeds as unknown as Record<string, Feed>;
@@ -80,17 +78,15 @@ describe.each(Object.keys(feeds))('%s', (name) => {
         const series = feed.series[uid];
         expect(canConvertSeries(series), 'the fixture should be convertible whole').toBe(true);
 
-        const span = feed.window ?? window;
-
         // What the calendar draws before conversion.
-        const imported = shapeOf(mergeImported([], feed.events), span);
+        const imported = shapeOf(mergeImported([], feed.events), window);
 
         // ...and after: the note the button writes, read back the way any note is.
         const note = buildSeriesNote(feed.events[0], series);
-        const { events, errors } = eventsFromEntries([noteEntry(note.content)], span);
+        const { events, errors } = eventsFromEntries([noteEntry(note.content)], window);
 
         expect(errors, 'a converted note should raise nothing').toEqual([]);
-        expect(shapeOf(events, span)).toEqual(imported);
+        expect(shapeOf(events, window)).toEqual(imported);
     });
 
     // How much a view asks for must not change what it is given for a day: Home asks for three

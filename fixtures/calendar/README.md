@@ -13,13 +13,12 @@ disagreeing with each other on almost every feed here — which is what a reader
 they press "Convert to note", because the note then claims the series and the imported original
 stops being drawn. A disagreement is invisible until something compares the two.
 
-Every feed is expanded over one wide window, except a feed about the window itself, which names
-its own in `OWN_WINDOWS` in `backend/src/tests.rs`; the golden records it beside that feed, and
-the frontend re-expands over the same. Only what starts inside the window, in the reader's zone,
+Every feed is expanded over one wide window, and only what starts inside it, in the reader's zone,
 is compared: the backend widens a window by a day either side, not knowing the reader's zone.
 
 A wide window hides every way of losing an occurrence at a window's edge, so each side also asks
-again for every occurrence it drew, over that occurrence's day alone, and requires it back.
+again for every occurrence it drew, over that occurrence's day alone, and requires it back. A
+feed about a window's edge, such as `moved-into-window.ics`, needs nothing more than that.
 
 Regenerate the golden with:
 
