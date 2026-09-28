@@ -758,6 +758,10 @@ function collectScrollAnchors(): ScrollAnchor[] {
     const viewerElement: HTMLElement = viewer.value!;
     const origin = viewerElement.getBoundingClientRect().top + viewerElement.clientTop - viewerElement.scrollTop;
     const elements = [...renderedContentDiv.value.querySelectorAll<HTMLElement>('[data-line]')]
+        // An element that is not drawn, such as one a note's custom CSS hides,
+        // measures as a zero rect at the viewport's corner, which would put it
+        // wherever the viewer happens to be scrolled.
+        .filter((el) => el.getClientRects().length > 0)
         .map((el) => ({ line: parseInt(el.dataset['line'] as string), offset: el.getBoundingClientRect().top - origin }));
     return [
         { line: 1, offset: 0 },
