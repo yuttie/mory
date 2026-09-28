@@ -20,8 +20,7 @@
                         v-on:ad-hoc="openAdHocDialog"
                         v-on:run="runAiAction"
                     ></AiActionMenu>
-                    <!-- The simple editor never wraps: its scroll sync puts a line at `lineNumber * lineHeight`,
-                         which holds only while every line is one row. -->
+                    <!-- Only CodeMirror wraps: see `.simple-editor`. -->
                     <template v-if="!useSimpleEditor">
                         <!-- Everything before this edits the text; what follows changes only how it is shown. -->
                         <v-divider
@@ -970,6 +969,8 @@ $side-by-side-width: 700px;
         outline: none;
         font-size: 13px;
         font-family: Menlo, monospace;
+        // Never wrapped, so the toolbar offers no wrapping switch here: `editorScrollTo()` puts a
+        // line at `lineNumber * lineHeight`, which holds only while every line is one row.
         white-space: pre;
         overflow: auto;
         resize: none;
