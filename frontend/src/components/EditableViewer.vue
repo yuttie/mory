@@ -711,10 +711,19 @@ function editorScrollTo(lineNumber: number) {
     }
 }
 
+// The last element of the section a heading opens, which runs up to the next heading of the same
+// or a higher level. The viewer renders each H1 and H2 section into a chunk of its own, so read
+// the elements across the chunks: an H1's section goes on through the chunks of its H2s.
 function findLastElementOfSection(headingElement: HTMLElement, level: number): HTMLElement {
+    const chunks = headingElement.parentElement?.parentElement?.children ?? [];
+    const elements = [...chunks].flatMap((chunk) => [...chunk.children]);
+    const start = elements.indexOf(headingElement);
     let current: HTMLElement = headingElement;
-    while (current.nextElementSibling) {
-        let next = current.nextElementSibling;
+    if (start < 0) {
+        return current;
+    }
+
+    for (const next of elements.slice(start + 1)) {
         const match = /H([1-6])/.exec(next.tagName);
         if (match) {
             const nextLevel = parseInt(match[1]);
