@@ -1797,6 +1797,23 @@ fn an_all_day_occurrence_moved_into_the_window_is_drawn_there() {
     assert_eq!(expansion.events[0].recurrence_id, "2024-05-06");
 }
 
+/// A timed RECURRENCE-ID on an all-day series names its slot's instant but not its key, so it
+/// replaces nothing -- and must not bring the slot it names into the window unmoved either.
+#[test]
+fn a_moved_occurrence_keyed_unlike_its_series_draws_nothing() {
+    let calendar = calendar_of(
+        "BEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20240506\r\nDTEND;VALUE=DATE:20240507\r\n\
+         RRULE:FREQ=WEEKLY;BYDAY=MO\r\nUID:ad@example\r\nSUMMARY:Holiday\r\nEND:VEVENT\r\n\
+         BEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20240516\r\nDTEND;VALUE=DATE:20240517\r\n\
+         RECURRENCE-ID;TZID=Asia/Tokyo:20240506T000000\r\nUID:ad@example\r\nSUMMARY:Holiday\r\n\
+         END:VEVENT\r\n",
+    );
+    let (from, to) = window("2024-05-16", "2024-05-16");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    assert_eq!(starts(&expansion), Vec::<String>::new());
+}
+
 /// An all-day series is not given a timezone, because a date is not an instant.
 ///
 /// Regression: `X-WR-TIMEZONE` anchoring made `to_repeat` write `tz: Asia/Tokyo` onto a series

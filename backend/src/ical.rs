@@ -641,8 +641,8 @@ fn generated_at(
     set: &RRuleSet,
     base: &Event,
     recurrence_id: &DatePerhapsTime,
-    key: &str,
 ) -> Option<DateTime<Tz>> {
+    let key = recurrence_key(recurrence_id)?;
     let slot = instant_in(recurrence_id, set.get_dt_start().timezone())?;
     // `after` and `before` are both inclusive, so this asks about that one instant.
     set.clone()
@@ -651,6 +651,9 @@ fn generated_at(
         .all(1)
         .dates
         .into_iter()
+        // Not redundant: the occurrence is drawn by looking its replacement up under this key, and
+        // one keyed otherwise -- a timed RECURRENCE-ID on an all-day series -- would find none and
+        // be drawn unmoved, at its slot outside the window.
         .find(|occurrence| occurrence_key(base, *occurrence) == key)
 }
 
@@ -816,7 +819,7 @@ fn expand_series(
         // naming no occurrence at all is dropped here just as it is when its slot is in the window.
         if let Some(occurrence) = replacement
             .get_recurrence_id()
-            .and_then(|value| generated_at(&set, base, &value, key))
+            .and_then(|value| generated_at(&set, base, &value))
         {
             occurrences.push(occurrence);
         }
