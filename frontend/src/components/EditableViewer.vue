@@ -23,6 +23,12 @@
                     <!-- The simple editor never wraps: its scroll sync puts a line at `lineNumber * lineHeight`,
                          which holds only while every line is one row. -->
                     <template v-if="!useSimpleEditor">
+                        <!-- Everything before this edits the text; what follows changes only how it is shown. -->
+                        <v-divider
+                            vertical
+                            inset
+                            class="mx-1"
+                        ></v-divider>
                         <v-icon-btn
                             v-bind:icon="mdiWrap"
                             v-bind:title="lineWrapping ? 'Disable line wrapping' : 'Enable line wrapping'"
