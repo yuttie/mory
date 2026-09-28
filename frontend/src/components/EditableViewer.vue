@@ -113,6 +113,7 @@ import type { AiAction } from '@/ai-actions';
 import { loadConfigValue } from '@/config';
 import { CliPrettify } from 'markdown-table-prettify';
 import { chunkMarkdownByHeadings } from '@/markdown-utils';
+import { buildScrollMap, lineAtOffset, offsetAtLine, type ScrollAnchor } from '@/scroll-map';
 import { renderMarkdown } from '@/markdown';
 
 // Props
@@ -744,6 +745,12 @@ function sectionIsVisible(heading: { level: number, href: string }): boolean {
     return range[0] < viewportRange[1] && (range[1] || scrollHeight) > viewportRange[0];
 }
 
+// Where each numbered element of the rendered note starts, for scroll sync.
+function collectScrollAnchors(): ScrollAnchor[] {
+    return [...renderedContentDiv.value.querySelectorAll<HTMLElement>('[data-line]')]
+        .map((el) => ({ line: parseInt(el.dataset['line'] as string), offset: computeOffset(el) }));
+}
+
 function handleDocumentScroll() {
     emit('viewer-scroll');
 
@@ -759,52 +766,8 @@ function handleDocumentScroll() {
         return;
     }
 
-    // Build scroll map
-    const scrollMap: [number, number][] = [...renderedContentDiv.value.querySelectorAll<HTMLElement>('[data-line]')]
-        .map((el) => {
-            const lineNumber = parseInt(el.dataset['line'] as string);
-            const offset = computeOffset(el);
-            return [lineNumber, offset];
-        })
-        .sort((a, b) => {
-            if (a[0] < b[0]) {
-                return -1;
-            }
-            if (a[0] > b[0]) {
-                return 1;
-            }
-            return 0;
-        }) as [number, number][];
-
-    // Remove non-monotonically increasing entries
-    {
-        let i = 0;
-        while (i < scrollMap.length - 1) {
-            if (scrollMap[i][1] > scrollMap[i + 1][1]) {
-                // Delete the (i + 1)-th element
-                scrollMap.splice(i + 1, 1);
-            }
-            else {
-                ++i;
-            }
-        }
-    }
-
-    // Find the interval where the `scrollTop` belongs to
-    const scrollTop = viewer.value.scrollTop;
-    let intervalIndex = null;
-    for (let i = 0; i < scrollMap.length - 1; ++i) {
-        if (scrollMap[i][1] <= scrollTop && scrollTop < scrollMap[i + 1][1]) {
-            intervalIndex = i;
-            break;
-        }
-    }
-    if (intervalIndex !== null) {
-        const [lineNumber1, offset1] = scrollMap[intervalIndex];
-        const [lineNumber2, offset2] = scrollMap[intervalIndex + 1];
-
-        // Scroll to the line
-        const lineNumber = lineNumber1 + (lineNumber2 - lineNumber1) * (scrollTop - offset1) / (offset2 - offset1);
+    const lineNumber = lineAtOffset(buildScrollMap(collectScrollAnchors()), viewer.value.scrollTop);
+    if (lineNumber !== null) {
         editorScrollTo(lineNumber);
     }
 }
@@ -823,51 +786,8 @@ function onEditorScroll(lineNumber: number) {
         return;
     }
 
-    // Build scroll map
-    const scrollMap: [number, number][] = [...renderedContentDiv.value.querySelectorAll<HTMLElement>('[data-line]')]
-        .map((el) => {
-            const lineNumber = parseInt(el.dataset['line'] as string);
-            const offset = computeOffset(el);
-            return [lineNumber, offset];
-        })
-        .sort((a, b) => {
-            if (a[0] < b[0]) {
-                return -1;
-            }
-            if (a[0] > b[0]) {
-                return 1;
-            }
-            return 0;
-        }) as [number, number][];
-
-    // Remove non-monotonically increasing entries
-    {
-        let i = 0;
-        while (i < scrollMap.length - 1) {
-            if (scrollMap[i][1] > scrollMap[i + 1][1]) {
-                // Delete the (i + 1)-th element
-                scrollMap.splice(i + 1, 1);
-            }
-            else {
-                ++i;
-            }
-        }
-    }
-
-    // Find the interval where the given line number belongs to
-    let intervalIndex = null;
-    for (let i = 0; i < scrollMap.length - 1; ++i) {
-        if (scrollMap[i][0] <= lineNumber && lineNumber < scrollMap[i + 1][0]) {
-            intervalIndex = i;
-            break;
-        }
-    }
-    if (intervalIndex !== null) {
-        const [lineNumber1, offset1] = scrollMap[intervalIndex];
-        const [lineNumber2, offset2] = scrollMap[intervalIndex + 1];
-
-        // Scroll by an offset
-        const offset = offset1 + (offset2 - offset1) * (lineNumber - lineNumber1) / (lineNumber2 - lineNumber1);
+    const offset = offsetAtLine(buildScrollMap(collectScrollAnchors()), lineNumber);
+    if (offset !== null) {
         const previousScrollTop = viewer.value.scrollTop;
         const previousScrollLeft = viewer.value.scrollLeft;
         viewer.value.scrollTo({ top: offset, left: 0, behavior: 'auto' });
