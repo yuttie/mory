@@ -13,6 +13,7 @@
 // _recorded`), which writes the golden this reads.
 
 import { describe, expect, it } from 'vitest';
+import dayjs from 'dayjs';
 import YAML from 'yaml';
 
 import type { ImportedOccurrence, ImportedSeries, MetadataEvent } from '@/api';
@@ -25,8 +26,6 @@ import golden from '../../fixtures/calendar/expansion.json';
 interface Feed {
     events: ImportedOccurrence[];
     series: Record<string, ImportedSeries>;
-    /// Only for a fixture about the window itself; every other feed shares the one below.
-    window?: { from: string; to: string };
 }
 
 const feeds = golden.feeds as unknown as Record<string, Feed>;
@@ -45,11 +44,25 @@ function noteEntry(content: string) {
     };
 }
 
-/// What a reader sees: name, start and end, in order.
-function shapeOf(events: readonly CalendarEvent[]): string[] {
+/// What a reader sees in `span`: name, start and end, in order.
+///
+/// Only what starts inside the span, in the reader's zone, is compared. The backend widens a window
+/// by a day either side, not knowing the reader's zone, so what it returns at the edges is more
+/// than the note is asked for.
+function shapeOf(events: readonly CalendarEvent[], span: { from: string; to: string }): string[] {
+    const from = dayjs(span.from).valueOf();
+    const to = dayjs(span.to).endOf('day').valueOf();
     return [...events]
+        .filter((event) => {
+            const start = dayjs(event.start).valueOf();
+            return start >= from && start <= to;
+        })
         .sort((a, b) => a.start.localeCompare(b.start))
-        .map((event) => `${event.start} .. ${event.end ?? '-'}  ${event.name}`);
+        .map(shapeOfOne);
+}
+
+function shapeOfOne(event: CalendarEvent): string {
+    return `${event.start} .. ${event.end ?? '-'}  ${event.name}`;
 }
 
 describe.each(Object.keys(feeds))('%s', (name) => {
@@ -66,14 +79,27 @@ describe.each(Object.keys(feeds))('%s', (name) => {
         expect(canConvertSeries(series), 'the fixture should be convertible whole').toBe(true);
 
         // What the calendar draws before conversion.
-        const imported = shapeOf(mergeImported([], feed.events));
+        const imported = shapeOf(mergeImported([], feed.events), window);
 
         // ...and after: the note the button writes, read back the way any note is.
         const note = buildSeriesNote(feed.events[0], series);
-        const { events, errors } = eventsFromEntries(
-            [noteEntry(note.content)], feed.window ?? window);
+        const { events, errors } = eventsFromEntries([noteEntry(note.content)], window);
 
         expect(errors, 'a converted note should raise nothing').toEqual([]);
-        expect(shapeOf(events)).toEqual(imported);
+        expect(shapeOf(events, window)).toEqual(imported);
+    });
+
+    // How much a view asks for must not change what it is given for a day: Home asks for three
+    // days and the calendar for three months. Asking for years, as above, hides every way of
+    // losing an occurrence at the edge of a window -- moved into it from outside, or read in the
+    // wrong zone -- and this expander has lost occurrences both ways.
+    it('finds each occurrence in a window of its own day', () => {
+        const note = noteEntry(buildSeriesNote(feed.events[0], feed.series[uids[0]]).content);
+        for (const occurrence of mergeImported([], feed.events)) {
+            const day = { from: occurrence.start.slice(0, 10), to: occurrence.start.slice(0, 10) };
+            const { events } = eventsFromEntries([note], day);
+
+            expect(events.map(shapeOfOne)).toContain(shapeOfOne(occurrence));
+        }
     });
 });
