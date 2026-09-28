@@ -268,7 +268,13 @@ async function jumpTo(id: string) {
     await whenRendered();
     const element = shadowRoot.value?.querySelector(`[id="${id.slice(1)}"]`);
     if (element) {
-        element.scrollIntoView();
+        // Scroll the viewer and nothing else. `scrollIntoView()` also scrolls every scrollable
+        // ancestor to bring the element to its top edge, `overflow: hidden` ones included, so
+        // anything that makes the page around the viewer overflow moves the whole layout. What it
+        // also did, leaving a heading's `scroll-margin-top` above it, is kept.
+        const viewerElement: HTMLElement = viewer.value!;
+        const margin = parseFloat(window.getComputedStyle(element).scrollMarginTop) || 0;
+        viewerElement.scrollTop = element.getBoundingClientRect().top - viewerScrollOrigin() - margin;
     }
 }
 
@@ -962,6 +968,12 @@ $side-by-side-width: 700px;
 .viewer-pane {
     flex: 1 1 0;
     overflow: hidden auto;
+    // What a note positions absolutely, such as KaTeX's hidden MathML or the heading links a custom
+    // note CSS hangs beside each heading, is placed against the nearest positioned ancestor. Unless
+    // that is this pane, it lies outside the pane: it neither scrolls with the note nor is clipped
+    // by it, and it stretches the app around the page instead, which `overflow: hidden` keeps from
+    // showing a scroll bar but not from being scrolled.
+    position: relative;
 
     .rendered-content {
         user-select: text;
