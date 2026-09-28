@@ -413,13 +413,14 @@ watch(() => props.lineWrapping, (isWrapping: boolean) => {
     }
 
     const effects = [lineWrappingCompartment.reconfigure(lineWrappingExtension(isWrapping))];
-    // Unwrapping can shrink the document below the scroll position. The
-    // browser then clamps `scrollTop` before CodeMirror's scroll anchoring
-    // runs, and the anchoring, which corrects relative to `scrollTop`, lands
-    // far above where the reader was. Even unclamped, it keeps the top line's
-    // offset in pixels, which a long paragraph unwrapped into one row
-    // overshoots by several lines. Put the line at the top back explicitly;
-    // at the very top there is nothing to restore.
+    // Unwrapping can shrink the document below the scroll position, and the
+    // browser clamps `scrollTop` before CodeMirror's scroll anchoring corrects
+    // it, relative to the clamped value, to far above where the reader was.
+    // Even unclamped, the anchoring, like `scrollSnapshot()`, keeps how many
+    // pixels of the top line are scrolled past, which carries the view several
+    // lines on once a long paragraph becomes one row. So put the top line back
+    // explicitly, but not at the very top: there is nothing to restore, and
+    // putting line 1 at the edge would scroll the content's top padding away.
     if (editor.scrollDOM.scrollTop > 0) {
         // Read a pixel below the edge: a line put there by the last switch can
         // sit a fraction of a pixel lower, and would otherwise lose the top to
