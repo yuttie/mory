@@ -50,9 +50,11 @@ function suppressScrollEvents() {
     suppressScrollEventsUntil = performance.now() + PROGRAMMATIC_SCROLL_SUPPRESSION_MS;
 }
 
-// The start of the line the wrapping watcher is putting back at the top, until
-// `scrollWithinEditor()` has done so.
-let restoringLineStart: number | null = null;
+// Where `scrollTo()` or the wrapping watcher is putting the top of the
+// scroller, until `scrollWithinEditor()` has done so: `line` is a 1-based
+// document line, possibly fractional, and `from` the start of its line block,
+// which the scroll they dispatch targets.
+let pendingScrollTarget: { line: number, from: number } | null = null;
 
 // Let the buffer be locked and unlocked, and its lines wrapped or not, without
 // rebuilding the editor, which would lose the undo history, the scroll position
@@ -90,17 +92,39 @@ function lineWrappingExtension(isWrapping: boolean): Extension {
 // `scrollIntoView` scrolls every scrollable ancestor as well, and when the
 // editor is already in place it asks the next one to put the line at its top
 // instead. In the task editor below `lg` that scrolls the form around the
-// editor and carries the toolbar out of sight. The line the wrapping watcher
-// puts back belongs at the top of the editor's own scroller and nowhere else.
+// editor and carries the toolbar out of sight. The lines `scrollTo()` and the
+// wrapping watcher put at the top belong at the top of the editor's own
+// scroller and nowhere else.
+//
+// A fractional line puts that fraction of the line's height above the edge. A
+// wrapped line is as many rows tall as it wraps to, so a line number alone
+// would leave the viewer's position within a long paragraph out.
+//
+// The target is placed here rather than before dispatching because only here,
+// with the scroll under way, is its line drawn and measured: a line far from
+// the viewport has only an estimated height.
 function scrollWithinEditor(view: EditorView, range: SelectionRange): boolean {
-    const target = restoringLineStart;
-    restoringLineStart = null;
-    if (range.head !== target) {
+    const target = pendingScrollTarget;
+    pendingScrollTarget = null;
+    if (target === null || range.head !== target.from) {
         return false;
     }
 
-    const lineTop = view.documentTop + view.lineBlockAt(target).top;
-    view.scrollDOM.scrollTop += lineTop - view.scrollDOM.getBoundingClientRect().top;
+    // The start of the first line is the top of the document, and putting it
+    // at the edge would scroll the content's top padding away.
+    if (target.line <= 1) {
+        view.scrollDOM.scrollTop = 0;
+        return true;
+    }
+
+    // A folded range is one block of several lines, so measure the fraction
+    // against every line the block holds.
+    const block = view.lineBlockAt(target.from);
+    const firstLine = view.state.doc.lineAt(block.from).number;
+    const lastLine = view.state.doc.lineAt(block.to).number;
+    const fraction = (target.line - firstLine) / (lastLine - firstLine + 1);
+    const top = view.documentTop + block.top + fraction * block.height;
+    view.scrollDOM.scrollTop += top - view.scrollDOM.getBoundingClientRect().top;
     return true;
 }
 
@@ -271,17 +295,20 @@ function resize() {
     // CodeMirror 6 handles resizing automatically
 }
 
+// Put `lineNumber`, a 1-based document line interpolated between two rendered
+// elements and so usually fractional, at the top of the scroller.
 function scrollTo(lineNumber: number) {
     if (!editor) return;
 
     suppressScrollEvents();
-    // `lineNumber` is a 1-based document line interpolated between two rendered
-    // elements, so it is usually fractional, and `doc.line()` rejects anything
-    // past the end of the document.
-    const targetLine = Math.min(Math.max(Math.round(lineNumber), 1), editor.state.doc.lines);
-    const line = editor.state.doc.line(targetLine);
+    // `doc.line()` rejects anything past the end of the document, and the end
+    // of the last line is as far as it goes.
+    const doc = editor.state.doc;
+    const line = Math.min(Math.max(lineNumber, 1), doc.lines + 1);
+    const from = editor.lineBlockAt(doc.line(Math.min(Math.floor(line), doc.lines)).from).from;
+    pendingScrollTarget = { line, from };
     editor.dispatch({
-        effects: EditorView.scrollIntoView(line.from, { y: 'start' })
+        effects: EditorView.scrollIntoView(from, { y: 'start' }),
     });
 }
 
@@ -426,7 +453,7 @@ watch(() => props.lineWrapping, (isWrapping: boolean) => {
         // sit a fraction of a pixel lower, and would otherwise lose the top to
         // the line before it, one line further up with every switch.
         const block = topLineBlock(editor, 1);
-        restoringLineStart = block.from;
+        pendingScrollTarget = { line: editor.state.doc.lineAt(block.from).number, from: block.from };
         effects.push(EditorView.scrollIntoView(block.from, { y: 'start', yMargin: 0 }));
     }
 
