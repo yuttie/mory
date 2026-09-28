@@ -749,11 +749,21 @@ function sectionIsVisible(heading: { level: number, href: string }): boolean {
 // the `scrollTop` that brings it to the viewer's top edge. Measured from the
 // viewer itself: `computeOffset()` adds up offsets all the way to the page, so
 // it also counts the toolbar above the viewer, which `scrollTop` does not.
+//
+// The note's two ends are anchors as well. Nothing is drawn for the
+// frontmatter, so without them the lines above the first element, and those
+// below the last, would have nowhere to sync to, and the other pane would stay
+// wherever it was.
 function collectScrollAnchors(): ScrollAnchor[] {
     const viewerElement: HTMLElement = viewer.value!;
     const origin = viewerElement.getBoundingClientRect().top + viewerElement.clientTop - viewerElement.scrollTop;
-    return [...renderedContentDiv.value.querySelectorAll<HTMLElement>('[data-line]')]
+    const elements = [...renderedContentDiv.value.querySelectorAll<HTMLElement>('[data-line]')]
         .map((el) => ({ line: parseInt(el.dataset['line'] as string), offset: el.getBoundingClientRect().top - origin }));
+    return [
+        { line: 1, offset: 0 },
+        ...elements,
+        { line: props.modelValue.split('\n').length + 1, offset: viewerElement.scrollHeight },
+    ];
 }
 
 function handleDocumentScroll() {
