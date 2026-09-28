@@ -8,7 +8,7 @@
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 
 import { loadConfigValue } from '@/config';
-import { Compartment, EditorState, Extension, Prec, StateEffect } from '@codemirror/state';
+import { Compartment, EditorState, Extension, Prec, SelectionRange, StateEffect } from '@codemirror/state';
 import { EditorView, keymap, highlightSpecialChars, drawSelection, dropCursor, rectangularSelection, crosshairCursor, lineNumbers, highlightActiveLine, highlightActiveLineGutter, scrollPastEnd } from '@codemirror/view';
 import { defaultHighlightStyle, syntaxHighlighting, indentOnInput, indentUnit, bracketMatching, foldGutter, foldKeymap } from '@codemirror/language';
 import { defaultKeymap, emacsStyleKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
@@ -46,6 +46,10 @@ let lastKnownScrollTop = 0;
 const PROGRAMMATIC_SCROLL_SUPPRESSION_MS = 100;
 let suppressScrollEventsUntil = 0;
 
+// The start of the line the wrapping watcher is putting back at the top, until
+// `scrollWithinEditor()` has done so.
+let restoringLineStart: number | null = null;
+
 // Let the buffer be locked and unlocked, and its lines wrapped or not, without
 // rebuilding the editor, which would lose the undo history, the scroll position
 // and the selection.
@@ -73,6 +77,23 @@ function editableExtension(isReadonly: boolean): Extension {
     return isReadonly
         ? [EditorState.readOnly.of(true), EditorView.editable.of(false)]
         : [];
+}
+
+// `scrollIntoView` scrolls every scrollable ancestor as well, and when the
+// editor is already in place it asks the next one to put the line at its top
+// instead. In the task editor below `lg` that scrolls the form around the
+// editor and carries the toolbar out of sight. The line the wrapping watcher
+// puts back belongs at the top of the editor's own scroller and nowhere else.
+function scrollWithinEditor(view: EditorView, range: SelectionRange): boolean {
+    const target = restoringLineStart;
+    restoringLineStart = null;
+    if (range.head !== target) {
+        return false;
+    }
+
+    const lineTop = view.documentTop + view.lineBlockAt(target).top;
+    view.scrollDOM.scrollTop += lineTop - view.scrollDOM.getBoundingClientRect().top;
+    return true;
 }
 
 // Report the first line visible at the top of the scroller, as a 1-based
@@ -162,6 +183,7 @@ onMounted(async () => {
                 emitScroll(view);
             },
         }),
+        EditorView.scrollHandler.of(scrollWithinEditor),
     ];
 
     // Add language support
@@ -394,6 +416,7 @@ watch(() => props.lineWrapping, (isWrapping: boolean) => {
         // the line before it, one line further up with every switch.
         const viewportTop = editor.scrollDOM.getBoundingClientRect().top + 1;
         const block = editor.lineBlockAtHeight(viewportTop - editor.documentTop);
+        restoringLineStart = block.from;
         effects.push(EditorView.scrollIntoView(block.from, { y: 'start', yMargin: 0 }));
     }
 
