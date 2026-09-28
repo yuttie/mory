@@ -298,16 +298,16 @@ function buildOccurrence(
     return validateEvent(event) ? event : null;
 }
 
-/// The instant a wall-clock or offset-bearing datetime names, for comparing two spellings of it.
-///
-/// `2020-01-30 10:00:00-08:00` and `2020-01-30 10:00` are the same moment written two ways, and the
-/// importer will not spell an exclusion the way a hand-edited note does. Comparing the strings
-/// would report a mismatch that is not there.
 /// A list from whatever the frontmatter held, which need not have been a list.
 function asArray<T>(value: T[] | undefined): T[] {
     return Array.isArray(value) ? value : [];
 }
 
+/// The instant a wall-clock or offset-bearing datetime names, for comparing two spellings of it.
+///
+/// `2020-01-30 10:00:00-08:00` and `2020-01-30 10:00` are the same moment written two ways, and the
+/// importer will not spell an exclusion the way a hand-edited note does. Comparing the strings
+/// would report a mismatch that is not there.
 function instantOf(value: unknown): number | null {
     if (typeof value !== 'string') {
         return null;

@@ -279,10 +279,11 @@ fn date_of(value: &DatePerhapsTime) -> Option<NaiveDate> {
     }
 }
 
-/// The end of one occurrence, in mory's spelling.
+/// The instant a DATE or DATE-TIME names, reading a bare date as midnight UTC.
 ///
-/// iCal's `DTEND` is exclusive. For a timed event that is simply the end instant; for an all-day
-/// event it is the day *after* the last, which mory writes inclusively, so a day comes back off.
+/// UTC rather than any real zone, for the lengths `event_length` measures: two dates are then
+/// always whole days apart, where a daylight-saving change would make one day 23 hours long, and
+/// `num_days` reads that as none.
 fn utc_of(value: &DatePerhapsTime) -> Option<chrono::DateTime<chrono::Utc>> {
     match value {
         DatePerhapsTime::DateTime(date_time) => date_time.try_into_utc(),
@@ -305,6 +306,10 @@ fn event_length(event: &Event) -> Option<Duration> {
     parse_duration(event.property_value("DURATION")?)
 }
 
+/// The end of one occurrence, in mory's spelling.
+///
+/// iCal's `DTEND` is exclusive. For a timed event that is simply the end instant; for an all-day
+/// event it is the day *after* the last, which mory writes inclusively, so a day comes back off.
 fn occurrence_end(event: &Event, occurrence: DateTime<Tz>) -> Option<String> {
     let length = event_length(event)?;
     if is_all_day(event) {
