@@ -408,13 +408,53 @@ function expandSeries(
         overrides.set(instant, override);
     }
 
-    const matched = new Set<number>();
-    const parent: EventParent = { ...detail, end: durationOf(detail) };
+    const bounds = boundsOf(window);
+    if (bounds === null) {
+        return;
+    }
+    const [from, to] = bounds;
+
+    // Where each occurrence was generated, keyed by instant.
+    const slots = new Map<number, string>();
     for (const occurrence of generated) {
         const instant = instantOf(occurrence);
-        if (instant === null) {
+        if (instant !== null) {
+            slots.set(instant, occurrence);
+        }
+    }
+
+    // The rule is expanded by where each occurrence was generated, so one an override moved into
+    // the window from outside it is not among them. Home asks for three days, and lost a meeting
+    // moved eleven days later that the calendar, asking for three months, drew.
+    //
+    // `checked` holds the slots looked for outside the window, which the report below then covers.
+    const checked = new Set<number>();
+    for (const [instant, override] of overrides) {
+        const moved = instantOf(override.start);
+        if (slots.has(instant) || excluded.has(instant)
+            || moved === null || moved < from || moved > to) {
             continue;
         }
+        checked.add(instant);
+        // Only a slot the rule still generates, as inside the window. Asked over the days either
+        // side rather than of the instant alone: `expandRule` reads its window as wall clock in the
+        // rule's own zone, which need not be the reader's.
+        const day = dayjs(instant);
+        const around = expand(
+            day.subtract(1, 'day').format('YYYY-MM-DD'),
+            day.add(1, 'day').format('YYYY-MM-DD'),
+        );
+        if (around === null) {
+            return;
+        }
+        if (around.some((occurrence) => instantOf(occurrence) === instant)) {
+            slots.set(instant, override.at as string);
+        }
+    }
+
+    const matched = new Set<number>();
+    const parent: EventParent = { ...detail, end: durationOf(detail) };
+    for (const [instant, occurrence] of slots) {
         if (excluded.has(instant)) {
             matched.add(instant);
             continue;
@@ -438,56 +478,11 @@ function expandSeries(
         }
     }
 
-    const bounds = boundsOf(window);
-    if (bounds === null) {
-        return;
-    }
-    const [from, to] = bounds;
-
-    // The rule is expanded by where each occurrence was generated, so one an override moved into
-    // the window from outside it is not among them. Home asks for three days, and lost a meeting
-    // moved eleven days later that the calendar, asking for three months, drew.
-    const strays = new Set<number>();
-    for (const [instant, override] of overrides) {
-        const moved = instantOf(override.start);
-        if (matched.has(instant) || excluded.has(instant)
-            || moved === null || moved < from || moved > to) {
-            continue;
-        }
-        // Only a slot the rule still generates, as inside the window. Asked over the days either
-        // side rather than of the instant alone: `expandRule` reads its window as wall clock in the
-        // rule's own zone, which need not be the reader's.
-        const day = dayjs(instant);
-        const around = expand(
-            day.subtract(1, 'day').format('YYYY-MM-DD'),
-            day.add(1, 'day').format('YYYY-MM-DD'),
-        );
-        if (around === null) {
-            return;
-        }
-        if (!around.some((occurrence) => instantOf(occurrence) === instant)) {
-            strays.add(instant);
-            continue;
-        }
-        matched.add(instant);
-        const event = buildOccurrence(
-            { ...override, at: undefined },
-            parent,
-            category,
-            eventName,
-            entry,
-            errors,
-        );
-        if (event !== null) {
-            into.push(event);
-        }
-    }
-
     // An adjustment landing on no occurrence is almost always a mistyped date, and doing nothing
-    // silently is how that survives. Only reported for adjustments inside the window, or moved
-    // into it: elsewhere there is nothing to match by construction.
+    // silently is how that survives. Only reported for adjustments inside the window, or checked
+    // above: elsewhere there is nothing to match by construction.
     const reportUnmatched = (instant: number, property: string, spelling: string) => {
-        if (!matched.has(instant) && (strays.has(instant) || (instant >= from && instant <= to))) {
+        if (!matched.has(instant) && (checked.has(instant) || (instant >= from && instant <= to))) {
             errors.push([property, spelling, eventName, entry.path, entry.title]);
         }
     };
