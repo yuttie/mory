@@ -745,10 +745,15 @@ function sectionIsVisible(heading: { level: number, href: string }): boolean {
     return range[0] < viewportRange[1] && (range[1] || scrollHeight) > viewportRange[0];
 }
 
-// Where each numbered element of the rendered note starts, for scroll sync.
+// Where each numbered element of the rendered note starts, for scroll sync, as
+// the `scrollTop` that brings it to the viewer's top edge. Measured from the
+// viewer itself: `computeOffset()` adds up offsets all the way to the page, so
+// it also counts the toolbar above the viewer, which `scrollTop` does not.
 function collectScrollAnchors(): ScrollAnchor[] {
+    const viewerElement: HTMLElement = viewer.value!;
+    const origin = viewerElement.getBoundingClientRect().top + viewerElement.clientTop - viewerElement.scrollTop;
     return [...renderedContentDiv.value.querySelectorAll<HTMLElement>('[data-line]')]
-        .map((el) => ({ line: parseInt(el.dataset['line'] as string), offset: computeOffset(el) }));
+        .map((el) => ({ line: parseInt(el.dataset['line'] as string), offset: el.getBoundingClientRect().top - origin }));
 }
 
 function handleDocumentScroll() {
