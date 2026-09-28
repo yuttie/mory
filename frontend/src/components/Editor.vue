@@ -139,8 +139,24 @@ function topLineBlock(view: EditorView, inset = 0): BlockInfo {
     return view.lineBlockAtHeight(viewportTop - view.documentTop);
 }
 
-// Report the first line visible at the top of the scroller, as a 1-based
-// document line number.
+// The 1-based document line at the top of the scroller, plus the fraction of
+// its height scrolled past the edge. A wrapped line is as many rows tall as it
+// wraps to, so without the fraction the viewer would stand still through a
+// long paragraph and then jump past it.
+function lineAtTop(view: EditorView): number {
+    const block = topLineBlock(view);
+    const edge = view.scrollDOM.getBoundingClientRect().top - view.documentTop;
+    // Above the first line lies the content's top padding, which counts as
+    // the start of that line.
+    const fraction = block.height > 0 ? Math.max(edge - block.top, 0) / block.height : 0;
+    // A folded range is one block of several lines, and the fraction runs
+    // through all of them.
+    const firstLine = view.state.doc.lineAt(block.from).number;
+    const lastLine = view.state.doc.lineAt(block.to).number;
+    return firstLine + Math.min(fraction, 1) * (lastLine - firstLine + 1);
+}
+
+// Report the line at the top of the scroller.
 function emitScroll(view: EditorView) {
     // The scroll handler also runs for intersection changes, which move
     // nothing, so only an actual change of position counts as scrolling.
@@ -157,7 +173,7 @@ function emitScroll(view: EditorView) {
         return;
     }
 
-    emit('scroll', view.state.doc.lineAt(topLineBlock(view).from).number);
+    emit('scroll', lineAtTop(view));
 }
 
 // Template Refs
