@@ -9,7 +9,7 @@ import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 
 import { loadConfigValue } from '@/config';
 import { Compartment, EditorState, Extension, Prec, SelectionRange, StateEffect } from '@codemirror/state';
-import { EditorView, keymap, highlightSpecialChars, drawSelection, dropCursor, rectangularSelection, crosshairCursor, lineNumbers, highlightActiveLine, highlightActiveLineGutter, scrollPastEnd } from '@codemirror/view';
+import { EditorView, keymap, highlightSpecialChars, drawSelection, dropCursor, rectangularSelection, crosshairCursor, lineNumbers, highlightActiveLine, highlightActiveLineGutter, scrollPastEnd, BlockInfo } from '@codemirror/view';
 import { defaultHighlightStyle, syntaxHighlighting, indentOnInput, indentUnit, bracketMatching, foldGutter, foldKeymap } from '@codemirror/language';
 import { defaultKeymap, emacsStyleKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
@@ -96,6 +96,17 @@ function scrollWithinEditor(view: EditorView, range: SelectionRange): boolean {
     return true;
 }
 
+// The line block at the top of the scroller, read `inset` pixels below its
+// edge. `scrollTop` is a distance within the scroller, while
+// `lineBlockAtHeight()` takes a height relative to `documentTop` (the top of
+// the first line, in screen coordinates). The two share neither an origin nor,
+// once the editor has top padding, a zero point, so convert through screen
+// coordinates rather than passing `scrollTop` in directly.
+function topLineBlock(view: EditorView, inset = 0): BlockInfo {
+    const viewportTop = view.scrollDOM.getBoundingClientRect().top + inset;
+    return view.lineBlockAtHeight(viewportTop - view.documentTop);
+}
+
 // Report the first line visible at the top of the scroller, as a 1-based
 // document line number.
 function emitScroll(view: EditorView) {
@@ -114,14 +125,7 @@ function emitScroll(view: EditorView) {
         return;
     }
 
-    // `scrollTop` is a distance within the scroller, while `lineBlockAtHeight()`
-    // takes a height relative to `documentTop` (the top of the first line, in
-    // screen coordinates). The two share neither an origin nor, once the editor
-    // has top padding, a zero point, so convert through screen coordinates
-    // rather than passing `scrollTop` in directly.
-    const viewportTop = view.scrollDOM.getBoundingClientRect().top;
-    const block = view.lineBlockAtHeight(viewportTop - view.documentTop);
-    emit('scroll', view.state.doc.lineAt(block.from).number);
+    emit('scroll', view.state.doc.lineAt(topLineBlock(view).from).number);
 }
 
 // Template Refs
@@ -414,8 +418,7 @@ watch(() => props.lineWrapping, (isWrapping: boolean) => {
         // Read a pixel below the edge: a line put there by the last switch can
         // sit a fraction of a pixel lower, and would otherwise lose the top to
         // the line before it, one line further up with every switch.
-        const viewportTop = editor.scrollDOM.getBoundingClientRect().top + 1;
-        const block = editor.lineBlockAtHeight(viewportTop - editor.documentTop);
+        const block = topLineBlock(editor, 1);
         restoringLineStart = block.from;
         effects.push(EditorView.scrollIntoView(block.from, { y: 'start', yMargin: 0 }));
     }
