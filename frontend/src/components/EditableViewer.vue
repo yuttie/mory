@@ -732,21 +732,22 @@ function findHeadingElement(level: number, href: string): HTMLElement {
     return hx;
 }
 
-function computeOffset(element: HTMLElement): number {
-    let offsetTop = element.offsetTop;
-    let parent = element.offsetParent;
-    while (parent) {
-        offsetTop += (parent as HTMLElement).offsetTop;
-        parent = parent.offsetParent;
-    }
-
-    return offsetTop;
+// Where the viewer's scroll origin is on screen: an element whose top is at `y` on screen
+// reaches the viewer's top edge when `scrollTop` is `y` minus this. Positions within the viewer
+// are measured this way rather than by adding up `offsetTop` through the offset parents, which
+// runs all the way to the page and so also counts the toolbar above the viewer.
+function viewerScrollOrigin(): number {
+    const viewerElement: HTMLElement = viewer.value!;
+    return viewerElement.getBoundingClientRect().top + viewerElement.clientTop - viewerElement.scrollTop;
 }
 
+// The span from the top of one element to the bottom of another, as the `scrollTop` values that
+// bring each edge to the viewer's top edge.
 function computeRangeOf(element1: HTMLElement, element2: HTMLElement): [number, number] {
+    const origin = viewerScrollOrigin();
     return [
-        computeOffset(element1),
-        computeOffset(element2) + element2.scrollHeight,
+        element1.getBoundingClientRect().top - origin,
+        element2.getBoundingClientRect().bottom - origin,
     ];
 }
 
@@ -769,9 +770,6 @@ function sectionIsVisible(heading: { level: number, href: string }): boolean {
 
 // Where each numbered element of the rendered note starts and ends, for scroll
 // sync, as the `scrollTop` that brings that edge to the viewer's top edge.
-// Measured from the viewer itself: `computeOffset()` adds up offsets all the
-// way to the page, so it also counts the toolbar above the viewer, which
-// `scrollTop` does not.
 //
 // Both edges count because the margin between two elements belongs to
 // neither. With tops alone, the lines from one element's top to the next's
@@ -784,7 +782,7 @@ function sectionIsVisible(heading: { level: number, href: string }): boolean {
 // wherever it was.
 function collectScrollAnchors(): ScrollAnchor[] {
     const viewerElement: HTMLElement = viewer.value!;
-    const origin = viewerElement.getBoundingClientRect().top + viewerElement.clientTop - viewerElement.scrollTop;
+    const origin = viewerScrollOrigin();
     const elements = [...renderedContentDiv.value.querySelectorAll<HTMLElement>('[data-line]')]
         // An element that is not drawn, such as one a note's custom CSS hides,
         // measures as a zero rect at the viewport's corner, which would put it
