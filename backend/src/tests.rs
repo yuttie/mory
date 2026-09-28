@@ -2000,7 +2000,7 @@ const FIXTURE_WINDOW: (&str, &str) = ("2015-01-01", "2027-01-01");
 ///
 /// Every other occurrence of such a fixture is kept more than a day clear of its window: the
 /// backend widens a window by a day either side, which the note's expansion does not.
-const OWN_WINDOWS: [(&str, (&str, &str)); 1] = [
+const OWN_WINDOWS: &[(&str, (&str, &str))] = &[
     // Narrow, so the occurrence moved into it was generated outside it.
     ("moved-into-window.ics", ("2024-05-27", "2024-05-29")),
 ];
@@ -2025,6 +2025,15 @@ fn calendar_fixtures_expand_as_recorded() {
         .collect();
     names.sort();
     assert!(!names.is_empty(), "no fixtures found in {}", dir.display());
+    // A renamed fixture would otherwise lose its window without a word, and go on passing over the
+    // wide one -- which holds every slot, so it no longer tests what it is there for.
+    for (fixture, _) in OWN_WINDOWS {
+        assert!(
+            names.iter().any(|name| name == fixture),
+            "OWN_WINDOWS names {fixture}, which is not in {}",
+            dir.display(),
+        );
+    }
 
     let mut recorded = serde_json::Map::new();
     for name in &names {
