@@ -87,19 +87,34 @@ export const useAppStore = defineStore('app', () => {
             console.error(`Service worker registration failed: ${error}`);
         });
 
+        // Also records the worker as the one to tell when the token changes.
+        function configure(worker: ServiceWorker) {
+            serviceWorker.value = worker;
+            worker.postMessage({
+                type: 'configure',
+                value: {
+                    apiUrl: apiUrl,
+                    apiToken: token.value,
+                    appRoot: import.meta.env.VITE_APP_APPLICATION_ROOT,
+                },
+            });
+        }
+
         navigator.serviceWorker.ready
             .then((registration) => {
                 console.log(`A service worker is active: ${registration.active}`);
-                serviceWorker.value = registration.active!;
-                serviceWorker.value.postMessage({
-                    type: 'configure',
-                    value: {
-                        apiUrl: apiUrl,
-                        apiToken: token.value,
-                        appRoot: import.meta.env.VITE_APP_APPLICATION_ROOT,
-                    },
-                });
+                configure(registration.active!);
             });
+
+        // A new version of the worker takes over the page as soon as it is installed, which can be
+        // while the page is still waiting for the old one to answer `configure`. The old one is
+        // then discarded without answering, and the page, which shows nothing until it hears back,
+        // would stay blank.
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (navigator.serviceWorker.controller !== null) {
+                configure(navigator.serviceWorker.controller);
+            }
+        });
 
         navigator.serviceWorker.addEventListener('message', (event) => {
             if (event.data === 'configured') {

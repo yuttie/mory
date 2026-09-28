@@ -92,6 +92,13 @@ async function requestToken(clientId) {
     });
 }
 
+self.addEventListener('install', () => {
+    // Replace the worker the open pages have now, rather than once every one of them has closed,
+    // which reloading one never achieves: the reloaded page is handed to the old worker before the
+    // new one can take over. `activate` then claims them.
+    self.skipWaiting();
+});
+
 self.addEventListener('activate', (event) => {
     event.waitUntil(self.clients.claim());
 });
