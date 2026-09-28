@@ -797,8 +797,9 @@ fn expand_series(
     }
 
     // The rule is expanded by where each occurrence was generated, so one an override moved into
-    // the window from outside it is not among them. Home asks for three days, and lost a meeting
-    // moved eleven days later that the calendar, asking for three months, drew.
+    // the window from outside it is not among them and is looked for here. `expandSeries` in
+    // `frontend/src/events.ts` does the same for a note, and
+    // `fixtures/calendar/moved-into-window.ics` holds the two to it: change one, change the other.
     let mut occurrences = result.dates;
     let generated: BTreeSet<String> = occurrences
         .iter()
@@ -815,8 +816,8 @@ fn expand_series(
         if moved < from || moved > to {
             continue;
         }
-        // Only a slot the series still generates. An excluded one stays excluded, and an override
-        // naming no occurrence at all is dropped here just as it is when its slot is in the window.
+        // Only a slot the series generates. An excluded one stays excluded, and an override naming
+        // no occurrence at all is dropped here just as it is when its slot is in the window.
         if let Some(occurrence) = replacement
             .get_recurrence_id()
             .and_then(|value| generated_at(&set, base, &value))

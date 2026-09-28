@@ -316,8 +316,8 @@ function instantOf(value: unknown): number | null {
     return parsed.isValid() ? parsed.valueOf() : null;
 }
 
-/// The first and last instants of a window. A bare date as `to` is that whole day, as it is to
-/// `expandRule`: its midnight would leave out the last day the rule was expanded over.
+/// The first and last instants of a window, in the reader's zone. A bare date as `to` is that
+/// whole day: its midnight would leave out the last day the rule was expanded over.
 function boundsOf(window: EventWindow): [number, number] | null {
     const from = instantOf(window.from);
     const to = typeof window.to === 'string' && isDateOnly(window.to)
@@ -424,8 +424,9 @@ function expandSeries(
     }
 
     // The rule is expanded by where each occurrence was generated, so one an override moved into
-    // the window from outside it is not among them. Home asks for three days, and lost a meeting
-    // moved eleven days later that the calendar, asking for three months, drew.
+    // the window from outside it is not among them and is looked for here. `expand_series` in
+    // `backend/src/ical.rs` does the same for a feed, and `fixtures/calendar/moved-into-window.ics`
+    // holds the two to it: change one, change the other.
     //
     // `checked` holds the slots looked for outside the window, which the report below then covers.
     const checked = new Set<number>();
@@ -436,9 +437,10 @@ function expandSeries(
             continue;
         }
         checked.add(instant);
-        // Only a slot the rule still generates, as inside the window. Asked over the days either
-        // side rather than of the instant alone: `expandRule` reads its window as wall clock in the
-        // rule's own zone, which need not be the reader's.
+        // Only a slot the rule generates, as inside the window; an override naming any other is
+        // reported below. Asked over the days either side rather than of the instant alone:
+        // `expandRule` reads its window as wall clock in the rule's own zone, which need not be the
+        // reader's.
         const day = dayjs(instant);
         const around = expand(
             day.subtract(1, 'day').format('YYYY-MM-DD'),
