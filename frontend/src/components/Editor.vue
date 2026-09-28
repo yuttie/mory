@@ -8,7 +8,7 @@
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 
 import { loadConfigValue } from '@/config';
-import { Compartment, EditorState, Extension, Prec, SelectionRange, StateEffect } from '@codemirror/state';
+import { Compartment, EditorState, Extension, Prec, SelectionRange } from '@codemirror/state';
 import { EditorView, keymap, highlightSpecialChars, drawSelection, dropCursor, rectangularSelection, crosshairCursor, lineNumbers, highlightActiveLine, highlightActiveLineGutter, scrollPastEnd, BlockInfo } from '@codemirror/view';
 import { defaultHighlightStyle, syntaxHighlighting, indentOnInput, indentUnit, bracketMatching, foldGutter, foldKeymap } from '@codemirror/language';
 import { defaultKeymap, emacsStyleKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
@@ -77,6 +77,10 @@ function editableExtension(isReadonly: boolean): Extension {
     return isReadonly
         ? [EditorState.readOnly.of(true), EditorView.editable.of(false)]
         : [];
+}
+
+function lineWrappingExtension(isWrapping: boolean): Extension {
+    return isWrapping ? EditorView.lineWrapping : [];
 }
 
 // `scrollIntoView` scrolls every scrollable ancestor as well, and when the
@@ -222,7 +226,7 @@ onMounted(async () => {
     // editor starts in whatever lock and wrapping state holds once it is
     // actually created.
     extensions.push(editableCompartment.of(editableExtension(props.readonly === true)));
-    extensions.push(lineWrappingCompartment.of(props.lineWrapping ? EditorView.lineWrapping : []));
+    extensions.push(lineWrappingCompartment.of(lineWrappingExtension(props.lineWrapping)));
 
     const state = EditorState.create({
         doc: props.value,
@@ -404,9 +408,7 @@ watch(() => props.lineWrapping, (isWrapping: boolean) => {
         return;
     }
 
-    const effects: StateEffect<unknown>[] = [
-        lineWrappingCompartment.reconfigure(isWrapping ? EditorView.lineWrapping : []),
-    ];
+    const effects = [lineWrappingCompartment.reconfigure(lineWrappingExtension(isWrapping))];
     // Unwrapping can shrink the document below the scroll position. The
     // browser then clamps `scrollTop` before CodeMirror's scroll anchoring
     // runs, and the anchoring, which corrects relative to `scrollTop`, lands
