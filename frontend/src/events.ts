@@ -316,6 +316,16 @@ function instantOf(value: unknown): number | null {
     return parsed.isValid() ? parsed.valueOf() : null;
 }
 
+/// The first and last instants of a window, in the reader's zone. A bare date as `to` is that
+/// whole day: its midnight would leave out the last day the rule was expanded over.
+function boundsOf(window: EventWindow): [number, number] | null {
+    const from = instantOf(window.from);
+    const to = typeof window.to === 'string' && isDateOnly(window.to)
+        ? dayjs(window.to).endOf('day').valueOf()
+        : instantOf(window.to);
+    return from === null || to === null ? null : [from, to];
+}
+
 // How long an occurrence lasts, carried from the base event to the ones a rule generates.
 //
 // A duration is reapplied per occurrence; an absolute end is turned into the gap it describes, so
@@ -355,16 +365,25 @@ function expandSeries(
     const start = detail.start as string;
     const repeat = detail.repeat!;
 
-    let generated: string[];
-    try {
-        generated = expandRule(repeat, start, window.from, window.to);
-    }
-    catch (error) {
-        if (error instanceof RecurrenceError) {
-            errors.push(['repeat', error.message, eventName, entry.path, entry.title]);
-            return;
+    // The rule's own mistakes are reported under `repeat` wherever an expansion meets them, and not
+    // only the first: an unknown `tz` fails only once there is an occurrence to convert, so a window
+    // holding none reads the rule without complaint.
+    const expand = (from: string, to: string): string[] | null => {
+        try {
+            return expandRule(repeat, start, from, to);
         }
-        throw error;
+        catch (error) {
+            if (error instanceof RecurrenceError) {
+                errors.push(['repeat', error.message, eventName, entry.path, entry.title]);
+                return null;
+            }
+            throw error;
+        }
+    };
+
+    const generated = expand(window.from, window.to);
+    if (generated === null) {
+        return;
     }
 
     // Both sides are keyed by instant, so an adjustment may be written with or without an offset
@@ -389,13 +408,55 @@ function expandSeries(
         overrides.set(instant, override);
     }
 
-    const matched = new Set<number>();
-    const parent: EventParent = { ...detail, end: durationOf(detail) };
+    const bounds = boundsOf(window);
+    if (bounds === null) {
+        return;
+    }
+    const [from, to] = bounds;
+
+    // Where each occurrence was generated, keyed by instant.
+    const slots = new Map<number, string>();
     for (const occurrence of generated) {
         const instant = instantOf(occurrence);
-        if (instant === null) {
+        if (instant !== null) {
+            slots.set(instant, occurrence);
+        }
+    }
+
+    // The rule is expanded by where each occurrence was generated, so one an override moved into
+    // the window from outside it is not among them and is looked for here. `expand_series` in
+    // `backend/src/ical.rs` does the same for a feed, and `fixtures/calendar/moved-into-window.ics`
+    // holds the two to it: change one, change the other.
+    //
+    // `checked` holds the slots looked for outside the window, which the report below then covers.
+    const checked = new Set<number>();
+    for (const [instant, override] of overrides) {
+        const moved = instantOf(override.start);
+        if (slots.has(instant) || excluded.has(instant)
+            || moved === null || moved < from || moved > to) {
             continue;
         }
+        checked.add(instant);
+        // Only a slot the rule generates, as inside the window; an override naming any other is
+        // reported below. Asked over the days either side rather than of the instant alone:
+        // `expandRule` reads its window as wall clock in the rule's own zone, which need not be the
+        // reader's.
+        const day = dayjs(instant);
+        const around = expand(
+            day.subtract(1, 'day').format('YYYY-MM-DD'),
+            day.add(1, 'day').format('YYYY-MM-DD'),
+        );
+        if (around === null) {
+            return;
+        }
+        if (around.some((occurrence) => instantOf(occurrence) === instant)) {
+            slots.set(instant, override.at as string);
+        }
+    }
+
+    const matched = new Set<number>();
+    const parent: EventParent = { ...detail, end: durationOf(detail) };
+    for (const [instant, occurrence] of slots) {
         if (excluded.has(instant)) {
             matched.add(instant);
             continue;
@@ -420,15 +481,10 @@ function expandSeries(
     }
 
     // An adjustment landing on no occurrence is almost always a mistyped date, and doing nothing
-    // silently is how that survives. Only reported for adjustments inside the window: outside it
-    // there is nothing to match by construction.
-    const from = instantOf(window.from);
-    const to = instantOf(window.to);
-    if (from === null || to === null) {
-        return;
-    }
+    // silently is how that survives. Only reported for adjustments inside the window, or checked
+    // above: elsewhere there is nothing to match by construction.
     const reportUnmatched = (instant: number, property: string, spelling: string) => {
-        if (!matched.has(instant) && instant >= from && instant <= to) {
+        if (!matched.has(instant) && (checked.has(instant) || (instant >= from && instant <= to))) {
             errors.push([property, spelling, eventName, entry.path, entry.title]);
         }
     };

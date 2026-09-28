@@ -13,6 +13,11 @@ disagreeing with each other on almost every feed here — which is what a reader
 they press "Convert to note", because the note then claims the series and the imported original
 stops being drawn. A disagreement is invisible until something compares the two.
 
+Every feed is expanded over one wide window, except a feed about the window itself, which names
+its own in `OWN_WINDOWS` in `backend/src/tests.rs`; the golden records it beside that feed, and
+the frontend re-expands over the same. Keep its other occurrences more than a day clear of it: the
+backend widens a window by a day either side, and the note's expansion does not.
+
 Regenerate the golden with:
 
     cd backend && UPDATE_CALENDAR_GOLDEN=1 cargo test calendar_fixtures

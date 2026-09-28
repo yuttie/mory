@@ -25,6 +25,8 @@ import golden from '../../fixtures/calendar/expansion.json';
 interface Feed {
     events: ImportedOccurrence[];
     series: Record<string, ImportedSeries>;
+    /// Only for a fixture about the window itself; every other feed shares the one below.
+    window?: { from: string; to: string };
 }
 
 const feeds = golden.feeds as unknown as Record<string, Feed>;
@@ -68,7 +70,8 @@ describe.each(Object.keys(feeds))('%s', (name) => {
 
         // ...and after: the note the button writes, read back the way any note is.
         const note = buildSeriesNote(feed.events[0], series);
-        const { events, errors } = eventsFromEntries([noteEntry(note.content)], window);
+        const { events, errors } = eventsFromEntries(
+            [noteEntry(note.content)], feed.window ?? window);
 
         expect(errors, 'a converted note should raise nothing').toEqual([]);
         expect(shapeOf(events)).toEqual(imported);

@@ -29,7 +29,7 @@
 //!     Windows zone name -- Outlook's `W. Europe Standard Time` -- fails to expand even though the
 //!     feed defines the zone itself. Such a series is reported rather than silently dropped.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{Context, Result, bail};
 use chrono::{DateTime, Duration, FixedOffset, NaiveDate, Offset, TimeZone};
@@ -627,6 +627,36 @@ fn occurrence_key(event: &Event, occurrence: DateTime<Tz>) -> String {
     }
 }
 
+/// The instant a DATE or DATE-TIME names, reading a bare date as midnight in `tz` -- which is
+/// where a series anchors its own all-day occurrences.
+fn instant_in(value: &DatePerhapsTime, tz: Tz) -> Option<DateTime<Tz>> {
+    match value {
+        DatePerhapsTime::DateTime(date_time) => Some(date_time.try_into_utc()?.with_timezone(&tz)),
+        DatePerhapsTime::Date(date) => tz.from_local_datetime(&date.and_hms_opt(0, 0, 0)?).earliest(),
+    }
+}
+
+/// The occurrence a `RECURRENCE-ID` names, if the series generates one there.
+fn generated_at(
+    set: &RRuleSet,
+    base: &Event,
+    recurrence_id: &DatePerhapsTime,
+) -> Option<DateTime<Tz>> {
+    let key = recurrence_key(recurrence_id)?;
+    let slot = instant_in(recurrence_id, set.get_dt_start().timezone())?;
+    // `after` and `before` are both inclusive, so this asks about that one instant.
+    set.clone()
+        .after(slot)
+        .before(slot)
+        .all(1)
+        .dates
+        .into_iter()
+        // Not redundant: the occurrence is drawn by looking its replacement up under this key, and
+        // one keyed otherwise -- a timed RECURRENCE-ID on an all-day series -- would find none and
+        // be drawn unmoved, at its slot outside the window.
+        .find(|occurrence| occurrence_key(base, *occurrence) == key)
+}
+
 /// Every override of one series drawn on its own, for a series whose rule yielded nothing to
 /// attach them to.
 fn standalone_overrides(
@@ -766,8 +796,38 @@ fn expand_series(
         replacements.insert(key, event);
     }
 
+    // The rule is expanded by where each occurrence was generated, so one an override moved into
+    // the window from outside it is not among them and is looked for here. `expandSeries` in
+    // `frontend/src/events.ts` does the same for a note, and
+    // `fixtures/calendar/moved-into-window.ics` holds the two to it: change one, change the other.
+    let mut occurrences = result.dates;
+    let generated: BTreeSet<String> = occurrences
+        .iter()
+        .map(|occurrence| occurrence_key(base, *occurrence))
+        .collect();
+    for (key, replacement) in &replacements {
+        if generated.contains(key) {
+            continue;
+        }
+        let Some(moved) = replacement.get_start().and_then(|value| instant_in(&value, dtstart_tz))
+        else {
+            continue;
+        };
+        if moved < from || moved > to {
+            continue;
+        }
+        // Only a slot the series generates. An excluded one stays excluded, and an override naming
+        // no occurrence at all is dropped here just as it is when its slot is in the window.
+        if let Some(occurrence) = replacement
+            .get_recurrence_id()
+            .and_then(|value| generated_at(&set, base, &value))
+        {
+            occurrences.push(occurrence);
+        }
+    }
+
     let mut occurrences_in_window = 0_usize;
-    for occurrence in &result.dates {
+    for occurrence in &occurrences {
         let key = occurrence_key(base, *occurrence);
         if cancelled.contains(&key) {
             continue;

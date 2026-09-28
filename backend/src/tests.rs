@@ -1737,6 +1737,99 @@ fn an_override_that_moves_an_occurrence_is_drawn_at_its_new_time() {
     assert_eq!(override_.start.as_deref(), Some("2015-08-06 16:00:00-07:00"));
 }
 
+/// A monthly series whose September occurrence is moved from the 17th to the 28th.
+const MOVED_MAINTENANCE: &str = "BEGIN:VEVENT\r\nDTSTART;TZID=Asia/Tokyo:20250918T180000\r\n\
+    DTEND;TZID=Asia/Tokyo:20250918T220000\r\nRRULE:FREQ=MONTHLY;BYDAY=3TH\r\n\
+    UID:maintenance@example\r\nSUMMARY:Maintenance\r\nEND:VEVENT\r\n\
+    BEGIN:VEVENT\r\nDTSTART;TZID=Asia/Tokyo:20260928T180000\r\n\
+    DTEND;TZID=Asia/Tokyo:20260928T200000\r\n\
+    RECURRENCE-ID;TZID=Asia/Tokyo:20260917T180000\r\n\
+    UID:maintenance@example\r\nSUMMARY:Maintenance\r\nEND:VEVENT\r\n";
+
+/// An override that moves an occurrence into the window from outside it is drawn there.
+///
+/// Regression: the rule was expanded over the window by where each occurrence was generated, so
+/// one moved in from the 17th was never met. Home, asking for three days, lost it; the calendar,
+/// asking for three months, drew it.
+#[test]
+fn an_occurrence_moved_into_the_window_is_drawn_there() {
+    let calendar = calendar_of(MOVED_MAINTENANCE);
+    let (from, to) = window("2026-09-28", "2026-09-30");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    assert_eq!(starts(&expansion), vec!["2026-09-28 18:00:00+09:00"]);
+    let moved = &expansion.events[0];
+    assert_eq!(moved.end.as_deref(), Some("2026-09-28 20:00:00+09:00"));
+    assert_eq!(moved.recurrence_id, "2026-09-17 18:00:00+09:00");
+    // The popup converts from `series`, which is only sent for a series drawn in the window.
+    assert!(expansion.series.contains_key("maintenance@example"));
+}
+
+/// Moving into the window does not bring back an occurrence the series excludes.
+#[test]
+fn an_occurrence_moved_into_the_window_from_an_excluded_slot_stays_excluded() {
+    let calendar = calendar_of(&MOVED_MAINTENANCE.replacen(
+        "RRULE:",
+        "EXDATE;TZID=Asia/Tokyo:20260917T180000\r\nRRULE:",
+        1,
+    ));
+    let (from, to) = window("2026-09-28", "2026-09-30");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    assert_eq!(starts(&expansion), Vec::<String>::new());
+}
+
+/// An override naming a slot the rule never generates stays undrawn when it moves into the window,
+/// as it does when that slot is inside it.
+#[test]
+fn an_override_moved_into_the_window_from_no_occurrence_is_not_drawn() {
+    // The 16th is a Wednesday, never a third Thursday.
+    let calendar = calendar_of(&MOVED_MAINTENANCE.replacen(
+        "RECURRENCE-ID;TZID=Asia/Tokyo:20260917T180000",
+        "RECURRENCE-ID;TZID=Asia/Tokyo:20260916T180000",
+        1,
+    ));
+    let (from, to) = window("2026-09-28", "2026-09-30");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    assert_eq!(starts(&expansion), Vec::<String>::new());
+}
+
+/// A bare date is found in the window the way the series anchors it: midnight in its own zone.
+#[test]
+fn an_all_day_occurrence_moved_into_the_window_is_drawn_there() {
+    let calendar = calendar_of(
+        "BEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20240506\r\nDTEND;VALUE=DATE:20240507\r\n\
+         RRULE:FREQ=WEEKLY;BYDAY=MO\r\nUID:ad@example\r\nSUMMARY:Holiday\r\nEND:VEVENT\r\n\
+         BEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20240516\r\nDTEND;VALUE=DATE:20240517\r\n\
+         RECURRENCE-ID;VALUE=DATE:20240506\r\nUID:ad@example\r\nSUMMARY:Holiday\r\n\
+         END:VEVENT\r\n",
+    );
+    let (from, to) = window("2024-05-16", "2024-05-16");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    assert_eq!(starts(&expansion), vec!["2024-05-16"]);
+    assert_eq!(expansion.events[0].end.as_deref(), Some("2024-05-16"));
+    assert_eq!(expansion.events[0].recurrence_id, "2024-05-06");
+}
+
+/// A timed RECURRENCE-ID on an all-day series names its slot's instant but not its key, so it
+/// replaces nothing -- and must not bring the slot it names into the window unmoved either.
+#[test]
+fn a_moved_occurrence_keyed_unlike_its_series_draws_nothing() {
+    let calendar = calendar_of(
+        "BEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20240506\r\nDTEND;VALUE=DATE:20240507\r\n\
+         RRULE:FREQ=WEEKLY;BYDAY=MO\r\nUID:ad@example\r\nSUMMARY:Holiday\r\nEND:VEVENT\r\n\
+         BEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20240516\r\nDTEND;VALUE=DATE:20240517\r\n\
+         RECURRENCE-ID;TZID=Asia/Tokyo:20240506T000000\r\nUID:ad@example\r\nSUMMARY:Holiday\r\n\
+         END:VEVENT\r\n",
+    );
+    let (from, to) = window("2024-05-16", "2024-05-16");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    assert_eq!(starts(&expansion), Vec::<String>::new());
+}
+
 /// An all-day series is not given a timezone, because a date is not an instant.
 ///
 /// Regression: `X-WR-TIMEZONE` anchoring made `to_repeat` write `tz: Asia/Tokyo` onto a series
@@ -1903,6 +1996,15 @@ fn an_absurd_duration_is_refused_rather_than_panicking() {
 /// The span the fixtures are expanded over. Wide enough to hold every series in them.
 const FIXTURE_WINDOW: (&str, &str) = ("2015-01-01", "2027-01-01");
 
+/// Fixtures about the window itself, each expanded over its own and recording it in the golden.
+///
+/// Every other occurrence of such a fixture is kept more than a day clear of its window: the
+/// backend widens a window by a day either side, which the note's expansion does not.
+const OWN_WINDOWS: &[(&str, (&str, &str))] = &[
+    // Narrow, so the occurrence moved into it was generated outside it.
+    ("moved-into-window.ics", ("2024-05-27", "2024-05-29")),
+];
+
 fn fixtures_dir() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -1913,7 +2015,6 @@ fn fixtures_dir() -> std::path::PathBuf {
 #[test]
 fn calendar_fixtures_expand_as_recorded() {
     let dir = fixtures_dir();
-    let (from, to) = window(FIXTURE_WINDOW.0, FIXTURE_WINDOW.1);
 
     let mut names: Vec<String> = std::fs::read_dir(&dir)
         .expect("the fixtures directory should exist")
@@ -1924,11 +2025,26 @@ fn calendar_fixtures_expand_as_recorded() {
         .collect();
     names.sort();
     assert!(!names.is_empty(), "no fixtures found in {}", dir.display());
+    // A renamed fixture would otherwise lose its window without a word, and go on passing over the
+    // wide one -- which holds every slot, so it no longer tests what it is there for.
+    for (fixture, _) in OWN_WINDOWS {
+        assert!(
+            names.iter().any(|name| name == fixture),
+            "OWN_WINDOWS names {fixture}, which is not in {}",
+            dir.display(),
+        );
+    }
 
     let mut recorded = serde_json::Map::new();
     for name in &names {
         let ics = std::fs::read_to_string(dir.join(name)).expect("a readable fixture");
         let calendar = crate::ical::parse_calendar(&ics).expect("a parseable fixture");
+        let own_window = OWN_WINDOWS
+            .iter()
+            .find(|(fixture, _)| *fixture == name.as_str())
+            .map(|(_, span)| *span);
+        let (from, to) = own_window.unwrap_or(FIXTURE_WINDOW);
+        let (from, to) = window(from, to);
         let expansion = crate::ical::expand(&calendar, "fixture", from, to);
 
         assert!(
@@ -1936,13 +2052,14 @@ fn calendar_fixtures_expand_as_recorded() {
             "{name} should expand cleanly: {:?}",
             expansion.warnings,
         );
-        recorded.insert(
-            name.clone(),
-            serde_json::json!({
-                "events": expansion.events,
-                "series": expansion.series,
-            }),
-        );
+        let mut feed = serde_json::json!({
+            "events": expansion.events,
+            "series": expansion.series,
+        });
+        if let Some((from, to)) = own_window {
+            feed["window"] = serde_json::json!({ "from": from, "to": to });
+        }
+        recorded.insert(name.clone(), feed);
     }
 
     let golden_path = dir.join("expansion.json");

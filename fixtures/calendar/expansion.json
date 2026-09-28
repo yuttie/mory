@@ -147,6 +147,45 @@
         }
       }
     },
+    "moved-into-window.ics": {
+      "events": [
+        {
+          "calendar": "fixture",
+          "end": "2024-05-27 20:00:00+09:00",
+          "name": "Maintenance, moved",
+          "recurrence_id": "2024-05-16 18:00:00+09:00",
+          "start": "2024-05-27 18:00:00+09:00",
+          "uid": "moved-into-window@example"
+        }
+      ],
+      "series": {
+        "moved-into-window@example": {
+          "end": "2024-01-18 22:00:00+09:00",
+          "name": "Maintenance",
+          "overrides": [
+            {
+              "at": "2024-05-16 18:00:00+09:00",
+              "end": "2024-05-27 20:00:00+09:00",
+              "name": "Maintenance, moved",
+              "start": "2024-05-27 18:00:00+09:00"
+            }
+          ],
+          "repeat": {
+            "byday": [
+              "3thu"
+            ],
+            "freq": "monthly",
+            "tz": "Asia/Tokyo",
+            "wkst": "mon"
+          },
+          "start": "2024-01-18 18:00:00+09:00"
+        }
+      },
+      "window": {
+        "from": "2024-05-27",
+        "to": "2024-05-29"
+      }
+    },
     "multi-day-all-day.ics": {
       "events": [
         {
