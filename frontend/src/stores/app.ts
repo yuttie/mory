@@ -76,7 +76,12 @@ export const useAppStore = defineStore('app', () => {
 
     // Service worker
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register(`${import.meta.env.BASE_URL}service-worker.js`).then((registration) => {
+        const apiUrl = new URL(import.meta.env.VITE_APP_API_URL!, window.location.href).href;
+
+        // The API URL goes in the script's URL, where every copy of the worker the browser starts
+        // can read it; see `filesUrl` in the worker.
+        const scriptUrl = `${import.meta.env.BASE_URL}service-worker.js?${new URLSearchParams({ api: apiUrl })}`;
+        navigator.serviceWorker.register(scriptUrl).then((registration) => {
             console.log('Service worker registration succeeded.');
         }).catch((error) => {
             console.error(`Service worker registration failed: ${error}`);
@@ -89,7 +94,7 @@ export const useAppStore = defineStore('app', () => {
                 serviceWorker.value.postMessage({
                     type: 'configure',
                     value: {
-                        apiUrl: new URL(import.meta.env.VITE_APP_API_URL!, window.location.href).href,
+                        apiUrl: apiUrl,
                         apiToken: token.value,
                         appRoot: import.meta.env.VITE_APP_APPLICATION_ROOT,
                     },
@@ -110,6 +115,10 @@ export const useAppStore = defineStore('app', () => {
                     }
                     loginCallbacks.value.length = 0;
                 }
+            }
+            else if (event.data === 'request-api-token') {
+                // The worker asks with each file it loads; see `requestToken` there for why.
+                event.ports[0].postMessage(token.value);
             }
         });
     } else {
