@@ -20,6 +20,16 @@
                         v-on:ad-hoc="openAdHocDialog"
                         v-on:run="runAiAction"
                     ></AiActionMenu>
+                    <!-- The simple editor never wraps: its scroll sync puts a line at `lineNumber * lineHeight`,
+                         which holds only while every line is one row. -->
+                    <template v-if="!useSimpleEditor">
+                        <v-icon-btn
+                            v-bind:icon="mdiWrap"
+                            v-bind:title="lineWrapping ? 'Disable line wrapping' : 'Enable line wrapping'"
+                            v-bind:active="lineWrapping ? true : undefined"
+                            v-on:click="lineWrapping = !lineWrapping"
+                        ></v-icon-btn>
+                    </template>
                 </v-sheet>
                 <template v-if="useSimpleEditor">
                     <textarea
@@ -35,6 +45,7 @@
                         v-bind:value="modelValue"
                         v-bind:mode="language"
                         v-bind:readonly="aiActionRunning"
+                        v-bind:line-wrapping="lineWrapping"
                         v-on:change="onEditorChange"
                         v-on:scroll="onEditorScroll"
                         ref="editor"
@@ -80,10 +91,12 @@ import {
     mdiFormatQuoteClose,
     mdiLinkVariant,
     mdiTableCheck,
+    mdiWrap,
     mdiXml,
 } from '@mdi/js';
 
 import { useAppStore } from '@/stores/app';
+import { useLocalStorage } from '@/composables/localStorage';
 
 import AiActionAdHocDialog from './AiActionAdHocDialog.vue';
 import AiActionInputDialog from './AiActionInputDialog.vue';
@@ -124,6 +137,7 @@ const files = useFilesStore();
 
 // Reactive states
 const useSimpleEditor = ref(loadConfigValue('use-simple-editor', false));
+const lineWrapping = useLocalStorage('editor-line-wrapping', true);
 const error = ref(false);
 const errorText = ref('');
 const renderTimeoutId = ref(null as null | number);
