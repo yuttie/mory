@@ -46,6 +46,10 @@ let lastKnownScrollTop = 0;
 const PROGRAMMATIC_SCROLL_SUPPRESSION_MS = 100;
 let suppressScrollEventsUntil = 0;
 
+function suppressScrollEvents() {
+    suppressScrollEventsUntil = performance.now() + PROGRAMMATIC_SCROLL_SUPPRESSION_MS;
+}
+
 // The start of the line the wrapping watcher is putting back at the top, until
 // `scrollWithinEditor()` has done so.
 let restoringLineStart: number | null = null;
@@ -270,7 +274,7 @@ function resize() {
 function scrollTo(lineNumber: number) {
     if (!editor) return;
 
-    suppressScrollEventsUntil = performance.now() + PROGRAMMATIC_SCROLL_SUPPRESSION_MS;
+    suppressScrollEvents();
     // `lineNumber` is a 1-based document line interpolated between two rendered
     // elements, so it is usually fractional, and `doc.line()` rejects anything
     // past the end of the document.
@@ -427,7 +431,7 @@ watch(() => props.lineWrapping, (isWrapping: boolean) => {
 
     // Only the layout changes, not which line is at the top, so there is
     // nothing for a synced viewer to follow.
-    suppressScrollEventsUntil = performance.now() + PROGRAMMATIC_SCROLL_SUPPRESSION_MS;
+    suppressScrollEvents();
     editor.dispatch({ effects });
 });
 
