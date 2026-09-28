@@ -8,7 +8,7 @@
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 
 import { loadConfigValue } from '@/config';
-import { Compartment, EditorState, Extension, Prec } from '@codemirror/state';
+import { Compartment, EditorState, Extension, Prec, StateEffect } from '@codemirror/state';
 import { EditorView, keymap, highlightSpecialChars, drawSelection, dropCursor, rectangularSelection, crosshairCursor, lineNumbers, highlightActiveLine, highlightActiveLineGutter, scrollPastEnd } from '@codemirror/view';
 import { defaultHighlightStyle, syntaxHighlighting, indentOnInput, indentUnit, bracketMatching, foldGutter, foldKeymap } from '@codemirror/language';
 import { defaultKeymap, emacsStyleKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
@@ -378,9 +378,29 @@ watch(() => props.lineWrapping, (isWrapping: boolean) => {
         return;
     }
 
-    editor.dispatch({
-        effects: lineWrappingCompartment.reconfigure(isWrapping ? EditorView.lineWrapping : []),
-    });
+    const effects: StateEffect<unknown>[] = [
+        lineWrappingCompartment.reconfigure(isWrapping ? EditorView.lineWrapping : []),
+    ];
+    // Unwrapping can shrink the document below the scroll position. The
+    // browser then clamps `scrollTop` before CodeMirror's scroll anchoring
+    // runs, and the anchoring, which corrects relative to `scrollTop`, lands
+    // far above where the reader was. Even unclamped, it keeps the top line's
+    // offset in pixels, which a long paragraph unwrapped into one row
+    // overshoots by several lines. Put the line at the top back explicitly;
+    // at the very top there is nothing to restore.
+    if (editor.scrollDOM.scrollTop > 0) {
+        // Read a pixel below the edge: a line put there by the last switch can
+        // sit a fraction of a pixel lower, and would otherwise lose the top to
+        // the line before it, one line further up with every switch.
+        const viewportTop = editor.scrollDOM.getBoundingClientRect().top + 1;
+        const block = editor.lineBlockAtHeight(viewportTop - editor.documentTop);
+        effects.push(EditorView.scrollIntoView(block.from, { y: 'start', yMargin: 0 }));
+    }
+
+    // Only the layout changes, not which line is at the top, so there is
+    // nothing for a synced viewer to follow.
+    suppressScrollEventsUntil = performance.now() + PROGRAMMATIC_SCROLL_SUPPRESSION_MS;
+    editor.dispatch({ effects });
 });
 
 watch(() => props.mode, (_mode: string) => {
