@@ -8,19 +8,24 @@
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 
 import { loadConfigValue } from '@/config';
-import { Compartment, EditorState, Extension, Prec } from '@codemirror/state';
-import { EditorView, keymap, highlightSpecialChars, drawSelection, dropCursor, rectangularSelection, crosshairCursor, lineNumbers, highlightActiveLine, highlightActiveLineGutter, scrollPastEnd } from '@codemirror/view';
+import { Compartment, EditorState, Extension, Prec, SelectionRange } from '@codemirror/state';
+import { EditorView, keymap, highlightSpecialChars, drawSelection, dropCursor, rectangularSelection, crosshairCursor, lineNumbers, highlightActiveLine, highlightActiveLineGutter, scrollPastEnd, BlockInfo } from '@codemirror/view';
 import { defaultHighlightStyle, syntaxHighlighting, indentOnInput, indentUnit, bracketMatching, foldGutter, foldKeymap } from '@codemirror/language';
 import { defaultKeymap, emacsStyleKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { autocompletion, completionKeymap, closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 
 // Props
-const props = defineProps<{
+const props = withDefaults(defineProps<{
     value: string;
     mode: string;
     readonly?: boolean;
-}>();
+    lineWrapping?: boolean;
+}>(), {
+    // Vue reads an absent boolean prop as `false`, which here would silently
+    // turn wrapping off.
+    lineWrapping: true,
+});
 
 // Emits
 const emit = defineEmits<{
@@ -41,9 +46,19 @@ let lastKnownScrollTop = 0;
 const PROGRAMMATIC_SCROLL_SUPPRESSION_MS = 100;
 let suppressScrollEventsUntil = 0;
 
-// Lets the buffer be locked and unlocked without rebuilding the editor, which
-// would lose the undo history, the scroll position and the selection.
+function suppressScrollEvents() {
+    suppressScrollEventsUntil = performance.now() + PROGRAMMATIC_SCROLL_SUPPRESSION_MS;
+}
+
+// The start of the line the wrapping watcher is putting back at the top, until
+// `scrollWithinEditor()` has done so.
+let restoringLineStart: number | null = null;
+
+// Let the buffer be locked and unlocked, and its lines wrapped or not, without
+// rebuilding the editor, which would lose the undo history, the scroll position
+// and the selection.
 const editableCompartment = new Compartment();
+const lineWrappingCompartment = new Compartment();
 
 // Ctrl+Enter and Shift+Enter toggle the editor and the viewer panes, and that
 // is decided by a window-level handler in the parent. CodeMirror runs its own
@@ -68,6 +83,38 @@ function editableExtension(isReadonly: boolean): Extension {
         : [];
 }
 
+function lineWrappingExtension(isWrapping: boolean): Extension {
+    return isWrapping ? EditorView.lineWrapping : [];
+}
+
+// `scrollIntoView` scrolls every scrollable ancestor as well, and when the
+// editor is already in place it asks the next one to put the line at its top
+// instead. In the task editor below `lg` that scrolls the form around the
+// editor and carries the toolbar out of sight. The line the wrapping watcher
+// puts back belongs at the top of the editor's own scroller and nowhere else.
+function scrollWithinEditor(view: EditorView, range: SelectionRange): boolean {
+    const target = restoringLineStart;
+    restoringLineStart = null;
+    if (range.head !== target) {
+        return false;
+    }
+
+    const lineTop = view.documentTop + view.lineBlockAt(target).top;
+    view.scrollDOM.scrollTop += lineTop - view.scrollDOM.getBoundingClientRect().top;
+    return true;
+}
+
+// The line block at the top of the scroller, read `inset` pixels below its
+// edge. `scrollTop` is a distance within the scroller, while
+// `lineBlockAtHeight()` takes a height relative to `documentTop` (the top of
+// the first line, in screen coordinates). The two share neither an origin nor,
+// once the editor has top padding, a zero point, so convert through screen
+// coordinates rather than passing `scrollTop` in directly.
+function topLineBlock(view: EditorView, inset = 0): BlockInfo {
+    const viewportTop = view.scrollDOM.getBoundingClientRect().top + inset;
+    return view.lineBlockAtHeight(viewportTop - view.documentTop);
+}
+
 // Report the first line visible at the top of the scroller, as a 1-based
 // document line number.
 function emitScroll(view: EditorView) {
@@ -86,14 +133,7 @@ function emitScroll(view: EditorView) {
         return;
     }
 
-    // `scrollTop` is a distance within the scroller, while `lineBlockAtHeight()`
-    // takes a height relative to `documentTop` (the top of the first line, in
-    // screen coordinates). The two share neither an origin nor, once the editor
-    // has top padding, a zero point, so convert through screen coordinates
-    // rather than passing `scrollTop` in directly.
-    const viewportTop = view.scrollDOM.getBoundingClientRect().top;
-    const block = view.lineBlockAtHeight(viewportTop - view.documentTop);
-    emit('scroll', view.state.doc.lineAt(block.from).number);
+    emit('scroll', view.state.doc.lineAt(topLineBlock(view).from).number);
 }
 
 // Template Refs
@@ -141,7 +181,6 @@ onMounted(async () => {
             ...completionKeymap,
             indentWithTab,
         ]),
-        EditorView.lineWrapping,
         EditorView.updateListener.of((update) => {
             if (update.docChanged) {
                 emit('change', update.state.doc.toString());
@@ -156,6 +195,7 @@ onMounted(async () => {
                 emitScroll(view);
             },
         }),
+        EditorView.scrollHandler.of(scrollWithinEditor),
     ];
 
     // Add language support
@@ -187,8 +227,10 @@ onMounted(async () => {
     }
 
     // Pushed after the awaits above rather than declared with the rest, so the
-    // editor starts in whatever lock state holds once it is actually created.
+    // editor starts in whatever lock and wrapping state holds once it is
+    // actually created.
     extensions.push(editableCompartment.of(editableExtension(props.readonly === true)));
+    extensions.push(lineWrappingCompartment.of(lineWrappingExtension(props.lineWrapping)));
 
     const state = EditorState.create({
         doc: props.value,
@@ -232,7 +274,7 @@ function resize() {
 function scrollTo(lineNumber: number) {
     if (!editor) return;
 
-    suppressScrollEventsUntil = performance.now() + PROGRAMMATIC_SCROLL_SUPPRESSION_MS;
+    suppressScrollEvents();
     // `lineNumber` is a 1-based document line interpolated between two rendered
     // elements, so it is usually fractional, and `doc.line()` rejects anything
     // past the end of the document.
@@ -365,6 +407,35 @@ watch(() => props.readonly, (isReadonly?: boolean) => {
     });
 });
 
+watch(() => props.lineWrapping, (isWrapping: boolean) => {
+    if (!editor) {
+        return;
+    }
+
+    const effects = [lineWrappingCompartment.reconfigure(lineWrappingExtension(isWrapping))];
+    // Unwrapping can shrink the document below the scroll position, and the
+    // browser clamps `scrollTop` before CodeMirror's scroll anchoring corrects
+    // it, relative to the clamped value, to far above where the reader was.
+    // Even unclamped, the anchoring, like `scrollSnapshot()`, keeps how many
+    // pixels of the top line are scrolled past, which carries the view several
+    // lines on once a long paragraph becomes one row. So put the top line back
+    // explicitly, but not at the very top: there is nothing to restore, and
+    // putting line 1 at the edge would scroll the content's top padding away.
+    if (editor.scrollDOM.scrollTop > 0) {
+        // Read a pixel below the edge: a line put there by the last switch can
+        // sit a fraction of a pixel lower, and would otherwise lose the top to
+        // the line before it, one line further up with every switch.
+        const block = topLineBlock(editor, 1);
+        restoringLineStart = block.from;
+        effects.push(EditorView.scrollIntoView(block.from, { y: 'start', yMargin: 0 }));
+    }
+
+    // Only the layout changes, not which line is at the top, so there is
+    // nothing for a synced viewer to follow.
+    suppressScrollEvents();
+    editor.dispatch({ effects });
+});
+
 watch(() => props.mode, (_mode: string) => {
     // Mode changes are not dynamically supported in this minimal implementation
     // The mode is set during initialization
@@ -391,6 +462,11 @@ defineExpose({
 
     & > * {
         flex: 1 1 0;
+        // A flex item is otherwise never narrower than its content, and an
+        // unwrapped line would widen it past the pane: the wrapper would then
+        // scroll sideways instead of CodeMirror, taking the line numbers along
+        // and leaving a cursor at the end of a long line out of sight.
+        min-width: 0;
     }
 
     :deep(.cm-editor) {
