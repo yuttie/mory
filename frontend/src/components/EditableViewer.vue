@@ -142,6 +142,8 @@ const files = useFilesStore();
 
 // Reactive states
 const useSimpleEditor = ref(loadConfigValue('use-simple-editor', false));
+// Switched from the toolbar rather than the config page, so it is saved the moment it changes, as
+// one setting for every note and the task editor alike.
 const lineWrapping = useLocalStorage('editor-line-wrapping', true);
 const error = ref(false);
 const errorText = ref('');
