@@ -605,10 +605,12 @@ function updateChunkInDisplay(chunkIndex: number, chunkHtml: string, startLine: 
     if (startLine > 1) {
         const elementsWithDataLine = chunkDiv.querySelectorAll('[data-line]');
         elementsWithDataLine.forEach((element) => {
-            const lineNum = element.getAttribute('data-line');
-            if (lineNum) {
-                const adjustedLine = parseInt(lineNum) + startLine - 1;
-                element.setAttribute('data-line', adjustedLine.toString());
+            for (const attribute of ['data-line', 'data-line-end']) {
+                const lineNum = element.getAttribute(attribute);
+                if (lineNum) {
+                    const adjustedLine = parseInt(lineNum) + startLine - 1;
+                    element.setAttribute(attribute, adjustedLine.toString());
+                }
             }
         });
     }
@@ -745,10 +747,16 @@ function sectionIsVisible(heading: { level: number, href: string }): boolean {
     return range[0] < viewportRange[1] && (range[1] || scrollHeight) > viewportRange[0];
 }
 
-// Where each numbered element of the rendered note starts, for scroll sync, as
-// the `scrollTop` that brings it to the viewer's top edge. Measured from the
-// viewer itself: `computeOffset()` adds up offsets all the way to the page, so
-// it also counts the toolbar above the viewer, which `scrollTop` does not.
+// Where each numbered element of the rendered note starts and ends, for scroll
+// sync, as the `scrollTop` that brings that edge to the viewer's top edge.
+// Measured from the viewer itself: `computeOffset()` adds up offsets all the
+// way to the page, so it also counts the toolbar above the viewer, which
+// `scrollTop` does not.
+//
+// Both edges count because the margin between two elements belongs to
+// neither. With tops alone, the lines from one element's top to the next's
+// were spread evenly over the element and the margin below it together: a
+// one-line paragraph and the blank line after it each got half of both.
 //
 // The note's two ends are anchors as well. Nothing is drawn for the
 // frontmatter, so without them the lines above the first element, and those
@@ -762,7 +770,13 @@ function collectScrollAnchors(): ScrollAnchor[] {
         // measures as a zero rect at the viewport's corner, which would put it
         // wherever the viewer happens to be scrolled.
         .filter((el) => el.getClientRects().length > 0)
-        .map((el) => ({ line: parseInt(el.dataset['line'] as string), offset: el.getBoundingClientRect().top - origin }));
+        .flatMap((el) => {
+            const rect = el.getBoundingClientRect();
+            return [
+                { line: parseInt(el.dataset['line'] as string), offset: rect.top - origin },
+                { line: parseInt(el.dataset['lineEnd'] as string), offset: rect.bottom - origin },
+            ];
+        });
     return [
         { line: 1, offset: 0 },
         ...elements,
