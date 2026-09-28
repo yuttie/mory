@@ -1125,13 +1125,17 @@ describe('taskDatesFromEntries', () => {
         expect(events.map((e) => e.finished)).toEqual([true, true]);
     });
 
+    // The last minute of the window's last day in Tokyo, which is where it is read: east of +09:00
+    // it is already April, and rightly left out.
     it('keeps only the deadlines inside the window', () => {
+        vi.stubEnv('TZ', 'Asia/Tokyo');
         const { events } = taskDates([
             taskEntry(UUID_A, { status: { kind: 'todo' }, deadline: '2026-02-28' }),
             taskEntry(UUID_B, { status: { kind: 'todo' }, deadline: '2026-03-31 23:59+09:00' }),
         ], { from: '2026-03-01', to: '2026-03-31' });
 
         expect(events.map((e) => e.taskId)).toEqual([UUID_B]);
+        vi.unstubAllEnvs();
     });
 
     it('reports an unusable deadline rather than dropping it silently', () => {
