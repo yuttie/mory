@@ -962,6 +962,12 @@ $side-by-side-width: 700px;
 .viewer-pane {
     flex: 1 1 0;
     overflow: hidden auto;
+    // What a note positions absolutely, such as KaTeX's hidden MathML or the heading links a custom
+    // note CSS hangs beside each heading, is placed against the nearest positioned ancestor. Unless
+    // that is this pane, it lies outside the pane: it neither scrolls with the note nor is clipped
+    // by it, and it stretches the app around the page instead, which `overflow: hidden` keeps from
+    // showing a scroll bar but not from being scrolled.
+    position: relative;
 
     .rendered-content {
         user-select: text;
