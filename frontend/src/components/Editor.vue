@@ -143,8 +143,12 @@ function topLineBlock(view: EditorView, inset = 0): BlockInfo {
 // its height scrolled past the edge. A wrapped line is as many rows tall as it
 // wraps to, so without the fraction the viewer would stand still through a
 // long paragraph and then jump past it.
-function lineAtTop(view: EditorView): number {
-    const block = topLineBlock(view);
+//
+// The block is read `inset` pixels below the edge, and the fraction measured
+// from the edge itself, so a line starting less than `inset` below the edge
+// counts as at the top rather than as the end of the line before it.
+function lineAtTop(view: EditorView, inset = 0): number {
+    const block = topLineBlock(view, inset);
     const edge = view.scrollDOM.getBoundingClientRect().top - view.documentTop;
     // Above the first line lies the content's top padding, which counts as
     // the start of that line.
@@ -311,20 +315,25 @@ function resize() {
     // CodeMirror 6 handles resizing automatically
 }
 
+// The target for `scrollWithinEditor()` that puts `lineNumber`, a 1-based
+// document line, possibly fractional, at the top of the scroller.
+function scrollTargetAt(view: EditorView, lineNumber: number): { line: number, from: number } {
+    // `doc.line()` rejects anything past the end of the document, and the end
+    // of the last line is as far as it goes.
+    const doc = view.state.doc;
+    const line = Math.min(Math.max(lineNumber, 1), doc.lines + 1);
+    return { line, from: view.lineBlockAt(doc.line(Math.min(Math.floor(line), doc.lines)).from).from };
+}
+
 // Put `lineNumber`, a 1-based document line interpolated between two rendered
 // elements and so usually fractional, at the top of the scroller.
 function scrollTo(lineNumber: number) {
     if (!editor) return;
 
     suppressScrollEvents();
-    // `doc.line()` rejects anything past the end of the document, and the end
-    // of the last line is as far as it goes.
-    const doc = editor.state.doc;
-    const line = Math.min(Math.max(lineNumber, 1), doc.lines + 1);
-    const from = editor.lineBlockAt(doc.line(Math.min(Math.floor(line), doc.lines)).from).from;
-    pendingScrollTarget = { line, from };
+    pendingScrollTarget = scrollTargetAt(editor, lineNumber);
     editor.dispatch({
-        effects: EditorView.scrollIntoView(from, { y: 'start' }),
+        effects: EditorView.scrollIntoView(pendingScrollTarget.from, { y: 'start' }),
     });
 }
 
@@ -461,16 +470,15 @@ watch(() => props.lineWrapping, (isWrapping: boolean) => {
     // it, relative to the clamped value, to far above where the reader was.
     // Even unclamped, the anchoring, like `scrollSnapshot()`, keeps how many
     // pixels of the top line are scrolled past, which carries the view several
-    // lines on once a long paragraph becomes one row. So put the top line back
-    // explicitly, but not at the very top: there is nothing to restore, and
-    // putting line 1 at the edge would scroll the content's top padding away.
+    // lines on once a long paragraph becomes one row. So put the top back
+    // explicitly, as far into its line as it was, which is also where a synced
+    // viewer still is. But not at the very top: there is nothing to restore.
     if (editor.scrollDOM.scrollTop > 0) {
         // Read a pixel below the edge: a line put there by the last switch can
-        // sit a fraction of a pixel lower, and would otherwise lose the top to
-        // the line before it, one line further up with every switch.
-        const block = topLineBlock(editor, 1);
-        pendingScrollTarget = { line: editor.state.doc.lineAt(block.from).number, from: block.from };
-        effects.push(EditorView.scrollIntoView(block.from, { y: 'start', yMargin: 0 }));
+        // sit a fraction of a pixel lower, and would otherwise count as the end
+        // of the line before it, which the switch can make many rows tall.
+        pendingScrollTarget = scrollTargetAt(editor, lineAtTop(editor, 1));
+        effects.push(EditorView.scrollIntoView(pendingScrollTarget.from, { y: 'start', yMargin: 0 }));
     }
 
     // Only the layout changes, not which line is at the top, so there is
