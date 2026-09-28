@@ -319,6 +319,31 @@ fn occurrence_end(event: &Event, occurrence: DateTime<Tz>) -> Option<String> {
     Some(format_datetime(to_fixed_offset(occurrence.checked_add_signed(length)?)))
 }
 
+/// The end of an override, in mory's spelling: its own `DTEND`, or its `DURATION`.
+///
+/// Measured from the override's own start rather than the series', since it may have moved. An
+/// all-day `DTEND` comes back a day, as everywhere else; a raw `PT90M` is iCal's spelling, which
+/// the reader cannot parse and would drop the occurrence over, so it is resolved here.
+fn override_end(event: &Event, tz: Tz) -> Option<String> {
+    if is_all_day(event) {
+        return event
+            .get_end()
+            .and_then(|value| date_of(&value))
+            .and_then(|day| day.pred_opt())
+            .map(format_date);
+    }
+    event
+        .get_end()
+        .and_then(|value| format_date_perhaps_time(&value, tz))
+        .or_else(|| {
+            let length = event_length(event)?;
+            let anchor = utc_of(&event.get_start()?)?;
+            Some(format_datetime(to_fixed_offset(
+                anchor.checked_add_signed(length)?.with_timezone(&tz),
+            )))
+        })
+}
+
 /// An RFC 5545 `DURATION`, which is ISO 8601 restricted to whole units and no months or years.
 fn parse_duration(value: &str) -> Option<Duration> {
     let value = value.trim();
@@ -838,40 +863,15 @@ fn expand_series(
         // A replacement carries its own DTSTART, which is usually *why* it exists: moving one
         // occurrence of a series is the commonest reason to override it. Reading only the
         // occurrence the rule generated would draw a moved meeting at the time it used to be.
-        let (start, end) = match replacements.get(&key) {
-            Some(replacement) => match replacement
-                .get_start()
-                .and_then(|value| format_date_perhaps_time(&value, dtstart_tz))
-            {
-                Some(moved) => {
-                    let end = replacement
-                        .get_end()
-                        .and_then(|value| format_date_perhaps_time(&value, dtstart_tz))
-                        .or_else(|| {
-                            // Only DURATION is left, which is relative to the replacement's start.
-                            let length = event_length(replacement)?;
-                            let anchor = utc_of(&replacement.get_start()?)?;
-                            Some(format_datetime(to_fixed_offset(
-                                anchor.checked_add_signed(length)?.with_timezone(&dtstart_tz),
-                            )))
-                        });
-                    let end = if is_all_day(replacement) {
-                        // Exclusive DTEND, as everywhere else.
-                        replacement
-                            .get_end()
-                            .and_then(|value| date_of(&value))
-                            .and_then(|day| day.pred_opt())
-                            .map(format_date)
-                    }
-                    else {
-                        end
-                    };
-                    (moved, end)
-                }
-                None => (at.clone(), occurrence_end(base, *occurrence)),
-            },
-            None => (at.clone(), occurrence_end(base, *occurrence)),
-        };
+        let (start, end) = replacements
+            .get(&key)
+            .and_then(|replacement| {
+                let moved = replacement
+                    .get_start()
+                    .and_then(|value| format_date_perhaps_time(&value, dtstart_tz))?;
+                Some((moved, override_end(replacement, dtstart_tz)))
+            })
+            .unwrap_or_else(|| (at.clone(), occurrence_end(base, *occurrence)));
 
         occurrences_in_window += 1;
         into.events.push(ImportedEvent {
@@ -927,28 +927,7 @@ fn expand_series(
                 Some(start) if *start != at => Some(start.clone()),
                 _ => None,
             },
-            end: if is_all_day(event) {
-                // Exclusive DTEND, as everywhere else.
-                event
-                    .get_end()
-                    .and_then(|value| date_of(&value))
-                    .and_then(|day| day.pred_opt())
-                    .map(format_date)
-            }
-            else {
-                event
-                    .get_end()
-                    .and_then(|value| format_date_perhaps_time(&value, dtstart_tz))
-                    // A raw `PT90M` is iCal's spelling, which the reader cannot parse and would
-                    // drop the occurrence over. Resolve it against this override's own start.
-                    .or_else(|| {
-                        let length = event_length(event)?;
-                        let anchor = utc_of(&event.get_start()?)?;
-                        Some(format_datetime(to_fixed_offset(
-                            anchor.checked_add_signed(length)?.with_timezone(&dtstart_tz),
-                        )))
-                    })
-            },
+            end: override_end(event, dtstart_tz),
             note: event.get_description().map(str::to_string),
             location: event.get_location().map(str::to_string),
         });
