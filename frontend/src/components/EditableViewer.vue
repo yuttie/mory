@@ -268,7 +268,13 @@ async function jumpTo(id: string) {
     await whenRendered();
     const element = shadowRoot.value?.querySelector(`[id="${id.slice(1)}"]`);
     if (element) {
-        element.scrollIntoView();
+        // Scroll the viewer and nothing else. `scrollIntoView()` also scrolls every scrollable
+        // ancestor to bring the element to its top edge, `overflow: hidden` ones included, so
+        // anything that makes the page around the viewer overflow moves the whole layout. What it
+        // also did, leaving a heading's `scroll-margin-top` above it, is kept.
+        const viewerElement: HTMLElement = viewer.value!;
+        const margin = parseFloat(window.getComputedStyle(element).scrollMarginTop) || 0;
+        viewerElement.scrollTop = element.getBoundingClientRect().top - viewerScrollOrigin() - margin;
     }
 }
 
