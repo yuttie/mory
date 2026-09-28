@@ -1779,6 +1779,22 @@ fn an_occurrence_moved_into_the_window_from_an_excluded_slot_stays_excluded() {
     assert_eq!(starts(&expansion), Vec::<String>::new());
 }
 
+/// An override naming a slot the rule never generates stays undrawn when it moves into the window,
+/// as it does when that slot is inside it.
+#[test]
+fn an_override_moved_into_the_window_from_no_occurrence_is_not_drawn() {
+    // The 16th is a Wednesday, never a third Thursday.
+    let calendar = calendar_of(&MOVED_MAINTENANCE.replacen(
+        "RECURRENCE-ID;TZID=Asia/Tokyo:20260917T180000",
+        "RECURRENCE-ID;TZID=Asia/Tokyo:20260916T180000",
+        1,
+    ));
+    let (from, to) = window("2026-09-28", "2026-09-30");
+    let expansion = crate::ical::expand(&calendar, "cal", from, to);
+
+    assert_eq!(starts(&expansion), Vec::<String>::new());
+}
+
 /// A bare date is found in the window the way the series anchors it: midnight in its own zone.
 #[test]
 fn an_all_day_occurrence_moved_into_the_window_is_drawn_there() {
