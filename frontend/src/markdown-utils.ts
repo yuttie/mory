@@ -31,6 +31,20 @@ export function chunkMarkdownByHeadings(markdown: string): { frontmatter: string
     const tree = processor.parse(markdown) as Root;
     const chunks: Array<{ content: string; startLine: number }> = [];
 
+    // `startLine` is the line `start` lies on. A chunk can open with line
+    // breaks, such as the one ending the frontmatter's closing fence and the
+    // blank line after it, and trimming drops them, so count them into the
+    // line the content starts on: the viewer adds it to every rendered line
+    // number, which scroll sync relies on.
+    function pushChunk(start: number, startLine: number, end: number) {
+        const raw = markdown.slice(start, end);
+        const content = raw.trim();
+        if (content) {
+            const skipped = raw.slice(0, raw.length - raw.trimStart().length);
+            chunks.push({ content, startLine: startLine + skipped.split('\n').length - 1 });
+        }
+    }
+
     let frontmatter = '';
     let currentChunkStart = 0;
     let currentChunkStartLine = 1;
@@ -41,7 +55,7 @@ export function chunkMarkdownByHeadings(markdown: string): { frontmatter: string
         if (firstNode.position?.end?.offset != null && firstNode.position?.end?.line != null) {
             frontmatter = markdown.slice(0, firstNode.position.end.offset);
             currentChunkStart = firstNode.position.end.offset;
-            currentChunkStartLine = firstNode.position.end.line + 1;
+            currentChunkStartLine = firstNode.position.end.line;
         }
     }
 
@@ -57,11 +71,7 @@ export function chunkMarkdownByHeadings(markdown: string): { frontmatter: string
         // Split at H1 or H2 headings
         if (node.type === 'heading' && (node.depth === 1 || node.depth === 2)) {
             if (node.position?.start?.offset != null && currentChunkStart < node.position.start.offset) {
-                // Add the chunk before this heading
-                const chunk = markdown.slice(currentChunkStart, node.position.start.offset).trim();
-                if (chunk) {
-                    chunks.push({ content: chunk, startLine: currentChunkStartLine });
-                }
+                pushChunk(currentChunkStart, currentChunkStartLine, node.position.start.offset);
                 currentChunkStart = node.position.start.offset;
                 currentChunkStartLine = node.position.start.line;
             }
@@ -70,10 +80,7 @@ export function chunkMarkdownByHeadings(markdown: string): { frontmatter: string
 
     // Add the remaining content as the last chunk
     if (currentChunkStart < markdown.length) {
-        const lastChunk = markdown.slice(currentChunkStart).trim();
-        if (lastChunk) {
-            chunks.push({ content: lastChunk, startLine: currentChunkStartLine });
-        }
+        pushChunk(currentChunkStart, currentChunkStartLine, markdown.length);
     }
 
     return { frontmatter, chunks };
