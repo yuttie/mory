@@ -24,7 +24,6 @@ import type {
     EventFields,
     EventIcal,
     EventOccurrence,
-    EventRepeat,
     ImportedOccurrence,
     ListEntry2,
     MetadataEvent,
@@ -327,30 +326,6 @@ function boundsOf(window: EventWindow): [number, number] | null {
     return from === null || to === null ? null : [from, to];
 }
 
-/// Whether a rule generates an occurrence at `instant`.
-///
-/// Asked over the days either side rather than of the instant alone: `expandRule` reads its window
-/// as wall clock in the rule's own zone, which need not be the reader's.
-function generates(repeat: EventRepeat, start: string, instant: number): boolean {
-    const day = dayjs(instant);
-    try {
-        return expandRule(
-            repeat,
-            start,
-            day.subtract(1, 'day').format('YYYY-MM-DD'),
-            day.add(1, 'day').format('YYYY-MM-DD'),
-        ).some((occurrence) => instantOf(occurrence) === instant);
-    }
-    catch (error) {
-        // The rule has just expanded over the window, so it is not expected to fail here. If it
-        // does, the occurrence is left out rather than the calendar blanked.
-        if (error instanceof RecurrenceError) {
-            return false;
-        }
-        throw error;
-    }
-}
-
 // How long an occurrence lasts, carried from the base event to the ones a rule generates.
 //
 // A duration is reapplied per occurrence; an absolute end is turned into the gap it describes, so
@@ -390,16 +365,25 @@ function expandSeries(
     const start = detail.start as string;
     const repeat = detail.repeat!;
 
-    let generated: string[];
-    try {
-        generated = expandRule(repeat, start, window.from, window.to);
-    }
-    catch (error) {
-        if (error instanceof RecurrenceError) {
-            errors.push(['repeat', error.message, eventName, entry.path, entry.title]);
-            return;
+    // The rule's own mistakes are reported under `repeat` wherever an expansion meets them, and not
+    // only the first: an unknown `tz` fails only once there is an occurrence to convert, so a window
+    // holding none reads the rule without complaint.
+    const expand = (from: string, to: string): string[] | null => {
+        try {
+            return expandRule(repeat, start, from, to);
         }
-        throw error;
+        catch (error) {
+            if (error instanceof RecurrenceError) {
+                errors.push(['repeat', error.message, eventName, entry.path, entry.title]);
+                return null;
+            }
+            throw error;
+        }
+    };
+
+    const generated = expand(window.from, window.to);
+    if (generated === null) {
+        return;
     }
 
     // Both sides are keyed by instant, so an adjustment may be written with or without an offset
@@ -470,8 +454,18 @@ function expandSeries(
             || moved === null || moved < from || moved > to) {
             continue;
         }
-        // Only a slot the rule still generates, as inside the window.
-        if (!generates(repeat, start, instant)) {
+        // Only a slot the rule still generates, as inside the window. Asked over the days either
+        // side rather than of the instant alone: `expandRule` reads its window as wall clock in the
+        // rule's own zone, which need not be the reader's.
+        const day = dayjs(instant);
+        const around = expand(
+            day.subtract(1, 'day').format('YYYY-MM-DD'),
+            day.add(1, 'day').format('YYYY-MM-DD'),
+        );
+        if (around === null) {
+            return;
+        }
+        if (!around.some((occurrence) => instantOf(occurrence) === instant)) {
             strays.add(instant);
             continue;
         }

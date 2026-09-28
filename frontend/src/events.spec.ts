@@ -767,6 +767,18 @@ describe('an override that moves its occurrence', () => {
         expect(events).toEqual([]);
         expect(errors).toEqual([['at', '2026-09-16 18:00', 'Maintenance', 'a.md', null]]);
     });
+
+    // A window with no occurrence of its own reads an unknown zone without complaint, so the
+    // problem first shows while looking for the slot this one moved from. It is the rule's.
+    it('reports an unknown zone met while looking for its slot under repeat', () => {
+        const { events, errors } = derive([maintenance({
+            repeat: { freq: 'monthly', byday: ['3thu'], tz: 'Mars/Olympus' },
+        })], home);
+
+        expect(events).toEqual([]);
+        expect(errors).toEqual(
+            [['repeat', 'Unknown timezone "Mars/Olympus"', 'Maintenance', 'a.md', null]]);
+    });
 });
 
 describe('an all-day series', () => {
