@@ -4,10 +4,10 @@ import type { Ref } from 'vue';
 import { defineStore } from 'pinia';
 
 import { useLocalStorage } from '@/composables/localStorage';
+import { connectServiceWorker } from '@/service-worker';
 import { useFilesStore } from '@/stores/files';
 
 import * as api from '@/api';
-import { apiUrl } from '@/api-url';
 
 export const useAppStore = defineStore('app', () => {
     // States
@@ -15,8 +15,7 @@ export const useAppStore = defineStore('app', () => {
     const loginCallbacks: Ref<(() => void)[]> = ref([]);
     const isLoggingIn = ref(false);
     const loginError: Ref<null | string> = ref(null);
-    const serviceWorker: Ref<null | ServiceWorker> = ref(null);
-    const serviceWorkerConfigured = ref(false);
+    const serviceWorkerConfigured = connectServiceWorker(token);
     const draggingViewerContent = ref(false);
     // How many mounted views are showing their own controls in the app bar, through <AppBarContent>.
     // While any is, the app bar leaves out its generic title.
@@ -71,75 +70,12 @@ export const useAppStore = defineStore('app', () => {
         }
     }, { flush: 'post' });
 
-    // Service worker
-    if ('serviceWorker' in navigator) {
-        // The API URL goes in the script's URL, where every copy of the worker the browser starts
-        // can read it; see `filesUrl` in the worker.
-        const scriptUrl = `${import.meta.env.BASE_URL}service-worker.js?${new URLSearchParams({ api: apiUrl })}`;
-        navigator.serviceWorker.register(scriptUrl).then(() => {
-            console.log('Service worker registration succeeded.');
-        }).catch((error) => {
-            console.error(`Service worker registration failed: ${error}`);
-        });
-
-        // Also records the worker as the one to tell when the token changes.
-        function configure(worker: ServiceWorker) {
-            serviceWorker.value = worker;
-            worker.postMessage({
-                type: 'configure',
-                value: {
-                    apiUrl: apiUrl,
-                    apiToken: token.value,
-                    appRoot: import.meta.env.VITE_APP_APPLICATION_ROOT,
-                },
-            });
-        }
-
-        navigator.serviceWorker.ready
-            .then((registration) => {
-                console.log(`A service worker is active: ${registration.active}`);
-                configure(registration.active!);
-            });
-
-        // A new version of the worker takes over the page as soon as it is installed, which can be
-        // while the page is still waiting for the old one to answer `configure`. The old one is
-        // then discarded without answering, and the page, which shows nothing until it hears back,
-        // would stay blank.
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-            if (navigator.serviceWorker.controller !== null) {
-                configure(navigator.serviceWorker.controller);
-            }
-        });
-
-        navigator.serviceWorker.addEventListener('message', (event) => {
-            if (event.data === 'configured') {
-                serviceWorkerConfigured.value = true;
-            }
-            else if (event.data === 'request-api-token') {
-                // The worker asks with each file it loads; see `requestToken` there for why.
-                event.ports[0].postMessage(token.value);
-            }
-        });
-
-        // The worker's event notifications read the token it was given last. A change before any
-        // worker is configured needs no message, as `configure` carries the token as it is then.
-        watch(token, (value) => {
-            serviceWorker.value?.postMessage({
-                type: 'update-api-token',
-                value: value,
-            });
-        });
-    } else {
-        console.error('Service workers are not supported.');
-    }
-
     return {
         // States
         token,
         loginCallbacks,
         isLoggingIn,
         loginError,
-        serviceWorker,
         serviceWorkerConfigured,
         draggingViewerContent,
         appBarClaims,
