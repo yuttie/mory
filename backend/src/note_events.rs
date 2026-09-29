@@ -205,6 +205,13 @@ static WALL_CLOCK: LazyLock<Regex> = LazyLock::new(|| {
     .expect("a valid pattern")
 });
 
+// `PARSE_REGEX` in Vuetify's `VCalendar/util/timestamp.js`: how the calendar reads a start that
+// `toWallClock` hands it as written.
+static CALENDAR_PARSE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^([0-9]{4})-([0-9]{1,2})(-([0-9]{1,2}))?([^0-9]+([0-9]{1,2}))?(:([0-9]{1,2}))?(:([0-9]{1,2}))?$")
+        .expect("a valid pattern")
+});
+
 static HAS_OFFSET: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?:Z|[+-][0-9]{2}:?[0-9]{2})$").expect("a valid pattern"));
 
@@ -356,9 +363,7 @@ fn parse_wall_clock(text: &str) -> Option<(NaiveDateTime, bool)> {
 /// zone; a wall clock without one is already the reader's, and is taken as written.
 pub(crate) fn to_wall_clock(text: &str, zone: Zone) -> Option<Start> {
     let Some((wall, has_time)) = parse_wall_clock(text) else {
-        // The frontend hands such a string to the view as it stands. It passed `dayjs`, so read it
-        // the way `dayjs` does.
-        return dayjs_parse(text, zone).map(|at| Start::Time(wall_clock_at(at, zone)));
+        return calendar_start(text);
     };
     if !has_time {
         return Some(Start::Date(wall.date()));
@@ -371,6 +376,21 @@ pub(crate) fn to_wall_clock(text: &str, zone: Zone) -> Option<Start> {
         }
     }
     Some(Start::Time(wall))
+}
+
+/// Where the calendar draws a start `toWallClock` hands it as written, having no wall clock to read
+/// in it: timed only with both an hour and a minute, seconds ignored, a missing day the first, and
+/// nowhere at all when it does not match -- the calendar throws.
+fn calendar_start(text: &str) -> Option<Start> {
+    let parts = CALENDAR_PARSE.captures(text)?;
+    let field = |i: usize| group(&parts, i).and_then(|n| u32::try_from(n).ok());
+    // `parseInt(parts[4]) || 1`
+    let day = field(4).filter(|day| *day != 0).unwrap_or(1);
+    let date = NaiveDate::from_ymd_opt(i32::try_from(group(&parts, 1)?).ok()?, field(2)?, day)?;
+    if parts.get(6).is_none() || parts.get(8).is_none() {
+        return Some(Start::Date(date));
+    }
+    Some(Start::Time(date.and_hms_opt(field(6)?, field(8)?, 0)?))
 }
 
 /// The value as JavaScript's `String()` would spell it, for the regexes that coerce their input.
@@ -938,6 +958,26 @@ events:
                         "2024-05-01 10:60+09:00", "2024-05-01+09:00"] {
             assert_eq!(read(refused), None, "{refused}");
         }
+    }
+
+    #[test]
+    fn a_start_without_a_wall_clock_is_drawn_where_the_calendar_reads_it() {
+        // Each passes `dayjs`, so the frontend hands it to `<v-calendar>` as written.
+        let yaml = "
+events:
+    Short month: { start: '2024-5-1 10:00' }
+    Short date: { start: '2024-5-2' }
+    Hour only: { start: '2024-05-03T10' }
+    Month only: { start: '2024-05' }
+    Slashes: { start: '2024/05/04 10:00' }
+    Fraction: { start: '2024-05-05 10:00:00.5' }
+";
+        assert_eq!(drawn(yaml), [
+            "2024-05-01  Month only",
+            "2024-05-01 10:00  Short month",
+            "2024-05-02  Short date",
+            "2024-05-03  Hour only",
+        ]);
     }
 
     #[test]
