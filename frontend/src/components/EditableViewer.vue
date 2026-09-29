@@ -106,6 +106,7 @@ import { useLocalStorage } from '@/composables/localStorage';
 import AiActionAdHocDialog from './AiActionAdHocDialog.vue';
 import AiActionInputDialog from './AiActionInputDialog.vue';
 import AiActionMenu from './AiActionMenu.vue';
+import Editor from './Editor.vue';
 import { runAiAction as runAiActionRequest } from '@/api';
 import { useFilesStore } from '@/stores/files';
 import { fillPrompt, hasInputPlaceholder, loadAiActions, saveAiActions } from '@/ai-actions';
@@ -178,7 +179,7 @@ let lastEmittedValue: string | null = null;
 let pendingInputResolve: ((input: string | null) => void) | null = null;
 
 // Template Refs
-const editor = ref(null);
+const editor = ref<InstanceType<typeof Editor> | HTMLTextAreaElement | null>(null);
 const viewer = ref(null);
 const shadowDomRootElement = ref(null);
 const shadowRoot = ref(null);
@@ -302,7 +303,7 @@ function insertText(newText: string) {
         textArea.value = textArea.value.slice(0, textArea.selectionStart) + newText + textArea.value.slice(textArea.selectionEnd);
     }
     else {
-        const editorComponent = editor.value as Editor;
+        const editorComponent = editor.value as InstanceType<typeof Editor>;
         editorComponent.replaceSelection(newText);
     }
 }
@@ -315,7 +316,7 @@ function encloseText(before: string, after: string) {
         textArea.value = textArea.value.slice(0, textArea.selectionStart) + formattedText + textArea.value.slice(textArea.selectionEnd);
     }
     else {
-        const editorComponent = editor.value as Editor;
+        const editorComponent = editor.value as InstanceType<typeof Editor>;
         const selectedText = editorComponent.getSelection();
         const formattedText = before + selectedText + after;
         editorComponent.replaceSelection(formattedText);
@@ -330,7 +331,7 @@ function formatTable() {
         textArea.value = textArea.value.slice(0, textArea.selectionStart) + formattedText + textArea.value.slice(textArea.selectionEnd);
     }
     else {
-        const editorComponent = editor.value as Editor;
+        const editorComponent = editor.value as InstanceType<typeof Editor>;
         const selectedText = editorComponent.getSelection();
         const formattedText = CliPrettify.prettify(selectedText);
         editorComponent.replaceSelection(formattedText);
@@ -347,7 +348,7 @@ function getEditorSelection(): { from: number, to: number, text: string } {
         };
     }
     else {
-        const editorComponent = editor.value as Editor;
+        const editorComponent = editor.value as InstanceType<typeof Editor>;
         const range = editorComponent.getSelectionRange();
         return { ...range, text: editorComponent.getSelection() };
     }
@@ -368,7 +369,7 @@ function replaceEditorRange(from: number, to: number, newText: string) {
         });
     }
     else {
-        const editorComponent = editor.value as Editor;
+        const editorComponent = editor.value as InstanceType<typeof Editor>;
         editorComponent.replaceRange(from, to, newText);
     }
 }
@@ -712,7 +713,7 @@ function editorScrollTo(lineNumber: number) {
         textArea.scrollTo({ top: lineNumber * lineHeight });
     }
     else {
-        const editorComponent = editor.value as Editor;
+        const editorComponent = editor.value as InstanceType<typeof Editor>;
         editorComponent.scrollTo(lineNumber);
     }
 }
@@ -871,7 +872,7 @@ function onEditorScroll(lineNumber: number) {
 }
 
 function onEditorPaneResize() {
-    (editor.value as Editor).resize();
+    (editor.value as InstanceType<typeof Editor>).resize();
 }
 
 function onViewerPaneResize() {
@@ -879,11 +880,11 @@ function onViewerPaneResize() {
 }
 
 function focus() {
-    (editor.value as Editor | HTMLTextAreaElement).focus();
+    (editor.value as InstanceType<typeof Editor> | HTMLTextAreaElement).focus();
 }
 
 function blur() {
-    (editor.value as Editor | HTMLTextAreaElement).blur();
+    (editor.value as InstanceType<typeof Editor> | HTMLTextAreaElement).blur();
 }
 
 // Watchers
