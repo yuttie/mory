@@ -25,6 +25,7 @@ use std::time::Duration as StdDuration;
 
 use anyhow::{Context, Result, bail};
 use axum::http::{HeaderValue, StatusCode, Uri};
+use axum::response::{IntoResponse, Response};
 use axum::{Json, extract};
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -40,7 +41,7 @@ use web_push_native::jwt_simple::algorithms::{
 };
 use web_push_native::{Auth, WebPushBuilder, p256::PublicKey};
 
-use crate::models::{AppState, ListEntry};
+use crate::models::{AppError, AppState, ListEntry};
 use crate::note_events::{self, Reader};
 
 /// How far ahead each look at the schedule reaches, and so how long the scheduler sleeps when
@@ -197,10 +198,11 @@ pub async fn get_key(extract::State(state): extract::State<AppState>) -> Json<St
 pub async fn put_subscription(
     extract::State(state): extract::State<AppState>,
     Json(request): Json<SubscriptionRequest>,
-) -> Result<StatusCode, (StatusCode, String)> {
+) -> Result<Response, AppError> {
     let SubscriptionRequest { endpoint, keys, zone } = request;
-    Subscription::parse(&endpoint, &keys.p256dh, &keys.auth, &zone)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    if let Err(e) = Subscription::parse(&endpoint, &keys.p256dh, &keys.auth, &zone) {
+        return Ok((StatusCode::BAD_REQUEST, e.to_string()).into_response());
+    }
     sqlx::query(
             "INSERT INTO push_subscription (endpoint, p256dh, auth, zone, updated_at)
              VALUES (?, ?, ?, ?, ?)
@@ -216,30 +218,19 @@ pub async fn put_subscription(
         .bind(&zone)
         .bind(Utc::now().timestamp())
         .execute(&state.cache_db_writer)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to store a push subscription: {:?}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, "the subscription could not be stored".to_owned())
-        })?;
+        .await?;
     state.push.subscriptions_changed.notify_one();
-    Ok(StatusCode::NO_CONTENT)
+    Ok(StatusCode::NO_CONTENT.into_response())
 }
 
 /// `DELETE /v2/push/subscription`: stop sending this browser alarms.
 pub async fn delete_subscription(
     extract::State(state): extract::State<AppState>,
     Json(request): Json<EndpointRequest>,
-) -> StatusCode {
-    match forget(&state, &request.endpoint).await {
-        Ok(()) => {
-            state.push.subscriptions_changed.notify_one();
-            StatusCode::NO_CONTENT
-        },
-        Err(e) => {
-            tracing::error!("Failed to delete a push subscription: {:?}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        },
-    }
+) -> Result<StatusCode, AppError> {
+    forget(&state, &request.endpoint).await?;
+    state.push.subscriptions_changed.notify_one();
+    Ok(StatusCode::NO_CONTENT)
 }
 
 // --- alarms ---------------------------------------------------------------------------------
