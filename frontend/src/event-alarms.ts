@@ -7,6 +7,17 @@ import * as api from '@/api';
 // service worker shows; see its `push` handler for why the worker cannot wait for one itself, and
 // `backend/src/push.rs` for the sender. This page only subscribes, and tells moried where to send.
 
+// How long signing out waits for the alarms to end. moried and the push service are each a network
+// away, and a sign-out stuck on either is worse than leaving moried to forget the subscription
+// when the push service next reports it ended.
+const END_TIMEOUT_MS = 5 * 1000;
+
+// Where a worker exists without Push, as in Safari on iOS outside a home-screen app, there is
+// nothing to subscribe or end.
+function pushSupported(): boolean {
+    return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+}
+
 function base64UrlToBytes(text: string): Uint8Array<ArrayBuffer> {
     // `atob` does without the padding, but not without the standard alphabet.
     const binary = atob(text.replace(/-/g, '+').replace(/_/g, '/'));
@@ -24,8 +35,7 @@ function sameBytes(a: ArrayBuffer | null, b: Uint8Array): boolean {
 // Registered on every load, which is what refills moried's copy should its cache be deleted, and
 // subscribed afresh when moried's key has changed, as it does when `MORIED_SECRET` is rotated.
 async function subscribe(): Promise<void> {
-    if (!('PushManager' in window) || !('Notification' in window)
-        || Notification.permission !== 'granted') {
+    if (!pushSupported() || Notification.permission !== 'granted') {
         return;
     }
     const key = base64UrlToBytes(await api.getPushKey());
@@ -68,11 +78,7 @@ export function watchEventAlarms(token: Ref<string | null>): void {
     }, { immediate: true, flush: 'post' });
 }
 
-/// Stops this browser's alarms, which name events from a private repository.
-export async function endEventAlarms(): Promise<void> {
-    if (!('serviceWorker' in navigator)) {
-        return;
-    }
+async function unsubscribe(): Promise<void> {
     const registration = await navigator.serviceWorker.getRegistration();
     const subscription = await registration?.pushManager.getSubscription();
     if (subscription === null || subscription === undefined) {
@@ -82,4 +88,17 @@ export async function endEventAlarms(): Promise<void> {
     // leaves it to do so at the next alarm.
     await api.deletePushSubscription(subscription.endpoint).catch(() => {});
     await subscription.unsubscribe();
+}
+
+/// Stops this browser's alarms, which name events from a private repository.
+export async function endEventAlarms(): Promise<void> {
+    if (!pushSupported()) {
+        return;
+    }
+    await Promise.race([
+        unsubscribe(),
+        new Promise<void>((resolve) => {
+            setTimeout(resolve, END_TIMEOUT_MS);
+        }),
+    ]);
 }
