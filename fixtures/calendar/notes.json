@@ -897,9 +897,17 @@
         "2024-09-01 07:00  Null parts",
         "2024-09-15 08:00  A month day, not a list",
         "2024-09-15 10:00  Twice a year",
+        "2024-10-06 08:00  An empty weekday list",
+        "2024-10-07 08:00  An empty month day list",
+        "2024-10-08 08:00  An empty month list",
+        "2024-11-06 08:00  An empty weekday list",
+        "2024-11-07 08:00  An empty month day list",
+        "2024-12-06 08:00  An empty weekday list",
+        "2024-12-07 08:00  An empty month day list",
         "2025-03-15 10:00  Twice a year",
         "2025-07-04 08:00  A month, not a list",
-        "2025-09-15 10:00  Twice a year"
+        "2025-09-15 10:00  Twice a year",
+        "2025-10-08 08:00  An empty month list"
       ],
       "metadata": {
         "events": {
@@ -918,6 +926,30 @@
               "freq": "yearly"
             },
             "start": "2024-07-04 08:00"
+          },
+          "An empty month day list": {
+            "repeat": {
+              "bymonthday": [],
+              "count": 3,
+              "freq": "monthly"
+            },
+            "start": "2024-10-07 08:00"
+          },
+          "An empty month list": {
+            "repeat": {
+              "bymonth": [],
+              "count": 2,
+              "freq": "yearly"
+            },
+            "start": "2024-10-08 08:00"
+          },
+          "An empty weekday list": {
+            "repeat": {
+              "byday": [],
+              "count": 3,
+              "freq": "monthly"
+            },
+            "start": "2024-10-06 08:00"
           },
           "Daily with count": {
             "exclusions": [
