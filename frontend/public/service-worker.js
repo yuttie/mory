@@ -71,6 +71,9 @@ self.addEventListener('push', (event) => {
         alarm = event.data.json();
     }
     catch {
+        alarm = null;
+    }
+    if (typeof alarm?.title !== 'string') {
         // Not one of moried's, such as the test message DevTools sends. Something must still be
         // shown, as the subscription promised; the browser shows a warning of its own otherwise.
         alarm = { title: 'mory', body: event.data?.text() };
