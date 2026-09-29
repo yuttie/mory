@@ -120,6 +120,18 @@ function hasOrdinal(value: string): boolean {
     return m !== null && m[1] !== undefined;
 }
 
+/// A list in a rule as the dialect means it, whatever the frontmatter held: a single value is a
+/// list of one, and `null` or an empty list is no restriction at all. rrule.js takes an empty list
+/// as "none of these", which drops the default it would take from `start`, so a monthly rule with
+/// `byday: []` came out daily.
+function listOf(value: unknown): unknown[] | undefined {
+    if (value === undefined || value === null) {
+        return undefined;
+    }
+    const list = Array.isArray(value) ? value : [value];
+    return list.length === 0 ? undefined : list;
+}
+
 /// The wall-clock occurrences a rule generates that fall within `[from, to]`.
 ///
 /// Returned in the reader's own zone: `repeat.tz` names the zone the rule's wall clock belongs to,
@@ -138,7 +150,13 @@ export function expandRule(
         throw new RecurrenceError(`Unusable start "${start}"`);
     }
 
-    if (repeat.byday !== undefined && repeat.freq === 'weekly' && repeat.byday.some(hasOrdinal)) {
+    // Frontmatter is whatever the file said, so the lists are read rather than trusted: a
+    // `TypeError` out of here would blank the whole calendar.
+    const byday = listOf(repeat.byday);
+    const bymonthday = listOf(repeat.bymonthday);
+    const bymonth = listOf(repeat.bymonth);
+
+    if (byday !== undefined && repeat.freq === 'weekly' && byday.some((day) => hasOrdinal(String(day)))) {
         // "the third Wednesday" needs a period longer than a week to count within.
         throw new RecurrenceError('An ordinal weekday means nothing under freq: weekly');
     }
@@ -150,14 +168,14 @@ export function expandRule(
     if (repeat.interval !== undefined) {
         options.interval = repeat.interval;
     }
-    if (repeat.byday !== undefined) {
-        options.byweekday = repeat.byday.map(toWeekday);
+    if (byday !== undefined) {
+        options.byweekday = byday.map((day) => toWeekday(String(day)));
     }
-    if (repeat.bymonthday !== undefined) {
-        options.bymonthday = repeat.bymonthday;
+    if (bymonthday !== undefined) {
+        options.bymonthday = bymonthday as number[];
     }
-    if (repeat.bymonth !== undefined) {
-        options.bymonth = repeat.bymonth;
+    if (bymonth !== undefined) {
+        options.bymonth = bymonth as number[];
     }
     if (repeat.wkst !== undefined) {
         options.wkst = WEEKDAYS[repeat.wkst];

@@ -86,6 +86,42 @@ events:
             freq: yearly
             bymonth: 7
             count: 2
+    An empty weekday list:
+        start: 2024-10-06 08:00
+        repeat:
+            freq: monthly
+            byday: []
+            count: 3
+    An empty month day list:
+        start: 2024-10-07 08:00
+        repeat:
+            freq: monthly
+            bymonthday: []
+            count: 3
+    An empty month list:
+        start: 2024-10-08 08:00
+        repeat:
+            freq: yearly
+            bymonth: []
+            count: 2
+    A weekday, not a list:
+        start: 2024-10-14 08:00
+        repeat:
+            freq: weekly
+            byday: wed
+            count: 2
+    An ordinal weekday, not a list:
+        start: 2024-10-14 09:00
+        repeat:
+            freq: monthly
+            byday: 3wed
+            count: 2
+    A null weekday list:
+        start: 2024-10-14 10:00
+        repeat:
+            freq: weekly
+            byday:
+            count: 2
 ---
 
 # Rules

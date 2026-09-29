@@ -105,6 +105,36 @@ describe('expandRule', () => {
         )).toEqual(['2024-03-01', '2024-11-01', '2025-03-01', '2025-11-01']);
     });
 
+    it('reads an empty list as no restriction rather than as none of these', () => {
+        // The 6th of each month, as with no list at all; rrule.js alone would give every day.
+        for (const list of ['byday', 'bymonthday'] as const) {
+            expect(expandRule(
+                { freq: 'monthly', [list]: [], count: 3 }, '2024-05-06', '2024-01-01', '2024-12-31',
+            ), list).toEqual(['2024-05-06', '2024-06-06', '2024-07-06']);
+        }
+        expect(expandRule(
+            { freq: 'yearly', bymonth: [], count: 2 }, '2024-05-06', '2024-01-01', '2025-12-31',
+        )).toEqual(['2024-05-06', '2025-05-06']);
+    });
+
+    it('reads a single value as a list of one, and null as no list', () => {
+        const rule = (byday: unknown) => ({ freq: 'weekly', byday, count: 2 }) as unknown as EventRepeat;
+        expect(expandRule(rule('wed'), '2024-05-06', '2024-01-01', '2024-12-31'))
+            .toEqual(['2024-05-08', '2024-05-15']);
+        expect(expandRule(rule(null), '2024-05-06', '2024-01-01', '2024-12-31'))
+            .toEqual(['2024-05-06', '2024-05-13']);
+        expect(expandRule(
+            { freq: 'monthly', byday: '3wed', count: 2 } as unknown as EventRepeat,
+            '2024-05-06', '2024-01-01', '2024-12-31',
+        )).toEqual(['2024-05-15', '2024-06-19']);
+    });
+
+    it('rejects a weekday it cannot read, rather than throwing out of the calendar', () => {
+        expect(() => expandRule(
+            { freq: 'weekly', byday: 5 } as unknown as EventRepeat, '2024-05-06', '2024-05-01', '2024-05-31',
+        )).toThrow(RecurrenceError);
+    });
+
     it('rejects an unusable start, until or timezone', () => {
         expect(() => expandRule({ freq: 'daily' }, 'nonsense', '2024-05-01', '2024-05-31'))
             .toThrow(RecurrenceError);

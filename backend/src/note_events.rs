@@ -676,9 +676,16 @@ fn expand_rule(
     };
     let mut rule = RRule::new(freq);
 
-    if let Some(byday) = repeat.get("byday") {
+    // `listOf` in the frontend: `null` is no list at all, and a single value a list of one. An
+    // empty list is no list to `rrule` already.
+    let list = |value: &Value| match value {
+        Value::Sequence(items) => items.clone(),
+        single => vec![single.clone()],
+    };
+
+    if let Some(byday) = present(repeat.get("byday")) {
         let mut days = Vec::new();
-        for day in byday.as_sequence()? {
+        for day in &list(byday) {
             let parts = BYDAY.captures(day.as_str()?)?;
             let day = weekday(&parts[2])?;
             days.push(match parts.get(1) {
@@ -698,11 +705,6 @@ fn expand_rule(
     if let Some(interval) = repeat.get("interval") {
         rule = rule.interval(integer::<u16>(interval).filter(|n| *n > 0)?);
     }
-    // rrule.js reads a `null` list as no list at all, and a single value as a list of one.
-    let list = |value: &Value| match value {
-        Value::Sequence(items) => items.clone(),
-        single => vec![single.clone()],
-    };
     if let Some(days) = present(repeat.get("bymonthday")) {
         rule = rule.by_month_day(list(days).iter().map(integer::<i8>).collect::<Option<_>>()?);
     }
