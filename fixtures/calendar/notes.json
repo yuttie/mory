@@ -1,0 +1,1166 @@
+{
+  "notes": {
+    "converted/all-day-series.md": {
+      "drawn": [
+        "2024-05-06  Holiday",
+        "2024-05-13  Holiday",
+        "2024-05-20  Holiday",
+        "2024-05-27  Holiday"
+      ],
+      "metadata": {
+        "events": {
+          "Holiday": {
+            "end": "2024-05-06",
+            "ical": {
+              "calendar": "fixture",
+              "uid": "allday@example"
+            },
+            "repeat": {
+              "byday": [
+                "mon"
+              ],
+              "count": 4,
+              "freq": "weekly",
+              "wkst": "mon"
+            },
+            "start": "2024-05-06"
+          }
+        },
+        "tags": [
+          "ical"
+        ]
+      }
+    },
+    "converted/all-day-until-date.md": {
+      "drawn": [
+        "2023-04-17  Third Monday each April",
+        "2024-04-15  Third Monday each April",
+        "2025-04-21  Third Monday each April"
+      ],
+      "metadata": {
+        "events": {
+          "Third Monday each April": {
+            "end": "2023-04-17",
+            "ical": {
+              "calendar": "fixture",
+              "uid": "all-day-until-date@example"
+            },
+            "repeat": {
+              "byday": [
+                "3mon"
+              ],
+              "freq": "monthly",
+              "interval": 12,
+              "until": "2025-04-21",
+              "wkst": "mon"
+            },
+            "start": "2023-04-17"
+          }
+        },
+        "tags": [
+          "ical"
+        ]
+      }
+    },
+    "converted/dtstart-off-rule.md": {
+      "drawn": [
+        "2024-05-14 17:00  Third Wednesday from a first Wednesday",
+        "2024-06-18 17:00  Third Wednesday from a first Wednesday",
+        "2024-07-16 17:00  Third Wednesday from a first Wednesday",
+        "2024-08-20 17:00  Third Wednesday from a first Wednesday"
+      ],
+      "metadata": {
+        "events": {
+          "Third Wednesday from a first Wednesday": {
+            "end": "2024-05-01 10:00:00+09:00",
+            "ical": {
+              "calendar": "fixture",
+              "uid": "dtstart-off-rule@example"
+            },
+            "repeat": {
+              "byday": [
+                "3wed"
+              ],
+              "count": 4,
+              "freq": "monthly",
+              "tz": "Asia/Tokyo",
+              "wkst": "mon"
+            },
+            "start": "2024-05-01 09:00:00+09:00"
+          }
+        },
+        "tags": [
+          "ical"
+        ]
+      }
+    },
+    "converted/moved-into-window.md": {
+      "drawn": [
+        "2024-01-18 01:00  Maintenance",
+        "2024-02-15 01:00  Maintenance",
+        "2024-03-21 02:00  Maintenance",
+        "2024-04-18 02:00  Maintenance",
+        "2024-05-27 02:00  Maintenance, moved",
+        "2024-06-20 02:00  Maintenance",
+        "2024-07-18 02:00  Maintenance",
+        "2024-08-15 02:00  Maintenance",
+        "2024-09-19 02:00  Maintenance",
+        "2024-10-17 02:00  Maintenance",
+        "2024-11-21 01:00  Maintenance",
+        "2024-12-19 01:00  Maintenance",
+        "2025-01-16 01:00  Maintenance",
+        "2025-02-20 01:00  Maintenance",
+        "2025-03-20 02:00  Maintenance",
+        "2025-04-17 02:00  Maintenance",
+        "2025-05-15 02:00  Maintenance",
+        "2025-06-19 02:00  Maintenance",
+        "2025-07-17 02:00  Maintenance",
+        "2025-08-21 02:00  Maintenance",
+        "2025-09-18 02:00  Maintenance",
+        "2025-10-16 02:00  Maintenance",
+        "2025-11-20 01:00  Maintenance",
+        "2025-12-18 01:00  Maintenance",
+        "2026-01-15 01:00  Maintenance",
+        "2026-02-19 01:00  Maintenance",
+        "2026-03-19 02:00  Maintenance",
+        "2026-04-16 02:00  Maintenance",
+        "2026-05-21 02:00  Maintenance",
+        "2026-06-18 02:00  Maintenance",
+        "2026-07-16 02:00  Maintenance",
+        "2026-08-20 02:00  Maintenance",
+        "2026-09-17 02:00  Maintenance",
+        "2026-10-15 02:00  Maintenance",
+        "2026-11-19 01:00  Maintenance",
+        "2026-12-17 01:00  Maintenance"
+      ],
+      "metadata": {
+        "events": {
+          "Maintenance": {
+            "end": "2024-01-18 22:00:00+09:00",
+            "ical": {
+              "calendar": "fixture",
+              "uid": "moved-into-window@example"
+            },
+            "overrides": [
+              {
+                "at": "2024-05-16 18:00:00+09:00",
+                "end": "2024-05-27 20:00:00+09:00",
+                "name": "Maintenance, moved",
+                "start": "2024-05-27 18:00:00+09:00"
+              }
+            ],
+            "repeat": {
+              "byday": [
+                "3thu"
+              ],
+              "freq": "monthly",
+              "tz": "Asia/Tokyo",
+              "wkst": "mon"
+            },
+            "start": "2024-01-18 18:00:00+09:00"
+          }
+        },
+        "tags": [
+          "ical"
+        ]
+      }
+    },
+    "converted/multi-day-all-day.md": {
+      "drawn": [
+        "2024-05-06  Two-day break",
+        "2024-05-13  Two-day break",
+        "2024-05-20  Two-day break"
+      ],
+      "metadata": {
+        "events": {
+          "Two-day break": {
+            "end": "2024-05-07",
+            "ical": {
+              "calendar": "fixture",
+              "uid": "span@example"
+            },
+            "repeat": {
+              "byday": [
+                "mon"
+              ],
+              "count": 3,
+              "freq": "weekly",
+              "wkst": "mon"
+            },
+            "start": "2024-05-06"
+          }
+        },
+        "tags": [
+          "ical"
+        ]
+      }
+    },
+    "converted/negative-monthday.md": {
+      "drawn": [
+        "2024-01-30 16:00  Month end",
+        "2024-02-28 16:00  Month end",
+        "2024-03-30 17:00  Month end",
+        "2024-04-29 17:00  Month end",
+        "2024-05-30 17:00  Month end"
+      ],
+      "metadata": {
+        "events": {
+          "Month end": {
+            "end": "2024-01-31 10:00:00+09:00",
+            "ical": {
+              "calendar": "fixture",
+              "uid": "monthend@example"
+            },
+            "repeat": {
+              "bymonthday": [
+                -1
+              ],
+              "count": 5,
+              "freq": "monthly",
+              "tz": "Asia/Tokyo",
+              "wkst": "mon"
+            },
+            "start": "2024-01-31 09:00:00+09:00"
+          }
+        },
+        "tags": [
+          "ical"
+        ]
+      }
+    },
+    "converted/ordinal-weekday.md": {
+      "drawn": [
+        "2024-05-14 17:00  Third Wednesday",
+        "2024-06-18 17:00  Third Wednesday",
+        "2024-07-16 17:00  Third Wednesday",
+        "2024-08-20 17:00  Third Wednesday"
+      ],
+      "metadata": {
+        "events": {
+          "Third Wednesday": {
+            "end": "2024-05-15 10:30:00+09:00",
+            "ical": {
+              "calendar": "fixture",
+              "uid": "ordinal@example"
+            },
+            "repeat": {
+              "byday": [
+                "3wed"
+              ],
+              "count": 4,
+              "freq": "monthly",
+              "tz": "Asia/Tokyo",
+              "wkst": "mon"
+            },
+            "start": "2024-05-15 09:00:00+09:00"
+          }
+        },
+        "tags": [
+          "ical"
+        ]
+      }
+    },
+    "converted/overrides-and-exclusion.md": {
+      "drawn": [
+        "2015-06-25 10:00  Rust release",
+        "2015-08-06 16:00  Moved to the afternoon",
+        "2015-10-29 10:00  Rust release",
+        "2016-01-21 10:00  Rust release",
+        "2016-03-03 10:00  Rust release",
+        "2016-04-14 10:00  Rust release",
+        "2016-05-26 10:00  Rust release",
+        "2016-07-07 10:00  Rust release",
+        "2016-08-18 10:00  Rust release",
+        "2016-09-29 10:00  Rust release",
+        "2016-11-10 10:00  Rust release",
+        "2016-12-22 10:00  Rust release",
+        "2017-02-02 10:00  Rust release",
+        "2017-03-16 10:00  Rust release",
+        "2017-04-27 10:00  Rust release",
+        "2017-06-08 10:00  Rust release",
+        "2017-07-20 10:00  Rust release",
+        "2017-08-31 10:00  Rust release",
+        "2017-10-12 10:00  Rust release",
+        "2017-11-23 10:00  Rust release",
+        "2018-01-04 10:00  Rust release",
+        "2018-02-15 10:00  Rust release",
+        "2018-03-29 10:00  Rust release",
+        "2018-05-10 10:00  Rust release",
+        "2018-06-21 10:00  Rust release",
+        "2018-08-02 10:00  Rust release",
+        "2018-09-13 10:00  Rust release",
+        "2018-10-25 10:00  Rust release",
+        "2018-12-06 10:00  Rust release",
+        "2019-01-17 10:00  Rust release",
+        "2019-02-28 10:00  Rust release",
+        "2019-04-11 10:00  Rust release",
+        "2019-05-23 10:00  Rust release",
+        "2019-07-04 10:00  Rust release",
+        "2019-08-15 10:00  Rust release",
+        "2019-09-26 10:00  Rust release",
+        "2019-11-07 10:00  Rust release",
+        "2019-12-19 10:00  Rust release",
+        "2020-01-30 10:00  Rust release",
+        "2020-03-12 10:00  Rust release",
+        "2020-04-23 10:00  Rust release",
+        "2020-06-04 10:00  Rust release",
+        "2020-07-16 10:00  Rust release",
+        "2020-08-27 10:00  Rust release",
+        "2020-10-08 10:00  Rust release",
+        "2020-11-19 10:00  Rust release",
+        "2020-12-31 10:00  Rust release",
+        "2021-02-11 10:00  Rust release",
+        "2021-03-25 10:00  Rust release",
+        "2021-05-06 10:00  Rust release",
+        "2021-06-17 10:00  Rust release",
+        "2021-07-29 10:00  Rust release",
+        "2021-09-09 10:00  Rust release",
+        "2021-10-21 10:00  Rust release",
+        "2021-12-02 10:00  Rust release",
+        "2022-01-13 10:00  Rust release",
+        "2022-02-24 10:00  Rust release",
+        "2022-04-07 10:00  Rust release",
+        "2022-05-19 10:00  Rust release",
+        "2022-06-30 10:00  Rust release",
+        "2022-08-11 10:00  Rust release",
+        "2022-09-22 10:00  Rust release",
+        "2022-11-03 10:00  Rust release",
+        "2022-12-15 10:00  Rust release",
+        "2023-01-26 10:00  Rust release",
+        "2023-03-09 10:00  Rust release",
+        "2023-04-20 10:00  Rust release",
+        "2023-06-01 10:00  Rust release",
+        "2023-07-13 10:00  Rust release",
+        "2023-08-24 10:00  Rust release",
+        "2023-10-05 10:00  Rust release",
+        "2023-11-16 10:00  Rust release",
+        "2023-12-28 10:00  Rust release",
+        "2024-02-08 10:00  Rust release",
+        "2024-03-21 10:00  Rust release",
+        "2024-05-02 10:00  Rust release",
+        "2024-06-13 10:00  Rust release",
+        "2024-07-25 10:00  Rust release",
+        "2024-09-05 10:00  Rust release",
+        "2024-10-17 10:00  Rust release",
+        "2024-11-28 10:00  Rust release",
+        "2025-01-09 10:00  Rust release",
+        "2025-02-20 10:00  Rust release",
+        "2025-04-03 10:00  Rust release",
+        "2025-05-15 10:00  Rust release",
+        "2025-06-26 10:00  Rust release",
+        "2025-08-07 10:00  Rust release",
+        "2025-09-18 10:00  Rust release",
+        "2025-10-30 10:00  Rust release",
+        "2025-12-11 10:00  Rust release",
+        "2026-01-22 10:00  Rust release",
+        "2026-03-05 10:00  Rust release",
+        "2026-04-16 10:00  Rust release",
+        "2026-05-28 10:00  Rust release",
+        "2026-07-09 10:00  Rust release",
+        "2026-08-20 10:00  Rust release",
+        "2026-10-01 10:00  Rust release",
+        "2026-11-12 10:00  Rust release",
+        "2026-12-24 10:00  Rust release"
+      ],
+      "metadata": {
+        "events": {
+          "Rust release": {
+            "end": "2015-06-25 11:00:00-07:00",
+            "exclusions": [
+              "2015-09-17 10:00:00-07:00",
+              "2015-12-10 10:00:00-08:00"
+            ],
+            "ical": {
+              "calendar": "fixture",
+              "uid": "series@example"
+            },
+            "overrides": [
+              {
+                "at": "2015-08-06 10:00:00-07:00",
+                "end": "2015-08-06 17:30:00-07:00",
+                "name": "Moved to the afternoon",
+                "start": "2015-08-06 16:00:00-07:00"
+              }
+            ],
+            "repeat": {
+              "byday": [
+                "thu"
+              ],
+              "freq": "weekly",
+              "interval": 6,
+              "tz": "America/Los_Angeles",
+              "wkst": "mon"
+            },
+            "start": "2015-06-25 10:00:00-07:00"
+          }
+        },
+        "tags": [
+          "ical"
+        ]
+      }
+    },
+    "converted/rdate.md": {
+      "drawn": [
+        "2024-05-05 18:00  Weekly plus an extra",
+        "2024-05-09 03:00  Weekly plus an extra",
+        "2024-05-12 18:00  Weekly plus an extra",
+        "2024-05-19 18:00  Weekly plus an extra"
+      ],
+      "metadata": {
+        "events": {
+          "Weekly plus an extra": {
+            "end": "2024-05-06 11:00:00+09:00",
+            "ical": {
+              "calendar": "fixture",
+              "uid": "rdate@example"
+            },
+            "instances": [
+              {
+                "end": "2024-05-09 20:00:00+09:00",
+                "start": "2024-05-09 19:00:00+09:00"
+              }
+            ],
+            "repeat": {
+              "byday": [
+                "mon"
+              ],
+              "count": 3,
+              "freq": "weekly",
+              "tz": "Asia/Tokyo",
+              "wkst": "mon"
+            },
+            "start": "2024-05-06 10:00:00+09:00"
+          }
+        },
+        "tags": [
+          "ical"
+        ]
+      }
+    },
+    "converted/timed-tz-dst.md": {
+      "drawn": [
+        "2024-03-01 10:00  Weekly across a DST change",
+        "2024-03-08 10:00  Weekly across a DST change",
+        "2024-03-15 10:00  Weekly across a DST change",
+        "2024-03-22 10:00  Weekly across a DST change",
+        "2024-03-29 10:00  Weekly across a DST change",
+        "2024-04-05 10:00  Weekly across a DST change",
+        "2024-04-12 10:00  Weekly across a DST change",
+        "2024-04-19 10:00  Weekly across a DST change",
+        "2024-04-26 10:00  Weekly across a DST change",
+        "2024-05-03 10:00  Weekly across a DST change",
+        "2024-05-10 10:00  Weekly across a DST change",
+        "2024-05-17 10:00  Weekly across a DST change",
+        "2024-05-24 10:00  Weekly across a DST change",
+        "2024-05-31 10:00  Weekly across a DST change",
+        "2024-06-07 10:00  Weekly across a DST change",
+        "2024-06-14 10:00  Weekly across a DST change",
+        "2024-06-21 10:00  Weekly across a DST change",
+        "2024-06-28 10:00  Weekly across a DST change",
+        "2024-07-05 10:00  Weekly across a DST change",
+        "2024-07-12 10:00  Weekly across a DST change",
+        "2024-07-19 10:00  Weekly across a DST change",
+        "2024-07-26 10:00  Weekly across a DST change",
+        "2024-08-02 10:00  Weekly across a DST change",
+        "2024-08-09 10:00  Weekly across a DST change",
+        "2024-08-16 10:00  Weekly across a DST change",
+        "2024-08-23 10:00  Weekly across a DST change",
+        "2024-08-30 10:00  Weekly across a DST change",
+        "2024-09-06 10:00  Weekly across a DST change",
+        "2024-09-13 10:00  Weekly across a DST change",
+        "2024-09-20 10:00  Weekly across a DST change",
+        "2024-09-27 10:00  Weekly across a DST change",
+        "2024-10-04 10:00  Weekly across a DST change",
+        "2024-10-11 10:00  Weekly across a DST change",
+        "2024-10-18 10:00  Weekly across a DST change",
+        "2024-10-25 10:00  Weekly across a DST change",
+        "2024-11-01 10:00  Weekly across a DST change",
+        "2024-11-08 10:00  Weekly across a DST change",
+        "2024-11-15 10:00  Weekly across a DST change",
+        "2024-11-22 10:00  Weekly across a DST change",
+        "2024-11-29 10:00  Weekly across a DST change",
+        "2024-12-06 10:00  Weekly across a DST change",
+        "2024-12-13 10:00  Weekly across a DST change",
+        "2024-12-20 10:00  Weekly across a DST change",
+        "2024-12-27 10:00  Weekly across a DST change",
+        "2025-01-03 10:00  Weekly across a DST change",
+        "2025-01-10 10:00  Weekly across a DST change",
+        "2025-01-17 10:00  Weekly across a DST change",
+        "2025-01-24 10:00  Weekly across a DST change",
+        "2025-01-31 10:00  Weekly across a DST change",
+        "2025-02-07 10:00  Weekly across a DST change",
+        "2025-02-14 10:00  Weekly across a DST change",
+        "2025-02-21 10:00  Weekly across a DST change",
+        "2025-02-28 10:00  Weekly across a DST change",
+        "2025-03-07 10:00  Weekly across a DST change",
+        "2025-03-14 10:00  Weekly across a DST change",
+        "2025-03-21 10:00  Weekly across a DST change",
+        "2025-03-28 10:00  Weekly across a DST change",
+        "2025-04-04 10:00  Weekly across a DST change",
+        "2025-04-11 10:00  Weekly across a DST change",
+        "2025-04-18 10:00  Weekly across a DST change",
+        "2025-04-25 10:00  Weekly across a DST change",
+        "2025-05-02 10:00  Weekly across a DST change",
+        "2025-05-09 10:00  Weekly across a DST change",
+        "2025-05-16 10:00  Weekly across a DST change",
+        "2025-05-23 10:00  Weekly across a DST change",
+        "2025-05-30 10:00  Weekly across a DST change",
+        "2025-06-06 10:00  Weekly across a DST change",
+        "2025-06-13 10:00  Weekly across a DST change",
+        "2025-06-20 10:00  Weekly across a DST change",
+        "2025-06-27 10:00  Weekly across a DST change",
+        "2025-07-04 10:00  Weekly across a DST change",
+        "2025-07-11 10:00  Weekly across a DST change",
+        "2025-07-18 10:00  Weekly across a DST change",
+        "2025-07-25 10:00  Weekly across a DST change",
+        "2025-08-01 10:00  Weekly across a DST change",
+        "2025-08-08 10:00  Weekly across a DST change",
+        "2025-08-15 10:00  Weekly across a DST change",
+        "2025-08-22 10:00  Weekly across a DST change",
+        "2025-08-29 10:00  Weekly across a DST change",
+        "2025-09-05 10:00  Weekly across a DST change",
+        "2025-09-12 10:00  Weekly across a DST change",
+        "2025-09-19 10:00  Weekly across a DST change",
+        "2025-09-26 10:00  Weekly across a DST change",
+        "2025-10-03 10:00  Weekly across a DST change",
+        "2025-10-10 10:00  Weekly across a DST change",
+        "2025-10-17 10:00  Weekly across a DST change",
+        "2025-10-24 10:00  Weekly across a DST change",
+        "2025-10-31 10:00  Weekly across a DST change",
+        "2025-11-07 10:00  Weekly across a DST change",
+        "2025-11-14 10:00  Weekly across a DST change",
+        "2025-11-21 10:00  Weekly across a DST change",
+        "2025-11-28 10:00  Weekly across a DST change",
+        "2025-12-05 10:00  Weekly across a DST change",
+        "2025-12-12 10:00  Weekly across a DST change",
+        "2025-12-19 10:00  Weekly across a DST change",
+        "2025-12-26 10:00  Weekly across a DST change",
+        "2026-01-02 10:00  Weekly across a DST change",
+        "2026-01-09 10:00  Weekly across a DST change",
+        "2026-01-16 10:00  Weekly across a DST change",
+        "2026-01-23 10:00  Weekly across a DST change",
+        "2026-01-30 10:00  Weekly across a DST change",
+        "2026-02-06 10:00  Weekly across a DST change",
+        "2026-02-13 10:00  Weekly across a DST change",
+        "2026-02-20 10:00  Weekly across a DST change",
+        "2026-02-27 10:00  Weekly across a DST change",
+        "2026-03-06 10:00  Weekly across a DST change",
+        "2026-03-13 10:00  Weekly across a DST change",
+        "2026-03-20 10:00  Weekly across a DST change",
+        "2026-03-27 10:00  Weekly across a DST change",
+        "2026-04-03 10:00  Weekly across a DST change",
+        "2026-04-10 10:00  Weekly across a DST change",
+        "2026-04-17 10:00  Weekly across a DST change",
+        "2026-04-24 10:00  Weekly across a DST change",
+        "2026-05-01 10:00  Weekly across a DST change",
+        "2026-05-08 10:00  Weekly across a DST change",
+        "2026-05-15 10:00  Weekly across a DST change",
+        "2026-05-22 10:00  Weekly across a DST change",
+        "2026-05-29 10:00  Weekly across a DST change",
+        "2026-06-05 10:00  Weekly across a DST change",
+        "2026-06-12 10:00  Weekly across a DST change",
+        "2026-06-19 10:00  Weekly across a DST change",
+        "2026-06-26 10:00  Weekly across a DST change",
+        "2026-07-03 10:00  Weekly across a DST change",
+        "2026-07-10 10:00  Weekly across a DST change",
+        "2026-07-17 10:00  Weekly across a DST change",
+        "2026-07-24 10:00  Weekly across a DST change",
+        "2026-07-31 10:00  Weekly across a DST change",
+        "2026-08-07 10:00  Weekly across a DST change",
+        "2026-08-14 10:00  Weekly across a DST change",
+        "2026-08-21 10:00  Weekly across a DST change",
+        "2026-08-28 10:00  Weekly across a DST change",
+        "2026-09-04 10:00  Weekly across a DST change",
+        "2026-09-11 10:00  Weekly across a DST change",
+        "2026-09-18 10:00  Weekly across a DST change",
+        "2026-09-25 10:00  Weekly across a DST change",
+        "2026-10-02 10:00  Weekly across a DST change",
+        "2026-10-09 10:00  Weekly across a DST change",
+        "2026-10-16 10:00  Weekly across a DST change",
+        "2026-10-23 10:00  Weekly across a DST change",
+        "2026-10-30 10:00  Weekly across a DST change",
+        "2026-11-06 10:00  Weekly across a DST change",
+        "2026-11-13 10:00  Weekly across a DST change",
+        "2026-11-20 10:00  Weekly across a DST change",
+        "2026-11-27 10:00  Weekly across a DST change",
+        "2026-12-04 10:00  Weekly across a DST change",
+        "2026-12-11 10:00  Weekly across a DST change",
+        "2026-12-18 10:00  Weekly across a DST change",
+        "2026-12-25 10:00  Weekly across a DST change",
+        "2027-01-01 10:00  Weekly across a DST change"
+      ],
+      "metadata": {
+        "events": {
+          "Weekly across a DST change": {
+            "end": "2024-03-01 11:00:00-08:00",
+            "ical": {
+              "calendar": "fixture",
+              "uid": "dst@example"
+            },
+            "repeat": {
+              "byday": [
+                "fri"
+              ],
+              "freq": "weekly",
+              "tz": "America/Los_Angeles",
+              "wkst": "mon"
+            },
+            "start": "2024-03-01 10:00:00-08:00"
+          }
+        },
+        "tags": [
+          "ical"
+        ]
+      }
+    },
+    "converted/until-and-wkst.md": {
+      "drawn": [
+        "2020-01-01 10:00  Bounded fortnightly",
+        "2020-01-12 10:00  Bounded fortnightly",
+        "2020-01-15 10:00  Bounded fortnightly",
+        "2020-01-26 10:00  Bounded fortnightly",
+        "2020-01-29 10:00  Bounded fortnightly",
+        "2020-02-09 10:00  Bounded fortnightly"
+      ],
+      "metadata": {
+        "events": {
+          "Bounded fortnightly": {
+            "end": "2020-01-01 11:00:00-08:00",
+            "ical": {
+              "calendar": "fixture",
+              "uid": "until@example"
+            },
+            "repeat": {
+              "byday": [
+                "wed",
+                "sun"
+              ],
+              "freq": "weekly",
+              "interval": 2,
+              "tz": "America/Los_Angeles",
+              "until": "2020-02-10 10:00:00-08:00",
+              "wkst": "sun"
+            },
+            "start": "2020-01-01 10:00:00-08:00"
+          }
+        },
+        "tags": [
+          "ical"
+        ]
+      }
+    },
+    "notes/all-day.md": {
+      "drawn": [
+        "2024-05-01  Monthly review",
+        "2024-05-04  Weekly day off",
+        "2024-05-10  Named zone on a date",
+        "2024-05-11  Named zone on a date",
+        "2024-05-11  Weekly day off",
+        "2024-05-18  Weekly day off",
+        "2024-06-01  Monthly review",
+        "2024-08-01  Monthly review"
+      ],
+      "metadata": {
+        "events": {
+          "Monthly review": {
+            "exclusions": [
+              "2024-07-01"
+            ],
+            "repeat": {
+              "freq": "monthly",
+              "until": "2024-08-01"
+            },
+            "start": "2024-05-01"
+          },
+          "Named zone on a date": {
+            "repeat": {
+              "count": 2,
+              "freq": "daily",
+              "tz": "Asia/Tokyo"
+            },
+            "start": "2024-05-10"
+          },
+          "Weekly day off": {
+            "end": "2024-05-05",
+            "repeat": {
+              "count": 3,
+              "freq": "weekly"
+            },
+            "start": "2024-05-04"
+          }
+        }
+      }
+    },
+    "notes/quirks.md": {
+      "drawn": [
+        "2024-05-01 09:00  Empty end on a start",
+        "2024-05-04 10:00  Blank name",
+        "2024-05-05 09:00  Durations",
+        "2024-05-05 10:00  Long duration",
+        "2024-05-05 11:00  Time of day",
+        "2024-05-06 09:00  Absolute end on a rule",
+        "2024-05-07 09:00  Absolute end on a rule",
+        "2024-05-08 09:00  Instances in a null",
+        "2024-05-09 09:00  Finished",
+        "2024-05-10 09:00  Renamed overrides keep no series name",
+        "2024-05-11 09:00  Renamed overrides keep no series name"
+      ],
+      "metadata": {
+        "events": {
+          "Absolute end on a rule": {
+            "end": "2024-05-06 10:00",
+            "repeat": {
+              "count": 2,
+              "freq": "daily"
+            },
+            "start": "2024-05-06 09:00"
+          },
+          "Blank name": {
+            "name": "",
+            "start": "2024-05-04 10:00"
+          },
+          "Durations": {
+            "end": "+90m",
+            "start": "2024-05-05 09:00"
+          },
+          "Empty end on a rule": {
+            "end": null,
+            "repeat": {
+              "count": 2,
+              "freq": "daily"
+            },
+            "start": "2024-05-03 09:00"
+          },
+          "Empty end on a start": {
+            "end": null,
+            "start": "2024-05-01 09:00"
+          },
+          "Empty end on instances": {
+            "end": null,
+            "instances": [
+              {
+                "start": "2024-05-02 09:00"
+              }
+            ]
+          },
+          "Finished": {
+            "finished": true,
+            "start": "2024-05-09 09:00"
+          },
+          "Instances in a null": {
+            "instances": null,
+            "times": [
+              {
+                "start": "2024-05-08 09:00"
+              }
+            ]
+          },
+          "Long duration": {
+            "end": "+2 hours",
+            "start": "2024-05-05 10:00"
+          },
+          "Numeric colour": {
+            "color": 5,
+            "start": "2024-05-04 11:00"
+          },
+          "Numeric name": {
+            "name": 5,
+            "start": "2024-05-04 09:00"
+          },
+          "Ordinal under weekly": {
+            "repeat": {
+              "byday": [
+                "2mon"
+              ],
+              "freq": "weekly"
+            },
+            "start": "2024-05-07 11:00"
+          },
+          "Renamed overrides keep no series name": {
+            "name": "Ignored on a rule",
+            "repeat": {
+              "count": 2,
+              "freq": "daily"
+            },
+            "start": "2024-05-10 09:00"
+          },
+          "Rule without a mapping": {
+            "repeat": null,
+            "start": "2024-05-07 09:00"
+          },
+          "Time of day": {
+            "end": "12:00",
+            "start": "2024-05-05 11:00"
+          },
+          "Unknown frequency": {
+            "repeat": {
+              "freq": "hourly"
+            },
+            "start": "2024-05-07 10:00"
+          },
+          "Unknown zone": {
+            "repeat": {
+              "count": 2,
+              "freq": "daily",
+              "tz": "Mars/Olympus_Mons"
+            },
+            "start": "2024-05-07 12:00"
+          },
+          "Unreadable end": {
+            "end": "soon",
+            "start": "2024-05-05 12:00"
+          }
+        }
+      }
+    },
+    "notes/rules.md": {
+      "drawn": [
+        "2020-03-15 10:00  Twice a year",
+        "2020-09-15 10:00  Twice a year",
+        "2021-03-15 10:00  Twice a year",
+        "2021-09-15 10:00  Twice a year",
+        "2022-03-15 10:00  Twice a year",
+        "2022-09-15 10:00  Twice a year",
+        "2023-03-15 10:00  Twice a year",
+        "2023-09-15 10:00  Twice a year",
+        "2024-01-02 18:00  Every other Tuesday and Thursday",
+        "2024-01-04 18:00  Every other Tuesday and Thursday",
+        "2024-01-16 18:00  Every other Tuesday and Thursday",
+        "2024-01-17 12:00  Third Wednesday",
+        "2024-01-18 18:00  Every other Tuesday and Thursday",
+        "2024-01-26 17:00  Last Friday",
+        "2024-01-30 18:00  Every other Tuesday and Thursday",
+        "2024-01-31 08:00  Last day of the month",
+        "2024-01-31 08:00  The 31st",
+        "2024-02-01 18:00  Every other Tuesday and Thursday",
+        "2024-02-13 18:00  Every other Tuesday and Thursday",
+        "2024-02-15 18:00  Every other Tuesday and Thursday",
+        "2024-02-21 12:00  Third Wednesday",
+        "2024-02-23 17:00  Last Friday",
+        "2024-02-27 18:00  Every other Tuesday and Thursday",
+        "2024-02-29 08:00  Last day of the month",
+        "2024-02-29 18:00  Every other Tuesday and Thursday",
+        "2024-03-15 10:00  Twice a year",
+        "2024-03-20 12:00  Third Wednesday",
+        "2024-03-29 17:00  Last Friday",
+        "2024-03-31 08:00  Last day of the month",
+        "2024-03-31 08:00  The 31st",
+        "2024-04-17 12:00  Third Wednesday",
+        "2024-04-26 17:00  Last Friday",
+        "2024-04-30 08:00  Last day of the month",
+        "2024-05-06 09:00  Daily with count",
+        "2024-05-09 11:30  Moved and renamed",
+        "2024-05-10 09:00  Daily with count",
+        "2024-05-15 12:00  Third Wednesday",
+        "2024-05-31 08:00  Last day of the month",
+        "2024-05-31 08:00  The 31st",
+        "2024-05-31 17:00  Last Friday",
+        "2024-06-03 10:00  Moved across a week",
+        "2024-06-15 16:00  Moved across a week",
+        "2024-06-17 10:00  Moved across a week",
+        "2024-06-19 12:00  Third Wednesday",
+        "2024-06-28 17:00  Last Friday",
+        "2024-07-01 07:00  Null parts",
+        "2024-07-31 08:00  The 31st",
+        "2024-08-01 07:00  Null parts",
+        "2024-08-05 09:00  Start off the rule",
+        "2024-08-12 09:00  Start off the rule",
+        "2024-09-01 07:00  Null parts",
+        "2024-09-15 10:00  Twice a year",
+        "2025-03-15 10:00  Twice a year",
+        "2025-09-15 10:00  Twice a year"
+      ],
+      "metadata": {
+        "events": {
+          "Daily with count": {
+            "exclusions": [
+              "2024-05-07 09:00",
+              "2024-05-08 09:00:00-07:00"
+            ],
+            "overrides": [
+              {
+                "at": "2024-05-09 09:00",
+                "name": "Moved and renamed",
+                "start": "2024-05-09 11:30"
+              },
+              {
+                "at": "2024-05-10 09:00",
+                "location": "Room 2"
+              }
+            ],
+            "repeat": {
+              "count": 5,
+              "freq": "daily"
+            },
+            "start": "2024-05-06 09:00"
+          },
+          "Every other Tuesday and Thursday": {
+            "repeat": {
+              "byday": [
+                "tue",
+                "thu"
+              ],
+              "freq": "weekly",
+              "interval": 2,
+              "until": "2024-03-01",
+              "wkst": "sun"
+            },
+            "start": "2024-01-02 18:00"
+          },
+          "Last Friday": {
+            "repeat": {
+              "byday": [
+                "-1fri"
+              ],
+              "freq": "monthly",
+              "until": "2024-06-30 23:00"
+            },
+            "start": "2024-01-26 17:00"
+          },
+          "Last day of the month": {
+            "repeat": {
+              "bymonthday": [
+                -1
+              ],
+              "count": 5,
+              "freq": "monthly"
+            },
+            "start": "2024-01-31 08:00"
+          },
+          "Moved across a week": {
+            "overrides": [
+              {
+                "at": "2024-06-10 10:00",
+                "start": "2024-06-15 16:00"
+              }
+            ],
+            "repeat": {
+              "count": 3,
+              "freq": "weekly"
+            },
+            "start": "2024-06-03 10:00"
+          },
+          "Null parts": {
+            "repeat": {
+              "bymonth": null,
+              "bymonthday": null,
+              "count": null,
+              "freq": "monthly",
+              "until": "2024-09-30"
+            },
+            "start": "2024-07-01 07:00"
+          },
+          "Start off the rule": {
+            "repeat": {
+              "byday": [
+                "mon"
+              ],
+              "count": 2,
+              "freq": "weekly"
+            },
+            "start": "2024-08-01 09:00"
+          },
+          "The 31st": {
+            "repeat": {
+              "bymonthday": [
+                31
+              ],
+              "count": 4,
+              "freq": "monthly"
+            },
+            "start": "2024-01-31 08:00"
+          },
+          "Third Wednesday": {
+            "repeat": {
+              "byday": [
+                "3wed"
+              ],
+              "count": 6,
+              "freq": "monthly"
+            },
+            "start": "2024-01-17 12:00"
+          },
+          "Twice a year": {
+            "repeat": {
+              "bymonth": [
+                3,
+                9
+              ],
+              "freq": "yearly",
+              "until": "2025-12-31"
+            },
+            "start": "2020-03-15 10:00"
+          }
+        }
+      }
+    },
+    "notes/single-occurrences.md": {
+      "drawn": [
+        "2024-04-30 18:00  With offset",
+        "2024-05-01 10:00  ISO with Z",
+        "2024-05-01 10:00  Wall clock",
+        "2024-05-01 10:00:30  With seconds",
+        "2024-05-02  All day",
+        "2024-05-03 09:00  Listed",
+        "2024-05-04 09:00  Renamed instance",
+        "2024-05-05  Listed",
+        "2024-05-06 09:00  Older spelling",
+        "2024-05-07 09:00  Both",
+        "2024-05-08 09:00  Both"
+      ],
+      "metadata": {
+        "events": {
+          "All day": {
+            "start": "2024-05-02"
+          },
+          "Both": {
+            "instances": [
+              {
+                "start": "2024-05-08 09:00"
+              }
+            ],
+            "start": "2024-05-07 09:00"
+          },
+          "ISO with Z": {
+            "start": "2024-05-01T17:00:00Z"
+          },
+          "Listed": {
+            "instances": [
+              {
+                "start": "2024-05-03 09:00"
+              },
+              {
+                "name": "Renamed instance",
+                "start": "2024-05-04 09:00-07:00"
+              },
+              {
+                "start": "2024-05-05"
+              },
+              {
+                "start": "not a date"
+              },
+              "just text"
+            ]
+          },
+          "Older spelling": {
+            "times": [
+              {
+                "start": "2024-05-06 09:00"
+              }
+            ]
+          },
+          "Unusable start": {
+            "start": "someday"
+          },
+          "Wall clock": {
+            "start": "2024-05-01 10:00"
+          },
+          "With offset": {
+            "start": "2024-05-01 10:00:00+09:00"
+          },
+          "With seconds": {
+            "start": "2024-05-01 10:00:30"
+          }
+        }
+      }
+    },
+    "notes/zones.md": {
+      "drawn": [
+        "2024-03-03 16:00  Tokyo morning",
+        "2024-03-08 02:30  Wall clock in the spring gap",
+        "2024-03-08 07:00  New York across spring forward",
+        "2024-03-09 02:30  Wall clock in the spring gap",
+        "2024-03-09 07:00  New York across spring forward",
+        "2024-03-10 02:30  Wall clock in the spring gap",
+        "2024-03-10 07:00  New York across spring forward",
+        "2024-03-10 17:00  Tokyo morning",
+        "2024-03-11 02:30  Wall clock in the spring gap",
+        "2024-03-11 07:00  New York across spring forward",
+        "2024-03-17 17:00  Tokyo morning",
+        "2024-03-24 17:00  Tokyo morning",
+        "2024-04-01 04:00  Until with an offset",
+        "2024-04-02 04:00  Until with an offset",
+        "2024-04-03 04:00  Until with an offset",
+        "2024-04-04 04:00  Until with an offset",
+        "2024-04-07 16:00  Excluded by instant",
+        "2024-04-09 16:00  Excluded by instant",
+        "2024-10-25 07:00  London across autumn",
+        "2024-10-26 07:00  London across autumn",
+        "2024-10-27 08:00  London across autumn",
+        "2024-10-28 08:00  London across autumn",
+        "2024-11-02 01:30  Wall clock in the repeated hour",
+        "2024-11-03 01:30  Wall clock in the repeated hour",
+        "2024-11-04 01:30  Wall clock in the repeated hour"
+      ],
+      "metadata": {
+        "events": {
+          "Excluded by instant": {
+            "exclusions": [
+              "2024-04-08 23:00:00Z"
+            ],
+            "repeat": {
+              "count": 3,
+              "freq": "daily",
+              "tz": "Asia/Tokyo"
+            },
+            "start": "2024-04-08 08:00"
+          },
+          "London across autumn": {
+            "repeat": {
+              "count": 4,
+              "freq": "daily",
+              "tz": "Europe/London"
+            },
+            "start": "2024-10-25 15:00:00+01:00"
+          },
+          "New York across spring forward": {
+            "repeat": {
+              "count": 4,
+              "freq": "daily",
+              "tz": "America/New_York"
+            },
+            "start": "2024-03-08 10:00:00-05:00"
+          },
+          "Tokyo morning": {
+            "repeat": {
+              "byday": [
+                "mon"
+              ],
+              "freq": "weekly",
+              "tz": "Asia/Tokyo",
+              "until": "2024-03-26"
+            },
+            "start": "2024-03-04 09:00"
+          },
+          "Until with an offset": {
+            "repeat": {
+              "freq": "daily",
+              "tz": "Asia/Tokyo",
+              "until": "2024-04-04 12:00:00+00:00"
+            },
+            "start": "2024-04-01 20:00"
+          },
+          "Wall clock in the repeated hour": {
+            "repeat": {
+              "count": 3,
+              "freq": "daily"
+            },
+            "start": "2024-11-02 01:30"
+          },
+          "Wall clock in the spring gap": {
+            "repeat": {
+              "count": 4,
+              "freq": "daily"
+            },
+            "start": "2024-03-08 02:30"
+          }
+        }
+      }
+    }
+  },
+  "window": {
+    "from": "2015-01-01",
+    "to": "2027-01-01"
+  },
+  "zone": "America/Los_Angeles"
+}
