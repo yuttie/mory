@@ -1,13 +1,7 @@
-// The frontend's note expander and the backend's must agree.
-//
-// moried rings event alarms as Web Push, so it expands notes itself, in
-// `backend/src/note_events.rs`. An alarm at a time the calendar does not show is the disagreement
-// `differential.spec.ts` exists to catch between feeds and notes, now between two readers of the
-// same note. `backend/src/tests.rs` (`note_fixtures_draw_as_recorded`) records what the backend
-// draws of every note in `fixtures/calendar/notes/` and `converted/`, with the metadata it parsed
-// out of each; this requires `eventsFromEntries` to draw the same from that same metadata.
+// The frontend's note expander and the backend's must agree: this requires `eventsFromEntries` to
+// draw what `backend/src/note_events.rs` recorded in `notes.json`. See `fixtures/calendar/README.md`.
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import dayjs from 'dayjs';
 
 import type { ListEntry2 } from '@/api';
@@ -23,20 +17,13 @@ interface RecordedNote {
 const notes = golden.notes as unknown as Record<string, RecordedNote>;
 const window = golden.window as { from: string; to: string };
 
-// Node's `process`, which the app's types leave out: bringing Node's in would retype `setTimeout`
-// across the app.
-const { env } = (globalThis as unknown as { process: { env: Record<string, string | undefined> } })
-    .process;
-
 // A note without offsets means something different in every zone, so both sides read the fixtures
-// in the one the golden names. `Date` reads `TZ` each time it converts, so setting it here is
-// enough, and each spec file runs in a process of its own.
-const originalZone = env.TZ;
+// in the one the golden names.
 beforeAll(() => {
-    env.TZ = golden.zone;
+    vi.stubEnv('TZ', golden.zone);
 });
 afterAll(() => {
-    env.TZ = originalZone;
+    vi.unstubAllEnvs();
 });
 
 /// `start  name` for everything that starts inside the window, in order -- what `drawn_in_window`
