@@ -104,6 +104,24 @@ events:
             freq: yearly
             bymonth: []
             count: 2
+    A weekday, not a list:
+        start: 2024-10-14 08:00
+        repeat:
+            freq: weekly
+            byday: wed
+            count: 2
+    An ordinal weekday, not a list:
+        start: 2024-10-14 09:00
+        repeat:
+            freq: monthly
+            byday: 3wed
+            count: 2
+    A null weekday list:
+        start: 2024-10-14 10:00
+        repeat:
+            freq: weekly
+            byday:
+            count: 2
 ---
 
 # Rules
