@@ -429,7 +429,8 @@ async fn run(state: AppState) {
     // The listing, read again only once a sync says it moved.
     let mut entries: Option<Vec<ListEntry>> = None;
     let mut done = state.cache_sync.done.clone();
-    let mut nudged_for: Option<Oid> = None;
+    // The HEAD a nudge was sent for, with what the last sync had reached then.
+    let mut nudged_for: Option<(Oid, Option<Oid>)> = None;
     // Alarms up to here have been sent or let pass. From now, so that a restart does not send
     // what was due while moried was down.
     let mut checked_up_to = Utc::now();
@@ -438,10 +439,12 @@ async fn run(state: AppState) {
         // A commit made outside moried, such as a push to the repository, moves HEAD without a
         // save to nudge the cache. Compared with what the last sync reached rather than asked of
         // the database, which would log.
-        let head = state.head_commit_id().ok();
-        if head.is_some() && head != *done.borrow() && head != nudged_for {
-            nudged_for = head;
-            state.nudge_cache().await;
+        if let Ok(head) = state.head_commit_id() {
+            let synced = *done.borrow();
+            if Some(head) != synced && nudged_for != Some((head, synced)) {
+                nudged_for = Some((head, synced));
+                state.nudge_cache().await;
+            }
         }
 
         let now = Utc::now();
