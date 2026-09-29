@@ -37,6 +37,11 @@ export default ts.config(
         files: ['*.vue', '**/*.vue'],
         languageOptions: {
             globals: globals.browser,
+            // The libs tsconfig.json lists, for names that exist only as types, such as
+            // ScrollToOptions: globals.browser lists only values
+            parserOptions: {
+                lib: ['esnext', 'dom', 'dom.iterable'],
+            },
         },
     },
     {
