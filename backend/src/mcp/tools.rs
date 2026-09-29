@@ -477,10 +477,11 @@ struct EventsOutput {
 /// Every occurrence start an event declares outright: its own `start`, and each entry of
 /// `instances` (or its older spelling `times`).
 ///
-/// What a `repeat` rule generates is deliberately not computed. Two expanders already exist --
-/// `backend/src/ical.rs` for feeds and `frontend/src/recurrence.ts` for notes -- and they passed
-/// their own tests for a long time while disagreeing about nearly every real feed. A third one
-/// here, with nothing comparing it to the frontend, would be a disagreement nobody could see.
+/// What a `repeat` rule generates is deliberately not computed, and the rule is returned as
+/// declared. The expanders passed their own tests for a long time while disagreeing about nearly
+/// every real feed, and this was written when a Rust one for notes would have had nothing
+/// comparing it to the frontend. `note_events` now has, for event alarms; using it here would be a
+/// change to what this tool tells a model, to make on purpose.
 fn declared_starts(event: &serde_yaml::Value) -> Vec<String> {
     let mut starts = Vec::new();
     if let Some(start) = event.get("start").and_then(|v| v.as_str()) {
@@ -508,7 +509,7 @@ const TASK_DATE_FIELDS: [&str; 2] = ["due_by", "deadline"];
 /// in `frontend/src/events.ts`; without them here, a model asked what is coming up this week
 /// would miss every deadline in it. The same rules apply: only a note on a path the task tree
 /// accepts, one entry per field holding a date, and a finished task's dates kept. There is nothing
-/// to expand -- a task has at most one of each -- so the no-third-expander rule is not at stake.
+/// to expand -- a task has at most one of each -- so no expander is at stake.
 fn task_dates_in_window(
     entries: &[crate::models::ListEntry],
     from: chrono::NaiveDate,
