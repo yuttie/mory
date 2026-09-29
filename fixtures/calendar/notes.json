@@ -1084,6 +1084,12 @@
         "2024-04-04 04:00  Until with an offset",
         "2024-04-07 16:00  Excluded by instant",
         "2024-04-09 16:00  Excluded by instant",
+        "2024-06-02 17:00  Zone in lower case",
+        "2024-06-03 17:00  Zone in lower case",
+        "2024-06-05 09:00  Empty zone",
+        "2024-06-06 09:00  Empty zone",
+        "2024-06-07  Unknown zone on dates",
+        "2024-06-08  Unknown zone on dates",
         "2024-10-25 07:00  London across autumn",
         "2024-10-26 07:00  London across autumn",
         "2024-10-27 08:00  London across autumn",
@@ -1094,6 +1100,14 @@
       ],
       "metadata": {
         "events": {
+          "Empty zone": {
+            "repeat": {
+              "count": 2,
+              "freq": "daily",
+              "tz": ""
+            },
+            "start": "2024-06-05 09:00"
+          },
           "Excluded by instant": {
             "exclusions": [
               "2024-04-08 23:00:00Z"
@@ -1132,6 +1146,14 @@
             },
             "start": "2024-03-04 09:00"
           },
+          "Unknown zone on dates": {
+            "repeat": {
+              "count": 2,
+              "freq": "daily",
+              "tz": "Mars/Olympus_Mons"
+            },
+            "start": "2024-06-07"
+          },
           "Until with an offset": {
             "repeat": {
               "freq": "daily",
@@ -1153,6 +1175,14 @@
               "freq": "daily"
             },
             "start": "2024-03-08 02:30"
+          },
+          "Zone in lower case": {
+            "repeat": {
+              "count": 2,
+              "freq": "daily",
+              "tz": "asia/tokyo"
+            },
+            "start": "2024-06-03 09:00"
           }
         }
       }

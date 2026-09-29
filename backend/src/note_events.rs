@@ -609,6 +609,13 @@ fn weekday(name: &str) -> Option<Weekday> {
     }
 }
 
+/// A zone by name, in any case, as `Intl` takes one.
+fn zone_named(name: &str) -> Option<Zone> {
+    name.parse().ok().or_else(|| {
+        chrono_tz::TZ_VARIANTS.iter().copied().find(|zone| zone.name().eq_ignore_ascii_case(name))
+    })
+}
+
 fn integer<T: TryFrom<i64>>(value: &Value) -> Option<T> {
     value.as_i64().and_then(|n| T::try_from(n).ok())
 }
@@ -678,12 +685,15 @@ fn expand_rule(
         rule = rule.count(integer::<u32>(count)?);
     }
 
-    // `tz: null` reaches `dayjs.tz` as no zone at all, which is the reader's.
-    let zone = match repeat.get("tz") {
+    // Read only where something is converted with it, as the frontend reads it: an all-day rule
+    // never is, so an unknown zone on one hides nothing. In any case, as `Intl` takes a name; `null`
+    // and `''` reach `dayjs.tz` as no zone at all, which is the reader's.
+    let zone: Option<Option<Zone>> = match repeat.get("tz") {
         None => None,
-        Some(Value::Null) => Some(reader.zone),
-        Some(Value::String(name)) => Some(name.parse::<Zone>().ok()?),
-        Some(_) => return None,
+        Some(Value::Null) => Some(Some(reader.zone)),
+        Some(Value::String(name)) if name.is_empty() => Some(Some(reader.zone)),
+        Some(Value::String(name)) => Some(zone_named(name)),
+        Some(_) => Some(None),
     };
 
     if let Some(until) = repeat.get("until") {
@@ -693,6 +703,7 @@ fn expand_rule(
         // unlike `start`'s -- once there is a zone to read it into.
         if let Some(zone) = zone {
             if until_has_time && HAS_OFFSET.is_match(text) {
+                let zone = zone?;
                 let at = dayjs_parse(text, reader.zone)?;
                 bound = wall_clock_at(at, zone).with_nanosecond(0)?;
             }
@@ -702,6 +713,11 @@ fn expand_rule(
         }
         rule = rule.until(Tz::UTC.from_utc_datetime(&bound));
     }
+
+    let convert_into = match (has_time, zone) {
+        (true, Some(zone)) => Some(zone?),
+        _ => None,
+    };
 
     let floating = |wall: NaiveDateTime| Tz::UTC.from_utc_datetime(&wall);
     let set = rule.build(floating(anchor)).ok()?;
@@ -716,7 +732,7 @@ fn expand_rule(
             .into_iter()
             .map(|at| {
                 let wall = at.naive_utc();
-                match (has_time, zone) {
+                match (has_time, convert_into) {
                     (false, _) => Start::Date(wall.date()),
                     (true, None) => Start::Time(wall),
                     // Into the reader's zone, to the minute: the frontend formats it `HH:mm`.

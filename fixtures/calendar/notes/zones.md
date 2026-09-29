@@ -43,6 +43,24 @@ events:
             tz: Asia/Tokyo
         exclusions:
             - 2024-04-08 23:00:00Z
+    Zone in lower case:
+        start: 2024-06-03 09:00
+        repeat:
+            freq: daily
+            count: 2
+            tz: asia/tokyo
+    Empty zone:
+        start: 2024-06-05 09:00
+        repeat:
+            freq: daily
+            count: 2
+            tz: ''
+    Unknown zone on dates:
+        start: 2024-06-07
+        repeat:
+            freq: daily
+            count: 2
+            tz: Mars/Olympus_Mons
 ---
 
 # Zones
