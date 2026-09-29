@@ -95,10 +95,9 @@
 <script lang="ts" setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
+import { apiFilesUrl } from '@/api-url';
 import { getAxios } from '@/axios';
 import { useFilesStore } from '@/stores/files';
-
-const apiFilesUrl = new URL('files/', new URL(import.meta.env.VITE_APP_API_URL!, window.location.href)).href;
 
 // Emits
 const emit = defineEmits<{
