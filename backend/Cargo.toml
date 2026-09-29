@@ -23,6 +23,7 @@ lindera-analysis = "5.0.1"
 lindera-tantivy = { version = "5.0.1", features = ["embed-ipadic"] }
 markdown = "=1.0.0-alpha.20"
 mime_guess = "2.0.5"
+regex = "1"
 reqwest = { version = "0.12", features = ["brotli", "gzip", "json", "rustls-tls"] }
 rust-argon2 = "2.1.0"
 serde = { version = "1.0", features = ["derive"] }

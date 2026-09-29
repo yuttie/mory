@@ -64,6 +64,9 @@ use models::*;
 
 mod ical;
 mod mcp;
+// Nothing outside its tests reads it until event alarms are sent.
+#[allow(dead_code)]
+mod note_events;
 mod oauth;
 mod search;
 

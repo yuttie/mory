@@ -1988,6 +1988,7 @@ dependencies = [
  "lindera-tantivy",
  "markdown",
  "mime_guess",
+ "regex",
  "reqwest",
  "rmcp",
  "rust-argon2",
