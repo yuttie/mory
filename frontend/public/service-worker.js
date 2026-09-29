@@ -112,6 +112,10 @@ self.addEventListener('message', event => {
         self.appRoot = config.appRoot;
 
         event.waitUntil((async () => {
+            // A page loaded past the worker, as Shift+Reload loads one, is not controlled, and what it
+            // loads from the files API would go out without the token. Take it over before letting it
+            // show anything.
+            await self.clients.claim();
             const allClients = await self.clients.matchAll({
                 includeUncontrolled: true,
             });
