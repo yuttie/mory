@@ -92,7 +92,7 @@ export const useAppStore = defineStore('app', () => {
         // The API URL goes in the script's URL, where every copy of the worker the browser starts
         // can read it; see `filesUrl` in the worker.
         const scriptUrl = `${import.meta.env.BASE_URL}service-worker.js?${new URLSearchParams({ api: apiUrl })}`;
-        navigator.serviceWorker.register(scriptUrl).then((registration) => {
+        navigator.serviceWorker.register(scriptUrl).then(() => {
             console.log('Service worker registration succeeded.');
         }).catch((error) => {
             console.error(`Service worker registration failed: ${error}`);
