@@ -389,11 +389,10 @@ async fn init_cache_database(
     // Each page load registers its browser's subscription again, so these refill themselves.
     sqlx::query("
             CREATE TABLE IF NOT EXISTS push_subscription (
-                endpoint    TEXT PRIMARY KEY,
-                p256dh      TEXT NOT NULL,
-                auth        TEXT NOT NULL,
-                zone        TEXT NOT NULL,
-                updated_at  INTEGER NOT NULL
+                endpoint  TEXT PRIMARY KEY,
+                p256dh    TEXT NOT NULL,
+                auth      TEXT NOT NULL,
+                zone      TEXT NOT NULL
             ) STRICT, WITHOUT ROWID;
         ")
         .execute(&mut *conn)

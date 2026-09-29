@@ -204,19 +204,16 @@ pub async fn put_subscription(
         return Ok((StatusCode::BAD_REQUEST, e.to_string()).into_response());
     }
     sqlx::query(
-            "INSERT INTO push_subscription (endpoint, p256dh, auth, zone, updated_at)
-             VALUES (?, ?, ?, ?, ?)
+            "INSERT INTO push_subscription (endpoint, p256dh, auth, zone) VALUES (?, ?, ?, ?)
              ON CONFLICT(endpoint) DO UPDATE SET
                  p256dh = excluded.p256dh,
                  auth = excluded.auth,
-                 zone = excluded.zone,
-                 updated_at = excluded.updated_at;",
+                 zone = excluded.zone;",
         )
         .bind(&endpoint)
         .bind(&keys.p256dh)
         .bind(&keys.auth)
         .bind(&zone)
-        .bind(Utc::now().timestamp())
         .execute(&state.cache_db_writer)
         .await?;
     state.push.subscriptions_changed.notify_one();
