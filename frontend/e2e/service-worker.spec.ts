@@ -1,0 +1,70 @@
+import { expect, test } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
+import { API_URL, TOKEN, mockBackend } from './backend';
+
+// A 1×1 PNG: enough for the browser to decode, and to give the image a size once it has.
+const PIXEL = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+    'base64',
+);
+
+// A note showing one image, with frontmatter only because the mock backend cannot list a note
+// without it.
+function note(title: string, file: string): string {
+    return ['---', 'tags: []', '---', '', `# ${title}`, '', `<img src="${file}">`, ''].join('\n');
+}
+
+const NOTES = {
+    'first.md': note('First', 'first.png'),
+    'second.md': note('Second', 'second.png'),
+};
+
+// A rendered image, found by the file it shows. The viewer rewrites a relative source into the
+// API's files URL.
+function image(page: Page, file: string): Locator {
+    return page.locator(`img[src="${API_URL}files/${file}"]`);
+}
+
+// The browser stops a service worker that has been idle for 30 seconds and starts a new one for the
+// next request, while the page that configured the old one stays open.
+test('shows an image first requested after the browser restarted the service worker', async ({ browserName, context, page }) => {
+    test.skip(browserName !== 'chromium', 'Stopping a service worker takes the Chrome DevTools Protocol.');
+    await mockBackend(context, NOTES);
+    // Registered last, so it answers before the catch-all. An <img> cannot send the token the files
+    // API requires; the worker adds it.
+    await context.route(`${API_URL}files/**`, async (route) => {
+        if (route.request().headers()['authorization'] !== `Bearer ${TOKEN}`) {
+            await route.fulfill({ status: 401 });
+            return;
+        }
+        await route.fulfill({ body: PIXEL, contentType: 'image/png' });
+    });
+
+    await page.goto('/note/first.md');
+    await expect(image(page, 'first.png')).toHaveJSProperty('naturalWidth', 1);
+    // Lost if the page loads again, which would configure the new worker and hide what this checks.
+    await page.evaluate(() => {
+        (window as unknown as { loaded: boolean }).loaded = true;
+    });
+
+    // Waited for rather than taken from the command's reply: the test means something only once the
+    // worker the page configured is gone, since that one still holds what it was given. Watched
+    // through the protocol, as Playwright's worker objects do not follow a worker stopped this way.
+    const cdp = await context.newCDPSession(page);
+    const stopped = new Promise<void>((resolve) => {
+        cdp.on('ServiceWorker.workerVersionUpdated', ({ versions }) => {
+            if (versions.length > 0 && versions.every((version) => version.runningStatus === 'stopped')) {
+                resolve();
+            }
+        });
+    });
+    await cdp.send('ServiceWorker.enable');
+    await cdp.send('ServiceWorker.stopAllWorkers');
+    await stopped;
+
+    // By the note tree, whose rows are the app's own links. A link inside a note is a plain anchor,
+    // and would load the page again.
+    await page.locator('.note-tree').getByRole('treeitem', { name: 'Second' }).click();
+    await expect(image(page, 'second.png')).toHaveJSProperty('naturalWidth', 1);
+    expect(await page.evaluate(() => (window as unknown as { loaded?: boolean }).loaded)).toBe(true);
+});
