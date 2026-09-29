@@ -10,7 +10,7 @@ const filesUrl = new URL('files/', new URL(self.location.href).searchParams.get(
 const TOKEN_REQUEST_TIMEOUT_MS = 10 * 1000;
 
 // The token, asked of a page for each request rather than kept: a worker the browser has restarted
-// has lost the one `configure` gave it, and a page's answer is always current. Any page will do, as
+// has lost every global it set, and a page's answer is always current. Any page will do, as
 // they all hold the one token kept in localStorage. The page that made the request is asked when
 // there is one. A page load, such as an image opened in a tab of its own, comes from no page, and
 // passes through this worker whenever the API shares the app's origin; the page focused last is
@@ -47,12 +47,6 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('message', event => {
     if (event.data.type === 'configure') {
-        const config = event.data.value;
-
-        self.apiUrl = config.apiUrl;
-        self.apiToken = config.apiToken;
-        self.appRoot = config.appRoot;
-
         event.waitUntil((async () => {
             // A page loaded past the worker, as Shift+Reload loads one, is not controlled, and what it
             // loads from the files API would go out without the token. Take it over before letting it
@@ -66,9 +60,6 @@ self.addEventListener('message', event => {
                 client.postMessage('configured');
             }
         })());
-    }
-    else if (event.data.type === 'update-api-token') {
-        self.apiToken = event.data.value;
     }
 });
 

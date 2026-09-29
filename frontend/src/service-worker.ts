@@ -23,19 +23,8 @@ export function connectServiceWorker(token: Ref<string | null>): Ref<boolean> {
         console.error(`Service worker registration failed: ${error}`);
     });
 
-    // The worker to tell when the token changes: the one configured last.
-    let worker: ServiceWorker | null = null;
-
     function configure(target: ServiceWorker) {
-        worker = target;
-        target.postMessage({
-            type: 'configure',
-            value: {
-                apiUrl: apiUrl,
-                apiToken: token.value,
-                appRoot: import.meta.env.VITE_APP_APPLICATION_ROOT,
-            },
-        });
+        target.postMessage({ type: 'configure' });
     }
 
     navigator.serviceWorker.ready
@@ -72,15 +61,6 @@ export function connectServiceWorker(token: Ref<string | null>): Ref<boolean> {
             // The worker asks with each file it loads; see `requestToken` there for why.
             event.ports[0].postMessage(token.value);
         }
-    });
-
-    // The worker's event notifications read the token it was given last. A change before any worker
-    // is configured needs no message, as `configure` carries the token as it is then.
-    watch(token, (value) => {
-        worker?.postMessage({
-            type: 'update-api-token',
-            value: value,
-        });
     });
 
     return configured;
