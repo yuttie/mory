@@ -22,6 +22,14 @@ export default ts.config(
             },
         },
     },
+    // The service worker is plain JavaScript, so no-undef is all that checks its names, and runs in
+    // a worker, which has no window or document
+    {
+        files: ['public/service-worker.js'],
+        languageOptions: {
+            globals: globals.serviceworker,
+        },
+    },
     // Enable TypeScript parser in *.vue files
     {
         files: ['*.vue', '**/*.vue'],
