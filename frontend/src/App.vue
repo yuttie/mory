@@ -778,11 +778,14 @@ async function requestNotificationPermission() {
 
     // Show an example notification if allowed
     if (result === "granted") {
-        const n = new Notification("Example notification from mory", {
-            icon: import.meta.env.VITE_APP_APPLICATION_ROOT + 'favicon.png',
-        });
+        // First: Chrome on Android refuses `new Notification`, and an example that threw here used
+        // to leave the phone unsubscribed until the next load.
         subscribeToEventAlarms().catch((error) => {
             console.warn('Failed to subscribe to event alarms:', error);
+        });
+        const registration = await navigator.serviceWorker.ready;
+        await registration.showNotification("Example notification from mory", {
+            icon: import.meta.env.VITE_APP_APPLICATION_ROOT + 'favicon.png',
         });
     }
 }
