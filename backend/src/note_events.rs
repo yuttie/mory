@@ -665,13 +665,16 @@ fn expand_rule(
     if let Some(interval) = repeat.get("interval") {
         rule = rule.interval(integer::<u16>(interval).filter(|n| *n > 0)?);
     }
-    // rrule.js reads a `null` list as no list at all.
+    // rrule.js reads a `null` list as no list at all, and a single value as a list of one.
+    let list = |value: &Value| match value {
+        Value::Sequence(items) => items.clone(),
+        single => vec![single.clone()],
+    };
     if let Some(days) = present(repeat.get("bymonthday")) {
-        rule = rule.by_month_day(days.as_sequence()?.iter().map(integer::<i8>).collect::<Option<_>>()?);
+        rule = rule.by_month_day(list(days).iter().map(integer::<i8>).collect::<Option<_>>()?);
     }
     if let Some(months) = present(repeat.get("bymonth")) {
-        let months = months
-            .as_sequence()?
+        let months = list(months)
             .iter()
             .map(|month| integer::<u8>(month).and_then(|n| chrono::Month::try_from(n).ok()))
             .collect::<Option<Vec<_>>>()?;

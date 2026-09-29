@@ -74,6 +74,18 @@ events:
             freq: weekly
             byday: [mon]
             count: 2
+    A month day, not a list:
+        start: 2024-07-15 08:00
+        repeat:
+            freq: monthly
+            bymonthday: 15
+            count: 3
+    A month, not a list:
+        start: 2024-07-04 08:00
+        repeat:
+            freq: yearly
+            bymonth: 7
+            count: 2
 ---
 
 # Rules

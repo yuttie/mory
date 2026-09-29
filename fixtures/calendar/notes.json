@@ -861,17 +861,38 @@
         "2024-06-19 12:00  Third Wednesday",
         "2024-06-28 17:00  Last Friday",
         "2024-07-01 07:00  Null parts",
+        "2024-07-04 08:00  A month, not a list",
+        "2024-07-15 08:00  A month day, not a list",
         "2024-07-31 08:00  The 31st",
         "2024-08-01 07:00  Null parts",
         "2024-08-05 09:00  Start off the rule",
         "2024-08-12 09:00  Start off the rule",
+        "2024-08-15 08:00  A month day, not a list",
         "2024-09-01 07:00  Null parts",
+        "2024-09-15 08:00  A month day, not a list",
         "2024-09-15 10:00  Twice a year",
         "2025-03-15 10:00  Twice a year",
+        "2025-07-04 08:00  A month, not a list",
         "2025-09-15 10:00  Twice a year"
       ],
       "metadata": {
         "events": {
+          "A month day, not a list": {
+            "repeat": {
+              "bymonthday": 15,
+              "count": 3,
+              "freq": "monthly"
+            },
+            "start": "2024-07-15 08:00"
+          },
+          "A month, not a list": {
+            "repeat": {
+              "bymonth": 7,
+              "count": 2,
+              "freq": "yearly"
+            },
+            "start": "2024-07-04 08:00"
+          },
           "Daily with count": {
             "exclusions": [
               "2024-05-07 09:00",
