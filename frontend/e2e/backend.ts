@@ -38,14 +38,21 @@ export async function mockBackend(context: BrowserContext, notes: Record<string,
         const request = route.request();
         const path = decodeURIComponent(new URL(request.url()).pathname);
         if (path === '/api/v2/entries') {
-            const entries = [...files].map(([notePath, content]) => ({
-                path: notePath,
-                size: content.length,
-                mime_type: 'text/markdown',
-                metadata: YAML.parse(content.split(/^---$/m)[1]),
-                title: /^# (.*)$/m.exec(content.split(/^---$/m)[2])?.[1] ?? null,
-                time: '2026-09-01T12:00:00+00:00',
-            }));
+            const entries = [...files].map(([notePath, content]) => {
+                // A note need not have frontmatter; the backend lists one without it with no
+                // metadata.
+                const [, frontmatter, body] = content.startsWith('---\n')
+                    ? content.split(/^---$/m)
+                    : [undefined, undefined, content];
+                return {
+                    path: notePath,
+                    size: content.length,
+                    mime_type: 'text/markdown',
+                    metadata: frontmatter === undefined ? null : YAML.parse(frontmatter),
+                    title: /^# (.*)$/m.exec(body)?.[1] ?? null,
+                    time: '2026-09-01T12:00:00+00:00',
+                };
+            });
             await route.fulfill({ json: { kind: 'full', commit: commitId(), head: commitId(), entries } });
             return;
         }
