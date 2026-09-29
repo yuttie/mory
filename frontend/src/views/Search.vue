@@ -127,7 +127,6 @@
 </template>
 
 <script lang="ts" setup>
-/* global AbortController, clearTimeout, document, HTMLElement, KeyboardEvent, setTimeout, window */
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import type { Ref } from 'vue';
 import axios from 'axios';

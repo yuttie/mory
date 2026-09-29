@@ -546,7 +546,6 @@
 </template>
 
 <script lang="ts" setup>
-/* global document */
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 
 import { useRoute } from 'vue-router';

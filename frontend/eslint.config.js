@@ -1,6 +1,7 @@
 import js from '@eslint/js';
 import ts from 'typescript-eslint';
 import eslintPluginVue from 'eslint-plugin-vue';
+import globals from 'globals';
 export default ts.config(
     // Globally ignore some files
     {
@@ -28,6 +29,14 @@ export default ts.config(
             parserOptions: {
                 parser: '@typescript-eslint/parser',
             },
+        },
+    },
+    // Components run in the browser. typescript-eslint turns no-undef off in *.ts files, where
+    // TypeScript checks names against the "dom" lib instead, but not in *.vue files.
+    {
+        files: ['*.vue', '**/*.vue'],
+        languageOptions: {
+            globals: globals.browser,
         },
     },
     {
