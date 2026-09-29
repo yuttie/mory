@@ -20,14 +20,14 @@
 //! and `sqlx` logs every statement there. It keeps the listing and the subscriptions in memory, and
 //! reads them again only when a sync or a handler says they changed.
 
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::time::Duration as StdDuration;
 
 use anyhow::{Context, Result, bail};
 use axum::{Json, extract, http::StatusCode};
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use chrono_tz::Tz as Zone;
 use git2::Oid;
 use hkdf::Hkdf;
@@ -42,8 +42,9 @@ use web_push_native::{Auth, WebPushBuilder, p256::PublicKey};
 use crate::models::{AppState, ListEntry};
 use crate::note_events::{self, Reader};
 
-/// How long the scheduler sleeps when nothing is due sooner. It is woken early by a change to the
-/// listing or the subscriptions, so this bounds only how late an alarm rings after a clock jump.
+/// How far ahead each look at the schedule reaches, and so how long the scheduler sleeps when
+/// nothing is due sooner: an alarm further off is found by a later look. Also how soon a commit
+/// made outside moried is noticed.
 const CHECK_INTERVAL: StdDuration = StdDuration::from_secs(60);
 
 /// How long one push service may take to answer before the alarms behind it are sent regardless.
@@ -62,7 +63,7 @@ pub struct Push {
     public_key: String,
     /// Who a push service contacts about this sender. RFC 8292 wants a `mailto:` or a URL.
     contact: String,
-    changed: Notify,
+    subscriptions_changed: Notify,
 }
 
 impl Push {
@@ -85,7 +86,7 @@ impl Push {
             if let Ok(key_pair) = ES256KeyPair::from_bytes(&scalar) {
                 let public_key =
                     URL_SAFE_NO_PAD.encode(key_pair.public_key().public_key().to_bytes_uncompressed());
-                return Ok(Push { key_pair, public_key, contact, changed: Notify::new() });
+                return Ok(Push { key_pair, public_key, contact, subscriptions_changed: Notify::new() });
             }
         }
         bail!("no VAPID key pair could be derived from MORIED_SECRET")
@@ -212,7 +213,7 @@ pub async fn put_subscription(
             tracing::error!("Failed to store a push subscription: {:?}", e);
             (StatusCode::INTERNAL_SERVER_ERROR, "the subscription could not be stored".to_owned())
         })?;
-    state.push.changed.notify_one();
+    state.push.subscriptions_changed.notify_one();
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -223,7 +224,7 @@ pub async fn delete_subscription(
 ) -> StatusCode {
     match forget(&state, &request.endpoint).await {
         Ok(()) => {
-            state.push.changed.notify_one();
+            state.push.subscriptions_changed.notify_one();
             StatusCode::NO_CONTENT
         },
         Err(e) => {
@@ -355,14 +356,67 @@ fn push_service(endpoint: &str) -> String {
         .unwrap_or_default()
 }
 
-pub fn spawn(state: AppState) {
-    tokio::spawn(run(state));
+/// What one look at the schedule found: the alarms due now, each with the browsers to send it to,
+/// and when the next one after them is due.
+struct Plan<'a> {
+    due: Vec<(Alarm, Vec<&'a Subscription>)>,
+    next: Option<DateTime<Utc>>,
 }
 
-fn head_of(state: &AppState) -> Option<Oid> {
-    let repo = state.repo.lock().ok()?;
-    let head = repo.head().ok()?.target();
-    head
+/// The alarms due in `(after, now]` for each zone's browsers, and the first due after `now` within
+/// `CHECK_INTERVAL`. One more than `LATE_LIMIT` late is let pass.
+fn plan<'a>(
+    listing: &[ListEntry],
+    subscriptions: &'a [Subscription],
+    after: DateTime<Utc>,
+    now: DateTime<Utc>,
+) -> Plan<'a> {
+    let mut by_zone: HashMap<Zone, Vec<&Subscription>> = HashMap::new();
+    for subscription in subscriptions {
+        by_zone.entry(subscription.zone).or_default().push(subscription);
+    }
+    let mut plan = Plan { due: Vec::new(), next: None };
+    for (zone, group) in by_zone {
+        for alarm in alarms_between(listing, after, now + CHECK_INTERVAL, &Reader { zone, now }) {
+            if alarm.at > now {
+                plan.next = Some(plan.next.map_or(alarm.at, |next| next.min(alarm.at)));
+                break;
+            }
+            if alarm.at >= now - LATE_LIMIT {
+                plan.due.push((alarm, group.clone()));
+            }
+        }
+    }
+    plan
+}
+
+/// Sends each due alarm to its browsers, and returns the endpoints their push services reported
+/// ended.
+async fn send(state: &AppState, due: &[(Alarm, Vec<&Subscription>)]) -> Vec<String> {
+    let mut gone = Vec::new();
+    for (alarm, group) in due {
+        let payload = alarm.payload();
+        let mut sent = 0;
+        for subscription in group {
+            match deliver(&state.http_client, &state.push, subscription, &payload).await {
+                Delivery::Sent => sent += 1,
+                Delivery::Gone => gone.push(subscription.endpoint.clone()),
+                Delivery::Failed => {},
+            }
+        }
+        tracing::info!(
+            "Sent the alarm for {:?} in {} to {} of {} browsers",
+            alarm.name,
+            alarm.path,
+            sent,
+            group.len(),
+        );
+    }
+    gone
+}
+
+pub fn spawn(state: AppState) {
+    tokio::spawn(run(state));
 }
 
 async fn run(state: AppState) {
@@ -378,15 +432,15 @@ async fn run(state: AppState) {
     loop {
         // A commit made outside moried, such as a push to the repository, moves HEAD without a
         // save to nudge the cache. Compared with what the last sync reached rather than asked of
-        // the database, which would log; a save made here has been synced already.
-        let head = head_of(&state);
+        // the database, which would log.
+        let head = state.head_commit_id().ok();
         if head.is_some() && head != *done.borrow() && head != nudged_for {
             nudged_for = head;
             state.nudge_cache().await;
         }
 
         let now = Utc::now();
-        let mut next: Option<DateTime<Utc>> = None;
+        let mut next = None;
         if !subscriptions.is_empty() {
             if entries.is_none() {
                 match state.read_entries(None).await {
@@ -394,43 +448,9 @@ async fn run(state: AppState) {
                     Err(e) => tracing::error!("The alarm scheduler could not read the listing: {:?}", e),
                 }
             }
-            let listing = entries.as_deref().unwrap_or_default();
-
-            let mut by_zone: BTreeMap<String, Vec<&Subscription>> = BTreeMap::new();
-            for subscription in &subscriptions {
-                by_zone.entry(subscription.zone.name().to_owned()).or_default().push(subscription);
-            }
-            let mut gone = Vec::new();
-            for group in by_zone.values() {
-                let reader = Reader { zone: group[0].zone, now };
-                let until = now + Duration::from_std(CHECK_INTERVAL).expect("a small duration");
-                let alarms = alarms_between(listing, checked_up_to, until, &reader);
-                for alarm in &alarms {
-                    if alarm.at > now {
-                        next = Some(next.map_or(alarm.at, |next| next.min(alarm.at)));
-                        break;
-                    }
-                    if (now - alarm.at).to_std().unwrap_or_default() > LATE_LIMIT {
-                        continue;
-                    }
-                    let payload = alarm.payload();
-                    let mut sent = 0;
-                    for subscription in group {
-                        match deliver(&state.http_client, &state.push, subscription, &payload).await {
-                            Delivery::Sent => sent += 1,
-                            Delivery::Gone => gone.push(subscription.endpoint.clone()),
-                            Delivery::Failed => {},
-                        }
-                    }
-                    tracing::info!(
-                        "Sent the alarm for {:?} in {} to {} of {} browsers",
-                        alarm.name,
-                        alarm.path,
-                        sent,
-                        group.len(),
-                    );
-                }
-            }
+            let plan = plan(entries.as_deref().unwrap_or_default(), &subscriptions, checked_up_to, now);
+            next = plan.next;
+            let gone = send(&state, &plan.due).await;
             if !gone.is_empty() {
                 for endpoint in &gone {
                     if let Err(e) = forget(&state, endpoint).await {
@@ -444,24 +464,17 @@ async fn run(state: AppState) {
         checked_up_to = now;
 
         // An alarm that came due while the others were being sent is due now, not in a minute.
-        let sleep = match next {
-            Some(next) => (next - Utc::now()).to_std().unwrap_or_default().min(CHECK_INTERVAL),
-            None => CHECK_INTERVAL,
-        };
+        let sleep = next.map_or(CHECK_INTERVAL, |next| (next - Utc::now()).to_std().unwrap_or_default());
+        // A closed channel would report a change on every call and spin the loop, so stop
+        // listening to it, as `search` does. Only shutdown drops the sender.
+        let sync_open = done.has_changed().is_ok();
         tokio::select! {
             () = tokio::time::sleep(sleep) => {},
-            () = state.push.changed.notified() => {
+            () = state.push.subscriptions_changed.notified() => {
                 subscriptions = load_subscriptions(&state).await;
             },
-            changed = done.changed() => {
-                if changed.is_ok() {
-                    entries = None;
-                }
-                else {
-                    // The cache manager is gone, and with it every future sync. Keep ringing from
-                    // the listing as it stands rather than spinning on a closed channel.
-                    tokio::time::sleep(sleep).await;
-                }
+            _ = done.changed(), if sync_open => {
+                entries = None;
             },
         }
     }
@@ -535,6 +548,56 @@ events:
         let span = (at("2024-05-05T00:00:00Z"), at("2024-05-07T00:00:00Z"));
         assert_eq!(alarms_between(&entries, span.0, span.1, &reader())[0].at, at("2024-05-06T16:00:00Z"));
         assert_eq!(alarms_between(&entries, span.0, span.1, &tokyo)[0].at, at("2024-05-06T00:00:00Z"));
+    }
+
+    fn subscription_in(zone: Zone) -> Subscription {
+        let (ua_secret, _, ua_auth, _) = subscription_keys();
+        Subscription {
+            endpoint: format!("https://push.example/{}", zone.name()),
+            ua_public: ua_secret.public_key(),
+            ua_auth,
+            zone,
+        }
+    }
+
+    fn names(plan: &Plan<'_>) -> Vec<(String, Vec<Zone>)> {
+        let mut due: Vec<(String, Vec<Zone>)> = plan
+            .due
+            .iter()
+            .map(|(alarm, group)| (alarm.name.clone(), group.iter().map(|s| s.zone).collect()))
+            .collect();
+        due.sort_by(|a, b| a.0.cmp(&b.0));
+        due
+    }
+
+    #[test]
+    fn a_plan_sends_what_is_due_lets_a_late_one_pass_and_finds_the_next() {
+        let entries = [entry("
+events:
+    Too late: { start: '2024-05-06 09:45:00+00:00' }
+    Late but in time: { start: '2024-05-06 09:55:00+00:00' }
+    Now: { start: '2024-05-06 10:00:00+00:00' }
+    Next: { start: '2024-05-06 10:00:30+00:00' }
+    After the lookahead: { start: '2024-05-06 10:05:00+00:00' }
+")];
+        let subscriptions = [subscription_in(LOS_ANGELES)];
+        let plan = plan(&entries, &subscriptions, at("2024-05-06T09:30:00Z"), at("2024-05-06T10:00:00Z"));
+        assert_eq!(names(&plan), [
+            ("Late but in time".to_owned(), vec![LOS_ANGELES]),
+            ("Now".to_owned(), vec![LOS_ANGELES]),
+        ]);
+        assert_eq!(plan.next, Some(at("2024-05-06T10:00:30Z")));
+    }
+
+    #[test]
+    fn a_plan_sends_a_wall_clock_to_the_browsers_whose_zone_it_is_due_in() {
+        let entries = [entry("events: { Call: { start: '2024-05-06 09:00' } }")];
+        let tokyo = chrono_tz::Asia::Tokyo;
+        let subscriptions = [subscription_in(LOS_ANGELES), subscription_in(tokyo)];
+        // 09:00 in Tokyo; still the night before in Los Angeles.
+        let plan = plan(&entries, &subscriptions, at("2024-05-05T23:59:00Z"), at("2024-05-06T00:00:30Z"));
+        assert_eq!(names(&plan), [("Call".to_owned(), vec![tokyo])]);
+        assert_eq!(plan.next, None);
     }
 
     fn subscription_keys() -> (web_push_native::p256::SecretKey, String, Auth, String) {
