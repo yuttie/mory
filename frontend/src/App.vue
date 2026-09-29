@@ -249,7 +249,7 @@
                                 <v-list-item to="/config" v-bind:prepend-icon="mdiCogOutline" title="Config"></v-list-item>
                                 <v-list-item to="/about" v-bind:prepend-icon="mdiInformationOutline" title="About"></v-list-item>
                                 <v-divider></v-divider>
-                                <v-list-item v-bind:prepend-icon="mdiLogout" title="Logout" v-on:click="signOut()"></v-list-item>
+                                <v-list-item v-bind:prepend-icon="mdiLogout" title="Logout" v-on:click="appStore.signOut()"></v-list-item>
                             </v-list>
                         </v-card>
                     </v-menu>
@@ -463,7 +463,7 @@
                                 <v-list-item to="/config" v-bind:prepend-icon="mdiCogOutline" title="Config"></v-list-item>
                                 <v-list-item to="/about" v-bind:prepend-icon="mdiInformationOutline" title="About"></v-list-item>
                                 <v-divider></v-divider>
-                                <v-list-item v-bind:prepend-icon="mdiLogout" title="Logout" v-on:click="signOut()"></v-list-item>
+                                <v-list-item v-bind:prepend-icon="mdiLogout" title="Logout" v-on:click="appStore.signOut()"></v-list-item>
                             </v-list>
                         </v-card>
                     </v-menu>
@@ -583,7 +583,7 @@ import { useAppStore } from '@/stores/app';
 import { loadConfigValue, saveConfigValue } from '@/config';
 import type { Claim, IndexingStop, ListEntry2, UploadEntry } from '@/api';
 import IndexingStopsItem from '@/components/IndexingStopsItem.vue';
-import { subscribeToEventAlarms, unsubscribeFromEventAlarms } from '@/service-worker';
+import { requestEventAlarms } from '@/event-alarms';
 import { useFilesStore } from '@/stores/files';
 import { jwtDecode } from 'jwt-decode';
 
@@ -780,9 +780,7 @@ async function requestNotificationPermission() {
     if (result === "granted") {
         // First: Chrome on Android refuses `new Notification`, and an example that threw here used
         // to leave the phone unsubscribed until the next load.
-        subscribeToEventAlarms().catch((error) => {
-            console.warn('Failed to subscribe to event alarms:', error);
-        });
+        requestEventAlarms();
         const registration = await navigator.serviceWorker.ready;
         await registration.showNotification("Example notification from mory", {
             icon: import.meta.env.VITE_APP_APPLICATION_ROOT + 'favicon.png',
@@ -796,14 +794,6 @@ function onWorkerMessage(event: MessageEvent) {
     if (event.data?.type === 'open-note' && typeof event.data.path === 'string') {
         router.push({ name: 'Note', params: { path: event.data.path.split('/') } });
     }
-}
-
-// Signing out on purpose ends this browser's event alarms; an expired session does not.
-async function signOut() {
-    await unsubscribeFromEventAlarms().catch((error) => {
-        console.warn('Failed to unsubscribe from event alarms:', error);
-    });
-    appStore.logout();
 }
 
 function tokenExpired(callback: () => void) {
