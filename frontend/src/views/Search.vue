@@ -87,8 +87,11 @@
                 v-for="item of response?.hits ?? []"
                 v-bind:key="`${item.path}:${item.passage_id}`"
                 v-bind:to="routeForMime(item.path, item.mime_type)"
-                v-bind:title="item.title || item.path"
+                class="result-item"
             >
+                <v-list-item-title class="result-title">
+                    {{ item.title || item.path }}
+                </v-list-item-title>
                 <v-list-item-subtitle class="result-meta">
                     {{ item.path }}<template v-if="lineLabel(item)">
                         · {{ lineLabel(item) }}
@@ -497,6 +500,19 @@ watch(draftMode, (mode) => {
     @media (max-width: 599px) {
         max-width: 7rem;
     }
+}
+
+.result-item {
+    max-height: 300px;
+    overflow: hidden;
+
+    &:not(:last-child) {
+        margin-bottom: 30px;
+    }
+}
+
+.result-title {
+    font-size: 1.5em;
 }
 
 .result-meta {
