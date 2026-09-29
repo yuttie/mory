@@ -71,6 +71,20 @@ events:
         repeat:
             freq: daily
             count: 2
+    Day out of range with an offset:
+        start: 2024-01-32 10:00+09:00
+    Date with an offset:
+        start: 2024-05-12+09:00
+    Date with Z:
+        start: 2024-05-13Z
+    End of the day with an offset:
+        start: 2024-05-14 24:00+09:00
+    Until that does not parse:
+        start: 2024-04-28 20:00
+        repeat:
+            freq: daily
+            tz: Asia/Tokyo
+            until: 2024-04-32 12:00:00+00:00
 ---
 
 # Quirks

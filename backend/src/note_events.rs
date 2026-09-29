@@ -188,7 +188,8 @@ static DAYJS_PARSE: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 // What `Date` is left to parse when `dayjs` gives up: in a note, an ISO datetime with an offset.
-// V8 reads a good deal more than this, none of which a note holds.
+// V8 reads a good deal more than this, none of which a note holds. The fields are checked in
+// `dayjs_parse`, as V8 refuses what is out of range rather than rolling it over.
 static WITH_OFFSET: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"^\s*([0-9]{4})-([0-9]{2})-([0-9]{2})(?:[Tt ]([0-9]{2}):([0-9]{2})(?::([0-9]{2})(?:\.([0-9]+))?)?)?\s*(?:([Zz])|([+-])([0-9]{2}):?([0-9]{2}))\s*$",
@@ -309,10 +310,22 @@ fn dayjs_parse(text: &str, zone: Zone) -> Option<DateTime<Utc>> {
         }
     }
     let parts = WITH_OFFSET.captures(text)?;
-    let number = |i: usize| group(&parts, i).unwrap_or(0);
+    // V8 takes a bare date only before `Z`, and `2024-05-01+09:00` not at all.
+    if parts.get(4).is_none() && parts.get(8).is_none() {
+        return None;
+    }
+    let field = |i: usize| u32::try_from(group(&parts, i).unwrap_or(0)).ok();
     let fraction = parts.get(7).map_or("0", |part| part.as_str());
-    let millis = format!("{:0<3}", &fraction[..fraction.len().min(3)]).parse::<i64>().ok()?;
-    let wall = make_date(number(1), number(2) - 1, number(3), number(4), number(5), number(6), millis)?;
+    let millis = format!("{:0<3}", &fraction[..fraction.len().min(3)]).parse::<u32>().ok()?;
+    let date = NaiveDate::from_ymd_opt(i32::try_from(group(&parts, 1)?).ok()?, field(2)?, field(3)?)?;
+    let (hour, minute, second) = (field(4)?, field(5)?, field(6)?);
+    let wall = if (hour, minute, second, millis) == (24, 0, 0, 0) {
+        // The end of the day, which ISO allows.
+        date.succ_opt()?.and_time(NaiveTime::MIN)
+    } else {
+        date.and_time(NaiveTime::from_hms_milli_opt(hour, minute, second, millis)?)
+    };
+    let number = |i: usize| group(&parts, i).unwrap_or(0);
     let offset = match parts.get(8) {
         Some(_) => 0,
         None => {
@@ -707,8 +720,10 @@ fn expand_rule(
         if let Some(zone) = zone {
             if until_has_time && HAS_OFFSET.is_match(text) {
                 let zone = zone?;
-                let at = dayjs_parse(text, reader.zone)?;
-                bound = wall_clock_at(at, zone).with_nanosecond(0)?;
+                // `bounded ?? until`: one `dayjs` cannot read is taken as written.
+                if let Some(at) = dayjs_parse(text, reader.zone) {
+                    bound = wall_clock_at(at, zone).with_nanosecond(0)?;
+                }
             }
         }
         if !until_has_time {
@@ -907,6 +922,22 @@ events:
             ("Not done".to_owned(), false),
             ("Said yes".to_owned(), true),
         ]);
+    }
+
+    #[test]
+    fn an_offset_datetime_is_read_as_v8_reads_one() {
+        let zone = LOS_ANGELES;
+        let read = |text: &str| dayjs_parse(text, zone).map(|at| at.to_rfc3339());
+        // What `new Date(text)` gives in Node for each.
+        assert_eq!(read("2024-05-01 10:00+09:00").as_deref(), Some("2024-05-01T01:00:00+00:00"));
+        assert_eq!(read("2024-05-01 24:00+09:00").as_deref(), Some("2024-05-01T15:00:00+00:00"));
+        assert_eq!(read("2024-05-01 10:00:00.5+09:00").as_deref(), Some("2024-05-01T01:00:00.500+00:00"));
+        assert_eq!(read("2024-05-01Z").as_deref(), Some("2024-05-01T00:00:00+00:00"));
+        assert_eq!(read("0050-05-01T10:00+09:00").as_deref(), Some("0050-05-01T01:00:00+00:00"));
+        for refused in ["2024-01-32 10:00+09:00", "2024-13-01 10:00+09:00", "2024-05-01 25:00+09:00",
+                        "2024-05-01 10:60+09:00", "2024-05-01+09:00"] {
+            assert_eq!(read(refused), None, "{refused}");
+        }
     }
 
     #[test]

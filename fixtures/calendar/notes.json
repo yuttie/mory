@@ -693,6 +693,10 @@
     },
     "notes/quirks.md": {
       "drawn": [
+        "2024-04-28 04:00  Until that does not parse",
+        "2024-04-29 04:00  Until that does not parse",
+        "2024-04-30 04:00  Until that does not parse",
+        "2024-05-01 04:00  Until that does not parse",
         "2024-05-01 09:00  Empty end on a start",
         "2024-05-04 10:00  Blank name",
         "2024-05-05 09:00  Durations",
@@ -703,7 +707,9 @@
         "2024-05-08 09:00  Instances in a null",
         "2024-05-09 09:00  Finished",
         "2024-05-10 09:00  Renamed overrides keep no series name",
-        "2024-05-11 09:00  Renamed overrides keep no series name"
+        "2024-05-11 09:00  Renamed overrides keep no series name",
+        "2024-05-13  Date with Z",
+        "2024-05-14 08:00  End of the day with an offset"
       ],
       "metadata": {
         "events": {
@@ -718,6 +724,15 @@
           "Blank name": {
             "name": "",
             "start": "2024-05-04 10:00"
+          },
+          "Date with Z": {
+            "start": "2024-05-13Z"
+          },
+          "Date with an offset": {
+            "start": "2024-05-12+09:00"
+          },
+          "Day out of range with an offset": {
+            "start": "2024-01-32 10:00+09:00"
           },
           "Durations": {
             "end": "+90m",
@@ -742,6 +757,9 @@
                 "start": "2024-05-02 09:00"
               }
             ]
+          },
+          "End of the day with an offset": {
+            "start": "2024-05-14 24:00+09:00"
           },
           "Finished": {
             "finished": true,
@@ -809,6 +827,14 @@
           "Unreadable end": {
             "end": "soon",
             "start": "2024-05-05 12:00"
+          },
+          "Until that does not parse": {
+            "repeat": {
+              "freq": "daily",
+              "tz": "Asia/Tokyo",
+              "until": "2024-04-32 12:00:00+00:00"
+            },
+            "start": "2024-04-28 20:00"
           }
         }
       }
