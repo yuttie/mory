@@ -4,6 +4,7 @@ import type { Ref } from 'vue';
 import { defineStore } from 'pinia';
 
 import { useLocalStorage } from '@/composables/localStorage';
+import { endEventAlarms, watchEventAlarms } from '@/event-alarms';
 import { connectServiceWorker } from '@/service-worker';
 import { useFilesStore } from '@/stores/files';
 
@@ -16,6 +17,7 @@ export const useAppStore = defineStore('app', () => {
     const isLoggingIn = ref(false);
     const loginError: Ref<null | string> = ref(null);
     const serviceWorkerConfigured = connectServiceWorker(token);
+    watchEventAlarms(token);
     const draggingViewerContent = ref(false);
     // How many mounted views are showing their own controls in the app bar, through <AppBarContent>.
     // While any is, the app bar leaves out its generic title.
@@ -47,6 +49,15 @@ export const useAppStore = defineStore('app', () => {
             isLoggingIn.value = false;
             loginError.value = "Incorrect username or password";
         });
+    }
+
+    // Signing out on purpose ends this browser's event alarms. An expired session, which ends in
+    // `logout` through `invalidateToken`, keeps them.
+    async function signOut() {
+        await endEventAlarms().catch((error) => {
+            console.warn('Failed to unsubscribe from event alarms:', error);
+        });
+        logout();
     }
 
     function logout() {
@@ -84,6 +95,7 @@ export const useAppStore = defineStore('app', () => {
         // Actions
         invalidateToken,
         login,
+        signOut,
         logout,
     };
 });

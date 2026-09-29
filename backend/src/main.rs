@@ -30,7 +30,7 @@ use axum::{
     middleware::{self, Next},
     response::{IntoResponse, Response},
     Router,
-    routing::{get, post},
+    routing::{get, post, put},
 };
 use chrono::{DateTime, Duration, Utc};
 use dotenv::dotenv;
@@ -64,7 +64,9 @@ use models::*;
 
 mod ical;
 mod mcp;
+mod note_events;
 mod oauth;
+mod push;
 mod search;
 
 #[cfg(test)]
@@ -126,6 +128,7 @@ async fn main() -> Result<()> {
             .context("Failed to build a reqwest client")
             .unwrap(),
         search: search.clone(),
+        push: Arc::new(push::Push::from_env()?),
     };
     // Sync before binding the listener, so the server never starts up serving a listing it knows
     // to be behind.
@@ -141,6 +144,7 @@ async fn main() -> Result<()> {
         cache_writer_conn,
     ));
     search.spawn(state.cache_sync.done.clone());
+    push::spawn(state.clone());
 
     let addr = env::var("MORIED_LISTEN").unwrap();
     tracing::debug!("{:?}", addr);
@@ -182,6 +186,8 @@ async fn main() -> Result<()> {
         .route("/search/indexing", get(search::get_indexing))
         .route("/assess-task", post(v2::post_assess_task))
         .route("/ai-action", post(v2::post_ai_action))
+        .route("/push/key", get(push::get_key))
+        .route("/push/subscription", put(push::put_subscription).delete(push::delete_subscription))
         .with_state(state.clone())
         .route_layer(middleware::from_fn(auth));
     let api_v2 = Router::new()
@@ -380,6 +386,17 @@ async fn init_cache_database(
         // here, where the cost is already being paid.
         sqlx::query("VACUUM;").execute(&mut *conn).await?;
     }
+    // Each page load registers its browser's subscription again, so these refill themselves.
+    sqlx::query("
+            CREATE TABLE IF NOT EXISTS push_subscription (
+                endpoint  TEXT PRIMARY KEY,
+                p256dh    TEXT NOT NULL,
+                auth      TEXT NOT NULL,
+                zone      TEXT NOT NULL
+            ) STRICT, WITHOUT ROWID;
+        ")
+        .execute(&mut *conn)
+        .await?;
     sqlx::query("
             CREATE TABLE IF NOT EXISTS ical_cache (
                 url            TEXT PRIMARY KEY,
@@ -2540,6 +2557,7 @@ mod models {
         pub cache_sync: Arc<CacheSync>,
         pub http_client: reqwest::Client,
         pub search: Arc<SearchManager>,
+        pub push: Arc<crate::push::Push>,
     }
 
     /// An in-memory index loaded from HEAD, with the commit to parent the next one on.

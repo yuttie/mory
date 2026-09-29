@@ -8,10 +8,12 @@ Layout of the tracked sources:
 
 - `backend/src/main.rs` — the server: routes, handlers, the `v2` module, and `models`.
 - `backend/src/ical.rs` — parsing subscribed iCal feeds and expanding their recurrences.
+- `backend/src/note_events.rs` — expanding the events a note declares, the Rust twin of `eventsFromEntries`, for event alarms.
+- `backend/src/push.rs` — event alarms sent as Web Push: the VAPID key, the subscription endpoints, and the scheduler.
 - `backend/src/oauth.rs` — the OAuth 2.1 authorization server the MCP endpoint needs.
 - `backend/src/mcp/` — the MCP server: `mod.rs` holds the tool router, `frontmatter.rs` the
   in-place frontmatter editor, and the rest the tools grouped by area.
-- `fixtures/calendar/` — iCal feeds both components expand, and the golden the differential test compares them against.
+- `fixtures/calendar/` — iCal feeds and notes both components expand, and the goldens the differential tests compare them against.
 - `backend/src/tests.rs` — in-crate tests, with Git repository fixtures.
 - `frontend/src/` — `views/` (routed screens), `components/`, `stores/` (Pinia), `api.ts` (backend client), `idb.ts` (IndexedDB cache), `*.spec.ts` (tests next to their subject).
 
@@ -108,6 +110,7 @@ These follow from the philosophy above; keep them intact.
 - The frontend files store (`frontend/src/stores/files.ts`) is the single entry point for file operations. Every consumer reads the one shared listing from it; nothing calls the entries API or IndexedDB directly.
 - A task's `due_by` and `deadline` are drawn as events too, derived from the same listing by `taskDatesFromEntries` in `frontend/src/events.ts` rather than from an `events:` block. Each has its own colour, configurable under `task_dates:` in `.mory/calendars.yaml`.
 - An event may name a category (`category: meeting`), configured under `categories:` in `.mory/calendars.yaml` with a default `color` and a `name` template (`[MTG] {{name}}`). A category changes only how an event is drawn, never when or where it happens, so the note still says everything about its events on its own. A nested id (`meeting/1on1`) takes each field it leaves unset from its nearest configured ancestor, but must be configured itself, so a misspelt one is reported rather than drawn as its parent. `resolveCategory` in `frontend/src/events.ts` is the one place this is worked out.
+- Event alarms are Web Push. A service worker cannot wait for an event — Chrome stops one idle for 30 seconds, timers and all — so `backend/src/push.rs` sends each alarm at its occurrence's start and the worker only shows it. The VAPID key pair is derived from `MORIED_SECRET`, so rotating the secret ends every subscription along with every session. Subscriptions live in `cache.sqlite`, and every page load registers its browser's afresh, so the table is as disposable as the rest of the cache. Production logs at debug and `sqlx` logs every statement there, so the scheduler keeps the listing and the subscriptions in memory: an idle minute must not touch the database.
 - External calendars are subscribed in `.mory/calendars.yaml` and served by `GET /v2/imported-events`. Their events are read-only and never stored: they are a live view of someone else's calendar, so the repository is deliberately not their home. Converting one writes an ordinary note under `.events/`, which then shadows the imported original by `ical.uid` — or by `uid` and `recurrence_id` together, when the note claims a single occurrence.
 
 ## The MCP server
@@ -143,9 +146,10 @@ A path under `.tasks/` must keep the UUIDv4 naming `entries_to_tree` derives the
 and `.mory/tasks.yaml` is read-only through MCP — 600 KB of legacy YAML using anchors and aliases
 that a rewrite would silently expand into independent copies.
 
-`list_events` deliberately does **not** expand recurrence rules. Two expanders already exist and
-have disagreed before; a third with nothing comparing it to the frontend would be a disagreement
-nobody could see. It returns the rule as declared and says so in the result.
+`list_events` does **not** expand recurrence rules: it returns the rule as declared and says so in
+the result. It was written when a Rust expander for notes would have had nothing comparing it to the
+frontend. `note_events` now has, for event alarms; handing a model computed occurrences instead would
+be a change to this tool to make on purpose.
 
 The event categories are returned the same way: as `.mory/calendars.yaml` declares them, never
 applied to the events. Resolving them in Rust would be a second copy of `resolveCategory`.
@@ -173,3 +177,5 @@ Three details are easy to get wrong:
 `<v-calendar>` cannot parse an offset — its regex has no offset group and it *throws* on a miss — so `frontend/src/events.ts` converts every datetime to naive local wall clock before it reaches the view. Nothing in the derivation may throw for the same reason: it runs inside a computed, so one bad value in one note would blank the whole calendar. Frontmatter is whatever the file said, so values are type-checked rather than trusted.
 
 Both sides expand with `rrule` — the crate in `backend/src/ical.rs`, rrule.js in `frontend/src/recurrence.ts` — but sharing a library is not the same as agreeing. Conversion is where the two swap places, and a disagreement is invisible afterwards, because the note claims the series and the imported original stops being drawn. `fixtures/calendar/` and `frontend/src/differential.spec.ts` exist to compare them; both expanders passed their own tests while disagreeing about nearly every feed there. Change either one and run it.
+
+A note is expanded twice as well: by `eventsFromEntries` for the calendar, and by `backend/src/note_events.rs` for event alarms, which follows the frontend rule by rule, JavaScript's accidents included — an alarm at a time the calendar does not show is the same disagreement. `fixtures/calendar/notes/`, `converted/` and `frontend/src/note-fixtures.spec.ts` compare the two. Change either one, run both halves, and regenerate as `fixtures/calendar/README.md` says.

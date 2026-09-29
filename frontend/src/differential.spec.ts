@@ -89,6 +89,14 @@ describe.each(Object.keys(feeds))('%s', (name) => {
         expect(shapeOf(events, window)).toEqual(imported);
     });
 
+    // The backend has no copy of conversion, so it expands the note this writes; see
+    // `note-fixtures.spec.ts`. Rewritten by `vitest -u`.
+    it('is kept converted in fixtures/calendar/converted', async () => {
+        const note = buildSeriesNote(feed.events[0], feed.series[uids[0]]).content;
+        await expect(note).toMatchFileSnapshot(
+            `../../fixtures/calendar/converted/${name.replace(/\.ics$/, '.md')}`);
+    });
+
     // How much a view asks for must not change what it is given for a day: Home asks for three
     // days and the calendar for three months. Asking for years, as above, hides every way of
     // losing an occurrence at the edge of a window -- moved into it from outside, or read in the

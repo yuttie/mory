@@ -1,7 +1,7 @@
 # Calendar fixtures
 
-iCalendar feeds that both components expand, and the golden file recording what the backend makes
-of them.
+iCalendar feeds and notes that both components expand, and the golden files recording what the
+backend makes of them.
 
 They exist for one comparison, in two halves. `backend/src/tests.rs` expands every `.ics` here and
 compares the result against `expansion.json`; `frontend/src/differential.spec.ts` reads that same
@@ -20,6 +20,28 @@ A wide window hides every way of losing an occurrence at a window's edge, so eac
 again for every occurrence it drew, over that occurrence's day alone, and requires it back. A
 feed about a window's edge, such as `moved-into-window.ics`, needs nothing more than that.
 
-Regenerate the golden with:
+## Notes
 
-    cd backend && UPDATE_CALENDAR_GOLDEN=1 cargo test calendar_fixtures
+A note is expanded twice as well: by the frontend for the calendar, and by the backend
+(`backend/src/note_events.rs`) for event alarms, which moried sends as Web Push at each
+occurrence's start. An alarm at a time the calendar does not show is the same disagreement, so the
+two are compared the same way.
+
+`notes/` holds notes written by hand, covering the `events:` dialect and the frontend's quirks with
+it, and `converted/` the note the app writes for each feed above. `backend/src/tests.rs` expands
+every one for a reader in `America/Los_Angeles` and records the result in `notes.json`, with the
+metadata it parsed out of each; `frontend/src/note-fixtures.spec.ts` requires `eventsFromEntries`
+to draw the same from that metadata. The backend also requires each converted note to draw what
+its feed did, which closes the circle: the feed, the frontend's note and the backend's all agree.
+
+`dayjs.tz` resolves an hour that happens twice by the season the reader is in *now*, so a rule
+with `tz` whose occurrences fall in such an hour would make the comparison depend on the date it
+runs. Keep them out of the fixtures.
+
+## Regenerating
+
+From the repository's root, in this order, since each step reads what the one before wrote:
+
+    (cd backend && UPDATE_CALENDAR_GOLDEN=1 cargo test calendar_fixtures)
+    (cd frontend && npx vitest run -u src/differential.spec.ts)
+    (cd backend && UPDATE_CALENDAR_GOLDEN=1 cargo test note_fixtures)

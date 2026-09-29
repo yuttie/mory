@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import type { BrowserContext, Locator, Page } from '@playwright/test';
 import { API_URL, TOKEN, mockBackend } from './backend';
+import { stopServiceWorkers } from './worker';
 
 // A 1×1 PNG: enough for the browser to decode, and to give the image a size once it has.
 const PIXEL = Buffer.from(
@@ -45,20 +46,7 @@ test('shows an image first requested after the browser restarted the service wor
         (window as unknown as { loaded: boolean }).loaded = true;
     });
 
-    // Waited for rather than taken from the command's reply: the test means something only once the
-    // worker the page configured is gone, since that one still holds what it was given. Watched
-    // through the protocol, as Playwright's worker objects do not follow a worker stopped this way.
-    const cdp = await context.newCDPSession(page);
-    const stopped = new Promise<void>((resolve) => {
-        cdp.on('ServiceWorker.workerVersionUpdated', ({ versions }) => {
-            if (versions.length > 0 && versions.every((version) => version.runningStatus === 'stopped')) {
-                resolve();
-            }
-        });
-    });
-    await cdp.send('ServiceWorker.enable');
-    await cdp.send('ServiceWorker.stopAllWorkers');
-    await stopped;
+    await stopServiceWorkers(context, page);
 
     // By the note tree, whose rows are the app's own links. A link inside a note is a plain anchor,
     // and would load the page again.

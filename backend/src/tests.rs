@@ -2003,19 +2003,26 @@ fn fixtures_dir() -> std::path::PathBuf {
         .join("fixtures/calendar")
 }
 
-/// Every feed in the fixtures directory, by file name, in order.
-fn fixture_names() -> Vec<String> {
-    let dir = fixtures_dir();
-    let mut names: Vec<String> = std::fs::read_dir(&dir)
+/// Every fixture in `dir` of the fixtures directory ending in `extension`, as a path from the
+/// fixtures directory, in order.
+fn fixture_files(dir: &str, extension: &str) -> Vec<String> {
+    let dir_path = fixtures_dir().join(dir);
+    let mut names: Vec<String> = std::fs::read_dir(&dir_path)
         .expect("the fixtures directory should exist")
         .filter_map(|entry| {
             let name = entry.ok()?.file_name().to_string_lossy().into_owned();
-            name.ends_with(".ics").then_some(name)
+            let path = if dir.is_empty() { name } else { format!("{dir}/{name}") };
+            path.ends_with(extension).then_some(path)
         })
         .collect();
     names.sort();
-    assert!(!names.is_empty(), "no fixtures found in {}", dir.display());
+    assert!(!names.is_empty(), "no fixtures found in {}", dir_path.display());
     names
+}
+
+/// Every feed in the fixtures directory, by file name, in order.
+fn fixture_names() -> Vec<String> {
+    fixture_files("", ".ics")
 }
 
 fn fixture_calendar(name: &str) -> icalendar::Calendar {
@@ -2088,6 +2095,169 @@ fn calendar_fixtures_find_each_occurrence_in_its_own_day() {
                 found.contains(&occurrence),
                 "{name}: {} is lost from its own day",
                 occurrence.start,
+            );
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Note fixtures: the Rust note expander held to the frontend's.
+//
+// `fixtures/calendar/notes/` holds notes written by hand, and `fixtures/calendar/converted/` the
+// note the app writes for each feed above. `notes.json` records what `note_events` draws of each
+// for a reader in `NOTE_READER_ZONE`, along with the metadata this backend parses out of it, and
+// `frontend/src/note-fixtures.spec.ts` requires `eventsFromEntries` to draw the same from that
+// metadata. The converted notes are held to their feeds as well, which closes the circle with the
+// comparison above: the feed, the frontend's note and this one all draw the same occurrences.
+//
+// Regenerate with `UPDATE_CALENDAR_GOLDEN=1 cargo test note_fixtures`, after the frontend has
+// rewritten `converted/` (see `fixtures/calendar/README.md`).
+// ---------------------------------------------------------------------------
+
+/// A zone with daylight saving, and not the one any developer here works in, so that reading a
+/// wall clock in the machine's own zone by mistake shows.
+const NOTE_READER_ZONE: chrono_tz::Tz = chrono_tz::America::Los_Angeles;
+
+use crate::note_events::{self, Start};
+
+fn note_reader() -> note_events::Reader {
+    note_events::Reader {
+        zone: NOTE_READER_ZONE,
+        // Only `dayjs.tz` reads it, in an hour that happens twice, and the fixtures hold none.
+        now: "2024-01-15T00:00:00Z".parse().expect("a valid instant"),
+    }
+}
+
+/// Every note fixture, as `notes/…` and `converted/…`, in order.
+fn note_fixture_names() -> Vec<String> {
+    let mut names = fixture_files("notes", ".md");
+    names.extend(fixture_files("converted", ".md"));
+    names.sort();
+    names
+}
+
+/// A fixture note as the listing holds it, with the metadata this backend parses out of it.
+fn note_fixture_entry(name: &str) -> crate::models::ListEntry {
+    let blob = std::fs::read(fixtures_dir().join(name)).expect("a readable fixture");
+    let (metadata, title) = crate::extract_metadata(&blob, "text/markdown");
+    crate::models::ListEntry {
+        path: name.into(),
+        size: blob.len(),
+        mime_type: "text/markdown".to_owned(),
+        metadata,
+        title,
+        time: "2024-05-01T00:00:00+00:00".parse().expect("a valid time"),
+    }
+}
+
+fn note_fixture_window() -> (chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>) {
+    let date = |text: &str| chrono::NaiveDate::parse_from_str(text, "%Y-%m-%d").expect("a date");
+    note_events::day_window(date(FIXTURE_WINDOW.0), date(FIXTURE_WINDOW.1), &note_reader())
+}
+
+/// `start  name` for everything that starts inside the window, in order -- what
+/// `note-fixtures.spec.ts` computes on its side.
+fn drawn_in_window<'a>(drawn: impl IntoIterator<Item = (Start, &'a str)>) -> Vec<String> {
+    let (from, to) = note_fixture_window();
+    let mut drawn: Vec<String> = drawn
+        .into_iter()
+        .filter(|(start, _)| (from..=to).contains(&start.begins(&note_reader())))
+        .map(|(start, name)| format!("{start}  {name}"))
+        .collect();
+    drawn.sort();
+    drawn
+}
+
+fn draw_note_fixture(entry: &crate::models::ListEntry) -> Vec<String> {
+    let (from, to) = note_fixture_window();
+    let occurrences = note_events::occurrences(std::slice::from_ref(entry), from, to, &note_reader());
+    drawn_in_window(occurrences.iter().map(|occurrence| (occurrence.start, occurrence.name.as_str())))
+}
+
+#[test]
+fn note_fixtures_draw_as_recorded() {
+    let mut recorded = serde_json::Map::new();
+    for name in note_fixture_names() {
+        let entry = note_fixture_entry(&name);
+        recorded.insert(
+            name,
+            serde_json::json!({
+                "metadata": entry.metadata,
+                "drawn": draw_note_fixture(&entry),
+            }),
+        );
+    }
+
+    let golden_path = fixtures_dir().join("notes.json");
+    let golden = serde_json::to_string_pretty(&serde_json::json!({
+        "zone": NOTE_READER_ZONE.name(),
+        "window": { "from": FIXTURE_WINDOW.0, "to": FIXTURE_WINDOW.1 },
+        "notes": recorded,
+    }))
+    .expect("serialisable");
+
+    if std::env::var("UPDATE_CALENDAR_GOLDEN").is_ok() {
+        std::fs::write(&golden_path, golden + "\n").expect("the golden should be writable");
+        return;
+    }
+    let expected = std::fs::read_to_string(&golden_path).unwrap_or_else(|_| {
+        panic!("{} is missing; regenerate with UPDATE_CALENDAR_GOLDEN=1", golden_path.display())
+    });
+    assert_eq!(
+        golden.trim(),
+        expected.trim(),
+        "what the notes draw changed; if that is intended, regenerate with UPDATE_CALENDAR_GOLDEN=1",
+    );
+}
+
+/// The note the app writes for a feed draws what the feed did, here as in the frontend.
+#[test]
+fn note_fixtures_converted_from_a_feed_draw_what_it_did() {
+    let (from, to) = window(FIXTURE_WINDOW.0, FIXTURE_WINDOW.1);
+    let reader = note_reader();
+    for name in fixture_names() {
+        let feed = crate::ical::expand(&fixture_calendar(&name), "fixture", from, to);
+        let imported = feed.events.iter().map(|event| {
+            let start = note_events::to_wall_clock(&event.start, reader.zone)
+                .expect("the backend writes starts the frontend reads");
+            (start, event.name.as_str())
+        });
+
+        let converted = format!("converted/{}", name.trim_end_matches(".ics"));
+        let entry = note_fixture_entry(&format!("{converted}.md"));
+        assert_eq!(
+            draw_note_fixture(&entry),
+            drawn_in_window(imported),
+            "{converted}.md should draw what {name} does",
+        );
+    }
+}
+
+/// How much the scheduler asks for must not change what it is given for a day. It asks for a day
+/// or two at a time, and asking for years, as the golden does, hides every way of losing an
+/// occurrence at a window's edge.
+#[test]
+fn note_fixtures_find_each_occurrence_in_its_own_day() {
+    let reader = note_reader();
+    let (from, to) = note_fixture_window();
+    for name in note_fixture_names() {
+        let entry = note_fixture_entry(&name);
+        let entries = std::slice::from_ref(&entry);
+        for occurrence in note_events::occurrences(entries, from, to, &reader) {
+            if !(from..=to).contains(&occurrence.start.begins(&reader)) {
+                continue;
+            }
+            let day = match occurrence.start {
+                Start::Date(date) => date,
+                Start::Time(wall) => wall.date(),
+            };
+            let (day_from, day_to) = note_events::day_window(day, day, &reader);
+            let found = note_events::occurrences(entries, day_from, day_to, &reader);
+            assert!(
+                found.contains(&occurrence),
+                "{name}: {} {} is lost from its own day",
+                occurrence.start,
+                occurrence.name,
             );
         }
     }
