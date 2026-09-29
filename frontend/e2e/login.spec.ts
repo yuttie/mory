@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { API_URL, mockBackend } from './backend';
 
 const NOTES = {
-    'retried.md': ['---', 'tags: []', '---', '', '# Retried', '', 'Loaded after the login.', ''].join('\n'),
+    'retried.md': '# Retried\n\nLoaded after the login.\n',
 };
 
 // What failed for want of a token is retried once the user has logged in again, in the view that

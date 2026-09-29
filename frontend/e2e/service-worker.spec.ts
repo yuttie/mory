@@ -8,15 +8,9 @@ const PIXEL = Buffer.from(
     'base64',
 );
 
-// A note showing one image, with frontmatter only because the mock backend cannot list a note
-// without it.
-function note(title: string, file: string): string {
-    return ['---', 'tags: []', '---', '', `# ${title}`, '', `<img src="${file}">`, ''].join('\n');
-}
-
 const NOTES = {
-    'first.md': note('First', 'first.png'),
-    'second.md': note('Second', 'second.png'),
+    'first.md': '# First\n\n<img src="first.png">\n',
+    'second.md': '# Second\n\n<img src="second.png">\n',
 };
 
 // A rendered image, found by the file it shows. The viewer rewrites a relative source into the
