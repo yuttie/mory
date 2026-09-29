@@ -3,6 +3,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import type { BrowserContext, Page } from '@playwright/test';
 import { API_URL, mockBackend } from './backend';
+import { stopServiceWorkers } from './worker';
 
 // A P-256 public key as moried serves its VAPID key: uncompressed, base64url.
 function vapidKey(): string {
@@ -15,10 +16,15 @@ function vapidKey(): string {
     return raw.toString('base64url');
 }
 
-// moried's push endpoints, recording what the page registers. Registered after `mockBackend`, so
-// they answer before its catch-all.
-async function mockPush(context: BrowserContext, key: string): Promise<unknown[]> {
-    const registered: unknown[] = [];
+interface PushRequests {
+    registered: unknown[];
+    deleted: unknown[];
+}
+
+// moried's push endpoints, recording what the page registers and deletes. Registered after
+// `mockBackend`, so they answer before its catch-all.
+async function mockPush(context: BrowserContext, key: string): Promise<PushRequests> {
+    const requests: PushRequests = { registered: [], deleted: [] };
     await context.route(`${API_URL}v2/push/**`, async (route) => {
         const request = route.request();
         if (request.url().endsWith('/push/key')) {
@@ -26,36 +32,65 @@ async function mockPush(context: BrowserContext, key: string): Promise<unknown[]
             return;
         }
         if (request.method() === 'PUT') {
-            registered.push(request.postDataJSON());
+            requests.registered.push(request.postDataJSON());
+        }
+        if (request.method() === 'DELETE') {
+            requests.deleted.push(request.postDataJSON());
         }
         await route.fulfill({ status: 204 });
     });
-    return registered;
+    return requests;
+}
+
+// What the page did with the browser's push subscription, as the stand-in below records it.
+interface Recorded {
+    subscribedWith?: string;
+    unsubscribed?: boolean;
+}
+
+// Playwright's Chromium has no push service to subscribe with, so the browser's half is stood in
+// for: what is checked is what the page asks of it, and what it tells moried. `existingKey` is the
+// key an earlier subscription was made with, if there is one.
+async function standInForPush(context: BrowserContext, existingKey?: string): Promise<void> {
+    await context.addInitScript((existing) => {
+        const recorded = {} as Recorded;
+        (window as unknown as { recorded: Recorded }).recorded = recorded;
+        const toBytes = (key: string) => Uint8Array.from(
+            atob(key.replace(/-/g, '+').replace(/_/g, '/')), (char) => char.charCodeAt(0)).buffer;
+        const subscription = (key: ArrayBuffer | null) => ({
+            endpoint: 'https://push.example/1',
+            options: { applicationServerKey: key },
+            toJSON: () => ({ endpoint: 'https://push.example/1', keys: { p256dh: 'p', auth: 'a' } }),
+            unsubscribe: async () => {
+                recorded.unsubscribed = true;
+                return true;
+            },
+        }) as unknown as PushSubscription;
+        let current = existing === undefined ? null : subscription(toBytes(existing));
+        PushManager.prototype.getSubscription = async () => current;
+        PushManager.prototype.subscribe = async function (options?: PushSubscriptionOptionsInit) {
+            const key = options!.applicationServerKey as ArrayBuffer;
+            recorded.subscribedWith = btoa(String.fromCharCode(...new Uint8Array(key)))
+                .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            current = subscription(key);
+            return current;
+        };
+    }, existingKey);
+}
+
+function recorded(page: Page): Promise<Recorded> {
+    return page.evaluate(() => (window as unknown as { recorded: Recorded }).recorded);
 }
 
 test.beforeEach(async ({ context, baseURL }) => {
     await context.grantPermissions(['notifications'], { origin: baseURL });
 });
 
-// Playwright's Chromium has no push service to subscribe with, so the browser's half is stood in
-// for: what is checked is what the page asks of it, and what it tells moried.
 test('registers this browser for alarms, with the zone it reads the calendar in', async ({ context, page }) => {
     await mockBackend(context, { 'a.md': '# A\n' });
     const key = vapidKey();
-    const registered = await mockPush(context, key);
-    await context.addInitScript(() => {
-        const subscription = {
-            options: { applicationServerKey: null as ArrayBuffer | null },
-            toJSON: () => ({ endpoint: 'https://push.example/1', keys: { p256dh: 'p', auth: 'a' } }),
-            unsubscribe: async () => true,
-        };
-        PushManager.prototype.getSubscription = async () => null;
-        PushManager.prototype.subscribe = async function (options?: PushSubscriptionOptionsInit) {
-            const bytes = new Uint8Array(options!.applicationServerKey as ArrayBuffer);
-            (window as unknown as { subscribedWith: number[] }).subscribedWith = [...bytes];
-            return subscription as unknown as PushSubscription;
-        };
-    });
+    const { registered } = await mockPush(context, key);
+    await standInForPush(context);
 
     await page.goto('/note/a.md');
     await expect.poll(() => registered).toHaveLength(1);
@@ -65,8 +100,52 @@ test('registers this browser for alarms, with the zone it reads the calendar in'
         keys: { p256dh: 'p', auth: 'a' },
         zone,
     });
-    const subscribedWith = await page.evaluate(() => (window as unknown as { subscribedWith: number[] }).subscribedWith);
-    expect(Buffer.from(subscribedWith).toString('base64url')).toBe(key);
+    expect(await recorded(page)).toEqual({ subscribedWith: key });
+});
+
+// moried's key follows `MORIED_SECRET`, and a subscription made with the old one is refused by the
+// push service once it is rotated.
+test('subscribes afresh when moried has a new key', async ({ context, page }) => {
+    await mockBackend(context, { 'a.md': '# A\n' });
+    const key = vapidKey();
+    const { registered } = await mockPush(context, key);
+    await standInForPush(context, vapidKey());
+
+    await page.goto('/note/a.md');
+    await expect.poll(() => registered).toHaveLength(1);
+    expect(await recorded(page)).toEqual({ unsubscribed: true, subscribedWith: key });
+});
+
+// Alarms name events from a private repository, so signing out on purpose ends them. A session
+// that expires signs out too, and must not: the alarms are for when no page is looked at.
+test('ends alarms on signing out, and keeps them when the session expires', async ({ context, page }) => {
+    await mockBackend(context, { 'a.md': '# A\n', 'b.md': '# B\n' });
+    const key = vapidKey();
+    const { registered, deleted } = await mockPush(context, key);
+    await standInForPush(context, key);
+    // The session expires on the second note's first request.
+    let expired = false;
+    await context.route(`${API_URL}notes/b.md`, async (route) => {
+        if (!expired) {
+            expired = true;
+            await route.fulfill({ status: 401, json: {} });
+            return;
+        }
+        await route.fallback();
+    });
+
+    await page.goto('/note/b.md');
+    await expect(page.getByRole('heading', { name: 'Login' })).toBeVisible();
+    expect(deleted).toEqual([]);
+    expect(await recorded(page)).toEqual({});
+
+    await page.goto('/note/a.md');
+    await expect.poll(() => registered.length).toBeGreaterThan(0);
+    await page.getByRole('listitem').filter({ hasText: 'e2e' }).first().click();
+    await page.getByText('Logout', { exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Login' })).toBeVisible();
+    expect(deleted).toEqual([{ endpoint: 'https://push.example/1' }]);
+    expect(await recorded(page)).toEqual({ unsubscribed: true });
 });
 
 // The titles, bodies and notes of the notifications shown. They belong to the worker's
@@ -78,8 +157,8 @@ function notifications(page: Page): Promise<unknown[]> {
     });
 }
 
-// The reason alarms are pushed at all: Chrome stops a worker idle for 30 seconds, and a push is the
-// one thing that starts it again at a time of someone else's choosing.
+// The reason alarms are pushed at all: a push is the one thing that starts a stopped worker at a
+// time of someone else's choosing.
 test('shows an alarm pushed after the browser stopped the service worker', async ({ browserName, context, page }) => {
     test.skip(browserName !== 'chromium', 'Delivering a push takes the Chrome DevTools Protocol.');
     await mockBackend(context, { 'a.md': '# A\n' });
@@ -87,26 +166,13 @@ test('shows an alarm pushed after the browser stopped the service worker', async
 
     await page.goto('/note/a.md');
     await expect(page.getByRole('heading', { name: 'A' })).toBeVisible();
+    const registrationId = await stopServiceWorkers(context, page);
 
     const cdp = await context.newCDPSession(page);
-    let registrationId: string | undefined;
-    const stopped = new Promise<void>((resolve) => {
-        cdp.on('ServiceWorker.workerRegistrationUpdated', ({ registrations }) => {
-            registrationId ??= registrations[0]?.registrationId;
-        });
-        cdp.on('ServiceWorker.workerVersionUpdated', ({ versions }) => {
-            if (versions.length > 0 && versions.every((version) => version.runningStatus === 'stopped')) {
-                resolve();
-            }
-        });
-    });
     await cdp.send('ServiceWorker.enable');
-    await cdp.send('ServiceWorker.stopAllWorkers');
-    await stopped;
-
     await cdp.send('ServiceWorker.deliverPushMessage', {
         origin: new URL(page.url()).origin,
-        registrationId: registrationId!,
+        registrationId,
         data: JSON.stringify({ title: 'Standup', body: 'Room 1', tag: 'a.md#Standup', path: 'a.md' }),
     });
     await expect.poll(() => notifications(page)).toEqual([
