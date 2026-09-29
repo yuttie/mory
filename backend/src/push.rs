@@ -20,7 +20,7 @@
 //! and `sqlx` logs every statement there. It keeps the listing and the subscriptions in memory, and
 //! reads them again only when a sync or a handler says they changed.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration as StdDuration;
 
 use anyhow::{Context, Result, bail};
@@ -391,16 +391,21 @@ fn plan<'a>(
 }
 
 /// Sends each due alarm to its browsers, and returns the endpoints their push services reported
-/// ended.
-async fn send(state: &AppState, due: &[(Alarm, Vec<&Subscription>)]) -> Vec<String> {
-    let mut gone = Vec::new();
+/// ended. One reported ended is not sent the alarms after it.
+async fn send(state: &AppState, due: &[(Alarm, Vec<&Subscription>)]) -> HashSet<String> {
+    let mut gone = HashSet::new();
     for (alarm, group) in due {
         let payload = alarm.payload();
         let mut sent = 0;
         for subscription in group {
+            if gone.contains(&subscription.endpoint) {
+                continue;
+            }
             match deliver(&state.http_client, &state.push, subscription, &payload).await {
                 Delivery::Sent => sent += 1,
-                Delivery::Gone => gone.push(subscription.endpoint.clone()),
+                Delivery::Gone => {
+                    gone.insert(subscription.endpoint.clone());
+                },
                 Delivery::Failed => {},
             }
         }
@@ -458,7 +463,7 @@ async fn run(state: AppState) {
                     }
                 }
                 tracing::info!("Forgot {} push subscriptions their browsers ended", gone.len());
-                subscriptions = load_subscriptions(&state).await;
+                subscriptions.retain(|subscription| !gone.contains(&subscription.endpoint));
             }
         }
         checked_up_to = now;
