@@ -16,6 +16,7 @@ chrono = { version = "0.4.38", features = ["serde"] }
 dotenv = "0.15.0"
 git2 = { version = "0.19", default-features = false }
 httpdate = "1"
+hkdf = "0.12"
 icalendar = { version = "0.17.13", features = ["recurrence"] }
 jsonwebtoken = "9"
 lindera = { version = "5.0.1", features = ["embed-ipadic"] }
@@ -42,6 +43,7 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 unicode-normalization = "0.1"
 url = "2"
 uuid = { version = "1.17.0", features = ["serde"] }
+web-push-native = "0.5"
 rmcp = { version = "3", features = ["server", "macros", "schemars", "transport-streamable-http-server"] }
 schemars = "1"
 chrono-tz = "0.10.4"
