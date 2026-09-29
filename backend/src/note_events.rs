@@ -481,7 +481,8 @@ fn build_occurrence(
         path: path.to_owned(),
         name,
         start,
-        finished: matches!(get("finished"), Some(Value::Bool(true))),
+        // The views take any truthy value as finished: `finished: yes` is text in YAML 1.2.
+        finished: get("finished").is_some_and(truthy),
         location,
     });
 }
@@ -861,6 +862,32 @@ events:
     Blank: { start: '2024-05-01 11:00', name: '' }
 ";
         assert_eq!(drawn(yaml), ["2024-05-01 11:00  Blank"]);
+    }
+
+    #[test]
+    fn anything_truthy_is_finished_as_the_views_read_it() {
+        let reader = reader();
+        let (from, to) = day_window(
+            NaiveDate::from_ymd_opt(2024, 5, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2024, 5, 1).unwrap(),
+            &reader,
+        );
+        let entries = [entry("
+events:
+    Said yes: { start: '2024-05-01 09:00', finished: yes }
+    Done: { start: '2024-05-01 10:00', finished: true }
+    Not done: { start: '2024-05-01 11:00', finished: false }
+    Empty: { start: '2024-05-01 12:00', finished: '' }
+")];
+        let mut finished: Vec<(String, bool)> =
+            occurrences(&entries, from, to, &reader).into_iter().map(|o| (o.name, o.finished)).collect();
+        finished.sort();
+        assert_eq!(finished, [
+            ("Done".to_owned(), true),
+            ("Empty".to_owned(), false),
+            ("Not done".to_owned(), false),
+            ("Said yes".to_owned(), true),
+        ]);
     }
 
     #[test]
