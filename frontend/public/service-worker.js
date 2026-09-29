@@ -9,64 +9,6 @@ const filesUrl = new URL('files/', new URL(self.location.href).searchParams.get(
 // version of the app, which does not know the question.
 const TOKEN_REQUEST_TIMEOUT_MS = 10 * 1000;
 
-function updateEvents() {
-    fetch(self.apiUrl + 'notes', {
-        mode: 'cors',
-        credentials: 'include',
-        headers: {
-            'Authorization': `Bearer ${self.apiToken}`,
-        },
-    })
-        .then((res) => {
-            if (!res.ok) {
-                throw new Error(`HTTP error! Status: ${res.status}`);
-            }
-            return res.json();
-        })
-        .then((notes) => {
-            self.events = [];
-            const now = Date.now();
-            for (const note of notes) {
-                if (note.metadata && note.metadata.events) {
-                    for (const [name, event] of Object.entries(note.metadata.events)) {
-                        if (event.start) {
-                            const time = Date.parse(event.start);
-                            if (time >= now) {
-                                self.events.push([time, name]);
-                            }
-                        }
-                        else if (event.times) {
-                            for (const instance of event.times) {
-                                if (instance.start) {
-                                    const time = Date.parse(instance.start);
-                                    if (time >= now) {
-                                        self.events.push([time, name]);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    self.updateEventsThread = setTimeout(updateEvents, 5 * 60 * 1000);
-}
-
-function checkEvents() {
-    const now = Date.now();
-    for (const [time, name] of self.events) {
-        const remainingTime = time - now;
-        if (0 <= remainingTime && remainingTime < 5 * 1000) {
-            setTimeout(() => {
-                self.registration.showNotification(name, {
-                    icon: self.appRoot + 'favicon.png',
-                });
-            }, remainingTime);
-        }
-    }
-    self.checkEventsThread = setTimeout(checkEvents, 5 * 1000);
-}
-
 // The token, asked of a page for each request rather than kept: a worker the browser has restarted
 // has lost the one `configure` gave it, and a page's answer is always current. Any page will do, as
 // they all hold the one token kept in localStorage. The page that made the request is asked when
@@ -124,21 +66,51 @@ self.addEventListener('message', event => {
                 client.postMessage('configured');
             }
         })());
-
-        // Start event watching
-        if (!self.events) {
-            self.events = [];
-        }
-        if (!self.updateEventsThread) {
-            self.updateEventsThread = setTimeout(updateEvents, 0);
-        }
-        if (!self.checkEventsThread) {
-            self.checkEventsThread = setTimeout(checkEvents, 0);
-        }
     }
     else if (event.data.type === 'update-api-token') {
         self.apiToken = event.data.value;
     }
+});
+
+// An event alarm, which moried sends at the event's start; see `backend/src/push.rs`. This worker
+// cannot wait for one itself: the browser stops it after 30 seconds idle, and its timers with it.
+self.addEventListener('push', (event) => {
+    let alarm;
+    try {
+        alarm = event.data.json();
+    }
+    catch {
+        // Not one of moried's, such as the test message DevTools sends. Something must still be
+        // shown, as the subscription promised; the browser shows a warning of its own otherwise.
+        alarm = { title: 'mory', body: event.data?.text() };
+    }
+    event.waitUntil(self.registration.showNotification(alarm.title, {
+        body: alarm.body,
+        tag: alarm.tag,
+        icon: new URL('favicon.png', self.registration.scope).href,
+        data: { path: alarm.path },
+    }));
+});
+
+// Opens the note an alarm is for. A tab of the app already open is asked to route to it, as a
+// link inside the app would, rather than loaded afresh, which would lose whatever it has unsaved.
+self.addEventListener('notificationclick', (event) => {
+    event.notification.close();
+    const path = event.notification.data?.path;
+    event.waitUntil((async () => {
+        const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        const open = windows.find((client) => client.url.startsWith(self.registration.scope));
+        if (open !== undefined) {
+            if (path !== undefined) {
+                open.postMessage({ type: 'open-note', path: path });
+            }
+            await open.focus();
+            return;
+        }
+        await self.clients.openWindow(path === undefined
+            ? self.registration.scope
+            : new URL(`note/${path.split('/').map(encodeURIComponent).join('/')}`, self.registration.scope).href);
+    })());
 });
 
 self.addEventListener('fetch', event => {

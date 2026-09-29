@@ -571,6 +571,31 @@ export async function getImportedEvents(
   return response.data;
 }
 
+// Event alarms, which moried sends as Web Push; see `backend/src/push.rs`.
+export interface PushSubscriptionRequest {
+    endpoint: string;
+    keys: { p256dh: string; auth: string };
+    /// The zone this browser reads the calendar in, which a note without offsets depends on.
+    zone: string;
+}
+
+/// The key a browser subscribes to moried's pushes with, base64url-encoded.
+export async function getPushKey(): Promise<string> {
+    const axios = await getAxios();
+    const response = await axios.get('/v2/push/key');
+    return response.data;
+}
+
+export async function putPushSubscription(subscription: PushSubscriptionRequest): Promise<void> {
+    const axios = await getAxios();
+    await axios.put('/v2/push/subscription', subscription);
+}
+
+export async function deletePushSubscription(endpoint: string): Promise<void> {
+    const axios = await getAxios();
+    await axios.delete('/v2/push/subscription', { data: { endpoint } });
+}
+
 export async function runAiAction(prompt: string): Promise<string> {
     const axios = await getAxios();
     const response = await axios.post('/v2/ai-action', { prompt: prompt });

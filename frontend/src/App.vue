@@ -249,7 +249,7 @@
                                 <v-list-item to="/config" v-bind:prepend-icon="mdiCogOutline" title="Config"></v-list-item>
                                 <v-list-item to="/about" v-bind:prepend-icon="mdiInformationOutline" title="About"></v-list-item>
                                 <v-divider></v-divider>
-                                <v-list-item v-bind:prepend-icon="mdiLogout" title="Logout" v-on:click="appStore.logout()"></v-list-item>
+                                <v-list-item v-bind:prepend-icon="mdiLogout" title="Logout" v-on:click="signOut()"></v-list-item>
                             </v-list>
                         </v-card>
                     </v-menu>
@@ -463,7 +463,7 @@
                                 <v-list-item to="/config" v-bind:prepend-icon="mdiCogOutline" title="Config"></v-list-item>
                                 <v-list-item to="/about" v-bind:prepend-icon="mdiInformationOutline" title="About"></v-list-item>
                                 <v-divider></v-divider>
-                                <v-list-item v-bind:prepend-icon="mdiLogout" title="Logout" v-on:click="appStore.logout()"></v-list-item>
+                                <v-list-item v-bind:prepend-icon="mdiLogout" title="Logout" v-on:click="signOut()"></v-list-item>
                             </v-list>
                         </v-card>
                     </v-menu>
@@ -548,7 +548,7 @@
 <script lang="ts" setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 
 import {
     mdiAlertCircleOutline,
@@ -583,6 +583,7 @@ import { useAppStore } from '@/stores/app';
 import { loadConfigValue, saveConfigValue } from '@/config';
 import type { Claim, IndexingStop, ListEntry2, UploadEntry } from '@/api';
 import IndexingStopsItem from '@/components/IndexingStopsItem.vue';
+import { subscribeToEventAlarms, unsubscribeFromEventAlarms } from '@/service-worker';
 import { useFilesStore } from '@/stores/files';
 import { jwtDecode } from 'jwt-decode';
 
@@ -590,6 +591,7 @@ import { jwtDecode } from 'jwt-decode';
 const appStore = useAppStore();
 const fileStore = useFilesStore();
 const route = useRoute();
+const router = useRouter();
 
 // Reactive states
 const notificationPermission = ref<'granted'| 'denied' | 'default'>('Notification' in window ? Notification.permission : 'denied');
@@ -719,6 +721,7 @@ onMounted(() => {
     loadTemplates();
     refreshIndexingStops();
     document.addEventListener('visibilitychange', onVisibilityChange);
+    navigator.serviceWorker?.addEventListener('message', onWorkerMessage);
 
     // Handle drag and drop of files
     // TODO v-onで書き直す
@@ -763,6 +766,7 @@ onMounted(() => {
 onUnmounted(() => {
     unloadCustomCss();
     document.removeEventListener('visibilitychange', onVisibilityChange);
+    navigator.serviceWorker?.removeEventListener('message', onWorkerMessage);
 });
 
 // Methods
@@ -777,7 +781,26 @@ async function requestNotificationPermission() {
         const n = new Notification("Example notification from mory", {
             icon: import.meta.env.VITE_APP_APPLICATION_ROOT + 'favicon.png',
         });
+        subscribeToEventAlarms().catch((error) => {
+            console.warn('Failed to subscribe to event alarms:', error);
+        });
     }
+}
+
+// A click on an event alarm, which the worker hands to a tab already open; see `notificationclick`
+// in `public/service-worker.js`.
+function onWorkerMessage(event: MessageEvent) {
+    if (event.data?.type === 'open-note' && typeof event.data.path === 'string') {
+        router.push({ name: 'Note', params: { path: event.data.path.split('/') } });
+    }
+}
+
+// Signing out on purpose ends this browser's event alarms; an expired session does not.
+async function signOut() {
+    await unsubscribeFromEventAlarms().catch((error) => {
+        console.warn('Failed to unsubscribe from event alarms:', error);
+    });
+    appStore.logout();
 }
 
 function tokenExpired(callback: () => void) {
