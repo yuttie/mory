@@ -7,6 +7,7 @@ import { useLocalStorage } from '@/composables/localStorage';
 import { useFilesStore } from '@/stores/files';
 
 import * as api from '@/api';
+import { apiUrl } from '@/api-url';
 
 export const useAppStore = defineStore('app', () => {
     // States
@@ -87,8 +88,6 @@ export const useAppStore = defineStore('app', () => {
 
     // Service worker
     if ('serviceWorker' in navigator) {
-        const apiUrl = new URL(import.meta.env.VITE_APP_API_URL!, window.location.href).href;
-
         // The API URL goes in the script's URL, where every copy of the worker the browser starts
         // can read it; see `filesUrl` in the worker.
         const scriptUrl = `${import.meta.env.BASE_URL}service-worker.js?${new URLSearchParams({ api: apiUrl })}`;

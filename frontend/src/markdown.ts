@@ -16,9 +16,8 @@ import rehypeHighlight from 'rehype-highlight';
 import rehypeStringify from 'rehype-stringify';
 import type { LanguageFn } from 'highlight.js';
 import { hljsLanguageMap } from '@/hljs-language-map';
+import { apiFilesUrl } from '@/api-url';
 import type { VFile } from 'vfile';
-
-const apiFilesUrl = new URL('files/', new URL(import.meta.env.VITE_APP_API_URL!, window.location.href)).href;
 
 /**
  * Feature flags detected from the markdown source. Expensive renderers
