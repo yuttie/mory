@@ -1,5 +1,5 @@
 // Utilities
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import type { Ref } from 'vue';
 import { defineStore } from 'pinia';
 
@@ -16,7 +16,6 @@ export const useAppStore = defineStore('app', () => {
     const loginError: Ref<null | string> = ref(null);
     const serviceWorker: Ref<null | ServiceWorker> = ref(null);
     const serviceWorkerConfigured = ref(false);
-    const serviceWorkerHasToken = ref(false);
     const draggingViewerContent = ref(false);
     // How many mounted views are showing their own controls in the app bar, through <AppBarContent>.
     // While any is, the app bar leaves out its generic title.
@@ -74,6 +73,18 @@ export const useAppStore = defineStore('app', () => {
         }
     }
 
+    // Watchers
+    // Retries what failed for want of a token once the page has one again, from a login here or
+    // in another tab. After the flush, so that `useLocalStorage` has stored the token that
+    // `getAxios()` reads.
+    watch(token, (newToken, oldToken) => {
+        if (oldToken === null && newToken !== null) {
+            for (const callback of loginCallbacks.value.splice(0)) {
+                callback();
+            }
+        }
+    }, { flush: 'post' });
+
     // Service worker
     if ('serviceWorker' in navigator) {
         const apiUrl = new URL(import.meta.env.VITE_APP_API_URL!, window.location.href).href;
@@ -119,17 +130,6 @@ export const useAppStore = defineStore('app', () => {
         navigator.serviceWorker.addEventListener('message', (event) => {
             if (event.data === 'configured') {
                 serviceWorkerConfigured.value = true;
-                serviceWorkerHasToken.value = token.value !== null;
-            }
-            else if (event.data === 'api-token-updated') {
-                serviceWorkerHasToken.value = token.value !== null;
-
-                if (serviceWorkerHasToken.value) {
-                    for (const callback of loginCallbacks.value) {
-                        callback();
-                    }
-                    loginCallbacks.value.length = 0;
-                }
             }
             else if (event.data === 'request-api-token') {
                 // The worker asks with each file it loads; see `requestToken` there for why.
@@ -148,7 +148,6 @@ export const useAppStore = defineStore('app', () => {
         loginError,
         serviceWorker,
         serviceWorkerConfigured,
-        serviceWorkerHasToken,
         draggingViewerContent,
         appBarClaims,
         // Getters

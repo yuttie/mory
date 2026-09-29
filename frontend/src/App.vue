@@ -1,6 +1,6 @@
 <template>
     <v-app id="app" ref="app">
-        <v-main v-if="appStore.serviceWorkerConfigured && appStore.serviceWorkerHasToken">
+        <v-main v-if="appStore.serviceWorkerConfigured">
             <v-container fluid class="pa-0" style="height: 100%;">
                 <router-view v-slot="{ Component }">
                     <component
