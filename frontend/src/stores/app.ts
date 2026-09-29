@@ -44,13 +44,6 @@ export const useAppStore = defineStore('app', () => {
 
             isLoggingIn.value = false;
             loginError.value = null;
-
-            if (serviceWorker.value) {  // FIXME This should be executed after service worker get ready
-                serviceWorker.value.postMessage({
-                    type: 'update-api-token',
-                    value: token.value,
-                });
-            }
         }).catch(_error => {
             isLoggingIn.value = false;
             loginError.value = "Incorrect username or password";
@@ -64,14 +57,6 @@ export const useAppStore = defineStore('app', () => {
         // The cached listing describes a private repository, so it must not outlive the
         // session that fetched it.
         useFilesStore().clear();
-
-        // Let service worker know it
-        if (serviceWorker.value) {  // FIXME This should be executed after service worker get ready
-            serviceWorker.value.postMessage({
-                type: 'update-api-token',
-                value: token.value,
-            });
-        }
     }
 
     // Watchers
@@ -134,6 +119,15 @@ export const useAppStore = defineStore('app', () => {
                 // The worker asks with each file it loads; see `requestToken` there for why.
                 event.ports[0].postMessage(token.value);
             }
+        });
+
+        // The worker's event notifications read the token it was given last. A change before any
+        // worker is configured needs no message, as `configure` carries the token as it is then.
+        watch(token, (value) => {
+            serviceWorker.value?.postMessage({
+                type: 'update-api-token',
+                value: value,
+            });
         });
     } else {
         console.error('Service workers are not supported.');
