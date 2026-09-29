@@ -24,7 +24,8 @@ use std::collections::{HashMap, HashSet};
 use std::time::Duration as StdDuration;
 
 use anyhow::{Context, Result, bail};
-use axum::{Json, extract, http::StatusCode};
+use axum::http::{HeaderValue, StatusCode, Uri};
+use axum::{Json, extract};
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use chrono::{DateTime, Utc};
@@ -120,9 +121,13 @@ pub struct EndpointRequest {
 /// A subscription moried can send to.
 #[derive(Debug, Clone)]
 struct Subscription {
+    /// As the browser gave it, which is how the table knows it.
     endpoint: String,
-    ua_public: PublicKey,
-    ua_auth: Auth,
+    /// The push service's host: enough for a log line to tell which browser's service failed,
+    /// where the endpoint is a credential to send that browser notifications.
+    host: String,
+    /// The endpoint and the browser's keys, parsed once into what sends to them.
+    builder: WebPushBuilder,
     zone: Zone,
 }
 
@@ -133,12 +138,14 @@ fn decode(value: &str) -> Option<Vec<u8>> {
 
 impl Subscription {
     fn parse(endpoint: &str, p256dh: &str, auth: &str, zone: &str) -> Result<Self> {
-        let url = url::Url::parse(endpoint).context("the endpoint is not a URL")?;
+        // Parsed as the type it is sent to, so that nothing is stored that could never be sent.
+        let uri = endpoint.parse::<Uri>().context("the endpoint is not a URL")?;
         // A push service is always reached over TLS, and moried should not be made to post to
         // anything else on a browser's say-so.
-        if url.scheme() != "https" {
+        if uri.scheme_str() != Some("https") {
             bail!("the endpoint is not an https URL");
         }
+        let host = uri.host().context("the endpoint names no host")?.to_owned();
         let ua_public = decode(p256dh)
             .and_then(|bytes| PublicKey::from_sec1_bytes(&bytes).ok())
             .context("keys.p256dh is not a P-256 public key")?;
@@ -147,7 +154,8 @@ impl Subscription {
             .map(|bytes| Auth::clone_from_slice(&bytes))
             .context("keys.auth is not 16 bytes")?;
         let zone = zone.parse::<Zone>().ok().context("zone is not an IANA zone name")?;
-        Ok(Subscription { endpoint: endpoint.to_owned(), ua_public, ua_auth, zone })
+        let builder = WebPushBuilder::new(uri, ua_public, ua_auth).with_valid_duration(LATE_LIMIT);
+        Ok(Subscription { endpoint: endpoint.to_owned(), host, builder, zone })
     }
 }
 
@@ -307,53 +315,62 @@ enum Delivery {
     Failed,
 }
 
+/// The push that carries `payload` to one browser: encrypted for it, and signed as this server.
+fn request(push: &Push, subscription: &Subscription, payload: &Payload) -> Result<reqwest::Request> {
+    let request = subscription
+        .builder
+        .clone()
+        .with_vapid(&push.key_pair, &push.contact)
+        .build(serde_json::to_vec(payload)?)?;
+    let mut request = reqwest::Request::try_from(request)?;
+    *request.timeout_mut() = Some(SEND_TIMEOUT);
+    // A phone dozing on battery holds back a normal-urgency push; an alarm must not wait.
+    request.headers_mut().insert("Urgency", HeaderValue::from_static("high"));
+    Ok(request)
+}
+
+/// What a push service's answer says of the subscription.
+fn delivery_of(status: StatusCode) -> Delivery {
+    if status.is_success() {
+        Delivery::Sent
+    }
+    // 404 and 410 for a subscription that has ended; 403 for one made with another key, as after
+    // `MORIED_SECRET` is rotated.
+    else if matches!(status.as_u16(), 403 | 404 | 410) {
+        Delivery::Gone
+    }
+    else {
+        Delivery::Failed
+    }
+}
+
 async fn deliver(
     client: &reqwest::Client,
     push: &Push,
     subscription: &Subscription,
     payload: &Payload,
 ) -> Delivery {
-    let result = async {
-        let endpoint = subscription.endpoint.parse::<axum::http::Uri>()?;
-        let request = WebPushBuilder::new(endpoint, subscription.ua_public, subscription.ua_auth)
-            .with_valid_duration(LATE_LIMIT)
-            .with_vapid(&push.key_pair, &push.contact)
-            .build(serde_json::to_vec(payload)?)?;
-        let mut request = reqwest::Request::try_from(request)?;
-        *request.timeout_mut() = Some(SEND_TIMEOUT);
-        // A phone dozing on battery holds back a normal-urgency push; an alarm must not wait.
-        request.headers_mut().insert("Urgency", axum::http::HeaderValue::from_static("high"));
-        anyhow::Ok(client.execute(request).await?)
-    }
-    .await;
-
-    match result {
-        Ok(response) if response.status().is_success() => Delivery::Sent,
-        // 404 and 410 for a subscription that has ended; 403 for one made with another key, as
-        // after `MORIED_SECRET` is rotated.
-        Ok(response) if matches!(response.status().as_u16(), 403 | 404 | 410) => Delivery::Gone,
+    let response = match request(push, subscription, payload) {
+        Ok(request) => client.execute(request).await.map_err(anyhow::Error::from),
+        Err(e) => Err(e),
+    };
+    match response {
         Ok(response) => {
-            tracing::warn!(
-                "The push service at {} refused an alarm: {}",
-                push_service(&subscription.endpoint),
-                response.status(),
-            );
-            Delivery::Failed
+            let delivery = delivery_of(response.status());
+            if delivery == Delivery::Failed {
+                tracing::warn!(
+                    "The push service at {} refused an alarm: {}",
+                    subscription.host,
+                    response.status(),
+                );
+            }
+            delivery
         },
         Err(e) => {
-            tracing::warn!("Failed to send an alarm to {}: {:?}", push_service(&subscription.endpoint), e);
+            tracing::warn!("Failed to send an alarm to {}: {:?}", subscription.host, e);
             Delivery::Failed
         },
     }
-}
-
-/// The push service's host: enough to tell which browser's service failed, without logging the
-/// endpoint, which is a credential to send notifications to that browser.
-fn push_service(endpoint: &str) -> String {
-    url::Url::parse(endpoint)
-        .ok()
-        .and_then(|url| url.host_str().map(str::to_owned))
-        .unwrap_or_default()
 }
 
 /// What one look at the schedule found: the alarms due now, each with the browsers to send it to,
@@ -508,8 +525,6 @@ async fn wait(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use super::*;
 
     const LOS_ANGELES: Zone = chrono_tz::America::Los_Angeles;
@@ -577,13 +592,9 @@ events:
     }
 
     fn subscription_in(zone: Zone) -> Subscription {
-        let (ua_secret, _, ua_auth, _) = subscription_keys();
-        Subscription {
-            endpoint: format!("https://push.example/{}", zone.name()),
-            ua_public: ua_secret.public_key(),
-            ua_auth,
-            zone,
-        }
+        let (_, p256dh, _, auth) = subscription_keys();
+        let endpoint = format!("https://push.example/{}", zone.name());
+        Subscription::parse(&endpoint, &p256dh, &auth, zone.name()).unwrap()
     }
 
     fn names(plan: &Plan<'_>) -> Vec<(String, Vec<Zone>)> {
@@ -643,45 +654,18 @@ events:
         assert!(ok("https://push.example/abc", &p256dh, &auth, "Asia/Tokyo"));
         assert!(ok("https://push.example/abc", &format!("{p256dh}="), &format!("{auth}=="), "UTC"));
         assert!(!ok("http://push.example/abc", &p256dh, &auth, "Asia/Tokyo"));
+        // A URL, but not one a request can be sent to: stored, it would fail every send for good.
+        assert!(!ok("https://push.example/a b", &p256dh, &auth, "Asia/Tokyo"));
         assert!(!ok("https://push.example/abc", "AAAA", &auth, "Asia/Tokyo"));
         assert!(!ok("https://push.example/abc", &p256dh, "AAAA", "Asia/Tokyo"));
         assert!(!ok("https://push.example/abc", &p256dh, &auth, "+09:00"));
     }
 
-    /// A push service on a local port that records what it is sent and answers with `status`.
-    async fn push_service_answering(
-        status: StatusCode,
-    ) -> (String, Arc<tokio::sync::Mutex<Vec<(axum::http::HeaderMap, Vec<u8>)>>>) {
-        let received = Arc::new(tokio::sync::Mutex::new(Vec::new()));
-        let sink = received.clone();
-        let app = axum::Router::new().route(
-            "/push/:id",
-            axum::routing::post(move |headers: axum::http::HeaderMap, body: axum::body::Bytes| {
-                let sink = sink.clone();
-                async move {
-                    sink.lock().await.push((headers, body.to_vec()));
-                    status
-                }
-            }),
-        );
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let address = listener.local_addr().unwrap();
-        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-        (format!("http://{address}/push/1"), received)
-    }
-
-    #[tokio::test]
-    async fn an_alarm_reaches_the_browser_encrypted_and_signed() {
+    #[test]
+    fn an_alarm_is_encrypted_for_the_browser_and_signed_as_this_server() {
         let push = Push::derive(b"secret", "mailto:a@example.invalid".into()).unwrap();
-        let (endpoint, received) = push_service_answering(StatusCode::CREATED).await;
         let (ua_secret, _, ua_auth, _) = subscription_keys();
-        // Built directly: the handler would refuse a plain-HTTP endpoint.
-        let subscription = Subscription {
-            endpoint,
-            ua_public: ua_secret.public_key(),
-            ua_auth,
-            zone: LOS_ANGELES,
-        };
+        let subscription = subscription_in(LOS_ANGELES);
         let alarm = Alarm {
             at: at("2024-05-06T16:00:00Z"),
             name: "Standup".into(),
@@ -689,11 +673,9 @@ events:
             location: Some("Room 1".into()),
         };
 
-        let delivery = deliver(&reqwest::Client::new(), &push, &subscription, &alarm.payload()).await;
-        assert_eq!(delivery, Delivery::Sent);
-
-        let received = received.lock().await;
-        let (headers, body) = &received[0];
+        let request = request(&push, &subscription, &alarm.payload()).unwrap();
+        assert_eq!(request.url().as_str(), "https://push.example/America/Los_Angeles");
+        let headers = request.headers();
         assert_eq!(headers["urgency"], "high");
         assert_eq!(headers["ttl"], "600");
         let authorization = headers["authorization"].to_str().unwrap();
@@ -701,27 +683,24 @@ events:
         assert!(authorization.ends_with(&format!("k={}", push.public_key)), "{authorization}");
 
         // Only the browser holding the subscription's secret can read it.
-        let plain = web_push_native::decrypt(body.clone(), &ua_secret, &ua_auth).unwrap();
+        let body = request.body().and_then(reqwest::Body::as_bytes).unwrap().to_vec();
+        let plain = web_push_native::decrypt(body, &ua_secret, &ua_auth).unwrap();
         let payload: Payload = serde_json::from_slice(&plain).unwrap();
         assert_eq!(payload, alarm.payload());
         assert_eq!(payload.title, "Standup");
         assert_eq!(payload.body.as_deref(), Some("Room 1"));
     }
 
-    #[tokio::test]
-    async fn an_ended_subscription_is_reported_gone() {
-        let push = Push::derive(b"secret", "mailto:a@example.invalid".into()).unwrap();
-        let (ua_secret, _, ua_auth, _) = subscription_keys();
+    #[test]
+    fn an_ended_subscription_is_reported_gone() {
         for (status, expected) in [
+            (StatusCode::CREATED, Delivery::Sent),
             (StatusCode::GONE, Delivery::Gone),
             (StatusCode::NOT_FOUND, Delivery::Gone),
             (StatusCode::FORBIDDEN, Delivery::Gone),
             (StatusCode::TOO_MANY_REQUESTS, Delivery::Failed),
         ] {
-            let (endpoint, _) = push_service_answering(status).await;
-            let subscription = Subscription { endpoint, ua_public: ua_secret.public_key(), ua_auth, zone: LOS_ANGELES };
-            let alarm = Alarm { at: at("2024-05-06T16:00:00Z"), name: "A".into(), path: "a.md".into(), location: None };
-            assert_eq!(deliver(&reqwest::Client::new(), &push, &subscription, &alarm.payload()).await, expected, "{status}");
+            assert_eq!(delivery_of(status), expected, "{status}");
         }
     }
 }
