@@ -114,9 +114,9 @@ test('shows an alarm pushed after the browser stopped the service worker', async
     ]);
 });
 
-// What the worker does with a click on an alarm while a tab is open: the tab routes to the note, as
-// a link inside the app would, and keeps what it had rather than loading afresh. The click itself
-// cannot be simulated, as a worker refuses to wait on an event the browser did not send it.
+// A click on an alarm while a tab is open: the tab routes to the note, as a link inside the app
+// would, and keeps what it had rather than loading afresh. The worker's own `openNote` is called,
+// as the click itself cannot be simulated.
 test('routes an open tab to the note of a clicked alarm', async ({ browserName, context, page }) => {
     test.skip(browserName !== 'chromium', 'Reaching into the service worker takes Chromium.');
     await mockBackend(context, { 'a.md': '# A\n', 'meetings/b.md': '# B\n' });
@@ -129,12 +129,13 @@ test('routes an open tab to the note of a clicked alarm', async ({ browserName, 
     });
 
     const worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker');
-    await worker.evaluate(async () => {
-        const scope = self as unknown as ServiceWorkerGlobalScope;
-        for (const client of await scope.clients.matchAll({ type: 'window' })) {
-            client.postMessage({ type: 'open-note', path: 'meetings/b.md' });
-        }
-    });
+    const refusal = await worker.evaluate(async (path) => {
+        const scope = self as unknown as { openNote(path: string): Promise<void> };
+        // Only a click lets the worker focus a tab, so the focus is refused here; the routing
+        // happens before it.
+        return scope.openNote(path).then(() => null, (error: Error) => error.name);
+    }, 'meetings/b.md');
+    expect([null, 'InvalidAccessError']).toContain(refusal);
 
     await expect(page).toHaveURL(/\/note\/meetings\/b\.md$/);
     await expect(page.getByRole('heading', { name: 'B' })).toBeVisible();

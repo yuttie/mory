@@ -86,25 +86,31 @@ self.addEventListener('push', (event) => {
     }));
 });
 
+// Where the app shows a note: `/note/:path*` in `src/router/index.ts`, a segment per directory.
+function noteUrl(path) {
+    return new URL(`note/${path.split('/').map(encodeURIComponent).join('/')}`, self.registration.scope).href;
+}
+
 // Opens the note an alarm is for. A tab of the app already open is asked to route to it, as a
 // link inside the app would, rather than loaded afresh, which would lose whatever it has unsaved.
+// Declared at the top level for the e2e tests to call, as a click on a notification cannot be
+// simulated.
+async function openNote(path) {
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const open = windows.find((client) => client.url.startsWith(self.registration.scope));
+    if (open === undefined) {
+        await self.clients.openWindow(path === undefined ? self.registration.scope : noteUrl(path));
+        return;
+    }
+    if (path !== undefined) {
+        open.postMessage({ type: 'open-note', path: path });
+    }
+    await open.focus();
+}
+
 self.addEventListener('notificationclick', (event) => {
     event.notification.close();
-    const path = event.notification.data?.path;
-    event.waitUntil((async () => {
-        const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-        const open = windows.find((client) => client.url.startsWith(self.registration.scope));
-        if (open !== undefined) {
-            if (path !== undefined) {
-                open.postMessage({ type: 'open-note', path: path });
-            }
-            await open.focus();
-            return;
-        }
-        await self.clients.openWindow(path === undefined
-            ? self.registration.scope
-            : new URL(`note/${path.split('/').map(encodeURIComponent).join('/')}`, self.registration.scope).href);
-    })());
+    event.waitUntil(openNote(event.notification.data?.path));
 });
 
 self.addEventListener('fetch', event => {
