@@ -2003,19 +2003,26 @@ fn fixtures_dir() -> std::path::PathBuf {
         .join("fixtures/calendar")
 }
 
-/// Every feed in the fixtures directory, by file name, in order.
-fn fixture_names() -> Vec<String> {
-    let dir = fixtures_dir();
-    let mut names: Vec<String> = std::fs::read_dir(&dir)
+/// Every fixture in `dir` of the fixtures directory ending in `extension`, as a path from the
+/// fixtures directory, in order.
+fn fixture_files(dir: &str, extension: &str) -> Vec<String> {
+    let dir_path = fixtures_dir().join(dir);
+    let mut names: Vec<String> = std::fs::read_dir(&dir_path)
         .expect("the fixtures directory should exist")
         .filter_map(|entry| {
             let name = entry.ok()?.file_name().to_string_lossy().into_owned();
-            name.ends_with(".ics").then_some(name)
+            let path = if dir.is_empty() { name } else { format!("{dir}/{name}") };
+            path.ends_with(extension).then_some(path)
         })
         .collect();
     names.sort();
-    assert!(!names.is_empty(), "no fixtures found in {}", dir.display());
+    assert!(!names.is_empty(), "no fixtures found in {}", dir_path.display());
     names
+}
+
+/// Every feed in the fixtures directory, by file name, in order.
+fn fixture_names() -> Vec<String> {
+    fixture_files("", ".ics")
 }
 
 fn fixture_calendar(name: &str) -> icalendar::Calendar {
@@ -2111,8 +2118,10 @@ fn calendar_fixtures_find_each_occurrence_in_its_own_day() {
 /// wall clock in the machine's own zone by mistake shows.
 const NOTE_READER_ZONE: chrono_tz::Tz = chrono_tz::America::Los_Angeles;
 
-fn note_reader() -> crate::note_events::Reader {
-    crate::note_events::Reader {
+use crate::note_events::{self, Start};
+
+fn note_reader() -> note_events::Reader {
+    note_events::Reader {
         zone: NOTE_READER_ZONE,
         // Only `dayjs.tz` reads it, in an hour that happens twice, and the fixtures hold none.
         now: "2024-01-15T00:00:00Z".parse().expect("a valid instant"),
@@ -2121,15 +2130,8 @@ fn note_reader() -> crate::note_events::Reader {
 
 /// Every note fixture, as `notes/…` and `converted/…`, in order.
 fn note_fixture_names() -> Vec<String> {
-    let mut names = Vec::new();
-    for dir in ["notes", "converted"] {
-        for entry in std::fs::read_dir(fixtures_dir().join(dir)).expect("the directory should exist") {
-            let name = entry.expect("a readable entry").file_name().to_string_lossy().into_owned();
-            if name.ends_with(".md") {
-                names.push(format!("{dir}/{name}"));
-            }
-        }
-    }
+    let mut names = fixture_files("notes", ".md");
+    names.extend(fixture_files("converted", ".md"));
     names.sort();
     names
 }
@@ -2150,27 +2152,17 @@ fn note_fixture_entry(name: &str) -> crate::models::ListEntry {
 
 fn note_fixture_window() -> (chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>) {
     let date = |text: &str| chrono::NaiveDate::parse_from_str(text, "%Y-%m-%d").expect("a date");
-    crate::note_events::day_window(date(FIXTURE_WINDOW.0), date(FIXTURE_WINDOW.1), &note_reader())
-}
-
-/// When a start begins, for asking whether it is inside a window: a date from its first moment.
-fn begins(start: &crate::note_events::Start) -> chrono::DateTime<chrono::Utc> {
-    match start {
-        crate::note_events::Start::Date(date) => {
-            crate::note_events::day_window(*date, *date, &note_reader()).0
-        },
-        crate::note_events::Start::Time(_) => start.instant(&note_reader()).expect("a timed start"),
-    }
+    note_events::day_window(date(FIXTURE_WINDOW.0), date(FIXTURE_WINDOW.1), &note_reader())
 }
 
 /// `start  name` for everything that starts inside the window, in order -- what
 /// `note-fixtures.spec.ts` computes on its side.
-fn drawn_in_window(occurrences: &[crate::note_events::Occurrence]) -> Vec<String> {
+fn drawn_in_window<'a>(drawn: impl IntoIterator<Item = (Start, &'a str)>) -> Vec<String> {
     let (from, to) = note_fixture_window();
-    let mut drawn: Vec<String> = occurrences
-        .iter()
-        .filter(|occurrence| (from..=to).contains(&begins(&occurrence.start)))
-        .map(|occurrence| format!("{}  {}", occurrence.start, occurrence.name))
+    let mut drawn: Vec<String> = drawn
+        .into_iter()
+        .filter(|(start, _)| (from..=to).contains(&start.begins(&note_reader())))
+        .map(|(start, name)| format!("{start}  {name}"))
         .collect();
     drawn.sort();
     drawn
@@ -2178,9 +2170,8 @@ fn drawn_in_window(occurrences: &[crate::note_events::Occurrence]) -> Vec<String
 
 fn draw_note_fixture(entry: &crate::models::ListEntry) -> Vec<String> {
     let (from, to) = note_fixture_window();
-    drawn_in_window(&crate::note_events::occurrences(
-        std::slice::from_ref(entry), from, to, &note_reader(),
-    ))
+    let occurrences = note_events::occurrences(std::slice::from_ref(entry), from, to, &note_reader());
+    drawn_in_window(occurrences.iter().map(|occurrence| (occurrence.start, occurrence.name.as_str())))
 }
 
 #[test]
@@ -2226,24 +2217,17 @@ fn note_fixtures_converted_from_a_feed_draw_what_it_did() {
     let reader = note_reader();
     for name in fixture_names() {
         let feed = crate::ical::expand(&fixture_calendar(&name), "fixture", from, to);
-        let imported: Vec<crate::note_events::Occurrence> = feed
-            .events
-            .iter()
-            .map(|event| crate::note_events::Occurrence {
-                path: String::new(),
-                name: event.name.clone(),
-                start: crate::note_events::wall_clock_of(&event.start, &reader)
-                    .expect("the backend writes starts the frontend reads"),
-                finished: false,
-                location: None,
-            })
-            .collect();
+        let imported = feed.events.iter().map(|event| {
+            let start = note_events::to_wall_clock(&event.start, reader.zone)
+                .expect("the backend writes starts the frontend reads");
+            (start, event.name.as_str())
+        });
 
         let converted = format!("converted/{}", name.trim_end_matches(".ics"));
         let entry = note_fixture_entry(&format!("{converted}.md"));
         assert_eq!(
             draw_note_fixture(&entry),
-            drawn_in_window(&imported),
+            drawn_in_window(imported),
             "{converted}.md should draw what {name} does",
         );
     }
@@ -2259,16 +2243,16 @@ fn note_fixtures_find_each_occurrence_in_its_own_day() {
     for name in note_fixture_names() {
         let entry = note_fixture_entry(&name);
         let entries = std::slice::from_ref(&entry);
-        for occurrence in crate::note_events::occurrences(entries, from, to, &reader) {
-            if !(from..=to).contains(&begins(&occurrence.start)) {
+        for occurrence in note_events::occurrences(entries, from, to, &reader) {
+            if !(from..=to).contains(&occurrence.start.begins(&reader)) {
                 continue;
             }
             let day = match occurrence.start {
-                crate::note_events::Start::Date(date) => date,
-                crate::note_events::Start::Time(wall) => wall.date(),
+                Start::Date(date) => date,
+                Start::Time(wall) => wall.date(),
             };
-            let (day_from, day_to) = crate::note_events::day_window(day, day, &reader);
-            let found = crate::note_events::occurrences(entries, day_from, day_to, &reader);
+            let (day_from, day_to) = note_events::day_window(day, day, &reader);
+            let found = note_events::occurrences(entries, day_from, day_to, &reader);
             assert!(
                 found.contains(&occurrence),
                 "{name}: {} {} is lost from its own day",

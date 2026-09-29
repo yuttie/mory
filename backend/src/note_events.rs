@@ -27,7 +27,7 @@
 //!     empty string and a zero each in their own way. `end:` left empty hides every instance and
 //!     every generated occurrence of its event, and so it does here.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::LazyLock;
 
 use chrono::{
@@ -58,11 +58,20 @@ pub enum Start {
 }
 
 impl Start {
-    /// The moment a timed occurrence starts. Resolved from the wall clock, as the calendar does.
+    /// The moment a timed occurrence starts; `None` for an all-day one, which has no moment.
     pub fn instant(&self, reader: &Reader) -> Option<DateTime<Utc>> {
         match self {
             Start::Date(_) => None,
-            Start::Time(wall) => Some(resolve_local(*wall, reader.zone)),
+            Start::Time(_) => Some(self.begins(reader)),
+        }
+    }
+
+    /// When it begins: `dayjs(start)`, which reads a date as its first moment and resolves a wall
+    /// clock as the calendar does.
+    pub fn begins(&self, reader: &Reader) -> DateTime<Utc> {
+        match self {
+            Start::Date(date) => resolve_local(date.and_time(NaiveTime::MIN), reader.zone),
+            Start::Time(wall) => resolve_local(*wall, reader.zone),
         }
     }
 }
@@ -97,7 +106,7 @@ pub fn occurrences(
     to: DateTime<Utc>,
     reader: &Reader,
 ) -> Vec<Occurrence> {
-    let window = Window { from: from.timestamp_millis(), to: to.timestamp_millis() };
+    let window = from.timestamp_millis()..=to.timestamp_millis();
     let mut out = Vec::new();
     for entry in entries {
         let Some(Value::Mapping(metadata)) = &entry.metadata else {
@@ -108,7 +117,7 @@ pub fn occurrences(
             Some(Value::Mapping(declared)) => {
                 for (key, detail) in declared {
                     if let (Some(name), Value::Mapping(detail)) = (key_name(key), detail) {
-                        events_of_entry(&name, detail, &path, window, reader, &mut out);
+                        events_of_entry(&name, detail, &path, &window, reader, &mut out);
                     }
                 }
             },
@@ -116,7 +125,7 @@ pub fn occurrences(
             Some(Value::Sequence(declared)) => {
                 for (index, detail) in declared.iter().enumerate() {
                     if let Value::Mapping(detail) = detail {
-                        events_of_entry(&index.to_string(), detail, &path, window, reader, &mut out);
+                        events_of_entry(&index.to_string(), detail, &path, &window, reader, &mut out);
                     }
                 }
             },
@@ -198,9 +207,6 @@ static WALL_CLOCK: LazyLock<Regex> = LazyLock::new(|| {
 static HAS_OFFSET: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?:Z|[+-][0-9]{2}:?[0-9]{2})$").expect("a valid pattern"));
 
-static DATE_ONLY: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$").expect("a valid pattern"));
-
 static DURATION_SHORT: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^\+([0-9.]+) *(y|M|w|d|h|m|s|ms)$").expect("a valid pattern"));
 
@@ -214,6 +220,11 @@ static DURATION_LONG: LazyLock<Regex> = LazyLock::new(|| {
 static BYDAY: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^(-?[0-9]+)?(sun|mon|tue|wed|thu|fri|sat)$").expect("a valid pattern")
 });
+
+/// A captured number; `None` when the group is absent or empty.
+fn group(parts: &regex::Captures<'_>, i: usize) -> Option<i64> {
+    parts.get(i).filter(|part| !part.as_str().is_empty())?.as_str().parse().ok()
+}
 
 /// `new Date(y, m, d, h, mi, s, ms)` and `Date.UTC` alike: out-of-range parts roll over into the
 /// next larger one, and a two-digit year is in the 1900s.
@@ -285,35 +296,28 @@ fn dayjs_parse(text: &str, zone: Zone) -> Option<DateTime<Utc>> {
     let ends_in_z = text.ends_with(['Z', 'z']);
     if !ends_in_z {
         if let Some(parts) = DAYJS_PARSE.captures(text) {
-            let number = |i: usize, default: i64| {
-                parts
-                    .get(i)
-                    .map(|part| part.as_str())
-                    .filter(|part| !part.is_empty())
-                    .map_or(Some(default), |part| part.parse::<i64>().ok())
-            };
             // `d[2] - 1 || 0`, `d[3] || 1`: an absent month is January and an empty day the first,
             // while a day of `00` is the last of the month before.
-            let month = number(2, 1)? - 1;
+            let number = |i: usize, default: i64| group(&parts, i).unwrap_or(default);
             let millis = parts.get(7).map_or("0", |part| part.as_str());
             let millis = millis[..millis.len().min(3)].parse::<i64>().ok()?;
             let wall = make_date(
-                number(1, 0)?, month, number(3, 1)?, number(4, 0)?, number(5, 0)?, number(6, 0)?,
+                number(1, 0), number(2, 1) - 1, number(3, 1), number(4, 0), number(5, 0), number(6, 0),
                 millis,
             )?;
             return Some(resolve_local(wall, zone));
         }
     }
     let parts = WITH_OFFSET.captures(text)?;
-    let number = |i: usize| parts.get(i).map_or(Some(0), |part| part.as_str().parse::<i64>().ok());
+    let number = |i: usize| group(&parts, i).unwrap_or(0);
     let fraction = parts.get(7).map_or("0", |part| part.as_str());
     let millis = format!("{:0<3}", &fraction[..fraction.len().min(3)]).parse::<i64>().ok()?;
-    let wall = make_date(number(1)?, number(2)? - 1, number(3)?, number(4)?, number(5)?, number(6)?, millis)?;
+    let wall = make_date(number(1), number(2) - 1, number(3), number(4), number(5), number(6), millis)?;
     let offset = match parts.get(8) {
         Some(_) => 0,
         None => {
             let sign = if &parts[9] == "-" { -1 } else { 1 };
-            sign * (number(10)? * 3600 + number(11)? * 60)
+            sign * (number(10) * 3600 + number(11) * 60)
         },
     };
     Some((wall - Duration::seconds(offset)).and_utc())
@@ -327,28 +331,18 @@ fn instant_of(value: Option<&Value>, zone: Zone) -> Option<i64> {
     }
 }
 
-/// `parseWallClock`: a datetime as written, offset ignored. The time is `None` for a date.
-fn parse_wall_clock(value: Option<&Value>) -> Option<(NaiveDateTime, bool)> {
-    let Some(Value::String(text)) = value else {
-        return None;
-    };
+/// `parseWallClock`: a datetime as written, offset ignored, and whether it has a time.
+fn parse_wall_clock(text: &str) -> Option<(NaiveDateTime, bool)> {
     let parts = WALL_CLOCK.captures(text.trim())?;
-    let number = |i: usize| parts.get(i).map_or(Some(0), |part| part.as_str().parse::<i64>().ok());
-    let wall = make_date(number(1)?, number(2)? - 1, number(3)?, number(4)?, number(5)?, number(6)?, 0)?;
+    let number = |i: usize| group(&parts, i).unwrap_or(0);
+    let wall = make_date(number(1), number(2) - 1, number(3), number(4), number(5), number(6), 0)?;
     Some((wall, parts.get(4).is_some()))
-}
-
-/// Where the calendar draws a start written as `text`: `toWallClock`, for the tests that compare
-/// a feed's occurrences with a note's.
-#[cfg(test)]
-pub fn wall_clock_of(text: &str, reader: &Reader) -> Option<Start> {
-    to_wall_clock(text, reader.zone)
 }
 
 /// `toWallClock`: where the calendar draws a start. An offset is converted into the reader's
 /// zone; a wall clock without one is already the reader's, and is taken as written.
-fn to_wall_clock(text: &str, zone: Zone) -> Option<Start> {
-    let Some((wall, has_time)) = parse_wall_clock(Some(&Value::String(text.to_owned()))) else {
+pub(crate) fn to_wall_clock(text: &str, zone: Zone) -> Option<Start> {
+    let Some((wall, has_time)) = parse_wall_clock(text) else {
         // The frontend hands such a string to the view as it stands. It passed `dayjs`, so read it
         // the way `dayjs` does.
         return dayjs_parse(text, zone).map(|at| Start::Time(wall_clock_at(at, zone)));
@@ -407,17 +401,8 @@ fn end_is_usable(end: Option<&Value>, zone: Zone) -> bool {
 
 // --- events -----------------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy)]
-struct Window {
-    from: i64,
-    to: i64,
-}
-
-impl Window {
-    fn contains(&self, instant: i64) -> bool {
-        self.from <= instant && instant <= self.to
-    }
-}
+/// The instants, in milliseconds, a rule's occurrences are drawn within.
+type Window = std::ops::RangeInclusive<i64>;
 
 /// Where a start comes from: the note, or a rule that generated it.
 #[derive(Clone, Copy)]
@@ -426,78 +411,66 @@ enum StartInput<'a> {
     Generated(Start),
 }
 
-/// The fields one occurrence reads of itself.
-#[derive(Clone, Copy)]
-struct Fields<'a> {
-    start: StartInput<'a>,
+/// What an occurrence falls back to when its own field is missing: nothing for an event's own
+/// start, and the event for its instances and for what its rule generates.
+///
+/// The frontend carries a series' end to each occurrence as a duration (`durationOf`), but only
+/// whether an end is usable matters here, and that conversion never changes it.
+#[derive(Default)]
+struct Parent<'a> {
     end: Option<&'a Value>,
-    name: Option<&'a Value>,
     color: Option<&'a Value>,
-    finished: Option<&'a Value>,
     location: Option<&'a Value>,
 }
 
-impl<'a> Fields<'a> {
-    fn of(map: Option<&'a Mapping>, start: StartInput<'a>) -> Self {
-        let get = |key: &str| map.and_then(|map| map.get(key));
-        Fields {
-            start,
-            end: get("end"),
-            name: get("name"),
-            color: get("color"),
-            finished: get("finished"),
-            location: get("location"),
-        }
+impl<'a> Parent<'a> {
+    fn of(detail: &'a Mapping) -> Self {
+        Parent { end: detail.get("end"), color: detail.get("color"), location: detail.get("location") }
     }
 }
 
-/// What an occurrence falls back to when its own field is missing.
-#[derive(Default)]
-struct Parent<'a> {
-    end: Option<Value>,
-    color: Option<&'a Value>,
-    location: Option<&'a Value>,
-}
-
-/// `buildOccurrence`, as far as it decides whether and where the occurrence is drawn.
+/// `buildOccurrence`, as far as it decides whether and where the occurrence is drawn. `own` is the
+/// occurrence's own fields, when it has any.
 fn build_occurrence(
-    time: Fields<'_>,
+    own: Option<&Mapping>,
+    start: StartInput<'_>,
     parent: &Parent<'_>,
     event_name: &str,
     path: &str,
     reader: &Reader,
     out: &mut Vec<Occurrence>,
 ) {
-    let start = match time.start {
+    let get = |key: &str| own.and_then(|own| own.get(key));
+    let start = match start {
         StartInput::Generated(start) => start,
         StartInput::Written(Some(Value::String(text))) if dayjs_parse(text, reader.zone).is_some() => {
-            match to_wall_clock(text, reader.zone) {
-                Some(start) => start,
-                None => return,
-            }
+            // Some whenever `dayjs` reads it.
+            let Some(start) = to_wall_clock(text, reader.zone) else {
+                return;
+            };
+            start
         },
         StartInput::Written(_) => return,
     };
 
     // `time.end ?? parent.end`
-    let end = present(time.end).or(parent.end.as_ref());
-    if !end_is_usable(end, reader.zone) {
+    if !end_is_usable(present(get("end")).or(parent.end), reader.zone) {
         return;
     }
 
     // `time.name || eventName`, then `validateEvent`, which refuses a name that is not a string.
-    let name = match time.name.filter(|name| truthy(name)) {
+    let name = match get("name").filter(|name| truthy(name)) {
         Some(Value::String(name)) => name.clone(),
         Some(_) => return,
         None => event_name.to_owned(),
     };
     // `time.color || parent.color || ...`: the rest are always strings, so only these can fail it.
-    if let Some(color) = [time.color, parent.color].into_iter().flatten().find(|color| truthy(color)) {
+    if let Some(color) = [get("color"), parent.color].into_iter().flatten().find(|color| truthy(color)) {
         if !color.is_string() {
             return;
         }
     }
-    let location = [time.location, parent.location]
+    let location = [get("location"), parent.location]
         .into_iter()
         .flatten()
         .find(|location| truthy(location))
@@ -508,7 +481,7 @@ fn build_occurrence(
         path: path.to_owned(),
         name,
         start,
-        finished: matches!(time.finished, Some(Value::Bool(true))),
+        finished: matches!(get("finished"), Some(Value::Bool(true))),
         location,
     });
 }
@@ -518,62 +491,26 @@ fn events_of_entry(
     event_name: &str,
     detail: &Mapping,
     path: &str,
-    window: Window,
+    window: &Window,
     reader: &Reader,
     out: &mut Vec<Occurrence>,
 ) {
-    // `instances ?? times`, and only the entries that are objects.
-    let listed = match present(detail.get("instances")) {
-        Some(instances) => Some(instances),
-        None => detail.get("times"),
-    };
-    let listed: Vec<&Mapping> = as_array(listed).iter().filter_map(Value::as_mapping).collect();
-
     // A key that is present counts even when it is `null`, as `!== undefined` does.
     if detail.contains_key("start") {
         if detail.contains_key("repeat") {
             expand_series(event_name, detail, path, window, reader, out);
         } else {
-            let own = Fields::of(Some(detail), StartInput::Written(detail.get("start")));
-            build_occurrence(own, &Parent::default(), event_name, path, reader, out);
+            let start = StartInput::Written(detail.get("start"));
+            build_occurrence(Some(detail), start, &Parent::default(), event_name, path, reader, out);
         }
     }
-    let parent = Parent {
-        end: detail.get("end").cloned(),
-        color: detail.get("color"),
-        location: detail.get("location"),
-    };
-    for occurrence in listed {
-        let time = Fields::of(Some(occurrence), StartInput::Written(occurrence.get("start")));
-        build_occurrence(time, &parent, event_name, path, reader, out);
+    // `instances ?? times`, and only the entries that are objects.
+    let listed = present(detail.get("instances")).or_else(|| detail.get("times"));
+    let parent = Parent::of(detail);
+    for occurrence in as_array(listed).iter().filter_map(Value::as_mapping) {
+        let start = StartInput::Written(occurrence.get("start"));
+        build_occurrence(Some(occurrence), start, &parent, event_name, path, reader, out);
     }
-}
-
-/// `durationOf`: the end a series carries to each occurrence.
-fn duration_of(detail: &Mapping, zone: Zone) -> Option<Value> {
-    let end = detail.get("end");
-    let (Some(end_value), Some(start_value)) = (end, detail.get("start")) else {
-        return end.cloned();
-    };
-    let Value::String(end_text) = end_value else {
-        return end.cloned();
-    };
-    if end_text.starts_with('+') {
-        return end.cloned();
-    }
-    let (Some(start), Some(end_at)) = (instant_of(Some(start_value), zone), instant_of(end, zone)) else {
-        return end.cloned();
-    };
-    if end_at < start {
-        return end.cloned();
-    }
-    let all_day = start_value.as_str().is_some_and(|text| DATE_ONLY.is_match(text.trim()));
-    Some(Value::String(if all_day {
-        // `Math.round`, which rounds a half up.
-        format!("+{}d", ((end_at - start) as f64 / 86_400_000.0 + 0.5).floor() as i64)
-    } else {
-        format!("+{}ms", end_at - start)
-    }))
 }
 
 /// `expandSeries`.
@@ -581,7 +518,7 @@ fn expand_series(
     event_name: &str,
     detail: &Mapping,
     path: &str,
-    window: Window,
+    window: &Window,
     reader: &Reader,
     out: &mut Vec<Occurrence>,
 ) {
@@ -594,8 +531,8 @@ fn expand_series(
     };
 
     let Some(generated) = expand(
-        local_date(window.from) - Duration::days(2),
-        local_date(window.to) + Duration::days(2),
+        local_date(*window.start()) - Duration::days(2),
+        local_date(*window.end()) + Duration::days(2),
     ) else {
         return;
     };
@@ -605,93 +542,69 @@ fn expand_series(
         .filter_map(|exclusion| instant_of(Some(exclusion), zone))
         .collect();
 
-    // A `Map` keeps the position a key was first set at, and the value it was set to last.
-    let mut overrides: Vec<(i64, &Mapping)> = Vec::new();
-    for entry in as_array(detail.get("overrides")) {
-        let Some(adjustment) = entry.as_mapping() else {
-            continue;
-        };
-        let Some(instant) = instant_of(adjustment.get("at"), zone) else {
-            continue;
-        };
-        match overrides.iter_mut().find(|(at, _)| *at == instant) {
-            Some(slot) => slot.1 = adjustment,
-            None => overrides.push((instant, adjustment)),
+    // Keyed by instant, the last of two for one instant winning, as `Map.set` does. The order
+    // occurrences are drawn in is nobody's concern: every reader sorts them.
+    let mut overrides: BTreeMap<i64, &Mapping> = BTreeMap::new();
+    for adjustment in as_array(detail.get("overrides")).iter().filter_map(Value::as_mapping) {
+        if let Some(instant) = instant_of(adjustment.get("at"), zone) {
+            overrides.insert(instant, adjustment);
         }
     }
-    let override_at = |instant: i64| overrides.iter().find(|(at, _)| *at == instant).map(|(_, o)| *o);
 
-    let mut slots: Vec<(i64, Start)> = Vec::new();
+    let instant = |start: Start| start.begins(reader).timestamp_millis();
+    let mut slots: BTreeMap<i64, Start> = BTreeMap::new();
     for start in generated {
-        let instant = local_instant(start, zone);
-        if !window.contains(instant) {
-            continue;
-        }
-        match slots.iter_mut().find(|(at, _)| *at == instant) {
-            Some(slot) => slot.1 = start,
-            None => slots.push((instant, start)),
+        if window.contains(&instant(start)) {
+            slots.insert(instant(start), start);
         }
     }
 
     // An override that moves its occurrence into the window from outside it: its slot was not
     // generated above, and is looked for over the days around it.
-    for (instant, adjustment) in &overrides {
-        let moved = instant_of(adjustment.get("start"), zone);
-        let Some(moved) = moved else {
+    for (at, adjustment) in &overrides {
+        let Some(moved) = instant_of(adjustment.get("start"), zone) else {
             continue;
         };
-        if slots.iter().any(|(at, _)| at == instant) || excluded.contains(instant) || !window.contains(moved) {
+        if slots.contains_key(at) || excluded.contains(at) || !window.contains(&moved) {
             continue;
         }
-        let day = local_date(*instant);
+        let day = local_date(*at);
         let Some(around) = expand(day - Duration::days(1), day + Duration::days(1)) else {
             // The frontend gives up on the whole series here, before drawing any of it.
             return;
         };
-        if let Some(start) = around.into_iter().find(|start| local_instant(*start, zone) == *instant) {
-            slots.push((*instant, start));
+        if let Some(start) = around.into_iter().find(|start| instant(*start) == *at) {
+            slots.insert(*at, start);
         }
     }
 
-    let parent = Parent {
-        end: duration_of(detail, zone),
-        color: detail.get("color"),
-        location: detail.get("location"),
-    };
-    for (instant, generated) in slots {
-        if excluded.contains(&instant) {
+    let parent = Parent::of(detail);
+    for (at, generated) in slots {
+        if excluded.contains(&at) {
             continue;
         }
-        let adjustment = override_at(instant);
+        let adjustment = overrides.get(&at).copied();
         // `override?.start ?? occurrence`
         let start = match adjustment.and_then(|o| present(o.get("start"))) {
             Some(start) => StartInput::Written(Some(start)),
             None => StartInput::Generated(generated),
         };
-        build_occurrence(Fields::of(adjustment, start), &parent, event_name, path, reader, out);
+        build_occurrence(adjustment, start, &parent, event_name, path, reader, out);
     }
-}
-
-/// `dayjs(occurrence)` for a start a rule generated, which never carries an offset.
-fn local_instant(start: Start, zone: Zone) -> i64 {
-    let wall = match start {
-        Start::Date(date) => date.and_time(NaiveTime::MIN),
-        Start::Time(wall) => wall,
-    };
-    resolve_local(wall, zone).timestamp_millis()
 }
 
 // --- the rule -----------------------------------------------------------------------------------
 
-fn weekday(name: &str) -> Weekday {
+fn weekday(name: &str) -> Option<Weekday> {
     match name {
-        "sun" => Weekday::Sun,
-        "mon" => Weekday::Mon,
-        "tue" => Weekday::Tue,
-        "wed" => Weekday::Wed,
-        "thu" => Weekday::Thu,
-        "fri" => Weekday::Fri,
-        _ => Weekday::Sat,
+        "sun" => Some(Weekday::Sun),
+        "mon" => Some(Weekday::Mon),
+        "tue" => Some(Weekday::Tue),
+        "wed" => Some(Weekday::Wed),
+        "thu" => Some(Weekday::Thu),
+        "fri" => Some(Weekday::Fri),
+        "sat" => Some(Weekday::Sat),
+        _ => None,
     }
 }
 
@@ -711,7 +624,7 @@ fn expand_rule(
     let Some(Value::Mapping(repeat)) = repeat else {
         return None;
     };
-    let (anchor, has_time) = parse_wall_clock(start)?;
+    let (anchor, has_time) = parse_wall_clock(start?.as_str()?)?;
 
     let freq = match repeat.get("freq")?.as_str()? {
         "daily" => Frequency::Daily,
@@ -726,7 +639,7 @@ fn expand_rule(
         let mut days = Vec::new();
         for day in byday.as_sequence()? {
             let parts = BYDAY.captures(day.as_str()?)?;
-            let day = weekday(&parts[2]);
+            let day = weekday(&parts[2])?;
             days.push(match parts.get(1) {
                 None => NWeekday::Every(day),
                 Some(ordinal) => {
@@ -757,14 +670,11 @@ fn expand_rule(
         rule = rule.by_month(&months);
     }
     // rrule.js falls back to Monday for a name it does not know, as `rrule` does for none.
-    if let Some(name) = repeat.get("wkst").and_then(Value::as_str) {
-        if BYDAY.captures(name).is_some_and(|parts| parts.get(1).is_none()) {
-            rule = rule.week_start(weekday(name));
-        }
+    if let Some(day) = repeat.get("wkst").and_then(Value::as_str).and_then(weekday) {
+        rule = rule.week_start(day);
     }
-    match repeat.get("count") {
-        None | Some(Value::Null) => {},
-        Some(count) => rule = rule.count(integer::<u32>(count)?),
+    if let Some(count) = present(repeat.get("count")) {
+        rule = rule.count(integer::<u32>(count)?);
     }
 
     // `tz: null` reaches `dayjs.tz` as no zone at all, which is the reader's.
@@ -776,10 +686,10 @@ fn expand_rule(
     };
 
     if let Some(until) = repeat.get("until") {
-        let (mut bound, until_has_time) = parse_wall_clock(Some(until))?;
+        let text = until.as_str()?;
+        let (mut bound, until_has_time) = parse_wall_clock(text)?;
         // Compared in the rule's own frame, so an offset on it is read rather than ignored --
         // unlike `start`'s -- once there is a zone to read it into.
-        let text = until.as_str().unwrap_or_default();
         if let Some(zone) = zone {
             if until_has_time && HAS_OFFSET.is_match(text) {
                 let at = dayjs_parse(text, reader.zone)?;
