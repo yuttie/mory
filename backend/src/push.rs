@@ -453,7 +453,13 @@ async fn run(state: AppState) {
                     Err(e) => tracing::error!("The alarm scheduler could not read the listing: {:?}", e),
                 }
             }
-            let plan = plan(entries.as_deref().unwrap_or_default(), &subscriptions, checked_up_to, now);
+            // Without a listing, what fell due is still unsent: look at the span again next time,
+            // rather than pass over it as though it held nothing.
+            let Some(listing) = entries.as_deref() else {
+                wait(&state, &mut done, &mut subscriptions, &mut entries, CHECK_INTERVAL).await;
+                continue;
+            };
+            let plan = plan(listing, &subscriptions, checked_up_to, now);
             next = plan.next;
             let gone = send(&state, &plan.due).await;
             if !gone.is_empty() {
@@ -466,22 +472,34 @@ async fn run(state: AppState) {
                 subscriptions.retain(|subscription| !gone.contains(&subscription.endpoint));
             }
         }
-        checked_up_to = now;
+        // Never back: a clock stepped back would otherwise send what was already sent.
+        checked_up_to = checked_up_to.max(now);
 
         // An alarm that came due while the others were being sent is due now, not in a minute.
         let sleep = next.map_or(CHECK_INTERVAL, |next| (next - Utc::now()).to_std().unwrap_or_default());
-        // A closed channel would report a change on every call and spin the loop, so stop
-        // listening to it, as `search` does. Only shutdown drops the sender.
-        let sync_open = done.has_changed().is_ok();
-        tokio::select! {
-            () = tokio::time::sleep(sleep) => {},
-            () = state.push.subscriptions_changed.notified() => {
-                subscriptions = load_subscriptions(&state).await;
-            },
-            _ = done.changed(), if sync_open => {
-                entries = None;
-            },
-        }
+        wait(&state, &mut done, &mut subscriptions, &mut entries, sleep).await;
+    }
+}
+
+/// Sleeps for `sleep`, or until the subscriptions or the listing change, and takes the change in.
+async fn wait(
+    state: &AppState,
+    done: &mut tokio::sync::watch::Receiver<Option<Oid>>,
+    subscriptions: &mut Vec<Subscription>,
+    entries: &mut Option<Vec<ListEntry>>,
+    sleep: StdDuration,
+) {
+    // A closed channel would report a change on every call and spin the loop, so stop listening to
+    // it, as `search` does. Only shutdown drops the sender.
+    let sync_open = done.has_changed().is_ok();
+    tokio::select! {
+        () = tokio::time::sleep(sleep) => {},
+        () = state.push.subscriptions_changed.notified() => {
+            *subscriptions = load_subscriptions(state).await;
+        },
+        _ = done.changed(), if sync_open => {
+            *entries = None;
+        },
     }
 }
 
