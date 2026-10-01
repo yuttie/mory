@@ -31,7 +31,8 @@ export type AlarmParse = { spec: AlarmSpec } | { error: string };
 
 // The furthest from its start an alarm may be set, which keeps what a note can make the scheduler
 // look ahead bounded.
-const MAX_SHIFT_SECONDS = 366 * 86_400;
+const MAX_DAYS = 366;
+const MAX_SHIFT_SECONDS = MAX_DAYS * 86_400;
 
 // `[0-9]`, as in the Rust twin, where `\d` would be any Unicode digit.
 const DAYS = /^([+-]?)([0-9]+) *(weeks?|days?|w|d)$/;
@@ -39,11 +40,11 @@ const ELAPSED = /^([+-]?)([0-9]+(?:\.[0-9]+)?) *(hours?|minutes?|seconds?|h|m|s)
 const CLOCK = /^(?:([+-]?)([0-9]+) *(weeks?|days?|w|d) +)?([0-9]{2}):([0-9]{2})$/;
 
 // `1` or `-1` for the sign written, which is required unless the amount is zero.
-function signOf(text: string, written: string, amount: number): number | { error: string } {
+function signOf(text: string, written: string, isZero: boolean): number | { error: string } {
     if (written === '-') {
         return -1;
     }
-    if (written === '+' || amount === 0) {
+    if (written === '+' || isZero) {
         return 1;
     }
     return { error: `${JSON.stringify(text)} needs a sign: -${text} is before the start, +${text} after it` };
@@ -54,29 +55,32 @@ const nonNegativeZero = (n: number) => (n === 0 ? 0 : n);
 
 const TOO_FAR = (text: string) => ({ error: `${JSON.stringify(text)} is more than a year from the start` });
 
+// A signed count of whole days, as `-2 days` and `+1w` say it, for the offset and for the day prefix
+// of a time of day alike. The sign is checked before the size, as in the Rust twin.
+function wholeDays(text: string, written: string, count: string, unit: string): number | { error: string } {
+    const days = Number(count) * (unit.startsWith('w') ? 7 : 1);
+    const sign = signOf(text, written, days === 0);
+    if (typeof sign !== 'number') {
+        return sign;
+    }
+    return days > MAX_DAYS ? TOO_FAR(text) : nonNegativeZero(sign * days);
+}
+
 /// Reads one alarm.
 export function parseAlarm(written: string): AlarmParse {
     const text = written.trim();
 
     let parts = DAYS.exec(text);
     if (parts !== null) {
-        const amount = Number(parts[2]);
-        const perUnit = parts[3].startsWith('w') ? 7 : 1;
-        const sign = signOf(text, parts[1], amount);
-        if (typeof sign !== 'number') {
-            return sign;
-        }
-        if (amount * perUnit * 86_400 > MAX_SHIFT_SECONDS) {
-            return TOO_FAR(text);
-        }
-        return { spec: { kind: 'days', days: nonNegativeZero(sign * amount * perUnit) } };
+        const days = wholeDays(text, parts[1], parts[2], parts[3]);
+        return typeof days === 'number' ? { spec: { kind: 'days', days } } : days;
     }
 
     parts = ELAPSED.exec(text);
     if (parts !== null) {
         const amount = Number(parts[2]);
         const perUnit = { h: 3_600, m: 60, s: 1 }[parts[3][0] as 'h' | 'm' | 's'];
-        const sign = signOf(text, parts[1], amount);
+        const sign = signOf(text, parts[1], amount === 0);
         if (typeof sign !== 'number') {
             return sign;
         }
@@ -90,16 +94,11 @@ export function parseAlarm(written: string): AlarmParse {
     if (parts !== null) {
         let days = 0;
         if (parts[2] !== undefined) {
-            const amount = Number(parts[2]);
-            const perUnit = parts[3].startsWith('w') ? 7 : 1;
-            if (amount * perUnit * 86_400 > MAX_SHIFT_SECONDS) {
-                return TOO_FAR(text);
+            const counted = wholeDays(text, parts[1], parts[2], parts[3]);
+            if (typeof counted !== 'number') {
+                return counted;
             }
-            const sign = signOf(text, parts[1], amount);
-            if (typeof sign !== 'number') {
-                return sign;
-            }
-            days = nonNegativeZero(sign * amount * perUnit);
+            days = counted;
         }
         const hour = Number(parts[4]);
         const minute = Number(parts[5]);

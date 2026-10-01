@@ -13,7 +13,10 @@ import {
     writeAlarmDefaults,
 } from '@/alarms';
 
-// The same cases as the tests in `backend/src/alarms.rs`, which is what rings them.
+import grammar from '../../fixtures/calendar/alarm-grammar.json';
+
+// The grammar's cases are the fixture's, which `backend/src/alarms.rs` reads too: it is what rings
+// them.
 
 function canonical(text: string): string {
     const parsed = parseAlarm(text);
@@ -24,12 +27,8 @@ function canonical(text: string): string {
 }
 
 describe('parseAlarm', () => {
-    it('reads an offset with a sign, a number and a unit', () => {
-        for (const [written, spelt] of [
-            ['-10m', '-10m'], ['+1h', '+1h'], ['-2 days', '-2d'], ['-1w', '-7d'], ['0m', '+0m'],
-            ['-0s', '+0m'], ['+0d', '+0d'], ['-1.5h', '-90m'], ['-90 minutes', '-90m'],
-            ['-30seconds', '-30s'], ['-1 hour', '-1h'], ['-0.5s', '-500ms'], [' -10m ', '-10m'],
-        ]) {
+    it('spells an alarm one way, however it was written', () => {
+        for (const [written, spelt] of grammar.canonical) {
             expect(canonical(written), written).toBe(spelt);
         }
     });
@@ -44,25 +43,16 @@ describe('parseAlarm', () => {
     });
 
     it('refuses what is not an alarm', () => {
-        for (const text of [
-            '', 'm', '-m', '-10', '-10x', '-10M', '-10 Minutes', '- 10m', '--10m', '-1.5d', '-0.5w',
-            '-1.d', '-1.0d', '0.0w', '-.5h', '-1e3s', '-٣m', '9:00', '09:0', '24:00', '09:60',
-            '09:00:00', '-1d09:00', '1.5d 09:00', '-1h 09:00', '0900', '-100w', '-367d', '-8785h',
-            '+99999999s', '-1d 09:00 -1d',
-        ]) {
+        for (const text of [...grammar.refused, ...grammar.tooFar]) {
             expect('error' in parseAlarm(text), JSON.stringify(text)).toBe(true);
         }
+        for (const text of grammar.tooFar) {
+            const parsed = parseAlarm(text);
+            expect('error' in parsed && parsed.error, text).toContain('more than a year');
+        }
         // A year is as far as an alarm goes.
-        expect('spec' in parseAlarm('-366d')).toBe(true);
-        expect('spec' in parseAlarm('-52w')).toBe(true);
-    });
-
-    it('reads a time on the start day, moved by whole days', () => {
-        for (const [written, spelt] of [
-            ['09:00', '09:00'], ['-1d 18:00', '-1d 18:00'], ['+1 day 08:30', '+1d 08:30'],
-            ['-1w 09:00', '-7d 09:00'], ['0d 09:00', '09:00'], ['-2 weeks 00:00', '-14d 00:00'],
-        ]) {
-            expect(canonical(written), written).toBe(spelt);
+        for (const text of grammar.atTheLimit) {
+            expect('spec' in parseAlarm(text), text).toBe(true);
         }
     });
 
