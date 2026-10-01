@@ -306,7 +306,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 
 import { mdiDelete, mdiPencil, mdiPlus } from '@mdi/js';
 
-import { BUILT_IN_ALARMS, describeAlarmText, parseAlarm } from '@/alarms';
+import { alarmProblems, BUILT_IN_ALARMS, describeAlarmText } from '@/alarms';
 import type { AlarmDefaults } from '@/alarms';
 import AlarmField from '@/components/AlarmField.vue';
 import ColorField from '@/components/ColorField.vue';
@@ -543,23 +543,12 @@ async function saveTaskDateColors() {
     }
 }
 
-// A list of alarms that is as typed, or the first entry that is not one.
-function alarmListProblem(list: readonly string[]): string | null {
-    for (const alarm of list) {
-        const parsed = parseAlarm(alarm);
-        if ('error' in parsed) {
-            return parsed.error;
-        }
-    }
-    return null;
-}
-
 async function saveAlarmDefaults() {
     const next: AlarmDefaults = {};
     for (const field of ALARM_FIELDS) {
         const list = alarmDraft[field.name].map((alarm) => alarm.trim());
-        const problem = alarmListProblem(list);
-        if (problem !== null) {
+        const [problem] = alarmProblems(list);
+        if (problem !== undefined) {
             alarmError.value = `${field.label}: ${problem}.`;
             return;
         }
@@ -642,8 +631,8 @@ async function saveCategory() {
 
     const alarms = categoryAlarms.value.map((alarm) => alarm.trim());
     if (categoryAlarmsSet.value) {
-        const problem = alarmListProblem(alarms);
-        if (problem !== null) {
+        const [problem] = alarmProblems(alarms);
+        if (problem !== undefined) {
             categoryDraftError.value = `${problem}.`;
             return;
         }

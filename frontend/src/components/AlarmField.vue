@@ -27,7 +27,7 @@
 
 import { computed } from 'vue';
 
-import { describeAlarmList, parseAlarm } from '@/alarms';
+import { alarmProblems, describeAlarmList } from '@/alarms';
 
 const props = defineProps<{
     modelValue: string[];
@@ -38,10 +38,7 @@ const emit = defineEmits<{
     (e: 'update:modelValue', value: string[]): void;
 }>();
 
-const problems = computed(() => props.modelValue.flatMap((alarm) => {
-    const parsed = parseAlarm(alarm);
-    return 'error' in parsed ? [parsed.error] : [];
-}));
+const problems = computed(() => alarmProblems(props.modelValue));
 
 const description = computed(() => describeAlarmList(props.modelValue));
 

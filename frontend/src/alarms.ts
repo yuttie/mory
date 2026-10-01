@@ -114,6 +114,16 @@ export function parseAlarm(written: string): AlarmParse {
     };
 }
 
+/// What is wrong with a list of alarms as typed: a sentence for each entry that is not one, in the
+/// order they were written, and none when every entry is. This is what a box that takes alarms
+/// says of its contents, so that what it accepts is what moried will ring.
+export function alarmProblems(alarms: readonly string[]): string[] {
+    return alarms.flatMap((alarm) => {
+        const parsed = parseAlarm(alarm);
+        return 'error' in parsed ? [parsed.error] : [];
+    });
+}
+
 const signed = (n: number) => `${n < 0 ? '-' : '+'}${Math.abs(n)}`;
 const clock = (hour: number, minute: number) =>
     `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;

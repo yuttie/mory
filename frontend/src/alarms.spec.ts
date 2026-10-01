@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    alarmProblems,
     BUILT_IN_ALARMS,
     describeAlarmList,
     describeAlarmText,
@@ -60,6 +61,18 @@ describe('parseAlarm', () => {
         expect(parseAlarm('-0m')).toEqual({ spec: { kind: 'elapsed', ms: 0 } });
         expect(parseAlarm('-0d')).toEqual({ spec: { kind: 'days', days: 0 } });
         expect(parseAlarm('-0d 09:00')).toEqual({ spec: { kind: 'at', days: 0, hour: 9, minute: 0 } });
+    });
+});
+
+describe('alarmProblems', () => {
+    it('says a sentence for each entry that is not an alarm, in the order written', () => {
+        expect(alarmProblems([])).toEqual([]);
+        expect(alarmProblems(['-10m', ' 09:00 ', '-1d 18:00'])).toEqual([]);
+
+        const problems = alarmProblems(['-10m', 'soon', '10m', '0m']);
+        expect(problems).toHaveLength(2);
+        expect(problems[0]).toContain('"soon"');
+        expect(problems[1]).toContain('needs a sign');
     });
 });
 

@@ -381,7 +381,7 @@ import {
 
 import { assessTask, type TaskAssessmentResponse } from '@/api';
 
-import { BUILT_IN_ALARMS, parseAlarm } from '@/alarms';
+import { alarmProblems, BUILT_IN_ALARMS } from '@/alarms';
 import type { TaskAlarms } from '@/alarms';
 import EditableViewer from '@/components/EditableViewer.vue';
 import TaskDateAlarms from '@/components/TaskDateAlarms.vue';
@@ -555,7 +555,7 @@ const statusGateError = computed<string | undefined>(() => {
 const alarmsInvalid = computed<boolean>(() => [
     form.due_by !== '' ? form.due_by_alarms : null,
     form.deadline !== '' ? form.deadline_alarms : null,
-].some((list) => list !== null && list.some((alarm) => 'error' in parseAlarm(alarm))));
+].some((list) => list !== null && alarmProblems(list).length > 0));
 
 const tagItems = computed<{ title: string; value: string; }[]>(() =>
     props.knownTags.map(([tag, count]) => {
