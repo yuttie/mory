@@ -7,6 +7,9 @@ import {
     parseAlarm,
     readAlarmDefaults,
     readAlarmList,
+    readTaskAlarms,
+    stringifyWithFlowAlarms,
+    writeAlarmDefaults,
 } from '@/alarms';
 
 // The same cases as the tests in `backend/src/alarms.rs`, which is what rings them.
@@ -143,5 +146,58 @@ describe('readAlarmDefaults', () => {
 describe('BUILT_IN_ALARMS', () => {
     it('rings a timed event at its start and nothing else', () => {
         expect(BUILT_IN_ALARMS).toEqual({ timed: ['0m'], allDay: [], dueBy: [], deadline: [] });
+    });
+});
+
+describe('readTaskAlarms', () => {
+    it('reads the alarms of each date a task sets, dropping what is not an alarm', () => {
+        expect(readTaskAlarms({ due_by: ['09:00', 'bogus'], deadline: '-1d 18:00' }))
+            .toEqual({ due_by: ['09:00'], deadline: ['-1d 18:00'] });
+    });
+
+    it('keeps an empty list, which silences, and leaves a date that is empty or missing out', () => {
+        expect(readTaskAlarms({ due_by: [], deadline: null })).toEqual({ due_by: [] });
+        expect(readTaskAlarms({ other: ['-1h'] })).toBeUndefined();
+        expect(readTaskAlarms({})).toBeUndefined();
+    });
+
+    it('takes anything but a mapping as setting nothing', () => {
+        for (const value of [undefined, null, 5, '-1h', ['-1h']]) {
+            expect(readTaskAlarms(value)).toBeUndefined();
+        }
+    });
+});
+
+describe('stringifyWithFlowAlarms', () => {
+    it('writes a list under alarms on the line that names it, and nothing else that way', () => {
+        expect(stringifyWithFlowAlarms({
+            tags: ['a', 'b'],
+            task: { alarms: { due_by: ['09:00'], deadline: [] }, scheduled_dates: ['2026-09-28'] },
+            alarms: { timed: ['-10m', '0m'] },
+            categories: { meeting: { alarms: ['-1h'] } },
+        }, { indent: 4 })).toBe(`tags:
+    - a
+    - b
+task:
+    alarms:
+        due_by: [09:00]
+        deadline: []
+    scheduled_dates:
+        - 2026-09-28
+alarms:
+    timed: [-10m, 0m]
+categories:
+    meeting:
+        alarms: [-1h]
+`);
+    });
+});
+
+describe('writeAlarmDefaults', () => {
+    it('writes the kinds that are set, in the file\'s spelling and order', () => {
+        const block = writeAlarmDefaults({ deadline: [], timed: ['-10m'], allDay: ['09:00'] });
+        expect(block).toEqual({ timed: ['-10m'], all_day: ['09:00'], deadline: [] });
+        expect(Object.keys(block)).toEqual(['timed', 'all_day', 'deadline']);
+        expect(writeAlarmDefaults({})).toEqual({});
     });
 });

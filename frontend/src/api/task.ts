@@ -1,5 +1,6 @@
 import YAML from 'yaml';
 
+import { readTaskAlarms } from '@/alarms';
 import { getAxios } from '@/axios';
 import type { UUID } from '@/api';
 import type { Task } from '@/task';
@@ -24,6 +25,7 @@ export async function getTask(taskPath: string, eTag?: string): Promise<[string,
         const { frontmatter, heading: title, rest } = extractFrontmatterH1AndRest(md);
         const metadata = YAML.parse(frontmatter);
         const uuid = extractFileUuid(taskPath);
+        const alarms = readTaskAlarms(metadata.task.alarms);
         const task = {
             uuid: uuid,
             title: title,
@@ -35,6 +37,7 @@ export async function getTask(taskPath: string, eTag?: string): Promise<[string,
             ...(metadata.task.start_at ? { start_at: metadata.task.start_at } : {}),
             ...(metadata.task.due_by ? { due_by: metadata.task.due_by } : {}),
             ...(metadata.task.deadline ? { deadline: metadata.task.deadline } : {}),
+            ...(alarms === undefined ? {} : { alarms }),
             scheduled_dates: metadata.task.scheduled_dates,
             note: rest,
         };

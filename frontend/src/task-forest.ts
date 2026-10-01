@@ -27,6 +27,8 @@ export interface TaskMetadata {
         start_at?: string;
         due_by?: string;
         deadline?: string;
+        // `task.alarms` as the frontmatter held it: `readTaskAlarms` gives it its shape.
+        alarms?: unknown;
         scheduled_dates?: string[];
     };
     // Virtual tag-group nodes only; a real task never carries this.

@@ -14,7 +14,12 @@ import { defineStore } from 'pinia';
 import YAML from 'yaml';
 
 import type { AlarmDefaults } from '@/alarms';
-import { readAlarmDefaults, readAlarmList, writeAlarmDefaults } from '@/alarms';
+import {
+    readAlarmDefaults,
+    readAlarmList,
+    stringifyWithFlowAlarms,
+    writeAlarmDefaults,
+} from '@/alarms';
 import type {
     ImportedCalendarReport,
     ImportedOccurrence,
@@ -251,19 +256,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
                 }
                 : {}),
         };
-        const text = new YAML.Document(document);
-        // Alarms are short, and read best on the line that names them, as a note writes them:
-        // `timed: [-10m, 0m]`, not a list of `- -10m` under it.
-        YAML.visit(text, {
-            Seq(_key, seq, path) {
-                const inAlarms = path.some((node) => YAML.isPair(node)
-                    && YAML.isScalar(node.key) && node.key.value === 'alarms');
-                if (inAlarms) {
-                    seq.flow = true;
-                }
-            },
-        });
-        await files.write(CALENDARS_PATH, text.toString({ indent: 4, flowCollectionPadding: false }));
+        await files.write(CALENDARS_PATH, stringifyWithFlowAlarms(document, { indent: 4 }));
     }
 
     function invalidate(): void {

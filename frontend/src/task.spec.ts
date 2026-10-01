@@ -23,6 +23,69 @@ function frontmatterOf(markdown: string): unknown {
     return YAML.parse(markdown.split(/^---$/m)[1]);
 }
 
+describe('render, alarms', () => {
+    it('writes the alarms a task sets for its dates, on the line that names them', () => {
+        const markdown = render(task({
+            deadline: '2026-10-05 17:00:00+09:00',
+            alarms: { due_by: ['09:00'], deadline: ['-1d 18:00', '-2h'] },
+        }));
+
+        expect(markdown).toContain('    alarms:\n        due_by: [09:00]\n        deadline: [-1d 18:00, -2h]\n');
+        expect(frontmatterOf(markdown)).toMatchObject({
+            task: { alarms: { due_by: ['09:00'], deadline: ['-1d 18:00', '-2h'] } },
+        });
+        // Beside the dates, and with `scheduled_dates` still last, where it always was.
+        const keys = Object.keys((frontmatterOf(markdown) as { task: object }).task);
+        expect(keys).toEqual([
+            'status', 'progress', 'importance', 'urgency', 'due_by', 'deadline', 'alarms',
+            'scheduled_dates',
+        ]);
+    });
+
+    // An empty list is a setting that silences a date; leaving a date out is what inherits.
+    it('writes an empty list, which silences, and leaves a date out that sets none', () => {
+        const markdown = render(task({ alarms: { deadline: [] } }));
+        expect(markdown).toContain('        deadline: []\n');
+        expect(markdown).not.toContain('due_by: [');
+    });
+
+    it('writes nothing for a task that sets none', () => {
+        expect(render(task())).not.toContain('alarms');
+        expect(render(task({ alarms: {} }))).not.toContain('alarms');
+    });
+
+    it('writes a task without alarms exactly as it was written before they existed', () => {
+        // The same layout as ever: block lists, four spaces, and nothing in flow style.
+        expect(render(task())).toBe(`---
+task:
+    status:
+        kind: waiting
+        waiting_for: the figures
+        contact: Alice
+    progress: 40
+    importance: 3
+    urgency: 4
+    due_by: 2026-10-01
+    scheduled_dates:
+        - 2026-09-28
+tags:
+    - work
+---
+
+# Write the report
+
+Some notes.
+`);
+    });
+
+    it('keeps them through a status change in place', () => {
+        const before = render(task({ alarms: { due_by: ['09:00'] } }));
+        const after = replaceStatus(before, { kind: 'todo' });
+        expect(after).toBe(render(task({ status: { kind: 'todo' }, alarms: { due_by: ['09:00'] } })));
+        expect(after).toContain('due_by: [09:00]');
+    });
+});
+
 describe('replaceStatus', () => {
     it('writes what render would, for a note render wrote', () => {
         const before = render(task());
