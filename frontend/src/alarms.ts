@@ -246,6 +246,18 @@ export function readAlarmsIfSet(value: unknown): string[] | undefined {
     return value === undefined || value === null ? undefined : readAlarmList(value).alarms;
 }
 
+/// What is wrong with the entries of an `alarms:` value that are not alarms, a sentence each, for a
+/// place that reports them; `[]` when it is not set or every entry is one. Those entries are
+/// dropped on reading, so unless someone says so they vanish without the author having been told.
+export function alarmValueProblems(value: unknown): string[] {
+    if (value === undefined || value === null) {
+        return [];
+    }
+    return readAlarmList(value).invalid.map((entry) => typeof entry === 'string'
+        ? alarmProblems([entry])[0]
+        : `${JSON.stringify(entry) ?? String(entry)} is not an alarm`);
+}
+
 /// What an occurrence rings at when nothing says otherwise: at its start if it is timed, and not
 /// at all if it is all-day, which is what every note did before alarms could be set. A task's dates
 /// have no alarm by default, since a date a task merely has is not an appointment.
@@ -392,13 +404,22 @@ export function writeAlarmDefaults(defaults: AlarmDefaults): Record<string, stri
 
 /// The `alarms:` block of the calendar configuration, which is hand-written: whatever is not usable
 /// is not there. An entry that is not an alarm is dropped from its list, as in a note.
-export function readAlarmDefaults(value: unknown): AlarmDefaults {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+///
+/// Each thing dropped is said in `problems`, if given, as `alarms.timed: <what is wrong>`: the file
+/// is rewritten whole from what is read, so the next save of anything would erase it unannounced.
+export function readAlarmDefaults(value: unknown, problems?: string[]): AlarmDefaults {
+    if (value === undefined || value === null) {
+        return {};
+    }
+    if (typeof value !== 'object' || Array.isArray(value)) {
+        problems?.push('alarms: is not a mapping of kinds to the alarms they ring at');
         return {};
     }
     const defaults: AlarmDefaults = {};
     for (const [field, key] of Object.entries(ALARM_DEFAULT_KEYS) as [keyof AlarmDefaults, string][]) {
-        const set = readAlarmsIfSet((value as Record<string, unknown>)[key]);
+        const written = (value as Record<string, unknown>)[key];
+        problems?.push(...alarmValueProblems(written).map((problem) => `alarms.${key}: ${problem}`));
+        const set = readAlarmsIfSet(written);
         if (set !== undefined) {
             defaults[field] = set;
         }

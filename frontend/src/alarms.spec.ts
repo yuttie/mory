@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
     alarmProblems,
+    alarmValueProblems,
     BUILT_IN_ALARMS,
     describeAlarmList,
     describeAlarmText,
@@ -79,6 +80,22 @@ describe('alarmProblems', () => {
         expect(problems).toHaveLength(2);
         expect(problems[0]).toContain('"soon"');
         expect(problems[1]).toContain('needs a sign');
+    });
+});
+
+describe('alarmValueProblems', () => {
+    it('says nothing of a value that is not set, empty or all alarms', () => {
+        for (const value of [undefined, null, [], ['-10m', '09:00'], '-1h']) {
+            expect(alarmValueProblems(value), JSON.stringify(value)).toEqual([]);
+        }
+    });
+
+    it('says what is wrong with each entry that is not an alarm', () => {
+        const problems = alarmValueProblems(['-10m', '10m', 5, null, { at: 1 }]);
+        expect(problems).toHaveLength(4);
+        expect(problems[0]).toContain('needs a sign');
+        expect(problems.slice(1)).toEqual(['5 is not an alarm', 'null is not an alarm', '{"at":1} is not an alarm']);
+        expect(alarmValueProblems(5)).toEqual(['5 is not an alarm']);
     });
 });
 
@@ -170,6 +187,33 @@ describe('readAlarmDefaults', () => {
         }
         // A value that is there but holds nothing usable is a setting, an empty one.
         expect(readAlarmDefaults({ timed: 5 })).toEqual({ timed: [] });
+    });
+});
+
+describe('readAlarmDefaults, reporting', () => {
+    it('says each entry it drops, by where it is written', () => {
+        const problems: string[] = [];
+        expect(readAlarmDefaults({ timed: ['-5m', '10m'], all_day: 'soon', due_by: [] }, problems))
+            .toEqual({ timed: ['-5m'], allDay: [], dueBy: [] });
+        expect(problems).toHaveLength(2);
+        expect(problems[0]).toMatch(/^alarms\.timed: "10m" needs a sign/);
+        expect(problems[1]).toMatch(/^alarms\.all_day: "soon"/);
+    });
+
+    it('says nothing of a block that is absent or sound', () => {
+        const problems: string[] = [];
+        readAlarmDefaults(undefined, problems);
+        readAlarmDefaults(null, problems);
+        readAlarmDefaults({ timed: ['-5m'], deadline: [] }, problems);
+        expect(problems).toEqual([]);
+    });
+
+    it('says a block that is not a mapping, which sets nothing', () => {
+        for (const value of ['-5m', ['-5m'], 5]) {
+            const problems: string[] = [];
+            expect(readAlarmDefaults(value, problems)).toEqual({});
+            expect(problems, JSON.stringify(value)).toEqual(['alarms: is not a mapping of kinds to the alarms they ring at']);
+        }
     });
 });
 

@@ -15,6 +15,7 @@ import YAML from 'yaml';
 
 import type { AlarmDefaults } from '@/alarms';
 import {
+    alarmValueProblems,
     readAlarmDefaults,
     readAlarmsIfSet,
     stringifyWithFlowAlarms,
@@ -93,6 +94,9 @@ export const useCalendarsStore = defineStore('calendars', () => {
     // `null` until the file has been read, and again when reading it fails: with no configuration
     // to hand, every category a note names would look unknown and be reported as a typo.
     const categories = ref<ConfiguredCategory[] | null>(null);
+    // What the file says that is dropped on reading, as lines to show. Dropped is lost: saving
+    // anything rewrites the file from what was kept, so the author is told before it is.
+    const configurationProblems = ref<string[]>([]);
     const hasLoadedSubscriptions = ref(false);
 
     const loaded = shallowRef<Loaded>(EMPTY);
@@ -168,11 +172,14 @@ export const useCalendarsStore = defineStore('calendars', () => {
             }));
     });
 
-    /// One line per calendar that failed, for the view's existing error alert.
-    const errors = computed(() =>
-        loaded.value.calendars
+    /// One line per calendar that failed, and per alarm in the configuration that is not one, for the
+    /// view's existing error alert.
+    const errors = computed(() => [
+        ...configurationProblems.value,
+        ...loaded.value.calendars
             .filter((calendar) => calendar.error !== null)
-            .map((calendar) => `${calendar.name}: ${calendar.error}`));
+            .map((calendar) => `${calendar.name}: ${calendar.error}`),
+    ]);
 
     async function loadSubscriptions(): Promise<CalendarSubscription[]> {
         try {
@@ -187,8 +194,11 @@ export const useCalendarsStore = defineStore('calendars', () => {
                 enabled: entry.enabled !== false,
             }));
             taskDateColors.value = readTaskDateColors(parsed?.task_dates);
-            alarmDefaults.value = readAlarmDefaults(parsed?.alarms);
-            categories.value = readCategories(parsed?.categories);
+            const problems: string[] = [];
+            alarmDefaults.value = readAlarmDefaults(parsed?.alarms, problems);
+            categories.value = readCategories(parsed?.categories, problems);
+            configurationProblems.value = problems.map((problem) =>
+                `${CALENDARS_PATH}: ${problem}. It is ignored, and saving the settings removes it.`);
         }
         catch (error) {
             // No file means no calendars, which is the normal state before any are added -- the
@@ -196,6 +206,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
             subscriptions.value = [];
             taskDateColors.value = {};
             alarmDefaults.value = {};
+            configurationProblems.value = [];
             categories.value = isMissing(error) ? [] : null;
             if (!isMissing(error)) {
                 throw error;
@@ -261,6 +272,8 @@ export const useCalendarsStore = defineStore('calendars', () => {
                 : {}),
         };
         await files.write(CALENDARS_PATH, stringifyWithFlowAlarms(document, { indent: 4 }));
+        // What was dropped on reading is now gone from the file, which is what was warned of.
+        configurationProblems.value = [];
     }
 
     function invalidate(): void {
@@ -370,7 +383,7 @@ function readTaskDateColors(value: unknown): TaskDateColors {
 // and inherits it all, so it is kept; one that is not a mapping at all is dropped, and the notes
 // naming it are then reported rather than drawn with half a category. `backend/src/alarms.rs`
 // reads the same rule for the alarms a category sets.
-function readCategories(value: unknown): ConfiguredCategory[] {
+function readCategories(value: unknown, problems?: string[]): ConfiguredCategory[] {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
         return [];
     }
@@ -392,7 +405,9 @@ function readCategories(value: unknown): ConfiguredCategory[] {
         }
         // Set, even to nothing: an empty list silences the category's events, where an empty
         // `alarms:` leaves them to the configuration's.
-        const alarms = readAlarmsIfSet((entry as Record<string, unknown>).alarms);
+        const written = (entry as Record<string, unknown>).alarms;
+        problems?.push(...alarmValueProblems(written).map((problem) => `categories.${id}.alarms: ${problem}`));
+        const alarms = readAlarmsIfSet(written);
         if (alarms !== undefined) {
             category.alarms = alarms;
         }

@@ -414,6 +414,70 @@ describe('alarm defaults', () => {
         expect(store.effectiveAlarmDefaults).toEqual({ timed: ['-5m'], allDay: [], dueBy: [], deadline: [] });
     });
 
+    // Dropped on reading, and the file is rewritten whole, so the next save would erase them.
+    describe('that are not alarms', () => {
+        const BAD = `${YAML_FILE}alarms:
+    timed: [10m, -5m]
+    due_by: soon
+categories:
+    meeting:
+        alarms: [-1h, 5]
+    fine:
+        alarms: [-1h]
+`;
+
+        it('are reported, by where they are written, and dropped', async () => {
+            apiMocks.getNote.mockResolvedValue({ data: BAD });
+            const { useCalendarsStore } = await load();
+            const store = useCalendarsStore();
+
+            await store.loadSubscriptions();
+
+            expect(store.alarmDefaults).toEqual({ timed: ['-5m'], dueBy: [] });
+            expect(store.errors).toHaveLength(3);
+            expect(store.errors[0]).toMatch(/^\.mory\/calendars\.yaml: alarms\.timed: "10m" needs a sign/);
+            expect(store.errors[1]).toMatch(/^\.mory\/calendars\.yaml: alarms\.due_by: "soon"/);
+            expect(store.errors[2]).toMatch(/^\.mory\/calendars\.yaml: categories\.meeting\.alarms: 5 is not an alarm/);
+            expect(store.errors.every((line) => line.endsWith('saving the settings removes it.'))).toBe(true);
+        });
+
+        it('are not reported when there are none, or no file', async () => {
+            apiMocks.getNote.mockResolvedValue({ data: WITH_ALARMS });
+            const { useCalendarsStore } = await load();
+            const store = useCalendarsStore();
+            await store.loadSubscriptions();
+            expect(store.errors).toEqual([]);
+
+            apiMocks.getNote.mockRejectedValue(missing());
+            await store.loadSubscriptions();
+            expect(store.errors).toEqual([]);
+        });
+
+        it('stop being reported once a save has rewritten the file without them', async () => {
+            apiMocks.getNote.mockResolvedValue({ data: BAD });
+            const { useCalendarsStore } = await load();
+            const store = useCalendarsStore();
+            await store.loadSubscriptions();
+            expect(store.errors).not.toEqual([]);
+
+            await store.saveAlarmDefaults({ timed: ['-5m'] });
+
+            expect(store.errors).toEqual([]);
+            expect(YAML.parse(apiMocks.addNote.mock.calls.at(-1)![1]).alarms).toEqual({ timed: ['-5m'] });
+        });
+
+        it('are reported again when the file is read again and still has them', async () => {
+            apiMocks.getNote.mockResolvedValue({ data: BAD });
+            const { useCalendarsStore } = await load();
+            const store = useCalendarsStore();
+
+            await store.loadSubscriptions();
+            await store.loadSubscriptions();
+
+            expect(store.errors).toHaveLength(3);
+        });
+    });
+
     // The whole file is rewritten from what the store holds, so what it does not hold is lost.
     it('keeps them when the subscriptions, the colours or the categories are saved', async () => {
         apiMocks.getNote.mockResolvedValue({ data: WITH_ALARMS });
