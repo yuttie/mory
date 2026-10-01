@@ -445,6 +445,25 @@ describe('alarm defaults', () => {
         expect(store.alarmDefaults).toEqual({ deadline: ['-1d 18:00', '-2h'], timed: [] });
     });
 
+    // Read back by hand as often as by the app, and short enough to sit on the line that names it.
+    it('writes each list on the line that names it', async () => {
+        apiMocks.getNote.mockResolvedValue({ data: WITH_ALARMS });
+        const { useCalendarsStore } = await load();
+        const store = useCalendarsStore();
+
+        await store.loadSubscriptions();
+        await store.saveAlarmDefaults({ timed: ['-10m', '0m'], allDay: ['-1d 18:00'] });
+        await store.saveCategories([{ id: 'meeting', alarms: ['-1h'] }, { id: 'quiet', alarms: [] }]);
+
+        const [, content] = apiMocks.addNote.mock.calls[1];
+        expect(content).toContain('timed: [-10m, 0m]');
+        expect(content).toContain('all_day: [-1d 18:00]');
+        expect(content).toContain('alarms: [-1h]');
+        expect(content).toContain('alarms: []');
+        // Only alarms: the subscriptions are in the block style they were.
+        expect(content).toMatch(/calendars:\n {4}- id: work\n/);
+    });
+
     it('leaves the block out of the file when none is set', async () => {
         apiMocks.getNote.mockResolvedValue({ data: WITH_ALARMS });
         const { useCalendarsStore } = await load();
