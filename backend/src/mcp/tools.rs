@@ -398,25 +398,10 @@ pub struct WindowArgs {
     pub end: String,
 }
 
-/// An `alarms:` list as the notes hold it, each entry checked against the grammar the scheduler
-/// and the web app read it by.
-///
-/// An entry that is not an alarm is dropped by both readers, so one written here would silently
-/// ring nothing; refusing it says why instead. They are written as given, not respelled: `-90
-/// minutes` is the user's or the model's own phrase.
+/// An `alarms:` list as the notes hold it, checked by `alarms::check_list` and written as given.
 pub fn alarm_list(alarms: &[String]) -> Result<serde_yaml::Value, String> {
-    let mut list = Vec::with_capacity(alarms.len());
-    for alarm in alarms {
-        crate::alarms::Spec::parse(alarm).map_err(|e| {
-            format!(
-                "Not an alarm: {e}. An alarm is an offset from the start, such as `-10m` before it \
-                 or `+1h` after, in w, d, h, m or s; or a time on the start's day, such as \
-                 `09:00` or `-1d 18:00`.",
-            )
-        })?;
-        list.push(serde_yaml::Value::String(alarm.trim().to_owned()));
-    }
-    Ok(serde_yaml::Value::Sequence(list))
+    let list = crate::alarms::check_list(alarms)?;
+    Ok(serde_yaml::Value::Sequence(list.into_iter().map(serde_yaml::Value::String).collect()))
 }
 
 /// The `YYYY-MM-DD` every event value begins with, whatever else it carries.

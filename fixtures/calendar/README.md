@@ -48,6 +48,15 @@ records, and a global `timed` or `all_day` every line of it.
 with `tz` whose occurrences fall in such an hour would make the comparison depend on the date it
 runs. Keep them out of the fixtures.
 
+## The alarm grammar
+
+`alarm-grammar.json` is not a golden: nothing writes it, and it is kept by hand. It holds the
+cases of the grammar alarms are written in, which three tests read so that none keeps a copy of its
+own: `backend/src/alarms.rs` and `frontend/src/alarms.spec.ts` require every `canonical` entry to
+parse and be spelt as given, and every `refused` and `tooFar` one to be refused; and
+`frontend/src/metadata-schema.spec.ts` requires the schema's pattern to agree, except on `tooFar`,
+which only a parser can tell, since the pattern cannot say how far from its start an alarm is.
+
 ## Regenerating
 
 From the repository's root, in this order, since each step reads what the one before wrote:

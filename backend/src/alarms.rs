@@ -43,7 +43,13 @@ use crate::tasks::{date_texts, is_over, task_of, task_status_of, TaskField};
 /// The furthest from its start an alarm may be set. Anything further is a typo or worse: the
 /// scheduler widens what it expands by the furthest alarm any note declares, and a note must not be
 /// able to make that unbounded.
-const MAX_SHIFT_SECONDS: f64 = 366.0 * 86_400.0;
+const MAX_DAYS: u64 = 366;
+const MAX_SHIFT_SECONDS: f64 = MAX_DAYS as f64 * 86_400.0;
+
+/// What an alarm is, for whoever wrote one that is not. The reason it was refused comes before it.
+const GRAMMAR: &str = "An alarm is an offset from the start, such as `-10m` before it or `+1h` \
+                       after, in w, d, h, m or s; or a time on the start's day, such as `09:00` or \
+                       `-1d 18:00`.";
 
 // `[0-9]` rather than `\d`, which is any Unicode digit in Rust and only ASCII in JavaScript.
 static DAYS: LazyLock<Regex> = LazyLock::new(|| {
@@ -78,13 +84,7 @@ impl Spec {
     pub fn parse(text: &str) -> Result<Spec, String> {
         let text = text.trim();
         if let Some(parts) = DAYS.captures(text) {
-            let amount: f64 = parts[2].parse().map_err(|_| format!("{text:?} is not a number of days"))?;
-            let per_unit = if parts[3].starts_with('w') { 7.0 } else { 1.0 };
-            let sign = Self::sign(text, &parts[1], amount)?;
-            if amount * per_unit * 86_400.0 > MAX_SHIFT_SECONDS {
-                return Err(format!("{text:?} is more than a year from the start"));
-            }
-            return Ok(Spec::Days(sign * (amount * per_unit) as i64));
+            return Ok(Spec::Days(Self::whole_days(text, &parts[1], &parts[2], &parts[3])?));
         }
         if let Some(parts) = ELAPSED.captures(text) {
             let amount: f64 = parts[2].parse().map_err(|_| format!("{text:?} is not a number of units"))?;
@@ -93,39 +93,48 @@ impl Spec {
                 Some('m') => 60.0,
                 _ => 1.0,
             };
-            let sign = Self::sign(text, &parts[1], amount)?;
+            let sign = Self::sign(text, &parts[1], amount == 0.0)?;
             if amount * per_unit > MAX_SHIFT_SECONDS {
-                return Err(format!("{text:?} is more than a year from the start"));
+                return Err(too_far(text));
             }
             return Ok(Spec::Elapsed(Duration::milliseconds(sign * (amount * per_unit * 1000.0).round() as i64)));
         }
         if let Some(parts) = CLOCK.captures(text) {
             let days = match parts.get(2) {
                 None => 0,
-                Some(count) => {
-                    let amount: f64 = count.as_str().parse().map_err(|_| format!("{text:?} is not a number of days"))?;
-                    let per_unit = if parts[3].starts_with('w') { 7.0 } else { 1.0 };
-                    if amount * per_unit * 86_400.0 > MAX_SHIFT_SECONDS {
-                        return Err(format!("{text:?} is more than a year from the start"));
-                    }
-                    Self::sign(text, &parts[1], amount)? * (amount * per_unit) as i64
-                },
+                Some(count) => Self::whole_days(text, &parts[1], count.as_str(), &parts[3])?,
             };
-            let time = NaiveTime::from_hms_opt(parts[4].parse().unwrap_or(99), parts[5].parse().unwrap_or(99), 0)
+            let time = parts[4]
+                .parse()
+                .ok()
+                .zip(parts[5].parse().ok())
+                .and_then(|(hour, minute)| NaiveTime::from_hms_opt(hour, minute, 0))
                 .ok_or_else(|| format!("{text:?} is not a time of day"))?;
             return Ok(Spec::At { days, time });
         }
-        Err(format!(
-            "{text:?} is neither an offset such as -10m nor a time such as 09:00 or -1d 18:00"
-        ))
+        // No examples: `check_list` follows this with `GRAMMAR`, which has them. The web app's
+        // `parseAlarm` is read on its own, so its message carries them.
+        Err(format!("{text:?} is in neither spelling"))
+    }
+
+    /// A signed count of whole days, as `-2 days` and `+1w` say it. Counted in integers, so that a
+    /// count too large for one is too far like any other and not a number that is not one.
+    fn whole_days(text: &str, written: &str, count: &str, unit: &str) -> Result<i64, String> {
+        let per_unit = if unit.starts_with('w') { 7 } else { 1 };
+        let days = count.parse::<u64>().ok().and_then(|count| count.checked_mul(per_unit));
+        let sign = Self::sign(text, written, days == Some(0))?;
+        match days {
+            Some(days) if days <= MAX_DAYS => Ok(sign * days as i64),
+            _ => Err(too_far(text)),
+        }
     }
 
     /// `1` or `-1` for the sign written, which is required unless the amount is zero.
-    fn sign(text: &str, written: &str, amount: f64) -> Result<i64, String> {
+    fn sign(text: &str, written: &str, is_zero: bool) -> Result<i64, String> {
         match written {
             "-" => Ok(-1),
             "+" => Ok(1),
-            _ if amount == 0.0 => Ok(1),
+            _ if is_zero => Ok(1),
             _ => Err(format!("{text:?} needs a sign: -{text} is before the start, +{text} after it")),
         }
     }
@@ -185,6 +194,26 @@ impl fmt::Display for Spec {
             Spec::At { days, time } => write!(f, "{days:+}d {}", time.format("%H:%M")),
         }
     }
+}
+
+fn too_far(text: &str) -> String {
+    format!("{text:?} is more than a year from the start")
+}
+
+/// An `alarms:` list as a person or a model typed it, each entry checked against the grammar the
+/// scheduler and the web app read it by, and trimmed as it will be written.
+///
+/// An entry that is not an alarm is dropped by both readers, so one written would silently ring
+/// nothing; refusing it says why instead. They are written as given, not respelled: `-90 minutes`
+/// is the author's own phrase.
+pub fn check_list(alarms: &[String]) -> Result<Vec<String>, String> {
+    alarms
+        .iter()
+        .map(|alarm| {
+            Spec::parse(alarm).map_err(|reason| format!("Not an alarm: {reason}. {GRAMMAR}"))?;
+            Ok(alarm.trim().to_owned())
+        })
+        .collect()
 }
 
 /// The alarms a note's `alarms:` value holds: a list, or a single string for a list of one, as
@@ -450,6 +479,22 @@ mod tests {
         Spec::parse(text).unwrap_or_else(|e| panic!("{text}: {e}"))
     }
 
+    /// The grammar's cases, which `frontend/src/alarms.spec.ts` and `metadata-schema.spec.ts` read
+    /// as well, so that the readers cannot come to disagree unseen.
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Grammar {
+        canonical: Vec<(String, String)>,
+        refused: Vec<String>,
+        too_far: Vec<String>,
+        at_the_limit: Vec<String>,
+    }
+
+    fn grammar() -> Grammar {
+        serde_json::from_str(include_str!("../../fixtures/calendar/alarm-grammar.json"))
+            .expect("a readable fixture")
+    }
+
     fn time(text: &str) -> Start {
         Start::Time(chrono::NaiveDateTime::parse_from_str(text, "%Y-%m-%d %H:%M").unwrap())
     }
@@ -463,13 +508,9 @@ mod tests {
     }
 
     #[test]
-    fn an_offset_has_a_sign_a_number_and_a_unit() {
-        for (written, canonical) in [
-            ("-10m", "-10m"), ("+1h", "+1h"), ("-2 days", "-2d"), ("-1w", "-7d"), ("0m", "+0m"),
-            ("-0s", "+0m"), ("+0d", "+0d"), ("-1.5h", "-90m"), ("-90 minutes", "-90m"),
-            ("-30seconds", "-30s"), ("-1 hour", "-1h"), ("-0.5s", "-500ms"), (" -10m ", "-10m"),
-        ] {
-            assert_eq!(spec(written).to_string(), canonical, "{written}");
+    fn an_alarm_is_spelt_one_way_whatever_it_was_written_as() {
+        for (written, canonical) in grammar().canonical {
+            assert_eq!(spec(&written).to_string(), canonical, "{written}");
         }
     }
 
@@ -484,27 +525,37 @@ mod tests {
     }
 
     #[test]
+    fn a_list_is_checked_and_trimmed_but_not_respelled() {
+        let list = |alarms: &[&str]| alarms.iter().map(|alarm| alarm.to_string()).collect::<Vec<_>>();
+        assert_eq!(check_list(&list(&[" -90 minutes ", "09:00"])), Ok(list(&["-90 minutes", "09:00"])));
+        assert_eq!(check_list(&[]), Ok(Vec::new()));
+
+        // The reason the entry was refused, and once what an alarm is.
+        let refused = check_list(&list(&["-10m", "soon"])).unwrap_err();
+        assert!(refused.starts_with("Not an alarm: \"soon\" is in neither spelling."), "{refused}");
+        assert_eq!(refused.matches("An alarm is").count(), 1, "{refused}");
+        let refused = check_list(&list(&["10m"])).unwrap_err();
+        assert!(refused.contains("needs a sign"), "{refused}");
+    }
+
+    #[test]
     fn what_is_not_an_alarm_is_refused() {
-        for text in [
-            "", "m", "-m", "-10", "-10x", "-10M", "-10 Minutes", "- 10m", "--10m", "-1.5d", "-0.5w",
-            "-1.d", "-1.0d", "0.0w", "-.5h", "-1e3s", "-٣m", "9:00", "09:0", "24:00", "09:60", "09:00:00", "-1d09:00",
-            "1.5d 09:00", "-1h 09:00", "0900", "-100w", "-367d", "-8785h", "+99999999s", "-1d 09:00 -1d",
-        ] {
+        let grammar = grammar();
+        for text in grammar.refused.iter().chain(&grammar.too_far) {
             assert!(Spec::parse(text).is_err(), "{text:?} should be refused");
         }
+        for text in &grammar.too_far {
+            let refused = Spec::parse(text).unwrap_err();
+            assert!(refused.contains("more than a year"), "{text:?}: {refused}");
+        }
         // A year is as far as an alarm goes.
-        assert!(Spec::parse("-366d").is_ok());
-        assert!(Spec::parse("-52w").is_ok());
+        for text in &grammar.at_the_limit {
+            assert!(Spec::parse(text).is_ok(), "{text:?} should be accepted");
+        }
     }
 
     #[test]
     fn a_time_of_day_is_on_the_start_day_moved_by_whole_days() {
-        for (written, canonical) in [
-            ("09:00", "09:00"), ("-1d 18:00", "-1d 18:00"), ("+1 day 08:30", "+1d 08:30"),
-            ("-1w 09:00", "-7d 09:00"), ("0d 09:00", "09:00"), ("-2 weeks 00:00", "-14d 00:00"),
-        ] {
-            assert_eq!(spec(written).to_string(), canonical, "{written}");
-        }
         // 2024-05-06 is a Monday, 09:00 and 18:00 in Los Angeles being 16:00 and 01:00 UTC.
         let start = time("2024-05-06 14:30");
         assert_eq!(rings("09:00", start), "2024-05-06T16:00:00+00:00");
