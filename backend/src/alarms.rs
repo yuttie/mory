@@ -18,6 +18,9 @@
 //! Where a note says nothing, `.mory/calendars.yaml` may: for a category of event, and then for all
 //! timed or all all-day ones. See `Defaults`.
 //!
+//! A task's `due_by` and `deadline` ring too, though they are not events: the calendar draws them as
+//! events, and `taskDatesFromEntries` decides which notes and which values count. See `task_dates`.
+//!
 //! `frontend/src/alarms.ts` is this grammar's twin, and `fixtures/calendar/notes/alarms.md` holds
 //! the two to each other: both spell each alarm they accept the same way (see `Spec`'s `Display`).
 //! `Defaults` has a twin too, in `resolveCategory` and `eventsFromEntries`, which the same fixtures
@@ -32,7 +35,10 @@ use regex::Regex;
 use serde_yaml::{Mapping, Value};
 
 use crate::models::ListEntry;
-use crate::note_events::{Occurrence, Reader, Start, key_name, present, resolve_local};
+use crate::note_events::{
+    Occurrence, Reader, Start, dayjs_parse, key_name, present, resolve_local, to_wall_clock,
+};
+use crate::tasks::{in_task_tree, task_status_of};
 
 /// The furthest from its start an alarm may be set. Anything further is a typo or worse: the
 /// scheduler widens what it expands by the furthest alarm any note declares, and a note must not be
@@ -205,6 +211,10 @@ pub fn list_of(value: &Value) -> Vec<Spec> {
 pub struct Defaults {
     timed: Option<Vec<Spec>>,
     all_day: Option<Vec<Spec>>,
+    /// For a task's due date, and for its deadline: none at all unless set, since a date a task
+    /// merely has is not an appointment to be reminded of.
+    due_by: Option<Vec<Spec>>,
+    deadline: Option<Vec<Spec>>,
     /// Every configured category, with the alarms it sets itself if it does.
     categories: BTreeMap<String, Option<Vec<Spec>>>,
 }
@@ -228,7 +238,13 @@ impl Defaults {
                 Some((key_name(id)?, alarms))
             })
             .collect();
-        Defaults { timed: set("timed"), all_day: set("all_day"), categories }
+        Defaults {
+            timed: set("timed"),
+            all_day: set("all_day"),
+            due_by: set("due_by"),
+            deadline: set("deadline"),
+            categories,
+        }
     }
 
     /// The alarms an occurrence rings at.
@@ -251,6 +267,18 @@ impl Defaults {
         }
     }
 
+    /// The alarms a task's date rings at: the task's own list for it if it has one, else the
+    /// configured one, else none.
+    pub fn task_specs_of(&self, date: &TaskDate) -> Vec<Spec> {
+        if let Some(declared) = &date.alarms {
+            return list_of(declared);
+        }
+        match date.field {
+            TaskField::DueBy => self.due_by.clone().unwrap_or_default(),
+            TaskField::Deadline => self.deadline.clone().unwrap_or_default(),
+        }
+    }
+
     /// What the category `id` sets, from the nearest of it and its ancestors that sets anything.
     /// `None` for an id that is not configured, whatever its ancestors say.
     fn category_alarms(&self, id: &str) -> Option<&[Spec]> {
@@ -258,7 +286,8 @@ impl Defaults {
         lineage(id).into_iter().find_map(|ancestor| self.categories.get(ancestor)?.as_deref())
     }
 
-    /// Every alarm any of it names, for `Reach`.
+    /// Every alarm it names for an event, for `Reach`. A task's dates are not expanded from a rule,
+    /// so what rings for them needs no looking ahead.
     fn specs(&self) -> impl Iterator<Item = &Spec> {
         [&self.timed, &self.all_day]
             .into_iter()
@@ -334,6 +363,88 @@ impl Reach {
             _ => {},
         }
     }
+}
+
+/// Which of a task's two dates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TaskField {
+    DueBy,
+    Deadline,
+}
+
+impl TaskField {
+    const ALL: [TaskField; 2] = [TaskField::DueBy, TaskField::Deadline];
+
+    fn key(self) -> &'static str {
+        match self {
+            TaskField::DueBy => "due_by",
+            TaskField::Deadline => "deadline",
+        }
+    }
+
+    /// What a notification calls it.
+    fn label(self) -> &'static str {
+        match self {
+            TaskField::DueBy => "Due",
+            TaskField::Deadline => "Deadline",
+        }
+    }
+}
+
+/// One of a task's dates, as far as ringing for it goes.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TaskDate {
+    pub path: String,
+    /// `Due: …` or `Deadline: …`, after the task as the calendar names it.
+    pub name: String,
+    pub field: TaskField,
+    pub start: Start,
+    /// The task's own `alarms:` for this date, as written.
+    pub alarms: Option<Value>,
+}
+
+/// Every due date and deadline in the listing that is still to come: those of tasks that are neither
+/// done nor canceled, which the calendar draws struck through and nobody needs telling of.
+///
+/// Which notes count and which values do is `taskDatesFromEntries`' answer, which this follows: a
+/// note in the task tree with a `task:` mapping, and a string that `dayjs` reads. Nothing is
+/// expanded, since a task has at most one of each.
+pub fn task_dates(entries: &[ListEntry], reader: &Reader) -> Vec<TaskDate> {
+    let mut found = Vec::new();
+    for entry in entries {
+        let path = entry.path.to_string_lossy();
+        if !in_task_tree(&path) {
+            continue;
+        }
+        let Some(Value::Mapping(task)) = entry.metadata.as_ref().and_then(|metadata| metadata.get("task")) else {
+            continue;
+        };
+        if matches!(task_status_of(entry.metadata.as_ref()).as_deref(), Some("done" | "canceled")) {
+            continue;
+        }
+        // `entry.title ?? entry.path`
+        let title = entry.title.as_deref().unwrap_or(&path);
+        let own = task.get("alarms").and_then(Value::as_mapping);
+        for field in TaskField::ALL {
+            let Some(Value::String(text)) = task.get(field.key()) else {
+                continue;
+            };
+            if dayjs_parse(text, reader.zone).is_none() {
+                continue;
+            }
+            let Some(start) = to_wall_clock(text, reader.zone) else {
+                continue;
+            };
+            found.push(TaskDate {
+                path: path.to_string(),
+                name: format!("{}: {title}", field.label()),
+                field,
+                start,
+                alarms: present(own.and_then(|own| own.get(field.key()))).cloned(),
+            });
+        }
+    }
+    found
 }
 
 /// The instants an occurrence rings at, each once however many of its specs name the same one.
@@ -627,6 +738,108 @@ events:
         let silent = ["2024-05-06 09:00  Timed  none", "2024-05-07  Day  none"];
         assert_eq!(resolved("alarms: { timed: 5, all_day: { at: -1h } }", note), silent);
         assert_eq!(resolved("categories: { a: { alarms: [10m] }, b: { alarms: soon } }", note), silent);
+    }
+
+    const TASK: &str = ".tasks/6f1d3c2e-8a4b-4c57-9d1e-2b7a5f0e9c31.md";
+    const OTHER_TASK: &str = ".tasks/0d9a7e54-1c3b-4f6a-8b2d-5e4c7a1f9b60.md";
+
+    /// What each of the tasks' dates rings at under `config`, as `start  name  spec|spec`.
+    fn task_lines(config: &str, tasks: &[(&str, Option<&str>, &str)]) -> Vec<String> {
+        let defaults = defaults(config);
+        let entries: Vec<ListEntry> = tasks
+            .iter()
+            .map(|(path, title, yaml)| ListEntry {
+                path: (*path).into(),
+                size: 1,
+                mime_type: "text/markdown".to_owned(),
+                metadata: Some(serde_yaml::from_str(yaml).unwrap()),
+                title: title.map(str::to_owned),
+                time: "2024-01-01T00:00:00+00:00".parse().unwrap(),
+            })
+            .collect();
+        let mut lines: Vec<String> = task_dates(&entries, &reader())
+            .iter()
+            .map(|date| {
+                let specs: Vec<String> = defaults.task_specs_of(date).iter().map(Spec::to_string).collect();
+                format!("{}  {}  {}", date.start, date.name, if specs.is_empty() { "none".into() } else { specs.join("|") })
+            })
+            .collect();
+        lines.sort();
+        lines
+    }
+
+    #[test]
+    fn a_tasks_dates_ring_by_its_own_list_then_the_configuration_and_otherwise_not_at_all() {
+        let dates = "task: { due_by: 2024-05-10, deadline: '2024-05-15 17:00:00+09:00' }";
+        let own = "task: { due_by: '2024-05-11 10:00', deadline: 2024-05-16, alarms: { due_by: [-2h], deadline: [] } }";
+        let tasks = [(TASK, Some("Write"), dates), (OTHER_TASK, Some("Read"), own)];
+        // Nothing is configured, and a date a task merely has is not an appointment: only what a
+        // task itself says rings. 17:00 in Tokyo is 01:00 in Los Angeles.
+        assert_eq!(task_lines("", &tasks), [
+            "2024-05-10  Due: Write  none",
+            "2024-05-11 10:00  Due: Read  -2h",
+            "2024-05-15 01:00  Deadline: Write  none",
+            "2024-05-16  Deadline: Read  none",
+        ]);
+        let config = "alarms: { due_by: [09:00], deadline: [-1d 18:00, -2h], timed: [-5m] }";
+        assert_eq!(task_lines(config, &tasks), [
+            "2024-05-10  Due: Write  09:00",
+            "2024-05-11 10:00  Due: Read  -2h",
+            "2024-05-15 01:00  Deadline: Write  -1d 18:00|-2h",
+            "2024-05-16  Deadline: Read  none",
+        ]);
+        // A task's list may be a string, and an empty `alarms:` for a date inherits.
+        let loose = "task: { due_by: 2024-05-10, deadline: 2024-05-12, alarms: { due_by: -1d 18:00, deadline: } }";
+        assert_eq!(task_lines(config, &[(TASK, None, loose)]), [
+            "2024-05-10  Due: .tasks/6f1d3c2e-8a4b-4c57-9d1e-2b7a5f0e9c31.md  -1d 18:00",
+            "2024-05-12  Deadline: .tasks/6f1d3c2e-8a4b-4c57-9d1e-2b7a5f0e9c31.md  -1d 18:00|-2h",
+        ]);
+    }
+
+    #[test]
+    fn only_the_dates_of_a_task_still_to_do_in_the_task_tree_ring() {
+        let due = |status: &str| format!("task: {{ due_by: 2024-05-10, {status} }}");
+        let tasks = [
+            (TASK, Some("Open"), due("status: { kind: todo }")),
+            (OTHER_TASK, Some("Done"), due("status: { kind: done }")),
+            (".tasks/11111111-2222-4333-8444-555555555555.md", Some("Canceled"), due("status: { kind: canceled }")),
+            // Not a status the views settle on.
+            (".tasks/11111111-2222-4333-8444-555555555556.md", Some("Odd"), due("status: { kind: waiting }")),
+            (".tasks/11111111-2222-4333-8444-555555555557.md", Some("Old"), due("status: done")),
+            // A note elsewhere is not a task, whatever it holds, and nor is one in a directory that
+            // is not a task's.
+            ("notes/note.md", Some("Not a task"), due("x: 1")),
+            (".tasks/directory/11111111-2222-4333-8444-555555555558.md", Some("Lost"), due("x: 1")),
+            (".tasks/not-a-uuid.md", Some("Unnamed"), due("x: 1")),
+        ];
+        let tasks: Vec<(&str, Option<&str>, &str)> =
+            tasks.iter().map(|(path, title, yaml)| (*path, *title, yaml.as_str())).collect();
+        assert_eq!(task_lines("", &tasks), [
+            "2024-05-10  Due: Odd  none",
+            "2024-05-10  Due: Old  none",
+            "2024-05-10  Due: Open  none",
+        ]);
+    }
+
+    #[test]
+    fn a_value_the_calendar_cannot_draw_as_a_date_does_not_ring() {
+        let tasks = [(TASK, Some("T"), "
+task:
+    due_by: soon
+    deadline: 2024-05-12 09:00
+")];
+        assert_eq!(task_lines("", &tasks), ["2024-05-12 09:00  Deadline: T  none"]);
+        for value in ["5", "null", "[2024-05-10]", "{ at: 2024-05-10 }", "true"] {
+            let yaml = format!("task: {{ due_by: {value}, deadline: {value} }}");
+            assert!(task_lines("", &[(TASK, Some("T"), yaml.as_str())]).is_empty(), "{value}");
+        }
+        // Neither a mapping for `task:` nor for its `alarms:` is anything to ring by.
+        assert!(task_lines("", &[(TASK, Some("T"), "task: 5")]).is_empty());
+        assert!(task_lines("", &[(TASK, Some("T"), "task: [due_by]")]).is_empty());
+        let config = "alarms: { due_by: [09:00] }";
+        assert_eq!(task_lines(config, &[(TASK, Some("T"), "task: { due_by: 2024-05-10, alarms: [-1h] }")]), [
+            "2024-05-10  Due: T  09:00",
+        ]);
     }
 
     #[test]

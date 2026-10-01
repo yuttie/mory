@@ -41,7 +41,7 @@ use web_push_native::jwt_simple::algorithms::{
 };
 use web_push_native::{Auth, WebPushBuilder, p256::PublicKey};
 
-use crate::alarms::{Defaults, Reach, instants_of};
+use crate::alarms::{self, Defaults, Reach, instants_of, task_dates};
 use crate::models::{AppError, AppState, ListEntry};
 use crate::note_events::{self, Reader, Start};
 
@@ -321,26 +321,32 @@ fn alarms_between(
         reader,
     );
     let mut alarms = Vec::new();
-    for occurrence in note_events::occurrences(&schedule.entries, from, to, reader) {
-        if occurrence.finished {
-            continue;
-        }
-        let start = match occurrence.start {
+    let mut ring = |specs: &[alarms::Spec], start: Start, name: &str, path: &str, location: Option<&str>| {
+        let moment = match start {
             Start::Date(day) => Moment::Day(day),
-            Start::Time(_) => Moment::At(occurrence.start.begins(reader)),
+            Start::Time(_) => Moment::At(start.begins(reader)),
         };
-        let specs = schedule.defaults.specs_of(&occurrence);
-        for at in instants_of(&specs, occurrence.start, reader) {
+        for at in instants_of(specs, start, reader) {
             if after < at && at <= until {
                 alarms.push(Alarm {
                     at,
-                    name: occurrence.name.clone(),
-                    path: occurrence.path.clone(),
-                    location: occurrence.location.clone(),
-                    start,
+                    name: name.to_owned(),
+                    path: path.to_owned(),
+                    location: location.map(str::to_owned),
+                    start: moment,
                 });
             }
         }
+    };
+    for occurrence in note_events::occurrences(&schedule.entries, from, to, reader) {
+        if !occurrence.finished {
+            let specs = schedule.defaults.specs_of(&occurrence);
+            ring(&specs, occurrence.start, &occurrence.name, &occurrence.path, occurrence.location.as_deref());
+        }
+    }
+    for date in task_dates(&schedule.entries, reader) {
+        let specs = schedule.defaults.task_specs_of(&date);
+        ring(&specs, date.start, &date.name, &date.path, None);
     }
     alarms.sort_by(|a, b| a.at.cmp(&b.at).then_with(|| a.name.cmp(&b.name)));
     alarms
@@ -824,6 +830,34 @@ events:
             "2024-05-03T16:00:00+00:00  Review",
             "2024-05-07T01:00:00+00:00  Holiday",
             "2024-05-07T16:00:00+00:00  Own",
+        ]);
+    }
+
+    #[test]
+    fn a_task_date_rings_as_due_or_deadline_after_the_task() {
+        let defaults = crate::v2::parse_calendar_config("alarms: { due_by: [09:00], deadline: [-1d 18:00, -2h] }")
+            .unwrap()
+            .alarm_defaults();
+        let mut task = entry("
+task:
+    due_by: 2024-05-10
+    deadline: 2024-05-15 17:00:00-07:00
+");
+        task.path = ".tasks/6f1d3c2e-8a4b-4c57-9d1e-2b7a5f0e9c31.md".into();
+        task.title = Some("Write the report".to_owned());
+        let mut done = task.clone();
+        done.path = ".tasks/0d9a7e54-1c3b-4f6a-8b2d-5e4c7a1f9b60.md".into();
+        done.metadata = Some(serde_yaml::from_str("task: { due_by: 2024-05-10, status: { kind: done } }").unwrap());
+        let schedule = Schedule::new(vec![task, done], defaults);
+        let alarms = alarms_between(&schedule, at("2024-05-01T00:00:00Z"), at("2024-05-20T00:00:00Z"), &reader());
+        let seen: Vec<(String, &str, String)> = alarms
+            .iter()
+            .map(|alarm| (alarm.at.to_rfc3339(), alarm.name.as_str(), alarm.start.to_string()))
+            .collect();
+        assert_eq!(seen, [
+            ("2024-05-10T16:00:00+00:00".to_owned(), "Due: Write the report", "2024-05-10".to_owned()),
+            ("2024-05-15T01:00:00+00:00".to_owned(), "Deadline: Write the report", "2024-05-16T00:00:00+00:00".to_owned()),
+            ("2024-05-15T22:00:00+00:00".to_owned(), "Deadline: Write the report", "2024-05-16T00:00:00+00:00".to_owned()),
         ]);
     }
 

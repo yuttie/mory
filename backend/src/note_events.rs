@@ -298,7 +298,7 @@ fn wall_clock_at(at: DateTime<Utc>, zone: Zone) -> NaiveDateTime {
 }
 
 /// `dayjs(text)`: the instant it names, or `None` where `isValid()` is false.
-fn dayjs_parse(text: &str, zone: Zone) -> Option<DateTime<Utc>> {
+pub(crate) fn dayjs_parse(text: &str, zone: Zone) -> Option<DateTime<Utc>> {
     let ends_in_z = text.ends_with(['Z', 'z']);
     if !ends_in_z {
         if let Some(parts) = DAYJS_PARSE.captures(text) {
