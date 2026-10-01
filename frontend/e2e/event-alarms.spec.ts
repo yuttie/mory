@@ -180,6 +180,78 @@ test('shows an alarm pushed after the browser stopped the service worker', async
     ]);
 });
 
+// What the notifications shown say and how they are tagged, for the worker's wording of an alarm.
+function shown(page: Page): Promise<{ title: string; body: string; tag: string; renotify: boolean }[]> {
+    return page.evaluate(async () => {
+        const registration = await navigator.serviceWorker.ready;
+        return (await registration.getNotifications())
+            .map((n) => ({ title: n.title, body: n.body, tag: n.tag, renotify: n.renotify }))
+            .sort((a, b) => a.title.localeCompare(b.title));
+    });
+}
+
+// An alarm ahead of its event says when the event is, in the reader's words: moried sends the
+// moment and the worker, which is in the reader's zone and locale, says it.
+test('says when the event is, as its reader would say it', async ({ browserName, context, page }) => {
+    test.skip(browserName !== 'chromium', 'Delivering a push takes the Chrome DevTools Protocol.');
+    await mockBackend(context, { 'a.md': '# A\n' });
+    await mockPush(context, vapidKey());
+
+    await page.goto('/note/a.md');
+    await expect(page.getByRole('heading', { name: 'A' })).toBeVisible();
+    const registrationId = await stopServiceWorkers(context, page);
+    const cdp = await context.newCDPSession(page);
+    await cdp.send('ServiceWorker.enable');
+    const push = (payload: object | string) => cdp.send('ServiceWorker.deliverPushMessage', {
+        origin: new URL(page.url()).origin,
+        registrationId,
+        data: typeof payload === 'string' ? payload : JSON.stringify(payload),
+    });
+
+    // The same moments, said as the page's own locale says them: what the worker is held to.
+    const day = 24 * 60 * 60 * 1000;
+    const { now, soon, later, today, wanted } = await page.evaluate((day) => {
+        const now = new Date();
+        const time = { hour: 'numeric', minute: '2-digit' } as const;
+        const say = (date: Date, options: Intl.DateTimeFormatOptions) =>
+            new Intl.DateTimeFormat(undefined, options).format(date);
+        const soon = new Date(now.getTime() + 3 * day);
+        const later = new Date(now.getTime() + 20 * day);
+        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        return {
+            now: now.toISOString(),
+            soon: soon.toISOString(),
+            later: later.toISOString(),
+            today,
+            wanted: {
+                now: say(now, time),
+                soon: say(soon, { weekday: 'short', ...time }),
+                later: say(later, { weekday: 'short', month: 'short', day: 'numeric', ...time }),
+                today: say(now, { weekday: 'short', month: 'short', day: 'numeric' }),
+            },
+        };
+    }, day);
+
+    await push({ title: 'Today', tag: 'a.md#Today', path: 'a.md', start: now, all_day: false, body: 'Room 1' });
+    await push({ title: 'This week', tag: 'a.md#Week', path: 'a.md', start: soon, all_day: false });
+    await push({ title: 'Later', tag: 'a.md#Later', path: 'a.md', start: later, all_day: false });
+    await push({ title: 'Whole day', tag: 'a.md#Day', path: 'a.md', start: today, all_day: true });
+    // From an older moried, or not moried's at all: shown as it always was, and with no tag it has
+    // nothing to replace, which the browser would refuse to be told to.
+    await push({ title: 'Older', tag: 'a.md#Older', path: 'a.md', body: 'Room 2' });
+    await push('Sent from DevTools');
+
+    await expect.poll(async () => (await shown(page)).length).toBe(6);
+    expect(await shown(page)).toEqual([
+        { title: 'Later', body: wanted.later, tag: 'a.md#Later', renotify: true },
+        { title: 'mory', body: 'Sent from DevTools', tag: '', renotify: false },
+        { title: 'Older', body: 'Room 2', tag: 'a.md#Older', renotify: true },
+        { title: 'This week', body: wanted.soon, tag: 'a.md#Week', renotify: true },
+        { title: 'Today', body: `${wanted.now} \u00b7 Room 1`, tag: 'a.md#Today', renotify: true },
+        { title: 'Whole day', body: wanted.today, tag: 'a.md#Day', renotify: true },
+    ].sort((a, b) => a.title.localeCompare(b.title)));
+});
+
 // A click on an alarm while a tab is open: the tab routes to the note, as a link inside the app
 // would, and keeps what it had rather than loading afresh. The worker's own `openNote` is called,
 // as the click itself cannot be simulated.

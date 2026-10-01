@@ -63,8 +63,45 @@ self.addEventListener('message', event => {
     }
 });
 
-// An event alarm, which moried sends at the event's start; see `backend/src/push.rs`. This worker
-// cannot wait for one itself: the browser stops it after 30 seconds idle, and its timers with it.
+// How far from now a time may be before a weekday no longer says which day it is.
+const WEEKDAY_ENOUGH_MS = 6 * 24 * 60 * 60 * 1000;
+
+const startOfDay = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+
+// When the occurrence an alarm is for starts, as its reader would say it. moried sends the moment
+// and leaves the words to this worker, which is in the reader's zone and locale where moried is not:
+// the time alone for one today, a weekday and the time for one within the week, and the date as well
+// beyond it, where a weekday would not say which. A whole day, which `start` then is, has no time.
+// Nothing for a payload that carries no start, such as one from an older moried.
+function whenIs(alarm, now) {
+    if (typeof alarm.start !== 'string') {
+        return undefined;
+    }
+    if (alarm.all_day === true) {
+        const [year, month, day] = alarm.start.split('-').map(Number);
+        const date = new Date(year, month - 1, day);
+        if (Number.isNaN(date.getTime())) {
+            return undefined;
+        }
+        return new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).format(date);
+    }
+    const start = new Date(alarm.start);
+    if (Number.isNaN(start.getTime())) {
+        return undefined;
+    }
+    const time = { hour: 'numeric', minute: '2-digit' };
+    if (startOfDay(start) === startOfDay(now)) {
+        return new Intl.DateTimeFormat(undefined, time).format(start);
+    }
+    const near = Math.abs(start.getTime() - now.getTime()) < WEEKDAY_ENOUGH_MS;
+    return new Intl.DateTimeFormat(undefined, near
+        ? { weekday: 'short', ...time }
+        : { weekday: 'short', month: 'short', day: 'numeric', ...time }).format(start);
+}
+
+// An event alarm, which moried sends ahead of or at the event's start; see `backend/src/push.rs`.
+// This worker cannot wait for one itself: the browser stops it after 30 seconds idle, and its
+// timers with it.
 self.addEventListener('push', (event) => {
     let alarm;
     try {
@@ -78,9 +115,14 @@ self.addEventListener('push', (event) => {
         // shown, as the subscription promised; the browser shows a warning of its own otherwise.
         alarm = { title: 'mory', body: event.data?.text() };
     }
+    // An alarm ahead of its event says when the event is, which the moment it is shown does not.
+    const body = [whenIs(alarm, new Date()), alarm.body].filter((part) => part !== undefined && part !== '' && part !== null).join(' · ');
     event.waitUntil(self.registration.showNotification(alarm.title, {
-        body: alarm.body,
+        body: body === '' ? undefined : body,
         tag: alarm.tag,
+        // A later alarm for the same occurrence replaces the one still showing, and a replacement
+        // is silent unless asked otherwise. The browser refuses `renotify` without a tag.
+        renotify: typeof alarm.tag === 'string' && alarm.tag !== '',
         icon: new URL('favicon.png', self.registration.scope).href,
         data: { path: alarm.path },
     }));
