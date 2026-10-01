@@ -42,7 +42,7 @@ const emit = defineEmits<{
 }>();
 
 const hint = computed(() => props.modelValue === null
-    ? `${describeAlarmList(props.fallback)}, as set under Calendars in the settings.`
+    ? `${describeAlarmList(props.fallback)} by default. The default is set under Calendars in the settings.`
     : 'Only these, and not the default.');
 
 function onDefault(isDefault: boolean | null) {
