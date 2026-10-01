@@ -386,14 +386,11 @@ const taskDateColorsChanged = computed(() => TASK_DATE_FIELDS.some(
     (field) => taskDateDraft[field.name].trim() !== (calendars.taskDateColors[field.name] ?? ''),
 ));
 
-const effectiveAlarms = (name: keyof AlarmDefaults): string[] =>
-    calendars.alarmDefaults[name] ?? [...BUILT_IN_ALARMS[name]];
-
 const sameList = (a: readonly string[], b: readonly string[]) =>
     a.length === b.length && a.every((entry, index) => entry.trim() === b[index].trim());
 
 const alarmsChanged = computed(() => ALARM_FIELDS.some(
-    (field) => !sameList(alarmDraft[field.name], effectiveAlarms(field.name)),
+    (field) => !sameList(alarmDraft[field.name], calendars.effectiveAlarmDefaults[field.name]),
 ));
 
 // `null` while the file is unread or unreadable; there is nothing to list either way.
@@ -444,7 +441,7 @@ watch(() => calendars.taskDateColors, (colors) => {
 
 watch(() => calendars.alarmDefaults, () => {
     for (const field of ALARM_FIELDS) {
-        alarmDraft[field.name] = [...effectiveAlarms(field.name)];
+        alarmDraft[field.name] = [...calendars.effectiveAlarmDefaults[field.name]];
     }
 }, { immediate: true });
 
@@ -599,7 +596,7 @@ function openCategoryDialog(index: number | null) {
 // would silence it: the list is the thing to edit, not to build.
 function onCategoryAlarmsSet(set: boolean | null) {
     if (set === true && categoryAlarms.value.length === 0) {
-        categoryAlarms.value = [...(inheritedDraft.value.alarms ?? effectiveAlarms('timed'))];
+        categoryAlarms.value = [...(inheritedDraft.value.alarms ?? calendars.effectiveAlarmDefaults.timed)];
     }
 }
 

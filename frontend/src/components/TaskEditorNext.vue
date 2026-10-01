@@ -198,7 +198,7 @@
                     <TaskDateAlarms
                         v-if="form.due_by !== ''"
                         v-model="form.due_by_alarms"
-                        v-bind:fallback="calendars.alarmDefaults.dueBy ?? BUILT_IN_ALARMS.dueBy"
+                        v-bind:fallback="calendars.effectiveAlarmDefaults.dueBy"
                     ></TaskDateAlarms>
                     <!-- Deadline -->
                     <DateSelector
@@ -213,7 +213,7 @@
                     <TaskDateAlarms
                         v-if="form.deadline !== ''"
                         v-model="form.deadline_alarms"
-                        v-bind:fallback="calendars.alarmDefaults.deadline ?? BUILT_IN_ALARMS.deadline"
+                        v-bind:fallback="calendars.effectiveAlarmDefaults.deadline"
                     ></TaskDateAlarms>
                     <!-- Scheduled dates -->
                     <v-label>
@@ -381,7 +381,7 @@ import {
 
 import { assessTask, type TaskAssessmentResponse } from '@/api';
 
-import { alarmProblems, BUILT_IN_ALARMS } from '@/alarms';
+import { alarmProblems } from '@/alarms';
 import type { TaskAlarms } from '@/alarms';
 import EditableViewer from '@/components/EditableViewer.vue';
 import TaskDateAlarms from '@/components/TaskDateAlarms.vue';

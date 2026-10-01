@@ -401,6 +401,19 @@ describe('alarm defaults', () => {
         expect(store.alarmDefaults).toEqual({});
     });
 
+    it('counts the built-in default for each kind the file leaves unset', async () => {
+        apiMocks.getNote.mockResolvedValue({
+            data: `${YAML_FILE}alarms:\n    timed: [-5m]\n    deadline: []\n`,
+        });
+        const { useCalendarsStore } = await load();
+        const store = useCalendarsStore();
+
+        expect(store.effectiveAlarmDefaults).toEqual({ timed: ['0m'], allDay: [], dueBy: [], deadline: [] });
+        await store.loadSubscriptions();
+
+        expect(store.effectiveAlarmDefaults).toEqual({ timed: ['-5m'], allDay: [], dueBy: [], deadline: [] });
+    });
+
     // The whole file is rewritten from what the store holds, so what it does not hold is lost.
     it('keeps them when the subscriptions, the colours or the categories are saved', async () => {
         apiMocks.getNote.mockResolvedValue({ data: WITH_ALARMS });

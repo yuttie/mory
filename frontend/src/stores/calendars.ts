@@ -16,8 +16,9 @@ import YAML from 'yaml';
 import type { AlarmDefaults } from '@/alarms';
 import {
     readAlarmDefaults,
-    readAlarmList,
+    readAlarmsIfSet,
     stringifyWithFlowAlarms,
+    withBuiltInAlarms,
     writeAlarmDefaults,
 } from '@/alarms';
 import type {
@@ -86,6 +87,9 @@ export const useCalendarsStore = defineStore('calendars', () => {
     // reason the colours are: it is the same kind of thing as a category's, and would otherwise
     // have to be set again on every device.
     const alarmDefaults = ref<AlarmDefaults>({});
+    // What each kind rings at once the built-in default is counted, which is what is in force where
+    // the file sets none and so what a box showing the setting should start from.
+    const effectiveAlarmDefaults = computed(() => withBuiltInAlarms(alarmDefaults.value));
     // `null` until the file has been read, and again when reading it fails: with no configuration
     // to hand, every category a note names would look unknown and be reported as a typo.
     const categories = ref<ConfiguredCategory[] | null>(null);
@@ -324,6 +328,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
         subscriptions,
         taskDateColors,
         alarmDefaults,
+        effectiveAlarmDefaults,
         categories,
         categoryMap,
         hasLoadedSubscriptions,
@@ -387,9 +392,9 @@ function readCategories(value: unknown): ConfiguredCategory[] {
         }
         // Set, even to nothing: an empty list silences the category's events, where an empty
         // `alarms:` leaves them to the configuration's.
-        const alarms = (entry as Record<string, unknown>).alarms;
-        if (alarms !== undefined && alarms !== null) {
-            category.alarms = readAlarmList(alarms).alarms;
+        const alarms = readAlarmsIfSet((entry as Record<string, unknown>).alarms);
+        if (alarms !== undefined) {
+            category.alarms = alarms;
         }
         categories.push(category);
     }
