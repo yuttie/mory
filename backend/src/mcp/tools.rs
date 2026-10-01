@@ -411,7 +411,8 @@ pub fn alarm_list(alarms: &[String]) -> Result<serde_yaml::Value, String> {
     for alarm in alarms {
         crate::alarms::Spec::parse(alarm).map_err(|e| {
             format!(
-                "Not an alarm: {e}. An alarm is an offset from the start, such as `-10m` before it                  or `+1h` after, in w, d, h, m or s; or a time on the start's day, such as \
+                "Not an alarm: {e}. An alarm is an offset from the start, such as `-10m` before it \
+                 or `+1h` after, in w, d, h, m or s; or a time on the start's day, such as \
                  `09:00` or `-1d 18:00`.",
             )
         })?;
@@ -1171,6 +1172,14 @@ mod tests {
     fn a_badly_named_task_can_still_be_renamed_or_deleted() {
         assert!(safe_path(".tasks/my-task.md").is_ok());
         assert!(writable_path(".tasks/my-task.md").is_err());
+    }
+
+    #[test]
+    fn a_refused_alarm_is_explained_without_stray_spaces() {
+        let message = alarm_list(&["10m".to_owned()]).expect_err("an unsigned offset is refused");
+        assert!(message.starts_with("Not an alarm:"), "{message}");
+        // A `\` continuation inside the literal once went missing and left a run of spaces.
+        assert!(!message.contains("  "), "{message:?}");
     }
 
     #[test]
