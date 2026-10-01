@@ -32,6 +32,22 @@
             "not": { "required": ["until", "count"] },
             "additionalProperties": false
         },
+        "event-alarm": {
+            "description": "When one alarm rings. An offset from the start, [+-]N unit (-10m, +1h, -2 days), with the units w d h m s or weeks days hours minutes seconds; or a time on the start's day, [[+-]N d|w ]HH:MM (09:00, -1d 18:00). The sign is required unless N is 0, so 10m is not read as ten minutes after. d and w take whole numbers and count calendar days; h, m and s count elapsed time. No alarm is more than a year from its start.",
+            "type": "string",
+            "pattern": "^\\s*(?:(?:[+-][0-9]+|0+) *(?:weeks?|days?|w|d)|(?:[+-][0-9]+(?:\\.[0-9]+)?|0+(?:\\.0+)?) *(?:hours?|minutes?|seconds?|h|m|s)|(?:(?:[+-][0-9]+|0+) *(?:weeks?|days?|w|d) +)?(?:[01][0-9]|2[0-3]):[0-5][0-9])\\s*$"
+        },
+        "event-alarms": {
+            "description": "When an event or occurrence rings: a list of alarms, or one alone. An empty list silences it, and an empty value is not set, so it takes the category's alarms, then the global ones in .mory/calendars.yaml.",
+            "oneOf": [
+                { "type": "null" },
+                { "$ref": "#/definitions/event-alarm" },
+                {
+                    "type": "array",
+                    "items": { "$ref": "#/definitions/event-alarm" }
+                }
+            ]
+        },
         "event-ical": {
             "description": "Where an imported event came from. recurrence_id narrows the claim to one occurrence; without it the note shadows the whole series.",
             "type": "object",
@@ -54,7 +70,8 @@
                 "note": { "type": "string" },
                 "name": { "type": "string" },
                 "location": { "type": "string" },
-                "url": { "type": "string" }
+                "url": { "type": "string" },
+                "alarms": { "$ref": "#/definitions/event-alarms" }
             }
         },
         "event-override": {
@@ -81,6 +98,7 @@
                 "name": { "type": "string" },
                 "location": { "type": "string" },
                 "url": { "type": "string" },
+                "alarms": { "$ref": "#/definitions/event-alarms" },
                 "category": {
                     "description": "The id of a category under categories: in .mory/calendars.yaml, which supplies a default color and a name template. A nested id such as meeting/1on1 takes whatever it does not set from meeting.",
                     "type": "string"
@@ -227,6 +245,20 @@
                 "scheduled_dates": {
                     "type": "array",
                     "items": { "type": "string" }
+                },
+                "alarms": {
+                    "description": "When due_by and deadline ring. Without these, they ring as .mory/calendars.yaml says, which is not at all unless it says so.",
+                    "oneOf": [
+                        { "type": "null" },
+                        {
+                            "type": "object",
+                            "properties": {
+                                "due_by": { "$ref": "#/definitions/event-alarms" },
+                                "deadline": { "$ref": "#/definitions/event-alarms" }
+                            },
+                            "additionalProperties": false
+                        }
+                    ]
                 }
             },
             "required": ["status", "progress", "importance", "urgency", "scheduled_dates"],

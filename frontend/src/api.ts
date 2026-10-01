@@ -95,6 +95,9 @@ export interface EventFields {
   name?: string;
   location?: string;
   url?: string;
+  // When it rings, as `alarms.ts` reads them: a list, or one string for a list of one. An empty
+  // list silences it, and an unset value takes the category's and then the global ones.
+  alarms?: string | string[];
 }
 
 export interface EventOccurrence extends EventFields {
