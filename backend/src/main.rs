@@ -1664,6 +1664,11 @@ Important:
             self.categories.as_mapping()
         }
 
+        /// The `alarms:` block as declared, or `None` when there is no usable one.
+        pub(crate) fn alarms(&self) -> Option<&serde_yaml::Mapping> {
+            self.alarms.as_mapping()
+        }
+
         /// The ids of the configured event categories, in the file's order.
         pub(crate) fn category_ids(&self) -> Vec<&str> {
             self.categories()

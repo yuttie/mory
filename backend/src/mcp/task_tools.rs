@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
 
 use super::frontmatter::{self, Change};
-use super::tools::{note_text, safe_path, write_note, WriteOutput};
+use super::tools::{alarm_list, note_text, safe_path, write_note, WriteOutput};
 use super::{json_result, tool_error};
 use crate::models::AppState;
 
@@ -335,34 +335,70 @@ pub struct SetTaskDatesArgs {
     /// The days it is scheduled on, as bare dates. An empty list clears them.
     #[serde(default)]
     pub scheduled_dates: Option<Vec<String>>,
-    /// Dates to remove entirely: any of `start_at`, `due_by`, `deadline`, `scheduled_dates`.
+    /// When `due_by` rings, as a list: offsets from it (`-1h` before, `+1h` after, in w, d, h, m
+    /// or s) or times on its day (`09:00`, `-1d 18:00`). Nothing rings for it unless the config
+    /// says so. An empty list silences it; name `due_by_alarms` in `clear` to go back to the
+    /// config's.
+    #[serde(default)]
+    pub due_by_alarms: Option<Vec<String>>,
+    /// When `deadline` rings, written as `due_by_alarms` is.
+    #[serde(default)]
+    pub deadline_alarms: Option<Vec<String>>,
+    /// Dates to remove entirely: any of `start_at`, `due_by`, `deadline`, `scheduled_dates`;
+    /// or `due_by_alarms` or `deadline_alarms`, to remove the alarms set for one.
     #[serde(default)]
     pub clear: Option<Vec<String>>,
 }
 
-const DATE_KEYS: [&str; 4] = ["start_at", "due_by", "deadline", "scheduled_dates"];
+const DATE_KEYS: [&str; 6] = [
+    "start_at", "due_by", "deadline", "scheduled_dates", "due_by_alarms", "deadline_alarms",
+];
 
-pub async fn set_task_dates(
-    state: &AppState,
-    args: SetTaskDatesArgs,
-) -> Result<CallToolResult, ErrorData> {
-    let path = match safe_path(&args.path) {
-        Ok(path) => path,
-        Err(message) => return Ok(tool_error(message)),
-    };
-    let Some(text) = note_text(state, &path).await? else {
-        return Ok(tool_error(format!("No note at {path:?}.")));
-    };
+/// Where a task keeps the alarms for one of its dates: `task.alarms.due_by`.
+fn alarms_path(date: &str) -> [&str; 3] {
+    ["task", "alarms", date]
+}
 
+/// The keys under `task.alarms` in a note, as it is now.
+fn alarm_keys(text: &str) -> Vec<String> {
+    let block = frontmatter::Note::parse(text).block;
+    serde_yaml::from_str::<Value>(&block)
+        .ok()
+        .and_then(|root| root.get("task")?.get("alarms")?.as_mapping().cloned())
+        .map(|alarms| alarms.keys().filter_map(|key| key.as_str().map(str::to_owned)).collect())
+        .unwrap_or_default()
+}
+
+/// The changes a `SetTaskDatesArgs` asks for, under `task`, to the note `text`.
+fn date_changes(args: &SetTaskDatesArgs, text: &str) -> Result<Vec<Change>, String> {
     let mut changes = Vec::new();
+    let mut cleared_alarms = Vec::new();
     for key in args.clear.as_deref().unwrap_or_default() {
         if !DATE_KEYS.contains(&key.as_str()) {
-            return Ok(tool_error(format!(
+            return Err(format!(
                 "{key:?} is not a task date. Clear one of: {}.",
                 DATE_KEYS.join(", "),
-            )));
+            ));
         }
-        changes.push(Change::remove(&["task", key]));
+        match key.strip_suffix("_alarms") {
+            Some(date) => cleared_alarms.push(date),
+            None => changes.push(Change::remove(&["task", key])),
+        }
+    }
+    // Taking the last key out of a mapping leaves `alarms:` with nothing under it, which the
+    // in-place editor cannot tell from the empty mapping it means and so refuses. A task whose
+    // alarms all go loses `alarms` instead.
+    let left = alarm_keys(text).into_iter().any(|key| !cleared_alarms.contains(&key.as_str()));
+    if !cleared_alarms.is_empty() && !left {
+        changes.push(Change::remove(&["task", "alarms"]));
+    }
+    else {
+        changes.extend(cleared_alarms.iter().map(|date| Change::remove(&alarms_path(date))));
+    }
+    for (date, alarms) in [("due_by", &args.due_by_alarms), ("deadline", &args.deadline_alarms)] {
+        if let Some(alarms) = alarms {
+            changes.push(Change::set(&alarms_path(date), alarm_list(alarms)?));
+        }
     }
     for (key, value) in [
         ("start_at", &args.start_at),
@@ -379,9 +415,28 @@ pub async fn set_task_dates(
             Value::Sequence(dates.iter().map(|date| Value::String(date.clone())).collect()),
         ));
     }
+    Ok(changes)
+}
+
+pub async fn set_task_dates(
+    state: &AppState,
+    args: SetTaskDatesArgs,
+) -> Result<CallToolResult, ErrorData> {
+    let path = match safe_path(&args.path) {
+        Ok(path) => path,
+        Err(message) => return Ok(tool_error(message)),
+    };
+    let Some(text) = note_text(state, &path).await? else {
+        return Ok(tool_error(format!("No note at {path:?}.")));
+    };
+
+    let changes = match date_changes(&args, &text) {
+        Ok(changes) => changes,
+        Err(message) => return Ok(tool_error(message)),
+    };
     if changes.is_empty() {
         return Ok(tool_error(
-            "Nothing to change. Pass a date to set, or name one in `clear`.",
+            "Nothing to change. Pass a date or its alarms to set, or name one in `clear`.",
         ));
     }
 
@@ -636,6 +691,74 @@ mod tests {
             a.urgency = urgency;
             assert!(measure_changes(&a).is_err(), "{progress:?} {importance:?} {urgency:?}");
         }
+    }
+
+    fn dates(json: serde_json::Value) -> SetTaskDatesArgs {
+        let mut args = json;
+        args["path"] = "t.md".into();
+        args["message"] = "m".into();
+        serde_json::from_value(args).expect("valid arguments")
+    }
+
+    fn alarms_of(note: &str) -> serde_yaml::Value {
+        let block = note.trim_start_matches("---\n").split("\n---").next().unwrap();
+        serde_yaml::from_str::<Value>(block).unwrap()["task"]["alarms"].clone()
+    }
+
+    fn yaml(text: &str) -> serde_yaml::Value {
+        serde_yaml::from_str(text).unwrap()
+    }
+
+    /// The alarms of a date are a mapping under `task`, which a task written before alarms existed
+    /// does not have.
+    #[test]
+    fn the_alarms_of_a_date_are_written_under_task_alarms() {
+        let args = dates(serde_json::json!({
+            "due_by_alarms": ["09:00"],
+            "deadline_alarms": ["-1d 18:00", "-2h"],
+        }));
+        let edited = apply(TASK, &date_changes(&args, TASK).expect("valid changes"));
+        assert!(edited.contains("    alarms:\n"), "{edited}");
+        assert_eq!(alarms_of(&edited), yaml("{ due_by: ['09:00'], deadline: ['-1d 18:00', '-2h'] }"));
+        // Everything else about the task is where it was.
+        assert!(edited.contains("        waiting_for: a reply\n"));
+        assert!(edited.contains("    scheduled_dates: []\n"));
+    }
+
+    #[test]
+    fn the_alarms_of_a_date_can_silence_it_or_be_cleared() {
+        let silenced = apply(TASK, &date_changes(&dates(serde_json::json!({ "due_by_alarms": [] })), TASK).unwrap());
+        assert_eq!(alarms_of(&silenced), yaml("{ due_by: [] }"));
+
+        // The only one goes with `alarms` itself, which the editor could not leave empty.
+        let clear = |what: &str| dates(serde_json::json!({ "clear": [what] }));
+        let cleared = apply(&silenced, &date_changes(&clear("due_by_alarms"), &silenced).unwrap());
+        assert_eq!(cleared, TASK);
+
+        // With another left, only its own goes.
+        let both = apply(
+            TASK,
+            &date_changes(&dates(serde_json::json!({ "due_by_alarms": ["09:00"], "deadline_alarms": [] })), TASK).unwrap(),
+        );
+        let cleared = apply(&both, &date_changes(&clear("due_by_alarms"), &both).unwrap());
+        assert_eq!(alarms_of(&cleared), yaml("{ deadline: [] }"));
+        let cleared = apply(
+            &both,
+            &date_changes(&dates(serde_json::json!({ "clear": ["due_by_alarms", "deadline_alarms"] })), &both).unwrap(),
+        );
+        assert_eq!(cleared, TASK);
+
+        // A note with none has nothing to clear, and clearing a date does not name its alarms.
+        assert!(date_changes(&clear("due_by_alarms"), TASK).is_ok());
+        assert!(date_changes(&clear("due_by"), TASK).is_ok());
+        assert!(date_changes(&clear("alarms"), TASK).is_err());
+    }
+
+    #[test]
+    fn an_alarm_that_is_not_one_is_refused_for_a_date_as_for_an_event() {
+        let error = date_changes(&dates(serde_json::json!({ "deadline_alarms": ["2h"] })), TASK)
+            .expect_err("a sign is required");
+        assert!(error.contains("needs a sign"), "{error}");
     }
 
     /// The notes write a whole percentage as an integer, and a task rewritten as `progress: 50.0`

@@ -151,7 +151,9 @@ impl Mory {
                        inside the window is listed too, under `task_dates`: the calendar draws \
                        them as events, so a question about what is coming up needs them. The \
                        event categories configured in `.mory/calendars.yaml` are listed under \
-                       `categories`, as declared. Events subscribed from an external calendar are \
+                       `categories`, as declared, and the config's `alarms`, saying when events \
+                       and task dates ring where a note does not. Events subscribed from an \
+                       external calendar are \
                        a separate tool, list_imported_events.",
         annotations(title = "List events", read_only_hint = true, open_world_hint = false)
     )]
@@ -350,7 +352,9 @@ impl Mory {
                        Requires the notes:write scope.\n\nThese are bare dates (`2026-03-15`) \
                        or datetimes carrying their offset (`2026-03-15 09:00:00+09:00`). due_by \
                        and deadline are drawn on the calendar in their own colours, so they are \
-                       events as well as fields, and list_events returns them.",
+                       events as well as fields, and list_events returns them. \
+                       `due_by_alarms` and `deadline_alarms` say when each rings, as offsets \
+                       (`-1h`) or times on its day (`09:00`, `-1d 18:00`).",
         annotations(title = "Set a task's dates", read_only_hint = false,
                     destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
@@ -378,7 +382,9 @@ impl Mory {
                        monthly` or `yearly`. `tz` is an IANA zone name such as `Asia/Tokyo`, \
                        never an offset.\n\n`category` names an event category configured in \
                        `.mory/calendars.yaml`, which list_events lists; one that is not \
-                       configured is refused rather than invented.",
+                       configured is refused rather than invented.\n\n`alarms` says when it \
+                       rings, as offsets from the start (`-10m`, `+1h`) or times on its day \
+                       (`09:00`, `-1d 18:00`); the sign is required, and `[]` silences it.",
         annotations(title = "Add an event", read_only_hint = false, destructive_hint = false,
                     idempotent_hint = false, open_world_hint = false)
     )]
@@ -401,7 +407,9 @@ impl Mory {
                        comments and hand-formatting included, is untouched. The same spelling \
                        rules as add_event apply: three-letter weekdays with an optional \
                        ordinal, an IANA zone name for `tz`, offsets on datetimes and none on \
-                       dates, and a `category` that is already configured.",
+                       dates, a `category` that is already configured, and `alarms` as offsets \
+                       or times on the day, with `clear: [\"alarms\"]` to go back to the \
+                       category's and the config's.",
         annotations(title = "Update an event", read_only_hint = false, destructive_hint = false,
                     idempotent_hint = true, open_world_hint = false)
     )]

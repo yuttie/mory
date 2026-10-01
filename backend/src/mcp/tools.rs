@@ -400,6 +400,26 @@ pub struct WindowArgs {
     pub end: String,
 }
 
+/// An `alarms:` list as the notes hold it, each entry checked against the grammar the scheduler
+/// and the web app read it by.
+///
+/// An entry that is not an alarm is dropped by both readers, so one written here would silently
+/// ring nothing; refusing it says why instead. They are written as given, not respelled: `-90
+/// minutes` is the user's or the model's own phrase.
+pub fn alarm_list(alarms: &[String]) -> Result<serde_yaml::Value, String> {
+    let mut list = Vec::with_capacity(alarms.len());
+    for alarm in alarms {
+        crate::alarms::Spec::parse(alarm).map_err(|e| {
+            format!(
+                "Not an alarm: {e}. An alarm is an offset from the start, such as `-10m` before it                  or `+1h` after, in w, d, h, m or s; or a time on the start's day, such as \
+                 `09:00` or `-1d 18:00`.",
+            )
+        })?;
+        list.push(serde_yaml::Value::String(alarm.trim().to_owned()));
+    }
+    Ok(serde_yaml::Value::Sequence(list))
+}
+
 /// The `YYYY-MM-DD` every event value begins with, whatever else it carries.
 ///
 /// Filtering on the date rather than the instant means an event within a few hours of a window
@@ -456,6 +476,9 @@ struct EventsOutput {
     /// The event categories `.mory/calendars.yaml` configures, keyed by id, exactly as declared.
     /// Always present, for the same reason as `task_dates`.
     categories: serde_json::Value,
+    /// The `alarms:` block of `.mory/calendars.yaml`, exactly as declared: when an event rings
+    /// where its note and its category say nothing, and a task's dates where it says nothing.
+    alarms: serde_json::Value,
     /// Why `categories` is empty when the file could not be read, so an unreadable file is not
     /// mistaken for one that configures none.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -628,15 +651,19 @@ pub async fn list_events(
     // Handed over as declared rather than applied to each event: resolving a nested id and
     // filling in a template here would be a second copy of what `frontend/src/events.ts` does,
     // in another language and with nothing comparing the two.
-    let (categories, categories_error) = match crate::v2::read_calendar_config(state).await {
+    let (categories, alarms, categories_error) = match crate::v2::read_calendar_config(state).await {
         Ok(config) => (
             config
                 .categories()
                 .and_then(|categories| serde_json::to_value(categories).ok())
                 .unwrap_or_else(|| serde_json::json!({})),
+            config
+                .alarms()
+                .and_then(|alarms| serde_json::to_value(alarms).ok())
+                .unwrap_or_else(|| serde_json::json!({})),
             None,
         ),
-        Err(e) => (serde_json::json!({}), Some(format!("{e:#}"))),
+        Err(e) => (serde_json::json!({}), serde_json::json!({}), Some(format!("{e:#}"))),
     };
 
     json_result(&EventsOutput {
@@ -645,6 +672,7 @@ pub async fn list_events(
         events,
         task_dates,
         categories,
+        alarms,
         categories_error,
         note: "Events marked `recurs` carry a repeat rule whose occurrences are not expanded \
                here; read `declaration.repeat` and work out the dates from it. Every other event \
@@ -655,7 +683,11 @@ pub async fn list_events(
                entry's `color` unless the event sets its own, and its `name` template, in which \
                `{{name}}` stands for the event's name. A nested id such as `meeting/1on1` takes \
                what it does not set from `meeting`. `declaration` is the note as written, with \
-               none of this applied.",
+               none of this applied. An event rings at its own `alarms`, else its occurrence's \
+               event's, else its category's, else the global `alarms.timed` or `alarms.all_day`, \
+               else at its start if it is timed and never if it is all-day; `[]` silences. A \
+               task's `task.alarms.due_by` and `deadline` come before the global `alarms.due_by` \
+               and `deadline`.",
     })
 }
 
