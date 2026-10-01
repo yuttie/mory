@@ -9,8 +9,12 @@ import {
     parseAlarm,
     readAlarmDefaults,
     readAlarmList,
+    readAlarmsIfSet,
     readTaskAlarms,
+    TASK_DATE_ALARM_DEFAULT,
+    taskAlarmOf,
     stringifyWithFlowAlarms,
+    withBuiltInAlarms,
     writeAlarmDefaults,
 } from '@/alarms';
 
@@ -126,6 +130,18 @@ describe('readAlarmList', () => {
     });
 });
 
+describe('readAlarmsIfSet', () => {
+    it('tells a value that is not set from an empty list, which is a setting', () => {
+        expect(readAlarmsIfSet(undefined)).toBeUndefined();
+        expect(readAlarmsIfSet(null)).toBeUndefined();
+        expect(readAlarmsIfSet([])).toEqual([]);
+        expect(readAlarmsIfSet(['-10m', 'bogus'])).toEqual(['-10m']);
+        expect(readAlarmsIfSet('09:00')).toEqual(['09:00']);
+        // Set, but to nothing usable: an entry that is not an alarm is dropped and the list stands.
+        expect(readAlarmsIfSet(5)).toEqual([]);
+    });
+});
+
 describe('readAlarmDefaults', () => {
     it('reads each kind the file sets', () => {
         expect(readAlarmDefaults({
@@ -158,6 +174,39 @@ describe('readAlarmDefaults', () => {
 describe('BUILT_IN_ALARMS', () => {
     it('rings a timed event at its start and nothing else', () => {
         expect(BUILT_IN_ALARMS).toEqual({ timed: ['0m'], allDay: [], dueBy: [], deadline: [] });
+    });
+});
+
+describe('withBuiltInAlarms', () => {
+    it('fills each kind the file leaves unset, and keeps one it sets, even to nothing', () => {
+        expect(withBuiltInAlarms(undefined)).toEqual(BUILT_IN_ALARMS);
+        expect(withBuiltInAlarms({})).toEqual(BUILT_IN_ALARMS);
+        expect(withBuiltInAlarms({ timed: [], dueBy: ['09:00'] })).toEqual({
+            timed: [],
+            allDay: [],
+            dueBy: ['09:00'],
+            deadline: [],
+        });
+    });
+
+    it('hands out lists of its own, so that changing one does not change the built-in', () => {
+        withBuiltInAlarms(undefined).timed.push('-5m');
+        expect(BUILT_IN_ALARMS.timed).toEqual(['0m']);
+        expect(withBuiltInAlarms(undefined).timed).toEqual(['0m']);
+    });
+});
+
+describe('taskAlarmOf', () => {
+    it('reads the list of one date as written, from a mapping only', () => {
+        expect(taskAlarmOf({ due_by: ['09:00'], deadline: null }, 'due_by')).toEqual(['09:00']);
+        expect(taskAlarmOf({ due_by: ['09:00'] }, 'deadline')).toBeUndefined();
+        for (const alarms of [undefined, null, 5, '-1h', ['-1h']]) {
+            expect(taskAlarmOf(alarms, 'due_by')).toBeUndefined();
+        }
+    });
+
+    it('is told where each date finds its default by TASK_DATE_ALARM_DEFAULT', () => {
+        expect(TASK_DATE_ALARM_DEFAULT).toEqual({ due_by: 'dueBy', deadline: 'deadline' });
     });
 });
 

@@ -239,6 +239,13 @@ export function readAlarmList(value: unknown): { alarms: string[]; invalid: unkn
     return { alarms, invalid };
 }
 
+/// The alarms a value sets, or `undefined` when it sets none: `null` and a missing key inherit, which
+/// is not what an empty list does, since that is a setting and silences. Every place that takes the
+/// first of several layers asks this, so that "unset" is one thing.
+export function readAlarmsIfSet(value: unknown): string[] | undefined {
+    return value === undefined || value === null ? undefined : readAlarmList(value).alarms;
+}
+
 /// What an occurrence rings at when nothing says otherwise: at its start if it is timed, and not
 /// at all if it is all-day, which is what every note did before alarms could be set. A task's dates
 /// have no alarm by default, since a date a task merely has is not an appointment.
@@ -270,6 +277,19 @@ export const ALARM_DEFAULT_KEYS = {
     deadline: 'deadline',
 } as const satisfies Record<keyof AlarmDefaults, string>;
 
+/// `AlarmDefaults` with each kind the file leaves unset filled with its built-in, which is the last
+/// layer of every resolution. Asking this one, a reader never repeats the fallback itself.
+export type EffectiveAlarmDefaults = Required<AlarmDefaults>;
+
+export function withBuiltInAlarms(defaults: AlarmDefaults | undefined): EffectiveAlarmDefaults {
+    return {
+        timed: defaults?.timed ?? [...BUILT_IN_ALARMS.timed],
+        allDay: defaults?.allDay ?? [...BUILT_IN_ALARMS.allDay],
+        dueBy: defaults?.dueBy ?? [...BUILT_IN_ALARMS.dueBy],
+        deadline: defaults?.deadline ?? [...BUILT_IN_ALARMS.deadline],
+    };
+}
+
 /// The alarms a task sets for its own dates, under `task.alarms`. A date left out takes the
 /// configuration's; an empty list silences it.
 export interface TaskAlarms {
@@ -277,18 +297,30 @@ export interface TaskAlarms {
     deadline?: string[];
 }
 
+/// Which kind of `AlarmDefaults` each of a task's dates takes its alarms from.
+export const TASK_DATE_ALARM_DEFAULT = {
+    due_by: 'dueBy',
+    deadline: 'deadline',
+} as const satisfies Record<keyof TaskAlarms, keyof AlarmDefaults>;
+
+/// What `task.alarms` holds for one of the task's dates, as written, which is `undefined` unless
+/// `task.alarms` is a mapping. The guard for reading it, wherever it is read.
+export function taskAlarmOf(alarms: unknown, field: keyof TaskAlarms): unknown {
+    if (typeof alarms !== 'object' || alarms === null || Array.isArray(alarms)) {
+        return undefined;
+    }
+    return (alarms as Record<string, unknown>)[field];
+}
+
 /// `task.alarms` as a note holds it, or `undefined` when it sets none. Hand-written, so whatever is
 /// not usable is not there: an entry that is not an alarm is dropped, and a date left empty is not
 /// set, which is not the same as an empty list.
 export function readTaskAlarms(value: unknown): TaskAlarms | undefined {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-        return undefined;
-    }
     const alarms: TaskAlarms = {};
-    for (const field of ['due_by', 'deadline'] as const) {
-        const entry = (value as Record<string, unknown>)[field];
-        if (entry !== undefined && entry !== null) {
-            alarms[field] = readAlarmList(entry).alarms;
+    for (const field of Object.keys(TASK_DATE_ALARM_DEFAULT) as (keyof TaskAlarms)[]) {
+        const set = readAlarmsIfSet(taskAlarmOf(value, field));
+        if (set !== undefined) {
+            alarms[field] = set;
         }
     }
     return Object.keys(alarms).length > 0 ? alarms : undefined;
@@ -332,9 +364,9 @@ export function readAlarmDefaults(value: unknown): AlarmDefaults {
     }
     const defaults: AlarmDefaults = {};
     for (const [field, key] of Object.entries(ALARM_DEFAULT_KEYS) as [keyof AlarmDefaults, string][]) {
-        const entry = (value as Record<string, unknown>)[key];
-        if (entry !== undefined && entry !== null) {
-            defaults[field] = readAlarmList(entry).alarms;
+        const set = readAlarmsIfSet((value as Record<string, unknown>)[key]);
+        if (set !== undefined) {
+            defaults[field] = set;
         }
     }
     return defaults;
