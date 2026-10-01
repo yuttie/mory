@@ -46,8 +46,12 @@ use crate::tasks::{in_task_tree, task_status_of};
 const MAX_SHIFT_SECONDS: f64 = 366.0 * 86_400.0;
 
 // `[0-9]` rather than `\d`, which is any Unicode digit in Rust and only ASCII in JavaScript.
-static OFFSET: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^([+-]?)([0-9]+(?:\.[0-9]+)?) *(weeks?|days?|hours?|minutes?|seconds?|w|d|h|m|s)$")
+static DAYS: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^([+-]?)([0-9]+) *(weeks?|days?|w|d)$").expect("a valid pattern")
+});
+
+static ELAPSED: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^([+-]?)([0-9]+(?:\.[0-9]+)?) *(hours?|minutes?|seconds?|h|m|s)$")
         .expect("a valid pattern")
 });
 
@@ -73,30 +77,27 @@ impl Spec {
 
     pub fn parse(text: &str) -> Result<Spec, String> {
         let text = text.trim();
-        if let Some(parts) = OFFSET.captures(text) {
+        if let Some(parts) = DAYS.captures(text) {
+            let amount: f64 = parts[2].parse().map_err(|_| format!("{text:?} is not a number of days"))?;
+            let per_unit = if parts[3].starts_with('w') { 7.0 } else { 1.0 };
+            let sign = Self::sign(text, &parts[1], amount)?;
+            if amount * per_unit * 86_400.0 > MAX_SHIFT_SECONDS {
+                return Err(format!("{text:?} is more than a year from the start"));
+            }
+            return Ok(Spec::Days(sign * (amount * per_unit) as i64));
+        }
+        if let Some(parts) = ELAPSED.captures(text) {
             let amount: f64 = parts[2].parse().map_err(|_| format!("{text:?} is not a number of units"))?;
-            let unit = &parts[3];
-            let per_unit = match unit.chars().next() {
-                Some('w') => 7.0 * 86_400.0,
-                Some('d') => 86_400.0,
+            let per_unit = match parts[3].chars().next() {
                 Some('h') => 3_600.0,
                 Some('m') => 60.0,
                 _ => 1.0,
             };
-            let calendar = matches!(unit.chars().next(), Some('w' | 'd'));
             let sign = Self::sign(text, &parts[1], amount)?;
-            if calendar && amount.fract() != 0.0 {
-                return Err(format!("{text:?}: days and weeks take whole numbers"));
-            }
             if amount * per_unit > MAX_SHIFT_SECONDS {
                 return Err(format!("{text:?} is more than a year from the start"));
             }
-            return Ok(if calendar {
-                // Whole by the check above, and under a year by the one before it.
-                Spec::Days(sign * (amount * per_unit / 86_400.0) as i64)
-            } else {
-                Spec::Elapsed(Duration::milliseconds(sign * (amount * per_unit * 1000.0).round() as i64))
-            });
+            return Ok(Spec::Elapsed(Duration::milliseconds(sign * (amount * per_unit * 1000.0).round() as i64)));
         }
         if let Some(parts) = CLOCK.captures(text) {
             let days = match parts.get(2) {
@@ -511,7 +512,7 @@ mod tests {
     fn what_is_not_an_alarm_is_refused() {
         for text in [
             "", "m", "-m", "-10", "-10x", "-10M", "-10 Minutes", "- 10m", "--10m", "-1.5d", "-0.5w",
-            "-1.d", "-.5h", "-1e3s", "-٣m", "9:00", "09:0", "24:00", "09:60", "09:00:00", "-1d09:00",
+            "-1.d", "-1.0d", "0.0w", "-.5h", "-1e3s", "-٣m", "9:00", "09:0", "24:00", "09:60", "09:00:00", "-1d09:00",
             "1.5d 09:00", "-1h 09:00", "0900", "-100w", "-367d", "-8785h", "+99999999s", "-1d 09:00 -1d",
         ] {
             assert!(Spec::parse(text).is_err(), "{text:?} should be refused");
