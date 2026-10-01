@@ -6,7 +6,10 @@
 import { describe, expect, it } from 'vitest';
 import Ajv from 'ajv';
 
+import { parseAlarm } from '@/alarms';
 import metadataSchema from '@/metadata-schema.json';
+
+import grammar from '../../fixtures/calendar/alarm-grammar.json';
 
 const ajv = new Ajv();
 const validate = ajv.compile(metadataSchema);
@@ -134,21 +137,32 @@ describe('metadata schema, alarms', () => {
     const at = (alarms: unknown) => ({ events: { A: { start: '2024-05-01 09:00', alarms } } });
 
     // What `alarms.rs` and `alarms.ts` read, as far as a pattern can say it: the schema is only the
-    // editor's first look, and the parser is what reports the rest.
-    const valid = [
-        '-10m', '+1h', '-2 days', '-1w', '0m', '0d', '-1.5h', '-90 minutes', '-30s', '+0.5s',
-        '09:00', '23:59', '00:00', '-1d 18:00', '+1 day 08:30', '-2 weeks 00:00', '0d 09:00',
-    ];
-    const invalid = [
-        '', 'soon', '0', '10m', '1d 09:00', '- 10m', '--10m', '-10', '-10x', '-10M', '-10 Minutes', '-1.5d',
-        '-1.0d', '-0.5w', '9:00', '09:0', '24:00', '09:60', '09:00:00', '-1d09:00', '-1h 09:00',
-        '-1d 25:00', '1.5d 09:00',
-    ];
+    // editor's first look, and the parser is what reports the rest. That is `tooFar`, which only a
+    // parser can tell.
+    const valid = [...grammar.canonical.map(([written]) => written), ...grammar.atTheLimit];
+    const invalid = grammar.refused;
 
     it('accepts offsets and times of day, one alone or in a list', () => {
         for (const alarm of valid) {
             expect(ok(at(alarm)), alarm).toBe(true);
             expect(ok(at([alarm, '-5m'])), alarm).toBe(true);
+        }
+    });
+
+    it('agrees with the parser on every spelling a corpus builds', () => {
+        // Each part is varied where the grammar has an opinion about it. Amounts stay within a
+        // year, which is the one thing only the parser can tell.
+        const offsets = ['', '+', '-'].flatMap((sign) => ['0', '1', '10', '1.5', '0.5', '52'].flatMap(
+            (amount) => ['', ' '].flatMap((gap) => ['m', 'minutes', 'h', 'hour', 's', 'd', 'days', 'w', 'weeks']
+                .map((unit) => `${sign}${amount}${gap}${unit}`))));
+        const clocks = ['09:00', '23:59', '9:00', '09:0', '24:00', '09:60'];
+        const corpus = [
+            ...offsets,
+            ...clocks,
+            ...offsets.flatMap((offset) => clocks.map((clock) => `${offset} ${clock}`)),
+        ];
+        for (const text of corpus) {
+            expect(ok(at(text)), JSON.stringify(text)).toBe('spec' in parseAlarm(text));
         }
     });
 
