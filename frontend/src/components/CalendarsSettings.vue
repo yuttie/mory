@@ -96,6 +96,39 @@
 
             <v-divider class="mt-6 mb-4"></v-divider>
 
+            <v-card-subtitle class="px-0">Alarms</v-card-subtitle>
+            <p class="text-medium-emphasis mb-4">
+                When mory rings, for an event or a task date whose note, or whose category, does not
+                say. An alarm is an offset from the start, <code>-10m</code> before it or
+                <code>+1h</code> after, or a time on the start's day, <code>09:00</code> or
+                <code>-1d 18:00</code>. A note sets its own with <code>alarms:</code>. Stored in the
+                same file, so they follow the notes rather than the browser.
+            </p>
+            <div class="alarm-defaults">
+                <AlarmField
+                    v-for="field of ALARM_FIELDS"
+                    v-bind:key="field.name"
+                    v-model="alarmDraft[field.name]"
+                    v-bind:label="field.label"
+                ></AlarmField>
+            </div>
+            <v-btn
+                v-bind:disabled="!alarmsChanged"
+                v-bind:loading="isSavingAlarms"
+                variant="tonal"
+                v-on:click="saveAlarmDefaults"
+            >
+                Save alarms
+            </v-btn>
+            <v-alert
+                v-if="alarmError"
+                class="mt-4"
+                type="error"
+                variant="tonal"
+            >{{ alarmError }}</v-alert>
+
+            <v-divider class="mt-6 mb-4"></v-divider>
+
             <v-card-subtitle class="px-0">Event categories</v-card-subtitle>
             <p class="text-medium-emphasis mb-4">
                 An event joins one by naming it, as in <code>category: meeting</code>, and is drawn
@@ -234,6 +267,20 @@
                         class="mt-4"
                         label="Colour"
                     ></ColorField>
+                    <v-switch
+                        v-model="categoryAlarmsSet"
+                        v-bind:hint="categoryAlarmsHint"
+                        class="mt-2"
+                        label="Set alarms"
+                        persistent-hint
+                        v-on:update:model-value="onCategoryAlarmsSet"
+                    ></v-switch>
+                    <AlarmField
+                        v-if="categoryAlarmsSet"
+                        v-model="categoryAlarms"
+                        class="mt-4"
+                        label="Alarms"
+                    ></AlarmField>
                     <v-alert
                         v-if="categoryDraftError"
                         type="error"
@@ -259,6 +306,9 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 
 import { mdiDelete, mdiPencil, mdiPlus } from '@mdi/js';
 
+import { BUILT_IN_ALARMS, describeAlarmText, parseAlarm } from '@/alarms';
+import type { AlarmDefaults } from '@/alarms';
+import AlarmField from '@/components/AlarmField.vue';
 import ColorField from '@/components/ColorField.vue';
 import { parseEventColor } from '@/event-color';
 import {
@@ -279,6 +329,14 @@ const TASK_DATE_FIELDS = [
     { name: 'deadline', label: 'Deadline colour', fallback: DEFAULT_DEADLINE_COLOR },
 ] as const;
 
+// The four kinds of alarm the file sets, with what each is called.
+const ALARM_FIELDS = [
+    { name: 'timed', label: 'Events with a time' },
+    { name: 'allDay', label: 'All-day events' },
+    { name: 'dueBy', label: 'Task due dates' },
+    { name: 'deadline', label: 'Task deadlines' },
+] as const satisfies readonly { name: keyof AlarmDefaults; label: string }[];
+
 // Composables
 const calendars = useCalendarsStore();
 
@@ -296,6 +354,17 @@ const draft = reactive<CalendarSubscription>({
     enabled: true,
 });
 
+const isSavingAlarms = ref(false);
+const alarmError = ref('');
+// Each box shows what the kind rings at now, built-in default included, so an empty one is
+// "never" and not "unset". Saving leaves out a kind that is back at the default.
+const alarmDraft = reactive<Record<keyof AlarmDefaults, string[]>>({
+    timed: [],
+    allDay: [],
+    dueBy: [],
+    deadline: [],
+});
+
 const isSavingColors = ref(false);
 const colorError = ref('');
 // Edited as text, so an empty field can mean "the default" rather than an unset key.
@@ -308,10 +377,23 @@ const categoryError = ref('');
 const categoryDraftError = ref('');
 // Text, for the same reason as the task date colours: empty means "inherit".
 const categoryDraft = reactive({ id: '', name: '', color: '' });
+// Off, the category sets no alarms and inherits them; on with none, its events never ring.
+const categoryAlarmsSet = ref(false);
+const categoryAlarms = ref<string[]>([]);
 
 // Computed properties
 const taskDateColorsChanged = computed(() => TASK_DATE_FIELDS.some(
     (field) => taskDateDraft[field.name].trim() !== (calendars.taskDateColors[field.name] ?? ''),
+));
+
+const effectiveAlarms = (name: keyof AlarmDefaults): string[] =>
+    calendars.alarmDefaults[name] ?? [...BUILT_IN_ALARMS[name]];
+
+const sameList = (a: readonly string[], b: readonly string[]) =>
+    a.length === b.length && a.every((entry, index) => entry.trim() === b[index].trim());
+
+const alarmsChanged = computed(() => ALARM_FIELDS.some(
+    (field) => !sameList(alarmDraft[field.name], effectiveAlarms(field.name)),
 ));
 
 // `null` while the file is unread or unreadable; there is nothing to list either way.
@@ -330,6 +412,20 @@ const inheritedDraft = computed((): EventCategory => {
     return resolveCategory(id, new Map([...categoryMap.value, [id, {}]])) ?? {};
 });
 
+// What the switch says it does, in the words of what the category would otherwise ring at.
+const categoryAlarmsHint = computed(() => {
+    if (categoryAlarmsSet.value) {
+        return 'Its events ring at these unless they set their own. With none, they never ring.';
+    }
+    const inherited = inheritedDraft.value.alarms;
+    if (inherited === undefined) {
+        return 'Inherits the alarms for events set under Alarms above.';
+    }
+    return inherited.length === 0
+        ? 'Inherits no alarms from the category it is nested under.'
+        : `Inherits: ${inherited.map(describeAlarmText).join(', ')}.`;
+});
+
 // Lifecycle hooks
 onMounted(() => {
     calendars.loadSubscriptions().catch((err) => {
@@ -343,6 +439,12 @@ onMounted(() => {
 watch(() => calendars.taskDateColors, (colors) => {
     for (const field of TASK_DATE_FIELDS) {
         taskDateDraft[field.name] = colors[field.name] ?? '';
+    }
+}, { immediate: true });
+
+watch(() => calendars.alarmDefaults, () => {
+    for (const field of ALARM_FIELDS) {
+        alarmDraft[field.name] = [...effectiveAlarms(field.name)];
     }
 }, { immediate: true });
 
@@ -441,6 +543,45 @@ async function saveTaskDateColors() {
     }
 }
 
+// A list of alarms that is as typed, or the first entry that is not one.
+function alarmListProblem(list: readonly string[]): string | null {
+    for (const alarm of list) {
+        const parsed = parseAlarm(alarm);
+        if ('error' in parsed) {
+            return parsed.error;
+        }
+    }
+    return null;
+}
+
+async function saveAlarmDefaults() {
+    const next: AlarmDefaults = {};
+    for (const field of ALARM_FIELDS) {
+        const list = alarmDraft[field.name].map((alarm) => alarm.trim());
+        const problem = alarmListProblem(list);
+        if (problem !== null) {
+            alarmError.value = `${field.label}: ${problem}.`;
+            return;
+        }
+        // A kind that is back at the built-in default is left out of the file, which means the same.
+        if (!sameList(list, BUILT_IN_ALARMS[field.name])) {
+            next[field.name] = list;
+        }
+    }
+
+    isSavingAlarms.value = true;
+    alarmError.value = '';
+    try {
+        await calendars.saveAlarmDefaults(next);
+    }
+    catch (err) {
+        alarmError.value = `Could not save ${CALENDARS_PATH}: ${err}`;
+    }
+    finally {
+        isSavingAlarms.value = false;
+    }
+}
+
 function resolvedOf(id: string): EventCategory {
     return resolveCategory(id, categoryMap.value) ?? {};
 }
@@ -460,7 +601,17 @@ function openCategoryDialog(index: number | null) {
         name: existing?.name ?? '',
         color: existing?.color ?? '',
     });
+    categoryAlarmsSet.value = existing?.alarms !== undefined;
+    categoryAlarms.value = [...(existing?.alarms ?? [])];
     categoryDialogOpen.value = true;
+}
+
+// Switching alarms on starts from what the category rings at now rather than from nothing, which
+// would silence it: the list is the thing to edit, not to build.
+function onCategoryAlarmsSet(set: boolean | null) {
+    if (set === true && categoryAlarms.value.length === 0) {
+        categoryAlarms.value = [...(inheritedDraft.value.alarms ?? effectiveAlarms('timed'))];
+    }
 }
 
 async function saveCategory() {
@@ -489,11 +640,21 @@ async function saveCategory() {
         }
     }
 
+    const alarms = categoryAlarms.value.map((alarm) => alarm.trim());
+    if (categoryAlarmsSet.value) {
+        const problem = alarmListProblem(alarms);
+        if (problem !== null) {
+            categoryDraftError.value = `${problem}.`;
+            return;
+        }
+    }
+
     const name = categoryDraft.name.trim();
     const entry: ConfiguredCategory = {
         id,
         ...(color === '' ? {} : { color }),
         ...(name === '' ? {} : { name }),
+        ...(categoryAlarmsSet.value ? { alarms } : {}),
     };
     const next = [...categoryList.value];
     if (editingCategoryIndex.value === null) {
@@ -542,7 +703,8 @@ async function persist(next: CalendarSubscription[], onSaved?: () => void) {
 
 <style scoped lang="scss">
 // Side by side where there is room, so the two colours are compared rather than read in turn.
-.task-date-colors {
+.task-date-colors,
+.alarm-defaults {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(14em, 1fr));
     gap: 0 1rem;
