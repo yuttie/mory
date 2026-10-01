@@ -38,7 +38,7 @@ use crate::models::ListEntry;
 use crate::note_events::{
     Occurrence, Reader, Start, dayjs_parse, key_name, present, resolve_local, to_wall_clock,
 };
-use crate::tasks::{in_task_tree, task_status_of};
+use crate::tasks::{date_texts, is_over, task_of, task_status_of, TaskField};
 
 /// The furthest from its start an alarm may be set. Anything further is a typo or worse: the
 /// scheduler widens what it expands by the furthest alarm any note declares, and a note must not be
@@ -366,29 +366,11 @@ impl Reach {
     }
 }
 
-/// Which of a task's two dates.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TaskField {
-    DueBy,
-    Deadline,
-}
-
-impl TaskField {
-    const ALL: [TaskField; 2] = [TaskField::DueBy, TaskField::Deadline];
-
-    fn key(self) -> &'static str {
-        match self {
-            TaskField::DueBy => "due_by",
-            TaskField::Deadline => "deadline",
-        }
-    }
-
-    /// What a notification calls it.
-    fn label(self) -> &'static str {
-        match self {
-            TaskField::DueBy => "Due",
-            TaskField::Deadline => "Deadline",
-        }
+/// What a notification calls a task's date.
+fn label(field: TaskField) -> &'static str {
+    match field {
+        TaskField::DueBy => "Due",
+        TaskField::Deadline => "Deadline",
     }
 }
 
@@ -413,23 +395,16 @@ pub struct TaskDate {
 pub fn task_dates(entries: &[ListEntry], reader: &Reader) -> Vec<TaskDate> {
     let mut found = Vec::new();
     for entry in entries {
-        let path = entry.path.to_string_lossy();
-        if !in_task_tree(&path) {
-            continue;
-        }
-        let Some(Value::Mapping(task)) = entry.metadata.as_ref().and_then(|metadata| metadata.get("task")) else {
+        let Some((path, task)) = task_of(entry) else {
             continue;
         };
-        if matches!(task_status_of(entry.metadata.as_ref()).as_deref(), Some("done" | "canceled")) {
+        if is_over(task_status_of(entry.metadata.as_ref()).as_deref()) {
             continue;
         }
         // `entry.title ?? entry.path`
         let title = entry.title.as_deref().unwrap_or(&path);
         let own = task.get("alarms").and_then(Value::as_mapping);
-        for field in TaskField::ALL {
-            let Some(Value::String(text)) = task.get(field.key()) else {
-                continue;
-            };
+        for (field, text) in date_texts(task) {
             if dayjs_parse(text, reader.zone).is_none() {
                 continue;
             }
@@ -438,7 +413,7 @@ pub fn task_dates(entries: &[ListEntry], reader: &Reader) -> Vec<TaskDate> {
             };
             found.push(TaskDate {
                 path: path.to_string(),
-                name: format!("{}: {title}", field.label()),
+                name: format!("{}: {title}", label(field)),
                 field,
                 start,
                 alarms: present(own.and_then(|own| own.get(field.key()))).cloned(),

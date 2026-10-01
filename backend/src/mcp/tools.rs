@@ -7,7 +7,9 @@ use serde::{Deserialize, Serialize};
 use super::{json_result, tool_error};
 use crate::models::AppState;
 use crate::search::{run_search, validate_search_request, SearchRequest};
-use crate::tasks::{check_tree_naming, in_task_tree, task_status_of, TASKS_DIR};
+use crate::tasks::{
+    check_tree_naming, date_texts, task_of, task_status_of, TASKS_DIR, STATUS_KINDS,
+};
 
 /// The largest note this will return in one call.
 ///
@@ -312,19 +314,15 @@ struct TaskSummary {
     tags: Vec<String>,
 }
 
-const TASK_STATUSES: [&str; 8] = [
-    "backlog", "todo", "in_progress", "waiting", "blocked", "on_hold", "done", "canceled",
-];
-
 pub async fn list_tasks(
     state: &AppState,
     args: ListTasksArgs,
 ) -> Result<CallToolResult, ErrorData> {
     if let Some(status) = args.status.as_deref() {
-        if !TASK_STATUSES.contains(&status) {
+        if !STATUS_KINDS.contains(&status) {
             return Ok(tool_error(format!(
                 "{status:?} is not a task status. Use one of: {}.",
-                TASK_STATUSES.join(", "),
+                STATUS_KINDS.join(", "),
             )));
         }
     }
@@ -515,9 +513,6 @@ fn declared_starts(event: &serde_yaml::Value) -> Vec<String> {
     starts
 }
 
-/// The task fields the calendar draws as events.
-const TASK_DATE_FIELDS: [&str; 2] = ["due_by", "deadline"];
-
 /// Every task due date and deadline whose day falls inside the window.
 ///
 /// The web app's calendar and home page draw these as events, derived by `taskDatesFromEntries`
@@ -532,21 +527,14 @@ fn task_dates_in_window(
 ) -> Vec<TaskDateSummary> {
     let mut dates = Vec::new();
     for entry in entries {
-        let path = entry.path.to_string_lossy();
         // A `task:` block on any other path is not in the task tree, and the calendar skips it.
-        if !in_task_tree(&path) {
-            continue;
-        }
-        let Some(task) = entry.metadata.as_ref().and_then(|value| value.get("task")) else {
+        let Some((path, task)) = task_of(entry) else {
             continue;
         };
 
-        for field in TASK_DATE_FIELDS {
-            // Frontmatter is whatever the file said: a value that is not a date is a task without
-            // that date, never an error that would lose the rest of the week.
-            let Some(date) = task.get(field).and_then(|value| value.as_str()) else {
-                continue;
-            };
+        for (field, date) in date_texts(task) {
+            // A value that is not a date is a task without that date, never an error that would
+            // lose the rest of the week.
             let Some(day) = leading_date(date) else {
                 continue;
             };
@@ -556,7 +544,7 @@ fn task_dates_in_window(
             dates.push((day, TaskDateSummary {
                 path: path.clone().into_owned(),
                 title: entry.title.clone(),
-                field,
+                field: field.key(),
                 date: date.to_owned(),
                 status: task_status_of(entry.metadata.as_ref()),
             }));

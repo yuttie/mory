@@ -1,9 +1,16 @@
-//! What the backend knows of the task tree: which paths are in it, and a task's status.
+//! What the backend knows of the task tree: which paths are in it, a task's status, and which of
+//! its fields are dates.
 //!
 //! The web app derives the tree from the paths under `.tasks/` (`taskUuidOf` in
 //! `frontend/src/task-forest.ts`), and a note outside the naming it needs is not a task there.
 //! The MCP tools and the alarm scheduler both have to agree with it about which notes are tasks, so
 //! the checks live here rather than in either.
+
+use std::borrow::Cow;
+
+use serde_yaml::{Mapping, Value};
+
+use crate::models::ListEntry;
 
 /// Where the task tree's naming rules apply.
 ///
@@ -45,6 +52,61 @@ pub(crate) fn check_tree_naming(rest: &str) -> Result<(), String> {
 fn is_uuid_v4(value: &str) -> bool {
     uuid::Uuid::parse_str(value)
         .is_ok_and(|parsed| parsed.get_version() == Some(uuid::Version::Random))
+}
+
+/// Every kind a task's `status` can take: the closed union `frontend/src/metadata-schema.json`
+/// defines, each member requiring companion keys of its own.
+pub(crate) const STATUS_KINDS: [&str; 8] = [
+    "backlog", "todo", "in_progress", "waiting", "blocked", "on_hold", "done", "canceled",
+];
+
+/// Whether a status kind is one the task has finished with. The calendar draws such a task struck
+/// through, and nothing rings for it.
+pub(crate) fn is_over(kind: Option<&str>) -> bool {
+    matches!(kind, Some("done" | "canceled"))
+}
+
+/// Which of a task's two dates the calendar draws as events, and the scheduler rings for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TaskField {
+    DueBy,
+    Deadline,
+}
+
+impl TaskField {
+    pub(crate) const ALL: [TaskField; 2] = [TaskField::DueBy, TaskField::Deadline];
+
+    /// The key it has under `task:`, and under `task.alarms:`.
+    pub(crate) fn key(self) -> &'static str {
+        match self {
+            TaskField::DueBy => "due_by",
+            TaskField::Deadline => "deadline",
+        }
+    }
+}
+
+/// A note in the task tree that carries a `task:` mapping, with its path and that mapping.
+///
+/// This is the whole of which notes the calendar draws task dates for: a `task:` block on any
+/// other path is not in the tree, and one that is not a mapping holds no dates.
+pub(crate) fn task_of(entry: &ListEntry) -> Option<(Cow<'_, str>, &Mapping)> {
+    let path = entry.path.to_string_lossy();
+    if !in_task_tree(&path) {
+        return None;
+    }
+    match entry.metadata.as_ref()?.get("task")? {
+        Value::Mapping(task) => Some((path, task)),
+        _ => None,
+    }
+}
+
+/// The dates a task holds, as written. A value that is not a string is a task without that date,
+/// because frontmatter is whatever the file said; whether the string is a date is for the caller,
+/// since the calendar window and the scheduler read it differently.
+pub(crate) fn date_texts(task: &Mapping) -> impl Iterator<Item = (TaskField, &str)> {
+    TaskField::ALL
+        .into_iter()
+        .filter_map(|field| Some((field, task.get(field.key())?.as_str()?)))
 }
 
 /// The `task.status.kind` of a note, when it has one.

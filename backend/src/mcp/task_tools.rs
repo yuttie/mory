@@ -10,16 +10,7 @@ use super::frontmatter::{self, Change};
 use super::tools::{alarm_list, note_text, safe_path, write_note, WriteOutput};
 use super::{json_result, tool_error};
 use crate::models::AppState;
-
-/// The closed union `frontend/src/metadata-schema.json` defines, and the companion keys each
-/// member requires.
-///
-/// `additionalProperties: false` on every member is why changing status removes the whole
-/// `status:` mapping first: a task that goes from `waiting` to `todo` carrying its old
-/// `waiting_for` is not a valid task, and the web app validates against this schema.
-const STATUS_KINDS: [&str; 8] = [
-    "backlog", "todo", "in_progress", "waiting", "blocked", "on_hold", "done", "canceled",
-];
+use crate::tasks::{TaskField, STATUS_KINDS};
 
 /// What `create_task` writes when the caller names no status. The web app's editor starts a new
 /// task in the backlog too: To do is a commitment made by moving it there.
@@ -350,9 +341,12 @@ pub struct SetTaskDatesArgs {
     pub clear: Option<Vec<String>>,
 }
 
-const DATE_KEYS: [&str; 6] = [
-    "start_at", "due_by", "deadline", "scheduled_dates", "due_by_alarms", "deadline_alarms",
-];
+/// What `clear` may name that is a date of its own.
+const DATE_KEYS: [&str; 4] = ["start_at", "due_by", "deadline", "scheduled_dates"];
+
+/// What `clear` may name to remove the alarms set for one date, and the date each is for.
+const ALARM_KEYS: [(&str, TaskField); 2] =
+    [("due_by_alarms", TaskField::DueBy), ("deadline_alarms", TaskField::Deadline)];
 
 /// Where a task keeps the alarms for one of its dates: `task.alarms.due_by`.
 fn alarms_path(date: &str) -> [&str; 3] {
@@ -374,15 +368,18 @@ fn date_changes(args: &SetTaskDatesArgs, text: &str) -> Result<Vec<Change>, Stri
     let mut changes = Vec::new();
     let mut cleared_alarms = Vec::new();
     for key in args.clear.as_deref().unwrap_or_default() {
-        if !DATE_KEYS.contains(&key.as_str()) {
+        if let Some((_, field)) = ALARM_KEYS.iter().find(|(name, _)| name == key) {
+            cleared_alarms.push(field.key());
+        }
+        else if DATE_KEYS.contains(&key.as_str()) {
+            changes.push(Change::remove(&["task", key]));
+        }
+        else {
+            let known = DATE_KEYS.into_iter().chain(ALARM_KEYS.map(|(name, _)| name));
             return Err(format!(
                 "{key:?} is not a task date. Clear one of: {}.",
-                DATE_KEYS.join(", "),
+                known.collect::<Vec<_>>().join(", "),
             ));
-        }
-        match key.strip_suffix("_alarms") {
-            Some(date) => cleared_alarms.push(date),
-            None => changes.push(Change::remove(&["task", key])),
         }
     }
     // Taking the last key out of a mapping leaves `alarms:` with nothing under it, which the
@@ -395,9 +392,12 @@ fn date_changes(args: &SetTaskDatesArgs, text: &str) -> Result<Vec<Change>, Stri
     else {
         changes.extend(cleared_alarms.iter().map(|date| Change::remove(&alarms_path(date))));
     }
-    for (date, alarms) in [("due_by", &args.due_by_alarms), ("deadline", &args.deadline_alarms)] {
+    for (field, alarms) in [
+        (TaskField::DueBy, &args.due_by_alarms),
+        (TaskField::Deadline, &args.deadline_alarms),
+    ] {
         if let Some(alarms) = alarms {
-            changes.push(Change::set(&alarms_path(date), alarm_list(alarms)?));
+            changes.push(Change::set(&alarms_path(field.key()), alarm_list(alarms)?));
         }
     }
     for (key, value) in [
