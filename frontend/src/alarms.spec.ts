@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
     BUILT_IN_ALARMS,
+    describeAlarmList,
     describeAlarmText,
     formatAlarm,
     parseAlarm,
@@ -90,6 +91,14 @@ describe('describeAlarmText', () => {
 
     it('leaves what is not an alarm as written', () => {
         expect(describeAlarmText('10m')).toBe('10m');
+    });
+});
+
+describe('describeAlarmList', () => {
+    it('says a list in words, and an empty one as never', () => {
+        expect(describeAlarmList(['-10m', '0m'])).toBe('Rings 10 minutes before, at the start');
+        expect(describeAlarmList(['-1d 18:00'])).toBe('Rings the day before at 18:00');
+        expect(describeAlarmList([])).toBe('Never rings');
     });
 });
 

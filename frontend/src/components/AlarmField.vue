@@ -27,7 +27,7 @@
 
 import { computed } from 'vue';
 
-import { describeAlarmText, parseAlarm } from '@/alarms';
+import { describeAlarmList, parseAlarm } from '@/alarms';
 
 const props = defineProps<{
     modelValue: string[];
@@ -43,9 +43,7 @@ const problems = computed(() => props.modelValue.flatMap((alarm) => {
     return 'error' in parsed ? [parsed.error] : [];
 }));
 
-const description = computed(() => props.modelValue.length === 0
-    ? 'Never rings'
-    : `Rings ${props.modelValue.map(describeAlarmText).join(', ')}`);
+const description = computed(() => describeAlarmList(props.modelValue));
 
 // Typed entries arrive as text, but an `items` list would hand objects: take only what is text.
 function onUpdate(value: unknown) {

@@ -196,6 +196,13 @@ export function describeAlarm(spec: AlarmSpec): string {
     }
 }
 
+/// A list of alarms in words: "Rings 10 minutes before, at the start", or "Never rings".
+export function describeAlarmList(alarms: readonly string[]): string {
+    return alarms.length === 0
+        ? 'Never rings'
+        : `Rings ${alarms.map(describeAlarmText).join(', ')}`;
+}
+
 /// `describeAlarm` of one as written, which is the text itself when it is not an alarm.
 export function describeAlarmText(written: string): string {
     const parsed = parseAlarm(written);

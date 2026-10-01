@@ -53,7 +53,7 @@
                         <span v-if="$vuetify.display.mdAndUp">Delete</span>
                     </v-btn>
                     <v-btn
-                        v-bind:disabled="!!statusGateError || !uiValid"
+                        v-bind:disabled="!!statusGateError || alarmsInvalid || !uiValid"
                         type="submit"
                         color="primary"
                     >
@@ -195,6 +195,11 @@
                             <v-icon>{{ mdiCalendarOutline }}</v-icon>
                         </template>
                     </DateSelector>
+                    <TaskDateAlarms
+                        v-if="form.due_by !== ''"
+                        v-model="form.due_by_alarms"
+                        v-bind:fallback="calendars.alarmDefaults.dueBy ?? BUILT_IN_ALARMS.dueBy"
+                    ></TaskDateAlarms>
                     <!-- Deadline -->
                     <DateSelector
                         v-model="form.deadline"
@@ -205,6 +210,11 @@
                             <v-icon>{{ mdiCalendarOutline }}</v-icon>
                         </template>
                     </DateSelector>
+                    <TaskDateAlarms
+                        v-if="form.deadline !== ''"
+                        v-model="form.deadline_alarms"
+                        v-bind:fallback="calendars.alarmDefaults.deadline ?? BUILT_IN_ALARMS.deadline"
+                    ></TaskDateAlarms>
                     <!-- Scheduled dates -->
                     <v-label>
                         <v-icon>{{ mdiCalendarCursorOutline }}</v-icon>
@@ -371,7 +381,10 @@ import {
 
 import { assessTask, type TaskAssessmentResponse } from '@/api';
 
+import { BUILT_IN_ALARMS, parseAlarm } from '@/alarms';
+import type { TaskAlarms } from '@/alarms';
 import EditableViewer from '@/components/EditableViewer.vue';
+import TaskDateAlarms from '@/components/TaskDateAlarms.vue';
 import { extractFileUuid } from '@/api/task';
 import type { UUID, Task, Status, StatusKind, WaitingStatus, BlockedStatus, OnHoldStatus, DoneStatus, CanceledStatus } from '@/task';
 import { STATUS_LABEL, nextOptions, makeDefaultStatus, canTransition, withoutBlanks } from '@/task';
@@ -379,6 +392,7 @@ import { useFetchTask } from '@/composables/fetchTask';
 import { useLocalStorage } from '@/composables/localStorage';
 import { loadConfigValue } from '@/config';
 import { optionalDateTime, range, required } from '@/rules';
+import { useCalendarsStore } from '@/stores/calendars';
 
 import dayjs from 'dayjs';
 
@@ -392,6 +406,10 @@ type EditableTask = {
     start_at: string;
     due_by: string;
     deadline: string;
+    // When each date rings: `null` is the default from the settings, which the note does not
+    // mention, and a list, even an empty one, is the task's own.
+    due_by_alarms: string[] | null;
+    deadline_alarms: string[] | null;
     scheduled_dates: string[];
     note: string;
 };
@@ -409,6 +427,7 @@ const pathRef = toRef(props, 'taskPath');
 
 // Composables
 const { task, loading, error, refresh } = useFetchTask(pathRef);
+const calendars = useCalendarsStore();
 
 // Emits
 const emit = defineEmits<{
@@ -432,6 +451,8 @@ const form = reactive<EditableTask>({
     start_at: '',
     due_by: '',
     deadline: '',
+    due_by_alarms: null,
+    deadline_alarms: null,
     scheduled_dates: [],
     note: '',
 });
@@ -468,6 +489,8 @@ const initialForm = computed<EditableTask>(() => {
             start_at: '',
             due_by: '',
             deadline: '',
+            due_by_alarms: null,
+            deadline_alarms: null,
             scheduled_dates: [],
             note: '',
         };
@@ -482,6 +505,8 @@ const initialForm = computed<EditableTask>(() => {
         start_at: t.start_at ?? '',
         due_by: t.due_by ?? '',
         deadline: t.deadline ?? '',
+        due_by_alarms: t.alarms?.due_by ? [...t.alarms.due_by] : null,
+        deadline_alarms: t.alarms?.deadline ? [...t.alarms.deadline] : null,
         scheduled_dates: Array.isArray(t.scheduled_dates) ? [...t.scheduled_dates] : [],
         note: t.note ?? '',
     };
@@ -525,6 +550,13 @@ const statusGateError = computed<string | undefined>(() => {
     }
 });
 
+// An alarm that is not one would be dropped by moried, so the task is not saved with it: the box
+// names it. Only the lists of dates the task has are checked, as only those are written.
+const alarmsInvalid = computed<boolean>(() => [
+    form.due_by !== '' ? form.due_by_alarms : null,
+    form.deadline !== '' ? form.deadline_alarms : null,
+].some((list) => list !== null && list.some((alarm) => 'error' in parseAlarm(alarm))));
+
 const tagItems = computed<{ title: string; value: string; }[]>(() =>
     props.knownTags.map(([tag, count]) => {
         return {
@@ -554,6 +586,8 @@ const isModified = computed<boolean>(() => {
         form.start_at !== initialForm.value.start_at ||
         form.due_by !== initialForm.value.due_by ||
         form.deadline !== initialForm.value.deadline ||
+        !alarmsEqual(form.due_by_alarms, initialForm.value.due_by_alarms) ||
+        !alarmsEqual(form.deadline_alarms, initialForm.value.deadline_alarms) ||
         !arraysEqual(form.scheduled_dates, initialForm.value.scheduled_dates) ||
         form.note !== initialForm.value.note
     );
@@ -600,6 +634,11 @@ watch(
 // Lifecycle hooks
 onMounted(() => {
     window.addEventListener('beforeunload', onBeforeunload);
+    // The default alarms are shown beside a date's own, and live in the calendar configuration.
+    // Without it they read as the built-in ones, which is only wrong until it has loaded.
+    if (!calendars.hasLoadedSubscriptions) {
+        calendars.loadSubscriptions().catch(() => undefined);
+    }
 });
 
 onUnmounted(() => {
@@ -643,6 +682,8 @@ function resetFromTask(t?: Task | undefined | null): void {
         form.start_at = '';
         form.due_by = '';
         form.deadline = '';
+        form.due_by_alarms = null;
+        form.deadline_alarms = null;
         form.scheduled_dates = [];
         form.note = '';
     }
@@ -656,6 +697,8 @@ function resetFromTask(t?: Task | undefined | null): void {
         form.start_at = t.start_at ?? '';
         form.due_by = t.due_by ?? '';
         form.deadline = t.deadline ?? '';
+        form.due_by_alarms = t.alarms?.due_by ? [...t.alarms.due_by] : null;
+        form.deadline_alarms = t.alarms?.deadline ? [...t.alarms.deadline] : null;
         form.scheduled_dates = Array.isArray(t.scheduled_dates) ? [...t.scheduled_dates] : [];
         form.note = t.note ?? '';
 
@@ -681,9 +724,17 @@ function onBeforeunload(e: any) {
 async function onSave(): Promise<void> {
     // Check validation results (async and returns { valid } in Vuetify 3)
     const result = await formRef.value?.validate?.();  // Runs Vuetify rules
-    if (!result?.valid || statusGateError.value) {
+    if (!result?.valid || statusGateError.value || alarmsInvalid.value) {
         return;
     }
+    // The alarms of the dates the task has, and only a list it set itself: the default is not a
+    // thing to write, or the date would stop following the settings.
+    const alarms: TaskAlarms = {
+        ...(form.due_by !== '' && form.due_by_alarms !== null
+            ? { due_by: form.due_by_alarms.map((alarm) => alarm.trim()) } : {}),
+        ...(form.deadline !== '' && form.deadline_alarms !== null
+            ? { deadline: form.deadline_alarms.map((alarm) => alarm.trim()) } : {}),
+    };
     // Create a Task value
     const task = {
         uuid: uuid.value,
@@ -696,6 +747,7 @@ async function onSave(): Promise<void> {
         ...(form.start_at !== '' ? { start_at: form.start_at } : {}),
         ...(form.due_by !== '' ? { due_by: form.due_by } : {}),
         ...(form.deadline !== '' ? { deadline: form.deadline } : {}),
+        ...(Object.keys(alarms).length > 0 ? { alarms } : {}),
         scheduled_dates: [...form.scheduled_dates],
         note: form.note,
     };
@@ -721,6 +773,11 @@ function onChangeParent(): void {
 function arraysEqual<T>(a: T[], b: T[]): boolean {
     if (a.length !== b.length) { return false; }
     return a.every((val, index) => val === b[index]);
+}
+
+// `null` is the default, which is not the same as a list of none.
+function alarmsEqual(a: string[] | null, b: string[] | null): boolean {
+    return a === null || b === null ? a === b : arraysEqual(a, b);
 }
 
 function statusEqual(a: Status, b: Status): boolean {
