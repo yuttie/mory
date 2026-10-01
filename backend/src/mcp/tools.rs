@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use super::{json_result, tool_error};
 use crate::models::AppState;
 use crate::search::{run_search, validate_search_request, SearchRequest};
+use crate::tasks::{check_tree_naming, in_task_tree, task_status_of, TASKS_DIR};
 
 /// The largest note this will return in one call.
 ///
@@ -240,16 +241,6 @@ fn tags_of(metadata: Option<&serde_yaml::Value>) -> Vec<String> {
                 .collect()
         })
         .unwrap_or_default()
-}
-
-/// The `task.status.kind` of a note, when it has one.
-fn task_status_of(metadata: Option<&serde_yaml::Value>) -> Option<String> {
-    metadata?
-        .get("task")?
-        .get("status")?
-        .get("kind")?
-        .as_str()
-        .map(str::to_owned)
 }
 
 fn summarize(entry: &crate::models::ListEntry) -> NoteSummary {
@@ -519,10 +510,7 @@ fn task_dates_in_window(
     for entry in entries {
         let path = entry.path.to_string_lossy();
         // A `task:` block on any other path is not in the task tree, and the calendar skips it.
-        let in_task_tree = path
-            .strip_prefix(TASKS_DIR)
-            .is_some_and(|rest| check_tree_naming(rest).is_ok());
-        if !in_task_tree {
+        if !in_task_tree(&path) {
             continue;
         }
         let Some(task) = entry.metadata.as_ref().and_then(|value| value.get("task")) else {
@@ -700,12 +688,6 @@ pub async fn list_imported_events(
 /// it; it is readable through `read_note` like any other file.
 const READ_ONLY_PATHS: [&str; 1] = [".mory/tasks.yaml"];
 
-/// Where the task tree's naming rules apply.
-///
-/// `entries_to_tree` derives the forest from the paths, so a file here named outside the
-/// convention makes the whole task tree unbuildable for the web app.
-const TASKS_DIR: &str = ".tasks/";
-
 /// Check a path a tool was asked to touch, and return it in its canonical spelling.
 ///
 /// Traversal is refused rather than normalised away: a caller that wrote `../` meant something,
@@ -754,34 +736,6 @@ pub fn writable_path(path: &str) -> Result<String, String> {
         check_tree_naming(rest)?;
     }
     Ok(path)
-}
-
-/// The naming `entries_to_tree` needs: every directory component a bare UUIDv4, and the file
-/// stem ending in one, optionally after a readable prefix.
-fn check_tree_naming(rest: &str) -> Result<(), String> {
-    let advice = "A task's file name must end with a UUIDv4 -- `<uuid>.md` or \
-                  `readable-name-<uuid>.md` -- and every directory under `.tasks/` must be a bare \
-                  UUIDv4 naming its parent task. The task tree is derived from these paths.";
-
-    let mut components = rest.split('/').collect::<Vec<_>>();
-    let Some(file) = components.pop() else {
-        return Err(advice.to_owned());
-    };
-    for directory in components {
-        if !is_uuid_v4(directory) {
-            return Err(format!("The directory {directory:?} is not a UUIDv4. {advice}"));
-        }
-    }
-    let stem = file.rsplit_once('.').map(|(stem, _)| stem).unwrap_or(file);
-    if stem.len() < 36 || !is_uuid_v4(&stem[stem.len() - 36..]) {
-        return Err(format!("The file name {file:?} does not end with a UUIDv4. {advice}"));
-    }
-    Ok(())
-}
-
-fn is_uuid_v4(value: &str) -> bool {
-    uuid::Uuid::parse_str(value)
-        .is_ok_and(|parsed| parsed.get_version() == Some(uuid::Version::Random))
 }
 
 #[derive(Debug, Serialize)]
@@ -1011,20 +965,6 @@ mod tests {
         assert_eq!(tags_of(Some(&yaml("tags: [1, a, true]"))), vec!["a"]);
         assert_eq!(tags_of(Some(&yaml("other: 1"))), Vec::<String>::new());
         assert_eq!(tags_of(None), Vec::<String>::new());
-    }
-
-    #[test]
-    fn a_task_status_is_read_from_its_kind_and_nothing_else() {
-        assert_eq!(
-            task_status_of(Some(&yaml("task:\n  status:\n    kind: done"))).as_deref(),
-            Some("done"),
-        );
-        // The older spelling, where status was a bare string, is not this shape and must not be
-        // mistaken for it.
-        assert_eq!(task_status_of(Some(&yaml("task:\n  status: done"))), None);
-        assert_eq!(task_status_of(Some(&yaml("task: a string"))), None);
-        assert_eq!(task_status_of(Some(&yaml("task:"))), None);
-        assert_eq!(task_status_of(Some(&yaml("tags: [x]"))), None);
     }
 
     #[test]

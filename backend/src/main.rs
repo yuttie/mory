@@ -69,6 +69,7 @@ mod note_events;
 mod oauth;
 mod push;
 mod search;
+mod tasks;
 
 #[cfg(test)]
 mod tests;
