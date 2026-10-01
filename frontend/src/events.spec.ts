@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import dayjs from 'dayjs';
 
+import type { AlarmDefaults } from '@/alarms';
 import type { ListEntry2, MetadataEvent } from '@/api';
 import type { ImportedOccurrence } from '@/api';
+import type { EventCategories } from '@/events';
 import {
     DEFAULT_DEADLINE_COLOR,
     DEFAULT_DUE_COLOR,
@@ -13,6 +15,7 @@ import {
     categoryLineage,
     eventEndsAt,
     eventsFromEntries,
+    isAllDay,
     isInHiddenCategory,
     taskDatesFromEntries,
     mergeImported,
@@ -127,6 +130,7 @@ describe('eventsFromEntries', () => {
             url: undefined,
             source: 'note',
             notePath: 'a.md',
+            alarms: ['0m'],
         }]);
     });
 
@@ -1086,6 +1090,7 @@ describe('taskDatesFromEntries', () => {
             taskDate: 'deadline',
             notePath: `.tasks/${UUID_A}.md`,
             taskId: UUID_A,
+            alarms: [],
         }]);
     });
 
@@ -1197,5 +1202,257 @@ describe('taskDatesFromEntries', () => {
 
         // Only what is configured is overridden; the rest keeps its default.
         expect(events.map((e) => e.color)).toEqual(['#0d47a1', DEFAULT_DEADLINE_COLOR]);
+    });
+});
+
+describe('event alarms', () => {
+    // The same configuration and notes as `each_step_of_the_precedence_wins_over_those_after_it` in
+    // `backend/src/alarms.rs`, which rings by what this resolves.
+    const categories: EventCategories = new Map([
+        ['meeting', { color: 'red', alarms: ['-10m'] }],
+        ['meeting/1on1', { alarms: ['-15m', '0m'] }],
+        ['meeting/standup', { color: 'blue' }],
+        ['meeting/quiet', { alarms: [] }],
+        ['unset', {}],
+        ['kin/child', { alarms: ['-2h'] }],
+        ['kin/child/grandchild', {}],
+        ['a/b/c', { alarms: ['-1h'] }],
+        ['a/b/c/d', {}],
+    ]);
+    const alarmDefaults: AlarmDefaults = { timed: ['-5m'], allDay: ['-1d 18:00'] };
+
+    /// What each event rings at, by name; the same name twice keeps the later.
+    function ringing(
+        events: Record<string, MetadataEvent>,
+        options: { categories?: EventCategories; alarmDefaults?: AlarmDefaults } = {},
+    ): Record<string, string[] | undefined> {
+        const derived = eventsFromEntries([entry('a.md', events)], ANY_WINDOW, options);
+        // A category that is not configured is reported, and is not what these are about.
+        expect(derived.errors.filter(([property]) => property !== 'category')).toEqual([]);
+        return Object.fromEntries(derived.events.map((event) => [event.name, event.alarms]));
+    }
+
+    it('rings at the start of a timed event and never for an all-day one, as before', () => {
+        expect(ringing({
+            Timed: { start: '2024-05-06 09:00' },
+            Day: { start: '2024-05-07' },
+            Offset: { start: '2024-05-08 09:00:00+09:00' },
+        })).toEqual({ Timed: ['0m'], Day: [], Offset: ['0m'] });
+    });
+
+    it('takes each step of the precedence over those after it', () => {
+        const at = (n: number) => `2024-05-06 09:${String(n).padStart(2, '0')}`;
+        expect(ringing({
+            'Own list': { start: at(0), category: 'meeting', alarms: ['-1m'] },
+            'Own list silences': { start: at(1), category: 'meeting', alarms: [] },
+            'The event\'s list': { start: at(3), category: 'meeting/1on1', alarms: ['-1h'] },
+            'A category': { start: at(4), category: 'meeting' },
+            'A nested category': { start: at(5), category: 'meeting/1on1' },
+            'A category that sets none': { start: at(6), category: 'meeting/standup' },
+            'A category that silences': { start: at(7), category: 'meeting/quiet' },
+            'A category with nothing': { start: at(8), category: 'unset' },
+            'A category misspelt': { start: at(9), category: 'meeting/1no1' },
+            'A category not configured': { start: at(11), category: 'nowhere' },
+            'A parent that is not configured': { start: at(12), category: 'kin' },
+            'Through two ancestors': { start: at(13), category: 'kin/child/grandchild' },
+            'Past an ancestor that is not configured': { start: at(14), category: 'a/b/c/d' },
+            'A configured id without its parents': { start: at(15), category: 'a/b' },
+            'No category': { start: at(16) },
+            'An all-day one': { start: '2024-05-06' },
+            'An all-day one in a category': { start: '2024-05-07', category: 'meeting' },
+            'An all-day one with its own': { start: '2024-05-08', alarms: ['09:00'] },
+        } as Record<string, MetadataEvent>, { categories, alarmDefaults })).toEqual({
+            'Own list': ['-1m'],
+            'Own list silences': [],
+            'The event\'s list': ['-1h'],
+            'A category': ['-10m'],
+            'A nested category': ['-15m', '0m'],
+            'A category that sets none': ['-10m'],
+            'A category that silences': [],
+            'A category with nothing': ['-5m'],
+            'A category misspelt': ['-5m'],
+            'A category not configured': ['-5m'],
+            'A parent that is not configured': ['-5m'],
+            'Through two ancestors': ['-2h'],
+            'Past an ancestor that is not configured': ['-1h'],
+            'A configured id without its parents': ['-5m'],
+            'No category': ['-5m'],
+            'An all-day one': ['-1d 18:00'],
+            'An all-day one in a category': ['-10m'],
+            'An all-day one with its own': ['09:00'],
+        });
+    });
+
+    it('takes the configuration for a kind it sets, an empty list silencing it', () => {
+        const events = { Timed: { start: '2024-05-06 09:00' }, Day: { start: '2024-05-07' } };
+        expect(ringing(events, { alarmDefaults: { timed: [], allDay: ['09:00'] } }))
+            .toEqual({ Timed: [], Day: ['09:00'] });
+        // A kind it leaves out is the built-in one.
+        expect(ringing(events, { alarmDefaults: { allDay: ['09:00'] } }))
+            .toEqual({ Timed: ['0m'], Day: ['09:00'] });
+    });
+
+    it('reads a single string as a list of one and leaves an empty value to inherit', () => {
+        expect(ringing({
+            Single: { start: '2024-05-06 09:00', alarms: '-1h' },
+            Empty: { start: '2024-05-06 10:00', alarms: null as unknown as string[] },
+        }, { alarmDefaults })).toEqual({ Single: ['-1h'], Empty: ['-5m'] });
+    });
+
+    it('keeps an alarm as written, trimmed, whichever way it is spelt', () => {
+        expect(ringing({
+            Spelt: { start: '2024-05-06 09:00', alarms: [' -90 minutes ', '+1 hour', '-1d 18:00'] },
+        })).toEqual({ Spelt: ['-90 minutes', '+1 hour', '-1d 18:00'] });
+    });
+
+    it('lets an override and an instance set their own, and inherit the event\'s otherwise', () => {
+        const derived = eventsFromEntries([entry('a.md', {
+            Standup: {
+                start: '2024-05-06 09:00',
+                repeat: { freq: 'daily', count: 3 },
+                alarms: ['-10m'],
+                overrides: [
+                    { at: '2024-05-07 09:00', alarms: [] },
+                    { at: '2024-05-08 09:00', location: 'Room 2' },
+                ],
+            },
+            Class: {
+                alarms: ['-30m'],
+                instances: [
+                    { start: '2024-05-10 14:00' },
+                    { start: '2024-05-11 14:00', alarms: ['0m'] },
+                    { start: '2024-05-12 14:00', alarms: null as unknown as string[] },
+                ],
+            },
+        })], ANY_WINDOW);
+        expect(derived.errors).toEqual([]);
+        expect(derived.events.map((event) => `${event.start}  ${event.name}  ${event.alarms}`).sort())
+            .toEqual([
+                '2024-05-06 09:00  Standup  -10m',
+                '2024-05-07 09:00  Standup  ',
+                '2024-05-08 09:00  Standup  -10m',
+                '2024-05-10 14:00  Class  -30m',
+                '2024-05-11 14:00  Class  0m',
+                '2024-05-12 14:00  Class  -30m',
+            ]);
+    });
+
+    it('takes the shape of a start from how the calendar reads it', () => {
+        for (const [start, allDay] of [
+            ['2024-05-06', true], ['2024-05-06 09:00', false], ['2024-05-06 09:00:30', false],
+            ['2024-5-2', true], ['2024-05', true], ['2024-05-03T10', true], ['2024-5-1 10:00', false],
+            ['2024/05/04 10:00', false],
+        ] as [string, boolean][]) {
+            expect(isAllDay(start), start).toBe(allDay);
+        }
+    });
+
+    describe('reports what is not an alarm', () => {
+        const derive = (events: Record<string, MetadataEvent>) =>
+            eventsFromEntries([entry('a.md', events, { title: 'A note' })], ANY_WINDOW);
+
+        it('once for each entry, under the property that holds it', () => {
+            const { events, errors } = derive({
+                Spoilt: { start: '2024-05-06 09:00', alarms: ['-5m', '10m', 'soon', 7] as unknown as string[] },
+            });
+            expect(errors).toEqual([
+                ['alarms', '10m', 'Spoilt', 'a.md', 'A note'],
+                ['alarms', 'soon', 'Spoilt', 'a.md', 'A note'],
+                ['alarms', 7, 'Spoilt', 'a.md', 'A note'],
+            ]);
+            // The rest stand, and the event is drawn.
+            expect(events.map((event) => event.alarms)).toEqual([['-5m']]);
+        });
+
+        it('once for an event however many occurrences it generates', () => {
+            const { events, errors } = derive({
+                Daily: {
+                    start: '2024-05-06 09:00',
+                    repeat: { freq: 'daily', count: 5 },
+                    alarms: ['10m'],
+                },
+            });
+            expect(events).toHaveLength(5);
+            expect(errors).toEqual([['alarms', '10m', 'Daily', 'a.md', 'A note']]);
+        });
+
+        it('for an override and an instance where it is written, and for a value that is no list', () => {
+            const { errors } = derive({
+                Series: {
+                    start: '2024-05-06 09:00',
+                    repeat: { freq: 'daily', count: 3 },
+                    overrides: [{ at: '2024-05-07 09:00', alarms: ['1h'] }],
+                    instances: [{ start: '2024-05-10 09:00', alarms: ['2h'] }],
+                },
+                Mapping: { start: '2024-05-06 10:00', alarms: { at: '-1h' } as unknown as string[] },
+                Number: { start: '2024-05-06 11:00', alarms: 5 as unknown as string[] },
+            });
+            expect(errors.map(([property, value, name]) => `${property} ${JSON.stringify(value)} ${name}`))
+                .toEqual([
+                    'alarms "1h" Series',
+                    'alarms "2h" Series',
+                    'alarms {"at":"-1h"} Mapping',
+                    'alarms 5 Number',
+                ]);
+        });
+
+        it('for nothing that is not set, or silences', () => {
+            expect(derive({
+                None: { start: '2024-05-06 09:00' },
+                Empty: { start: '2024-05-06 10:00', alarms: null as unknown as string[] },
+                Silenced: { start: '2024-05-06 11:00', alarms: [] },
+            }).errors).toEqual([]);
+        });
+    });
+});
+
+describe('task date alarms', () => {
+    const UUID = '11111111-1111-4111-8111-111111111111';
+    const task = (fields: Record<string, unknown>, title: string | null = 'Write'): ListEntry2 => ({
+        path: `.tasks/${UUID}.md`,
+        size: 1,
+        mime_type: 'text/markdown',
+        metadata: { tags: [], task: { status: { kind: 'todo' }, ...fields } },
+        title,
+        time: '2024-05-01T12:00:00+00:00',
+    });
+    const dates = (entries: ListEntry2[], alarmDefaults?: AlarmDefaults) =>
+        taskDatesFromEntries(entries, ANY_WINDOW, { alarmDefaults });
+    const ringing = (derived: ReturnType<typeof dates>) =>
+        derived.events.map((event) => `${event.taskDate} ${event.alarms}`);
+
+    it('rings by the task\'s own list, then the configuration, and otherwise not at all', () => {
+        const both = { due_by: '2024-05-10', deadline: '2024-05-15 17:00' };
+        const config = { dueBy: ['09:00'], deadline: ['-1d 18:00', '-2h'] };
+        expect(ringing(dates([task(both)]))).toEqual(['due_by ', 'deadline ']);
+        expect(ringing(dates([task(both)], config)))
+            .toEqual(['due_by 09:00', 'deadline -1d 18:00,-2h']);
+        expect(ringing(dates([task({ ...both, alarms: { due_by: ['-2h'], deadline: [] } })], config)))
+            .toEqual(['due_by -2h', 'deadline ']);
+        // A single string, and a date left empty, which inherits.
+        expect(ringing(dates([task({ ...both, alarms: { due_by: '-1d 18:00', deadline: null } })], config)))
+            .toEqual(['due_by -1d 18:00', 'deadline -1d 18:00,-2h']);
+        // Neither a list for both nor anything but a mapping is a task's own.
+        expect(ringing(dates([task({ ...both, alarms: ['-1h'] })], config)))
+            .toEqual(['due_by 09:00', 'deadline -1d 18:00,-2h']);
+    });
+
+    it('never rings for a task that is over, and says so', () => {
+        const done = task({ due_by: '2024-05-10', alarms: { due_by: ['-1h'] } });
+        done.metadata!.task = { ...done.metadata!.task as object, status: { kind: 'done' } };
+        expect(ringing(dates([done], { dueBy: ['09:00'] }))).toEqual(['due_by ']);
+    });
+
+    it('reports what is not an alarm, once for each date', () => {
+        const { events, errors } = dates([task({
+            due_by: '2024-05-10',
+            deadline: '2024-05-15',
+            alarms: { due_by: ['-1h', '10m'], deadline: 'soon' },
+        })]);
+        expect(errors).toEqual([
+            ['alarms', '10m', 'Write', `.tasks/${UUID}.md`, 'Write'],
+            ['alarms', 'soon', 'Write', `.tasks/${UUID}.md`, 'Write'],
+        ]);
+        expect(events.map((event) => event.alarms)).toEqual([['-1h'], []]);
     });
 });
