@@ -354,6 +354,110 @@ describe('task date colours', () => {
     });
 });
 
+describe('alarm defaults', () => {
+    const WITH_ALARMS = `${YAML_FILE}alarms:
+    timed: [-10m]
+    all_day: -1d 18:00
+    due_by: [09:00]
+    deadline: []
+`;
+
+    it('reads each kind the file sets, a single string as a list of one', async () => {
+        apiMocks.getNote.mockResolvedValue({ data: WITH_ALARMS });
+        const { useCalendarsStore } = await load();
+        const store = useCalendarsStore();
+
+        await store.loadSubscriptions();
+
+        expect(store.alarmDefaults).toEqual({
+            timed: ['-10m'],
+            allDay: ['-1d 18:00'],
+            dueBy: ['09:00'],
+            deadline: [],
+        });
+    });
+
+    // Hand-edited YAML: an entry that is not an alarm is dropped, as moried drops it, and a kind
+    // left empty is not set -- which is not the same as an empty list.
+    it('drops what is not usable, and leaves a kind that is empty unset', async () => {
+        apiMocks.getNote.mockResolvedValue({
+            data: `${YAML_FILE}alarms:\n    timed: [10m, -5m, soon]\n    all_day:\n    due_by: 5\n`,
+        });
+        const { useCalendarsStore } = await load();
+        const store = useCalendarsStore();
+
+        await store.loadSubscriptions();
+
+        expect(store.alarmDefaults).toEqual({ timed: ['-5m'], dueBy: [] });
+    });
+
+    it('has none when there is no file, or none is set', async () => {
+        apiMocks.getNote.mockRejectedValue(missing());
+        const { useCalendarsStore } = await load();
+        const store = useCalendarsStore();
+
+        await store.loadSubscriptions();
+
+        expect(store.alarmDefaults).toEqual({});
+    });
+
+    // The whole file is rewritten from what the store holds, so what it does not hold is lost.
+    it('keeps them when the subscriptions, the colours or the categories are saved', async () => {
+        apiMocks.getNote.mockResolvedValue({ data: WITH_ALARMS });
+        const { useCalendarsStore } = await load();
+        const store = useCalendarsStore();
+
+        await store.loadSubscriptions();
+        await store.saveSubscriptions([{
+            id: 'work',
+            name: 'Work',
+            url: 'https://example.invalid/work.ics',
+            enabled: true,
+        }]);
+        await store.saveTaskDateColors({ deadline: '#b71c1c' });
+        await store.saveCategories([{ id: 'meeting' }]);
+
+        for (const [, content] of apiMocks.addNote.mock.calls) {
+            expect(YAML.parse(content).alarms).toEqual({
+                timed: ['-10m'],
+                all_day: ['-1d 18:00'],
+                due_by: ['09:00'],
+                deadline: [],
+            });
+        }
+        expect(apiMocks.addNote.mock.calls).toHaveLength(3);
+    });
+
+    it('writes only the kinds that are set, in the file\'s order, and keeps the rest of it', async () => {
+        apiMocks.getNote.mockResolvedValue({ data: WITH_ALARMS });
+        const { useCalendarsStore } = await load();
+        const store = useCalendarsStore();
+
+        await store.loadSubscriptions();
+        await store.saveAlarmDefaults({ deadline: ['-1d 18:00', '-2h'], timed: [] });
+
+        const [path, content] = apiMocks.addNote.mock.calls[0];
+        expect(path).toBe('.mory/calendars.yaml');
+        expect(content).toContain('https://example.invalid/work.ics');
+        const alarms = YAML.parse(content).alarms;
+        expect(alarms).toEqual({ timed: [], deadline: ['-1d 18:00', '-2h'] });
+        expect(Object.keys(alarms)).toEqual(['timed', 'deadline']);
+        expect(store.alarmDefaults).toEqual({ deadline: ['-1d 18:00', '-2h'], timed: [] });
+    });
+
+    it('leaves the block out of the file when none is set', async () => {
+        apiMocks.getNote.mockResolvedValue({ data: WITH_ALARMS });
+        const { useCalendarsStore } = await load();
+        const store = useCalendarsStore();
+
+        await store.loadSubscriptions();
+        await store.saveAlarmDefaults({});
+
+        const [, content] = apiMocks.addNote.mock.calls[0];
+        expect(content).not.toContain('alarms');
+    });
+});
+
 describe('event categories', () => {
     const WITH_CATEGORIES = `${YAML_FILE}categories:
     meeting:
@@ -437,6 +541,78 @@ describe('event categories', () => {
         expect(content).toContain('[MTG] {{name}}');
         expect(content).toContain('meeting/1on1: {}');
         expect(content).toContain('#2e7d32');
+    });
+
+    describe('alarms', () => {
+        const WITH_ALARMS = `${YAML_FILE}categories:
+    meeting:
+        color: "#1565c0"
+        alarms: [-10m, 0m]
+    meeting/1on1:
+        alarms: -15m
+    meeting/quiet:
+        alarms: []
+    meeting/standup:
+        alarms:
+    trip:
+        alarms: [10m, -1d 18:00, soon]
+`;
+
+        // A set list is not an unset one, which is what an empty `alarms:` is.
+        it('reads a category\'s, an empty list as set and an empty value as not', async () => {
+            apiMocks.getNote.mockResolvedValue({ data: WITH_ALARMS });
+            const { useCalendarsStore } = await load();
+            const store = useCalendarsStore();
+
+            await store.loadSubscriptions();
+
+            expect(store.categories).toEqual([
+                { id: 'meeting', color: '#1565c0', alarms: ['-10m', '0m'] },
+                { id: 'meeting/1on1', alarms: ['-15m'] },
+                { id: 'meeting/quiet', alarms: [] },
+                { id: 'meeting/standup' },
+                { id: 'trip', alarms: ['-1d 18:00'] },
+            ]);
+            expect(store.categoryMap?.get('meeting')?.alarms).toEqual(['-10m', '0m']);
+        });
+
+        it('keeps them when the subscriptions are saved, as written', async () => {
+            apiMocks.getNote.mockResolvedValue({ data: WITH_ALARMS });
+            const { useCalendarsStore } = await load();
+            const store = useCalendarsStore();
+
+            await store.loadSubscriptions();
+            await store.saveSubscriptions([{
+                id: 'work',
+                name: 'Work',
+                url: 'https://example.invalid/work.ics',
+                enabled: true,
+            }]);
+
+            const [, content] = apiMocks.addNote.mock.calls[0];
+            expect(YAML.parse(content).categories).toEqual({
+                meeting: { color: '#1565c0', alarms: ['-10m', '0m'] },
+                'meeting/1on1': { alarms: ['-15m'] },
+                'meeting/quiet': { alarms: [] },
+                'meeting/standup': {},
+                trip: { alarms: ['-1d 18:00'] },
+            });
+        });
+
+        it('writes what the settings give', async () => {
+            apiMocks.getNote.mockResolvedValue({ data: WITH_ALARMS });
+            const { useCalendarsStore } = await load();
+            const store = useCalendarsStore();
+
+            await store.loadSubscriptions();
+            await store.saveCategories([{ id: 'meeting', alarms: ['-1h'] }, { id: 'quiet', alarms: [] }]);
+
+            const [, content] = apiMocks.addNote.mock.calls[0];
+            expect(YAML.parse(content).categories).toEqual({
+                meeting: { alarms: ['-1h'] },
+                quiet: { alarms: [] },
+            });
+        });
     });
 
     it('keeps the subscriptions when only the categories are saved', async () => {

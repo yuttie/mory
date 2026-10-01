@@ -252,6 +252,19 @@ export const ALARM_DEFAULT_KEYS = {
     deadline: 'deadline',
 } as const satisfies Record<keyof AlarmDefaults, string>;
 
+/// The `alarms:` block as the file holds it, for a kind that is set: the keys in the file's own
+/// spelling and order. The reverse of `readAlarmDefaults`, up to the entries that were not alarms.
+export function writeAlarmDefaults(defaults: AlarmDefaults): Record<string, string[]> {
+    const block: Record<string, string[]> = {};
+    for (const [field, key] of Object.entries(ALARM_DEFAULT_KEYS) as [keyof AlarmDefaults, string][]) {
+        const alarms = defaults[field];
+        if (alarms !== undefined) {
+            block[key] = [...alarms];
+        }
+    }
+    return block;
+}
+
 /// The `alarms:` block of the calendar configuration, which is hand-written: whatever is not usable
 /// is not there. An entry that is not an alarm is dropped from its list, as in a note.
 export function readAlarmDefaults(value: unknown): AlarmDefaults {

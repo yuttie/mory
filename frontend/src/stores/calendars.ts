@@ -13,6 +13,8 @@ import { computed, ref, shallowRef } from 'vue';
 import { defineStore } from 'pinia';
 import YAML from 'yaml';
 
+import type { AlarmDefaults } from '@/alarms';
+import { readAlarmDefaults, readAlarmList, writeAlarmDefaults } from '@/alarms';
 import type {
     ImportedCalendarReport,
     ImportedOccurrence,
@@ -75,6 +77,10 @@ export const useCalendarsStore = defineStore('calendars', () => {
 
     const subscriptions = ref<CalendarSubscription[]>([]);
     const taskDateColors = ref<TaskDateColors>({});
+    // When an event or a task's date rings where its note says nothing. Kept in this file for the
+    // reason the colours are: it is the same kind of thing as a category's, and would otherwise
+    // have to be set again on every device.
+    const alarmDefaults = ref<AlarmDefaults>({});
     // `null` until the file has been read, and again when reading it fails: with no configuration
     // to hand, every category a note names would look unknown and be reported as a typo.
     const categories = ref<ConfiguredCategory[] | null>(null);
@@ -172,6 +178,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
                 enabled: entry.enabled !== false,
             }));
             taskDateColors.value = readTaskDateColors(parsed?.task_dates);
+            alarmDefaults.value = readAlarmDefaults(parsed?.alarms);
             categories.value = readCategories(parsed?.categories);
         }
         catch (error) {
@@ -179,6 +186,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
             // same reading `ai-actions.ts` gives a 404 on its own config.
             subscriptions.value = [];
             taskDateColors.value = {};
+            alarmDefaults.value = {};
             categories.value = isMissing(error) ? [] : null;
             if (!isMissing(error)) {
                 throw error;
@@ -204,6 +212,14 @@ export const useCalendarsStore = defineStore('calendars', () => {
         await writeConfiguration();
     }
 
+    /// Set when events and task dates ring where a note says nothing. A kind left out takes the
+    /// built-in default. Like the colours, this changes how events are shown, not which ones the
+    /// backend returns, so no `invalidate()`.
+    async function saveAlarmDefaults(next: AlarmDefaults): Promise<void> {
+        alarmDefaults.value = next;
+        await writeConfiguration();
+    }
+
     /// Set the event categories. Like the task date colours, they change how events are drawn,
     /// not which ones the backend returns.
     async function saveCategories(next: ConfiguredCategory[]): Promise<void> {
@@ -224,6 +240,9 @@ export const useCalendarsStore = defineStore('calendars', () => {
             })),
             ...(Object.keys(taskDateColors.value).length > 0
                 ? { task_dates: { ...taskDateColors.value } }
+                : {}),
+            ...(Object.keys(alarmDefaults.value).length > 0
+                ? { alarms: writeAlarmDefaults(alarmDefaults.value) }
                 : {}),
             ...(categories.value !== null && categories.value.length > 0
                 ? {
@@ -299,6 +318,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
     return {
         subscriptions,
         taskDateColors,
+        alarmDefaults,
         categories,
         categoryMap,
         hasLoadedSubscriptions,
@@ -313,6 +333,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
         loadSubscriptions,
         saveSubscriptions,
         saveTaskDateColors,
+        saveAlarmDefaults,
         saveCategories,
         invalidate,
         load,
@@ -337,7 +358,8 @@ function readTaskDateColors(value: unknown): TaskDateColors {
 
 // Hand-edited YAML too. A category with nothing after its id is one that sets nothing of its own
 // and inherits it all, so it is kept; one that is not a mapping at all is dropped, and the notes
-// naming it are then reported rather than drawn with half a category.
+// naming it are then reported rather than drawn with half a category. `backend/src/alarms.rs`
+// reads the same rule for the alarms a category sets.
 function readCategories(value: unknown): ConfiguredCategory[] {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
         return [];
@@ -357,6 +379,12 @@ function readCategories(value: unknown): ConfiguredCategory[] {
             if (typeof text === 'string' && text.trim() !== '') {
                 category[field] = text.trim();
             }
+        }
+        // Set, even to nothing: an empty list silences the category's events, where an empty
+        // `alarms:` leaves them to the configuration's.
+        const alarms = (entry as Record<string, unknown>).alarms;
+        if (alarms !== undefined && alarms !== null) {
+            category.alarms = readAlarmList(alarms).alarms;
         }
         categories.push(category);
     }
