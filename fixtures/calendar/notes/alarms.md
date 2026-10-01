@@ -1,0 +1,80 @@
+---
+events:
+    Not set:
+        start: 2024-05-06 09:00
+    All day not set:
+        start: 2024-05-07
+    On the event:
+        start: 2024-05-06 10:00
+        alarms: [-10m]
+    A single string:
+        start: 2024-05-06 11:00
+        alarms: -1h
+    Silenced:
+        start: 2024-05-06 12:00
+        alarms: []
+    An empty list is not set:
+        start: 2024-05-06 13:00
+        alarms:
+    Malformed entries are dropped:
+        start: 2024-05-06 14:00
+        alarms: [-5m, 5m, soon, 1h, 7, -1.5d, '-1d 25:00', null, [-1h], -400d]
+    Every spelling:
+        start: 2024-05-06 15:00
+        alarms: [-90 minutes, -1.5h, -30s, +2 hours, 0m, -1w, 09:00, '-1d 18:00', '+1 day 08:30', -0.5s]
+    The same alarm twice:
+        start: 2024-05-06 16:00
+        alarms: [-1h, -60m, 0m, +0d]
+    All day with times:
+        start: 2024-05-08
+        alarms: ['-1d 18:00', 09:00, -6h]
+    A single string for a time of day:
+        start: 2024-05-09
+        alarms: '-1d 18:00'
+    A series:
+        start: 2024-05-13 09:00
+        repeat: { freq: weekly, count: 4 }
+        alarms: [-15m]
+        overrides:
+            - at: 2024-05-20 09:00
+              alarms: []
+            - at: 2024-05-27 09:00
+              alarms: [-1h, 0m]
+            - at: 2024-06-03 09:00
+              location: Room 2
+    A series with none set:
+        start: 2024-05-14 09:00
+        repeat: { freq: weekly, count: 2 }
+        overrides:
+            - at: 2024-05-21 09:00
+              alarms: [-5m]
+    Listed:
+        alarms: [-30m]
+        instances:
+            - start: 2024-06-10 14:00
+            - start: 2024-06-11 14:00
+              alarms: [0m]
+            - start: 2024-06-12 14:00
+              alarms: []
+            - start: 2024-06-13 14:00
+              alarms:
+    Listed with none set:
+        instances:
+            - start: 2024-06-14 14:00
+            - start: 2024-06-15
+            - start: 2024-06-16 14:00
+              alarms: -2h
+    A start and a list:
+        start: 2024-06-17 14:00
+        alarms: [-20m]
+        instances:
+            - start: 2024-06-18 14:00
+            - start: 2024-06-19 14:00
+              alarms: [+1h]
+    Finished:
+        start: 2024-06-20 14:00
+        finished: true
+        alarms: [-1h]
+---
+
+# Alarms

@@ -34,6 +34,10 @@ metadata it parsed out of each; `frontend/src/note-fixtures.spec.ts` requires `e
 to draw the same from that metadata. The backend also requires each converted note to draw what
 its feed did, which closes the circle: the feed, the frontend's note and the backend's all agree.
 
+Each note's alarms are recorded too, as `alarms`: one `start  name  spec|spec` line for every
+occurrence, naming the alarms it rings at and spelling each as `Spec`'s `Display` does, so that
+`-1.5h` and `-90 minutes` both read `-90m`. `notes/alarms.md` is about little else.
+
 `dayjs.tz` resolves an hour that happens twice by the season the reader is in *now*, so a rule
 with `tz` whose occurrences fall in such an hour would make the comparison depend on the date it
 runs. Keep them out of the fixtures.

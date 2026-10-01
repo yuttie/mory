@@ -62,6 +62,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use models::*;
 
+mod alarms;
 mod ical;
 mod mcp;
 mod note_events;

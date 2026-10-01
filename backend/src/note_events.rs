@@ -12,8 +12,9 @@
 //! run both halves of that comparison.
 //!
 //! Only what decides whether an occurrence is drawn, and at what wall clock, is reproduced.
-//! Colours and ends are read only as far as a bad one hides an occurrence, and categories not at
-//! all: they change how an event is drawn, never when.
+//! Colours and ends are read only as far as a bad one hides an occurrence. An occurrence's alarms
+//! and category are carried as written, for `alarms` to resolve: the category still changes only
+//! how an event is drawn, never when, and matters here for when it is *rung*.
 //!
 //! Three JavaScript behaviours carry most of the weight, each easy to get subtly wrong:
 //!
@@ -58,14 +59,6 @@ pub enum Start {
 }
 
 impl Start {
-    /// The moment a timed occurrence starts; `None` for an all-day one, which has no moment.
-    pub fn instant(&self, reader: &Reader) -> Option<DateTime<Utc>> {
-        match self {
-            Start::Date(_) => None,
-            Start::Time(_) => Some(self.begins(reader)),
-        }
-    }
-
     /// When it begins: `dayjs(start)`, which reads a date as its first moment and resolves a wall
     /// clock as the calendar does.
     pub fn begins(&self, reader: &Reader) -> DateTime<Utc> {
@@ -94,6 +87,11 @@ pub struct Occurrence {
     pub start: Start,
     pub finished: bool,
     pub location: Option<String>,
+    /// The `alarms:` the occurrence's own fields or its event's hold, as written. `None` for
+    /// neither, which is not the same as an empty list: that silences.
+    pub alarms: Option<Value>,
+    /// The category the event names, configured or not.
+    pub category: Option<String>,
 }
 
 /// Every occurrence the listing declares in `[from, to]`.
@@ -253,7 +251,7 @@ fn make_date(year: i64, month: i64, day: i64, hour: i64, minute: i64, second: i6
 /// A time in a daylight-saving gap takes the offset from before the change, which moves it
 /// forward by the gap: 02:30 on the spring-forward night is 03:30. A time that happens twice is
 /// the first of the two.
-fn resolve_local(wall: NaiveDateTime, zone: Zone) -> DateTime<Utc> {
+pub(crate) fn resolve_local(wall: NaiveDateTime, zone: Zone) -> DateTime<Utc> {
     match zone.from_local_datetime(&wall) {
         LocalResult::Single(at) => at.with_timezone(&Utc),
         LocalResult::Ambiguous(first, second) => first.min(second).with_timezone(&Utc),
@@ -449,16 +447,33 @@ enum StartInput<'a> {
 ///
 /// The frontend carries a series' end to each occurrence as a duration (`durationOf`), but only
 /// whether an end is usable matters here, and that conversion never changes it.
+///
+/// `category` is the exception: it belongs to the event as a whole, so an event's own start has it
+/// too, and an override or an instance cannot change it.
 #[derive(Default)]
 struct Parent<'a> {
     end: Option<&'a Value>,
     color: Option<&'a Value>,
     location: Option<&'a Value>,
+    alarms: Option<&'a Value>,
+    category: Option<&'a str>,
 }
 
 impl<'a> Parent<'a> {
     fn of(detail: &'a Mapping) -> Self {
-        Parent { end: detail.get("end"), color: detail.get("color"), location: detail.get("location") }
+        Parent {
+            end: detail.get("end"),
+            color: detail.get("color"),
+            location: detail.get("location"),
+            alarms: detail.get("alarms"),
+            ..Parent::category_of(detail)
+        }
+    }
+
+    /// An event's own start inherits nothing but its category from the event it is.
+    fn category_of(detail: &'a Mapping) -> Self {
+        // `categoryOf`: a category that is not text is reported and the event drawn without it.
+        Parent { category: detail.get("category").and_then(Value::as_str), ..Parent::default() }
     }
 }
 
@@ -517,6 +532,9 @@ fn build_occurrence(
         // The views take any truthy value as finished: `finished: yes` is text in YAML 1.2.
         finished: get("finished").is_some_and(truthy),
         location,
+        // `time.alarms ?? parent.alarms`
+        alarms: present(get("alarms")).or(present(parent.alarms)).cloned(),
+        category: parent.category.map(str::to_owned),
     });
 }
 
@@ -535,7 +553,7 @@ fn events_of_entry(
             expand_series(event_name, detail, path, window, reader, out);
         } else {
             let start = StartInput::Written(detail.get("start"));
-            build_occurrence(Some(detail), start, &Parent::default(), event_name, path, reader, out);
+            build_occurrence(Some(detail), start, &Parent::category_of(detail), event_name, path, reader, out);
         }
     }
     // `instances ?? times`, and only the entries that are objects.

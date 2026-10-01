@@ -2105,9 +2105,9 @@ fn calendar_fixtures_find_each_occurrence_in_its_own_day() {
 //
 // `fixtures/calendar/notes/` holds notes written by hand, and `fixtures/calendar/converted/` the
 // note the app writes for each feed above. `notes.json` records what `note_events` draws of each
-// for a reader in `NOTE_READER_ZONE`, along with the metadata this backend parses out of it, and
-// `frontend/src/note-fixtures.spec.ts` requires `eventsFromEntries` to draw the same from that
-// metadata. The converted notes are held to their feeds as well, which closes the circle with the
+// for a reader in `NOTE_READER_ZONE`, and which alarms each occurrence is to ring at, along with
+// the metadata this backend parses out of it, and `frontend/src/note-fixtures.spec.ts` requires
+// `eventsFromEntries` to draw and resolve the same from that metadata. The converted notes are held to their feeds as well, which closes the circle with the
 // comparison above: the feed, the frontend's note and this one all draw the same occurrences.
 //
 // Regenerate with `UPDATE_CALENDAR_GOLDEN=1 cargo test note_fixtures`, after the frontend has
@@ -2118,6 +2118,7 @@ fn calendar_fixtures_find_each_occurrence_in_its_own_day() {
 /// wall clock in the machine's own zone by mistake shows.
 const NOTE_READER_ZONE: chrono_tz::Tz = chrono_tz::America::Los_Angeles;
 
+use crate::alarms;
 use crate::note_events::{self, Start};
 
 fn note_reader() -> note_events::Reader {
@@ -2174,6 +2175,25 @@ fn draw_note_fixture(entry: &crate::models::ListEntry) -> Vec<String> {
     drawn_in_window(occurrences.iter().map(|occurrence| (occurrence.start, occurrence.name.as_str())))
 }
 
+/// `start  name  spec|spec` for everything that starts inside the window, in order: the alarms each
+/// occurrence is to ring at, each spelled as `Spec` spells it. The frontend resolves the same from
+/// the same metadata.
+fn alarms_of_note_fixture(entry: &crate::models::ListEntry) -> Vec<String> {
+    let reader = note_reader();
+    let (from, to) = note_fixture_window();
+    let mut lines: Vec<String> = note_events::occurrences(std::slice::from_ref(entry), from, to, &reader)
+        .iter()
+        .filter(|occurrence| (from..=to).contains(&occurrence.start.begins(&reader)))
+        .map(|occurrence| {
+            let specs: Vec<String> = alarms::specs_of(occurrence).iter().map(alarms::Spec::to_string).collect();
+            let specs = if specs.is_empty() { "none".to_owned() } else { specs.join("|") };
+            format!("{}  {}  {specs}", occurrence.start, occurrence.name)
+        })
+        .collect();
+    lines.sort();
+    lines
+}
+
 #[test]
 fn note_fixtures_draw_as_recorded() {
     let mut recorded = serde_json::Map::new();
@@ -2184,6 +2204,7 @@ fn note_fixtures_draw_as_recorded() {
             serde_json::json!({
                 "metadata": entry.metadata,
                 "drawn": draw_note_fixture(&entry),
+                "alarms": alarms_of_note_fixture(&entry),
             }),
         );
     }
