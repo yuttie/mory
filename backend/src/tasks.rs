@@ -33,7 +33,10 @@ pub(crate) fn check_tree_naming(rest: &str) -> Result<(), String> {
         }
     }
     let stem = file.rsplit_once('.').map(|(stem, _)| stem).unwrap_or(file);
-    if stem.len() < 36 || !is_uuid_v4(&stem[stem.len() - 36..]) {
+    // `get`, not indexing: 36 bytes back can land inside a multibyte character, and a note's
+    // path is whatever its author typed. This runs for every task on every scheduler pass, where
+    // a panic would end the alarms until moried restarts.
+    if !stem.len().checked_sub(36).and_then(|from| stem.get(from..)).is_some_and(is_uuid_v4) {
         return Err(format!("The file name {file:?} does not end with a UUIDv4. {advice}"));
     }
     Ok(())
@@ -87,5 +90,13 @@ mod tests {
         assert!(!in_task_tree(".tasks/not-a-uuid.md"));
         assert!(!in_task_tree(&format!(".tasks/directory/{uuid}.md")));
         assert!(!in_task_tree(&format!(".tasks{uuid}.md")));
+    }
+
+    #[test]
+    fn a_multibyte_file_name_is_refused_rather_than_sliced() {
+        // Twelve three-byte characters and one more byte put the 36-byte cut inside a character.
+        let stem = format!("{}a", "あ".repeat(12));
+        assert!(!in_task_tree(&format!(".tasks/{stem}.md")));
+        assert!(check_tree_naming(&format!("{stem}.md")).is_err());
     }
 }
