@@ -381,8 +381,7 @@ import {
 
 import { assessTask, type TaskAssessmentResponse } from '@/api';
 
-import { alarmProblems } from '@/alarms';
-import type { TaskAlarms } from '@/alarms';
+import { alarmProblems, sameTaskAlarms, taskAlarmsToWrite } from '@/alarms';
 import EditableViewer from '@/components/EditableViewer.vue';
 import TaskDateAlarms from '@/components/TaskDateAlarms.vue';
 import { extractFileUuid } from '@/api/task';
@@ -551,11 +550,9 @@ const statusGateError = computed<string | undefined>(() => {
 });
 
 // An alarm that is not one would be dropped by moried, so the task is not saved with it: the box
-// names it. Only the lists of dates the task has are checked, as only those are written.
-const alarmsInvalid = computed<boolean>(() => [
-    form.due_by !== '' ? form.due_by_alarms : null,
-    form.deadline !== '' ? form.deadline_alarms : null,
-].some((list) => list !== null && alarmProblems(list).length > 0));
+// names it. Only the lists that would be written are checked.
+const alarmsInvalid = computed<boolean>(() => Object.values(taskAlarmsToWrite(form))
+    .some((list) => alarmProblems(list).length > 0));
 
 const tagItems = computed<{ title: string; value: string; }[]>(() =>
     props.knownTags.map(([tag, count]) => {
@@ -586,8 +583,7 @@ const isModified = computed<boolean>(() => {
         form.start_at !== initialForm.value.start_at ||
         form.due_by !== initialForm.value.due_by ||
         form.deadline !== initialForm.value.deadline ||
-        !alarmsEqual(form.due_by_alarms, initialForm.value.due_by_alarms) ||
-        !alarmsEqual(form.deadline_alarms, initialForm.value.deadline_alarms) ||
+        !sameTaskAlarms(taskAlarmsToWrite(form), taskAlarmsToWrite(initialForm.value)) ||
         !arraysEqual(form.scheduled_dates, initialForm.value.scheduled_dates) ||
         form.note !== initialForm.value.note
     );
@@ -727,14 +723,7 @@ async function onSave(): Promise<void> {
     if (!result?.valid || statusGateError.value || alarmsInvalid.value) {
         return;
     }
-    // The alarms of the dates the task has, and only a list it set itself: the default is not a
-    // thing to write, or the date would stop following the settings.
-    const alarms: TaskAlarms = {
-        ...(form.due_by !== '' && form.due_by_alarms !== null
-            ? { due_by: form.due_by_alarms.map((alarm) => alarm.trim()) } : {}),
-        ...(form.deadline !== '' && form.deadline_alarms !== null
-            ? { deadline: form.deadline_alarms.map((alarm) => alarm.trim()) } : {}),
-    };
+    const alarms = taskAlarmsToWrite(form);
     // Create a Task value
     const task = {
         uuid: uuid.value,
@@ -773,11 +762,6 @@ function onChangeParent(): void {
 function arraysEqual<T>(a: T[], b: T[]): boolean {
     if (a.length !== b.length) { return false; }
     return a.every((val, index) => val === b[index]);
-}
-
-// `null` is the default, which is not the same as a list of none.
-function alarmsEqual(a: string[] | null, b: string[] | null): boolean {
-    return a === null || b === null ? a === b : arraysEqual(a, b);
 }
 
 function statusEqual(a: Status, b: Status): boolean {

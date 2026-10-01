@@ -11,8 +11,10 @@ import {
     readAlarmList,
     readAlarmsIfSet,
     readTaskAlarms,
+    sameTaskAlarms,
     TASK_DATE_ALARM_DEFAULT,
     taskAlarmOf,
+    taskAlarmsToWrite,
     stringifyWithFlowAlarms,
     withBuiltInAlarms,
     writeAlarmDefaults,
@@ -226,6 +228,47 @@ describe('readTaskAlarms', () => {
         for (const value of [undefined, null, 5, '-1h', ['-1h']]) {
             expect(readTaskAlarms(value)).toBeUndefined();
         }
+    });
+});
+
+describe('taskAlarmsToWrite', () => {
+    const form = {
+        due_by: '2026-10-10',
+        deadline: '2026-10-20',
+        due_by_alarms: ['09:00', ' -1h '] as string[] | null,
+        deadline_alarms: null as string[] | null,
+    };
+
+    it('writes the lists a task set itself for the dates it has, trimmed', () => {
+        expect(taskAlarmsToWrite(form)).toEqual({ due_by: ['09:00', '-1h'] });
+        expect(taskAlarmsToWrite({ ...form, deadline_alarms: [] })).toEqual({
+            due_by: ['09:00', '-1h'],
+            deadline: [],
+        });
+        expect(taskAlarmsToWrite({ ...form, due_by_alarms: null })).toEqual({});
+    });
+
+    // Setting a deadline, editing its alarms and clearing it again leaves the list in the form.
+    it('leaves out the list of a date the task does not have', () => {
+        expect(taskAlarmsToWrite({ ...form, deadline: '', deadline_alarms: ['-1h'] }))
+            .toEqual({ due_by: ['09:00', '-1h'] });
+        expect(taskAlarmsToWrite({ ...form, due_by: '', deadline: '' })).toEqual({});
+    });
+});
+
+describe('sameTaskAlarms', () => {
+    it('tells a list that is empty from one that is not set', () => {
+        expect(sameTaskAlarms({}, {})).toBe(true);
+        expect(sameTaskAlarms({ due_by: [] }, { due_by: [] })).toBe(true);
+        expect(sameTaskAlarms({ due_by: [] }, {})).toBe(false);
+        expect(sameTaskAlarms({}, { deadline: [] })).toBe(false);
+    });
+
+    it('compares what the lists hold, in order', () => {
+        expect(sameTaskAlarms({ due_by: ['-1h', '0m'] }, { due_by: ['-1h', '0m'] })).toBe(true);
+        expect(sameTaskAlarms({ due_by: ['-1h', '0m'] }, { due_by: ['0m', '-1h'] })).toBe(false);
+        expect(sameTaskAlarms({ due_by: ['-1h'] }, { due_by: ['-1h', '0m'] })).toBe(false);
+        expect(sameTaskAlarms({ due_by: ['-1h'] }, { due_by: ['-1h'], deadline: ['0m'] })).toBe(false);
     });
 });
 

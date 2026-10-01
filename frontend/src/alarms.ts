@@ -312,12 +312,46 @@ export function taskAlarmOf(alarms: unknown, field: keyof TaskAlarms): unknown {
     return (alarms as Record<string, unknown>)[field];
 }
 
+// The dates of a task that have alarms.
+const TASK_DATES = Object.keys(TASK_DATE_ALARM_DEFAULT) as (keyof TaskAlarms)[];
+
+/// The alarms a task being edited would write: those of the dates it has, and only a list it set
+/// itself, trimmed. The default is not a thing to write, or the date would stop following the
+/// settings. A list left behind for a date the task has since lost is not written either, so it is
+/// neither compared with the saved task nor checked: it would be dropped on saving.
+export function taskAlarmsToWrite(task: {
+    due_by: string;
+    deadline: string;
+    due_by_alarms: readonly string[] | null;
+    deadline_alarms: readonly string[] | null;
+}): TaskAlarms {
+    const alarms: TaskAlarms = {};
+    for (const field of TASK_DATES) {
+        const list = task[`${field}_alarms`];
+        if (task[field] !== '' && list !== null) {
+            alarms[field] = list.map((alarm) => alarm.trim());
+        }
+    }
+    return alarms;
+}
+
+/// Whether two tasks set the same alarms. A date that sets none takes the default, which is not the
+/// same as one that sets an empty list.
+export function sameTaskAlarms(a: TaskAlarms, b: TaskAlarms): boolean {
+    return TASK_DATES.every((field) => {
+        const [x, y] = [a[field], b[field]];
+        return x === undefined || y === undefined
+            ? x === y
+            : x.length === y.length && x.every((alarm, index) => alarm === y[index]);
+    });
+}
+
 /// `task.alarms` as a note holds it, or `undefined` when it sets none. Hand-written, so whatever is
 /// not usable is not there: an entry that is not an alarm is dropped, and a date left empty is not
 /// set, which is not the same as an empty list.
 export function readTaskAlarms(value: unknown): TaskAlarms | undefined {
     const alarms: TaskAlarms = {};
-    for (const field of Object.keys(TASK_DATE_ALARM_DEFAULT) as (keyof TaskAlarms)[]) {
+    for (const field of TASK_DATES) {
         const set = readAlarmsIfSet(taskAlarmOf(value, field));
         if (set !== undefined) {
             alarms[field] = set;
