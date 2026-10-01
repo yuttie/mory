@@ -38,6 +38,11 @@ Each note's alarms are recorded too, as `alarms`: one `start  name  spec|spec` l
 occurrence, naming the alarms it rings at and spelling each as `Spec`'s `Display` does, so that
 `-1.5h` and `-90 minutes` both read `-90m`. `notes/alarms.md` is about little else.
 
+An occurrence that sets no alarms of its own takes its category's, so the notes are read under
+`calendars.yaml`, a stand-in for `.mory/calendars.yaml`, whose parsed contents `notes.json` records
+as `calendars`. It sets category alarms only: a `name` template would change the names the golden
+records, and a global `timed` or `all_day` every line of it.
+
 `dayjs.tz` resolves an hour that happens twice by the season the reader is in *now*, so a rule
 with `tz` whose occurrences fall in such an hour would make the comparison depend on the date it
 runs. Keep them out of the fixtures.

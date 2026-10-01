@@ -1645,9 +1645,19 @@ Important:
         /// from loading.
         #[serde(default)]
         categories: serde_yaml::Value,
+        /// When alarms ring where a note does not say: `timed`, `all_day`, and later the task
+        /// dates. As lenient as `categories`, and for the same reason: an unusable value is no
+        /// setting, and never a reason to lose the imported events.
+        #[serde(default)]
+        alarms: serde_yaml::Value,
     }
 
     impl CalendarConfig {
+        /// What the configuration says alarms ring at where a note does not.
+        pub(crate) fn alarm_defaults(&self) -> crate::alarms::Defaults {
+            crate::alarms::Defaults::read(self.alarms.as_mapping(), self.categories())
+        }
+
         /// The `categories:` block as declared, or `None` when there is no usable one.
         pub(crate) fn categories(&self) -> Option<&serde_yaml::Mapping> {
             self.categories.as_mapping()

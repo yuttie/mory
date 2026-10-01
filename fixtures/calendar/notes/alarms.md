@@ -75,6 +75,44 @@ events:
         start: 2024-06-20 14:00
         finished: true
         alarms: [-1h]
+    A category:
+        start: 2024-07-01 09:00
+        category: meeting
+    A nested category:
+        start: 2024-07-02 09:00
+        category: meeting/1on1
+    A nested category that sets none:
+        start: 2024-07-03 09:00
+        category: meeting/standup
+    A category that silences:
+        start: 2024-07-04 09:00
+        category: meeting/quiet
+    A category that is not configured:
+        start: 2024-07-05 09:00
+        category: nowhere
+    A category misspelt:
+        start: 2024-07-08 09:00
+        category: meeting/1no1
+    A category with nothing in it:
+        start: 2024-07-09 09:00
+        category: unset
+    Through an ancestor that is not configured:
+        start: 2024-07-10 09:00
+        category: a/b/c/d
+    A category and a list on the event:
+        start: 2024-07-11 09:00
+        category: meeting
+        alarms: [-1m]
+    A category on a series:
+        start: 2024-07-15 09:00
+        repeat: { freq: daily, count: 3 }
+        category: meeting
+        overrides:
+            - at: 2024-07-16 09:00
+              alarms: [-1h]
+    All day in a category:
+        start: 2024-07-20
+        category: meeting
 ---
 
 # Alarms

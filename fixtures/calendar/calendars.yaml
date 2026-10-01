@@ -1,0 +1,17 @@
+# What `.mory/calendars.yaml` holds, for the notes in `notes/` to be read under. Only categories:
+# their colours and name templates change how an event is drawn, which the golden does not record,
+# and a template would change the names it does.
+categories:
+    meeting:
+        color: '#1565c0'
+        alarms: [-10m]
+    meeting/1on1:
+        alarms: [-15m, 0m]
+    meeting/standup:
+        color: '#2e7d32'
+    meeting/quiet:
+        alarms: []
+    unset:
+    a/b/c:
+        alarms: [-1h]
+    a/b/c/d:

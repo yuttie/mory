@@ -15,20 +15,24 @@
 //! the day before across a daylight-saving change, and take whole numbers. `h m s` count elapsed
 //! time and may be decimal. An all-day event starts at the first moment of its day.
 //!
+//! Where a note says nothing, `.mory/calendars.yaml` may: for a category of event, and then for all
+//! timed or all all-day ones. See `Defaults`.
+//!
 //! `frontend/src/alarms.ts` is this grammar's twin, and `fixtures/calendar/notes/alarms.md` holds
 //! the two to each other: both spell each alarm they accept the same way (see `Spec`'s `Display`).
-//! Change either one and run both halves of that comparison.
+//! `Defaults` has a twin too, in `resolveCategory` and `eventsFromEntries`, which the same fixtures
+//! hold to it. Change either one and run both halves of that comparison.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::sync::LazyLock;
 
 use chrono::{DateTime, Duration, NaiveTime, Utc};
 use regex::Regex;
-use serde_yaml::Value;
+use serde_yaml::{Mapping, Value};
 
 use crate::models::ListEntry;
-use crate::note_events::{Occurrence, Reader, Start, resolve_local};
+use crate::note_events::{Occurrence, Reader, Start, key_name, present, resolve_local};
 
 /// The furthest from its start an alarm may be set. Anything further is a typo or worse: the
 /// scheduler widens what it expands by the furthest alarm any note declares, and a note must not be
@@ -187,17 +191,96 @@ pub fn list_of(value: &Value) -> Vec<Spec> {
     }
 }
 
-/// The alarms an occurrence rings at.
+/// What `.mory/calendars.yaml` says an occurrence rings at where its note says nothing.
 ///
-/// Its own list if it has one -- an override, an instance or the event itself -- else the event's,
-/// as `note_events` already resolved. Otherwise an alarm at the start of a timed occurrence, which
-/// is what every note had before alarms could be set, and none for an all-day one.
-pub fn specs_of(occurrence: &Occurrence) -> Vec<Spec> {
-    match (&occurrence.alarms, occurrence.start) {
-        (Some(declared), _) => list_of(declared),
-        (None, Start::Time(_)) => vec![Spec::AT_START],
-        (None, Start::Date(_)) => Vec::new(),
+/// A category of event can name alarms of its own, and nested ids inherit as they do for colour:
+/// `meeting/1on1` takes them from `meeting` unless it sets its own. The id the event names must
+/// itself be configured, as in `resolveCategory`, so that a misspelt `meeting/1no1` is not quietly
+/// a meeting. Failing that, the `timed` or the `all_day` list the occurrence's shape asks for, and
+/// failing that the built-in default.
+///
+/// Every value is `None` when the file does not set it. That is not the same as an empty list,
+/// which silences.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Defaults {
+    timed: Option<Vec<Spec>>,
+    all_day: Option<Vec<Spec>>,
+    /// Every configured category, with the alarms it sets itself if it does.
+    categories: BTreeMap<String, Option<Vec<Spec>>>,
+}
+
+impl Defaults {
+    /// The `alarms:` and `categories:` blocks of the calendar configuration. Hand-written, so
+    /// whatever is not usable is not there, as `readCategories` reads them in the frontend: a
+    /// category with nothing after its id is configured and sets nothing, and one that is not a
+    /// mapping is not configured at all.
+    pub fn read(alarms: Option<&Mapping>, categories: Option<&Mapping>) -> Defaults {
+        let set = |key: &str| alarms.and_then(|alarms| present(alarms.get(key))).map(list_of);
+        let categories = categories
+            .into_iter()
+            .flatten()
+            .filter_map(|(id, entry)| {
+                let alarms = match entry {
+                    Value::Null => None,
+                    Value::Mapping(entry) => present(entry.get("alarms")).map(list_of),
+                    _ => return None,
+                };
+                Some((key_name(id)?, alarms))
+            })
+            .collect();
+        Defaults { timed: set("timed"), all_day: set("all_day"), categories }
     }
+
+    /// The alarms an occurrence rings at.
+    ///
+    /// Its own list if it has one -- an override, an instance or the event itself -- else the
+    /// event's, as `note_events` already resolved. Then its category's, then the configured list
+    /// for its shape. Otherwise an alarm at the start of a timed occurrence, which is what every
+    /// note had before alarms could be set, and none for an all-day one.
+    pub fn specs_of(&self, occurrence: &Occurrence) -> Vec<Spec> {
+        if let Some(declared) = &occurrence.alarms {
+            return list_of(declared);
+        }
+        let in_category = occurrence.category.as_deref().and_then(|id| self.category_alarms(id));
+        if let Some(specs) = in_category {
+            return specs.to_vec();
+        }
+        match occurrence.start {
+            Start::Time(_) => self.timed.clone().unwrap_or_else(|| vec![Spec::AT_START]),
+            Start::Date(_) => self.all_day.clone().unwrap_or_default(),
+        }
+    }
+
+    /// What the category `id` sets, from the nearest of it and its ancestors that sets anything.
+    /// `None` for an id that is not configured, whatever its ancestors say.
+    fn category_alarms(&self, id: &str) -> Option<&[Spec]> {
+        self.categories.get(id)?;
+        lineage(id).into_iter().find_map(|ancestor| self.categories.get(ancestor)?.as_deref())
+    }
+
+    /// Every alarm any of it names, for `Reach`.
+    fn specs(&self) -> impl Iterator<Item = &Spec> {
+        [&self.timed, &self.all_day]
+            .into_iter()
+            .chain(self.categories.values())
+            .flatten()
+            .flatten()
+    }
+}
+
+/// A category id and its ancestors, nearest first: `a/b/c`, `a/b`, `a`. `categoryLineage` in the
+/// frontend, which a leading slash does not make an ancestor of.
+fn lineage(id: &str) -> Vec<&str> {
+    let mut found = vec![id];
+    let mut end = id.len();
+    while let Some(slash) = id[..end].rfind('/') {
+        if slash == 0 {
+            break;
+        }
+        found.push(&id[..slash]);
+        end = slash;
+    }
+    found
 }
 
 /// How far before and after an occurrence's start any alarm in the listing rings.
@@ -212,8 +295,11 @@ pub struct Reach {
 }
 
 impl Reach {
-    pub fn of(entries: &[ListEntry]) -> Reach {
+    pub fn of(entries: &[ListEntry], defaults: &Defaults) -> Reach {
         let mut reach = Reach::default();
+        for spec in defaults.specs() {
+            reach.include(std::slice::from_ref(spec));
+        }
         for entry in entries {
             if let Some(events) = entry.metadata.as_ref().and_then(|metadata| metadata.get("events")) {
                 reach.scan(events);
@@ -266,6 +352,11 @@ mod tests {
 
     fn reader() -> Reader {
         Reader { zone: LOS_ANGELES, now: "2024-01-15T00:00:00Z".parse().unwrap() }
+    }
+
+    /// The defaults a `.mory/calendars.yaml` gives, through the same reading the scheduler uses.
+    fn defaults(yaml: &str) -> Defaults {
+        crate::v2::parse_calendar_config(yaml).unwrap().alarm_defaults()
     }
 
     fn spec(text: &str) -> Spec {
@@ -381,6 +472,172 @@ mod tests {
         assert!(list("{ at: -10m }").is_empty());
     }
 
+    /// What each occurrence of `note` rings at under the configuration `config`, as
+    /// `start  name  spec|spec` in order.
+    fn resolved(config: &str, note: &str) -> Vec<String> {
+        let defaults = defaults(config);
+        let entry = ListEntry {
+            path: "note.md".into(),
+            size: 1,
+            mime_type: "text/markdown".to_owned(),
+            metadata: Some(serde_yaml::from_str(note).unwrap()),
+            title: None,
+            time: "2024-01-01T00:00:00+00:00".parse().unwrap(),
+        };
+        let reader = reader();
+        let (from, to) = crate::note_events::day_window(
+            NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2024, 12, 31).unwrap(),
+            &reader,
+        );
+        let mut lines: Vec<String> = crate::note_events::occurrences(&[entry], from, to, &reader)
+            .iter()
+            .map(|occurrence| {
+                let specs: Vec<String> = defaults.specs_of(occurrence).iter().map(Spec::to_string).collect();
+                format!("{}  {}  {}", occurrence.start, occurrence.name, if specs.is_empty() { "none".into() } else { specs.join("|") })
+            })
+            .collect();
+        lines.sort();
+        lines
+    }
+
+    const CONFIG: &str = "
+alarms: { timed: [-5m], all_day: [-1d 18:00] }
+categories:
+    meeting: { color: red, alarms: [-10m] }
+    meeting/1on1: { alarms: [-15m, 0m] }
+    meeting/standup: { color: blue }
+    meeting/quiet: { alarms: [] }
+    unset:
+    kin/child: { alarms: [-2h] }
+    kin/child/grandchild:
+    a/b/c: { alarms: [-1h] }
+    a/b/c/d:
+";
+
+    #[test]
+    fn each_step_of_the_precedence_wins_over_those_after_it() {
+        let note = "
+events:
+    Own list: { start: '2024-05-06 09:00', category: meeting, alarms: [-1m] }
+    Own list silences: { start: '2024-05-06 09:01', category: meeting, alarms: [] }
+    Own list beats an event's: { start: '2024-05-06 09:02', alarms: [-1h], instances: [{ start: '2024-05-06 10:02', alarms: [-2m] }] }
+    The event's list: { start: '2024-05-06 09:03', category: meeting/1on1, alarms: [-1h] }
+    A category: { start: '2024-05-06 09:04', category: meeting }
+    A nested category: { start: '2024-05-06 09:05', category: meeting/1on1 }
+    A category that sets none: { start: '2024-05-06 09:06', category: meeting/standup }
+    A category that silences: { start: '2024-05-06 09:07', category: meeting/quiet }
+    A category with nothing: { start: '2024-05-06 09:08', category: unset }
+    A category misspelt: { start: '2024-05-06 09:09', category: meeting/1no1 }
+    A category not text: { start: '2024-05-06 09:10', category: 5 }
+    A category not configured: { start: '2024-05-06 09:11', category: nowhere }
+    A parent that is not configured: { start: '2024-05-06 09:12', category: kin }
+    Through two ancestors: { start: '2024-05-06 09:13', category: kin/child/grandchild }
+    Past an ancestor that is not configured: { start: '2024-05-06 09:14', category: a/b/c/d }
+    A configured id without its parents: { start: '2024-05-06 09:15', category: a/b }
+    No category: { start: '2024-05-06 09:16' }
+    An all-day one: { start: '2024-05-06' }
+    An all-day one in a category: { start: '2024-05-07', category: meeting }
+    An all-day one with its own: { start: '2024-05-08', alarms: [09:00] }
+";
+        assert_eq!(resolved(CONFIG, note), [
+            "2024-05-06  An all-day one  -1d 18:00",
+            "2024-05-06 09:00  Own list  -1m",
+            "2024-05-06 09:01  Own list silences  none",
+            "2024-05-06 09:02  Own list beats an event's  -1h",
+            "2024-05-06 09:03  The event's list  -1h",
+            "2024-05-06 09:04  A category  -10m",
+            "2024-05-06 09:05  A nested category  -15m|+0m",
+            "2024-05-06 09:06  A category that sets none  -10m",
+            "2024-05-06 09:07  A category that silences  none",
+            "2024-05-06 09:08  A category with nothing  -5m",
+            "2024-05-06 09:09  A category misspelt  -5m",
+            "2024-05-06 09:10  A category not text  -5m",
+            "2024-05-06 09:11  A category not configured  -5m",
+            "2024-05-06 09:12  A parent that is not configured  -5m",
+            "2024-05-06 09:13  Through two ancestors  -2h",
+            "2024-05-06 09:14  Past an ancestor that is not configured  -1h",
+            "2024-05-06 09:15  A configured id without its parents  -5m",
+            "2024-05-06 09:16  No category  -5m",
+            "2024-05-06 10:02  Own list beats an event's  -2m",
+            "2024-05-07  An all-day one in a category  -10m",
+            "2024-05-08  An all-day one with its own  09:00",
+        ]);
+    }
+
+    #[test]
+    fn a_category_belongs_to_the_whole_event_and_its_alarms_to_each_occurrence() {
+        let note = "
+events:
+    Series:
+        start: '2024-05-06 09:00'
+        repeat: { freq: daily, count: 3 }
+        category: meeting
+        overrides:
+            - { at: '2024-05-07 09:00', alarms: [-1h] }
+            - { at: '2024-05-08 09:00', category: unset, location: Room 2 }
+    Listed:
+        category: meeting/1on1
+        instances: [{ start: '2024-05-10 09:00' }, { start: '2024-05-11 09:00', category: unset }]
+";
+        assert_eq!(resolved(CONFIG, note), [
+            "2024-05-06 09:00  Series  -10m",
+            "2024-05-07 09:00  Series  -1h",
+            "2024-05-08 09:00  Series  -10m",
+            "2024-05-10 09:00  Listed  -15m|+0m",
+            "2024-05-11 09:00  Listed  -15m|+0m",
+        ]);
+    }
+
+    #[test]
+    fn with_nothing_configured_a_timed_occurrence_rings_at_its_start_and_an_all_day_one_never() {
+        let note = "events: { Timed: { start: '2024-05-06 09:00', category: meeting }, Day: { start: '2024-05-07' } }";
+        let built_in = ["2024-05-06 09:00  Timed  +0m", "2024-05-07  Day  none"];
+        assert_eq!(resolved("", note), built_in);
+        assert_eq!(resolved("calendars: []", note), built_in);
+        // A key left empty is not set, and falls through as an empty `category:` does.
+        assert_eq!(resolved("alarms:\n    timed:\n    all_day:\n", note), built_in);
+        // Silenced is not the same: an empty list is a setting.
+        assert_eq!(resolved("alarms: { timed: [], all_day: [09:00] }", note), [
+            "2024-05-06 09:00  Timed  none",
+            "2024-05-07  Day  09:00",
+        ]);
+        // A single string is a list of one, and an entry that is not an alarm is dropped.
+        assert_eq!(resolved("alarms: { timed: -1h, all_day: [bogus, -6h] }", note), [
+            "2024-05-06 09:00  Timed  -1h",
+            "2024-05-07  Day  -6h",
+        ]);
+    }
+
+    #[test]
+    fn a_configuration_that_is_not_usable_sets_nothing() {
+        let note = "events: { Timed: { start: '2024-05-06 09:00', category: a }, Day: { start: '2024-05-07', category: b } }";
+        let built_in = ["2024-05-06 09:00  Timed  +0m", "2024-05-07  Day  none"];
+        // Blocks that are not mappings, and categories that are not either, set nothing and are not
+        // configured.
+        for config in [
+            "alarms: 5\ncategories: [a, b]",
+            "alarms: [timed]\ncategories: 5",
+            "categories: { a: 5, b: [alarms] }",
+        ] {
+            assert_eq!(resolved(config, note), built_in, "{config}");
+        }
+        // A value that is there but holds no usable alarm is a setting all the same, an empty one,
+        // as it is in a note: nothing is rung, and the web app is what says why.
+        let silent = ["2024-05-06 09:00  Timed  none", "2024-05-07  Day  none"];
+        assert_eq!(resolved("alarms: { timed: 5, all_day: { at: -1h } }", note), silent);
+        assert_eq!(resolved("categories: { a: { alarms: [10m] }, b: { alarms: soon } }", note), silent);
+    }
+
+    #[test]
+    fn a_category_id_is_its_ancestors_nearest_first() {
+        assert_eq!(lineage("a/b/c"), ["a/b/c", "a/b", "a"]);
+        assert_eq!(lineage("a"), ["a"]);
+        assert_eq!(lineage("/a"), ["/a"]);
+        assert_eq!(lineage("a//b"), ["a//b", "a/", "a"]);
+        assert_eq!(lineage(""), [""]);
+    }
+
     #[test]
     fn the_reach_is_the_furthest_alarm_in_either_direction() {
         let entry = |yaml: &str| ListEntry {
@@ -391,20 +648,25 @@ mod tests {
             title: None,
             time: "2024-01-01T00:00:00+00:00".parse().unwrap(),
         };
-        assert_eq!(Reach::of(&[entry("events: { A: { start: '2024-05-06 09:00' } }")]), Reach::default());
+        let none = Defaults::default();
+        assert_eq!(Reach::of(&[entry("events: { A: { start: '2024-05-06 09:00' } }")], &none), Reach::default());
         let reach = Reach::of(&[
             entry("events: { A: { start: '2024-05-06 09:00', alarms: [-10m, +2h] } }"),
             entry("events: { B: { start: '2024-05-06', overrides: [{ at: x, alarms: -3h }], instances: [{ alarms: [-1w] }] } }"),
             entry("tags: [alarms]"),
-        ]);
+        ], &none);
         // A week, and the day more that whole days are counted with.
         assert_eq!(reach.before, Duration::days(8));
         assert_eq!(reach.after, Duration::hours(2));
         // An event that happens to be called `alarms` is looked into, not mistaken for a list.
-        let named = Reach::of(&[entry("events: { alarms: { start: '2024-05-06 09:00', alarms: -2h } }")]);
+        let named = Reach::of(&[entry("events: { alarms: { start: '2024-05-06 09:00', alarms: -2h } }")], &none);
         assert_eq!(named.before, Duration::hours(2));
         // A time of day on the day before can be anywhere in it, which is up to two days early.
-        let at = Reach::of(&[entry("events: { A: { start: '2024-05-06', alarms: [-1d 18:00] } }")]);
+        let at = Reach::of(&[entry("events: { A: { start: '2024-05-06', alarms: [-1d 18:00] } }")], &none);
         assert_eq!((at.before, at.after), (Duration::days(2), Duration::zero()));
+        // What the configuration sets counts as well, before any note names it.
+        let configured = defaults("alarms: { timed: [-1h], all_day: [+2h] }\ncategories: { a: { alarms: [-3d] } }");
+        let reach = Reach::of(&[], &configured);
+        assert_eq!((reach.before, reach.after), (Duration::days(4), Duration::hours(2)));
     }
 }

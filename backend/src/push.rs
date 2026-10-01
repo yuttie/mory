@@ -41,7 +41,7 @@ use web_push_native::jwt_simple::algorithms::{
 };
 use web_push_native::{Auth, WebPushBuilder, p256::PublicKey};
 
-use crate::alarms::{self, Reach};
+use crate::alarms::{Defaults, Reach, instants_of};
 use crate::models::{AppError, AppState, ListEntry};
 use crate::note_events::{self, Reader, Start};
 
@@ -288,22 +288,24 @@ impl Alarm {
 /// What the scheduler works from, read again whenever a sync says the listing changed.
 struct Schedule {
     entries: Vec<ListEntry>,
-    /// How far from an occurrence any alarm in `entries` rings: asked of every note, so asked once
-    /// here and not every minute.
+    /// What `.mory/calendars.yaml` says alarms ring at where a note does not.
+    defaults: Defaults,
+    /// How far from an occurrence any alarm in `entries` or `defaults` rings: asked of every note,
+    /// so asked once here and not every minute.
     reach: Reach,
 }
 
 impl Schedule {
-    fn new(entries: Vec<ListEntry>) -> Self {
-        let reach = Reach::of(&entries);
-        Schedule { entries, reach }
+    fn new(entries: Vec<ListEntry>, defaults: Defaults) -> Self {
+        let reach = Reach::of(&entries, &defaults);
+        Schedule { entries, defaults, reach }
     }
 }
 
 /// The alarms ringing after `after` and no later than `until`, soonest first.
 ///
-/// An occurrence rings at what its `alarms` say, or at its start if they say nothing; an all-day
-/// one that says nothing never rings. One already marked finished needs no reminder.
+/// An occurrence rings at what its `alarms` say, then its category, then the configuration; failing
+/// all of them, at its start, if it is timed. One already marked finished needs no reminder.
 fn alarms_between(
     schedule: &Schedule,
     after: DateTime<Utc>,
@@ -327,8 +329,8 @@ fn alarms_between(
             Start::Date(day) => Moment::Day(day),
             Start::Time(_) => Moment::At(occurrence.start.begins(reader)),
         };
-        let specs = alarms::specs_of(&occurrence);
-        for at in alarms::instants_of(&specs, occurrence.start, reader) {
+        let specs = schedule.defaults.specs_of(&occurrence);
+        for at in instants_of(&specs, occurrence.start, reader) {
             if after < at && at <= until {
                 alarms.push(Alarm {
                     at,
@@ -508,7 +510,18 @@ async fn run(state: AppState) {
         if !subscriptions.is_empty() {
             if schedule.is_none() {
                 match state.read_entries(None).await {
-                    Ok((_, listing)) => schedule = Some(Schedule::new(listing)),
+                    Ok((_, listing)) => {
+                        // Read from git with the listing, so that an idle minute asks the database
+                        // for nothing. A file moried cannot read leaves every alarm at its default.
+                        let defaults = match crate::v2::read_calendar_config(&state).await {
+                            Ok(config) => config.alarm_defaults(),
+                            Err(e) => {
+                                tracing::error!("The alarm scheduler could not read the calendar configuration: {:?}", e);
+                                Defaults::default()
+                            },
+                        };
+                        schedule = Some(Schedule::new(listing, defaults));
+                    },
                     Err(e) => tracing::error!("The alarm scheduler could not read the listing: {:?}", e),
                 }
             }
@@ -584,7 +597,7 @@ mod tests {
     }
 
     fn schedule(entries: impl IntoIterator<Item = ListEntry>) -> Schedule {
-        Schedule::new(entries.into_iter().collect())
+        Schedule::new(entries.into_iter().collect(), Defaults::default())
     }
 
     fn reader() -> Reader {
@@ -785,6 +798,32 @@ events:
 ";
         assert_eq!(rung(after, "2024-05-07T15:59:00Z", "2024-05-07T16:01:00Z"), [
             "2024-05-07T16:00:00+00:00  Review",
+        ]);
+    }
+
+    #[test]
+    fn the_configuration_sets_the_alarms_a_note_leaves_unsaid_and_the_window_follows() {
+        let config = "
+alarms: { all_day: [-1d 18:00] }
+categories: { meeting: { alarms: [-3d] } }
+";
+        let defaults = crate::v2::parse_calendar_config(config).unwrap().alarm_defaults();
+        // The Monday occurrence is generated, so only a window reaching it finds the Friday alarm,
+        // although no note says anything of three days.
+        let schedule = Schedule::new(vec![entry("
+events:
+    Review: { start: '2024-04-29 09:00', repeat: { freq: weekly }, category: meeting }
+    Holiday: { start: '2024-05-07' }
+    Own: { start: '2024-05-07 10:00', category: meeting, alarms: [-1h] }
+")], defaults);
+        let rung: Vec<String> = alarms_between(&schedule, at("2024-05-03T15:59:00Z"), at("2024-05-07T20:00:00Z"), &reader())
+            .iter()
+            .map(|alarm| format!("{}  {}", alarm.at.to_rfc3339(), alarm.name))
+            .collect();
+        assert_eq!(rung, [
+            "2024-05-03T16:00:00+00:00  Review",
+            "2024-05-07T01:00:00+00:00  Holiday",
+            "2024-05-07T16:00:00+00:00  Own",
         ]);
     }
 

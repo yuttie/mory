@@ -143,7 +143,7 @@ pub fn day_window(from: NaiveDate, to: NaiveDate, reader: &Reader) -> (DateTime<
 // --- reading values as JavaScript does -----------------------------------------------------
 
 /// A map key as the frontend names the event: JSON has only string keys, so a number is its text.
-fn key_name(key: &Value) -> Option<String> {
+pub(crate) fn key_name(key: &Value) -> Option<String> {
     match key {
         Value::String(name) => Some(name.clone()),
         Value::Number(number) => Some(number.to_string()),
@@ -164,7 +164,7 @@ fn truthy(value: &Value) -> bool {
 }
 
 /// The value JavaScript's `??` leaves: `None` for a missing key and for `null` alike.
-fn present(value: Option<&Value>) -> Option<&Value> {
+pub(crate) fn present(value: Option<&Value>) -> Option<&Value> {
     value.filter(|value| !value.is_null())
 }
 

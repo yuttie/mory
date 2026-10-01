@@ -2175,17 +2175,25 @@ fn draw_note_fixture(entry: &crate::models::ListEntry) -> Vec<String> {
     drawn_in_window(occurrences.iter().map(|occurrence| (occurrence.start, occurrence.name.as_str())))
 }
 
+/// The calendar configuration the note fixtures are read under: what `.mory/calendars.yaml` holds,
+/// as the backend parses it.
+fn note_fixture_config() -> (serde_yaml::Value, alarms::Defaults) {
+    let text = std::fs::read_to_string(fixtures_dir().join("calendars.yaml")).expect("a readable fixture");
+    let config = crate::v2::parse_calendar_config(&text).expect("a parseable fixture");
+    (serde_yaml::from_str(&text).expect("valid YAML"), config.alarm_defaults())
+}
+
 /// `start  name  spec|spec` for everything that starts inside the window, in order: the alarms each
 /// occurrence is to ring at, each spelled as `Spec` spells it. The frontend resolves the same from
-/// the same metadata.
-fn alarms_of_note_fixture(entry: &crate::models::ListEntry) -> Vec<String> {
+/// the same metadata and configuration.
+fn alarms_of_note_fixture(entry: &crate::models::ListEntry, defaults: &alarms::Defaults) -> Vec<String> {
     let reader = note_reader();
     let (from, to) = note_fixture_window();
     let mut lines: Vec<String> = note_events::occurrences(std::slice::from_ref(entry), from, to, &reader)
         .iter()
         .filter(|occurrence| (from..=to).contains(&occurrence.start.begins(&reader)))
         .map(|occurrence| {
-            let specs: Vec<String> = alarms::specs_of(occurrence).iter().map(alarms::Spec::to_string).collect();
+            let specs: Vec<String> = defaults.specs_of(occurrence).iter().map(alarms::Spec::to_string).collect();
             let specs = if specs.is_empty() { "none".to_owned() } else { specs.join("|") };
             format!("{}  {}  {specs}", occurrence.start, occurrence.name)
         })
@@ -2196,6 +2204,7 @@ fn alarms_of_note_fixture(entry: &crate::models::ListEntry) -> Vec<String> {
 
 #[test]
 fn note_fixtures_draw_as_recorded() {
+    let (config, defaults) = note_fixture_config();
     let mut recorded = serde_json::Map::new();
     for name in note_fixture_names() {
         let entry = note_fixture_entry(&name);
@@ -2204,7 +2213,7 @@ fn note_fixtures_draw_as_recorded() {
             serde_json::json!({
                 "metadata": entry.metadata,
                 "drawn": draw_note_fixture(&entry),
-                "alarms": alarms_of_note_fixture(&entry),
+                "alarms": alarms_of_note_fixture(&entry, &defaults),
             }),
         );
     }
@@ -2213,6 +2222,7 @@ fn note_fixtures_draw_as_recorded() {
     let golden = serde_json::to_string_pretty(&serde_json::json!({
         "zone": NOTE_READER_ZONE.name(),
         "window": { "from": FIXTURE_WINDOW.0, "to": FIXTURE_WINDOW.1 },
+        "calendars": config,
         "notes": recorded,
     }))
     .expect("serialisable");
