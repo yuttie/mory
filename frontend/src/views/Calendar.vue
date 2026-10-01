@@ -215,6 +215,9 @@
                         <v-list-item v-if="selectedEvent.location" v-bind:prepend-icon="mdiMapMarkerOutline">
                             {{ selectedEvent.location }}
                         </v-list-item>
+                        <v-list-item v-if="selectedEventAlarms.length > 0" v-bind:prepend-icon="mdiBellOutline">
+                            {{ selectedEventAlarms.join(', ') }}
+                        </v-list-item>
                         <v-list-item v-if="selectedEvent.url" v-bind:prepend-icon="mdiLinkVariant">
                             <a
                                 v-bind:href="selectedEvent.url"
@@ -274,6 +277,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import {
+    mdiBellOutline,
     mdiCalendarImport,
     mdiCalendarMultiple,
     mdiCalendarToday,
@@ -290,6 +294,7 @@ import {
 } from '@mdi/js';
 
 
+import { describeAlarmText } from '@/alarms';
 import {
     DEFAULT_EVENT_COLOR,
     DEFAULT_IMPORTED_COLOR,
@@ -373,15 +378,25 @@ const eventWindow = computed(() => {
 const derived = computed(() => eventsFromEntries(
     files.entries,
     eventWindow.value,
-    { categories: calendars.categoryMap },
+    { categories: calendars.categoryMap, alarmDefaults: calendars.alarmDefaults },
 ));
 // A task's dates are not an `events:` block, so they come from their own derivation over the same
 // listing.
 const taskDates = computed(() => taskDatesFromEntries(
     files.entries,
     eventWindow.value,
-    { colorOf: calendars.taskDateColors },
+    { colorOf: calendars.taskDateColors, alarmDefaults: calendars.alarmDefaults },
 ));
+// What the selected event rings at, in words. Nothing for one that is over, which never rings, nor
+// for one with no alarms, which would only say so on every all-day event; and not an imported one,
+// whose calendar is someone else's.
+const selectedEventAlarms = computed(() => {
+    const event = selectedEvent.value;
+    if (event === null || event.finished || event.alarms === undefined) {
+        return [];
+    }
+    return [...new Set(event.alarms.map(describeAlarmText))];
+});
 const hiddenCalendars = computed(() => new Set(hiddenCalendarIds.value));
 const hiddenCategories = computed(() => new Set(hiddenCategoryIds.value));
 const categoryList = computed(() => calendars.categories ?? []);
