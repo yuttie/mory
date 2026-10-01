@@ -272,6 +272,11 @@ struct Payload {
     tag: String,
     /// The note to open when the notification is clicked.
     path: String,
+    /// When the occurrence starts, which an alarm ahead of it does not say: an RFC 3339 instant,
+    /// or a `YYYY-MM-DD` date when `all_day`. Left to the worker to put in the reader's words,
+    /// since the worker is in the reader's zone and this is not.
+    start: String,
+    all_day: bool,
 }
 
 impl Alarm {
@@ -281,6 +286,8 @@ impl Alarm {
             body: self.location.clone(),
             tag: format!("{}#{}@{}", self.path, self.name, self.start),
             path: self.path.clone(),
+            start: self.start.to_string(),
+            all_day: matches!(self.start, Moment::Day(_)),
         }
     }
 }
@@ -958,6 +965,23 @@ events:
         assert_eq!(payload, alarm.payload());
         assert_eq!(payload.title, "Standup");
         assert_eq!(payload.body.as_deref(), Some("Room 1"));
+        // An alarm ten minutes ahead still says when the meeting is.
+        assert_eq!(payload.start, "2024-05-06T16:00:00+00:00");
+        assert!(!payload.all_day);
+    }
+
+    #[test]
+    fn the_payload_of_an_all_day_alarm_names_the_day() {
+        let alarm = Alarm {
+            at: at("2024-05-07T01:00:00Z"),
+            name: "Birthday".into(),
+            path: "notes/birthday.md".into(),
+            location: None,
+            start: Moment::Day(NaiveDate::from_ymd_opt(2024, 5, 7).unwrap()),
+        };
+        let payload = alarm.payload();
+        assert_eq!((payload.start.as_str(), payload.all_day), ("2024-05-07", true));
+        assert_eq!(payload.body, None);
     }
 
     #[test]
