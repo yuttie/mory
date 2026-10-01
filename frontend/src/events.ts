@@ -29,8 +29,14 @@ import type {
     MetadataEvent,
 } from '@/api';
 import { occurrencesOf, validateEvent } from '@/api';
-import type { AlarmDefaults } from '@/alarms';
-import { BUILT_IN_ALARMS, readAlarmList } from '@/alarms';
+import type { AlarmDefaults, EffectiveAlarmDefaults } from '@/alarms';
+import {
+    readAlarmList,
+    readAlarmsIfSet,
+    TASK_DATE_ALARM_DEFAULT,
+    taskAlarmOf,
+    withBuiltInAlarms,
+} from '@/alarms';
 import { RecurrenceError, expandRule, parseWallClock } from '@/recurrence';
 import { taskUuidOf } from '@/task-forest';
 import dayjs from 'dayjs';
@@ -279,23 +285,17 @@ export function isAllDay(start: string): boolean {
 
 // What an occurrence rings at, by the first of these that is set: its own `alarms` or its event's
 // (`own`, which has already been through `??`), its category's, the configuration's for a timed or
-// an all-day one, and the built-in default. `[]` is a setting and silences; `null` is not one.
+// an all-day one, which is the built-in default where the file sets none. `[]` is a setting and
+// silences; `null` is not one.
 function resolveAlarms(
     own: unknown,
     category: EventCategoryRef | undefined,
     start: string,
-    defaults: AlarmDefaults | undefined,
+    defaults: EffectiveAlarmDefaults,
 ): string[] {
-    if (own !== undefined && own !== null) {
-        return readAlarmList(own).alarms;
-    }
-    const inCategory = category?.defaults?.alarms;
-    if (inCategory !== undefined) {
-        return inCategory;
-    }
-    return isAllDay(start)
-        ? defaults?.allDay ?? [...BUILT_IN_ALARMS.allDay]
-        : defaults?.timed ?? [...BUILT_IN_ALARMS.timed];
+    return readAlarmsIfSet(own)
+        ?? category?.defaults?.alarms
+        ?? (isAllDay(start) ? defaults.allDay : defaults.timed);
 }
 
 // Every entry of an `alarms:` value that is not an alarm, reported where it is written: once for the
@@ -321,7 +321,7 @@ function buildOccurrence(
     eventName: string,
     entry: ListEntry2,
     errors: EventError[],
-    alarmDefaults?: AlarmDefaults,
+    alarmDefaults: EffectiveAlarmDefaults,
 ): CalendarEvent | null {
     // `typeof` first: `dayjs(20240501)` is a valid epoch, so a YAML integer would pass the
     // validity check and then fail as a string later, inside the view.
@@ -425,7 +425,7 @@ function expandSeries(
     category: EventCategoryRef | undefined,
     entry: ListEntry2,
     window: EventWindow,
-    alarmDefaults: AlarmDefaults | undefined,
+    alarmDefaults: EffectiveAlarmDefaults,
     into: CalendarEvent[],
     errors: EventError[],
 ): void {
@@ -612,7 +612,7 @@ function eventsOfEntry(
     entry: ListEntry2,
     window: EventWindow,
     categories: EventCategories | undefined,
-    alarmDefaults: AlarmDefaults | undefined,
+    alarmDefaults: EffectiveAlarmDefaults,
     into: CalendarEvent[],
     errors: EventError[],
 ): void {
@@ -663,6 +663,7 @@ export function eventsFromEntries(
 ): DerivedEvents {
     const events: CalendarEvent[] = [];
     const errors: EventError[] = [];
+    const alarmDefaults = withBuiltInAlarms(options.alarmDefaults);
 
     for (const entry of entries) {
         const metadata = entry.metadata;
@@ -680,7 +681,7 @@ export function eventsFromEntries(
         for (const [eventName, detail] of Object.entries(declared)) {
             if (typeof detail === 'object' && detail !== null) {
                 eventsOfEntry(
-                    eventName, detail, entry, window, options.categories, options.alarmDefaults,
+                    eventName, detail, entry, window, options.categories, alarmDefaults,
                     events, errors);
             }
         }
@@ -852,7 +853,7 @@ function taskDateEvent(
     entry: ListEntry2,
     window: EventWindow,
     colors: TaskDateColors,
-    alarmDefaults: AlarmDefaults | undefined,
+    alarmDefaults: EffectiveAlarmDefaults,
     into: CalendarEvent[],
     errors: EventError[],
 ): void {
@@ -869,12 +870,9 @@ function taskDateEvent(
         return;
     }
 
-    // The task's own list for this date, which `task.alarms` holds beside the date and not in it:
-    // anything but a mapping there is not set. Checked wherever the date is, as the date itself is.
-    const kept = (task as { alarms?: unknown }).alarms;
-    const own = typeof kept === 'object' && kept !== null && !Array.isArray(kept)
-        ? (kept as Record<TaskDate, unknown>)[field]
-        : undefined;
+    // The task's own list for this date, which `task.alarms` holds beside the date and not in it.
+    // Checked wherever the date is, as the date itself is.
+    const own = taskAlarmOf((task as { alarms?: unknown }).alarms, field);
     checkAlarms(own, name, entry, errors);
 
     // Compared as dates, not as instants: the window's ends are bare dates, so an instant
@@ -886,7 +884,6 @@ function taskDateEvent(
     }
 
     const settled = isSettled((task as { status?: unknown }).status);
-    const configured = alarmDefaults?.[field === 'due_by' ? 'dueBy' : 'deadline'];
     into.push({
         name,
         start,
@@ -899,9 +896,7 @@ function taskDateEvent(
         // A task that is over never rings, so it is not shown to.
         alarms: settled
             ? []
-            : own !== undefined && own !== null
-                ? readAlarmList(own).alarms
-                : configured ?? [...BUILT_IN_ALARMS[field === 'due_by' ? 'dueBy' : 'deadline']],
+            : readAlarmsIfSet(own) ?? alarmDefaults[TASK_DATE_ALARM_DEFAULT[field]],
     });
 }
 
@@ -921,6 +916,7 @@ export function taskDatesFromEntries(
     const events: CalendarEvent[] = [];
     const errors: EventError[] = [];
     const colors = options.colorOf ?? {};
+    const alarmDefaults = withBuiltInAlarms(options.alarmDefaults);
 
     for (const entry of entries) {
         const uuid = taskUuidOf(entry.path);
@@ -932,9 +928,9 @@ export function taskDatesFromEntries(
             continue;
         }
         taskDateEvent(
-            'due_by', task, uuid, entry, window, colors, options.alarmDefaults, events, errors);
+            'due_by', task, uuid, entry, window, colors, alarmDefaults, events, errors);
         taskDateEvent(
-            'deadline', task, uuid, entry, window, colors, options.alarmDefaults, events, errors);
+            'deadline', task, uuid, entry, window, colors, alarmDefaults, events, errors);
     }
 
     return { events, errors };
