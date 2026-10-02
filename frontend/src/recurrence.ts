@@ -132,6 +132,9 @@ function listOf(value: unknown): unknown[] | undefined {
     return list.length === 0 ? undefined : list;
 }
 
+// What `backend/src/note_events.rs` holds an interval in, which the two must agree on.
+const MAX_INTERVAL = 65535;
+
 /// The wall-clock occurrences a rule generates that fall within `[from, to]`.
 ///
 /// Returned in the reader's own zone: `repeat.tz` names the zone the rule's wall clock belongs to,
@@ -165,8 +168,15 @@ export function expandRule(
         freq: FREQUENCIES[repeat.freq],
         dtstart: toAnchor(anchorStart),
     };
-    if (repeat.interval !== undefined) {
-        options.interval = repeat.interval;
+    // Blank is no interval, as it is for the other fields. Anything else that is not a whole number
+    // from one to what the backend's `u16` holds is not a rule: rrule.js never finishes expanding
+    // one, and a loop here freezes the page where a throw would only blank the calendar.
+    const interval: unknown = repeat.interval;
+    if (interval !== undefined && interval !== null) {
+        if (typeof interval !== 'number' || !Number.isInteger(interval) || interval < 1 || interval > MAX_INTERVAL) {
+            throw new RecurrenceError(`interval must be a whole number from 1 to ${MAX_INTERVAL}, not ${JSON.stringify(interval)}`);
+        }
+        options.interval = interval;
     }
     if (byday !== undefined) {
         options.byweekday = byday.map((day) => toWeekday(String(day)));

@@ -2070,9 +2070,14 @@
         "2024-10-07 08:00  An empty month day list  +0m",
         "2024-10-08 08:00  An empty month list  +0m",
         "2024-10-14 10:00  A null weekday list  +0m",
+        "2024-10-15 08:00  A blank interval is none  +0m",
+        "2024-10-15 09:00  An interval of one  +0m",
+        "2024-10-15 15:00  The largest interval  +0m",
         "2024-10-16 08:00  A weekday, not a list  +0m",
         "2024-10-16 09:00  An ordinal weekday, not a list  +0m",
         "2024-10-21 10:00  A null weekday list  +0m",
+        "2024-10-22 08:00  A blank interval is none  +0m",
+        "2024-10-22 09:00  An interval of one  +0m",
         "2024-10-23 08:00  A weekday, not a list  +0m",
         "2024-11-06 08:00  An empty weekday list  +0m",
         "2024-11-07 08:00  An empty month day list  +0m",
@@ -2145,9 +2150,14 @@
         "2024-10-07 08:00  An empty month day list  -5m",
         "2024-10-08 08:00  An empty month list  -5m",
         "2024-10-14 10:00  A null weekday list  -5m",
+        "2024-10-15 08:00  A blank interval is none  -5m",
+        "2024-10-15 09:00  An interval of one  -5m",
+        "2024-10-15 15:00  The largest interval  -5m",
         "2024-10-16 08:00  A weekday, not a list  -5m",
         "2024-10-16 09:00  An ordinal weekday, not a list  -5m",
         "2024-10-21 10:00  A null weekday list  -5m",
+        "2024-10-22 08:00  A blank interval is none  -5m",
+        "2024-10-22 09:00  An interval of one  -5m",
         "2024-10-23 08:00  A weekday, not a list  -5m",
         "2024-11-06 08:00  An empty weekday list  -5m",
         "2024-11-07 08:00  An empty month day list  -5m",
@@ -2220,9 +2230,14 @@
         "2024-10-07 08:00  An empty month day list",
         "2024-10-08 08:00  An empty month list",
         "2024-10-14 10:00  A null weekday list",
+        "2024-10-15 08:00  A blank interval is none",
+        "2024-10-15 09:00  An interval of one",
+        "2024-10-15 15:00  The largest interval",
         "2024-10-16 08:00  A weekday, not a list",
         "2024-10-16 09:00  An ordinal weekday, not a list",
         "2024-10-21 10:00  A null weekday list",
+        "2024-10-22 08:00  A blank interval is none",
+        "2024-10-22 09:00  An interval of one",
         "2024-10-23 08:00  A weekday, not a list",
         "2024-11-06 08:00  An empty weekday list",
         "2024-11-07 08:00  An empty month day list",
@@ -2236,6 +2251,14 @@
       ],
       "metadata": {
         "events": {
+          "A blank interval is none": {
+            "repeat": {
+              "count": 2,
+              "freq": "weekly",
+              "interval": null
+            },
+            "start": "2024-10-15 08:00"
+          },
           "A month day, not a list": {
             "repeat": {
               "bymonthday": 15,
@@ -2291,6 +2314,54 @@
               "freq": "monthly"
             },
             "start": "2024-10-06 08:00"
+          },
+          "An interval of one": {
+            "repeat": {
+              "count": 2,
+              "freq": "weekly",
+              "interval": 1
+            },
+            "start": "2024-10-15 09:00"
+          },
+          "An interval that is negative is no rule": {
+            "repeat": {
+              "count": 2,
+              "freq": "weekly",
+              "interval": -1
+            },
+            "start": "2024-10-15 11:00"
+          },
+          "An interval that is not whole is no rule": {
+            "repeat": {
+              "count": 2,
+              "freq": "weekly",
+              "interval": 1.5
+            },
+            "start": "2024-10-15 13:00"
+          },
+          "An interval that is text is no rule": {
+            "repeat": {
+              "count": 2,
+              "freq": "weekly",
+              "interval": "twice"
+            },
+            "start": "2024-10-15 12:00"
+          },
+          "An interval that is zero is no rule": {
+            "repeat": {
+              "count": 2,
+              "freq": "weekly",
+              "interval": 0
+            },
+            "start": "2024-10-15 10:00"
+          },
+          "An interval too large is no rule": {
+            "repeat": {
+              "count": 2,
+              "freq": "weekly",
+              "interval": 70000
+            },
+            "start": "2024-10-15 14:00"
           },
           "An ordinal weekday, not a list": {
             "repeat": {
@@ -2397,6 +2468,14 @@
               "freq": "monthly"
             },
             "start": "2024-01-31 08:00"
+          },
+          "The largest interval": {
+            "repeat": {
+              "count": 2,
+              "freq": "daily",
+              "interval": 65535
+            },
+            "start": "2024-10-15 15:00"
           },
           "Third Wednesday": {
             "repeat": {

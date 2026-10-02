@@ -720,7 +720,9 @@ fn expand_rule(
         }
         rule = rule.by_weekday(days);
     }
-    if let Some(interval) = repeat.get("interval") {
+    // Blank is none, as for the rest; anything else must be a whole number from one to what a `u16`
+    // holds, which `expandRule` requires too, since rrule.js never finishes expanding one that is not.
+    if let Some(interval) = present(repeat.get("interval")) {
         rule = rule.interval(integer::<u16>(interval).filter(|n| *n > 0)?);
     }
     if let Some(days) = present(repeat.get("bymonthday")) {

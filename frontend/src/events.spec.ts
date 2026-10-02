@@ -1485,6 +1485,36 @@ describe('an overrides list written by hand', () => {
     });
 });
 
+describe('a repeat interval written by hand', () => {
+    // rrule.js never finishes expanding a null, negative or non-numeric interval, which froze the
+    // page rather than blanking the calendar. It is refused and reported instead.
+    const weekly = (interval: unknown) => eventsFromEntries([entry('a.md', {
+        Standup: {
+            start: '2024-05-06 09:00',
+            repeat: { freq: 'weekly', interval: interval as number, count: 2 },
+        },
+    })], ANY_WINDOW);
+
+    it('takes a blank interval as none, and a whole number from one up', () => {
+        for (const interval of [undefined, null, 1, 2, 65535]) {
+            const derived = weekly(interval);
+            expect(derived.errors, String(interval)).toEqual([]);
+            expect(derived.events.length, String(interval)).toBeGreaterThanOrEqual(1);
+        }
+        expect(weekly(null).events.map((event) => event.start)).toEqual(['2024-05-06 09:00', '2024-05-13 09:00']);
+    });
+
+    it('refuses any other, with a reason, and draws nothing from the rule', () => {
+        for (const interval of [0, -1, 1.5, 65536, 'twice', true, [], {}, ['2']]) {
+            const derived = weekly(interval);
+            expect(derived.events, JSON.stringify(interval)).toEqual([]);
+            expect(derived.errors, JSON.stringify(interval)).toHaveLength(1);
+            expect(derived.errors[0][0]).toBe('repeat');
+            expect(String(derived.errors[0][1])).toContain('interval must be a whole number');
+        }
+    });
+});
+
 describe('an ical key written by hand', () => {
     // `ical:` with nothing after it is null, which the provenance read as a mapping and threw on.
     it('is no provenance when it is blank or not a mapping, and the event is drawn as any other', () => {
