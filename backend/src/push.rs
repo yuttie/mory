@@ -343,7 +343,7 @@ struct Plan<'a> {
 /// The alarms due in `(after, now]` for each zone's browsers, and the first due after `now` within
 /// `CHECK_INTERVAL`. One more than `LATE_LIMIT` late is let pass.
 fn plan<'a>(
-    listing: &Schedule,
+    schedule: &Schedule,
     subscriptions: &'a [Subscription],
     after: DateTime<Utc>,
     now: DateTime<Utc>,
@@ -354,7 +354,7 @@ fn plan<'a>(
     }
     let mut plan = Plan { due: Vec::new(), next: None };
     for (zone, group) in by_zone {
-        for alarm in alarms_between(listing, after, now + CHECK_INTERVAL, &Reader { zone, now }) {
+        for alarm in alarms_between(schedule, after, now + CHECK_INTERVAL, &Reader { zone, now }) {
             if alarm.at > now {
                 plan.next = Some(plan.next.map_or(alarm.at, |next| next.min(alarm.at)));
                 break;
@@ -519,7 +519,7 @@ mod tests {
         text.parse().unwrap()
     }
 
-    fn schedule(entries: impl IntoIterator<Item = ListEntry>) -> Schedule {
+    fn schedule_of(entries: impl IntoIterator<Item = ListEntry>) -> Schedule {
         Schedule::new(entries.into_iter().collect(), Defaults::default())
     }
 
@@ -556,7 +556,7 @@ mod tests {
 
     #[test]
     fn a_plan_sends_what_is_due_lets_a_late_one_pass_and_finds_the_next() {
-        let entries = schedule([entry("
+        let schedule = schedule_of([entry("
 events:
     Too late: { start: '2024-05-06 09:45:00+00:00' }
     Late but in time: { start: '2024-05-06 09:55:00+00:00' }
@@ -565,7 +565,7 @@ events:
     After the lookahead: { start: '2024-05-06 10:05:00+00:00' }
 ")]);
         let subscriptions = [subscription_in(LOS_ANGELES)];
-        let plan = plan(&entries, &subscriptions, at("2024-05-06T09:30:00Z"), at("2024-05-06T10:00:00Z"));
+        let plan = plan(&schedule, &subscriptions, at("2024-05-06T09:30:00Z"), at("2024-05-06T10:00:00Z"));
         assert_eq!(names(&plan), [
             ("Late but in time".to_owned(), vec![LOS_ANGELES]),
             ("Now".to_owned(), vec![LOS_ANGELES]),
@@ -575,24 +575,24 @@ events:
 
     #[test]
     fn a_plan_sends_a_wall_clock_to_the_browsers_whose_zone_it_is_due_in() {
-        let entries = schedule([entry("events: { Call: { start: '2024-05-06 09:00' } }")]);
+        let schedule = schedule_of([entry("events: { Call: { start: '2024-05-06 09:00' } }")]);
         let tokyo = chrono_tz::Asia::Tokyo;
         let subscriptions = [subscription_in(LOS_ANGELES), subscription_in(tokyo)];
         // 09:00 in Tokyo; still the night before in Los Angeles.
-        let plan = plan(&entries, &subscriptions, at("2024-05-05T23:59:00Z"), at("2024-05-06T00:00:30Z"));
+        let plan = plan(&schedule, &subscriptions, at("2024-05-05T23:59:00Z"), at("2024-05-06T00:00:30Z"));
         assert_eq!(names(&plan), [("Call".to_owned(), vec![tokyo])]);
         assert_eq!(plan.next, None);
     }
 
     #[test]
     fn a_plan_finds_the_next_early_alarm() {
-        let entries = schedule([entry("events: { Call: { start: '2024-05-06 09:00:00+00:00', alarms: [-30s, 0m] } }")]);
+        let schedule = schedule_of([entry("events: { Call: { start: '2024-05-06 09:00:00+00:00', alarms: [-30s, 0m] } }")]);
         let subscriptions = [subscription_in(LOS_ANGELES)];
-        let plan = plan(&entries, &subscriptions, at("2024-05-06T08:59:00Z"), at("2024-05-06T08:59:10Z"));
+        let plan = plan(&schedule, &subscriptions, at("2024-05-06T08:59:00Z"), at("2024-05-06T08:59:10Z"));
         assert!(plan.due.is_empty());
         assert_eq!(plan.next, Some(at("2024-05-06T08:59:30Z")));
 
-        let plan = super::plan(&entries, &subscriptions, at("2024-05-06T08:59:10Z"), at("2024-05-06T08:59:30Z"));
+        let plan = super::plan(&schedule, &subscriptions, at("2024-05-06T08:59:10Z"), at("2024-05-06T08:59:30Z"));
         assert_eq!(names(&plan), [("Call".to_owned(), vec![LOS_ANGELES])]);
         assert_eq!(plan.next, Some(at("2024-05-06T09:00:00Z")));
     }
@@ -608,7 +608,7 @@ events:
     Holiday: { start: '2024-05-06', alarms: [09:00, 17:00] }
 ";
         let alarms = alarms_between(
-            &schedule([entry(yaml)]),
+            &schedule_of([entry(yaml)]),
             at("2024-05-05T00:00:00Z"),
             at("2024-05-08T00:00:00Z"),
             &reader(),

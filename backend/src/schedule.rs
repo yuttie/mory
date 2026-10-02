@@ -159,7 +159,7 @@ mod tests {
         text.parse().unwrap()
     }
 
-    fn schedule(entries: impl IntoIterator<Item = ListEntry>) -> Schedule {
+    fn schedule_of(entries: impl IntoIterator<Item = ListEntry>) -> Schedule {
         Schedule::new(entries.into_iter().collect(), Defaults::default())
     }
 
@@ -169,7 +169,7 @@ mod tests {
 
     #[test]
     fn alarms_are_the_timed_unfinished_occurrences_in_the_span() {
-        let entries = schedule([entry("
+        let schedule = schedule_of([entry("
 events:
     Standup:
         start: '2024-05-06 09:00'
@@ -181,7 +181,7 @@ events:
 ")]);
         // 09:00 in Los Angeles is 16:00 UTC; the span starts exactly at the first, so it is left
         // out as already rung.
-        let alarms = alarms_between(&entries, at("2024-05-06T16:00:00Z"), at("2024-05-07T16:00:00Z"), &reader());
+        let alarms = alarms_between(&schedule, at("2024-05-06T16:00:00Z"), at("2024-05-07T16:00:00Z"), &reader());
         let seen: Vec<(String, &str)> = alarms.iter().map(|a| (a.at.to_rfc3339(), a.name.as_str())).collect();
         assert_eq!(seen, [
             ("2024-05-06T17:00:00+00:00".to_owned(), "Later"),
@@ -192,19 +192,24 @@ events:
 
     #[test]
     fn a_wall_clock_rings_at_that_time_in_each_readers_zone() {
-        let entries = schedule([entry("events: { Call: { start: '2024-05-06 09:00' } }")]);
+        let schedule = schedule_of([entry("events: { Call: { start: '2024-05-06 09:00' } }")]);
         let tokyo = Reader { zone: chrono_tz::Asia::Tokyo, now: at("2024-05-01T00:00:00Z") };
         let span = (at("2024-05-05T00:00:00Z"), at("2024-05-07T00:00:00Z"));
-        assert_eq!(alarms_between(&entries, span.0, span.1, &reader())[0].at, at("2024-05-06T16:00:00Z"));
-        assert_eq!(alarms_between(&entries, span.0, span.1, &tokyo)[0].at, at("2024-05-06T00:00:00Z"));
+        assert_eq!(alarms_between(&schedule, span.0, span.1, &reader())[0].at, at("2024-05-06T16:00:00Z"));
+        assert_eq!(alarms_between(&schedule, span.0, span.1, &tokyo)[0].at, at("2024-05-06T00:00:00Z"));
     }
 
     /// What a reader in Los Angeles is told over the span, as `at  name`.
-    fn rung(yaml: &str, after: &str, until: &str) -> Vec<String> {
-        alarms_between(&schedule([entry(yaml)]), at(after), at(until), &reader())
+    fn told(schedule: &Schedule, after: &str, until: &str) -> Vec<String> {
+        alarms_between(schedule, at(after), at(until), &reader())
             .iter()
             .map(|alarm| format!("{}  {}", alarm.at.to_rfc3339(), alarm.name))
             .collect()
+    }
+
+    /// What `told` says of one note, under the defaults every note has.
+    fn rung(yaml: &str, after: &str, until: &str) -> Vec<String> {
+        told(&schedule_of([entry(yaml)]), after, until)
     }
 
     #[test]
@@ -322,11 +327,7 @@ events:
     Holiday: { start: '2024-05-07' }
     Own: { start: '2024-05-07 10:00', category: meeting, alarms: [-1h] }
 ")], defaults);
-        let rung: Vec<String> = alarms_between(&schedule, at("2024-05-03T15:59:00Z"), at("2024-05-07T20:00:00Z"), &reader())
-            .iter()
-            .map(|alarm| format!("{}  {}", alarm.at.to_rfc3339(), alarm.name))
-            .collect();
-        assert_eq!(rung, [
+        assert_eq!(told(&schedule, "2024-05-03T15:59:00Z", "2024-05-07T20:00:00Z"), [
             "2024-05-03T16:00:00+00:00  Review",
             "2024-05-07T01:00:00+00:00  Holiday",
             "2024-05-07T16:00:00+00:00  Own",
