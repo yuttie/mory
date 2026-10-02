@@ -2871,3 +2871,26 @@ categories:
     let config = crate::v2::parse_calendar_config("categories: [meeting]\n").expect("valid");
     assert!(config.category_ids().is_empty());
 }
+
+/// What the web app takes for a category (`readCategories`) is what the tools must take for one,
+/// or a model is told a category exists that the calendar then reports as unknown, and refused
+/// one the calendar would have drawn.
+#[test]
+fn a_category_is_configured_as_the_web_app_reads_it() {
+    let config = crate::v2::parse_calendar_config("\
+categories:
+    mapping: {}
+    nothing:
+    text: 5
+    list: [meeting]
+    1: {}
+    true:
+    ? [a, b]
+    : {}
+    alarmed:
+        alarms: [-10m]
+")
+    .expect("a valid configuration");
+    // Scalar keys are named as the frontend names them, JSON having only strings.
+    assert_eq!(config.category_ids(), ["mapping", "nothing", "1", "true", "alarmed"]);
+}

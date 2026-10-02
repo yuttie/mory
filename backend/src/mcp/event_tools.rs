@@ -283,8 +283,8 @@ fn event_changes(args: &EventArgs) -> Result<Vec<Change>, String> {
 /// The web app would draw the event without it and report it as unknown, so an unconfigured id is
 /// a typo or an invention either way. A nested id must be configured itself, as the web app
 /// requires: were its parent enough, a misspelt child would never be reported.
-fn check_category(id: &str, configured: &[&str]) -> Result<(), String> {
-    if configured.contains(&id) {
+fn check_category(id: &str, configured: &[String]) -> Result<(), String> {
+    if configured.iter().any(|configured| configured == id) {
         return Ok(());
     }
     if configured.is_empty() {
@@ -528,7 +528,7 @@ mod tests {
 
     #[test]
     fn a_category_must_be_configured_and_names_the_ones_that_are() {
-        let configured = ["meeting", "meeting/1on1", "trip"];
+        let configured = ["meeting", "meeting/1on1", "trip"].map(String::from);
         assert!(check_category("meeting", &configured).is_ok());
         assert!(check_category("meeting/1on1", &configured).is_ok());
 

@@ -249,6 +249,28 @@ pub struct Defaults {
     categories: BTreeMap<String, Option<Vec<Spec>>>,
 }
 
+/// The categories a `categories:` block configures, each by its id and with the mapping that sets
+/// its things, if it has one, in the file's order: `readCategories` in the frontend reads the same
+/// rule. A category with nothing after its id is configured and sets nothing; one that is not a
+/// mapping is not configured at all, and nor is one whose id is not a scalar. An id that is a
+/// number or a flag is its text, as JSON has only string keys.
+///
+/// What counts as configured is decided here and only here, for the alarms a category sets and for
+/// the tools that check an id against it, so a model is never told a category exists that the
+/// calendar then reports as unknown.
+pub(crate) fn configured_categories(
+    block: Option<&Mapping>,
+) -> impl Iterator<Item = (String, Option<&Mapping>)> {
+    block.into_iter().flatten().filter_map(|(id, entry)| {
+        let entry = match entry {
+            Value::Null => None,
+            Value::Mapping(entry) => Some(entry),
+            _ => return None,
+        };
+        Some((key_name(id)?, entry))
+    })
+}
+
 impl Defaults {
     /// The `alarms:` and `categories:` blocks of the calendar configuration. Hand-written, so
     /// whatever is not usable is not there, as `readCategories` reads them in the frontend: a
@@ -256,17 +278,8 @@ impl Defaults {
     /// mapping is not configured at all.
     pub fn read(alarms: Option<&Mapping>, categories: Option<&Mapping>) -> Defaults {
         let set = |key: &str| alarms.and_then(|alarms| present(alarms.get(key))).map(list_of);
-        let categories = categories
-            .into_iter()
-            .flatten()
-            .filter_map(|(id, entry)| {
-                let alarms = match entry {
-                    Value::Null => None,
-                    Value::Mapping(entry) => present(entry.get("alarms")).map(list_of),
-                    _ => return None,
-                };
-                Some((key_name(id)?, alarms))
-            })
+        let categories = configured_categories(categories)
+            .map(|(id, entry)| (id, entry.and_then(|entry| present(entry.get("alarms"))).map(list_of)))
             .collect();
         Defaults {
             timed: set("timed"),

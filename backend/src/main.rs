@@ -1669,11 +1669,10 @@ Important:
             self.alarms.as_mapping()
         }
 
-        /// The ids of the configured event categories, in the file's order.
-        pub(crate) fn category_ids(&self) -> Vec<&str> {
-            self.categories()
-                .map(|categories| categories.keys().filter_map(|id| id.as_str()).collect())
-                .unwrap_or_default()
+        /// The ids of the configured event categories, in the file's order, as the web app reads
+        /// them.
+        pub(crate) fn category_ids(&self) -> Vec<String> {
+            crate::alarms::configured_categories(self.categories()).map(|(id, _)| id).collect()
         }
     }
 

@@ -20,6 +20,7 @@ import {
     taskDatesFromEntries,
     mergeImported,
     normalizeEndTime,
+    readCategories,
     resolveCategory,
     toWallClock,
 } from '@/events';
@@ -1534,5 +1535,29 @@ describe('an ical key written by hand', () => {
             Standup: { start: '2024-05-06 09:00', ical: { calendar: 'work', uid: 'u1' } },
         })], ANY_WINDOW).events;
         expect([event.calendar, event.uid]).toEqual(['work', 'u1']);
+    });
+});
+
+describe('readCategories', () => {
+    // `a_category_is_configured_as_the_web_app_reads_it` in the backend holds the same block to the
+    // same rule, so that a model is not told a category exists that the calendar reports as unknown.
+    it('configures a mapping, and an id with nothing after it, and nothing else', () => {
+        const categories = readCategories({
+            mapping: {},
+            nothing: null,
+            text: 5,
+            list: ['meeting'],
+            1: {},
+            true: null,
+            alarmed: { alarms: ['-10m'] },
+        });
+        expect(categories.map(({ id }) => id).sort()).toEqual(['1', 'alarmed', 'mapping', 'nothing', 'true']);
+        expect(categories.find(({ id }) => id === 'alarmed')?.alarms).toEqual(['-10m']);
+    });
+
+    it('configures none from a block that is not a mapping', () => {
+        for (const block of [undefined, null, 5, 'meeting', ['meeting']]) {
+            expect(readCategories(block), JSON.stringify(block)).toEqual([]);
+        }
     });
 });
