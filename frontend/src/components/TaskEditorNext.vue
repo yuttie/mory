@@ -195,11 +195,11 @@
                             <v-icon>{{ mdiCalendarOutline }}</v-icon>
                         </template>
                     </DateSelector>
-                    <TaskDateAlarms
+                    <InheritableAlarms
                         v-if="form.due_by !== ''"
                         v-model="form.due_by_alarms"
                         v-bind:fallback="calendars.effectiveAlarmDefaults.dueBy"
-                    ></TaskDateAlarms>
+                    ></InheritableAlarms>
                     <!-- Deadline -->
                     <DateSelector
                         v-model="form.deadline"
@@ -210,11 +210,11 @@
                             <v-icon>{{ mdiCalendarOutline }}</v-icon>
                         </template>
                     </DateSelector>
-                    <TaskDateAlarms
+                    <InheritableAlarms
                         v-if="form.deadline !== ''"
                         v-model="form.deadline_alarms"
                         v-bind:fallback="calendars.effectiveAlarmDefaults.deadline"
-                    ></TaskDateAlarms>
+                    ></InheritableAlarms>
                     <!-- Scheduled dates -->
                     <v-label>
                         <v-icon>{{ mdiCalendarCursorOutline }}</v-icon>
@@ -383,7 +383,7 @@ import { assessTask, type TaskAssessmentResponse } from '@/api';
 
 import { alarmProblems, sameTaskAlarms, taskAlarmsToWrite } from '@/alarms';
 import EditableViewer from '@/components/EditableViewer.vue';
-import TaskDateAlarms from '@/components/TaskDateAlarms.vue';
+import InheritableAlarms from '@/components/InheritableAlarms.vue';
 import { extractFileUuid } from '@/api/task';
 import type { UUID, Task, Status, StatusKind, WaitingStatus, BlockedStatus, OnHoldStatus, DoneStatus, CanceledStatus } from '@/task';
 import { STATUS_LABEL, nextOptions, makeDefaultStatus, canTransition, withoutBlanks } from '@/task';

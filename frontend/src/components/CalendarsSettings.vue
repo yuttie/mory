@@ -267,20 +267,14 @@
                         class="mt-4"
                         label="Colour"
                     ></ColorField>
-                    <v-switch
-                        v-model="categoryAlarmsSet"
-                        v-bind:hint="categoryAlarmsHint"
-                        class="mt-2"
-                        label="Set alarms"
-                        persistent-hint
-                        v-on:update:model-value="onCategoryAlarmsSet"
-                    ></v-switch>
-                    <AlarmField
-                        v-if="categoryAlarmsSet"
+                    <InheritableAlarms
                         v-model="categoryAlarms"
-                        class="mt-4"
-                        label="Alarms"
-                    ></AlarmField>
+                        v-bind:fallback="inheritedDraft.alarms ?? calendars.effectiveAlarmDefaults.timed"
+                        v-bind:inherited-hint="categoryInheritedHint"
+                        class="mt-2"
+                        label="Inherit alarms"
+                        own-hint="Its events ring at these unless they set their own. With none, they never ring."
+                    ></InheritableAlarms>
                     <v-alert
                         v-if="categoryDraftError"
                         type="error"
@@ -309,6 +303,7 @@ import { mdiDelete, mdiPencil, mdiPlus } from '@mdi/js';
 import { alarmProblems, BUILT_IN_ALARMS, describeAlarmText } from '@/alarms';
 import type { AlarmDefaults } from '@/alarms';
 import AlarmField from '@/components/AlarmField.vue';
+import InheritableAlarms from '@/components/InheritableAlarms.vue';
 import ColorField from '@/components/ColorField.vue';
 import { parseEventColor } from '@/event-color';
 import {
@@ -377,9 +372,8 @@ const categoryError = ref('');
 const categoryDraftError = ref('');
 // Text, for the same reason as the task date colours: empty means "inherit".
 const categoryDraft = reactive({ id: '', name: '', color: '' });
-// Off, the category sets no alarms and inherits them; on with none, its events never ring.
-const categoryAlarmsSet = ref(false);
-const categoryAlarms = ref<string[]>([]);
+// `null`, the category sets no alarms and inherits them; a list with none in it, its events never ring.
+const categoryAlarms = ref<string[] | null>(null);
 
 // Computed properties
 const taskDateColorsChanged = computed(() => TASK_DATE_FIELDS.some(
@@ -409,11 +403,8 @@ const inheritedDraft = computed((): EventCategory => {
     return resolveCategory(id, new Map([...categoryMap.value, [id, {}]])) ?? {};
 });
 
-// What the switch says it does, in the words of what the category would otherwise ring at.
-const categoryAlarmsHint = computed(() => {
-    if (categoryAlarmsSet.value) {
-        return 'Its events ring at these unless they set their own. With none, they never ring.';
-    }
+// What inheriting means, in the words of what the category would ring at.
+const categoryInheritedHint = computed(() => {
     const inherited = inheritedDraft.value.alarms;
     if (inherited === undefined) {
         return 'Inherits the alarms for events set under Alarms above.';
@@ -587,17 +578,8 @@ function openCategoryDialog(index: number | null) {
         name: existing?.name ?? '',
         color: existing?.color ?? '',
     });
-    categoryAlarmsSet.value = existing?.alarms !== undefined;
-    categoryAlarms.value = [...(existing?.alarms ?? [])];
+    categoryAlarms.value = existing?.alarms === undefined ? null : [...existing.alarms];
     categoryDialogOpen.value = true;
-}
-
-// Switching alarms on starts from what the category rings at now rather than from nothing, which
-// would silence it: the list is the thing to edit, not to build.
-function onCategoryAlarmsSet(set: boolean | null) {
-    if (set === true && categoryAlarms.value.length === 0) {
-        categoryAlarms.value = [...(inheritedDraft.value.alarms ?? calendars.effectiveAlarmDefaults.timed)];
-    }
 }
 
 async function saveCategory() {
@@ -626,8 +608,8 @@ async function saveCategory() {
         }
     }
 
-    const alarms = categoryAlarms.value.map((alarm) => alarm.trim());
-    if (categoryAlarmsSet.value) {
+    const alarms = categoryAlarms.value?.map((alarm) => alarm.trim());
+    if (alarms !== undefined) {
         const [problem] = alarmProblems(alarms);
         if (problem !== undefined) {
             categoryDraftError.value = `${problem}.`;
@@ -640,7 +622,7 @@ async function saveCategory() {
         id,
         ...(color === '' ? {} : { color }),
         ...(name === '' ? {} : { name }),
-        ...(categoryAlarmsSet.value ? { alarms } : {}),
+        ...(alarms === undefined ? {} : { alarms }),
     };
     const next = [...categoryList.value];
     if (editingCategoryIndex.value === null) {
