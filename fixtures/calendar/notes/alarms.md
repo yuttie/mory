@@ -96,6 +96,12 @@ events:
     A category with nothing in it:
         start: 2024-07-09 09:00
         category: unset
+    All day with a category with nothing in it:
+        start: 2024-07-21
+        category: unset
+    All day with a category that silences:
+        start: 2024-07-22
+        category: meeting/quiet
     Through an ancestor that is not configured:
         start: 2024-07-10 09:00
         category: a/b/c/d
