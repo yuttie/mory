@@ -126,6 +126,19 @@ export function alarmProblems(alarms: readonly string[]): string[] {
     });
 }
 
+// The units an elapsed time is told in, largest first: how many milliseconds each is, how `formatAlarm`
+// spells it and what `describeAlarm` calls it. Whatever none of them divides is milliseconds, which
+// no note spells.
+const UNITS = [
+    { ms: 3_600_000, short: 'h', word: 'hour' },
+    { ms: 60_000, short: 'm', word: 'minute' },
+    { ms: 1_000, short: 's', word: 'second' },
+] as const;
+
+function unitFor(ms: number): { ms: number; short: string; word: string } {
+    return UNITS.find((unit) => ms % unit.ms === 0) ?? { ms: 1, short: 'ms', word: 'millisecond' };
+}
+
 const signed = (n: number) => `${n < 0 ? '-' : '+'}${Math.abs(n)}`;
 const clock = (hour: number, minute: number) =>
     `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
@@ -138,20 +151,11 @@ export function formatAlarm(spec: AlarmSpec): string {
         case 'days':
             return `${signed(spec.days)}d`;
         case 'elapsed': {
-            const ms = spec.ms;
-            if (ms === 0) {
+            if (spec.ms === 0) {
                 return '+0m';
             }
-            if (ms % 3_600_000 === 0) {
-                return `${signed(ms / 3_600_000)}h`;
-            }
-            if (ms % 60_000 === 0) {
-                return `${signed(ms / 60_000)}m`;
-            }
-            if (ms % 1000 === 0) {
-                return `${signed(ms / 1000)}s`;
-            }
-            return `${signed(ms)}ms`;
+            const unit = unitFor(spec.ms);
+            return `${signed(spec.ms / unit.ms)}${unit.short}`;
         }
         case 'at':
             return spec.days === 0
@@ -169,16 +173,8 @@ function daysIn(days: number): string {
 
 // "90 minutes", in the largest unit that divides the time evenly.
 function durationIn(ms: number): string {
-    if (ms % 3_600_000 === 0) {
-        return plural(ms / 3_600_000, 'hour');
-    }
-    if (ms % 60_000 === 0) {
-        return plural(ms / 60_000, 'minute');
-    }
-    if (ms % 1000 === 0) {
-        return plural(ms / 1000, 'second');
-    }
-    return plural(ms, 'millisecond');
+    const unit = unitFor(ms);
+    return plural(ms / unit.ms, unit.word);
 }
 
 /// What an alarm says, in words: "10 minutes before", "the day before at 18:00".
