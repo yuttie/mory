@@ -735,6 +735,27 @@ mod tests {
         assert!(date_changes(&clear("alarms"), TASK).is_err());
     }
 
+    /// A request that clears a date and sets it in the same call means to set it, so what it
+    /// clears is removed before what it sets is written, whichever of the two comes first in the
+    /// arguments. The note has to hold them already: the editor drops a removal of what is not
+    /// there before it starts.
+    #[test]
+    fn what_a_request_clears_goes_before_what_it_sets() {
+        let had = apply(
+            TASK,
+            &date_changes(&dates(serde_json::json!({ "due_by": "2026-09-01", "deadline_alarms": ["-2h"] })), TASK)
+                .expect("valid changes"),
+        );
+        let args = dates(serde_json::json!({
+            "due_by": "2026-10-01",
+            "deadline_alarms": ["-1h"],
+            "clear": ["due_by", "deadline_alarms"],
+        }));
+        let edited = apply(&had, &date_changes(&args, &had).expect("valid changes"));
+        assert!(edited.contains("    due_by: 2026-10-01\n"), "{edited}");
+        assert_eq!(alarms_of(&edited), yaml("{ deadline: ['-1h'] }"));
+    }
+
     #[test]
     fn an_alarm_that_is_not_one_is_refused_for_a_date_as_for_an_event() {
         let error = date_changes(&dates(serde_json::json!({ "deadline_alarms": ["2h"] })), TASK)
