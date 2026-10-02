@@ -293,7 +293,7 @@ impl Alarm {
 }
 
 /// What the scheduler works from, read again whenever a sync says the listing changed.
-struct Schedule {
+pub(crate) struct Schedule {
     entries: Vec<ListEntry>,
     /// What `.mory/calendars.yaml` says alarms ring at where a note does not.
     defaults: Defaults,
@@ -303,7 +303,7 @@ struct Schedule {
 }
 
 impl Schedule {
-    fn new(entries: Vec<ListEntry>, defaults: Defaults) -> Self {
+    pub(crate) fn new(entries: Vec<ListEntry>, defaults: Defaults) -> Self {
         let reach = Reach::of(&entries, &defaults);
         Schedule { entries, defaults, reach }
     }
@@ -313,7 +313,7 @@ impl Schedule {
 ///
 /// An occurrence rings at what its `alarms` say, then its category, then the configuration; failing
 /// all of them, at its start, if it is timed. One already marked finished needs no reminder.
-fn alarms_between(
+pub(crate) fn alarms_between(
     schedule: &Schedule,
     after: DateTime<Utc>,
     until: DateTime<Utc>,
