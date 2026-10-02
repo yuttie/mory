@@ -368,14 +368,27 @@ function checkAlarms(
     }
 }
 
+// What a derivation carries from one note to the next: the window it draws, what alarms are
+// resolved against, and where the events and the errors it finds go. They travel together through
+// every function below, which is why they are one value.
+interface Derivation {
+    window: EventWindow;
+    alarmDefaults: EffectiveAlarmDefaults;
+    into: CalendarEvent[];
+    errors: EventError[];
+}
+
+function derivationOf(window: EventWindow, alarmDefaults: AlarmDefaults | undefined): Derivation {
+    return { window, alarmDefaults: withBuiltInAlarms(alarmDefaults), into: [], errors: [] };
+}
+
 function buildOccurrence(
     time: EventOccurrence,
     parent: EventParent,
     category: EventCategoryRef | undefined,
     eventName: string,
     entry: ListEntry2,
-    errors: EventError[],
-    alarmDefaults: EffectiveAlarmDefaults,
+    { errors, alarmDefaults }: Derivation,
 ): CalendarEvent | null {
     // `typeof` first: `dayjs(20240501)` is a valid epoch, so a YAML integer would pass the
     // validity check and then fail as a string later, inside the view.
@@ -484,11 +497,9 @@ function expandSeries(
     detail: MetadataEvent,
     category: EventCategoryRef | undefined,
     entry: ListEntry2,
-    window: EventWindow,
-    alarmDefaults: EffectiveAlarmDefaults,
-    into: CalendarEvent[],
-    errors: EventError[],
+    derivation: Derivation,
 ): void {
+    const { window, into, errors } = derivation;
     const start = detail.start as string;
     const repeat = detail.repeat!;
 
@@ -615,8 +626,7 @@ function expandSeries(
             category,
             eventName,
             entry,
-            errors,
-            alarmDefaults,
+            derivation,
         );
         if (event !== null) {
             into.push(event);
@@ -676,17 +686,14 @@ function eventsOfEntry(
     eventName: string,
     detail: MetadataEvent,
     entry: ListEntry2,
-    window: EventWindow,
+    derivation: Derivation,
     categories: EventCategories | undefined,
-    alarmDefaults: EffectiveAlarmDefaults,
-    into: CalendarEvent[],
-    errors: EventError[],
 ): void {
+    const { into, errors } = derivation;
     const category = categoryOf(detail, categories, eventName, entry, errors);
     checkAlarms(detail.alarms, eventName, entry, errors);
     const push = (occurrence: EventOccurrence, parent: EventParent) => {
-        const event = buildOccurrence(
-            occurrence, parent, category, eventName, entry, errors, alarmDefaults);
+        const event = buildOccurrence(occurrence, parent, category, eventName, entry, derivation);
         if (event !== null) {
             into.push(event);
         }
@@ -705,7 +712,7 @@ function eventsOfEntry(
     }
     if (detail.start !== undefined) {
         if (detail.repeat !== undefined) {
-            expandSeries(eventName, detail, category, entry, window, alarmDefaults, into, errors);
+            expandSeries(eventName, detail, category, entry, derivation);
         }
         else {
             push(detail, { ical: detail.ical });
@@ -727,9 +734,7 @@ export function eventsFromEntries(
     window: EventWindow,
     options: { categories?: EventCategories; alarmDefaults?: AlarmDefaults } = {},
 ): DerivedEvents {
-    const events: CalendarEvent[] = [];
-    const errors: EventError[] = [];
-    const alarmDefaults = withBuiltInAlarms(options.alarmDefaults);
+    const derivation = derivationOf(window, options.alarmDefaults);
 
     for (const entry of entries) {
         const metadata = entry.metadata;
@@ -746,14 +751,12 @@ export function eventsFromEntries(
 
         for (const [eventName, detail] of Object.entries(declared)) {
             if (typeof detail === 'object' && detail !== null) {
-                eventsOfEntry(
-                    eventName, detail, entry, window, options.categories, alarmDefaults,
-                    events, errors);
+                eventsOfEntry(eventName, detail, entry, derivation, options.categories);
             }
         }
     }
 
-    return { events, errors };
+    return { events: derivation.into, errors: derivation.errors };
 }
 
 /// A datetime with any offset removed, which is the only form `<v-calendar>` can read.
@@ -917,11 +920,8 @@ function taskDateEvent(
     task: object,
     uuid: string,
     entry: ListEntry2,
-    window: EventWindow,
+    { window, alarmDefaults, into, errors }: Derivation,
     colors: TaskDateColors,
-    alarmDefaults: EffectiveAlarmDefaults,
-    into: CalendarEvent[],
-    errors: EventError[],
 ): void {
     const value = (task as Record<string, unknown>)[field];
     if (value === undefined || value === null) {
@@ -979,10 +979,8 @@ export function taskDatesFromEntries(
     window: EventWindow,
     options: { colorOf?: TaskDateColors; alarmDefaults?: AlarmDefaults } = {},
 ): DerivedEvents {
-    const events: CalendarEvent[] = [];
-    const errors: EventError[] = [];
+    const derivation = derivationOf(window, options.alarmDefaults);
     const colors = options.colorOf ?? {};
-    const alarmDefaults = withBuiltInAlarms(options.alarmDefaults);
 
     for (const entry of entries) {
         const uuid = taskUuidOf(entry.path);
@@ -993,11 +991,9 @@ export function taskDatesFromEntries(
         if (typeof task !== 'object' || task === null) {
             continue;
         }
-        taskDateEvent(
-            'due_by', task, uuid, entry, window, colors, alarmDefaults, events, errors);
-        taskDateEvent(
-            'deadline', task, uuid, entry, window, colors, alarmDefaults, events, errors);
+        taskDateEvent('due_by', task, uuid, entry, derivation, colors);
+        taskDateEvent('deadline', task, uuid, entry, derivation, colors);
     }
 
-    return { events, errors };
+    return { events: derivation.into, errors: derivation.errors };
 }
