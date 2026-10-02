@@ -432,7 +432,7 @@ const shortTitle = computed((): string => {
 // Lifecycle hooks
 onMounted(() => {
     document.title = `Calendar | ${import.meta.env.VITE_APP_NAME}`;
-    calendars.loadSubscriptions().catch(() => {
+    calendars.loadConfiguration().catch(() => {
         // The subscription list is only needed for names and colours; the events themselves come
         // back from the backend, which reads the same file.
     });

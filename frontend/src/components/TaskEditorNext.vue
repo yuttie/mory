@@ -632,8 +632,8 @@ onMounted(() => {
     window.addEventListener('beforeunload', onBeforeunload);
     // The default alarms are shown beside a date's own, and live in the calendar configuration.
     // Without it they read as the built-in ones, which is only wrong until it has loaded.
-    if (!calendars.hasLoadedSubscriptions) {
-        calendars.loadSubscriptions().catch(() => undefined);
+    if (!calendars.hasLoadedConfiguration) {
+        calendars.loadConfiguration().catch(() => undefined);
     }
 });
 

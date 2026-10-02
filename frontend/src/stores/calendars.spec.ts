@@ -92,7 +92,7 @@ describe('available', () => {
     it('falls back to the enabled subscriptions before anything is loaded', async () => {
         const store = await storeWith(YAML_FILE);
 
-        await store.loadSubscriptions();
+        await store.loadConfiguration();
 
         // The disabled one is left out: the backend never fetches it, so hiding it would do
         // nothing.
@@ -104,7 +104,7 @@ describe('subscriptions', () => {
     it('reads the list out of the repository', async () => {
         const store = await storeWith(YAML_FILE);
 
-        await store.loadSubscriptions();
+        await store.loadConfiguration();
 
         expect(store.subscriptions).toEqual([
             {
@@ -130,10 +130,10 @@ describe('subscriptions', () => {
         apiMocks.getNote.mockRejectedValue(missing());
         const store = await freshStore();
 
-        await store.loadSubscriptions();
+        await store.loadConfiguration();
 
         expect(store.subscriptions).toEqual([]);
-        expect(store.hasLoadedSubscriptions).toBe(true);
+        expect(store.hasLoadedConfiguration).toBe(true);
     });
 
     it('does not swallow a failure that is not a missing file', async () => {
@@ -141,7 +141,7 @@ describe('subscriptions', () => {
             Object.assign(new Error('boom'), { response: { status: 500 } }));
         const store = await freshStore();
 
-        await expect(store.loadSubscriptions()).rejects.toThrow('boom');
+        await expect(store.loadConfiguration()).rejects.toThrow('boom');
     });
 
     it('writes the list back and drops what was loaded for the old one', async () => {
@@ -223,7 +223,7 @@ describe('loading events', () => {
         apiMocks.getImportedEvents.mockResolvedValue(response());
         const store = await freshStore();
 
-        await store.loadSubscriptions();
+        await store.loadConfiguration();
         await store.load('2024-05-01', '2024-05-31');
 
         expect(store.colorOf.get('work')).toBe('#3f51b5');
@@ -295,7 +295,7 @@ describe('task date colours', () => {
     it('reads them out of the same file', async () => {
         const store = await storeWith(WITH_COLORS);
 
-        await store.loadSubscriptions();
+        await store.loadConfiguration();
 
         expect(store.taskDateColors).toEqual({ due_by: '#0d47a1', deadline: '#880e4f' });
     });
@@ -307,7 +307,7 @@ describe('task date colours', () => {
         });
         const store = await freshStore();
 
-        await store.loadSubscriptions();
+        await store.loadConfiguration();
 
         expect(store.taskDateColors).toEqual({});
     });
@@ -315,7 +315,7 @@ describe('task date colours', () => {
     it('keeps the subscriptions when only the colours are saved', async () => {
         const store = await storeWith(WITH_COLORS);
 
-        await store.loadSubscriptions();
+        await store.loadConfiguration();
         await store.saveTaskDateColors({ deadline: '#b71c1c' });
 
         const [path, content] = apiMocks.addNote.mock.calls[0];
@@ -328,7 +328,7 @@ describe('task date colours', () => {
     it('keeps the colours when only the subscriptions are saved', async () => {
         const store = await storeWith(WITH_COLORS);
 
-        await store.loadSubscriptions();
+        await store.loadConfiguration();
         await store.saveSubscriptions([{
             id: 'work',
             name: 'Work',
@@ -353,7 +353,7 @@ describe('alarm defaults', () => {
     it('reads each kind the file sets, a single string as a list of one', async () => {
         const store = await storeWith(WITH_ALARMS);
 
-        await store.loadSubscriptions();
+        await store.loadConfiguration();
 
         expect(store.alarmDefaults).toEqual({
             timed: ['-10m'],
@@ -371,7 +371,7 @@ describe('alarm defaults', () => {
         });
         const store = await freshStore();
 
-        await store.loadSubscriptions();
+        await store.loadConfiguration();
 
         expect(store.alarmDefaults).toEqual({ timed: ['-5m'], dueBy: [] });
     });
@@ -380,7 +380,7 @@ describe('alarm defaults', () => {
         apiMocks.getNote.mockRejectedValue(missing());
         const store = await freshStore();
 
-        await store.loadSubscriptions();
+        await store.loadConfiguration();
 
         expect(store.alarmDefaults).toEqual({});
     });
@@ -392,7 +392,7 @@ describe('alarm defaults', () => {
         const store = await freshStore();
 
         expect(store.effectiveAlarmDefaults).toEqual({ timed: ['0m'], allDay: [], dueBy: [], deadline: [] });
-        await store.loadSubscriptions();
+        await store.loadConfiguration();
 
         expect(store.effectiveAlarmDefaults).toEqual({ timed: ['-5m'], allDay: [], dueBy: [], deadline: [] });
     });
@@ -412,7 +412,7 @@ categories:
         it('are reported, by where they are written, and dropped', async () => {
             const store = await storeWith(BAD);
 
-            await store.loadSubscriptions();
+            await store.loadConfiguration();
 
             expect(store.alarmDefaults).toEqual({ timed: ['-5m'], dueBy: [] });
             expect(store.errors).toHaveLength(3);
@@ -424,17 +424,17 @@ categories:
 
         it('are not reported when there are none, or no file', async () => {
             const store = await storeWith(WITH_ALARMS);
-            await store.loadSubscriptions();
+            await store.loadConfiguration();
             expect(store.errors).toEqual([]);
 
             apiMocks.getNote.mockRejectedValue(missing());
-            await store.loadSubscriptions();
+            await store.loadConfiguration();
             expect(store.errors).toEqual([]);
         });
 
         it('stop being reported once a save has rewritten the file without them', async () => {
             const store = await storeWith(BAD);
-            await store.loadSubscriptions();
+            await store.loadConfiguration();
             expect(store.errors).not.toEqual([]);
 
             await store.saveAlarmDefaults({ timed: ['-5m'] });
@@ -446,8 +446,8 @@ categories:
         it('are reported again when the file is read again and still has them', async () => {
             const store = await storeWith(BAD);
 
-            await store.loadSubscriptions();
-            await store.loadSubscriptions();
+            await store.loadConfiguration();
+            await store.loadConfiguration();
 
             expect(store.errors).toHaveLength(3);
         });
@@ -457,7 +457,7 @@ categories:
     it('keeps them when the subscriptions, the colours or the categories are saved', async () => {
         const store = await storeWith(WITH_ALARMS);
 
-        await store.loadSubscriptions();
+        await store.loadConfiguration();
         await store.saveSubscriptions([{
             id: 'work',
             name: 'Work',
@@ -481,7 +481,7 @@ categories:
     it('writes only the kinds that are set, in the file\'s order, and keeps the rest of it', async () => {
         const store = await storeWith(WITH_ALARMS);
 
-        await store.loadSubscriptions();
+        await store.loadConfiguration();
         await store.saveAlarmDefaults({ deadline: ['-1d 18:00', '-2h'], timed: [] });
 
         const [path, content] = apiMocks.addNote.mock.calls[0];
@@ -497,7 +497,7 @@ categories:
     it('writes each list on the line that names it', async () => {
         const store = await storeWith(WITH_ALARMS);
 
-        await store.loadSubscriptions();
+        await store.loadConfiguration();
         await store.saveAlarmDefaults({ timed: ['-10m', '0m'], allDay: ['-1d 18:00'] });
         await store.saveCategories([{ id: 'meeting', alarms: ['-1h'] }, { id: 'quiet', alarms: [] }]);
 
@@ -513,7 +513,7 @@ categories:
     it('leaves the block out of the file when none is set', async () => {
         const store = await storeWith(WITH_ALARMS);
 
-        await store.loadSubscriptions();
+        await store.loadConfiguration();
         await store.saveAlarmDefaults({});
 
         const [, content] = apiMocks.addNote.mock.calls[0];
@@ -534,7 +534,7 @@ describe('event categories', () => {
     it('reads them out of the same file, in its order', async () => {
         const store = await storeWith(WITH_CATEGORIES);
 
-        await store.loadSubscriptions();
+        await store.loadConfiguration();
 
         expect(store.categories).toEqual([
             { id: 'meeting', color: '#1565c0', name: '[MTG] {{name}}' },
@@ -552,7 +552,7 @@ describe('event categories', () => {
         });
         const store = await freshStore();
 
-        await store.loadSubscriptions();
+        await store.loadConfiguration();
 
         expect(store.categories).toEqual([{ id: 'trip' }]);
     });
@@ -568,7 +568,7 @@ describe('event categories', () => {
         apiMocks.getNote.mockRejectedValue(missing());
         const store = await freshStore();
 
-        await store.loadSubscriptions();
+        await store.loadConfiguration();
 
         expect(store.categoryMap).toEqual(new Map());
     });
@@ -577,14 +577,14 @@ describe('event categories', () => {
         apiMocks.getNote.mockRejectedValue(new Error('offline'));
         const store = await freshStore();
 
-        await expect(store.loadSubscriptions()).rejects.toThrow('offline');
+        await expect(store.loadConfiguration()).rejects.toThrow('offline');
         expect(store.categoryMap).toBeUndefined();
     });
 
     it('keeps them when only the subscriptions are saved', async () => {
         const store = await storeWith(WITH_CATEGORIES);
 
-        await store.loadSubscriptions();
+        await store.loadConfiguration();
         await store.saveSubscriptions([{
             id: 'work',
             name: 'Work',
@@ -617,7 +617,7 @@ describe('event categories', () => {
         it('reads a category\'s, an empty list as set and an empty value as not', async () => {
             const store = await storeWith(WITH_ALARMS);
 
-            await store.loadSubscriptions();
+            await store.loadConfiguration();
 
             expect(store.categories).toEqual([
                 { id: 'meeting', color: '#1565c0', alarms: ['-10m', '0m'] },
@@ -632,7 +632,7 @@ describe('event categories', () => {
         it('keeps them when the subscriptions are saved, as written', async () => {
             const store = await storeWith(WITH_ALARMS);
 
-            await store.loadSubscriptions();
+            await store.loadConfiguration();
             await store.saveSubscriptions([{
                 id: 'work',
                 name: 'Work',
@@ -653,7 +653,7 @@ describe('event categories', () => {
         it('writes what the settings give', async () => {
             const store = await storeWith(WITH_ALARMS);
 
-            await store.loadSubscriptions();
+            await store.loadConfiguration();
             await store.saveCategories([{ id: 'meeting', alarms: ['-1h'] }, { id: 'quiet', alarms: [] }]);
 
             const [, content] = apiMocks.addNote.mock.calls[0];
@@ -667,7 +667,7 @@ describe('event categories', () => {
     it('keeps the subscriptions when only the categories are saved', async () => {
         const store = await storeWith(WITH_CATEGORIES);
 
-        await store.loadSubscriptions();
+        await store.loadConfiguration();
         await store.saveCategories([{ id: 'meeting', color: '#0d47a1' }]);
 
         const [path, content] = apiMocks.addNote.mock.calls[0];

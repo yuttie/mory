@@ -361,7 +361,7 @@ const categoryInheritedHint = computed(() => {
 
 // Lifecycle hooks
 onMounted(() => {
-    calendars.loadSubscriptions().catch((err) => {
+    calendars.loadConfiguration().catch((err) => {
         error.value = `Could not read ${CALENDARS_PATH}: ${err}`;
     });
 });

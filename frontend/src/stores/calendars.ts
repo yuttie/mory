@@ -87,7 +87,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
     // What the file says that is dropped on reading, as lines to show. Dropped is lost: saving
     // anything rewrites the file from what was kept, so the author is told before it is.
     const configurationProblems = ref<string[]>([]);
-    const hasLoadedSubscriptions = ref(false);
+    const hasLoadedConfiguration = ref(false);
 
     const loaded = shallowRef<Loaded>(EMPTY);
     const isLoading = ref(false);
@@ -171,7 +171,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
             .map((calendar) => `${calendar.name}: ${calendar.error}`),
     ]);
 
-    async function loadSubscriptions(): Promise<CalendarSubscription[]> {
+    async function loadConfiguration(): Promise<CalendarSubscription[]> {
         try {
             const text = await files.read(CALENDARS_PATH);
             const parsed = YAML.parse(text);
@@ -202,7 +202,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
                 throw error;
             }
         }
-        hasLoadedSubscriptions.value = true;
+        hasLoadedConfiguration.value = true;
         return subscriptions.value;
     }
 
@@ -334,7 +334,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
         effectiveAlarmDefaults,
         categories,
         categoryMap,
-        hasLoadedSubscriptions,
+        hasLoadedConfiguration,
         available,
         events,
         series,
@@ -343,7 +343,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
         colorOf,
         nameOf,
         isLoading,
-        loadSubscriptions,
+        loadConfiguration,
         saveSubscriptions,
         saveTaskDateColors,
         saveAlarmDefaults,
