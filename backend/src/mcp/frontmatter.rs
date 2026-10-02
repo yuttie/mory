@@ -240,20 +240,8 @@ fn expected_value(before: &Mapping, changes: &[Change]) -> Result<Mapping, EditE
         // Removing a key under a parent that does not exist is already done, and must not
         // create the parent on its way to discovering that.
         if matches!(change, Change::Remove { .. }) {
-            let mut cursor = &result;
-            let mut missing = false;
-            for part in parents {
-                match cursor.get(Value::String(part.clone())) {
-                    Some(Value::Mapping(next)) => cursor = next,
-                    _ => {
-                        missing = true;
-                        break;
-                    },
-                }
-            }
-            if missing {
-                continue;
-            }
+            remove_under(&mut result, parents, last);
+            continue;
         }
 
         let mut cursor = &mut result;
@@ -275,16 +263,36 @@ fn expected_value(before: &Mapping, changes: &[Change]) -> Result<Mapping, EditE
             cursor = next;
         }
 
-        match change {
-            Change::Set { value, .. } => {
-                cursor.insert(Value::String(last.clone()), value.clone());
-            },
-            Change::Remove { .. } => {
-                cursor.remove(Value::String(last.clone()));
-            },
+        if let Change::Set { value, .. } = change {
+            cursor.insert(Value::String(last.clone()), value.clone());
         }
     }
     Ok(result)
+}
+
+/// Removes `last` from the mapping `parents` leads to, if it is there, and says whether it was.
+///
+/// A parent the removal leaves with nothing in it becomes `null`, not `{}`: the text has nothing
+/// after the key, which is how a note spells an empty one and which `serde_yaml` reads as `null`.
+/// Expecting `{}` made the oracle refuse the removal of an event's only key, or of the last of a
+/// task's alarms, though the edit was exactly what was asked. Only a parent that the removal
+/// emptied is changed so: `events: {}` that the note wrote itself keeps meaning a mapping.
+fn remove_under(mapping: &mut Mapping, parents: &[String], last: &str) -> bool {
+    let Some((first, rest)) = parents.split_first() else {
+        return mapping.remove(Value::String(last.to_owned())).is_some();
+    };
+    let key = Value::String(first.clone());
+    let (removed, emptied) = match mapping.get_mut(&key) {
+        Some(Value::Mapping(child)) => {
+            let removed = remove_under(child, rest, last);
+            (removed, child.is_empty())
+        },
+        _ => (false, false),
+    };
+    if removed && emptied {
+        mapping.insert(key, Value::Null);
+    }
+    removed
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -723,6 +731,44 @@ mod tests {
             apply(before, &[Change::remove(&["task", "progress"])]).expect("no-op"),
             before,
         );
+    }
+
+    /// The last thing under a key going leaves the key with nothing after it, which is how a note
+    /// spells an empty one, and is what the edit means: `events:` with no events.
+    #[test]
+    fn removing_the_last_key_under_a_parent_leaves_the_parent_empty() {
+        let before = "---\nevents:\n    A:\n        start: 2026-01-01\n---\n\n# N\n";
+        let after = apply(before, &[Change::remove(&["events", "A"])])
+            .expect("emptying a mapping is not a shape the editor cannot change");
+        assert_eq!(after, "---\nevents:\n---\n\n# N\n");
+
+        // Under a parent that is itself under another, with siblings and comments around it.
+        let before = "---\ntask:\n    alarms:\n        due_by: [09:00]\n    # Kept.\n    progress: 0\n\
+                      tags: [x]\n---\n\n# N\n";
+        let after = apply(before, &[Change::remove(&["task", "alarms", "due_by"])])
+            .expect("the removal should apply");
+        assert_eq!(after, "---\ntask:\n    alarms:\n    # Kept.\n    progress: 0\ntags: [x]\n---\n\n# N\n");
+
+        // And the empty parent is one a later change can fill again, in the same batch or not.
+        let again = apply(&after, &[Change::set(&["task", "alarms", "deadline"], "x")])
+            .expect("an empty key takes children");
+        assert!(again.contains("    alarms:\n        deadline: x\n"), "{again}");
+        let batch = apply(
+            before,
+            &[
+                Change::remove(&["task", "alarms", "due_by"]),
+                Change::set(&["task", "alarms", "deadline"], "x"),
+            ],
+        )
+        .expect("a batch that empties a parent and refills it");
+        assert!(batch.contains("    alarms:\n        deadline: x\n"), "{batch}");
+    }
+
+    /// Only a parent the removal emptied is treated so: one the note wrote as `{}` is left alone.
+    #[test]
+    fn a_removal_that_removes_nothing_does_not_change_what_a_parent_is() {
+        let before = "---\nevents: {}\n---\n\n# N\n";
+        assert_eq!(apply(before, &[Change::remove(&["events", "A"])]).expect("no-op"), before);
     }
 
     #[test]
