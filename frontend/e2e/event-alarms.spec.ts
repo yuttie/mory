@@ -3,7 +3,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import type { BrowserContext, Page } from '@playwright/test';
 import { API_URL, mockBackend } from './backend';
-import { stopServiceWorkers } from './worker';
+import { pushToStoppedWorker } from './worker';
 
 // A P-256 public key as moried serves its VAPID key: uncompressed, base64url.
 function vapidKey(): string {
@@ -148,12 +148,20 @@ test('ends alarms on signing out, and keeps them when the session expires', asyn
     expect(await recorded(page)).toEqual({ unsubscribed: true });
 });
 
-// The titles, bodies and notes of the notifications shown. They belong to the worker's
-// registration, so they can be read whether or not the worker is running.
-function notifications(page: Page): Promise<unknown[]> {
+// The notifications shown, by title: what they say, how they are tagged, and the note each opens.
+// They belong to the worker's registration, so they can be read whether or not the worker is running.
+function shown(page: Page): Promise<{
+    title: string;
+    body: string;
+    tag: string;
+    renotify: boolean;
+    data: unknown;
+}[]> {
     return page.evaluate(async () => {
         const registration = await navigator.serviceWorker.ready;
-        return (await registration.getNotifications()).map((n) => ({ title: n.title, body: n.body, data: n.data }));
+        return (await registration.getNotifications())
+            .map((n) => ({ title: n.title, body: n.body, tag: n.tag, renotify: n.renotify, data: n.data }))
+            .sort((a, b) => a.title.localeCompare(b.title));
     });
 }
 
@@ -166,29 +174,13 @@ test('shows an alarm pushed after the browser stopped the service worker', async
 
     await page.goto('/note/a.md');
     await expect(page.getByRole('heading', { name: 'A' })).toBeVisible();
-    const registrationId = await stopServiceWorkers(context, page);
+    const push = await pushToStoppedWorker(context, page);
 
-    const cdp = await context.newCDPSession(page);
-    await cdp.send('ServiceWorker.enable');
-    await cdp.send('ServiceWorker.deliverPushMessage', {
-        origin: new URL(page.url()).origin,
-        registrationId,
-        data: JSON.stringify({ title: 'Standup', body: 'Room 1', tag: 'a.md#Standup', path: 'a.md' }),
-    });
-    await expect.poll(() => notifications(page)).toEqual([
+    await push({ title: 'Standup', body: 'Room 1', tag: 'a.md#Standup', path: 'a.md' });
+    await expect.poll(() => shown(page)).toMatchObject([
         { title: 'Standup', body: 'Room 1', data: { path: 'a.md' } },
     ]);
 });
-
-// What the notifications shown say and how they are tagged, for the worker's wording of an alarm.
-function shown(page: Page): Promise<{ title: string; body: string; tag: string; renotify: boolean }[]> {
-    return page.evaluate(async () => {
-        const registration = await navigator.serviceWorker.ready;
-        return (await registration.getNotifications())
-            .map((n) => ({ title: n.title, body: n.body, tag: n.tag, renotify: n.renotify }))
-            .sort((a, b) => a.title.localeCompare(b.title));
-    });
-}
 
 // An alarm ahead of its event says when the event is, in the reader's words: moried sends the
 // moment and the worker, which is in the reader's zone and locale, says it.
@@ -199,14 +191,7 @@ test('says when the event is, as its reader would say it', async ({ browserName,
 
     await page.goto('/note/a.md');
     await expect(page.getByRole('heading', { name: 'A' })).toBeVisible();
-    const registrationId = await stopServiceWorkers(context, page);
-    const cdp = await context.newCDPSession(page);
-    await cdp.send('ServiceWorker.enable');
-    const push = (payload: object | string) => cdp.send('ServiceWorker.deliverPushMessage', {
-        origin: new URL(page.url()).origin,
-        registrationId,
-        data: typeof payload === 'string' ? payload : JSON.stringify(payload),
-    });
+    const push = await pushToStoppedWorker(context, page);
 
     // The same moments, said as the page's own locale says them: what the worker is held to.
     const day = 24 * 60 * 60 * 1000;
@@ -236,20 +221,22 @@ test('says when the event is, as its reader would say it', async ({ browserName,
     await push({ title: 'This week', tag: 'a.md#Week', path: 'a.md', start: soon, all_day: false });
     await push({ title: 'Later', tag: 'a.md#Later', path: 'a.md', start: later, all_day: false });
     await push({ title: 'Whole day', tag: 'a.md#Day', path: 'a.md', start: today, all_day: true });
-    // From an older moried, or not moried's at all: shown as it always was, and with no tag it has
-    // nothing to replace, which the browser would refuse to be told to.
+    // From an older moried, with no start: shown as it always was.
     await push({ title: 'Older', tag: 'a.md#Older', path: 'a.md', body: 'Room 2' });
+    // Not moried's at all, so with no tag: it has nothing to replace, which the browser would refuse
+    // to be told to.
     await push('Sent from DevTools');
 
     await expect.poll(async () => (await shown(page)).length).toBe(6);
-    expect(await shown(page)).toEqual([
+    // In the order `shown` gives them, which is by title.
+    expect(await shown(page)).toMatchObject([
         { title: 'Later', body: wanted.later, tag: 'a.md#Later', renotify: true },
         { title: 'mory', body: 'Sent from DevTools', tag: '', renotify: false },
         { title: 'Older', body: 'Room 2', tag: 'a.md#Older', renotify: true },
         { title: 'This week', body: wanted.soon, tag: 'a.md#Week', renotify: true },
         { title: 'Today', body: `${wanted.now} \u00b7 Room 1`, tag: 'a.md#Today', renotify: true },
         { title: 'Whole day', body: wanted.today, tag: 'a.md#Day', renotify: true },
-    ].sort((a, b) => a.title.localeCompare(b.title)));
+    ]);
 });
 
 // A click on an alarm while a tab is open: the tab routes to the note, as a link inside the app
