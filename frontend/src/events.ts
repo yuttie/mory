@@ -419,6 +419,10 @@ function buildOccurrence(
 }
 
 /// A list from whatever the frontmatter held, which need not have been a list.
+function isMapping(value: unknown): value is EventOccurrence {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function asArray<T>(value: T[] | undefined): T[] {
     return Array.isArray(value) ? value : [];
 }
@@ -534,7 +538,13 @@ function expandSeries(
     }
 
     const overrides = new Map<number, EventOccurrence>();
-    for (const override of asArray(detail.overrides)) {
+    for (const override of asArray<unknown>(detail.overrides)) {
+        // Hand-written, and read inside a computed: an element that is not a mapping is reported
+        // and skipped, where dereferencing it would blank the calendar. The backend skips it too.
+        if (!isMapping(override)) {
+            errors.push(['overrides', override, eventName, entry.path, entry.title]);
+            continue;
+        }
         checkAlarms(override.alarms, eventName, entry, errors);
         const instant = override.at === undefined ? null : instantOf(override.at);
         if (instant === null) {

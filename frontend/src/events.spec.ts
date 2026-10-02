@@ -1456,3 +1456,31 @@ describe('task date alarms', () => {
         expect(events.map((event) => event.alarms)).toEqual([['-1h'], []]);
     });
 });
+
+describe('an overrides list written by hand', () => {
+    // Frontmatter is whatever the file said, and this runs inside a computed: one element that is
+    // not a mapping must not throw, or the whole calendar goes blank for one note.
+    const series = (overrides: unknown[]) => eventsFromEntries([entry('a.md', {
+        Standup: {
+            start: '2024-05-06 09:00',
+            repeat: { freq: 'daily', count: 3 },
+            overrides: overrides as never,
+        },
+    })], ANY_WINDOW);
+
+    it('skips an element that is not a mapping, and reports it', () => {
+        for (const bad of [null, 'text', 5, true, ['2024-05-07 09:00']]) {
+            let derived: ReturnType<typeof series> | undefined;
+            expect(() => {
+                derived = series([bad, { at: '2024-05-07 09:00', name: 'Retro' }]);
+            }, JSON.stringify(bad)).not.toThrow();
+            expect(derived?.errors, JSON.stringify(bad)).toEqual([['overrides', bad, 'Standup', 'a.md', null]]);
+            expect(derived?.events.map((event) => `${event.start}  ${event.name}`).sort(), JSON.stringify(bad))
+                .toEqual(['2024-05-06 09:00  Standup', '2024-05-07 09:00  Retro', '2024-05-08 09:00  Standup']);
+        }
+    });
+
+    it('still reports an override that names no occurrence', () => {
+        expect(series([{ name: 'No at' }]).errors).toEqual([['at', undefined, 'Standup', 'a.md', null]]);
+    });
+});
