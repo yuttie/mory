@@ -463,8 +463,8 @@ struct EventsOutput {
     /// The `alarms:` block of `.mory/calendars.yaml`, exactly as declared: when an event rings
     /// where its note and its category say nothing, and a task's dates where it says nothing.
     alarms: serde_json::Value,
-    /// Why `categories` is empty when the file could not be read, so an unreadable file is not
-    /// mistaken for one that configures none.
+    /// Why `categories` and `alarms` are both empty when the file could not be read, so an
+    /// unreadable file is not mistaken for one that configures none: `{}` is what both look like.
     #[serde(skip_serializing_if = "Option::is_none")]
     categories_error: Option<String>,
     /// Said once per call rather than trusted to the tool description, because a recurring event
@@ -657,11 +657,12 @@ pub async fn list_events(
                entry's `color` unless the event sets its own, and its `name` template, in which \
                `{{name}}` stands for the event's name. A nested id such as `meeting/1on1` takes \
                what it does not set from `meeting`. `declaration` is the note as written, with \
-               none of this applied. An event rings at its own `alarms`, else its occurrence's \
-               event's, else its category's, else the global `alarms.timed` or `alarms.all_day`, \
-               else at its start if it is timed and never if it is all-day; `[]` silences. A \
-               task's `task.alarms.due_by` and `deadline` come before the global `alarms.due_by` \
-               and `deadline`.",
+               none of this applied. An occurrence rings at its own `alarms`, which an override or \
+               an instance may set, else its event's, else its category's, else the global \
+               `alarms.timed` or `alarms.all_day`, else at its start if it is timed and never if \
+               it is all-day; `[]` silences. A task's date rings at the task's own `task.alarms` \
+               for it, which `list_tasks` returns under `task`, else the global `alarms.due_by` \
+               or `alarms.deadline`, else never.",
     })
 }
 
