@@ -2,9 +2,9 @@
 // so what is expected here is what `Intl` says of the same moment, as `e2e/event-alarms.spec.ts`
 // does in a browser; this holds the edges of it that a browser test would take a week to reach.
 
-import { readFileSync } from 'node:fs';
-
 import { afterAll, describe, expect, it, vi } from 'vitest';
+
+import source from '../public/service-worker.js?raw';
 
 interface Alarm {
     title?: string;
@@ -16,7 +16,6 @@ interface Alarm {
 const worker = (() => {
     // A classic script, which declares its functions at the top level for the e2e tests to call:
     // run it as a function of the `self` it expects, and take them out.
-    const source = readFileSync(new URL('../public/service-worker.js', import.meta.url), 'utf8');
     const self = {
         location: { href: 'https://app.invalid/service-worker.js?api=https://api.invalid/api/' },
         addEventListener: () => undefined,
