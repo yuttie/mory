@@ -2223,6 +2223,34 @@ fn alarms_of_note_fixture(entry: &crate::models::ListEntry, defaults: &alarms::D
     lines
 }
 
+/// Every task fixture as `tasks/…`, in order.
+fn task_fixture_names() -> Vec<String> {
+    fixture_files("tasks", ".md")
+}
+
+/// A task fixture as the listing holds it: in the task tree, under `.tasks/`, unless its name keeps
+/// it out of it.
+fn task_fixture_entry(name: &str) -> crate::models::ListEntry {
+    fixture_entry(name, &format!(".tasks/{}", name.trim_start_matches("tasks/")))
+}
+
+/// `start  due_by|deadline  spec|spec` for every date of a task that rings and falls inside the
+/// window, in order. A task that is done or canceled has none, and nor does a note outside the task
+/// tree or a date that is not one; the frontend resolves the same.
+fn alarms_of_task_fixture(entry: &crate::models::ListEntry, defaults: &alarms::Defaults) -> Vec<String> {
+    let reader = note_reader();
+    let (from, to) = note_fixture_window();
+    let mut lines: Vec<String> = alarms::task_dates(std::slice::from_ref(entry), &reader)
+        .iter()
+        .filter(|date| (from..=to).contains(&date.start.begins(&reader)))
+        .map(|date| {
+            format!("{}  {}  {}", date.start, date.field.key(), spec_line(&defaults.task_specs_of(date)))
+        })
+        .collect();
+    lines.sort();
+    lines
+}
+
 #[test]
 fn note_fixtures_draw_as_recorded() {
     let (config_value, config) = note_fixture_config();
@@ -2240,12 +2268,26 @@ fn note_fixtures_draw_as_recorded() {
             }),
         );
     }
+    let mut tasks = serde_json::Map::new();
+    for name in task_fixture_names() {
+        let entry = task_fixture_entry(&name);
+        tasks.insert(
+            name,
+            serde_json::json!({
+                "metadata": entry.metadata,
+                "alarms": alarms_of_task_fixture(&entry, &categories_only),
+                "alarmsWithDefaults": alarms_of_task_fixture(&entry, &with_alarms),
+            }),
+        );
+    }
+
     let golden_path = fixtures_dir().join("notes.json");
     let golden = serde_json::to_string_pretty(&serde_json::json!({
         "zone": NOTE_READER_ZONE.name(),
         "window": { "from": FIXTURE_WINDOW.0, "to": FIXTURE_WINDOW.1 },
         "calendars": config_value,
         "notes": recorded,
+        "tasks": tasks,
     }))
     .expect("serialisable");
 

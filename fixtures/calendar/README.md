@@ -47,6 +47,20 @@ category does not say to the built-in default, and `alarmsWithDefaults` under it
 the global `timed` and `all_day` that sit between the two. A `name` template would change the
 names the golden records, so none is set.
 
+## Tasks
+
+A task's `due_by` and `deadline` ring too, and which notes have them and what they ring at is a
+third copy of what the frontend's `taskDatesFromEntries` works out, in `alarms::task_dates`.
+`tasks/` holds task notes, each listed as `.tasks/<name>` as the app lists them, and `notes.json`
+records under `tasks`, for each, one `start  due_by|deadline  spec|spec` line per date that is to
+ring, in the same two readings. `note-fixtures.spec.ts` requires `taskDatesFromEntries` to resolve
+the same, and a task that is done or canceled to draw its dates and ring for neither.
+
+A task whose name carries no UUID is not in the task tree, and rings for nothing whatever it says;
+one with a date that is not a date has no such date. Both are fixtures. The MCP tool
+`list_events` has a copy of the same rules of its own, `task_dates_in_window`, which nothing here
+compares.
+
 `dayjs.tz` resolves an hour that happens twice by the season the reader is in *now*, so a rule
 with `tz` whose occurrences fall in such an hour would make the comparison depend on the date it
 runs. Keep them out of the fixtures.

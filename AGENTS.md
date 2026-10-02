@@ -164,10 +164,13 @@ rings at would be a third copy of the precedence above.
 `task_dates`, because the calendar draws them as events. Nothing there is expanded, but
 `task_dates_in_window` is still a second copy of which tasks and values `taskDatesFromEntries`
 accepts, in another language and with nothing comparing the two: change one, change the other.
-`alarms::task_dates`, which the scheduler rings from, is a third. The two Rust sides at least
-agree with each other about which notes and which fields: `tasks::task_of` and `tasks::date_texts`
-decide that, and what is left to each is the test of a value, the leading `YYYY-MM-DD` for the
-window and the stricter reading `dayjs` gives for the scheduler, which also skips a finished task.
+`alarms::task_dates`, which the scheduler rings from, is a third, and `fixtures/calendar/tasks/`
+holds it to `taskDatesFromEntries`: which dates ring and what they ring at, under the
+configuration's alarms and without. `task_dates_in_window` has nothing comparing it. The two Rust
+sides at least agree with each other about which notes and which fields: `tasks::task_of` and
+`tasks::date_texts` decide that, and what is left to each is the test of a value, the leading
+`YYYY-MM-DD` for the window and the stricter reading `dayjs` gives for the scheduler, which also
+skips a finished task.
 
 ## The `events:` frontmatter
 
