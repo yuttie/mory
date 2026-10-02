@@ -547,6 +547,28 @@ fn task_dates_in_window(
     dates.into_iter().map(|(_, summary)| summary).collect()
 }
 
+/// The `categories:` and `alarms:` blocks of the calendar configuration, as declared, and why they
+/// are both empty if the file could not be read.
+///
+/// A block the file does not have, or one that is not a mapping, is `{}`, which is also what a file
+/// that could not be read leaves, so the reason is returned beside them for the two not to be mixed
+/// up. Handed over as declared rather than applied to each event: resolving a nested id and
+/// filling in a template here would be a second copy of what `frontend/src/events.ts` does, in
+/// another language and with nothing comparing the two.
+fn config_blocks(
+    config: anyhow::Result<crate::v2::CalendarConfig>,
+) -> (serde_json::Value, serde_json::Value, Option<String>) {
+    let declared = |block: Option<&serde_yaml::Mapping>| {
+        block
+            .and_then(|block| serde_json::to_value(block).ok())
+            .unwrap_or_else(|| serde_json::json!({}))
+    };
+    match config {
+        Ok(config) => (declared(config.categories()), declared(config.alarms()), None),
+        Err(e) => (serde_json::json!({}), serde_json::json!({}), Some(format!("{e:#}"))),
+    }
+}
+
 pub async fn list_events(
     state: &AppState,
     args: WindowArgs,
@@ -623,23 +645,8 @@ pub async fn list_events(
 
     let task_dates = task_dates_in_window(&entries, from, to);
 
-    // Handed over as declared rather than applied to each event: resolving a nested id and
-    // filling in a template here would be a second copy of what `frontend/src/events.ts` does,
-    // in another language and with nothing comparing the two.
-    let (categories, alarms, categories_error) = match crate::v2::read_calendar_config(state).await {
-        Ok(config) => (
-            config
-                .categories()
-                .and_then(|categories| serde_json::to_value(categories).ok())
-                .unwrap_or_else(|| serde_json::json!({})),
-            config
-                .alarms()
-                .and_then(|alarms| serde_json::to_value(alarms).ok())
-                .unwrap_or_else(|| serde_json::json!({})),
-            None,
-        ),
-        Err(e) => (serde_json::json!({}), serde_json::json!({}), Some(format!("{e:#}"))),
-    };
+    let (categories, alarms, categories_error) =
+        config_blocks(crate::v2::read_calendar_config(state).await);
 
     json_result(&EventsOutput {
         commit: commit.to_string(),
@@ -988,6 +995,31 @@ mod tests {
 
     fn yaml(text: &str) -> serde_yaml::Value {
         serde_yaml::from_str(text).expect("the fixture should be YAML")
+    }
+
+    /// What `list_events` hands over of `.mory/calendars.yaml`: each block as the file declares it,
+    /// and `{}` where it does not, with the reason only when the file could not be read.
+    #[test]
+    fn the_calendar_configuration_is_handed_over_as_declared() {
+        let json = |text: &str| -> serde_json::Value { serde_json::from_str(text).unwrap() };
+        let parsed = |text: &str| crate::v2::parse_calendar_config(text);
+
+        let configured = "categories: { meeting: { color: red } }\nalarms: { timed: [-10m] }\n";
+        assert_eq!(
+            config_blocks(parsed(configured)),
+            (json(r#"{ "meeting": { "color": "red" } }"#), json(r#"{ "timed": ["-10m"] }"#), None),
+        );
+        // A file, or a block, that says nothing is `{}` and no reason: it was read.
+        let nothing = (json("{}"), json("{}"), None);
+        assert_eq!(config_blocks(parsed("")), nothing);
+        assert_eq!(config_blocks(parsed("calendars: []\n")), nothing);
+        // So is one that is not a mapping, as the web app draws nothing from it either.
+        assert_eq!(config_blocks(parsed("categories: [meeting]\nalarms: soon\n")), nothing);
+        // Only a file that could not be read says why, which `{}` alone would not.
+        let unreadable = config_blocks(parsed("categories: [unclosed"));
+        assert_eq!(unreadable.0, json("{}"));
+        assert_eq!(unreadable.1, json("{}"));
+        assert!(unreadable.2.as_deref().is_some_and(|reason| reason.contains("not valid YAML")), "{unreadable:?}");
     }
 
     #[test]
