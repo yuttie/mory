@@ -12,8 +12,9 @@
 //! run both halves of that comparison.
 //!
 //! Only what decides whether an occurrence is drawn, and at what wall clock, is reproduced.
-//! Colours and ends are read only as far as a bad one hides an occurrence, and categories not at
-//! all: they change how an event is drawn, never when.
+//! Colours and ends are read only as far as a bad one hides an occurrence. An occurrence's alarms
+//! and category are carried as written, for `alarms` to resolve: the category still changes only
+//! how an event is drawn, never when, and matters here for when it is *rung*.
 //!
 //! Three JavaScript behaviours carry most of the weight, each easy to get subtly wrong:
 //!
@@ -58,21 +59,18 @@ pub enum Start {
 }
 
 impl Start {
-    /// The moment a timed occurrence starts; `None` for an all-day one, which has no moment.
-    pub fn instant(&self, reader: &Reader) -> Option<DateTime<Utc>> {
+    /// The wall clock it is at: a date is the first moment of its day.
+    pub fn wall(&self) -> NaiveDateTime {
         match self {
-            Start::Date(_) => None,
-            Start::Time(_) => Some(self.begins(reader)),
+            Start::Date(date) => date.and_time(NaiveTime::MIN),
+            Start::Time(wall) => *wall,
         }
     }
 
     /// When it begins: `dayjs(start)`, which reads a date as its first moment and resolves a wall
     /// clock as the calendar does.
     pub fn begins(&self, reader: &Reader) -> DateTime<Utc> {
-        match self {
-            Start::Date(date) => resolve_local(date.and_time(NaiveTime::MIN), reader.zone),
-            Start::Time(wall) => resolve_local(*wall, reader.zone),
-        }
+        resolve_local(self.wall(), reader.zone)
     }
 }
 
@@ -94,6 +92,11 @@ pub struct Occurrence {
     pub start: Start,
     pub finished: bool,
     pub location: Option<String>,
+    /// The `alarms:` the occurrence's own fields or its event's hold, as written. `None` for
+    /// neither, which is not the same as an empty list: that silences.
+    pub alarms: Option<Value>,
+    /// The category the event names, configured or not.
+    pub category: Option<String>,
 }
 
 /// Every occurrence the listing declares in `[from, to]`.
@@ -145,7 +148,7 @@ pub fn day_window(from: NaiveDate, to: NaiveDate, reader: &Reader) -> (DateTime<
 // --- reading values as JavaScript does -----------------------------------------------------
 
 /// A map key as the frontend names the event: JSON has only string keys, so a number is its text.
-fn key_name(key: &Value) -> Option<String> {
+pub(crate) fn key_name(key: &Value) -> Option<String> {
     match key {
         Value::String(name) => Some(name.clone()),
         Value::Number(number) => Some(number.to_string()),
@@ -166,7 +169,7 @@ fn truthy(value: &Value) -> bool {
 }
 
 /// The value JavaScript's `??` leaves: `None` for a missing key and for `null` alike.
-fn present(value: Option<&Value>) -> Option<&Value> {
+pub(crate) fn present(value: Option<&Value>) -> Option<&Value> {
     value.filter(|value| !value.is_null())
 }
 
@@ -378,6 +381,13 @@ pub(crate) fn to_wall_clock(text: &str, zone: Zone) -> Option<Start> {
     Some(Start::Time(wall))
 }
 
+/// Where the calendar draws a task's date, as `taskDateEvent` reads one: `None` for a value `dayjs`
+/// cannot read, which is reported and drawn nowhere, and otherwise where `toWallClock` puts it.
+pub(crate) fn task_date_start(text: &str, zone: Zone) -> Option<Start> {
+    dayjs_parse(text, zone)?;
+    to_wall_clock(text, zone)
+}
+
 /// Where the calendar draws a start `toWallClock` hands it as written, having no wall clock to read
 /// in it: timed only with both an hour and a minute, seconds ignored, a missing day the first, and
 /// nowhere at all when it does not match -- the calendar throws.
@@ -449,17 +459,38 @@ enum StartInput<'a> {
 ///
 /// The frontend carries a series' end to each occurrence as a duration (`durationOf`), but only
 /// whether an end is usable matters here, and that conversion never changes it.
+///
+/// `category` is the exception: it belongs to the event as a whole, so an event's own start has it
+/// too, and an override or an instance cannot change it.
 #[derive(Default)]
 struct Parent<'a> {
     end: Option<&'a Value>,
     color: Option<&'a Value>,
     location: Option<&'a Value>,
+    alarms: Option<&'a Value>,
+    category: Option<&'a str>,
 }
 
 impl<'a> Parent<'a> {
     fn of(detail: &'a Mapping) -> Self {
-        Parent { end: detail.get("end"), color: detail.get("color"), location: detail.get("location") }
+        Parent {
+            end: detail.get("end"),
+            color: detail.get("color"),
+            location: detail.get("location"),
+            alarms: detail.get("alarms"),
+            category: category_of(detail),
+        }
     }
+
+    /// An event's own start inherits nothing but its category from the event it is.
+    fn category_only(detail: &'a Mapping) -> Self {
+        Parent { category: category_of(detail), ..Parent::default() }
+    }
+}
+
+/// `categoryOf`: a category that is not text is reported and the event drawn without it.
+fn category_of(detail: &Mapping) -> Option<&str> {
+    detail.get("category").and_then(Value::as_str)
 }
 
 /// `buildOccurrence`, as far as it decides whether and where the occurrence is drawn. `own` is the
@@ -517,6 +548,9 @@ fn build_occurrence(
         // The views take any truthy value as finished: `finished: yes` is text in YAML 1.2.
         finished: get("finished").is_some_and(truthy),
         location,
+        // `time.alarms ?? parent.alarms`
+        alarms: present(get("alarms")).or(present(parent.alarms)).cloned(),
+        category: parent.category.map(str::to_owned),
     });
 }
 
@@ -535,7 +569,7 @@ fn events_of_entry(
             expand_series(event_name, detail, path, window, reader, out);
         } else {
             let start = StartInput::Written(detail.get("start"));
-            build_occurrence(Some(detail), start, &Parent::default(), event_name, path, reader, out);
+            build_occurrence(Some(detail), start, &Parent::category_only(detail), event_name, path, reader, out);
         }
     }
     // `instances ?? times`, and only the entries that are objects.
@@ -702,7 +736,9 @@ fn expand_rule(
         }
         rule = rule.by_weekday(days);
     }
-    if let Some(interval) = repeat.get("interval") {
+    // Blank is none, as for the rest; anything else must be a whole number from one to what a `u16`
+    // holds, which `expandRule` requires too, since rrule.js never finishes expanding one that is not.
+    if let Some(interval) = present(repeat.get("interval")) {
         rule = rule.interval(integer::<u16>(interval).filter(|n| *n > 0)?);
     }
     if let Some(days) = present(repeat.get("bymonthday")) {
@@ -797,14 +833,7 @@ mod tests {
     }
 
     fn entry(yaml: &str) -> ListEntry {
-        ListEntry {
-            path: "note.md".into(),
-            size: 1,
-            mime_type: "text/markdown".to_owned(),
-            metadata: Some(serde_yaml::from_str(yaml).expect("valid YAML")),
-            title: None,
-            time: "2024-01-01T00:00:00+00:00".parse().unwrap(),
-        }
+        ListEntry::note("note.md", yaml)
     }
 
     /// What a reader in Los Angeles sees over 2024: `start  name`, in order.

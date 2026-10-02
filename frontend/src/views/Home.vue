@@ -594,7 +594,7 @@ onMounted(() => {
 
     load();
     loadTasks();
-    calendars.loadSubscriptions().catch(() => {
+    calendars.loadConfiguration().catch(() => {
         // Only names and colours are wanted from it, and there are defaults for those; the
         // imported events themselves come back from the backend, which reads the same file.
     });

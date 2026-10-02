@@ -34,9 +34,53 @@ metadata it parsed out of each; `frontend/src/note-fixtures.spec.ts` requires `e
 to draw the same from that metadata. The backend also requires each converted note to draw what
 its feed did, which closes the circle: the feed, the frontend's note and the backend's all agree.
 
+Each note's alarms are recorded too: one `start  name  spec|spec` line for every occurrence, naming
+the alarms it rings at and spelling each as `Spec`'s `Display` does, so that `-1.5h` and
+`-90 minutes` both read `-90m`. `note-fixtures.spec.ts` requires `eventsFromEntries` to resolve the
+same. `notes/alarms.md` is about little else.
+
+An occurrence that sets no alarms of its own takes its category's, then the configuration's, then
+the built-in default, so the notes are read under `calendars.yaml`, a stand-in for
+`.mory/calendars.yaml`, whose parsed contents `notes.json` records as `calendars`. They are read
+twice, and both are recorded: `alarms` under its `categories:` alone, which leaves everything a
+category does not say to the built-in default, and `alarmsWithDefaults` under its `alarms:` as well,
+the global `timed` and `all_day` that sit between the two. A `name` template would change the
+names the golden records, so none is set.
+
+## Tasks
+
+A task's `due_by` and `deadline` ring too, and which notes have them and what they ring at is a
+third copy of what the frontend's `taskDatesFromEntries` works out, in `alarms::task_dates`.
+`tasks/` holds task notes, each listed as `.tasks/<name>` as the app lists them, and `notes.json`
+records under `tasks`, for each, one `start  due_by|deadline  spec|spec` line per date that is to
+ring, in the same two readings. `note-fixtures.spec.ts` requires `taskDatesFromEntries` to resolve
+the same, and a task that is done or canceled to draw its dates and ring for neither.
+
+A task whose name carries no UUID is not in the task tree, and rings for nothing whatever it says;
+one with a date that is not a date has no such date. Both are fixtures.
+
+The MCP tool `list_events` has a copy of the same rules of its own, `task_dates_in_window`, and
+`notes.json` records what it returns for each task as `windowDates`: one `field  date  status` line
+for every date inside the window. `note-fixtures.spec.ts` requires `taskDatesFromEntries` to draw
+those same dates, and each finished exactly when the tool's `status` is `done` or `canceled`. The
+date is compared as the note writes it, since the tool reads its leading `YYYY-MM-DD` and converts
+no offset, where the calendar converts to the reader's zone: the fixtures keep to values that give
+the same day either way. They do not agree on a day that is not in its month, such as `2024-02-30`,
+or on an unpadded month or day, such as `2024-8-9`: `dayjs` reads both, the calendar draws them, and
+the tool leaves them out. Neither is a fixture.
+
 `dayjs.tz` resolves an hour that happens twice by the season the reader is in *now*, so a rule
 with `tz` whose occurrences fall in such an hour would make the comparison depend on the date it
 runs. Keep them out of the fixtures.
+
+## The alarm grammar
+
+`alarm-grammar.json` is not a golden: nothing writes it, and it is kept by hand. It holds the
+cases of the grammar alarms are written in, which three tests read so that none keeps a copy of its
+own: `backend/src/alarms.rs` and `frontend/src/alarms.spec.ts` require every `canonical` entry to
+parse and be spelt as given, and every `refused` and `tooFar` one to be refused; and
+`frontend/src/metadata-schema.spec.ts` requires the schema's pattern to agree, except on `tooFar`,
+which only a parser can tell, since the pattern cannot say how far from its start an alarm is.
 
 ## Regenerating
 

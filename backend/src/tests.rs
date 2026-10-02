@@ -2105,9 +2105,9 @@ fn calendar_fixtures_find_each_occurrence_in_its_own_day() {
 //
 // `fixtures/calendar/notes/` holds notes written by hand, and `fixtures/calendar/converted/` the
 // note the app writes for each feed above. `notes.json` records what `note_events` draws of each
-// for a reader in `NOTE_READER_ZONE`, along with the metadata this backend parses out of it, and
-// `frontend/src/note-fixtures.spec.ts` requires `eventsFromEntries` to draw the same from that
-// metadata. The converted notes are held to their feeds as well, which closes the circle with the
+// for a reader in `NOTE_READER_ZONE`, and which alarms each occurrence is to ring at, along with
+// the metadata this backend parses out of it, and `frontend/src/note-fixtures.spec.ts` requires
+// `eventsFromEntries` to draw and resolve the same from that metadata. The converted notes are held to their feeds as well, which closes the circle with the
 // comparison above: the feed, the frontend's note and this one all draw the same occurrences.
 //
 // Regenerate with `UPDATE_CALENDAR_GOLDEN=1 cargo test note_fixtures`, after the frontend has
@@ -2118,6 +2118,7 @@ fn calendar_fixtures_find_each_occurrence_in_its_own_day() {
 /// wall clock in the machine's own zone by mistake shows.
 const NOTE_READER_ZONE: chrono_tz::Tz = chrono_tz::America::Los_Angeles;
 
+use crate::alarms;
 use crate::note_events::{self, Start};
 
 fn note_reader() -> note_events::Reader {
@@ -2138,10 +2139,19 @@ fn note_fixture_names() -> Vec<String> {
 
 /// A fixture note as the listing holds it, with the metadata this backend parses out of it.
 fn note_fixture_entry(name: &str) -> crate::models::ListEntry {
-    let blob = std::fs::read(fixtures_dir().join(name)).expect("a readable fixture");
-    let (metadata, title) = crate::extract_metadata(&blob, "text/markdown");
+    fixture_entry(name, name)
+}
+
+/// The fixture `name`, listed at `path`.
+fn fixture_entry(name: &str, path: &str) -> crate::models::ListEntry {
+    listed_note(path, &std::fs::read(fixtures_dir().join(name)).expect("a readable fixture"))
+}
+
+/// A markdown file as the listing holds it, with the metadata this backend parses out of it.
+fn listed_note(path: impl Into<std::path::PathBuf>, blob: &[u8]) -> crate::models::ListEntry {
+    let (metadata, title) = crate::extract_metadata(blob, "text/markdown");
     crate::models::ListEntry {
-        path: name.into(),
+        path: path.into(),
         size: blob.len(),
         mime_type: "text/markdown".to_owned(),
         metadata,
@@ -2174,8 +2184,100 @@ fn draw_note_fixture(entry: &crate::models::ListEntry) -> Vec<String> {
     drawn_in_window(occurrences.iter().map(|occurrence| (occurrence.start, occurrence.name.as_str())))
 }
 
+/// The calendar configuration the fixtures are read under: what `.mory/calendars.yaml` holds, as
+/// the backend parses it.
+fn note_fixture_config() -> (serde_yaml::Value, crate::v2::CalendarConfig) {
+    let text = std::fs::read_to_string(fixtures_dir().join("calendars.yaml")).expect("a readable fixture");
+    let config = crate::v2::parse_calendar_config(&text).expect("a parseable fixture");
+    (serde_yaml::from_str(&text).expect("valid YAML"), config)
+}
+
+/// What the fixtures are read under, twice: with the configuration's categories alone, so that what
+/// they leave unsaid is left to the built-in default, and with its `alarms:` as well, which is the
+/// layer between the two. Both sides read both.
+fn note_fixture_defaults(config: &crate::v2::CalendarConfig) -> [alarms::Defaults; 2] {
+    [
+        alarms::Defaults::read(alarms::Blocks { categories: config.categories(), ..Default::default() }),
+        config.alarm_defaults(),
+    ]
+}
+
+/// The alarms of an occurrence or of a task's date, each spelled as `Spec` spells it.
+fn spec_line(specs: &[alarms::Spec]) -> String {
+    if specs.is_empty() {
+        return "none".to_owned();
+    }
+    specs.iter().map(alarms::Spec::to_string).collect::<Vec<_>>().join("|")
+}
+
+/// `start  name  spec|spec` for everything that starts inside the window, in order: the alarms each
+/// occurrence is to ring at, each spelled as `Spec` spells it. The frontend resolves the same from
+/// the same metadata and configuration.
+fn alarms_of_note_fixture(entry: &crate::models::ListEntry, defaults: &alarms::Defaults) -> Vec<String> {
+    let reader = note_reader();
+    let (from, to) = note_fixture_window();
+    let mut lines: Vec<String> = note_events::occurrences(std::slice::from_ref(entry), from, to, &reader)
+        .iter()
+        .filter(|occurrence| (from..=to).contains(&occurrence.start.begins(&reader)))
+        .map(|occurrence| {
+            format!("{}  {}  {}", occurrence.start, occurrence.name, spec_line(&defaults.specs_of(occurrence)))
+        })
+        .collect();
+    lines.sort();
+    lines
+}
+
+/// Every task fixture as `tasks/…`, in order.
+fn task_fixture_names() -> Vec<String> {
+    fixture_files("tasks", ".md")
+}
+
+/// A task fixture as the listing holds it: in the task tree, under `.tasks/`, unless its name keeps
+/// it out of it.
+fn task_fixture_entry(name: &str) -> crate::models::ListEntry {
+    fixture_entry(name, &format!(".tasks/{}", name.trim_start_matches("tasks/")))
+}
+
+/// `start  due_by|deadline  spec|spec` for every date of a task that rings and falls inside the
+/// window, in order. A task that is done or canceled has none, and nor does a note outside the task
+/// tree or a date that is not one; the frontend resolves the same.
+fn alarms_of_task_fixture(entry: &crate::models::ListEntry, defaults: &alarms::Defaults) -> Vec<String> {
+    let reader = note_reader();
+    let (from, to) = note_fixture_window();
+    let mut lines: Vec<String> = alarms::task_dates(std::slice::from_ref(entry), &reader)
+        .iter()
+        .filter(|date| (from..=to).contains(&date.start.begins(&reader)))
+        .map(|date| {
+            format!("{}  {}  {}", date.start, date.field.key(), spec_line(&defaults.task_specs_of(date)))
+        })
+        .collect();
+    lines.sort();
+    lines
+}
+
+/// `field  date  status` for every date of a task that `list_events` returns inside the window, in
+/// order: the date exactly as the note writes it, since the tool does not convert an offset, and
+/// the `status.kind` it reports, `none` where the task has none. The frontend's
+/// `taskDatesFromEntries` is required to find the same dates, and the same of them finished.
+fn window_dates_of_task_fixture(entry: &crate::models::ListEntry) -> Vec<String> {
+    let day = |text: &str| chrono::NaiveDate::parse_from_str(text, "%Y-%m-%d").expect("a date");
+    let dates = crate::mcp::tools::task_dates_in_window(
+        std::slice::from_ref(entry),
+        day(FIXTURE_WINDOW.0),
+        day(FIXTURE_WINDOW.1),
+    );
+    let mut lines: Vec<String> = dates
+        .iter()
+        .map(|date| format!("{}  {}  {}", date.field, date.date, date.status.as_deref().unwrap_or("none")))
+        .collect();
+    lines.sort();
+    lines
+}
+
 #[test]
 fn note_fixtures_draw_as_recorded() {
+    let (config_value, config) = note_fixture_config();
+    let [categories_only, with_alarms] = note_fixture_defaults(&config);
     let mut recorded = serde_json::Map::new();
     for name in note_fixture_names() {
         let entry = note_fixture_entry(&name);
@@ -2184,6 +2286,21 @@ fn note_fixtures_draw_as_recorded() {
             serde_json::json!({
                 "metadata": entry.metadata,
                 "drawn": draw_note_fixture(&entry),
+                "alarms": alarms_of_note_fixture(&entry, &categories_only),
+                "alarmsWithDefaults": alarms_of_note_fixture(&entry, &with_alarms),
+            }),
+        );
+    }
+    let mut tasks = serde_json::Map::new();
+    for name in task_fixture_names() {
+        let entry = task_fixture_entry(&name);
+        tasks.insert(
+            name,
+            serde_json::json!({
+                "metadata": entry.metadata,
+                "alarms": alarms_of_task_fixture(&entry, &categories_only),
+                "alarmsWithDefaults": alarms_of_task_fixture(&entry, &with_alarms),
+                "windowDates": window_dates_of_task_fixture(&entry),
             }),
         );
     }
@@ -2192,7 +2309,9 @@ fn note_fixtures_draw_as_recorded() {
     let golden = serde_json::to_string_pretty(&serde_json::json!({
         "zone": NOTE_READER_ZONE.name(),
         "window": { "from": FIXTURE_WINDOW.0, "to": FIXTURE_WINDOW.1 },
+        "calendars": config_value,
         "notes": recorded,
+        "tasks": tasks,
     }))
     .expect("serialisable");
 
@@ -2441,6 +2560,27 @@ fn a_non_utf8_path_in_head_does_not_break_a_lookup() {
 
 
 
+/// Every Markdown file under `dir`, for the tests that run against a real notes repository.
+fn corpus_notes(dir: &Path) -> Vec<std::path::PathBuf> {
+    let mut notes = Vec::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(path) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&path) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            }
+            else if path.extension().and_then(|e| e.to_str()) == Some("md") {
+                notes.push(path);
+            }
+        }
+    }
+    notes
+}
+
 /// Every frontmatter edit the MCP tools make, run against a real notes repository.
 ///
 /// Ignored by default: it needs a corpus, and the only honest corpus is somebody's actual notes.
@@ -2473,22 +2613,7 @@ fn frontmatter_edits_a_real_corpus() {
         return;
     };
 
-    let mut notes = Vec::new();
-    let mut stack = vec![std::path::PathBuf::from(dir)];
-    while let Some(path) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(&path) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                stack.push(path);
-            }
-            else if path.extension().and_then(|e| e.to_str()) == Some("md") {
-                notes.push(path);
-            }
-        }
-    }
+    let notes = corpus_notes(Path::new(&dir));
 
     let (mut with_frontmatter, mut exact, mut declined) = (0, 0, 0);
     let (mut touched, mut same_meaning, mut declined_deep) = (0, 0, 0);
@@ -2596,6 +2721,120 @@ fn frontmatter_edits_a_real_corpus() {
     println!("  meaning and body preserved:       {same_meaning}");
     println!("  declined with an explanation:     {declined_deep}");
     assert!(with_frontmatter > 0, "the corpus held no frontmatter");
+}
+
+/// What the alarm scheduler costs each minute on a real notes repository.
+///
+/// Ignored by default, like `frontmatter_edits_a_real_corpus`: the only honest corpus is somebody's
+/// actual notes, and a debug build's timings mean nothing, so run it in release:
+///
+/// ```shell
+/// MORY_CORPUS=/path/to/notes cargo test --release scheduler_cost_on_a_real_corpus -- --ignored --nocapture
+/// ```
+///
+/// criterion is driven from here because the crate is a binary, so a `benches/` target could not
+/// import `Schedule`. `configure_from_args` is left out: it would read the test harness's flags as
+/// its own.
+///
+/// **What counts as cheap**, decided before the first run: a pass under 10 ms for one zone. The
+/// scheduler makes one pass per zone with a subscriber each minute, so that is a small share of a
+/// minute and nothing in it is worth restructuring for speed. Over that, the passes are worth
+/// making cheaper, in the order the numbers point to.
+#[test]
+#[ignore]
+fn scheduler_cost_on_a_real_corpus() {
+    use std::hint::black_box;
+
+    use chrono::{Duration, Utc};
+    use criterion::{BatchSize, Criterion};
+
+    use crate::alarms::{task_dates, Defaults, Reach};
+    use crate::models::ListEntry;
+    use crate::note_events::Reader;
+    use crate::schedule::{alarms_between, Schedule};
+
+    let Ok(dir) = std::env::var("MORY_CORPUS") else {
+        eprintln!("set MORY_CORPUS to a notes repository to run this");
+        return;
+    };
+    let root = Path::new(&dir);
+    // Listed by their path in the repository, as the cache lists them, so that `.tasks/` is the
+    // task tree.
+    let entries: Vec<ListEntry> = corpus_notes(root)
+        .iter()
+        .filter_map(|path| Some(listed_note(path.strip_prefix(root).ok()?, &std::fs::read(path).ok()?)))
+        .collect();
+    assert!(!entries.is_empty(), "the corpus held no notes");
+
+    let defaults = Defaults::default();
+    let schedule = Schedule::new(entries.clone(), defaults.clone());
+    // The reach is one number for the whole listing, so one wide alarm widens the window every
+    // rule is expanded over. The corpus has no rule to expand, so a daily one stands in, with the
+    // furthest an alarm may be set, and without it for the same listing to be compared with.
+    let with_rule = |extra: &[(&str, &str)]| {
+        let mut entries = entries.clone();
+        entries.push(ListEntry::note(
+            "rule.md",
+            "events: { Daily: { start: '2024-01-01 09:00', repeat: { freq: daily } } }",
+        ));
+        entries.extend(extra.iter().map(|(path, yaml)| ListEntry::note(path, yaml)));
+        entries
+    };
+    let rule_entries = with_rule(&[]);
+    let wide_entries =
+        with_rule(&[("wide.md", "events: { Wide: { start: '2030-01-01 09:00', alarms: [-366d] } }")]);
+    let rule = Schedule::new(rule_entries.clone(), defaults.clone());
+    let wide = Schedule::new(wide_entries.clone(), defaults.clone());
+
+    // What `plan` asks for in the steady state: from the last look, a `CHECK_INTERVAL` ago, to a
+    // `CHECK_INTERVAL` ahead.
+    let now = Utc::now();
+    let (after, until) = (now - Duration::seconds(60), now + Duration::seconds(60));
+    let reader = |zone| Reader { zone, now };
+    let zones = [chrono_tz::Asia::Tokyo, chrono_tz::America::Los_Angeles, chrono_tz::Europe::London];
+
+    let declaring = |key: &str| {
+        entries
+            .iter()
+            .filter(|entry| entry.metadata.as_ref().and_then(|metadata| metadata.get(key)).is_some())
+            .count()
+    };
+    println!("notes in the listing:        {}", entries.len());
+    println!("notes declaring events:      {}", declaring("events"));
+    println!("notes declaring a task:      {}", declaring("task"));
+    println!("reach of the listing:        {:?}", Reach::of(&entries, &defaults));
+    println!("reach with a -366d alarm:    {:?}", Reach::of(&wide_entries, &defaults));
+    println!("task dates:                  {}", task_dates(&entries, &reader(zones[0])).len());
+    println!("alarms in the span:          {}", alarms_between(&schedule, after, until, &reader(zones[0])).len());
+
+    let mut criterion = Criterion::default().without_plots();
+    criterion.bench_function("alarms_between, one zone", |b| {
+        b.iter(|| alarms_between(black_box(&schedule), after, until, &reader(zones[0])));
+    });
+    criterion.bench_function("alarms_between, three zones", |b| {
+        b.iter(|| {
+            for zone in zones {
+                black_box(alarms_between(black_box(&schedule), after, until, &reader(zone)));
+            }
+        });
+    });
+    criterion.bench_function("alarms_between, one zone, a daily rule", |b| {
+        b.iter(|| alarms_between(black_box(&rule), after, until, &reader(zones[0])));
+    });
+    criterion.bench_function("alarms_between, one zone, a daily rule and a -366d alarm", |b| {
+        b.iter(|| alarms_between(black_box(&wide), after, until, &reader(zones[0])));
+    });
+    criterion.bench_function("task_dates", |b| {
+        b.iter(|| task_dates(black_box(&entries), &reader(zones[0])));
+    });
+    criterion.bench_function("Reach::of", |b| b.iter(|| Reach::of(black_box(&entries), &defaults)));
+    criterion.bench_function("Schedule::new", |b| {
+        b.iter_batched(
+            || entries.clone(),
+            |entries| Schedule::new(entries, defaults.clone()),
+            BatchSize::LargeInput,
+        );
+    });
 }
 
 /// What the task and event tools emit, validated against the schema the frontend validates with.
@@ -2775,4 +3014,27 @@ categories:
 
     let config = crate::v2::parse_calendar_config("categories: [meeting]\n").expect("valid");
     assert!(config.category_ids().is_empty());
+}
+
+/// What the web app takes for a category (`readCategories`) is what the tools must take for one,
+/// or a model is told a category exists that the calendar then reports as unknown, and refused
+/// one the calendar would have drawn.
+#[test]
+fn a_category_is_configured_as_the_web_app_reads_it() {
+    let config = crate::v2::parse_calendar_config("\
+categories:
+    mapping: {}
+    nothing:
+    text: 5
+    list: [meeting]
+    1: {}
+    true:
+    ? [a, b]
+    : {}
+    alarmed:
+        alarms: [-10m]
+")
+    .expect("a valid configuration");
+    // Scalar keys are named as the frontend names them, JSON having only strings.
+    assert_eq!(config.category_ids(), ["mapping", "nothing", "1", "true", "alarmed"]);
 }

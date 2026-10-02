@@ -11,7 +11,7 @@ use serde::Deserialize;
 use serde_yaml::{Mapping, Value};
 
 use super::frontmatter::{self, Change};
-use super::tools::{note_text, safe_path, write_note};
+use super::tools::{alarm_list, commit_edit, note_text, safe_path, write_note};
 use super::tool_error;
 use crate::models::AppState;
 
@@ -202,6 +202,13 @@ pub struct EventArgs {
     /// with the category's name template. Must be configured already; `list_events` lists them.
     #[serde(default)]
     pub category: Option<String>,
+    /// When it rings, as a list: offsets from the start (`-10m` before it, `+1h` after, in w, d,
+    /// h, m or s) or times on the start's day (`09:00`, `-1d 18:00`). The sign is required, so
+    /// `10m` is refused. Without one it rings at its start if it is timed, never if all-day,
+    /// unless its category or the config says otherwise. An empty list silences it; name
+    /// `alarms` in `clear` to go back to the category's and the config's.
+    #[serde(default)]
+    pub alarms: Option<Vec<String>>,
     /// A recurrence rule.
     #[serde(default)]
     pub repeat: Option<Repeat>,
@@ -215,8 +222,8 @@ pub struct EventArgs {
     pub clear: Option<Vec<String>>,
 }
 
-const EVENT_KEYS: [&str; 10] = [
-    "start", "end", "finished", "color", "note", "location", "url", "category", "repeat",
+const EVENT_KEYS: [&str; 11] = [
+    "start", "end", "finished", "color", "note", "location", "url", "category", "alarms", "repeat",
     "exclusions",
 ];
 
@@ -256,6 +263,9 @@ fn event_changes(args: &EventArgs) -> Result<Vec<Change>, String> {
             set(key, value.as_str().into());
         }
     }
+    if let Some(alarms) = &args.alarms {
+        set("alarms", alarm_list(alarms)?);
+    }
     if let Some(repeat) = &args.repeat {
         set("repeat", repeat.to_value()?);
     }
@@ -273,8 +283,8 @@ fn event_changes(args: &EventArgs) -> Result<Vec<Change>, String> {
 /// The web app would draw the event without it and report it as unknown, so an unconfigured id is
 /// a typo or an invention either way. A nested id must be configured itself, as the web app
 /// requires: were its parent enough, a misspelt child would never be reported.
-fn check_category(id: &str, configured: &[&str]) -> Result<(), String> {
-    if configured.contains(&id) {
+fn check_category(id: &str, configured: &[String]) -> Result<(), String> {
+    if configured.iter().any(|configured| configured == id) {
         return Ok(());
     }
     if configured.is_empty() {
@@ -292,9 +302,7 @@ fn check_category(id: &str, configured: &[&str]) -> Result<(), String> {
 
 /// Whether the note already declares an event by this name.
 fn has_event(text: &str, name: &str) -> bool {
-    let block = frontmatter::Note::parse(text).block;
-    serde_yaml::from_str::<Value>(&block)
-        .ok()
+    frontmatter::value(text)
         .and_then(|root| root.get("events")?.as_mapping()?.get(name).cloned())
         .is_some()
 }
@@ -367,16 +375,7 @@ async fn apply_event(
             return Ok(tool_error(message));
         }
     }
-    let edited = match frontmatter::apply(text, &changes) {
-        Ok(edited) => edited,
-        Err(e) => return Ok(tool_error(e.to_string())),
-    };
-    if edited == text {
-        return Ok(tool_error(format!(
-            "{path:?} already says all of that, so nothing was committed.",
-        )));
-    }
-    write_note(state, path, &edited, &args.message).await
+    commit_edit(state, path, text, &changes, &args.message).await
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -518,7 +517,7 @@ mod tests {
 
     #[test]
     fn a_category_must_be_configured_and_names_the_ones_that_are() {
-        let configured = ["meeting", "meeting/1on1", "trip"];
+        let configured = ["meeting", "meeting/1on1", "trip"].map(String::from);
         assert!(check_category("meeting", &configured).is_ok());
         assert!(check_category("meeting/1on1", &configured).is_ok());
 
@@ -529,6 +528,69 @@ mod tests {
 
         let error = check_category("meeting", &[]).expect_err("none configured");
         assert!(error.contains(".mory/calendars.yaml"), "{error}");
+    }
+
+    fn alarms_args(alarms: serde_json::Value) -> EventArgs {
+        serde_json::from_value(serde_json::json!({
+            "path": "a.md",
+            "name": "Standup",
+            "message": "m",
+            "alarms": alarms,
+        }))
+        .expect("valid arguments")
+    }
+
+    #[test]
+    fn alarms_are_written_as_given_and_an_empty_list_silences() {
+        let note = "---\nevents:\n    Standup:\n        start: 2026-09-23 09:00:00+09:00\n---\n";
+        let edited = frontmatter::apply(
+            note,
+            &event_changes(&alarms_args(serde_json::json!(["-10m", "-1d 18:00", "09:00", "+1 hour"])))
+                .expect("valid changes"),
+        )
+        .expect("an edit");
+        let parsed = frontmatter::value(&edited).expect("valid YAML");
+        let written: Vec<&str> = parsed["events"]["Standup"]["alarms"]
+            .as_sequence()
+            .unwrap()
+            .iter()
+            .map(|alarm| alarm.as_str().unwrap())
+            .collect();
+        assert_eq!(written, ["-10m", "-1d 18:00", "09:00", "+1 hour"]);
+
+        let silenced = frontmatter::apply(
+            note,
+            &event_changes(&alarms_args(serde_json::json!([]))).expect("valid changes"),
+        )
+        .expect("an edit");
+        assert!(silenced.contains("alarms: []"), "{silenced}");
+    }
+
+    /// An entry the scheduler and the web app would both drop rings nothing, so it is refused
+    /// with the grammar rather than written.
+    #[test]
+    fn an_alarm_that_is_not_one_is_refused_with_the_grammar() {
+        for bad in ["10m", "soon", "-10 mins", "-1d 25:00", "-2y"] {
+            let error = event_changes(&alarms_args(serde_json::json!(["-5m", bad]))).expect_err(bad);
+            assert!(error.contains(&format!("{bad:?}")), "{bad}: {error}");
+            assert!(error.contains("`-10m`"), "{error}");
+        }
+        let error = event_changes(&alarms_args(serde_json::json!(["10m"]))).expect_err("unsigned");
+        assert!(error.contains("needs a sign"), "{error}");
+    }
+
+    #[test]
+    fn alarms_can_be_cleared_like_any_other_key() {
+        let args: EventArgs = serde_json::from_value(serde_json::json!({
+            "path": "a.md", "name": "Standup", "message": "m", "clear": ["alarms"],
+        }))
+        .expect("valid arguments");
+        let edited = frontmatter::apply(
+            "---\nevents:\n    Standup:\n        start: 2026-09-23\n        alarms: [-10m]\n---\n",
+            &event_changes(&args).expect("valid changes"),
+        )
+        .expect("an edit");
+        assert!(!edited.contains("alarms"), "{edited}");
     }
 
     #[test]

@@ -122,6 +122,54 @@ events:
             freq: weekly
             byday:
             count: 2
+    A blank interval is none:
+        start: 2024-10-15 08:00
+        repeat:
+            freq: weekly
+            interval:
+            count: 2
+    An interval of one:
+        start: 2024-10-15 09:00
+        repeat:
+            freq: weekly
+            interval: 1
+            count: 2
+    An interval that is zero is no rule:
+        start: 2024-10-15 10:00
+        repeat:
+            freq: weekly
+            interval: 0
+            count: 2
+    An interval that is negative is no rule:
+        start: 2024-10-15 11:00
+        repeat:
+            freq: weekly
+            interval: -1
+            count: 2
+    An interval that is text is no rule:
+        start: 2024-10-15 12:00
+        repeat:
+            freq: weekly
+            interval: twice
+            count: 2
+    An interval that is not whole is no rule:
+        start: 2024-10-15 13:00
+        repeat:
+            freq: weekly
+            interval: 1.5
+            count: 2
+    An interval too large is no rule:
+        start: 2024-10-15 14:00
+        repeat:
+            freq: weekly
+            interval: 70000
+            count: 2
+    The largest interval:
+        start: 2024-10-15 15:00
+        repeat:
+            freq: daily
+            interval: 65535
+            count: 2
 ---
 
 # Rules

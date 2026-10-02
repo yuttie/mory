@@ -1,6 +1,8 @@
 import YAML from 'yaml';
 import dayjs from 'dayjs';
 
+import { stringifyWithFlowAlarms } from '@/frontmatter';
+import type { TaskAlarms } from '@/alarms';
 import type { UUID } from '@/api';
 import { columnOf, editFrontmatter, hasKey, indentBlock, lineEnding, parsesTo, sameValue, splice } from '@/frontmatter';
 
@@ -99,6 +101,9 @@ export interface Task {
     start_at?: string;
     due_by?: string;
     deadline?: string;
+    // When `due_by` and `deadline` ring, where this task says so; `render` has to write it, or a
+    // save from the editor would delete it.
+    alarms?: TaskAlarms;
     scheduled_dates: string[];
     note: string;
 }
@@ -153,11 +158,12 @@ export function render(task: Task): string {
             ...(task.start_at ? { start_at: task.start_at } : {}),
             ...(task.due_by ? { due_by: task.due_by } : {}),
             ...(task.deadline ? { deadline: task.deadline } : {}),
+            ...(task.alarms && Object.keys(task.alarms).length > 0 ? { alarms: task.alarms } : {}),
             scheduled_dates: task.scheduled_dates,
         },
         tags: task.tags,
     };
-    return '---\n' + YAML.stringify(metadata, { indent: 4 }) + '---\n' + (task.title ? `\n# ${task.title}\n` : '') + (`\n${task.note}`);
+    return '---\n' + stringifyWithFlowAlarms(metadata, { indent: 4 }) + '---\n' + (task.title ? `\n# ${task.title}\n` : '') + (`\n${task.note}`);
 }
 
 // A note with its task's status replaced, and every other byte left alone.

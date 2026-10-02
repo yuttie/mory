@@ -52,3 +52,7 @@ chrono-tz = "0.10.4"
 # Used only by the test that checks what the task and event tools emit against
 # `frontend/src/metadata-schema.json`, which stays the single copy of that schema.
 jsonschema = "0.33"
+# Drives `scheduler_cost_on_a_real_corpus`, an ignored test. The crate is a binary, so a `benches/`
+# target could not import the scheduler; `default-features` off leaves out the plotting and the
+# command-line runner, neither of which a test uses.
+criterion = { version = "0.8.2", default-features = false }

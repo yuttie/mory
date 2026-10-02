@@ -6,7 +6,10 @@
 import { describe, expect, it } from 'vitest';
 import Ajv from 'ajv';
 
+import { parseAlarm } from '@/alarms';
 import metadataSchema from '@/metadata-schema.json';
+
+import grammar from '../../fixtures/calendar/alarm-grammar.json';
 
 const ajv = new Ajv();
 const validate = ajv.compile(metadataSchema);
@@ -130,6 +133,72 @@ describe('metadata schema, events', () => {
     });
 });
 
+describe('metadata schema, alarms', () => {
+    const at = (alarms: unknown) => ({ events: { A: { start: '2024-05-01 09:00', alarms } } });
+
+    // What `alarms.rs` and `alarms.ts` read, as far as a pattern can say it: the schema is only the
+    // editor's first look, and the parser is what reports the rest. That is `tooFar`, which only a
+    // parser can tell.
+    const valid = [...grammar.canonical.map(([written]) => written), ...grammar.atTheLimit];
+    const invalid = grammar.refused;
+
+    it('accepts offsets and times of day, one alone or in a list', () => {
+        for (const alarm of valid) {
+            expect(ok(at(alarm)), alarm).toBe(true);
+            expect(ok(at([alarm, '-5m'])), alarm).toBe(true);
+        }
+    });
+
+    it('agrees with the parser on every spelling a corpus builds', () => {
+        // Each part is varied where the grammar has an opinion about it. Amounts stay within a
+        // year, which is the one thing only the parser can tell.
+        const offsets = ['', '+', '-'].flatMap((sign) => ['0', '1', '10', '1.5', '0.5', '52'].flatMap(
+            (amount) => ['', ' '].flatMap((gap) => ['m', 'minutes', 'h', 'hour', 's', 'd', 'days', 'w', 'weeks']
+                .map((unit) => `${sign}${amount}${gap}${unit}`))));
+        const clocks = ['09:00', '23:59', '9:00', '09:0', '24:00', '09:60'];
+        const corpus = [
+            ...offsets,
+            ...clocks,
+            ...offsets.flatMap((offset) => clocks.map((clock) => `${offset} ${clock}`)),
+        ];
+        for (const text of corpus) {
+            expect(ok(at(text)), JSON.stringify(text)).toBe('spec' in parseAlarm(text));
+        }
+    });
+
+    it('accepts a list that is empty, and a value left empty', () => {
+        expect(ok(at([]))).toBe(true);
+        expect(ok(at(null))).toBe(true);
+    });
+
+    it('rejects an alarm that is not one, and anything that is not text', () => {
+        for (const alarm of invalid) {
+            expect(ok(at(alarm)), JSON.stringify(alarm)).toBe(false);
+            expect(ok(at(['-5m', alarm])), JSON.stringify(alarm)).toBe(false);
+        }
+        for (const alarms of [5, true, {}, [5], [null], [['-5m']], { at: '-5m' }]) {
+            expect(ok(at(alarms)), JSON.stringify(alarms)).toBe(false);
+        }
+    });
+
+    it('accepts alarms on an override and an instance as on the event', () => {
+        expect(ok({
+            events: {
+                A: {
+                    start: '2024-05-01 09:00',
+                    repeat: { freq: 'weekly' },
+                    alarms: ['-10m'],
+                    overrides: [{ at: '2024-05-08 09:00', alarms: [] }],
+                    instances: [{ start: '2024-05-09 09:00', alarms: '-1h' }],
+                },
+            },
+        })).toBe(true);
+        expect(ok({
+            events: { A: { instances: [{ start: '2024-05-09 09:00', alarms: ['soon'] }] } },
+        })).toBe(false);
+    });
+});
+
 describe('metadata schema, tasks', () => {
     const task = (status: unknown) => ({
         task: { status, progress: 0, importance: 3, urgency: 3, scheduled_dates: [] },
@@ -143,5 +212,34 @@ describe('metadata schema, tasks', () => {
 
     it('rejects a status kind it does not know', () => {
         expect(ok(task({ kind: 'someday' }))).toBe(false);
+    });
+});
+
+describe('metadata schema, task alarms', () => {
+    const task = (alarms: unknown) => ({
+        task: {
+            status: { kind: 'todo' },
+            progress: 0,
+            importance: 3,
+            urgency: 3,
+            scheduled_dates: [],
+            due_by: '2024-05-10',
+            alarms,
+        },
+    });
+
+    it('accepts alarms for each of the two dates', () => {
+        expect(ok(task({ due_by: ['09:00'], deadline: ['-1d 18:00', '-2h'] }))).toBe(true);
+        expect(ok(task({ deadline: '-1h' }))).toBe(true);
+        expect(ok(task({ due_by: [], deadline: null }))).toBe(true);
+        expect(ok(task({}))).toBe(true);
+        expect(ok(task(null))).toBe(true);
+    });
+
+    it('rejects an alarm that is not one, a date a task does not have, and a list for both', () => {
+        expect(ok(task({ due_by: ['10m'] }))).toBe(false);
+        expect(ok(task({ start_at: ['-1h'] }))).toBe(false);
+        expect(ok(task(['-1h']))).toBe(false);
+        expect(ok(task('-1h'))).toBe(false);
     });
 });

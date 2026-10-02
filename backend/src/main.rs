@@ -62,12 +62,15 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use models::*;
 
+mod alarms;
 mod ical;
 mod mcp;
 mod note_events;
 mod oauth;
 mod push;
+mod schedule;
 mod search;
+mod tasks;
 
 #[cfg(test)]
 mod tests;
@@ -1644,19 +1647,36 @@ Important:
         /// from loading.
         #[serde(default)]
         categories: serde_yaml::Value,
+        /// When alarms ring where a note does not say: `timed`, `all_day`, and later the task
+        /// dates. As lenient as `categories`, and for the same reason: an unusable value is no
+        /// setting, and never a reason to lose the imported events.
+        #[serde(default)]
+        alarms: serde_yaml::Value,
     }
 
     impl CalendarConfig {
+        /// What the configuration says alarms ring at where a note does not.
+        pub(crate) fn alarm_defaults(&self) -> crate::alarms::Defaults {
+            crate::alarms::Defaults::read(crate::alarms::Blocks {
+                alarms: self.alarms.as_mapping(),
+                categories: self.categories(),
+            })
+        }
+
         /// The `categories:` block as declared, or `None` when there is no usable one.
         pub(crate) fn categories(&self) -> Option<&serde_yaml::Mapping> {
             self.categories.as_mapping()
         }
 
-        /// The ids of the configured event categories, in the file's order.
-        pub(crate) fn category_ids(&self) -> Vec<&str> {
-            self.categories()
-                .map(|categories| categories.keys().filter_map(|id| id.as_str()).collect())
-                .unwrap_or_default()
+        /// The `alarms:` block as declared, or `None` when there is no usable one.
+        pub(crate) fn alarms(&self) -> Option<&serde_yaml::Mapping> {
+            self.alarms.as_mapping()
+        }
+
+        /// The ids of the configured event categories, in the file's order, as the web app reads
+        /// them.
+        pub(crate) fn category_ids(&self) -> Vec<String> {
+            crate::alarms::configured_categories(self.categories()).map(|(id, _)| id).collect()
         }
     }
 
@@ -2293,6 +2313,22 @@ mod models {
         pub metadata: Option<Metadata>,
         pub title: Option<String>,
         pub time: DateTime<FixedOffset>,
+    }
+
+    #[cfg(test)]
+    impl ListEntry {
+        /// A markdown note as the listing holds it, its frontmatter given as YAML and nothing else
+        /// about it mattering, which is all a test of how notes are read needs of one.
+        pub(crate) fn note(path: &str, frontmatter: &str) -> ListEntry {
+            ListEntry {
+                path: path.into(),
+                size: 1,
+                mime_type: "text/markdown".to_owned(),
+                metadata: Some(serde_yaml::from_str(frontmatter).expect("valid YAML")),
+                title: None,
+                time: "2024-01-01T00:00:00+00:00".parse().expect("a valid time"),
+            }
+        }
     }
 
     #[derive(Debug, Serialize, Clone)]

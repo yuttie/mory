@@ -29,6 +29,15 @@ import type {
     MetadataEvent,
 } from '@/api';
 import { occurrencesOf, validateEvent } from '@/api';
+import type { AlarmDefaults, EffectiveAlarmDefaults } from '@/alarms';
+import {
+    alarmValueProblems,
+    readAlarmList,
+    readAlarmsIfSet,
+    TASK_DATE_ALARM_DEFAULT,
+    taskAlarmOf,
+    withBuiltInAlarms,
+} from '@/alarms';
 import { RecurrenceError, expandRule, parseWallClock } from '@/recurrence';
 import { taskUuidOf } from '@/task-forest';
 import dayjs from 'dayjs';
@@ -39,16 +48,75 @@ export const DEFAULT_EVENT_COLOR = '#666666';
 /// What a category, configured under `categories:` in `.mory/calendars.yaml`, supplies to the
 /// events that name it: a default for the same keys an event has.
 ///
-/// Only how an event is drawn, never when or where it happens -- those stay in the note, which has
-/// to say everything about its events on its own.
+/// How an event is drawn, and when it rings; never when or where it happens -- those stay in the
+/// note, which has to say everything about its events on its own.
 export interface EventCategory {
     color?: string;
     /// A template for the drawn name, in which `{{name}}` stands for the event's own.
     name?: string;
+    /// When its events ring, where the event itself says nothing: alarms as `alarms.ts` reads them.
+    /// An empty list is a setting, and silences them.
+    ///
+    /// Not how the event is drawn, nor when or where it happens: it matters to moried, which rings
+    /// them, and to the popup, which says so.
+    alarms?: string[];
 }
 
 /// The configured categories by id.
 export type EventCategories = ReadonlyMap<string, EventCategory>;
+
+/// An event category as configured under `categories:`: its id, and the defaults it supplies.
+///
+/// Kept as a list rather than a map so the settings show them in the order the file has them.
+export interface ConfiguredCategory extends EventCategory {
+    id: string;
+}
+
+/// The `categories:` block of the calendar configuration, which is hand-written, as a list in the
+/// file's order. A category with nothing after its id is one that sets nothing of its own
+/// and inherits it all, so it is kept; one that is not a mapping at all is dropped, and the notes
+/// naming it are then reported rather than drawn with half a category. `backend/src/alarms.rs`
+/// reads the same rule for the alarms a category sets.
+///
+/// Each entry dropped from an `alarms:` list is said in `problems`, if given, as
+/// `categories.<id>.alarms: <what is wrong>`.
+export function readCategories(value: unknown, problems?: string[]): ConfiguredCategory[] {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        return [];
+    }
+    const categories: ConfiguredCategory[] = [];
+    for (const [id, entry] of Object.entries(value)) {
+        if (entry === null) {
+            categories.push({ id });
+            continue;
+        }
+        if (typeof entry !== 'object' || Array.isArray(entry)) {
+            continue;
+        }
+        const category: ConfiguredCategory = { id };
+        for (const field of ['color', 'name'] as const) {
+            const text = (entry as Record<string, unknown>)[field];
+            if (typeof text === 'string' && text.trim() !== '') {
+                category[field] = text.trim();
+            }
+        }
+        // Set, even to nothing: an empty list silences the category's events, where an empty
+        // `alarms:` leaves them to the configuration's.
+        const written = (entry as Record<string, unknown>).alarms;
+        problems?.push(...alarmValueProblems(written).map((problem) => `categories.${id}.alarms: ${problem}`));
+        const alarms = readAlarmsIfSet(written);
+        if (alarms !== undefined) {
+            category.alarms = alarms;
+        }
+        categories.push(category);
+    }
+    return categories;
+}
+
+/// The categories by id, as the event derivation takes them.
+export function categoryMapOf(categories: readonly ConfiguredCategory[]): EventCategories {
+    return new Map(categories.map(({ id, ...defaults }) => [id, defaults]));
+}
 
 /// The name an event is drawn with, given its category's template.
 ///
@@ -102,6 +170,7 @@ export function resolveCategory(id: string, categories: EventCategories): EventC
         const category = categories.get(ancestor);
         resolved.color ??= category?.color;
         resolved.name ??= category?.name;
+        resolved.alarms ??= category?.alarms;
     }
     return resolved;
 }
@@ -135,6 +204,11 @@ export interface CalendarEvent {
     /// The category the note names, configured or not. Not `category`, for the reason `timed` is
     /// absent: v-calendar reads a property of that name in its category mode.
     categoryId?: string;
+    /// What it rings at, as `backend/src/alarms.rs` resolves it: the occurrence's own list, then the
+    /// event's, then its category's, then the configuration's, then the built-in. Alarms as written,
+    /// the ones that are not alarms left out. Never set for an imported event, which has none of
+    /// its own to ring.
+    alarms?: string[];
 }
 
 // `[property, offending value, event name, note path, note title]` -- the shape `Calendar.vue`
@@ -251,13 +325,70 @@ interface EventCategoryRef {
     defaults?: EventCategory;
 }
 
+// How `<v-calendar>` reads a start `toWallClock` hands it: `parseTimestamp`'s `PARSE_REGEX`, and it
+// is timed only with both an hour and a minute. Seconds are ignored, a missing day is the first, and
+// a start it does not match is not drawn at all -- so one that matches nothing is never all-day here.
+const CALENDAR_PARSE = /^(\d{4})-(\d{1,2})(-(\d{1,2}))?([^\d]+(\d{1,2}))?(:(\d{1,2}))?(:(\d{1,2}))?$/;
+
+/// Whether the calendar draws a start as a whole day, which is what decides the alarms an event
+/// rings at when nothing sets them.
+export function isAllDay(start: string): boolean {
+    const parts = CALENDAR_PARSE.exec(start);
+    return parts !== null && !(parts[6] && parts[8]);
+}
+
+// What an occurrence rings at, by the first of these that is set: its own `alarms` or its event's
+// (`own`, which has already been through `??`), its category's, the configuration's for a timed or
+// an all-day one, which is the built-in default where the file sets none. `[]` is a setting and
+// silences; `null` is not one.
+function resolveAlarms(
+    own: unknown,
+    category: EventCategoryRef | undefined,
+    start: string,
+    defaults: EffectiveAlarmDefaults,
+): string[] {
+    return readAlarmsIfSet(own)
+        ?? category?.defaults?.alarms
+        ?? (isAllDay(start) ? defaults.allDay : defaults.timed);
+}
+
+// Every entry of an `alarms:` value that is not an alarm, reported where it is written: once for the
+// event, an override or an instance, and not again for each occurrence that inherits it.
+function checkAlarms(
+    value: unknown,
+    eventName: string,
+    entry: ListEntry2,
+    errors: EventError[],
+): void {
+    if (value === undefined || value === null) {
+        return;
+    }
+    for (const invalid of readAlarmList(value).invalid) {
+        errors.push(['alarms', invalid, eventName, entry.path, entry.title]);
+    }
+}
+
+// What a derivation carries from one note to the next: the window it draws, what alarms are
+// resolved against, and where the events and the errors it finds go. They travel together through
+// every function below, which is why they are one value.
+interface Derivation {
+    window: EventWindow;
+    alarmDefaults: EffectiveAlarmDefaults;
+    into: CalendarEvent[];
+    errors: EventError[];
+}
+
+function derivationOf(window: EventWindow, alarmDefaults: AlarmDefaults | undefined): Derivation {
+    return { window, alarmDefaults: withBuiltInAlarms(alarmDefaults), into: [], errors: [] };
+}
+
 function buildOccurrence(
     time: EventOccurrence,
     parent: EventParent,
     category: EventCategoryRef | undefined,
     eventName: string,
     entry: ListEntry2,
-    errors: EventError[],
+    { errors, alarmDefaults }: Derivation,
 ): CalendarEvent | null {
     // `typeof` first: `dayjs(20240501)` is a valid epoch, so a YAML integer would pass the
     // validity check and then fail as a string later, inside the view.
@@ -275,9 +406,10 @@ function buildOccurrence(
     // The template wraps the name as resolved, so a renamed occurrence keeps its category's prefix.
     // A non-string name is handed on untouched, for `validateEvent` to refuse as before.
     const name = time.name || eventName;
+    const start = toWallClock(time.start);
     const event: CalendarEvent = {
         name: typeof name === 'string' ? applyNameTemplate(category?.defaults?.name, name) : name,
-        start: toWallClock(time.start),
+        start,
         end: normalizedEnd === undefined ? undefined : toWallClock(normalizedEnd),
         finished: time.finished,
         color: time.color || parent.color || category?.defaults?.color || DEFAULT_EVENT_COLOR,
@@ -286,7 +418,9 @@ function buildOccurrence(
         url: time.url || parent.url,
         source: 'note',
         notePath: entry.path,
-        ...(parent.ical === undefined
+        // Only a mapping is provenance: `ical:` with nothing after it is null, and read as one
+        // that threw inside the computed.
+        ...(typeof parent.ical !== 'object' || parent.ical === null || Array.isArray(parent.ical)
             ? {}
             : {
                 calendar: parent.ical.calendar,
@@ -294,11 +428,16 @@ function buildOccurrence(
                 recurrenceId: parent.ical.recurrence_id,
             }),
         ...(category === undefined ? {} : { categoryId: category.id }),
+        alarms: resolveAlarms(time.alarms ?? parent.alarms, category, start, alarmDefaults),
     };
     return validateEvent(event) ? event : null;
 }
 
 /// A list from whatever the frontmatter held, which need not have been a list.
+function isMapping(value: unknown): value is EventOccurrence {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function asArray<T>(value: T[] | undefined): T[] {
     return Array.isArray(value) ? value : [];
 }
@@ -358,10 +497,9 @@ function expandSeries(
     detail: MetadataEvent,
     category: EventCategoryRef | undefined,
     entry: ListEntry2,
-    window: EventWindow,
-    into: CalendarEvent[],
-    errors: EventError[],
+    derivation: Derivation,
 ): void {
+    const { window, into, errors } = derivation;
     const start = detail.start as string;
     const repeat = detail.repeat!;
 
@@ -413,7 +551,14 @@ function expandSeries(
     }
 
     const overrides = new Map<number, EventOccurrence>();
-    for (const override of asArray(detail.overrides)) {
+    for (const override of asArray<unknown>(detail.overrides)) {
+        // Hand-written, and read inside a computed: an element that is not a mapping is reported
+        // and skipped, where dereferencing it would blank the calendar. The backend skips it too.
+        if (!isMapping(override)) {
+            errors.push(['overrides', override, eventName, entry.path, entry.title]);
+            continue;
+        }
+        checkAlarms(override.alarms, eventName, entry, errors);
         const instant = override.at === undefined ? null : instantOf(override.at);
         if (instant === null) {
             errors.push(['at', override.at, eventName, entry.path, entry.title]);
@@ -481,7 +626,7 @@ function expandSeries(
             category,
             eventName,
             entry,
-            errors,
+            derivation,
         );
         if (event !== null) {
             into.push(event);
@@ -541,14 +686,14 @@ function eventsOfEntry(
     eventName: string,
     detail: MetadataEvent,
     entry: ListEntry2,
-    window: EventWindow,
+    derivation: Derivation,
     categories: EventCategories | undefined,
-    into: CalendarEvent[],
-    errors: EventError[],
 ): void {
+    const { into, errors } = derivation;
     const category = categoryOf(detail, categories, eventName, entry, errors);
+    checkAlarms(detail.alarms, eventName, entry, errors);
     const push = (occurrence: EventOccurrence, parent: EventParent) => {
-        const event = buildOccurrence(occurrence, parent, category, eventName, entry, errors);
+        const event = buildOccurrence(occurrence, parent, category, eventName, entry, derivation);
         if (event !== null) {
             into.push(event);
         }
@@ -567,13 +712,14 @@ function eventsOfEntry(
     }
     if (detail.start !== undefined) {
         if (detail.repeat !== undefined) {
-            expandSeries(eventName, detail, category, entry, window, into, errors);
+            expandSeries(eventName, detail, category, entry, derivation);
         }
         else {
             push(detail, { ical: detail.ical });
         }
     }
     for (const occurrence of occurrences) {
+        checkAlarms(occurrence.alarms, eventName, entry, errors);
         push(occurrence, detail);
     }
 }
@@ -581,14 +727,14 @@ function eventsOfEntry(
 /// Every event declared by every entry in the listing, expanded over `window`.
 ///
 /// `categories` is the configuration once it has loaded. Without it, an event's category is
-/// recorded but neither applied nor checked.
+/// recorded but neither applied nor checked. `alarmDefaults` is what the configuration says events
+/// ring at where nothing else does, and without it they take the built-in default.
 export function eventsFromEntries(
     entries: readonly ListEntry2[],
     window: EventWindow,
-    options: { categories?: EventCategories } = {},
+    options: { categories?: EventCategories; alarmDefaults?: AlarmDefaults } = {},
 ): DerivedEvents {
-    const events: CalendarEvent[] = [];
-    const errors: EventError[] = [];
+    const derivation = derivationOf(window, options.alarmDefaults);
 
     for (const entry of entries) {
         const metadata = entry.metadata;
@@ -605,13 +751,12 @@ export function eventsFromEntries(
 
         for (const [eventName, detail] of Object.entries(declared)) {
             if (typeof detail === 'object' && detail !== null) {
-                eventsOfEntry(
-                    eventName, detail, entry, window, options.categories, events, errors);
+                eventsOfEntry(eventName, detail, entry, derivation, options.categories);
             }
         }
     }
 
-    return { events, errors };
+    return { events: derivation.into, errors: derivation.errors };
 }
 
 /// A datetime with any offset removed, which is the only form `<v-calendar>` can read.
@@ -775,10 +920,8 @@ function taskDateEvent(
     task: object,
     uuid: string,
     entry: ListEntry2,
-    window: EventWindow,
+    { window, alarmDefaults, into, errors }: Derivation,
     colors: TaskDateColors,
-    into: CalendarEvent[],
-    errors: EventError[],
 ): void {
     const value = (task as Record<string, unknown>)[field];
     if (value === undefined || value === null) {
@@ -793,6 +936,11 @@ function taskDateEvent(
         return;
     }
 
+    // The task's own list for this date, which `task.alarms` holds beside the date and not in it.
+    // Checked wherever the date is, as the date itself is.
+    const own = taskAlarmOf((task as { alarms?: unknown }).alarms, field);
+    checkAlarms(own, name, entry, errors);
+
     // Compared as dates, not as instants: the window's ends are bare dates, so an instant
     // comparison would drop a date late on its last day.
     const start = toWallClock(value);
@@ -801,15 +949,20 @@ function taskDateEvent(
         return;
     }
 
+    const settled = isSettled((task as { status?: unknown }).status);
     into.push({
         name,
         start,
-        finished: isSettled((task as { status?: unknown }).status),
+        finished: settled,
         color: colors[field] || TASK_DATE_COLOR[field],
         source: 'task',
         taskDate: field,
         notePath: entry.path,
         taskId: uuid,
+        // A task that is over never rings, so it is not shown to.
+        alarms: settled
+            ? []
+            : readAlarmsIfSet(own) ?? alarmDefaults[TASK_DATE_ALARM_DEFAULT[field]],
     });
 }
 
@@ -819,13 +972,14 @@ function taskDateEvent(
 /// `task.due_by` and `task.deadline` rather than in an `events:` block, which is why
 /// `eventsFromEntries` cannot see them. A task carrying both contributes both, so the run-up to a
 /// deadline is visible rather than implied.
+///
+/// `alarmDefaults` is what the configuration says each date rings at where its task does not say.
 export function taskDatesFromEntries(
     entries: readonly ListEntry2[],
     window: EventWindow,
-    options: { colorOf?: TaskDateColors } = {},
+    options: { colorOf?: TaskDateColors; alarmDefaults?: AlarmDefaults } = {},
 ): DerivedEvents {
-    const events: CalendarEvent[] = [];
-    const errors: EventError[] = [];
+    const derivation = derivationOf(window, options.alarmDefaults);
     const colors = options.colorOf ?? {};
 
     for (const entry of entries) {
@@ -837,9 +991,9 @@ export function taskDatesFromEntries(
         if (typeof task !== 'object' || task === null) {
             continue;
         }
-        taskDateEvent('due_by', task, uuid, entry, window, colors, events, errors);
-        taskDateEvent('deadline', task, uuid, entry, window, colors, events, errors);
+        taskDateEvent('due_by', task, uuid, entry, derivation, colors);
+        taskDateEvent('deadline', task, uuid, entry, derivation, colors);
     }
 
-    return { events, errors };
+    return { events: derivation.into, errors: derivation.errors };
 }

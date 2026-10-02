@@ -13,13 +13,21 @@ import { computed, ref, shallowRef } from 'vue';
 import { defineStore } from 'pinia';
 import YAML from 'yaml';
 
+import type { AlarmDefaults } from '@/alarms';
+import {
+    readAlarmDefaults,
+    withBuiltInAlarms,
+    writeAlarmDefaults,
+} from '@/alarms';
 import type {
     ImportedCalendarReport,
     ImportedOccurrence,
     ImportedSeries,
 } from '@/api';
 import { getImportedEvents } from '@/api';
-import type { EventCategories, EventCategory, TaskDateColors } from '@/events';
+import type { ConfiguredCategory, EventCategories, TaskDateColors } from '@/events';
+import { stringifyWithFlowAlarms } from '@/frontmatter';
+import { categoryMapOf, readCategories } from '@/events';
 import { useFilesStore } from '@/stores/files';
 
 export const CALENDARS_PATH = '.mory/calendars.yaml';
@@ -45,15 +53,6 @@ export interface CalendarSubscription {
 // how one source of dates is told from another, and something the user would otherwise have to set
 // again on every device.
 
-/// An event category as configured under `categories:`: its id, and the defaults it supplies.
-///
-/// Kept as a list rather than a map so the settings show them in the order the file has them.
-/// They live here for the reason the task date colours do: how one kind of event is told from
-/// another is the same kind of thing as a calendar's colour.
-export interface ConfiguredCategory extends EventCategory {
-    id: string;
-}
-
 /// A calendar as a view needs to list it: what to call it, and what colour it draws in.
 export interface CalendarSummary {
     id: string;
@@ -75,10 +74,20 @@ export const useCalendarsStore = defineStore('calendars', () => {
 
     const subscriptions = ref<CalendarSubscription[]>([]);
     const taskDateColors = ref<TaskDateColors>({});
+    // When an event or a task's date rings where its note says nothing. Kept in this file for the
+    // reason the colours are: it is the same kind of thing as a category's, and would otherwise
+    // have to be set again on every device.
+    const alarmDefaults = ref<AlarmDefaults>({});
+    // What each kind rings at once the built-in default is counted, which is what is in force where
+    // the file sets none and so what a box showing the setting should start from.
+    const effectiveAlarmDefaults = computed(() => withBuiltInAlarms(alarmDefaults.value));
     // `null` until the file has been read, and again when reading it fails: with no configuration
     // to hand, every category a note names would look unknown and be reported as a typo.
     const categories = ref<ConfiguredCategory[] | null>(null);
-    const hasLoadedSubscriptions = ref(false);
+    // What the file says that is dropped on reading, as lines to show. Dropped is lost: saving
+    // anything rewrites the file from what was kept, so the author is told before it is.
+    const configurationProblems = ref<string[]>([]);
+    const hasLoadedConfiguration = ref(false);
 
     const loaded = shallowRef<Loaded>(EMPTY);
     const isLoading = ref(false);
@@ -127,7 +136,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
         if (categories.value === null) {
             return undefined;
         }
-        return new Map(categories.value.map(({ id, ...defaults }) => [id, defaults]));
+        return categoryMapOf(categories.value);
     });
 
     /// The calendars whose events this window could contain, in the order they are configured.
@@ -153,13 +162,16 @@ export const useCalendarsStore = defineStore('calendars', () => {
             }));
     });
 
-    /// One line per calendar that failed, for the view's existing error alert.
-    const errors = computed(() =>
-        loaded.value.calendars
+    /// One line per calendar that failed, and per alarm in the configuration that is not one, for the
+    /// view's existing error alert.
+    const errors = computed(() => [
+        ...configurationProblems.value,
+        ...loaded.value.calendars
             .filter((calendar) => calendar.error !== null)
-            .map((calendar) => `${calendar.name}: ${calendar.error}`));
+            .map((calendar) => `${calendar.name}: ${calendar.error}`),
+    ]);
 
-    async function loadSubscriptions(): Promise<CalendarSubscription[]> {
+    async function readConfiguration(): Promise<CalendarSubscription[]> {
         try {
             const text = await files.read(CALENDARS_PATH);
             const parsed = YAML.parse(text);
@@ -172,20 +184,47 @@ export const useCalendarsStore = defineStore('calendars', () => {
                 enabled: entry.enabled !== false,
             }));
             taskDateColors.value = readTaskDateColors(parsed?.task_dates);
-            categories.value = readCategories(parsed?.categories);
+            const problems: string[] = [];
+            alarmDefaults.value = readAlarmDefaults(parsed?.alarms, problems);
+            categories.value = readCategories(parsed?.categories, problems);
+            configurationProblems.value = problems.map((problem) =>
+                `${CALENDARS_PATH}: ${problem}. It is ignored, and saving the settings removes it.`);
         }
         catch (error) {
             // No file means no calendars, which is the normal state before any are added -- the
             // same reading `ai-actions.ts` gives a 404 on its own config.
             subscriptions.value = [];
             taskDateColors.value = {};
+            alarmDefaults.value = {};
+            configurationProblems.value = [];
             categories.value = isMissing(error) ? [] : null;
             if (!isMissing(error)) {
                 throw error;
             }
         }
-        hasLoadedSubscriptions.value = true;
+        hasLoadedConfiguration.value = true;
         return subscriptions.value;
+    }
+
+    // The read under way, which a view that asks while one is joins rather than repeats: every view
+    // that shows what the file holds asks as it mounts, and two of them mount together.
+    let reading: Promise<CalendarSubscription[]> | null = null;
+
+    /// Reads the configuration, again if it has been: a view that is opened finds the file as it is
+    /// now, however it was changed since.
+    function loadConfiguration(): Promise<CalendarSubscription[]> {
+        reading ??= readConfiguration().finally(() => {
+            reading = null;
+        });
+        return reading;
+    }
+
+    /// Reads the configuration only if it has not been read, for what wants it there rather than
+    /// fresh: a box that shows the defaults beside a task's own.
+    async function ensureLoaded(): Promise<void> {
+        if (!hasLoadedConfiguration.value) {
+            await loadConfiguration();
+        }
     }
 
     async function saveSubscriptions(next: CalendarSubscription[]): Promise<void> {
@@ -201,6 +240,14 @@ export const useCalendarsStore = defineStore('calendars', () => {
     /// No `invalidate()`: this changes how events are drawn, not which ones the backend returns.
     async function saveTaskDateColors(next: TaskDateColors): Promise<void> {
         taskDateColors.value = next;
+        await writeConfiguration();
+    }
+
+    /// Set when events and task dates ring where a note says nothing. A kind left out takes the
+    /// built-in default. Like the colours, this changes how events are shown, not which ones the
+    /// backend returns, so no `invalidate()`.
+    async function saveAlarmDefaults(next: AlarmDefaults): Promise<void> {
+        alarmDefaults.value = next;
         await writeConfiguration();
     }
 
@@ -225,6 +272,9 @@ export const useCalendarsStore = defineStore('calendars', () => {
             ...(Object.keys(taskDateColors.value).length > 0
                 ? { task_dates: { ...taskDateColors.value } }
                 : {}),
+            ...(Object.keys(alarmDefaults.value).length > 0
+                ? { alarms: writeAlarmDefaults(alarmDefaults.value) }
+                : {}),
             ...(categories.value !== null && categories.value.length > 0
                 ? {
                     categories: Object.fromEntries(categories.value.map(
@@ -232,7 +282,9 @@ export const useCalendarsStore = defineStore('calendars', () => {
                 }
                 : {}),
         };
-        await files.write(CALENDARS_PATH, YAML.stringify(document, { indent: 4 }));
+        await files.write(CALENDARS_PATH, stringifyWithFlowAlarms(document, { indent: 4 }));
+        // What was dropped on reading is now gone from the file, which is what was warned of.
+        configurationProblems.value = [];
     }
 
     function invalidate(): void {
@@ -299,9 +351,11 @@ export const useCalendarsStore = defineStore('calendars', () => {
     return {
         subscriptions,
         taskDateColors,
+        alarmDefaults,
+        effectiveAlarmDefaults,
         categories,
         categoryMap,
-        hasLoadedSubscriptions,
+        hasLoadedConfiguration,
         available,
         events,
         series,
@@ -310,9 +364,11 @@ export const useCalendarsStore = defineStore('calendars', () => {
         colorOf,
         nameOf,
         isLoading,
-        loadSubscriptions,
+        loadConfiguration,
+        ensureLoaded,
         saveSubscriptions,
         saveTaskDateColors,
+        saveAlarmDefaults,
         saveCategories,
         invalidate,
         load,
@@ -333,34 +389,6 @@ function readTaskDateColors(value: unknown): TaskDateColors {
         }
     }
     return colors;
-}
-
-// Hand-edited YAML too. A category with nothing after its id is one that sets nothing of its own
-// and inherits it all, so it is kept; one that is not a mapping at all is dropped, and the notes
-// naming it are then reported rather than drawn with half a category.
-function readCategories(value: unknown): ConfiguredCategory[] {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-        return [];
-    }
-    const categories: ConfiguredCategory[] = [];
-    for (const [id, entry] of Object.entries(value)) {
-        if (entry === null) {
-            categories.push({ id });
-            continue;
-        }
-        if (typeof entry !== 'object' || Array.isArray(entry)) {
-            continue;
-        }
-        const category: ConfiguredCategory = { id };
-        for (const field of ['color', 'name'] as const) {
-            const text = (entry as Record<string, unknown>)[field];
-            if (typeof text === 'string' && text.trim() !== '') {
-                category[field] = text.trim();
-            }
-        }
-        categories.push(category);
-    }
-    return categories;
 }
 
 function isMissing(error: unknown): boolean {

@@ -1,6 +1,62 @@
 {
+  "calendars": {
+    "alarms": {
+      "all_day": [
+        "-1d 18:00"
+      ],
+      "deadline": [
+        "-1d 09:00",
+        "-2h"
+      ],
+      "due_by": [
+        "09:00"
+      ],
+      "timed": [
+        "-5m"
+      ]
+    },
+    "categories": {
+      "a/b/c": {
+        "alarms": [
+          "-1h"
+        ]
+      },
+      "a/b/c/d": null,
+      "meeting": {
+        "alarms": [
+          "-10m"
+        ],
+        "color": "#1565c0"
+      },
+      "meeting/1on1": {
+        "alarms": [
+          "-15m",
+          "0m"
+        ]
+      },
+      "meeting/quiet": {
+        "alarms": []
+      },
+      "meeting/standup": {
+        "color": "#2e7d32"
+      },
+      "unset": null
+    }
+  },
   "notes": {
     "converted/all-day-series.md": {
+      "alarms": [
+        "2024-05-06  Holiday  none",
+        "2024-05-13  Holiday  none",
+        "2024-05-20  Holiday  none",
+        "2024-05-27  Holiday  none"
+      ],
+      "alarmsWithDefaults": [
+        "2024-05-06  Holiday  -1d 18:00",
+        "2024-05-13  Holiday  -1d 18:00",
+        "2024-05-20  Holiday  -1d 18:00",
+        "2024-05-27  Holiday  -1d 18:00"
+      ],
       "drawn": [
         "2024-05-06  Holiday",
         "2024-05-13  Holiday",
@@ -32,6 +88,16 @@
       }
     },
     "converted/all-day-until-date.md": {
+      "alarms": [
+        "2023-04-17  Third Monday each April  none",
+        "2024-04-15  Third Monday each April  none",
+        "2025-04-21  Third Monday each April  none"
+      ],
+      "alarmsWithDefaults": [
+        "2023-04-17  Third Monday each April  -1d 18:00",
+        "2024-04-15  Third Monday each April  -1d 18:00",
+        "2025-04-21  Third Monday each April  -1d 18:00"
+      ],
       "drawn": [
         "2023-04-17  Third Monday each April",
         "2024-04-15  Third Monday each April",
@@ -63,6 +129,18 @@
       }
     },
     "converted/dtstart-off-rule.md": {
+      "alarms": [
+        "2024-05-14 17:00  Third Wednesday from a first Wednesday  +0m",
+        "2024-06-18 17:00  Third Wednesday from a first Wednesday  +0m",
+        "2024-07-16 17:00  Third Wednesday from a first Wednesday  +0m",
+        "2024-08-20 17:00  Third Wednesday from a first Wednesday  +0m"
+      ],
+      "alarmsWithDefaults": [
+        "2024-05-14 17:00  Third Wednesday from a first Wednesday  -5m",
+        "2024-06-18 17:00  Third Wednesday from a first Wednesday  -5m",
+        "2024-07-16 17:00  Third Wednesday from a first Wednesday  -5m",
+        "2024-08-20 17:00  Third Wednesday from a first Wednesday  -5m"
+      ],
       "drawn": [
         "2024-05-14 17:00  Third Wednesday from a first Wednesday",
         "2024-06-18 17:00  Third Wednesday from a first Wednesday",
@@ -95,6 +173,82 @@
       }
     },
     "converted/moved-into-window.md": {
+      "alarms": [
+        "2024-01-18 01:00  Maintenance  +0m",
+        "2024-02-15 01:00  Maintenance  +0m",
+        "2024-03-21 02:00  Maintenance  +0m",
+        "2024-04-18 02:00  Maintenance  +0m",
+        "2024-05-27 02:00  Maintenance, moved  +0m",
+        "2024-06-20 02:00  Maintenance  +0m",
+        "2024-07-18 02:00  Maintenance  +0m",
+        "2024-08-15 02:00  Maintenance  +0m",
+        "2024-09-19 02:00  Maintenance  +0m",
+        "2024-10-17 02:00  Maintenance  +0m",
+        "2024-11-21 01:00  Maintenance  +0m",
+        "2024-12-19 01:00  Maintenance  +0m",
+        "2025-01-16 01:00  Maintenance  +0m",
+        "2025-02-20 01:00  Maintenance  +0m",
+        "2025-03-20 02:00  Maintenance  +0m",
+        "2025-04-17 02:00  Maintenance  +0m",
+        "2025-05-15 02:00  Maintenance  +0m",
+        "2025-06-19 02:00  Maintenance  +0m",
+        "2025-07-17 02:00  Maintenance  +0m",
+        "2025-08-21 02:00  Maintenance  +0m",
+        "2025-09-18 02:00  Maintenance  +0m",
+        "2025-10-16 02:00  Maintenance  +0m",
+        "2025-11-20 01:00  Maintenance  +0m",
+        "2025-12-18 01:00  Maintenance  +0m",
+        "2026-01-15 01:00  Maintenance  +0m",
+        "2026-02-19 01:00  Maintenance  +0m",
+        "2026-03-19 02:00  Maintenance  +0m",
+        "2026-04-16 02:00  Maintenance  +0m",
+        "2026-05-21 02:00  Maintenance  +0m",
+        "2026-06-18 02:00  Maintenance  +0m",
+        "2026-07-16 02:00  Maintenance  +0m",
+        "2026-08-20 02:00  Maintenance  +0m",
+        "2026-09-17 02:00  Maintenance  +0m",
+        "2026-10-15 02:00  Maintenance  +0m",
+        "2026-11-19 01:00  Maintenance  +0m",
+        "2026-12-17 01:00  Maintenance  +0m"
+      ],
+      "alarmsWithDefaults": [
+        "2024-01-18 01:00  Maintenance  -5m",
+        "2024-02-15 01:00  Maintenance  -5m",
+        "2024-03-21 02:00  Maintenance  -5m",
+        "2024-04-18 02:00  Maintenance  -5m",
+        "2024-05-27 02:00  Maintenance, moved  -5m",
+        "2024-06-20 02:00  Maintenance  -5m",
+        "2024-07-18 02:00  Maintenance  -5m",
+        "2024-08-15 02:00  Maintenance  -5m",
+        "2024-09-19 02:00  Maintenance  -5m",
+        "2024-10-17 02:00  Maintenance  -5m",
+        "2024-11-21 01:00  Maintenance  -5m",
+        "2024-12-19 01:00  Maintenance  -5m",
+        "2025-01-16 01:00  Maintenance  -5m",
+        "2025-02-20 01:00  Maintenance  -5m",
+        "2025-03-20 02:00  Maintenance  -5m",
+        "2025-04-17 02:00  Maintenance  -5m",
+        "2025-05-15 02:00  Maintenance  -5m",
+        "2025-06-19 02:00  Maintenance  -5m",
+        "2025-07-17 02:00  Maintenance  -5m",
+        "2025-08-21 02:00  Maintenance  -5m",
+        "2025-09-18 02:00  Maintenance  -5m",
+        "2025-10-16 02:00  Maintenance  -5m",
+        "2025-11-20 01:00  Maintenance  -5m",
+        "2025-12-18 01:00  Maintenance  -5m",
+        "2026-01-15 01:00  Maintenance  -5m",
+        "2026-02-19 01:00  Maintenance  -5m",
+        "2026-03-19 02:00  Maintenance  -5m",
+        "2026-04-16 02:00  Maintenance  -5m",
+        "2026-05-21 02:00  Maintenance  -5m",
+        "2026-06-18 02:00  Maintenance  -5m",
+        "2026-07-16 02:00  Maintenance  -5m",
+        "2026-08-20 02:00  Maintenance  -5m",
+        "2026-09-17 02:00  Maintenance  -5m",
+        "2026-10-15 02:00  Maintenance  -5m",
+        "2026-11-19 01:00  Maintenance  -5m",
+        "2026-12-17 01:00  Maintenance  -5m"
+      ],
       "drawn": [
         "2024-01-18 01:00  Maintenance",
         "2024-02-15 01:00  Maintenance",
@@ -166,6 +320,16 @@
       }
     },
     "converted/multi-day-all-day.md": {
+      "alarms": [
+        "2024-05-06  Two-day break  none",
+        "2024-05-13  Two-day break  none",
+        "2024-05-20  Two-day break  none"
+      ],
+      "alarmsWithDefaults": [
+        "2024-05-06  Two-day break  -1d 18:00",
+        "2024-05-13  Two-day break  -1d 18:00",
+        "2024-05-20  Two-day break  -1d 18:00"
+      ],
       "drawn": [
         "2024-05-06  Two-day break",
         "2024-05-13  Two-day break",
@@ -196,6 +360,20 @@
       }
     },
     "converted/negative-monthday.md": {
+      "alarms": [
+        "2024-01-30 16:00  Month end  +0m",
+        "2024-02-28 16:00  Month end  +0m",
+        "2024-03-30 17:00  Month end  +0m",
+        "2024-04-29 17:00  Month end  +0m",
+        "2024-05-30 17:00  Month end  +0m"
+      ],
+      "alarmsWithDefaults": [
+        "2024-01-30 16:00  Month end  -5m",
+        "2024-02-28 16:00  Month end  -5m",
+        "2024-03-30 17:00  Month end  -5m",
+        "2024-04-29 17:00  Month end  -5m",
+        "2024-05-30 17:00  Month end  -5m"
+      ],
       "drawn": [
         "2024-01-30 16:00  Month end",
         "2024-02-28 16:00  Month end",
@@ -229,6 +407,18 @@
       }
     },
     "converted/ordinal-weekday.md": {
+      "alarms": [
+        "2024-05-14 17:00  Third Wednesday  +0m",
+        "2024-06-18 17:00  Third Wednesday  +0m",
+        "2024-07-16 17:00  Third Wednesday  +0m",
+        "2024-08-20 17:00  Third Wednesday  +0m"
+      ],
+      "alarmsWithDefaults": [
+        "2024-05-14 17:00  Third Wednesday  -5m",
+        "2024-06-18 17:00  Third Wednesday  -5m",
+        "2024-07-16 17:00  Third Wednesday  -5m",
+        "2024-08-20 17:00  Third Wednesday  -5m"
+      ],
       "drawn": [
         "2024-05-14 17:00  Third Wednesday",
         "2024-06-18 17:00  Third Wednesday",
@@ -261,6 +451,208 @@
       }
     },
     "converted/overrides-and-exclusion.md": {
+      "alarms": [
+        "2015-06-25 10:00  Rust release  +0m",
+        "2015-08-06 16:00  Moved to the afternoon  +0m",
+        "2015-10-29 10:00  Rust release  +0m",
+        "2016-01-21 10:00  Rust release  +0m",
+        "2016-03-03 10:00  Rust release  +0m",
+        "2016-04-14 10:00  Rust release  +0m",
+        "2016-05-26 10:00  Rust release  +0m",
+        "2016-07-07 10:00  Rust release  +0m",
+        "2016-08-18 10:00  Rust release  +0m",
+        "2016-09-29 10:00  Rust release  +0m",
+        "2016-11-10 10:00  Rust release  +0m",
+        "2016-12-22 10:00  Rust release  +0m",
+        "2017-02-02 10:00  Rust release  +0m",
+        "2017-03-16 10:00  Rust release  +0m",
+        "2017-04-27 10:00  Rust release  +0m",
+        "2017-06-08 10:00  Rust release  +0m",
+        "2017-07-20 10:00  Rust release  +0m",
+        "2017-08-31 10:00  Rust release  +0m",
+        "2017-10-12 10:00  Rust release  +0m",
+        "2017-11-23 10:00  Rust release  +0m",
+        "2018-01-04 10:00  Rust release  +0m",
+        "2018-02-15 10:00  Rust release  +0m",
+        "2018-03-29 10:00  Rust release  +0m",
+        "2018-05-10 10:00  Rust release  +0m",
+        "2018-06-21 10:00  Rust release  +0m",
+        "2018-08-02 10:00  Rust release  +0m",
+        "2018-09-13 10:00  Rust release  +0m",
+        "2018-10-25 10:00  Rust release  +0m",
+        "2018-12-06 10:00  Rust release  +0m",
+        "2019-01-17 10:00  Rust release  +0m",
+        "2019-02-28 10:00  Rust release  +0m",
+        "2019-04-11 10:00  Rust release  +0m",
+        "2019-05-23 10:00  Rust release  +0m",
+        "2019-07-04 10:00  Rust release  +0m",
+        "2019-08-15 10:00  Rust release  +0m",
+        "2019-09-26 10:00  Rust release  +0m",
+        "2019-11-07 10:00  Rust release  +0m",
+        "2019-12-19 10:00  Rust release  +0m",
+        "2020-01-30 10:00  Rust release  +0m",
+        "2020-03-12 10:00  Rust release  +0m",
+        "2020-04-23 10:00  Rust release  +0m",
+        "2020-06-04 10:00  Rust release  +0m",
+        "2020-07-16 10:00  Rust release  +0m",
+        "2020-08-27 10:00  Rust release  +0m",
+        "2020-10-08 10:00  Rust release  +0m",
+        "2020-11-19 10:00  Rust release  +0m",
+        "2020-12-31 10:00  Rust release  +0m",
+        "2021-02-11 10:00  Rust release  +0m",
+        "2021-03-25 10:00  Rust release  +0m",
+        "2021-05-06 10:00  Rust release  +0m",
+        "2021-06-17 10:00  Rust release  +0m",
+        "2021-07-29 10:00  Rust release  +0m",
+        "2021-09-09 10:00  Rust release  +0m",
+        "2021-10-21 10:00  Rust release  +0m",
+        "2021-12-02 10:00  Rust release  +0m",
+        "2022-01-13 10:00  Rust release  +0m",
+        "2022-02-24 10:00  Rust release  +0m",
+        "2022-04-07 10:00  Rust release  +0m",
+        "2022-05-19 10:00  Rust release  +0m",
+        "2022-06-30 10:00  Rust release  +0m",
+        "2022-08-11 10:00  Rust release  +0m",
+        "2022-09-22 10:00  Rust release  +0m",
+        "2022-11-03 10:00  Rust release  +0m",
+        "2022-12-15 10:00  Rust release  +0m",
+        "2023-01-26 10:00  Rust release  +0m",
+        "2023-03-09 10:00  Rust release  +0m",
+        "2023-04-20 10:00  Rust release  +0m",
+        "2023-06-01 10:00  Rust release  +0m",
+        "2023-07-13 10:00  Rust release  +0m",
+        "2023-08-24 10:00  Rust release  +0m",
+        "2023-10-05 10:00  Rust release  +0m",
+        "2023-11-16 10:00  Rust release  +0m",
+        "2023-12-28 10:00  Rust release  +0m",
+        "2024-02-08 10:00  Rust release  +0m",
+        "2024-03-21 10:00  Rust release  +0m",
+        "2024-05-02 10:00  Rust release  +0m",
+        "2024-06-13 10:00  Rust release  +0m",
+        "2024-07-25 10:00  Rust release  +0m",
+        "2024-09-05 10:00  Rust release  +0m",
+        "2024-10-17 10:00  Rust release  +0m",
+        "2024-11-28 10:00  Rust release  +0m",
+        "2025-01-09 10:00  Rust release  +0m",
+        "2025-02-20 10:00  Rust release  +0m",
+        "2025-04-03 10:00  Rust release  +0m",
+        "2025-05-15 10:00  Rust release  +0m",
+        "2025-06-26 10:00  Rust release  +0m",
+        "2025-08-07 10:00  Rust release  +0m",
+        "2025-09-18 10:00  Rust release  +0m",
+        "2025-10-30 10:00  Rust release  +0m",
+        "2025-12-11 10:00  Rust release  +0m",
+        "2026-01-22 10:00  Rust release  +0m",
+        "2026-03-05 10:00  Rust release  +0m",
+        "2026-04-16 10:00  Rust release  +0m",
+        "2026-05-28 10:00  Rust release  +0m",
+        "2026-07-09 10:00  Rust release  +0m",
+        "2026-08-20 10:00  Rust release  +0m",
+        "2026-10-01 10:00  Rust release  +0m",
+        "2026-11-12 10:00  Rust release  +0m",
+        "2026-12-24 10:00  Rust release  +0m"
+      ],
+      "alarmsWithDefaults": [
+        "2015-06-25 10:00  Rust release  -5m",
+        "2015-08-06 16:00  Moved to the afternoon  -5m",
+        "2015-10-29 10:00  Rust release  -5m",
+        "2016-01-21 10:00  Rust release  -5m",
+        "2016-03-03 10:00  Rust release  -5m",
+        "2016-04-14 10:00  Rust release  -5m",
+        "2016-05-26 10:00  Rust release  -5m",
+        "2016-07-07 10:00  Rust release  -5m",
+        "2016-08-18 10:00  Rust release  -5m",
+        "2016-09-29 10:00  Rust release  -5m",
+        "2016-11-10 10:00  Rust release  -5m",
+        "2016-12-22 10:00  Rust release  -5m",
+        "2017-02-02 10:00  Rust release  -5m",
+        "2017-03-16 10:00  Rust release  -5m",
+        "2017-04-27 10:00  Rust release  -5m",
+        "2017-06-08 10:00  Rust release  -5m",
+        "2017-07-20 10:00  Rust release  -5m",
+        "2017-08-31 10:00  Rust release  -5m",
+        "2017-10-12 10:00  Rust release  -5m",
+        "2017-11-23 10:00  Rust release  -5m",
+        "2018-01-04 10:00  Rust release  -5m",
+        "2018-02-15 10:00  Rust release  -5m",
+        "2018-03-29 10:00  Rust release  -5m",
+        "2018-05-10 10:00  Rust release  -5m",
+        "2018-06-21 10:00  Rust release  -5m",
+        "2018-08-02 10:00  Rust release  -5m",
+        "2018-09-13 10:00  Rust release  -5m",
+        "2018-10-25 10:00  Rust release  -5m",
+        "2018-12-06 10:00  Rust release  -5m",
+        "2019-01-17 10:00  Rust release  -5m",
+        "2019-02-28 10:00  Rust release  -5m",
+        "2019-04-11 10:00  Rust release  -5m",
+        "2019-05-23 10:00  Rust release  -5m",
+        "2019-07-04 10:00  Rust release  -5m",
+        "2019-08-15 10:00  Rust release  -5m",
+        "2019-09-26 10:00  Rust release  -5m",
+        "2019-11-07 10:00  Rust release  -5m",
+        "2019-12-19 10:00  Rust release  -5m",
+        "2020-01-30 10:00  Rust release  -5m",
+        "2020-03-12 10:00  Rust release  -5m",
+        "2020-04-23 10:00  Rust release  -5m",
+        "2020-06-04 10:00  Rust release  -5m",
+        "2020-07-16 10:00  Rust release  -5m",
+        "2020-08-27 10:00  Rust release  -5m",
+        "2020-10-08 10:00  Rust release  -5m",
+        "2020-11-19 10:00  Rust release  -5m",
+        "2020-12-31 10:00  Rust release  -5m",
+        "2021-02-11 10:00  Rust release  -5m",
+        "2021-03-25 10:00  Rust release  -5m",
+        "2021-05-06 10:00  Rust release  -5m",
+        "2021-06-17 10:00  Rust release  -5m",
+        "2021-07-29 10:00  Rust release  -5m",
+        "2021-09-09 10:00  Rust release  -5m",
+        "2021-10-21 10:00  Rust release  -5m",
+        "2021-12-02 10:00  Rust release  -5m",
+        "2022-01-13 10:00  Rust release  -5m",
+        "2022-02-24 10:00  Rust release  -5m",
+        "2022-04-07 10:00  Rust release  -5m",
+        "2022-05-19 10:00  Rust release  -5m",
+        "2022-06-30 10:00  Rust release  -5m",
+        "2022-08-11 10:00  Rust release  -5m",
+        "2022-09-22 10:00  Rust release  -5m",
+        "2022-11-03 10:00  Rust release  -5m",
+        "2022-12-15 10:00  Rust release  -5m",
+        "2023-01-26 10:00  Rust release  -5m",
+        "2023-03-09 10:00  Rust release  -5m",
+        "2023-04-20 10:00  Rust release  -5m",
+        "2023-06-01 10:00  Rust release  -5m",
+        "2023-07-13 10:00  Rust release  -5m",
+        "2023-08-24 10:00  Rust release  -5m",
+        "2023-10-05 10:00  Rust release  -5m",
+        "2023-11-16 10:00  Rust release  -5m",
+        "2023-12-28 10:00  Rust release  -5m",
+        "2024-02-08 10:00  Rust release  -5m",
+        "2024-03-21 10:00  Rust release  -5m",
+        "2024-05-02 10:00  Rust release  -5m",
+        "2024-06-13 10:00  Rust release  -5m",
+        "2024-07-25 10:00  Rust release  -5m",
+        "2024-09-05 10:00  Rust release  -5m",
+        "2024-10-17 10:00  Rust release  -5m",
+        "2024-11-28 10:00  Rust release  -5m",
+        "2025-01-09 10:00  Rust release  -5m",
+        "2025-02-20 10:00  Rust release  -5m",
+        "2025-04-03 10:00  Rust release  -5m",
+        "2025-05-15 10:00  Rust release  -5m",
+        "2025-06-26 10:00  Rust release  -5m",
+        "2025-08-07 10:00  Rust release  -5m",
+        "2025-09-18 10:00  Rust release  -5m",
+        "2025-10-30 10:00  Rust release  -5m",
+        "2025-12-11 10:00  Rust release  -5m",
+        "2026-01-22 10:00  Rust release  -5m",
+        "2026-03-05 10:00  Rust release  -5m",
+        "2026-04-16 10:00  Rust release  -5m",
+        "2026-05-28 10:00  Rust release  -5m",
+        "2026-07-09 10:00  Rust release  -5m",
+        "2026-08-20 10:00  Rust release  -5m",
+        "2026-10-01 10:00  Rust release  -5m",
+        "2026-11-12 10:00  Rust release  -5m",
+        "2026-12-24 10:00  Rust release  -5m"
+      ],
       "drawn": [
         "2015-06-25 10:00  Rust release",
         "2015-08-06 16:00  Moved to the afternoon",
@@ -400,6 +792,18 @@
       }
     },
     "converted/rdate.md": {
+      "alarms": [
+        "2024-05-05 18:00  Weekly plus an extra  +0m",
+        "2024-05-09 03:00  Weekly plus an extra  +0m",
+        "2024-05-12 18:00  Weekly plus an extra  +0m",
+        "2024-05-19 18:00  Weekly plus an extra  +0m"
+      ],
+      "alarmsWithDefaults": [
+        "2024-05-05 18:00  Weekly plus an extra  -5m",
+        "2024-05-09 03:00  Weekly plus an extra  -5m",
+        "2024-05-12 18:00  Weekly plus an extra  -5m",
+        "2024-05-19 18:00  Weekly plus an extra  -5m"
+      ],
       "drawn": [
         "2024-05-05 18:00  Weekly plus an extra",
         "2024-05-09 03:00  Weekly plus an extra",
@@ -438,6 +842,308 @@
       }
     },
     "converted/timed-tz-dst.md": {
+      "alarms": [
+        "2024-03-01 10:00  Weekly across a DST change  +0m",
+        "2024-03-08 10:00  Weekly across a DST change  +0m",
+        "2024-03-15 10:00  Weekly across a DST change  +0m",
+        "2024-03-22 10:00  Weekly across a DST change  +0m",
+        "2024-03-29 10:00  Weekly across a DST change  +0m",
+        "2024-04-05 10:00  Weekly across a DST change  +0m",
+        "2024-04-12 10:00  Weekly across a DST change  +0m",
+        "2024-04-19 10:00  Weekly across a DST change  +0m",
+        "2024-04-26 10:00  Weekly across a DST change  +0m",
+        "2024-05-03 10:00  Weekly across a DST change  +0m",
+        "2024-05-10 10:00  Weekly across a DST change  +0m",
+        "2024-05-17 10:00  Weekly across a DST change  +0m",
+        "2024-05-24 10:00  Weekly across a DST change  +0m",
+        "2024-05-31 10:00  Weekly across a DST change  +0m",
+        "2024-06-07 10:00  Weekly across a DST change  +0m",
+        "2024-06-14 10:00  Weekly across a DST change  +0m",
+        "2024-06-21 10:00  Weekly across a DST change  +0m",
+        "2024-06-28 10:00  Weekly across a DST change  +0m",
+        "2024-07-05 10:00  Weekly across a DST change  +0m",
+        "2024-07-12 10:00  Weekly across a DST change  +0m",
+        "2024-07-19 10:00  Weekly across a DST change  +0m",
+        "2024-07-26 10:00  Weekly across a DST change  +0m",
+        "2024-08-02 10:00  Weekly across a DST change  +0m",
+        "2024-08-09 10:00  Weekly across a DST change  +0m",
+        "2024-08-16 10:00  Weekly across a DST change  +0m",
+        "2024-08-23 10:00  Weekly across a DST change  +0m",
+        "2024-08-30 10:00  Weekly across a DST change  +0m",
+        "2024-09-06 10:00  Weekly across a DST change  +0m",
+        "2024-09-13 10:00  Weekly across a DST change  +0m",
+        "2024-09-20 10:00  Weekly across a DST change  +0m",
+        "2024-09-27 10:00  Weekly across a DST change  +0m",
+        "2024-10-04 10:00  Weekly across a DST change  +0m",
+        "2024-10-11 10:00  Weekly across a DST change  +0m",
+        "2024-10-18 10:00  Weekly across a DST change  +0m",
+        "2024-10-25 10:00  Weekly across a DST change  +0m",
+        "2024-11-01 10:00  Weekly across a DST change  +0m",
+        "2024-11-08 10:00  Weekly across a DST change  +0m",
+        "2024-11-15 10:00  Weekly across a DST change  +0m",
+        "2024-11-22 10:00  Weekly across a DST change  +0m",
+        "2024-11-29 10:00  Weekly across a DST change  +0m",
+        "2024-12-06 10:00  Weekly across a DST change  +0m",
+        "2024-12-13 10:00  Weekly across a DST change  +0m",
+        "2024-12-20 10:00  Weekly across a DST change  +0m",
+        "2024-12-27 10:00  Weekly across a DST change  +0m",
+        "2025-01-03 10:00  Weekly across a DST change  +0m",
+        "2025-01-10 10:00  Weekly across a DST change  +0m",
+        "2025-01-17 10:00  Weekly across a DST change  +0m",
+        "2025-01-24 10:00  Weekly across a DST change  +0m",
+        "2025-01-31 10:00  Weekly across a DST change  +0m",
+        "2025-02-07 10:00  Weekly across a DST change  +0m",
+        "2025-02-14 10:00  Weekly across a DST change  +0m",
+        "2025-02-21 10:00  Weekly across a DST change  +0m",
+        "2025-02-28 10:00  Weekly across a DST change  +0m",
+        "2025-03-07 10:00  Weekly across a DST change  +0m",
+        "2025-03-14 10:00  Weekly across a DST change  +0m",
+        "2025-03-21 10:00  Weekly across a DST change  +0m",
+        "2025-03-28 10:00  Weekly across a DST change  +0m",
+        "2025-04-04 10:00  Weekly across a DST change  +0m",
+        "2025-04-11 10:00  Weekly across a DST change  +0m",
+        "2025-04-18 10:00  Weekly across a DST change  +0m",
+        "2025-04-25 10:00  Weekly across a DST change  +0m",
+        "2025-05-02 10:00  Weekly across a DST change  +0m",
+        "2025-05-09 10:00  Weekly across a DST change  +0m",
+        "2025-05-16 10:00  Weekly across a DST change  +0m",
+        "2025-05-23 10:00  Weekly across a DST change  +0m",
+        "2025-05-30 10:00  Weekly across a DST change  +0m",
+        "2025-06-06 10:00  Weekly across a DST change  +0m",
+        "2025-06-13 10:00  Weekly across a DST change  +0m",
+        "2025-06-20 10:00  Weekly across a DST change  +0m",
+        "2025-06-27 10:00  Weekly across a DST change  +0m",
+        "2025-07-04 10:00  Weekly across a DST change  +0m",
+        "2025-07-11 10:00  Weekly across a DST change  +0m",
+        "2025-07-18 10:00  Weekly across a DST change  +0m",
+        "2025-07-25 10:00  Weekly across a DST change  +0m",
+        "2025-08-01 10:00  Weekly across a DST change  +0m",
+        "2025-08-08 10:00  Weekly across a DST change  +0m",
+        "2025-08-15 10:00  Weekly across a DST change  +0m",
+        "2025-08-22 10:00  Weekly across a DST change  +0m",
+        "2025-08-29 10:00  Weekly across a DST change  +0m",
+        "2025-09-05 10:00  Weekly across a DST change  +0m",
+        "2025-09-12 10:00  Weekly across a DST change  +0m",
+        "2025-09-19 10:00  Weekly across a DST change  +0m",
+        "2025-09-26 10:00  Weekly across a DST change  +0m",
+        "2025-10-03 10:00  Weekly across a DST change  +0m",
+        "2025-10-10 10:00  Weekly across a DST change  +0m",
+        "2025-10-17 10:00  Weekly across a DST change  +0m",
+        "2025-10-24 10:00  Weekly across a DST change  +0m",
+        "2025-10-31 10:00  Weekly across a DST change  +0m",
+        "2025-11-07 10:00  Weekly across a DST change  +0m",
+        "2025-11-14 10:00  Weekly across a DST change  +0m",
+        "2025-11-21 10:00  Weekly across a DST change  +0m",
+        "2025-11-28 10:00  Weekly across a DST change  +0m",
+        "2025-12-05 10:00  Weekly across a DST change  +0m",
+        "2025-12-12 10:00  Weekly across a DST change  +0m",
+        "2025-12-19 10:00  Weekly across a DST change  +0m",
+        "2025-12-26 10:00  Weekly across a DST change  +0m",
+        "2026-01-02 10:00  Weekly across a DST change  +0m",
+        "2026-01-09 10:00  Weekly across a DST change  +0m",
+        "2026-01-16 10:00  Weekly across a DST change  +0m",
+        "2026-01-23 10:00  Weekly across a DST change  +0m",
+        "2026-01-30 10:00  Weekly across a DST change  +0m",
+        "2026-02-06 10:00  Weekly across a DST change  +0m",
+        "2026-02-13 10:00  Weekly across a DST change  +0m",
+        "2026-02-20 10:00  Weekly across a DST change  +0m",
+        "2026-02-27 10:00  Weekly across a DST change  +0m",
+        "2026-03-06 10:00  Weekly across a DST change  +0m",
+        "2026-03-13 10:00  Weekly across a DST change  +0m",
+        "2026-03-20 10:00  Weekly across a DST change  +0m",
+        "2026-03-27 10:00  Weekly across a DST change  +0m",
+        "2026-04-03 10:00  Weekly across a DST change  +0m",
+        "2026-04-10 10:00  Weekly across a DST change  +0m",
+        "2026-04-17 10:00  Weekly across a DST change  +0m",
+        "2026-04-24 10:00  Weekly across a DST change  +0m",
+        "2026-05-01 10:00  Weekly across a DST change  +0m",
+        "2026-05-08 10:00  Weekly across a DST change  +0m",
+        "2026-05-15 10:00  Weekly across a DST change  +0m",
+        "2026-05-22 10:00  Weekly across a DST change  +0m",
+        "2026-05-29 10:00  Weekly across a DST change  +0m",
+        "2026-06-05 10:00  Weekly across a DST change  +0m",
+        "2026-06-12 10:00  Weekly across a DST change  +0m",
+        "2026-06-19 10:00  Weekly across a DST change  +0m",
+        "2026-06-26 10:00  Weekly across a DST change  +0m",
+        "2026-07-03 10:00  Weekly across a DST change  +0m",
+        "2026-07-10 10:00  Weekly across a DST change  +0m",
+        "2026-07-17 10:00  Weekly across a DST change  +0m",
+        "2026-07-24 10:00  Weekly across a DST change  +0m",
+        "2026-07-31 10:00  Weekly across a DST change  +0m",
+        "2026-08-07 10:00  Weekly across a DST change  +0m",
+        "2026-08-14 10:00  Weekly across a DST change  +0m",
+        "2026-08-21 10:00  Weekly across a DST change  +0m",
+        "2026-08-28 10:00  Weekly across a DST change  +0m",
+        "2026-09-04 10:00  Weekly across a DST change  +0m",
+        "2026-09-11 10:00  Weekly across a DST change  +0m",
+        "2026-09-18 10:00  Weekly across a DST change  +0m",
+        "2026-09-25 10:00  Weekly across a DST change  +0m",
+        "2026-10-02 10:00  Weekly across a DST change  +0m",
+        "2026-10-09 10:00  Weekly across a DST change  +0m",
+        "2026-10-16 10:00  Weekly across a DST change  +0m",
+        "2026-10-23 10:00  Weekly across a DST change  +0m",
+        "2026-10-30 10:00  Weekly across a DST change  +0m",
+        "2026-11-06 10:00  Weekly across a DST change  +0m",
+        "2026-11-13 10:00  Weekly across a DST change  +0m",
+        "2026-11-20 10:00  Weekly across a DST change  +0m",
+        "2026-11-27 10:00  Weekly across a DST change  +0m",
+        "2026-12-04 10:00  Weekly across a DST change  +0m",
+        "2026-12-11 10:00  Weekly across a DST change  +0m",
+        "2026-12-18 10:00  Weekly across a DST change  +0m",
+        "2026-12-25 10:00  Weekly across a DST change  +0m",
+        "2027-01-01 10:00  Weekly across a DST change  +0m"
+      ],
+      "alarmsWithDefaults": [
+        "2024-03-01 10:00  Weekly across a DST change  -5m",
+        "2024-03-08 10:00  Weekly across a DST change  -5m",
+        "2024-03-15 10:00  Weekly across a DST change  -5m",
+        "2024-03-22 10:00  Weekly across a DST change  -5m",
+        "2024-03-29 10:00  Weekly across a DST change  -5m",
+        "2024-04-05 10:00  Weekly across a DST change  -5m",
+        "2024-04-12 10:00  Weekly across a DST change  -5m",
+        "2024-04-19 10:00  Weekly across a DST change  -5m",
+        "2024-04-26 10:00  Weekly across a DST change  -5m",
+        "2024-05-03 10:00  Weekly across a DST change  -5m",
+        "2024-05-10 10:00  Weekly across a DST change  -5m",
+        "2024-05-17 10:00  Weekly across a DST change  -5m",
+        "2024-05-24 10:00  Weekly across a DST change  -5m",
+        "2024-05-31 10:00  Weekly across a DST change  -5m",
+        "2024-06-07 10:00  Weekly across a DST change  -5m",
+        "2024-06-14 10:00  Weekly across a DST change  -5m",
+        "2024-06-21 10:00  Weekly across a DST change  -5m",
+        "2024-06-28 10:00  Weekly across a DST change  -5m",
+        "2024-07-05 10:00  Weekly across a DST change  -5m",
+        "2024-07-12 10:00  Weekly across a DST change  -5m",
+        "2024-07-19 10:00  Weekly across a DST change  -5m",
+        "2024-07-26 10:00  Weekly across a DST change  -5m",
+        "2024-08-02 10:00  Weekly across a DST change  -5m",
+        "2024-08-09 10:00  Weekly across a DST change  -5m",
+        "2024-08-16 10:00  Weekly across a DST change  -5m",
+        "2024-08-23 10:00  Weekly across a DST change  -5m",
+        "2024-08-30 10:00  Weekly across a DST change  -5m",
+        "2024-09-06 10:00  Weekly across a DST change  -5m",
+        "2024-09-13 10:00  Weekly across a DST change  -5m",
+        "2024-09-20 10:00  Weekly across a DST change  -5m",
+        "2024-09-27 10:00  Weekly across a DST change  -5m",
+        "2024-10-04 10:00  Weekly across a DST change  -5m",
+        "2024-10-11 10:00  Weekly across a DST change  -5m",
+        "2024-10-18 10:00  Weekly across a DST change  -5m",
+        "2024-10-25 10:00  Weekly across a DST change  -5m",
+        "2024-11-01 10:00  Weekly across a DST change  -5m",
+        "2024-11-08 10:00  Weekly across a DST change  -5m",
+        "2024-11-15 10:00  Weekly across a DST change  -5m",
+        "2024-11-22 10:00  Weekly across a DST change  -5m",
+        "2024-11-29 10:00  Weekly across a DST change  -5m",
+        "2024-12-06 10:00  Weekly across a DST change  -5m",
+        "2024-12-13 10:00  Weekly across a DST change  -5m",
+        "2024-12-20 10:00  Weekly across a DST change  -5m",
+        "2024-12-27 10:00  Weekly across a DST change  -5m",
+        "2025-01-03 10:00  Weekly across a DST change  -5m",
+        "2025-01-10 10:00  Weekly across a DST change  -5m",
+        "2025-01-17 10:00  Weekly across a DST change  -5m",
+        "2025-01-24 10:00  Weekly across a DST change  -5m",
+        "2025-01-31 10:00  Weekly across a DST change  -5m",
+        "2025-02-07 10:00  Weekly across a DST change  -5m",
+        "2025-02-14 10:00  Weekly across a DST change  -5m",
+        "2025-02-21 10:00  Weekly across a DST change  -5m",
+        "2025-02-28 10:00  Weekly across a DST change  -5m",
+        "2025-03-07 10:00  Weekly across a DST change  -5m",
+        "2025-03-14 10:00  Weekly across a DST change  -5m",
+        "2025-03-21 10:00  Weekly across a DST change  -5m",
+        "2025-03-28 10:00  Weekly across a DST change  -5m",
+        "2025-04-04 10:00  Weekly across a DST change  -5m",
+        "2025-04-11 10:00  Weekly across a DST change  -5m",
+        "2025-04-18 10:00  Weekly across a DST change  -5m",
+        "2025-04-25 10:00  Weekly across a DST change  -5m",
+        "2025-05-02 10:00  Weekly across a DST change  -5m",
+        "2025-05-09 10:00  Weekly across a DST change  -5m",
+        "2025-05-16 10:00  Weekly across a DST change  -5m",
+        "2025-05-23 10:00  Weekly across a DST change  -5m",
+        "2025-05-30 10:00  Weekly across a DST change  -5m",
+        "2025-06-06 10:00  Weekly across a DST change  -5m",
+        "2025-06-13 10:00  Weekly across a DST change  -5m",
+        "2025-06-20 10:00  Weekly across a DST change  -5m",
+        "2025-06-27 10:00  Weekly across a DST change  -5m",
+        "2025-07-04 10:00  Weekly across a DST change  -5m",
+        "2025-07-11 10:00  Weekly across a DST change  -5m",
+        "2025-07-18 10:00  Weekly across a DST change  -5m",
+        "2025-07-25 10:00  Weekly across a DST change  -5m",
+        "2025-08-01 10:00  Weekly across a DST change  -5m",
+        "2025-08-08 10:00  Weekly across a DST change  -5m",
+        "2025-08-15 10:00  Weekly across a DST change  -5m",
+        "2025-08-22 10:00  Weekly across a DST change  -5m",
+        "2025-08-29 10:00  Weekly across a DST change  -5m",
+        "2025-09-05 10:00  Weekly across a DST change  -5m",
+        "2025-09-12 10:00  Weekly across a DST change  -5m",
+        "2025-09-19 10:00  Weekly across a DST change  -5m",
+        "2025-09-26 10:00  Weekly across a DST change  -5m",
+        "2025-10-03 10:00  Weekly across a DST change  -5m",
+        "2025-10-10 10:00  Weekly across a DST change  -5m",
+        "2025-10-17 10:00  Weekly across a DST change  -5m",
+        "2025-10-24 10:00  Weekly across a DST change  -5m",
+        "2025-10-31 10:00  Weekly across a DST change  -5m",
+        "2025-11-07 10:00  Weekly across a DST change  -5m",
+        "2025-11-14 10:00  Weekly across a DST change  -5m",
+        "2025-11-21 10:00  Weekly across a DST change  -5m",
+        "2025-11-28 10:00  Weekly across a DST change  -5m",
+        "2025-12-05 10:00  Weekly across a DST change  -5m",
+        "2025-12-12 10:00  Weekly across a DST change  -5m",
+        "2025-12-19 10:00  Weekly across a DST change  -5m",
+        "2025-12-26 10:00  Weekly across a DST change  -5m",
+        "2026-01-02 10:00  Weekly across a DST change  -5m",
+        "2026-01-09 10:00  Weekly across a DST change  -5m",
+        "2026-01-16 10:00  Weekly across a DST change  -5m",
+        "2026-01-23 10:00  Weekly across a DST change  -5m",
+        "2026-01-30 10:00  Weekly across a DST change  -5m",
+        "2026-02-06 10:00  Weekly across a DST change  -5m",
+        "2026-02-13 10:00  Weekly across a DST change  -5m",
+        "2026-02-20 10:00  Weekly across a DST change  -5m",
+        "2026-02-27 10:00  Weekly across a DST change  -5m",
+        "2026-03-06 10:00  Weekly across a DST change  -5m",
+        "2026-03-13 10:00  Weekly across a DST change  -5m",
+        "2026-03-20 10:00  Weekly across a DST change  -5m",
+        "2026-03-27 10:00  Weekly across a DST change  -5m",
+        "2026-04-03 10:00  Weekly across a DST change  -5m",
+        "2026-04-10 10:00  Weekly across a DST change  -5m",
+        "2026-04-17 10:00  Weekly across a DST change  -5m",
+        "2026-04-24 10:00  Weekly across a DST change  -5m",
+        "2026-05-01 10:00  Weekly across a DST change  -5m",
+        "2026-05-08 10:00  Weekly across a DST change  -5m",
+        "2026-05-15 10:00  Weekly across a DST change  -5m",
+        "2026-05-22 10:00  Weekly across a DST change  -5m",
+        "2026-05-29 10:00  Weekly across a DST change  -5m",
+        "2026-06-05 10:00  Weekly across a DST change  -5m",
+        "2026-06-12 10:00  Weekly across a DST change  -5m",
+        "2026-06-19 10:00  Weekly across a DST change  -5m",
+        "2026-06-26 10:00  Weekly across a DST change  -5m",
+        "2026-07-03 10:00  Weekly across a DST change  -5m",
+        "2026-07-10 10:00  Weekly across a DST change  -5m",
+        "2026-07-17 10:00  Weekly across a DST change  -5m",
+        "2026-07-24 10:00  Weekly across a DST change  -5m",
+        "2026-07-31 10:00  Weekly across a DST change  -5m",
+        "2026-08-07 10:00  Weekly across a DST change  -5m",
+        "2026-08-14 10:00  Weekly across a DST change  -5m",
+        "2026-08-21 10:00  Weekly across a DST change  -5m",
+        "2026-08-28 10:00  Weekly across a DST change  -5m",
+        "2026-09-04 10:00  Weekly across a DST change  -5m",
+        "2026-09-11 10:00  Weekly across a DST change  -5m",
+        "2026-09-18 10:00  Weekly across a DST change  -5m",
+        "2026-09-25 10:00  Weekly across a DST change  -5m",
+        "2026-10-02 10:00  Weekly across a DST change  -5m",
+        "2026-10-09 10:00  Weekly across a DST change  -5m",
+        "2026-10-16 10:00  Weekly across a DST change  -5m",
+        "2026-10-23 10:00  Weekly across a DST change  -5m",
+        "2026-10-30 10:00  Weekly across a DST change  -5m",
+        "2026-11-06 10:00  Weekly across a DST change  -5m",
+        "2026-11-13 10:00  Weekly across a DST change  -5m",
+        "2026-11-20 10:00  Weekly across a DST change  -5m",
+        "2026-11-27 10:00  Weekly across a DST change  -5m",
+        "2026-12-04 10:00  Weekly across a DST change  -5m",
+        "2026-12-11 10:00  Weekly across a DST change  -5m",
+        "2026-12-18 10:00  Weekly across a DST change  -5m",
+        "2026-12-25 10:00  Weekly across a DST change  -5m",
+        "2027-01-01 10:00  Weekly across a DST change  -5m"
+      ],
       "drawn": [
         "2024-03-01 10:00  Weekly across a DST change",
         "2024-03-08 10:00  Weekly across a DST change",
@@ -614,6 +1320,22 @@
       }
     },
     "converted/until-and-wkst.md": {
+      "alarms": [
+        "2020-01-01 10:00  Bounded fortnightly  +0m",
+        "2020-01-12 10:00  Bounded fortnightly  +0m",
+        "2020-01-15 10:00  Bounded fortnightly  +0m",
+        "2020-01-26 10:00  Bounded fortnightly  +0m",
+        "2020-01-29 10:00  Bounded fortnightly  +0m",
+        "2020-02-09 10:00  Bounded fortnightly  +0m"
+      ],
+      "alarmsWithDefaults": [
+        "2020-01-01 10:00  Bounded fortnightly  -5m",
+        "2020-01-12 10:00  Bounded fortnightly  -5m",
+        "2020-01-15 10:00  Bounded fortnightly  -5m",
+        "2020-01-26 10:00  Bounded fortnightly  -5m",
+        "2020-01-29 10:00  Bounded fortnightly  -5m",
+        "2020-02-09 10:00  Bounded fortnightly  -5m"
+      ],
       "drawn": [
         "2020-01-01 10:00  Bounded fortnightly",
         "2020-01-12 10:00  Bounded fortnightly",
@@ -649,7 +1371,416 @@
         ]
       }
     },
+    "notes/alarms.md": {
+      "alarms": [
+        "2024-05-06 09:00  Not set  +0m",
+        "2024-05-06 10:00  On the event  -10m",
+        "2024-05-06 11:00  A single string  -1h",
+        "2024-05-06 12:00  Silenced  none",
+        "2024-05-06 13:00  An empty list is not set  +0m",
+        "2024-05-06 14:00  Malformed entries are dropped  -5m",
+        "2024-05-06 15:00  Every spelling  -90m|-90m|-30s|+2h|+0m|-7d|09:00|-1d 18:00|+1d 08:30|-500ms",
+        "2024-05-06 16:00  The same alarm twice  -1h|-1h|+0m|+0d",
+        "2024-05-07  All day not set  none",
+        "2024-05-08  All day with times  -1d 18:00|09:00|-6h",
+        "2024-05-09  A single string for a time of day  -1d 18:00",
+        "2024-05-13 09:00  A series  -15m",
+        "2024-05-14 09:00  A series with none set  +0m",
+        "2024-05-20 09:00  A series  none",
+        "2024-05-21 09:00  A series with none set  -5m",
+        "2024-05-27 09:00  A series  -1h|+0m",
+        "2024-06-03 09:00  A series  -15m",
+        "2024-06-10 14:00  Listed  -30m",
+        "2024-06-11 14:00  Listed  +0m",
+        "2024-06-12 14:00  Listed  none",
+        "2024-06-13 14:00  Listed  -30m",
+        "2024-06-14 14:00  Listed with none set  +0m",
+        "2024-06-15  Listed with none set  none",
+        "2024-06-16 14:00  Listed with none set  -2h",
+        "2024-06-17 14:00  A start and a list  -20m",
+        "2024-06-18 14:00  A start and a list  -20m",
+        "2024-06-19 14:00  A start and a list  +1h",
+        "2024-06-20 14:00  Finished  -1h",
+        "2024-07-01 09:00  A category  -10m",
+        "2024-07-02 09:00  A nested category  -15m|+0m",
+        "2024-07-03 09:00  A nested category that sets none  -10m",
+        "2024-07-04 09:00  A category that silences  none",
+        "2024-07-05 09:00  A category that is not configured  +0m",
+        "2024-07-08 09:00  A category misspelt  +0m",
+        "2024-07-09 09:00  A category with nothing in it  +0m",
+        "2024-07-10 09:00  Through an ancestor that is not configured  -1h",
+        "2024-07-11 09:00  A category and a list on the event  -1m",
+        "2024-07-15 09:00  A category on a series  -10m",
+        "2024-07-16 09:00  A category on a series  -1h",
+        "2024-07-17 09:00  A category on a series  -10m",
+        "2024-07-20  All day in a category  -10m",
+        "2024-07-21  All day with a category with nothing in it  none",
+        "2024-07-22  All day with a category that silences  none"
+      ],
+      "alarmsWithDefaults": [
+        "2024-05-06 09:00  Not set  -5m",
+        "2024-05-06 10:00  On the event  -10m",
+        "2024-05-06 11:00  A single string  -1h",
+        "2024-05-06 12:00  Silenced  none",
+        "2024-05-06 13:00  An empty list is not set  -5m",
+        "2024-05-06 14:00  Malformed entries are dropped  -5m",
+        "2024-05-06 15:00  Every spelling  -90m|-90m|-30s|+2h|+0m|-7d|09:00|-1d 18:00|+1d 08:30|-500ms",
+        "2024-05-06 16:00  The same alarm twice  -1h|-1h|+0m|+0d",
+        "2024-05-07  All day not set  -1d 18:00",
+        "2024-05-08  All day with times  -1d 18:00|09:00|-6h",
+        "2024-05-09  A single string for a time of day  -1d 18:00",
+        "2024-05-13 09:00  A series  -15m",
+        "2024-05-14 09:00  A series with none set  -5m",
+        "2024-05-20 09:00  A series  none",
+        "2024-05-21 09:00  A series with none set  -5m",
+        "2024-05-27 09:00  A series  -1h|+0m",
+        "2024-06-03 09:00  A series  -15m",
+        "2024-06-10 14:00  Listed  -30m",
+        "2024-06-11 14:00  Listed  +0m",
+        "2024-06-12 14:00  Listed  none",
+        "2024-06-13 14:00  Listed  -30m",
+        "2024-06-14 14:00  Listed with none set  -5m",
+        "2024-06-15  Listed with none set  -1d 18:00",
+        "2024-06-16 14:00  Listed with none set  -2h",
+        "2024-06-17 14:00  A start and a list  -20m",
+        "2024-06-18 14:00  A start and a list  -20m",
+        "2024-06-19 14:00  A start and a list  +1h",
+        "2024-06-20 14:00  Finished  -1h",
+        "2024-07-01 09:00  A category  -10m",
+        "2024-07-02 09:00  A nested category  -15m|+0m",
+        "2024-07-03 09:00  A nested category that sets none  -10m",
+        "2024-07-04 09:00  A category that silences  none",
+        "2024-07-05 09:00  A category that is not configured  -5m",
+        "2024-07-08 09:00  A category misspelt  -5m",
+        "2024-07-09 09:00  A category with nothing in it  -5m",
+        "2024-07-10 09:00  Through an ancestor that is not configured  -1h",
+        "2024-07-11 09:00  A category and a list on the event  -1m",
+        "2024-07-15 09:00  A category on a series  -10m",
+        "2024-07-16 09:00  A category on a series  -1h",
+        "2024-07-17 09:00  A category on a series  -10m",
+        "2024-07-20  All day in a category  -10m",
+        "2024-07-21  All day with a category with nothing in it  -1d 18:00",
+        "2024-07-22  All day with a category that silences  none"
+      ],
+      "drawn": [
+        "2024-05-06 09:00  Not set",
+        "2024-05-06 10:00  On the event",
+        "2024-05-06 11:00  A single string",
+        "2024-05-06 12:00  Silenced",
+        "2024-05-06 13:00  An empty list is not set",
+        "2024-05-06 14:00  Malformed entries are dropped",
+        "2024-05-06 15:00  Every spelling",
+        "2024-05-06 16:00  The same alarm twice",
+        "2024-05-07  All day not set",
+        "2024-05-08  All day with times",
+        "2024-05-09  A single string for a time of day",
+        "2024-05-13 09:00  A series",
+        "2024-05-14 09:00  A series with none set",
+        "2024-05-20 09:00  A series",
+        "2024-05-21 09:00  A series with none set",
+        "2024-05-27 09:00  A series",
+        "2024-06-03 09:00  A series",
+        "2024-06-10 14:00  Listed",
+        "2024-06-11 14:00  Listed",
+        "2024-06-12 14:00  Listed",
+        "2024-06-13 14:00  Listed",
+        "2024-06-14 14:00  Listed with none set",
+        "2024-06-15  Listed with none set",
+        "2024-06-16 14:00  Listed with none set",
+        "2024-06-17 14:00  A start and a list",
+        "2024-06-18 14:00  A start and a list",
+        "2024-06-19 14:00  A start and a list",
+        "2024-06-20 14:00  Finished",
+        "2024-07-01 09:00  A category",
+        "2024-07-02 09:00  A nested category",
+        "2024-07-03 09:00  A nested category that sets none",
+        "2024-07-04 09:00  A category that silences",
+        "2024-07-05 09:00  A category that is not configured",
+        "2024-07-08 09:00  A category misspelt",
+        "2024-07-09 09:00  A category with nothing in it",
+        "2024-07-10 09:00  Through an ancestor that is not configured",
+        "2024-07-11 09:00  A category and a list on the event",
+        "2024-07-15 09:00  A category on a series",
+        "2024-07-16 09:00  A category on a series",
+        "2024-07-17 09:00  A category on a series",
+        "2024-07-20  All day in a category",
+        "2024-07-21  All day with a category with nothing in it",
+        "2024-07-22  All day with a category that silences"
+      ],
+      "metadata": {
+        "events": {
+          "A category": {
+            "category": "meeting",
+            "start": "2024-07-01 09:00"
+          },
+          "A category and a list on the event": {
+            "alarms": [
+              "-1m"
+            ],
+            "category": "meeting",
+            "start": "2024-07-11 09:00"
+          },
+          "A category misspelt": {
+            "category": "meeting/1no1",
+            "start": "2024-07-08 09:00"
+          },
+          "A category on a series": {
+            "category": "meeting",
+            "overrides": [
+              {
+                "alarms": [
+                  "-1h"
+                ],
+                "at": "2024-07-16 09:00"
+              }
+            ],
+            "repeat": {
+              "count": 3,
+              "freq": "daily"
+            },
+            "start": "2024-07-15 09:00"
+          },
+          "A category that is not configured": {
+            "category": "nowhere",
+            "start": "2024-07-05 09:00"
+          },
+          "A category that silences": {
+            "category": "meeting/quiet",
+            "start": "2024-07-04 09:00"
+          },
+          "A category with nothing in it": {
+            "category": "unset",
+            "start": "2024-07-09 09:00"
+          },
+          "A nested category": {
+            "category": "meeting/1on1",
+            "start": "2024-07-02 09:00"
+          },
+          "A nested category that sets none": {
+            "category": "meeting/standup",
+            "start": "2024-07-03 09:00"
+          },
+          "A series": {
+            "alarms": [
+              "-15m"
+            ],
+            "overrides": [
+              {
+                "alarms": [],
+                "at": "2024-05-20 09:00"
+              },
+              {
+                "alarms": [
+                  "-1h",
+                  "0m"
+                ],
+                "at": "2024-05-27 09:00"
+              },
+              {
+                "at": "2024-06-03 09:00",
+                "location": "Room 2"
+              }
+            ],
+            "repeat": {
+              "count": 4,
+              "freq": "weekly"
+            },
+            "start": "2024-05-13 09:00"
+          },
+          "A series with none set": {
+            "overrides": [
+              {
+                "alarms": [
+                  "-5m"
+                ],
+                "at": "2024-05-21 09:00"
+              }
+            ],
+            "repeat": {
+              "count": 2,
+              "freq": "weekly"
+            },
+            "start": "2024-05-14 09:00"
+          },
+          "A single string": {
+            "alarms": "-1h",
+            "start": "2024-05-06 11:00"
+          },
+          "A single string for a time of day": {
+            "alarms": "-1d 18:00",
+            "start": "2024-05-09"
+          },
+          "A start and a list": {
+            "alarms": [
+              "-20m"
+            ],
+            "instances": [
+              {
+                "start": "2024-06-18 14:00"
+              },
+              {
+                "alarms": [
+                  "+1h"
+                ],
+                "start": "2024-06-19 14:00"
+              }
+            ],
+            "start": "2024-06-17 14:00"
+          },
+          "All day in a category": {
+            "category": "meeting",
+            "start": "2024-07-20"
+          },
+          "All day not set": {
+            "start": "2024-05-07"
+          },
+          "All day with a category that silences": {
+            "category": "meeting/quiet",
+            "start": "2024-07-22"
+          },
+          "All day with a category with nothing in it": {
+            "category": "unset",
+            "start": "2024-07-21"
+          },
+          "All day with times": {
+            "alarms": [
+              "-1d 18:00",
+              "09:00",
+              "-6h"
+            ],
+            "start": "2024-05-08"
+          },
+          "An empty list is not set": {
+            "alarms": null,
+            "start": "2024-05-06 13:00"
+          },
+          "Every spelling": {
+            "alarms": [
+              "-90 minutes",
+              "-1.5h",
+              "-30s",
+              "+2 hours",
+              "0m",
+              "-1w",
+              "09:00",
+              "-1d 18:00",
+              "+1 day 08:30",
+              "-0.5s"
+            ],
+            "start": "2024-05-06 15:00"
+          },
+          "Finished": {
+            "alarms": [
+              "-1h"
+            ],
+            "finished": true,
+            "start": "2024-06-20 14:00"
+          },
+          "Listed": {
+            "alarms": [
+              "-30m"
+            ],
+            "instances": [
+              {
+                "start": "2024-06-10 14:00"
+              },
+              {
+                "alarms": [
+                  "0m"
+                ],
+                "start": "2024-06-11 14:00"
+              },
+              {
+                "alarms": [],
+                "start": "2024-06-12 14:00"
+              },
+              {
+                "alarms": null,
+                "start": "2024-06-13 14:00"
+              }
+            ]
+          },
+          "Listed with none set": {
+            "instances": [
+              {
+                "start": "2024-06-14 14:00"
+              },
+              {
+                "start": "2024-06-15"
+              },
+              {
+                "alarms": "-2h",
+                "start": "2024-06-16 14:00"
+              }
+            ]
+          },
+          "Malformed entries are dropped": {
+            "alarms": [
+              "-5m",
+              "5m",
+              "soon",
+              "1h",
+              7,
+              "-1.5d",
+              "-1d 25:00",
+              null,
+              [
+                "-1h"
+              ],
+              "-400d"
+            ],
+            "start": "2024-05-06 14:00"
+          },
+          "Not set": {
+            "start": "2024-05-06 09:00"
+          },
+          "On the event": {
+            "alarms": [
+              "-10m"
+            ],
+            "start": "2024-05-06 10:00"
+          },
+          "Silenced": {
+            "alarms": [],
+            "start": "2024-05-06 12:00"
+          },
+          "The same alarm twice": {
+            "alarms": [
+              "-1h",
+              "-60m",
+              "0m",
+              "+0d"
+            ],
+            "start": "2024-05-06 16:00"
+          },
+          "Through an ancestor that is not configured": {
+            "category": "a/b/c/d",
+            "start": "2024-07-10 09:00"
+          }
+        }
+      }
+    },
     "notes/all-day.md": {
+      "alarms": [
+        "2024-05-01  Monthly review  none",
+        "2024-05-04  Weekly day off  none",
+        "2024-05-10  Named zone on a date  none",
+        "2024-05-11  Named zone on a date  none",
+        "2024-05-11  Weekly day off  none",
+        "2024-05-18  Weekly day off  none",
+        "2024-06-01  Monthly review  none",
+        "2024-08-01  Monthly review  none"
+      ],
+      "alarmsWithDefaults": [
+        "2024-05-01  Monthly review  -1d 18:00",
+        "2024-05-04  Weekly day off  -1d 18:00",
+        "2024-05-10  Named zone on a date  -1d 18:00",
+        "2024-05-11  Named zone on a date  -1d 18:00",
+        "2024-05-11  Weekly day off  -1d 18:00",
+        "2024-05-18  Weekly day off  -1d 18:00",
+        "2024-06-01  Monthly review  -1d 18:00",
+        "2024-08-01  Monthly review  -1d 18:00"
+      ],
       "drawn": [
         "2024-05-01  Monthly review",
         "2024-05-04  Weekly day off",
@@ -692,6 +1823,44 @@
       }
     },
     "notes/quirks.md": {
+      "alarms": [
+        "2024-04-28 04:00  Until that does not parse  +0m",
+        "2024-04-29 04:00  Until that does not parse  +0m",
+        "2024-04-30 04:00  Until that does not parse  +0m",
+        "2024-05-01 04:00  Until that does not parse  +0m",
+        "2024-05-01 09:00  Empty end on a start  +0m",
+        "2024-05-04 10:00  Blank name  +0m",
+        "2024-05-05 09:00  Durations  +0m",
+        "2024-05-05 10:00  Long duration  +0m",
+        "2024-05-05 11:00  Time of day  +0m",
+        "2024-05-06 09:00  Absolute end on a rule  +0m",
+        "2024-05-07 09:00  Absolute end on a rule  +0m",
+        "2024-05-08 09:00  Instances in a null  +0m",
+        "2024-05-09 09:00  Finished  +0m",
+        "2024-05-10 09:00  Renamed overrides keep no series name  +0m",
+        "2024-05-11 09:00  Renamed overrides keep no series name  +0m",
+        "2024-05-13  Date with Z  none",
+        "2024-05-14 08:00  End of the day with an offset  +0m"
+      ],
+      "alarmsWithDefaults": [
+        "2024-04-28 04:00  Until that does not parse  -5m",
+        "2024-04-29 04:00  Until that does not parse  -5m",
+        "2024-04-30 04:00  Until that does not parse  -5m",
+        "2024-05-01 04:00  Until that does not parse  -5m",
+        "2024-05-01 09:00  Empty end on a start  -5m",
+        "2024-05-04 10:00  Blank name  -5m",
+        "2024-05-05 09:00  Durations  -5m",
+        "2024-05-05 10:00  Long duration  -5m",
+        "2024-05-05 11:00  Time of day  -5m",
+        "2024-05-06 09:00  Absolute end on a rule  -5m",
+        "2024-05-07 09:00  Absolute end on a rule  -5m",
+        "2024-05-08 09:00  Instances in a null  -5m",
+        "2024-05-09 09:00  Finished  -5m",
+        "2024-05-10 09:00  Renamed overrides keep no series name  -5m",
+        "2024-05-11 09:00  Renamed overrides keep no series name  -5m",
+        "2024-05-13  Date with Z  -1d 18:00",
+        "2024-05-14 08:00  End of the day with an offset  -5m"
+      ],
       "drawn": [
         "2024-04-28 04:00  Until that does not parse",
         "2024-04-29 04:00  Until that does not parse",
@@ -840,6 +2009,166 @@
       }
     },
     "notes/rules.md": {
+      "alarms": [
+        "2020-03-15 10:00  Twice a year  +0m",
+        "2020-09-15 10:00  Twice a year  +0m",
+        "2021-03-15 10:00  Twice a year  +0m",
+        "2021-09-15 10:00  Twice a year  +0m",
+        "2022-03-15 10:00  Twice a year  +0m",
+        "2022-09-15 10:00  Twice a year  +0m",
+        "2023-03-15 10:00  Twice a year  +0m",
+        "2023-09-15 10:00  Twice a year  +0m",
+        "2024-01-02 18:00  Every other Tuesday and Thursday  +0m",
+        "2024-01-04 18:00  Every other Tuesday and Thursday  +0m",
+        "2024-01-16 18:00  Every other Tuesday and Thursday  +0m",
+        "2024-01-17 12:00  Third Wednesday  +0m",
+        "2024-01-18 18:00  Every other Tuesday and Thursday  +0m",
+        "2024-01-26 17:00  Last Friday  +0m",
+        "2024-01-30 18:00  Every other Tuesday and Thursday  +0m",
+        "2024-01-31 08:00  Last day of the month  +0m",
+        "2024-01-31 08:00  The 31st  +0m",
+        "2024-02-01 18:00  Every other Tuesday and Thursday  +0m",
+        "2024-02-13 18:00  Every other Tuesday and Thursday  +0m",
+        "2024-02-15 18:00  Every other Tuesday and Thursday  +0m",
+        "2024-02-21 12:00  Third Wednesday  +0m",
+        "2024-02-23 17:00  Last Friday  +0m",
+        "2024-02-27 18:00  Every other Tuesday and Thursday  +0m",
+        "2024-02-29 08:00  Last day of the month  +0m",
+        "2024-02-29 18:00  Every other Tuesday and Thursday  +0m",
+        "2024-03-15 10:00  Twice a year  +0m",
+        "2024-03-20 12:00  Third Wednesday  +0m",
+        "2024-03-29 17:00  Last Friday  +0m",
+        "2024-03-31 08:00  Last day of the month  +0m",
+        "2024-03-31 08:00  The 31st  +0m",
+        "2024-04-17 12:00  Third Wednesday  +0m",
+        "2024-04-26 17:00  Last Friday  +0m",
+        "2024-04-30 08:00  Last day of the month  +0m",
+        "2024-05-06 09:00  Daily with count  +0m",
+        "2024-05-09 11:30  Moved and renamed  +0m",
+        "2024-05-10 09:00  Daily with count  +0m",
+        "2024-05-15 12:00  Third Wednesday  +0m",
+        "2024-05-31 08:00  Last day of the month  +0m",
+        "2024-05-31 08:00  The 31st  +0m",
+        "2024-05-31 17:00  Last Friday  +0m",
+        "2024-06-03 10:00  Moved across a week  +0m",
+        "2024-06-15 16:00  Moved across a week  +0m",
+        "2024-06-17 10:00  Moved across a week  +0m",
+        "2024-06-19 12:00  Third Wednesday  +0m",
+        "2024-06-28 17:00  Last Friday  +0m",
+        "2024-07-01 07:00  Null parts  +0m",
+        "2024-07-04 08:00  A month, not a list  +0m",
+        "2024-07-15 08:00  A month day, not a list  +0m",
+        "2024-07-31 08:00  The 31st  +0m",
+        "2024-08-01 07:00  Null parts  +0m",
+        "2024-08-05 09:00  Start off the rule  +0m",
+        "2024-08-12 09:00  Start off the rule  +0m",
+        "2024-08-15 08:00  A month day, not a list  +0m",
+        "2024-09-01 07:00  Null parts  +0m",
+        "2024-09-15 08:00  A month day, not a list  +0m",
+        "2024-09-15 10:00  Twice a year  +0m",
+        "2024-10-06 08:00  An empty weekday list  +0m",
+        "2024-10-07 08:00  An empty month day list  +0m",
+        "2024-10-08 08:00  An empty month list  +0m",
+        "2024-10-14 10:00  A null weekday list  +0m",
+        "2024-10-15 08:00  A blank interval is none  +0m",
+        "2024-10-15 09:00  An interval of one  +0m",
+        "2024-10-15 15:00  The largest interval  +0m",
+        "2024-10-16 08:00  A weekday, not a list  +0m",
+        "2024-10-16 09:00  An ordinal weekday, not a list  +0m",
+        "2024-10-21 10:00  A null weekday list  +0m",
+        "2024-10-22 08:00  A blank interval is none  +0m",
+        "2024-10-22 09:00  An interval of one  +0m",
+        "2024-10-23 08:00  A weekday, not a list  +0m",
+        "2024-11-06 08:00  An empty weekday list  +0m",
+        "2024-11-07 08:00  An empty month day list  +0m",
+        "2024-11-20 09:00  An ordinal weekday, not a list  +0m",
+        "2024-12-06 08:00  An empty weekday list  +0m",
+        "2024-12-07 08:00  An empty month day list  +0m",
+        "2025-03-15 10:00  Twice a year  +0m",
+        "2025-07-04 08:00  A month, not a list  +0m",
+        "2025-09-15 10:00  Twice a year  +0m",
+        "2025-10-08 08:00  An empty month list  +0m"
+      ],
+      "alarmsWithDefaults": [
+        "2020-03-15 10:00  Twice a year  -5m",
+        "2020-09-15 10:00  Twice a year  -5m",
+        "2021-03-15 10:00  Twice a year  -5m",
+        "2021-09-15 10:00  Twice a year  -5m",
+        "2022-03-15 10:00  Twice a year  -5m",
+        "2022-09-15 10:00  Twice a year  -5m",
+        "2023-03-15 10:00  Twice a year  -5m",
+        "2023-09-15 10:00  Twice a year  -5m",
+        "2024-01-02 18:00  Every other Tuesday and Thursday  -5m",
+        "2024-01-04 18:00  Every other Tuesday and Thursday  -5m",
+        "2024-01-16 18:00  Every other Tuesday and Thursday  -5m",
+        "2024-01-17 12:00  Third Wednesday  -5m",
+        "2024-01-18 18:00  Every other Tuesday and Thursday  -5m",
+        "2024-01-26 17:00  Last Friday  -5m",
+        "2024-01-30 18:00  Every other Tuesday and Thursday  -5m",
+        "2024-01-31 08:00  Last day of the month  -5m",
+        "2024-01-31 08:00  The 31st  -5m",
+        "2024-02-01 18:00  Every other Tuesday and Thursday  -5m",
+        "2024-02-13 18:00  Every other Tuesday and Thursday  -5m",
+        "2024-02-15 18:00  Every other Tuesday and Thursday  -5m",
+        "2024-02-21 12:00  Third Wednesday  -5m",
+        "2024-02-23 17:00  Last Friday  -5m",
+        "2024-02-27 18:00  Every other Tuesday and Thursday  -5m",
+        "2024-02-29 08:00  Last day of the month  -5m",
+        "2024-02-29 18:00  Every other Tuesday and Thursday  -5m",
+        "2024-03-15 10:00  Twice a year  -5m",
+        "2024-03-20 12:00  Third Wednesday  -5m",
+        "2024-03-29 17:00  Last Friday  -5m",
+        "2024-03-31 08:00  Last day of the month  -5m",
+        "2024-03-31 08:00  The 31st  -5m",
+        "2024-04-17 12:00  Third Wednesday  -5m",
+        "2024-04-26 17:00  Last Friday  -5m",
+        "2024-04-30 08:00  Last day of the month  -5m",
+        "2024-05-06 09:00  Daily with count  -5m",
+        "2024-05-09 11:30  Moved and renamed  -5m",
+        "2024-05-10 09:00  Daily with count  -5m",
+        "2024-05-15 12:00  Third Wednesday  -5m",
+        "2024-05-31 08:00  Last day of the month  -5m",
+        "2024-05-31 08:00  The 31st  -5m",
+        "2024-05-31 17:00  Last Friday  -5m",
+        "2024-06-03 10:00  Moved across a week  -5m",
+        "2024-06-15 16:00  Moved across a week  -5m",
+        "2024-06-17 10:00  Moved across a week  -5m",
+        "2024-06-19 12:00  Third Wednesday  -5m",
+        "2024-06-28 17:00  Last Friday  -5m",
+        "2024-07-01 07:00  Null parts  -5m",
+        "2024-07-04 08:00  A month, not a list  -5m",
+        "2024-07-15 08:00  A month day, not a list  -5m",
+        "2024-07-31 08:00  The 31st  -5m",
+        "2024-08-01 07:00  Null parts  -5m",
+        "2024-08-05 09:00  Start off the rule  -5m",
+        "2024-08-12 09:00  Start off the rule  -5m",
+        "2024-08-15 08:00  A month day, not a list  -5m",
+        "2024-09-01 07:00  Null parts  -5m",
+        "2024-09-15 08:00  A month day, not a list  -5m",
+        "2024-09-15 10:00  Twice a year  -5m",
+        "2024-10-06 08:00  An empty weekday list  -5m",
+        "2024-10-07 08:00  An empty month day list  -5m",
+        "2024-10-08 08:00  An empty month list  -5m",
+        "2024-10-14 10:00  A null weekday list  -5m",
+        "2024-10-15 08:00  A blank interval is none  -5m",
+        "2024-10-15 09:00  An interval of one  -5m",
+        "2024-10-15 15:00  The largest interval  -5m",
+        "2024-10-16 08:00  A weekday, not a list  -5m",
+        "2024-10-16 09:00  An ordinal weekday, not a list  -5m",
+        "2024-10-21 10:00  A null weekday list  -5m",
+        "2024-10-22 08:00  A blank interval is none  -5m",
+        "2024-10-22 09:00  An interval of one  -5m",
+        "2024-10-23 08:00  A weekday, not a list  -5m",
+        "2024-11-06 08:00  An empty weekday list  -5m",
+        "2024-11-07 08:00  An empty month day list  -5m",
+        "2024-11-20 09:00  An ordinal weekday, not a list  -5m",
+        "2024-12-06 08:00  An empty weekday list  -5m",
+        "2024-12-07 08:00  An empty month day list  -5m",
+        "2025-03-15 10:00  Twice a year  -5m",
+        "2025-07-04 08:00  A month, not a list  -5m",
+        "2025-09-15 10:00  Twice a year  -5m",
+        "2025-10-08 08:00  An empty month list  -5m"
+      ],
       "drawn": [
         "2020-03-15 10:00  Twice a year",
         "2020-09-15 10:00  Twice a year",
@@ -901,9 +2230,14 @@
         "2024-10-07 08:00  An empty month day list",
         "2024-10-08 08:00  An empty month list",
         "2024-10-14 10:00  A null weekday list",
+        "2024-10-15 08:00  A blank interval is none",
+        "2024-10-15 09:00  An interval of one",
+        "2024-10-15 15:00  The largest interval",
         "2024-10-16 08:00  A weekday, not a list",
         "2024-10-16 09:00  An ordinal weekday, not a list",
         "2024-10-21 10:00  A null weekday list",
+        "2024-10-22 08:00  A blank interval is none",
+        "2024-10-22 09:00  An interval of one",
         "2024-10-23 08:00  A weekday, not a list",
         "2024-11-06 08:00  An empty weekday list",
         "2024-11-07 08:00  An empty month day list",
@@ -917,6 +2251,14 @@
       ],
       "metadata": {
         "events": {
+          "A blank interval is none": {
+            "repeat": {
+              "count": 2,
+              "freq": "weekly",
+              "interval": null
+            },
+            "start": "2024-10-15 08:00"
+          },
           "A month day, not a list": {
             "repeat": {
               "bymonthday": 15,
@@ -972,6 +2314,54 @@
               "freq": "monthly"
             },
             "start": "2024-10-06 08:00"
+          },
+          "An interval of one": {
+            "repeat": {
+              "count": 2,
+              "freq": "weekly",
+              "interval": 1
+            },
+            "start": "2024-10-15 09:00"
+          },
+          "An interval that is negative is no rule": {
+            "repeat": {
+              "count": 2,
+              "freq": "weekly",
+              "interval": -1
+            },
+            "start": "2024-10-15 11:00"
+          },
+          "An interval that is not whole is no rule": {
+            "repeat": {
+              "count": 2,
+              "freq": "weekly",
+              "interval": 1.5
+            },
+            "start": "2024-10-15 13:00"
+          },
+          "An interval that is text is no rule": {
+            "repeat": {
+              "count": 2,
+              "freq": "weekly",
+              "interval": "twice"
+            },
+            "start": "2024-10-15 12:00"
+          },
+          "An interval that is zero is no rule": {
+            "repeat": {
+              "count": 2,
+              "freq": "weekly",
+              "interval": 0
+            },
+            "start": "2024-10-15 10:00"
+          },
+          "An interval too large is no rule": {
+            "repeat": {
+              "count": 2,
+              "freq": "weekly",
+              "interval": 70000
+            },
+            "start": "2024-10-15 14:00"
           },
           "An ordinal weekday, not a list": {
             "repeat": {
@@ -1079,6 +2469,14 @@
             },
             "start": "2024-01-31 08:00"
           },
+          "The largest interval": {
+            "repeat": {
+              "count": 2,
+              "freq": "daily",
+              "interval": 65535
+            },
+            "start": "2024-10-15 15:00"
+          },
           "Third Wednesday": {
             "repeat": {
               "byday": [
@@ -1104,6 +2502,32 @@
       }
     },
     "notes/single-occurrences.md": {
+      "alarms": [
+        "2024-04-30 18:00  With offset  +0m",
+        "2024-05-01 10:00  ISO with Z  +0m",
+        "2024-05-01 10:00  Wall clock  +0m",
+        "2024-05-01 10:00:30  With seconds  +0m",
+        "2024-05-02  All day  none",
+        "2024-05-03 09:00  Listed  +0m",
+        "2024-05-04 09:00  Renamed instance  +0m",
+        "2024-05-05  Listed  none",
+        "2024-05-06 09:00  Older spelling  +0m",
+        "2024-05-07 09:00  Both  +0m",
+        "2024-05-08 09:00  Both  +0m"
+      ],
+      "alarmsWithDefaults": [
+        "2024-04-30 18:00  With offset  -5m",
+        "2024-05-01 10:00  ISO with Z  -5m",
+        "2024-05-01 10:00  Wall clock  -5m",
+        "2024-05-01 10:00:30  With seconds  -5m",
+        "2024-05-02  All day  -1d 18:00",
+        "2024-05-03 09:00  Listed  -5m",
+        "2024-05-04 09:00  Renamed instance  -5m",
+        "2024-05-05  Listed  -1d 18:00",
+        "2024-05-06 09:00  Older spelling  -5m",
+        "2024-05-07 09:00  Both  -5m",
+        "2024-05-08 09:00  Both  -5m"
+      ],
       "drawn": [
         "2024-04-30 18:00  With offset",
         "2024-05-01 10:00  ISO with Z",
@@ -1174,6 +2598,72 @@
       }
     },
     "notes/zones.md": {
+      "alarms": [
+        "2024-03-03 16:00  Tokyo morning  +0m",
+        "2024-03-08 02:30  Wall clock in the spring gap  +0m",
+        "2024-03-08 07:00  New York across spring forward  +0m",
+        "2024-03-09 02:30  Wall clock in the spring gap  +0m",
+        "2024-03-09 07:00  New York across spring forward  +0m",
+        "2024-03-10 02:30  Wall clock in the spring gap  +0m",
+        "2024-03-10 07:00  New York across spring forward  +0m",
+        "2024-03-10 17:00  Tokyo morning  +0m",
+        "2024-03-11 02:30  Wall clock in the spring gap  +0m",
+        "2024-03-11 07:00  New York across spring forward  +0m",
+        "2024-03-17 17:00  Tokyo morning  +0m",
+        "2024-03-24 17:00  Tokyo morning  +0m",
+        "2024-04-01 04:00  Until with an offset  +0m",
+        "2024-04-02 04:00  Until with an offset  +0m",
+        "2024-04-03 04:00  Until with an offset  +0m",
+        "2024-04-04 04:00  Until with an offset  +0m",
+        "2024-04-07 16:00  Excluded by instant  +0m",
+        "2024-04-09 16:00  Excluded by instant  +0m",
+        "2024-06-02 17:00  Zone in lower case  +0m",
+        "2024-06-03 17:00  Zone in lower case  +0m",
+        "2024-06-05 09:00  Empty zone  +0m",
+        "2024-06-06 09:00  Empty zone  +0m",
+        "2024-06-07  Unknown zone on dates  none",
+        "2024-06-08  Unknown zone on dates  none",
+        "2024-10-25 07:00  London across autumn  +0m",
+        "2024-10-26 07:00  London across autumn  +0m",
+        "2024-10-27 08:00  London across autumn  +0m",
+        "2024-10-28 08:00  London across autumn  +0m",
+        "2024-11-02 01:30  Wall clock in the repeated hour  +0m",
+        "2024-11-03 01:30  Wall clock in the repeated hour  +0m",
+        "2024-11-04 01:30  Wall clock in the repeated hour  +0m"
+      ],
+      "alarmsWithDefaults": [
+        "2024-03-03 16:00  Tokyo morning  -5m",
+        "2024-03-08 02:30  Wall clock in the spring gap  -5m",
+        "2024-03-08 07:00  New York across spring forward  -5m",
+        "2024-03-09 02:30  Wall clock in the spring gap  -5m",
+        "2024-03-09 07:00  New York across spring forward  -5m",
+        "2024-03-10 02:30  Wall clock in the spring gap  -5m",
+        "2024-03-10 07:00  New York across spring forward  -5m",
+        "2024-03-10 17:00  Tokyo morning  -5m",
+        "2024-03-11 02:30  Wall clock in the spring gap  -5m",
+        "2024-03-11 07:00  New York across spring forward  -5m",
+        "2024-03-17 17:00  Tokyo morning  -5m",
+        "2024-03-24 17:00  Tokyo morning  -5m",
+        "2024-04-01 04:00  Until with an offset  -5m",
+        "2024-04-02 04:00  Until with an offset  -5m",
+        "2024-04-03 04:00  Until with an offset  -5m",
+        "2024-04-04 04:00  Until with an offset  -5m",
+        "2024-04-07 16:00  Excluded by instant  -5m",
+        "2024-04-09 16:00  Excluded by instant  -5m",
+        "2024-06-02 17:00  Zone in lower case  -5m",
+        "2024-06-03 17:00  Zone in lower case  -5m",
+        "2024-06-05 09:00  Empty zone  -5m",
+        "2024-06-06 09:00  Empty zone  -5m",
+        "2024-06-07  Unknown zone on dates  -1d 18:00",
+        "2024-06-08  Unknown zone on dates  -1d 18:00",
+        "2024-10-25 07:00  London across autumn  -5m",
+        "2024-10-26 07:00  London across autumn  -5m",
+        "2024-10-27 08:00  London across autumn  -5m",
+        "2024-10-28 08:00  London across autumn  -5m",
+        "2024-11-02 01:30  Wall clock in the repeated hour  -5m",
+        "2024-11-03 01:30  Wall clock in the repeated hour  -5m",
+        "2024-11-04 01:30  Wall clock in the repeated hour  -5m"
+      ],
       "drawn": [
         "2024-03-03 16:00  Tokyo morning",
         "2024-03-08 02:30  Wall clock in the spring gap",
@@ -1295,6 +2785,280 @@
           }
         }
       }
+    }
+  },
+  "tasks": {
+    "tasks/bad-dates-6f1d3c2e-8a4b-4c57-9d1e-2b7a5f0f3c31.md": {
+      "alarms": [],
+      "alarmsWithDefaults": [],
+      "metadata": {
+        "task": {
+          "alarms": {
+            "due_by": [
+              "-1h"
+            ]
+          },
+          "deadline": 20240930,
+          "due_by": "soon",
+          "progress": 0,
+          "status": {
+            "kind": "todo"
+          }
+        }
+      },
+      "windowDates": []
+    },
+    "tasks/canceled-6f1d3c2e-8a4b-4c57-9d1e-2b7a5f0f2c31.md": {
+      "alarms": [],
+      "alarmsWithDefaults": [],
+      "metadata": {
+        "task": {
+          "deadline": "2024-09-27",
+          "due_by": "2024-09-23",
+          "progress": 0,
+          "status": {
+            "kind": "canceled"
+          }
+        }
+      },
+      "windowDates": [
+        "deadline  2024-09-27  canceled",
+        "due_by  2024-09-23  canceled"
+      ]
+    },
+    "tasks/done-6f1d3c2e-8a4b-4c57-9d1e-2b7a5f0f1c31.md": {
+      "alarms": [],
+      "alarmsWithDefaults": [],
+      "metadata": {
+        "task": {
+          "alarms": {
+            "due_by": [
+              "-1h"
+            ]
+          },
+          "deadline": "2024-09-20 09:00",
+          "due_by": "2024-09-16",
+          "progress": 0,
+          "status": {
+            "kind": "done"
+          }
+        }
+      },
+      "windowDates": [
+        "deadline  2024-09-20 09:00  done",
+        "due_by  2024-09-16  done"
+      ]
+    },
+    "tasks/empty-date-6f1d3c2e-8a4b-4c57-9d1e-2b7a5f0eec31.md": {
+      "alarms": [
+        "2024-08-27 08:00  due_by  none",
+        "2024-08-30  deadline  -3h"
+      ],
+      "alarmsWithDefaults": [
+        "2024-08-27 08:00  due_by  09:00",
+        "2024-08-30  deadline  -3h"
+      ],
+      "metadata": {
+        "task": {
+          "alarms": {
+            "deadline": [
+              "-3h"
+            ],
+            "due_by": null
+          },
+          "deadline": "2024-08-30",
+          "due_by": "2024-08-27 08:00",
+          "progress": 0,
+          "status": {
+            "kind": "todo"
+          }
+        }
+      },
+      "windowDates": [
+        "deadline  2024-08-30  todo",
+        "due_by  2024-08-27 08:00  todo"
+      ]
+    },
+    "tasks/malformed-6f1d3c2e-8a4b-4c57-9d1e-2b7a5f0efc31.md": {
+      "alarms": [
+        "2024-09-02 12:00  due_by  -5m",
+        "2024-09-06 12:00  deadline  none"
+      ],
+      "alarmsWithDefaults": [
+        "2024-09-02 12:00  due_by  -5m",
+        "2024-09-06 12:00  deadline  none"
+      ],
+      "metadata": {
+        "task": {
+          "alarms": {
+            "deadline": 5,
+            "due_by": [
+              "-5m",
+              "5m",
+              "soon",
+              7,
+              "-1.5d",
+              null
+            ]
+          },
+          "deadline": "2024-09-06 12:00",
+          "due_by": "2024-09-02 12:00",
+          "progress": 0,
+          "status": {
+            "kind": "todo"
+          }
+        }
+      },
+      "windowDates": [
+        "deadline  2024-09-06 12:00  todo",
+        "due_by  2024-09-02 12:00  todo"
+      ]
+    },
+    "tasks/not-a-mapping-6f1d3c2e-8a4b-4c57-9d1e-2b7a5f0f0c31.md": {
+      "alarms": [
+        "2024-09-09  due_by  none"
+      ],
+      "alarmsWithDefaults": [
+        "2024-09-09  due_by  09:00"
+      ],
+      "metadata": {
+        "task": {
+          "alarms": "-1h",
+          "due_by": "2024-09-09",
+          "progress": 0,
+          "status": {
+            "kind": "todo"
+          }
+        }
+      },
+      "windowDates": [
+        "due_by  2024-09-09  todo"
+      ]
+    },
+    "tasks/not-in-the-tree.md": {
+      "alarms": [],
+      "alarmsWithDefaults": [],
+      "metadata": {
+        "task": {
+          "alarms": {
+            "due_by": [
+              "-1h"
+            ]
+          },
+          "due_by": "2024-10-01 09:00",
+          "progress": 0,
+          "status": {
+            "kind": "todo"
+          }
+        }
+      },
+      "windowDates": []
+    },
+    "tasks/own-6f1d3c2e-8a4b-4c57-9d1e-2b7a5f0ebc31.md": {
+      "alarms": [
+        "2024-08-12 10:00  due_by  -1h|+0m",
+        "2024-08-16  deadline  -1d 18:00"
+      ],
+      "alarmsWithDefaults": [
+        "2024-08-12 10:00  due_by  -1h|+0m",
+        "2024-08-16  deadline  -1d 18:00"
+      ],
+      "metadata": {
+        "task": {
+          "alarms": {
+            "deadline": "-1d 18:00",
+            "due_by": [
+              "-1h",
+              "0m"
+            ]
+          },
+          "deadline": "2024-08-16",
+          "due_by": "2024-08-12 10:00",
+          "progress": 0,
+          "status": {
+            "kind": "in_progress"
+          }
+        }
+      },
+      "windowDates": [
+        "deadline  2024-08-16  in_progress",
+        "due_by  2024-08-12 10:00  in_progress"
+      ]
+    },
+    "tasks/plain-6f1d3c2e-8a4b-4c57-9d1e-2b7a5f0eac31.md": {
+      "alarms": [
+        "2024-08-05  due_by  none",
+        "2024-08-09 01:00  deadline  none"
+      ],
+      "alarmsWithDefaults": [
+        "2024-08-05  due_by  09:00",
+        "2024-08-09 01:00  deadline  -1d 09:00|-2h"
+      ],
+      "metadata": {
+        "task": {
+          "deadline": "2024-08-09 17:00:00+09:00",
+          "due_by": "2024-08-05",
+          "progress": 0,
+          "status": {
+            "kind": "todo"
+          }
+        }
+      },
+      "windowDates": [
+        "deadline  2024-08-09 17:00:00+09:00  todo",
+        "due_by  2024-08-05  todo"
+      ]
+    },
+    "tasks/silenced-6f1d3c2e-8a4b-4c57-9d1e-2b7a5f0ecc31.md": {
+      "alarms": [
+        "2024-08-19 09:00  due_by  none",
+        "2024-08-23  deadline  -5m"
+      ],
+      "alarmsWithDefaults": [
+        "2024-08-19 09:00  due_by  none",
+        "2024-08-23  deadline  -5m"
+      ],
+      "metadata": {
+        "task": {
+          "alarms": {
+            "deadline": [
+              "-5m"
+            ],
+            "due_by": []
+          },
+          "deadline": "2024-08-23",
+          "due_by": "2024-08-19 09:00:00-07:00",
+          "progress": 0,
+          "status": {
+            "kind": "todo"
+          }
+        }
+      },
+      "windowDates": [
+        "deadline  2024-08-23  todo",
+        "due_by  2024-08-19 09:00:00-07:00  todo"
+      ]
+    },
+    "tasks/unset-6f1d3c2e-8a4b-4c57-9d1e-2b7a5f0edc31.md": {
+      "alarms": [
+        "2024-08-26  due_by  none"
+      ],
+      "alarmsWithDefaults": [
+        "2024-08-26  due_by  09:00"
+      ],
+      "metadata": {
+        "task": {
+          "alarms": null,
+          "due_by": "2024-08-26",
+          "progress": 0,
+          "status": {
+            "kind": "todo"
+          }
+        }
+      },
+      "windowDates": [
+        "due_by  2024-08-26  todo"
+      ]
     }
   },
   "window": {

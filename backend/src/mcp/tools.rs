@@ -4,9 +4,13 @@ use rmcp::{model::CallToolResult, ErrorData};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use super::frontmatter::{self, Change};
 use super::{json_result, tool_error};
 use crate::models::AppState;
 use crate::search::{run_search, validate_search_request, SearchRequest};
+use crate::tasks::{
+    check_tree_naming, date_texts, task_of, task_status_of, TASKS_DIR, STATUS_KINDS,
+};
 
 /// The largest note this will return in one call.
 ///
@@ -242,16 +246,6 @@ fn tags_of(metadata: Option<&serde_yaml::Value>) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// The `task.status.kind` of a note, when it has one.
-fn task_status_of(metadata: Option<&serde_yaml::Value>) -> Option<String> {
-    metadata?
-        .get("task")?
-        .get("status")?
-        .get("kind")?
-        .as_str()
-        .map(str::to_owned)
-}
-
 fn summarize(entry: &crate::models::ListEntry) -> NoteSummary {
     NoteSummary {
         path: entry.path.to_string_lossy().into_owned(),
@@ -321,19 +315,15 @@ struct TaskSummary {
     tags: Vec<String>,
 }
 
-const TASK_STATUSES: [&str; 8] = [
-    "backlog", "todo", "in_progress", "waiting", "blocked", "on_hold", "done", "canceled",
-];
-
 pub async fn list_tasks(
     state: &AppState,
     args: ListTasksArgs,
 ) -> Result<CallToolResult, ErrorData> {
     if let Some(status) = args.status.as_deref() {
-        if !TASK_STATUSES.contains(&status) {
+        if !STATUS_KINDS.contains(&status) {
             return Ok(tool_error(format!(
                 "{status:?} is not a task status. Use one of: {}.",
-                TASK_STATUSES.join(", "),
+                STATUS_KINDS.join(", "),
             )));
         }
     }
@@ -409,6 +399,12 @@ pub struct WindowArgs {
     pub end: String,
 }
 
+/// An `alarms:` list as the notes hold it, checked by `alarms::check_list` and written as given.
+pub fn alarm_list(alarms: &[String]) -> Result<serde_yaml::Value, String> {
+    let list = crate::alarms::check_list(alarms)?;
+    Ok(serde_yaml::Value::Sequence(list.into_iter().map(serde_yaml::Value::String).collect()))
+}
+
 /// The `YYYY-MM-DD` every event value begins with, whatever else it carries.
 ///
 /// Filtering on the date rather than the instant means an event within a few hours of a window
@@ -440,18 +436,18 @@ struct EventSummary {
 
 /// One of a task's dates, which the web app draws on the calendar as an event of its own.
 #[derive(Debug, PartialEq, Serialize)]
-struct TaskDateSummary {
+pub(crate) struct TaskDateSummary {
     path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     title: Option<String>,
     /// `due_by` or `deadline`.
-    field: &'static str,
+    pub(crate) field: &'static str,
     /// The value exactly as the task declares it.
-    date: String,
+    pub(crate) date: String,
     /// The task's `status.kind`. A done or canceled task's dates are still listed, as the calendar
     /// still draws them, so this is what tells a date that stands from one that is settled.
     #[serde(skip_serializing_if = "Option::is_none")]
-    status: Option<String>,
+    pub(crate) status: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -465,8 +461,11 @@ struct EventsOutput {
     /// The event categories `.mory/calendars.yaml` configures, keyed by id, exactly as declared.
     /// Always present, for the same reason as `task_dates`.
     categories: serde_json::Value,
-    /// Why `categories` is empty when the file could not be read, so an unreadable file is not
-    /// mistaken for one that configures none.
+    /// The `alarms:` block of `.mory/calendars.yaml`, exactly as declared: when an event rings
+    /// where its note and its category say nothing, and a task's dates where it says nothing.
+    alarms: serde_json::Value,
+    /// Why `categories` and `alarms` are both empty when the file could not be read, so an
+    /// unreadable file is not mistaken for one that configures none: `{}` is what both look like.
     #[serde(skip_serializing_if = "Option::is_none")]
     categories_error: Option<String>,
     /// Said once per call rather than trusted to the tool description, because a recurring event
@@ -500,9 +499,6 @@ fn declared_starts(event: &serde_yaml::Value) -> Vec<String> {
     starts
 }
 
-/// The task fields the calendar draws as events.
-const TASK_DATE_FIELDS: [&str; 2] = ["due_by", "deadline"];
-
 /// Every task due date and deadline whose day falls inside the window.
 ///
 /// The web app's calendar and home page draw these as events, derived by `taskDatesFromEntries`
@@ -510,31 +506,21 @@ const TASK_DATE_FIELDS: [&str; 2] = ["due_by", "deadline"];
 /// would miss every deadline in it. The same rules apply: only a note on a path the task tree
 /// accepts, one entry per field holding a date, and a finished task's dates kept. There is nothing
 /// to expand -- a task has at most one of each -- so no expander is at stake.
-fn task_dates_in_window(
+pub(crate) fn task_dates_in_window(
     entries: &[crate::models::ListEntry],
     from: chrono::NaiveDate,
     to: chrono::NaiveDate,
 ) -> Vec<TaskDateSummary> {
     let mut dates = Vec::new();
     for entry in entries {
-        let path = entry.path.to_string_lossy();
         // A `task:` block on any other path is not in the task tree, and the calendar skips it.
-        let in_task_tree = path
-            .strip_prefix(TASKS_DIR)
-            .is_some_and(|rest| check_tree_naming(rest).is_ok());
-        if !in_task_tree {
-            continue;
-        }
-        let Some(task) = entry.metadata.as_ref().and_then(|value| value.get("task")) else {
+        let Some((path, task)) = task_of(entry) else {
             continue;
         };
 
-        for field in TASK_DATE_FIELDS {
-            // Frontmatter is whatever the file said: a value that is not a date is a task without
-            // that date, never an error that would lose the rest of the week.
-            let Some(date) = task.get(field).and_then(|value| value.as_str()) else {
-                continue;
-            };
+        for (field, date) in date_texts(task) {
+            // A value that is not a date is a task without that date, never an error that would
+            // lose the rest of the week.
             let Some(day) = leading_date(date) else {
                 continue;
             };
@@ -544,7 +530,7 @@ fn task_dates_in_window(
             dates.push((day, TaskDateSummary {
                 path: path.clone().into_owned(),
                 title: entry.title.clone(),
-                field,
+                field: field.key(),
                 date: date.to_owned(),
                 status: task_status_of(entry.metadata.as_ref()),
             }));
@@ -559,6 +545,28 @@ fn task_dates_in_window(
             .then_with(|| a.field.cmp(b.field))
     });
     dates.into_iter().map(|(_, summary)| summary).collect()
+}
+
+/// The `categories:` and `alarms:` blocks of the calendar configuration, as declared, and why they
+/// are both empty if the file could not be read.
+///
+/// A block the file does not have, or one that is not a mapping, is `{}`, which is also what a file
+/// that could not be read leaves, so the reason is returned beside them for the two not to be mixed
+/// up. Handed over as declared rather than applied to each event: resolving a nested id and
+/// filling in a template here would be a second copy of what `frontend/src/events.ts` does, in
+/// another language and with nothing comparing the two.
+fn config_blocks(
+    config: anyhow::Result<crate::v2::CalendarConfig>,
+) -> (serde_json::Value, serde_json::Value, Option<String>) {
+    let declared = |block: Option<&serde_yaml::Mapping>| {
+        block
+            .and_then(|block| serde_json::to_value(block).ok())
+            .unwrap_or_else(|| serde_json::json!({}))
+    };
+    match config {
+        Ok(config) => (declared(config.categories()), declared(config.alarms()), None),
+        Err(e) => (serde_json::json!({}), serde_json::json!({}), Some(format!("{e:#}"))),
+    }
 }
 
 pub async fn list_events(
@@ -637,19 +645,8 @@ pub async fn list_events(
 
     let task_dates = task_dates_in_window(&entries, from, to);
 
-    // Handed over as declared rather than applied to each event: resolving a nested id and
-    // filling in a template here would be a second copy of what `frontend/src/events.ts` does,
-    // in another language and with nothing comparing the two.
-    let (categories, categories_error) = match crate::v2::read_calendar_config(state).await {
-        Ok(config) => (
-            config
-                .categories()
-                .and_then(|categories| serde_json::to_value(categories).ok())
-                .unwrap_or_else(|| serde_json::json!({})),
-            None,
-        ),
-        Err(e) => (serde_json::json!({}), Some(format!("{e:#}"))),
-    };
+    let (categories, alarms, categories_error) =
+        config_blocks(crate::v2::read_calendar_config(state).await);
 
     json_result(&EventsOutput {
         commit: commit.to_string(),
@@ -657,6 +654,7 @@ pub async fn list_events(
         events,
         task_dates,
         categories,
+        alarms,
         categories_error,
         note: "Events marked `recurs` carry a repeat rule whose occurrences are not expanded \
                here; read `declaration.repeat` and work out the dates from it. Every other event \
@@ -667,7 +665,12 @@ pub async fn list_events(
                entry's `color` unless the event sets its own, and its `name` template, in which \
                `{{name}}` stands for the event's name. A nested id such as `meeting/1on1` takes \
                what it does not set from `meeting`. `declaration` is the note as written, with \
-               none of this applied.",
+               none of this applied. An occurrence rings at its own `alarms`, which an override or \
+               an instance may set, else its event's, else its category's, else the global \
+               `alarms.timed` or `alarms.all_day`, else at its start if it is timed and never if \
+               it is all-day; `[]` silences. A task's date rings at the task's own `task.alarms` \
+               for it, which `list_tasks` returns under `task`, else the global `alarms.due_by` \
+               or `alarms.deadline`, else never.",
     })
 }
 
@@ -699,12 +702,6 @@ pub async fn list_imported_events(
 /// parse-and-serialize round-trip silently expands into independent copies. Nothing here writes
 /// it; it is readable through `read_note` like any other file.
 const READ_ONLY_PATHS: [&str; 1] = [".mory/tasks.yaml"];
-
-/// Where the task tree's naming rules apply.
-///
-/// `entries_to_tree` derives the forest from the paths, so a file here named outside the
-/// convention makes the whole task tree unbuildable for the web app.
-const TASKS_DIR: &str = ".tasks/";
 
 /// Check a path a tool was asked to touch, and return it in its canonical spelling.
 ///
@@ -756,34 +753,6 @@ pub fn writable_path(path: &str) -> Result<String, String> {
     Ok(path)
 }
 
-/// The naming `entries_to_tree` needs: every directory component a bare UUIDv4, and the file
-/// stem ending in one, optionally after a readable prefix.
-fn check_tree_naming(rest: &str) -> Result<(), String> {
-    let advice = "A task's file name must end with a UUIDv4 -- `<uuid>.md` or \
-                  `readable-name-<uuid>.md` -- and every directory under `.tasks/` must be a bare \
-                  UUIDv4 naming its parent task. The task tree is derived from these paths.";
-
-    let mut components = rest.split('/').collect::<Vec<_>>();
-    let Some(file) = components.pop() else {
-        return Err(advice.to_owned());
-    };
-    for directory in components {
-        if !is_uuid_v4(directory) {
-            return Err(format!("The directory {directory:?} is not a UUIDv4. {advice}"));
-        }
-    }
-    let stem = file.rsplit_once('.').map(|(stem, _)| stem).unwrap_or(file);
-    if stem.len() < 36 || !is_uuid_v4(&stem[stem.len() - 36..]) {
-        return Err(format!("The file name {file:?} does not end with a UUIDv4. {advice}"));
-    }
-    Ok(())
-}
-
-fn is_uuid_v4(value: &str) -> bool {
-    uuid::Uuid::parse_str(value)
-        .is_ok_and(|parsed| parsed.get_version() == Some(uuid::Version::Random))
-}
-
 #[derive(Debug, Serialize)]
 pub struct WriteOutput {
     pub path: String,
@@ -803,6 +772,33 @@ pub async fn note_text(state: &AppState, path: &str) -> Result<Option<String>, E
     String::from_utf8(bytes)
         .map(Some)
         .map_err(|_| ErrorData::invalid_params(format!("{path} is not UTF-8 text"), None))
+}
+
+/// The note `text` becomes under `changes`, or why it cannot, in words a model can act on.
+///
+/// It is refused when the in-place editor cannot make the edit, which it says why, and when the
+/// note already says everything the edit would: that would be an empty commit, and the caller
+/// should hear that nothing was needed rather than that something was done.
+pub fn edited_note(text: &str, changes: &[Change], path: &str) -> Result<String, String> {
+    let edited = frontmatter::apply(text, changes).map_err(|e| e.to_string())?;
+    if edited == text {
+        return Err(format!("{path:?} already says all of that, so nothing was committed."));
+    }
+    Ok(edited)
+}
+
+/// Apply `changes` to the note at `path`, whose text is `text`, and commit what comes of it.
+pub async fn commit_edit(
+    state: &AppState,
+    path: &str,
+    text: &str,
+    changes: &[Change],
+    message: &str,
+) -> Result<CallToolResult, ErrorData> {
+    match edited_note(text, changes, path) {
+        Ok(edited) => write_note(state, path, &edited, message).await,
+        Err(reason) => Ok(tool_error(reason)),
+    }
 }
 
 /// Commit an edited note and report where it landed.
@@ -1001,6 +997,48 @@ mod tests {
         serde_yaml::from_str(text).expect("the fixture should be YAML")
     }
 
+    /// What `list_events` hands over of `.mory/calendars.yaml`: each block as the file declares it,
+    /// and `{}` where it does not, with the reason only when the file could not be read.
+    #[test]
+    fn the_calendar_configuration_is_handed_over_as_declared() {
+        let json = |text: &str| -> serde_json::Value { serde_json::from_str(text).unwrap() };
+        let parsed = |text: &str| crate::v2::parse_calendar_config(text);
+
+        let configured = "categories: { meeting: { color: red } }\nalarms: { timed: [-10m] }\n";
+        assert_eq!(
+            config_blocks(parsed(configured)),
+            (json(r#"{ "meeting": { "color": "red" } }"#), json(r#"{ "timed": ["-10m"] }"#), None),
+        );
+        // A file, or a block, that says nothing is `{}` and no reason: it was read.
+        let nothing = (json("{}"), json("{}"), None);
+        assert_eq!(config_blocks(parsed("")), nothing);
+        assert_eq!(config_blocks(parsed("calendars: []\n")), nothing);
+        // So is one that is not a mapping, as the web app draws nothing from it either.
+        assert_eq!(config_blocks(parsed("categories: [meeting]\nalarms: soon\n")), nothing);
+        // Only a file that could not be read says why, which `{}` alone would not.
+        let unreadable = config_blocks(parsed("categories: [unclosed"));
+        assert_eq!(unreadable.0, json("{}"));
+        assert_eq!(unreadable.1, json("{}"));
+        assert!(unreadable.2.as_deref().is_some_and(|reason| reason.contains("not valid YAML")), "{unreadable:?}");
+    }
+
+    #[test]
+    fn an_edit_is_refused_when_the_editor_cannot_make_it_or_the_note_already_says_it() {
+        let note = "---\ntask:\n    progress: 50\n---\n# Title\n";
+
+        let edited = edited_note(note, &[Change::set(&["task", "progress"], 75)], "t.md").expect("an edit");
+        assert_eq!(edited, "---\ntask:\n    progress: 75\n---\n# Title\n");
+
+        // Says what the note says already: nothing to commit, and the path says which note.
+        let same = edited_note(note, &[Change::set(&["task", "progress"], 50)], "t.md").expect_err("a no-op");
+        assert_eq!(same, r#""t.md" already says all of that, so nothing was committed."#);
+
+        // Frontmatter that is not YAML is not edited in place, and the editor says so.
+        let broken = "---\ntags: [unclosed\n---\n";
+        let refused = edited_note(broken, &[Change::set(&["task", "progress"], 75)], "t.md").expect_err("invalid");
+        assert!(refused.contains("not valid YAML"), "{refused}");
+    }
+
     /// Frontmatter is whatever the file said, so every one of these has to be a shrug rather than
     /// an error that would lose the other 1,599 entries.
     #[test]
@@ -1011,20 +1049,6 @@ mod tests {
         assert_eq!(tags_of(Some(&yaml("tags: [1, a, true]"))), vec!["a"]);
         assert_eq!(tags_of(Some(&yaml("other: 1"))), Vec::<String>::new());
         assert_eq!(tags_of(None), Vec::<String>::new());
-    }
-
-    #[test]
-    fn a_task_status_is_read_from_its_kind_and_nothing_else() {
-        assert_eq!(
-            task_status_of(Some(&yaml("task:\n  status:\n    kind: done"))).as_deref(),
-            Some("done"),
-        );
-        // The older spelling, where status was a bare string, is not this shape and must not be
-        // mistaken for it.
-        assert_eq!(task_status_of(Some(&yaml("task:\n  status: done"))), None);
-        assert_eq!(task_status_of(Some(&yaml("task: a string"))), None);
-        assert_eq!(task_status_of(Some(&yaml("task:"))), None);
-        assert_eq!(task_status_of(Some(&yaml("tags: [x]"))), None);
     }
 
     #[test]
@@ -1072,12 +1096,9 @@ mod tests {
 
     fn listed(path: &str, frontmatter: &str) -> crate::models::ListEntry {
         crate::models::ListEntry {
-            path: path.into(),
-            size: 1,
-            mime_type: "text/markdown".to_owned(),
-            metadata: Some(yaml(frontmatter)),
             title: Some(format!("title of {path}")),
             time: chrono::DateTime::parse_from_rfc3339("2026-09-01T00:00:00+09:00").unwrap(),
+            ..crate::models::ListEntry::note(path, frontmatter)
         }
     }
 
@@ -1199,6 +1220,14 @@ mod tests {
     fn a_badly_named_task_can_still_be_renamed_or_deleted() {
         assert!(safe_path(".tasks/my-task.md").is_ok());
         assert!(writable_path(".tasks/my-task.md").is_err());
+    }
+
+    #[test]
+    fn a_refused_alarm_is_explained_without_stray_spaces() {
+        let message = alarm_list(&["10m".to_owned()]).expect_err("an unsigned offset is refused");
+        assert!(message.starts_with("Not an alarm:"), "{message}");
+        // A `\` continuation inside the literal once went missing and left a run of spaces.
+        assert!(!message.contains("  "), "{message:?}");
     }
 
     #[test]

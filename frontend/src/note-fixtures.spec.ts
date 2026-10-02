@@ -1,21 +1,46 @@
 // The frontend's note expander and the backend's must agree: this requires `eventsFromEntries` to
-// draw what `backend/src/note_events.rs` recorded in `notes.json`. See `fixtures/calendar/README.md`.
+// draw, and to resolve the alarms of, what `backend/src/note_events.rs` and `backend/src/alarms.rs`
+// recorded in `notes.json`, and `taskDatesFromEntries` to resolve those of a task's dates, and to
+// find the dates the MCP tool `list_events` returns for a task. See `fixtures/calendar/README.md`.
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import dayjs from 'dayjs';
 
+import type { AlarmDefaults } from '@/alarms';
+import { formatAlarm, parseAlarm, readAlarmDefaults } from '@/alarms';
 import type { ListEntry2 } from '@/api';
-import { eventsFromEntries } from '@/events';
+import { categoryMapOf, eventsFromEntries, readCategories, taskDatesFromEntries } from '@/events';
 
 import golden from '../../fixtures/calendar/notes.json';
 
-interface RecordedNote {
+// What was recorded of a fixture: its metadata, and the alarms it rings at under the
+// configuration's categories alone and under its `alarms:` as well.
+interface Recorded {
     metadata: ListEntry2['metadata'];
+    alarms: string[];
+    alarmsWithDefaults: string[];
+}
+
+interface RecordedNote extends Recorded {
     drawn: string[];
 }
 
+// A task fixture also records the dates the MCP tool returns for it inside the window, one
+// `field  date  status` line each: the date as the note writes it, and the tool's `status.kind`.
+interface RecordedTask extends Recorded {
+    windowDates: string[];
+}
+
 const notes = golden.notes as unknown as Record<string, RecordedNote>;
+const tasks = golden.tasks as unknown as Record<string, RecordedTask>;
 const window = golden.window as { from: string; to: string };
+
+// What `.mory/calendars.yaml` held, as the backend parsed it, for the fixtures to be read under:
+// through the reader the app reads the file with, and not one of this test's own, which would only
+// show that the test agrees with itself.
+const calendars = golden.calendars as { alarms?: unknown; categories?: unknown };
+const categories = categoryMapOf(readCategories(calendars.categories));
+const configuredDefaults = readAlarmDefaults(calendars.alarms);
 
 // A note without offsets means something different in every zone, so both sides read the fixtures
 // in the one the golden names.
@@ -26,10 +51,8 @@ afterAll(() => {
     vi.unstubAllEnvs();
 });
 
-/// `start  name` for everything that starts inside the window, in order -- what `drawn_in_window`
-/// computes on the backend's side.
-function drawn(path: string, note: RecordedNote): string[] {
-    const entry: ListEntry2 = {
+function entryOf(path: string, note: RecordedNote): ListEntry2 {
+    return {
         path,
         size: 1,
         mime_type: 'text/markdown',
@@ -37,9 +60,14 @@ function drawn(path: string, note: RecordedNote): string[] {
         title: null,
         time: '2024-05-01T00:00:00+00:00',
     };
+}
+
+/// `start  name` for everything that starts inside the window, in order -- what `drawn_in_window`
+/// computes on the backend's side.
+function drawn(path: string, note: RecordedNote): string[] {
     const from = dayjs(window.from).valueOf();
     const to = dayjs(window.to).endOf('day').valueOf();
-    return eventsFromEntries([entry], window).events
+    return eventsFromEntries([entryOf(path, note)], window).events
         .filter((event) => {
             const start = dayjs(event.start).valueOf();
             return start >= from && start <= to;
@@ -48,9 +76,82 @@ function drawn(path: string, note: RecordedNote): string[] {
         .sort();
 }
 
+// `none`, or the alarms spelt as `Spec`'s `Display` spells them.
+function specLine(alarms: readonly string[] | undefined): string {
+    const specs = (alarms ?? []).map((alarm) => {
+        const parsed = parseAlarm(alarm);
+        return 'spec' in parsed ? formatAlarm(parsed.spec) : `invalid(${alarm})`;
+    });
+    return specs.length === 0 ? 'none' : specs.join('|');
+}
+
+function inWindow(start: string): boolean {
+    const from = dayjs(window.from).valueOf();
+    const to = dayjs(window.to).endOf('day').valueOf();
+    return dayjs(start).valueOf() >= from && dayjs(start).valueOf() <= to;
+}
+
+/// `start  name  spec|spec` for the same, each alarm spelt as `Spec`'s `Display` spells it -- what
+/// `alarms_of_note_fixture` computes on the backend's side. `alarmDefaults` is what the
+/// configuration's `alarms:` says, or nothing, which leaves the built-in default.
+function alarmsOf(path: string, note: RecordedNote, alarmDefaults?: AlarmDefaults): string[] {
+    return eventsFromEntries([entryOf(path, note)], window, { categories, alarmDefaults }).events
+        .filter((event) => inWindow(event.start))
+        .map((event) => `${event.start}  ${event.name}  ${specLine(event.alarms)}`)
+        .sort();
+}
+
+// A task fixture is listed in the task tree, under `.tasks/`, unless its name keeps it out.
+function taskEntryOf(name: string, task: Recorded): ListEntry2 {
+    return entryOf(`.tasks/${name.replace(/^tasks\//, '')}`, task as RecordedNote);
+}
+
+/// `start  due_by|deadline  spec|spec` for every date of a task that is to ring and falls inside
+/// the window -- what `alarms_of_task_fixture` computes on the backend's side. A task that is done
+/// or canceled rings nothing, and is not listed there; here its dates are drawn and silent.
+function taskAlarmsOf(name: string, task: Recorded, alarmDefaults?: AlarmDefaults): string[] {
+    const { events } = taskDatesFromEntries([taskEntryOf(name, task)], window, { alarmDefaults });
+    for (const event of events.filter((event) => event.finished)) {
+        expect(event.alarms, `${name}: ${event.start}`).toEqual([]);
+    }
+    return events
+        .filter((event) => !event.finished && inWindow(event.start))
+        .map((event) => `${event.start}  ${event.taskDate}  ${specLine(event.alarms)}`)
+        .sort();
+}
+
+// `field  date  finished|open` for every date of a task that `taskDatesFromEntries` draws inside the
+// window, the date as the note writes it: the tool gives it so, with no offset converted, and the
+// fixtures keep to dates whose day is the same either way.
+function drawnTaskDates(name: string, task: Recorded): string[] {
+    const written = (task.metadata?.task ?? {}) as Record<string, unknown>;
+    const { events } = taskDatesFromEntries([taskEntryOf(name, task)], window);
+    return events
+        .map((event) => `${event.taskDate}  ${written[event.taskDate ?? '']}  ${event.finished ? 'finished' : 'open'}`)
+        .sort();
+}
+
+// The same of what the tool returned. It gives a task's `status.kind` and leaves the reading to the
+// caller, and its own note says a task whose status is `done` or `canceled` is settled, which is
+// what the calendar draws as finished.
+function returnedTaskDates(task: RecordedTask): string[] {
+    return task.windowDates
+        .map((line) => {
+            const [field, date, status] = line.split('  ');
+            return `${field}  ${date}  ${status === 'done' || status === 'canceled' ? 'finished' : 'open'}`;
+        })
+        .sort();
+}
+
 it('runs in the zone the golden was recorded in', () => {
     expect(dayjs('2024-07-01 00:00').utcOffset()).toBe(-7 * 60);
     expect(dayjs('2024-01-01 00:00').utcOffset()).toBe(-8 * 60);
+});
+
+it('records every task fixture', () => {
+    const onDisk = Object.keys(import.meta.glob('../../fixtures/calendar/tasks/*.md'))
+        .map((path) => path.replace('../../fixtures/calendar/', ''));
+    expect(Object.keys(tasks).sort(), 'regenerate with UPDATE_CALENDAR_GOLDEN=1').toEqual(onDisk.sort());
 });
 
 it('records every note fixture', () => {
@@ -65,4 +166,33 @@ describe.each(Object.keys(notes))('%s', (path) => {
     it('draws what the backend draws', () => {
         expect(drawn(path, notes[path])).toEqual(notes[path].drawn);
     });
+
+    it('rings at what the backend rings at, with only the built-in default and categories', () => {
+        expect(alarmsOf(path, notes[path])).toEqual(notes[path].alarms);
+    });
+
+    it('rings at what the backend rings at, under the configuration\'s alarms', () => {
+        expect(alarmsOf(path, notes[path], configuredDefaults)).toEqual(notes[path].alarmsWithDefaults);
+    });
+});
+
+describe.each(Object.keys(tasks))('%s', (name) => {
+    it('rings for its dates at what the backend rings at, with only the built-in default', () => {
+        expect(taskAlarmsOf(name, tasks[name])).toEqual(tasks[name].alarms);
+    });
+
+    it('rings for its dates at what the backend rings at, under the configuration\'s alarms', () => {
+        expect(taskAlarmsOf(name, tasks[name], configuredDefaults)).toEqual(tasks[name].alarmsWithDefaults);
+    });
+
+    it('has the dates the MCP tool returns for it, finished as the tool says', () => {
+        expect(drawnTaskDates(name, tasks[name])).toEqual(returnedTaskDates(tasks[name]));
+    });
+});
+
+it('compares some dates, and some of them finished', () => {
+    const returned = Object.values(tasks).flatMap(returnedTaskDates);
+    expect(returned.length).toBeGreaterThan(5);
+    expect(returned.some((line) => line.endsWith('  finished'))).toBe(true);
+    expect(returned.some((line) => line.endsWith('  open'))).toBe(true);
 });

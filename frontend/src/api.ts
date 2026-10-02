@@ -95,6 +95,10 @@ export interface EventFields {
   name?: string;
   location?: string;
   url?: string;
+  // When it rings, as `alarms.ts` reads them: a list, or one string for a list of one. An empty
+  // list silences it, and an unset value takes the category's and then the global ones. `null` is
+  // what a key with nothing after it reads as, and is unset.
+  alarms?: string | string[] | null;
 }
 
 export interface EventOccurrence extends EventFields {
@@ -106,8 +110,9 @@ export interface EventOccurrence extends EventFields {
 export interface MetadataEvent extends EventFields {
   start?: string;
   // The id of a category in `.mory/calendars.yaml`. Belongs to the event as a whole, so its
-  // overrides and instances are always the same kind of thing as the event they belong to.
-  category?: string;
+  // overrides and instances are always the same kind of thing as the event they belong to. `null`,
+  // from a key with nothing after it, is none.
+  category?: string | null;
   repeat?: EventRepeat;
   exclusions?: string[];
   overrides?: EventOccurrence[];

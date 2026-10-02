@@ -9,7 +9,10 @@ Layout of the tracked sources:
 - `backend/src/main.rs` — the server: routes, handlers, the `v2` module, and `models`.
 - `backend/src/ical.rs` — parsing subscribed iCal feeds and expanding their recurrences.
 - `backend/src/note_events.rs` — expanding the events a note declares, the Rust twin of `eventsFromEntries`, for event alarms.
-- `backend/src/push.rs` — event alarms sent as Web Push: the VAPID key, the subscription endpoints, and the scheduler.
+- `backend/src/alarms.rs` — when each alarm rings: the `alarms:` grammar, the defaults `.mory/calendars.yaml` sets, and a task's dates.
+- `backend/src/tasks.rs` — which notes are in the task tree, and a task's status: the checks the MCP tools and the alarm scheduler share.
+- `backend/src/schedule.rs` — which alarms ring in a span of time, from the listing and the calendar configuration.
+- `backend/src/push.rs` — event alarms sent as Web Push: the VAPID key, the subscription endpoints, and the loop that asks the schedule once a minute and sends what is due.
 - `backend/src/oauth.rs` — the OAuth 2.1 authorization server the MCP endpoint needs.
 - `backend/src/mcp/` — the MCP server: `mod.rs` holds the tool router, `frontmatter.rs` the
   in-place frontmatter editor, and the rest the tools grouped by area.
@@ -109,8 +112,9 @@ These follow from the philosophy above; keep them intact.
 - `GET /v2/entries` serves the listing together with its commit ID, and serves only the changes when given `since`.
 - The frontend files store (`frontend/src/stores/files.ts`) is the single entry point for file operations. Every consumer reads the one shared listing from it; nothing calls the entries API or IndexedDB directly.
 - A task's `due_by` and `deadline` are drawn as events too, derived from the same listing by `taskDatesFromEntries` in `frontend/src/events.ts` rather than from an `events:` block. Each has its own colour, configurable under `task_dates:` in `.mory/calendars.yaml`.
-- An event may name a category (`category: meeting`), configured under `categories:` in `.mory/calendars.yaml` with a default `color` and a `name` template (`[MTG] {{name}}`). A category changes only how an event is drawn, never when or where it happens, so the note still says everything about its events on its own. A nested id (`meeting/1on1`) takes each field it leaves unset from its nearest configured ancestor, but must be configured itself, so a misspelt one is reported rather than drawn as its parent. `resolveCategory` in `frontend/src/events.ts` is the one place this is worked out.
-- Event alarms are Web Push. A service worker cannot wait for an event — Chrome stops one idle for 30 seconds, timers and all — so `backend/src/push.rs` sends each alarm at its occurrence's start and the worker only shows it. The VAPID key pair is derived from `MORIED_SECRET`, so rotating the secret ends every subscription along with every session. Subscriptions live in `cache.sqlite`, and every page load registers its browser's afresh, so the table is as disposable as the rest of the cache. Production logs at debug and `sqlx` logs every statement there, so the scheduler keeps the listing and the subscriptions in memory: an idle minute must not touch the database.
+- An event may name a category (`category: meeting`), configured under `categories:` in `.mory/calendars.yaml` with a default `color`, a `name` template (`[MTG] {{name}}`) and `alarms`. A category changes how an event is drawn and when it rings, never when or where it happens, so the note still says everything about its events on its own. A nested id (`meeting/1on1`) takes each field it leaves unset from its nearest configured ancestor, but must be configured itself, so a misspelt one is reported rather than drawn as its parent. `resolveCategory` in `frontend/src/events.ts` is the one place this is worked out, with one exception: `backend/src/alarms.rs` walks a category's lineage for `alarms` too, because it is moried that rings them. `fixtures/calendar/calendars.yaml` and `notes/alarms.md` hold that second copy to the first.
+- Event alarms are Web Push. A service worker cannot wait for an event — Chrome stops one idle for 30 seconds, timers and all — so `backend/src/push.rs` sends each alarm at the time its note asks for and the worker only shows it, saying when the event starts: moried sends the moment, and the worker, which is in the reader's zone and locale, puts it in words. The VAPID key pair is derived from `MORIED_SECRET`, so rotating the secret ends every subscription along with every session. Subscriptions live in `cache.sqlite`, and every page load registers its browser's afresh, so the table is as disposable as the rest of the cache. Production logs at debug and `sqlx` logs every statement there, so the scheduler keeps the listing and the subscriptions in memory: an idle minute must not touch the database. The calendar configuration is read from git, with the listing, whenever a sync says either moved. An alarm before its occurrence is only found if the window the scheduler expands reaches that far, so each reload works out how far any alarm in the listing and the configuration rings (`alarms::Reach`) and widens the window by it.
+- Alarm timing has layers, and the first that is set wins. For an event's occurrence: its own `alarms` (an override, an instance, or the event for a lone start), the event's, its category's, the configuration's `alarms.timed` or `alarms.all_day`, then the built-in default — at the start if timed, never if all-day. For a task's date: `task.alarms.due_by` or `.deadline`, then the configuration's `alarms.due_by` or `.deadline`, then nothing; a task that is done or canceled never rings. `[]` silences, and an empty value is not set and inherits, as an empty `category:` does. An entry that is not an alarm is dropped, the rest of the list stands, and the web app reports it: for a note, where the note is drawn, and for `.mory/calendars.yaml`, in the Calendar's error alert, since the next save of anything would erase it unannounced. The grammar's twin is `frontend/src/alarms.ts`, and `fixtures/calendar/` holds the two to each other. `render` in `frontend/src/task.ts` and `writeConfiguration` in `frontend/src/stores/calendars.ts` rewrite whole files from what they hold, so each must carry `alarms` or the next save of anything deletes it.
 - External calendars are subscribed in `.mory/calendars.yaml` and served by `GET /v2/imported-events`. Their events are read-only and never stored: they are a live view of someone else's calendar, so the repository is deliberately not their home. Converting one writes an ordinary note under `.events/`, which then shadows the imported original by `ical.uid` — or by `uid` and `recurrence_id` together, when the note claims a single occurrence.
 
 ## The MCP server
@@ -154,10 +158,22 @@ be a change to this tool to make on purpose.
 The event categories are returned the same way: as `.mory/calendars.yaml` declares them, never
 applied to the events. Resolving them in Rust would be a second copy of `resolveCategory`.
 
+The global `alarms:` block is returned the same way, as declared. Resolving which alarms an event
+rings at would be a third copy of the precedence above.
+
 `list_events` does return each task's `due_by` and `deadline` inside the window, under
 `task_dates`, because the calendar draws them as events. Nothing there is expanded, but
 `task_dates_in_window` is still a second copy of which tasks and values `taskDatesFromEntries`
-accepts, in another language and with nothing comparing the two: change one, change the other.
+accepts, in another language: `fixtures/calendar/tasks/` holds it to `taskDatesFromEntries` for
+which dates fall in the window, as the note writes them, and which are finished, so change one,
+change the other and run both halves. `alarms::task_dates`, which the scheduler rings from, is a
+third, and the same fixtures hold it to `taskDatesFromEntries`: which dates ring and what they ring
+at, under the configuration's alarms and without. `task_dates_in_window` takes a value's leading
+`YYYY-MM-DD` where `dayjs` reads more, such as `2024-8-9` or `2024-02-30`, so the fixtures keep to values
+both read. The two Rust sides at least agree with each other about which notes and which fields:
+`tasks::task_of` and `tasks::date_texts` decide that, and what is left to each is the test of a
+value, the leading `YYYY-MM-DD` for the window and the stricter reading `dayjs` gives for the
+scheduler, which also skips a finished task.
 
 ## The `events:` frontmatter
 
@@ -167,6 +183,9 @@ An event is a base occurrence (`start`), a list of occurrences (`instances`, or 
 - `exclusions` — occurrences to remove. `overrides` — entries carrying `at` plus the changed keys. `instances` — occurrences with their own `start`.
 - `location`, `url`, `name` (overrides the map key for one occurrence), and `ical` provenance.
 - `category` — a category id from `.mory/calendars.yaml`. It belongs to the event as a whole: overrides and instances cannot change it.
+- `alarms` — when it rings: a list of alarms, or one alone, on the event, an override or an instance. See below.
+
+An alarm is a string, one of two spellings: an offset from the start, `[+-]N unit` (`-10m` before it, `+1h` after; `w d h m s` or `weeks days hours minutes seconds`), or a time on the start's day, `[[+-]N d|w ]HH:MM` (`09:00`, `-1d 18:00`). The sign is required unless N is 0, so `10m` is refused, not read as "after". `d` and `w` take whole numbers and move by calendar days in the reader's zone, so `-1d` on a 09:00 event is 09:00 the day before across a daylight-saving change, where `-24h` is not. An all-day event starts at the first moment of its day. No alarm is more than a year from its start.
 
 Three details are easy to get wrong:
 
@@ -178,4 +197,4 @@ Three details are easy to get wrong:
 
 Both sides expand with `rrule` — the crate in `backend/src/ical.rs`, rrule.js in `frontend/src/recurrence.ts` — but sharing a library is not the same as agreeing. Conversion is where the two swap places, and a disagreement is invisible afterwards, because the note claims the series and the imported original stops being drawn. `fixtures/calendar/` and `frontend/src/differential.spec.ts` exist to compare them; both expanders passed their own tests while disagreeing about nearly every feed there. Change either one and run it.
 
-A note is expanded twice as well: by `eventsFromEntries` for the calendar, and by `backend/src/note_events.rs` for event alarms, which follows the frontend rule by rule, JavaScript's accidents included — an alarm at a time the calendar does not show is the same disagreement. `fixtures/calendar/notes/`, `converted/` and `frontend/src/note-fixtures.spec.ts` compare the two. Change either one, run both halves, and regenerate as `fixtures/calendar/README.md` says.
+A note is expanded twice as well: by `eventsFromEntries` for the calendar, and by `backend/src/note_events.rs` for event alarms, which follows the frontend rule by rule, JavaScript's accidents included — an alarm at a time the calendar does not show is the same disagreement. `fixtures/calendar/notes/`, `converted/` and `frontend/src/note-fixtures.spec.ts` compare the two. Change either one, run both halves, and regenerate as `fixtures/calendar/README.md` says. The same goes for the alarms an occurrence resolves to, which `notes.json` records beside what it draws.

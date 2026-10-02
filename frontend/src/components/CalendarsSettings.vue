@@ -96,6 +96,10 @@
 
             <v-divider class="mt-6 mb-4"></v-divider>
 
+            <AlarmDefaultsSettings></AlarmDefaultsSettings>
+
+            <v-divider class="mt-6 mb-4"></v-divider>
+
             <v-card-subtitle class="px-0">Event categories</v-card-subtitle>
             <p class="text-medium-emphasis mb-4">
                 An event joins one by naming it, as in <code>category: meeting</code>, and is drawn
@@ -234,6 +238,14 @@
                         class="mt-4"
                         label="Colour"
                     ></ColorField>
+                    <InheritableAlarms
+                        v-model="categoryAlarms"
+                        v-bind:fallback="inheritedDraft.alarms ?? calendars.effectiveAlarmDefaults.timed"
+                        v-bind:inherited-hint="categoryInheritedHint"
+                        class="mt-2"
+                        label="Inherit alarms"
+                        own-hint="Its events ring at these unless they set their own. With none, they never ring."
+                    ></InheritableAlarms>
                     <v-alert
                         v-if="categoryDraftError"
                         type="error"
@@ -259,6 +271,9 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 
 import { mdiDelete, mdiPencil, mdiPlus } from '@mdi/js';
 
+import { alarmProblems, describeAlarmText } from '@/alarms';
+import AlarmDefaultsSettings from '@/components/AlarmDefaultsSettings.vue';
+import InheritableAlarms from '@/components/InheritableAlarms.vue';
 import ColorField from '@/components/ColorField.vue';
 import { parseEventColor } from '@/event-color';
 import {
@@ -269,9 +284,9 @@ import {
     applyNameTemplate,
     resolveCategory,
 } from '@/events';
-import type { EventCategory, TaskDateColors } from '@/events';
+import type { ConfiguredCategory, EventCategory, TaskDateColors } from '@/events';
 import { CALENDARS_PATH, useCalendarsStore } from '@/stores/calendars';
-import type { CalendarSubscription, ConfiguredCategory } from '@/stores/calendars';
+import type { CalendarSubscription } from '@/stores/calendars';
 
 // The two fields, with what each falls back to when it is left empty.
 const TASK_DATE_FIELDS = [
@@ -296,6 +311,7 @@ const draft = reactive<CalendarSubscription>({
     enabled: true,
 });
 
+
 const isSavingColors = ref(false);
 const colorError = ref('');
 // Edited as text, so an empty field can mean "the default" rather than an unset key.
@@ -308,6 +324,8 @@ const categoryError = ref('');
 const categoryDraftError = ref('');
 // Text, for the same reason as the task date colours: empty means "inherit".
 const categoryDraft = reactive({ id: '', name: '', color: '' });
+// `null`, the category sets no alarms and inherits them; a list with none in it, its events never ring.
+const categoryAlarms = ref<string[] | null>(null);
 
 // Computed properties
 const taskDateColorsChanged = computed(() => TASK_DATE_FIELDS.some(
@@ -330,9 +348,20 @@ const inheritedDraft = computed((): EventCategory => {
     return resolveCategory(id, new Map([...categoryMap.value, [id, {}]])) ?? {};
 });
 
+// What inheriting means, in the words of what the category would ring at.
+const categoryInheritedHint = computed(() => {
+    const inherited = inheritedDraft.value.alarms;
+    if (inherited === undefined) {
+        return 'Inherits the alarms for events set under Alarms above.';
+    }
+    return inherited.length === 0
+        ? 'Inherits no alarms from the category it is nested under.'
+        : `Inherits: ${inherited.map(describeAlarmText).join(', ')}.`;
+});
+
 // Lifecycle hooks
 onMounted(() => {
-    calendars.loadSubscriptions().catch((err) => {
+    calendars.loadConfiguration().catch((err) => {
         error.value = `Could not read ${CALENDARS_PATH}: ${err}`;
     });
 });
@@ -460,6 +489,7 @@ function openCategoryDialog(index: number | null) {
         name: existing?.name ?? '',
         color: existing?.color ?? '',
     });
+    categoryAlarms.value = existing?.alarms === undefined ? null : [...existing.alarms];
     categoryDialogOpen.value = true;
 }
 
@@ -489,11 +519,21 @@ async function saveCategory() {
         }
     }
 
+    const alarms = categoryAlarms.value?.map((alarm) => alarm.trim());
+    if (alarms !== undefined) {
+        const [problem] = alarmProblems(alarms);
+        if (problem !== undefined) {
+            categoryDraftError.value = `${problem}.`;
+            return;
+        }
+    }
+
     const name = categoryDraft.name.trim();
     const entry: ConfiguredCategory = {
         id,
         ...(color === '' ? {} : { color }),
         ...(name === '' ? {} : { name }),
+        ...(alarms === undefined ? {} : { alarms }),
     };
     const next = [...categoryList.value];
     if (editingCategoryIndex.value === null) {

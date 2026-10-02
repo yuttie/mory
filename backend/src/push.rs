@@ -13,8 +13,8 @@
 //! subscription afresh, so the table is as disposable as the rest of the cache. Delete it, and each
 //! browser is sent alarms again from the next time it opens mory.
 //!
-//! When an occurrence starts is `note_events`' answer, which the fixtures in `fixtures/calendar/`
-//! hold to the calendar's.
+//! What rings when is `schedule`'s answer. This module is what carries it to a browser: the key,
+//! the subscriptions, the push, and the loop that asks once a minute.
 //!
 //! The scheduler must not talk to the database while nothing changes: production logs at debug,
 //! and `sqlx` logs every statement there. It keeps the listing and the subscriptions in memory, and
@@ -41,8 +41,10 @@ use web_push_native::jwt_simple::algorithms::{
 };
 use web_push_native::{Auth, WebPushBuilder, p256::PublicKey};
 
-use crate::models::{AppError, AppState, ListEntry};
-use crate::note_events::{self, Reader};
+use crate::alarms::Defaults;
+use crate::models::{AppError, AppState};
+use crate::note_events::Reader;
+use crate::schedule::{Alarm, Moment, Schedule, alarms_between};
 
 /// How far ahead each look at the schedule reaches, and so how long the scheduler sleeps when
 /// nothing is due sooner: an alarm further off is found by a later look. Also how soon a commit
@@ -232,65 +234,35 @@ pub async fn delete_subscription(
 
 // --- alarms ---------------------------------------------------------------------------------
 
-/// One alarm: an occurrence, when it starts, and what the worker shows for it.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Alarm {
-    pub at: DateTime<Utc>,
-    pub name: String,
-    pub path: String,
-    pub location: Option<String>,
-}
-
 /// What the service worker is sent, and shows.
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 struct Payload {
     title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     body: Option<String>,
-    /// Tells two sends of the same alarm apart from two alarms, so that a repeat replaces the
-    /// notification rather than adding one.
+    /// Names the occurrence, not the alarm: a later alarm for the same occurrence replaces the
+    /// notification the earlier one showed, rather than piling up beside it.
     tag: String,
     /// The note to open when the notification is clicked.
     path: String,
+    /// When the occurrence starts, which an alarm ahead of it does not say: an RFC 3339 instant,
+    /// or a `YYYY-MM-DD` date when `all_day`. Left to the worker to put in the reader's words,
+    /// since the worker is in the reader's zone and this is not.
+    start: String,
+    all_day: bool,
 }
 
-impl Alarm {
-    fn payload(&self) -> Payload {
+impl Payload {
+    fn of(alarm: &Alarm) -> Payload {
         Payload {
-            title: self.name.clone(),
-            body: self.location.clone(),
-            tag: format!("{}#{}@{}", self.path, self.name, self.at.to_rfc3339()),
-            path: self.path.clone(),
+            title: alarm.name.clone(),
+            body: alarm.location.clone(),
+            tag: format!("{}#{}@{}", alarm.path, alarm.name, alarm.start),
+            path: alarm.path.clone(),
+            start: alarm.start.to_string(),
+            all_day: matches!(alarm.start, Moment::Day(_)),
         }
     }
-}
-
-/// The occurrences starting after `after` and no later than `until`, soonest first.
-///
-/// An all-day event has no moment to ring at, and one already marked finished needs no reminder.
-pub fn alarms_between(
-    entries: &[ListEntry],
-    after: DateTime<Utc>,
-    until: DateTime<Utc>,
-    reader: &Reader,
-) -> Vec<Alarm> {
-    let local_date = |at: DateTime<Utc>| at.with_timezone(&reader.zone).date_naive();
-    let (from, to) = note_events::day_window(local_date(after), local_date(until), reader);
-    let mut alarms: Vec<Alarm> = note_events::occurrences(entries, from, to, reader)
-        .into_iter()
-        .filter(|occurrence| !occurrence.finished)
-        .filter_map(|occurrence| {
-            let at = occurrence.start.instant(reader)?;
-            (after < at && at <= until).then_some(Alarm {
-                at,
-                name: occurrence.name,
-                path: occurrence.path,
-                location: occurrence.location,
-            })
-        })
-        .collect();
-    alarms.sort_by(|a, b| a.at.cmp(&b.at).then_with(|| a.name.cmp(&b.name)));
-    alarms
 }
 
 /// What became of one push.
@@ -371,7 +343,7 @@ struct Plan<'a> {
 /// The alarms due in `(after, now]` for each zone's browsers, and the first due after `now` within
 /// `CHECK_INTERVAL`. One more than `LATE_LIMIT` late is let pass.
 fn plan<'a>(
-    listing: &[ListEntry],
+    schedule: &Schedule,
     subscriptions: &'a [Subscription],
     after: DateTime<Utc>,
     now: DateTime<Utc>,
@@ -382,7 +354,7 @@ fn plan<'a>(
     }
     let mut plan = Plan { due: Vec::new(), next: None };
     for (zone, group) in by_zone {
-        for alarm in alarms_between(listing, after, now + CHECK_INTERVAL, &Reader { zone, now }) {
+        for alarm in alarms_between(schedule, after, now + CHECK_INTERVAL, &Reader { zone, now }) {
             if alarm.at > now {
                 plan.next = Some(plan.next.map_or(alarm.at, |next| next.min(alarm.at)));
                 break;
@@ -400,7 +372,7 @@ fn plan<'a>(
 async fn send(state: &AppState, due: &[(Alarm, Vec<&Subscription>)]) -> HashSet<String> {
     let mut gone = HashSet::new();
     for (alarm, group) in due {
-        let payload = alarm.payload();
+        let payload = Payload::of(alarm);
         let mut sent = 0;
         for subscription in group {
             if gone.contains(&subscription.endpoint) {
@@ -425,14 +397,35 @@ async fn send(state: &AppState, due: &[(Alarm, Vec<&Subscription>)]) -> HashSet<
     gone
 }
 
+/// The listing and the calendar configuration as of now, or `None` if the listing cannot be read.
+async fn load_schedule(state: &AppState) -> Option<Schedule> {
+    let listing = match state.read_entries(None).await {
+        Ok((_, listing)) => listing,
+        Err(e) => {
+            tracing::error!("The alarm scheduler could not read the listing: {:?}", e);
+            return None;
+        },
+    };
+    // Read from git with the listing, so that an idle minute asks the database for nothing. A file
+    // moried cannot read leaves every alarm at its default.
+    let defaults = match crate::v2::read_calendar_config(state).await {
+        Ok(config) => config.alarm_defaults(),
+        Err(e) => {
+            tracing::error!("The alarm scheduler could not read the calendar configuration: {:?}", e);
+            Defaults::default()
+        },
+    };
+    Some(Schedule::new(listing, defaults))
+}
+
 pub fn spawn(state: AppState) {
     tokio::spawn(run(state));
 }
 
 async fn run(state: AppState) {
     let mut subscriptions = load_subscriptions(&state).await;
-    // The listing, read again only once a sync says it moved.
-    let mut entries: Option<Vec<ListEntry>> = None;
+    // Loaded again only once a sync says the listing moved.
+    let mut schedule: Option<Schedule> = None;
     let mut done = state.cache_sync.done.clone();
     // The HEAD a nudge was sent for, with what the last sync had reached then.
     let mut nudged_for: Option<(Oid, Option<Oid>)> = None;
@@ -455,19 +448,16 @@ async fn run(state: AppState) {
         let now = Utc::now();
         let mut next = None;
         if !subscriptions.is_empty() {
-            if entries.is_none() {
-                match state.read_entries(None).await {
-                    Ok((_, listing)) => entries = Some(listing),
-                    Err(e) => tracing::error!("The alarm scheduler could not read the listing: {:?}", e),
-                }
+            if schedule.is_none() {
+                schedule = load_schedule(&state).await;
             }
             // Without a listing, what fell due is still unsent: look at the span again next time,
             // rather than pass over it as though it held nothing.
-            let Some(listing) = entries.as_deref() else {
-                wait(&state, &mut done, &mut subscriptions, &mut entries, CHECK_INTERVAL).await;
+            let Some(current) = schedule.as_ref() else {
+                wait(&state, &mut done, &mut subscriptions, &mut schedule, CHECK_INTERVAL).await;
                 continue;
             };
-            let plan = plan(listing, &subscriptions, checked_up_to, now);
+            let plan = plan(current, &subscriptions, checked_up_to, now);
             next = plan.next;
             let gone = send(&state, &plan.due).await;
             if !gone.is_empty() {
@@ -485,7 +475,7 @@ async fn run(state: AppState) {
 
         // An alarm that came due while the others were being sent is due now, not in a minute.
         let sleep = next.map_or(CHECK_INTERVAL, |next| (next - Utc::now()).to_std().unwrap_or_default());
-        wait(&state, &mut done, &mut subscriptions, &mut entries, sleep).await;
+        wait(&state, &mut done, &mut subscriptions, &mut schedule, sleep).await;
     }
 }
 
@@ -494,7 +484,7 @@ async fn wait(
     state: &AppState,
     done: &mut tokio::sync::watch::Receiver<Option<Oid>>,
     subscriptions: &mut Vec<Subscription>,
-    entries: &mut Option<Vec<ListEntry>>,
+    schedule: &mut Option<Schedule>,
     sleep: StdDuration,
 ) {
     // A closed channel would report a change on every call and spin the loop, so stop listening to
@@ -506,7 +496,7 @@ async fn wait(
             *subscriptions = load_subscriptions(state).await;
         },
         _ = done.changed(), if sync_open => {
-            *entries = None;
+            *schedule = None;
         },
     }
 }
@@ -515,21 +505,22 @@ async fn wait(
 mod tests {
     use super::*;
 
+    use chrono::NaiveDate;
+
+    use crate::models::ListEntry;
+
     const LOS_ANGELES: Zone = chrono_tz::America::Los_Angeles;
 
     fn entry(yaml: &str) -> ListEntry {
-        ListEntry {
-            path: "note.md".into(),
-            size: 1,
-            mime_type: "text/markdown".to_owned(),
-            metadata: Some(serde_yaml::from_str(yaml).expect("valid YAML")),
-            title: None,
-            time: "2024-01-01T00:00:00+00:00".parse().unwrap(),
-        }
+        ListEntry::note("note.md", yaml)
     }
 
     fn at(text: &str) -> DateTime<Utc> {
         text.parse().unwrap()
+    }
+
+    fn schedule_of(entries: impl IntoIterator<Item = ListEntry>) -> Schedule {
+        Schedule::new(entries.into_iter().collect(), Defaults::default())
     }
 
     fn reader() -> Reader {
@@ -545,38 +536,6 @@ mod tests {
         assert_ne!(one.public_key, other.public_key);
         // Uncompressed P-256: a tag byte and two 32-byte coordinates.
         assert_eq!(decode(&one.public_key).unwrap().len(), 65);
-    }
-
-    #[test]
-    fn alarms_are_the_timed_unfinished_occurrences_in_the_span() {
-        let entries = [entry("
-events:
-    Standup:
-        start: '2024-05-06 09:00'
-        repeat: { freq: daily, count: 3 }
-        location: Room 1
-    Done: { start: '2024-05-06 09:30', finished: true }
-    Holiday: { start: '2024-05-07' }
-    Later: { start: '2024-05-06 10:00:00-07:00' }
-")];
-        // 09:00 in Los Angeles is 16:00 UTC; the span starts exactly at the first, so it is left
-        // out as already rung.
-        let alarms = alarms_between(&entries, at("2024-05-06T16:00:00Z"), at("2024-05-07T16:00:00Z"), &reader());
-        let seen: Vec<(String, &str)> = alarms.iter().map(|a| (a.at.to_rfc3339(), a.name.as_str())).collect();
-        assert_eq!(seen, [
-            ("2024-05-06T17:00:00+00:00".to_owned(), "Later"),
-            ("2024-05-07T16:00:00+00:00".to_owned(), "Standup"),
-        ]);
-        assert_eq!(alarms[1].location.as_deref(), Some("Room 1"));
-    }
-
-    #[test]
-    fn a_wall_clock_rings_at_that_time_in_each_readers_zone() {
-        let entries = [entry("events: { Call: { start: '2024-05-06 09:00' } }")];
-        let tokyo = Reader { zone: chrono_tz::Asia::Tokyo, now: at("2024-05-01T00:00:00Z") };
-        let span = (at("2024-05-05T00:00:00Z"), at("2024-05-07T00:00:00Z"));
-        assert_eq!(alarms_between(&entries, span.0, span.1, &reader())[0].at, at("2024-05-06T16:00:00Z"));
-        assert_eq!(alarms_between(&entries, span.0, span.1, &tokyo)[0].at, at("2024-05-06T00:00:00Z"));
     }
 
     fn subscription_in(zone: Zone) -> Subscription {
@@ -597,16 +556,16 @@ events:
 
     #[test]
     fn a_plan_sends_what_is_due_lets_a_late_one_pass_and_finds_the_next() {
-        let entries = [entry("
+        let schedule = schedule_of([entry("
 events:
     Too late: { start: '2024-05-06 09:45:00+00:00' }
     Late but in time: { start: '2024-05-06 09:55:00+00:00' }
     Now: { start: '2024-05-06 10:00:00+00:00' }
     Next: { start: '2024-05-06 10:00:30+00:00' }
     After the lookahead: { start: '2024-05-06 10:05:00+00:00' }
-")];
+")]);
         let subscriptions = [subscription_in(LOS_ANGELES)];
-        let plan = plan(&entries, &subscriptions, at("2024-05-06T09:30:00Z"), at("2024-05-06T10:00:00Z"));
+        let plan = plan(&schedule, &subscriptions, at("2024-05-06T09:30:00Z"), at("2024-05-06T10:00:00Z"));
         assert_eq!(names(&plan), [
             ("Late but in time".to_owned(), vec![LOS_ANGELES]),
             ("Now".to_owned(), vec![LOS_ANGELES]),
@@ -616,13 +575,57 @@ events:
 
     #[test]
     fn a_plan_sends_a_wall_clock_to_the_browsers_whose_zone_it_is_due_in() {
-        let entries = [entry("events: { Call: { start: '2024-05-06 09:00' } }")];
+        let schedule = schedule_of([entry("events: { Call: { start: '2024-05-06 09:00' } }")]);
         let tokyo = chrono_tz::Asia::Tokyo;
         let subscriptions = [subscription_in(LOS_ANGELES), subscription_in(tokyo)];
         // 09:00 in Tokyo; still the night before in Los Angeles.
-        let plan = plan(&entries, &subscriptions, at("2024-05-05T23:59:00Z"), at("2024-05-06T00:00:30Z"));
+        let plan = plan(&schedule, &subscriptions, at("2024-05-05T23:59:00Z"), at("2024-05-06T00:00:30Z"));
         assert_eq!(names(&plan), [("Call".to_owned(), vec![tokyo])]);
         assert_eq!(plan.next, None);
+    }
+
+    #[test]
+    fn a_plan_finds_the_next_early_alarm() {
+        let schedule = schedule_of([entry("events: { Call: { start: '2024-05-06 09:00:00+00:00', alarms: [-30s, 0m] } }")]);
+        let subscriptions = [subscription_in(LOS_ANGELES)];
+        let plan = plan(&schedule, &subscriptions, at("2024-05-06T08:59:00Z"), at("2024-05-06T08:59:10Z"));
+        assert!(plan.due.is_empty());
+        assert_eq!(plan.next, Some(at("2024-05-06T08:59:30Z")));
+
+        let plan = super::plan(&schedule, &subscriptions, at("2024-05-06T08:59:10Z"), at("2024-05-06T08:59:30Z"));
+        assert_eq!(names(&plan), [("Call".to_owned(), vec![LOS_ANGELES])]);
+        assert_eq!(plan.next, Some(at("2024-05-06T09:00:00Z")));
+    }
+
+    #[test]
+    fn the_tag_names_the_occurrence_so_a_later_alarm_replaces_an_earlier_one() {
+        let yaml = "
+events:
+    Standup:
+        start: '2024-05-06 09:00'
+        repeat: { freq: daily, count: 2 }
+        alarms: [-10m, 0m]
+    Holiday: { start: '2024-05-06', alarms: [09:00, 17:00] }
+";
+        let alarms = alarms_between(
+            &schedule_of([entry(yaml)]),
+            at("2024-05-05T00:00:00Z"),
+            at("2024-05-08T00:00:00Z"),
+            &reader(),
+        );
+        let tags: Vec<(String, String)> = alarms
+            .iter()
+            .map(|alarm| (format!("{}  {}", alarm.at.to_rfc3339(), alarm.name), Payload::of(alarm).tag))
+            .collect();
+        // Both alarms of one occurrence share a tag, and the next day's has its own.
+        assert_eq!(tags, [
+            ("2024-05-06T15:50:00+00:00  Standup".to_owned(), "note.md#Standup@2024-05-06T16:00:00+00:00".to_owned()),
+            ("2024-05-06T16:00:00+00:00  Holiday".to_owned(), "note.md#Holiday@2024-05-06".to_owned()),
+            ("2024-05-06T16:00:00+00:00  Standup".to_owned(), "note.md#Standup@2024-05-06T16:00:00+00:00".to_owned()),
+            ("2024-05-07T00:00:00+00:00  Holiday".to_owned(), "note.md#Holiday@2024-05-06".to_owned()),
+            ("2024-05-07T15:50:00+00:00  Standup".to_owned(), "note.md#Standup@2024-05-07T16:00:00+00:00".to_owned()),
+            ("2024-05-07T16:00:00+00:00  Standup".to_owned(), "note.md#Standup@2024-05-07T16:00:00+00:00".to_owned()),
+        ]);
     }
 
     fn subscription_keys() -> (web_push_native::p256::SecretKey, String, Auth, String) {
@@ -655,13 +658,14 @@ events:
         let (ua_secret, _, ua_auth, _) = subscription_keys();
         let subscription = subscription_in(LOS_ANGELES);
         let alarm = Alarm {
-            at: at("2024-05-06T16:00:00Z"),
+            at: at("2024-05-06T15:50:00Z"),
             name: "Standup".into(),
             path: "notes/standup.md".into(),
             location: Some("Room 1".into()),
+            start: Moment::At(at("2024-05-06T16:00:00Z")),
         };
 
-        let request = request(&push, &subscription, &alarm.payload()).unwrap();
+        let request = request(&push, &subscription, &Payload::of(&alarm)).unwrap();
         assert_eq!(request.url().as_str(), "https://push.example/America/Los_Angeles");
         let headers = request.headers();
         assert_eq!(headers["urgency"], "high");
@@ -674,9 +678,26 @@ events:
         let body = request.body().and_then(reqwest::Body::as_bytes).unwrap().to_vec();
         let plain = web_push_native::decrypt(body, &ua_secret, &ua_auth).unwrap();
         let payload: Payload = serde_json::from_slice(&plain).unwrap();
-        assert_eq!(payload, alarm.payload());
+        assert_eq!(payload, Payload::of(&alarm));
         assert_eq!(payload.title, "Standup");
         assert_eq!(payload.body.as_deref(), Some("Room 1"));
+        // An alarm ten minutes ahead still says when the meeting is.
+        assert_eq!(payload.start, "2024-05-06T16:00:00+00:00");
+        assert!(!payload.all_day);
+    }
+
+    #[test]
+    fn the_payload_of_an_all_day_alarm_names_the_day() {
+        let alarm = Alarm {
+            at: at("2024-05-07T01:00:00Z"),
+            name: "Birthday".into(),
+            path: "notes/birthday.md".into(),
+            location: None,
+            start: Moment::Day(NaiveDate::from_ymd_opt(2024, 5, 7).unwrap()),
+        };
+        let payload = Payload::of(&alarm);
+        assert_eq!((payload.start.as_str(), payload.all_day), ("2024-05-07", true));
+        assert_eq!(payload.body, None);
     }
 
     #[test]

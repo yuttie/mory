@@ -1,0 +1,26 @@
+# What `.mory/calendars.yaml` holds, for the notes in `notes/` and `tasks/` to be read under. A
+# category's colour and name template change how an event is drawn, which the golden does not
+# record, and a template would change the names it does.
+#
+# The notes are read twice: under `categories:` alone, which leaves everything else to the built-in
+# default, and under `alarms:` as well, which sets the layer between the two for events and for a
+# task's dates.
+alarms:
+    timed: [-5m]
+    all_day: ['-1d 18:00']
+    due_by: [09:00]
+    deadline: ['-1d 09:00', -2h]
+categories:
+    meeting:
+        color: '#1565c0'
+        alarms: [-10m]
+    meeting/1on1:
+        alarms: [-15m, 0m]
+    meeting/standup:
+        color: '#2e7d32'
+    meeting/quiet:
+        alarms: []
+    unset:
+    a/b/c:
+        alarms: [-1h]
+    a/b/c/d:

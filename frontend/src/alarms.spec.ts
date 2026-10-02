@@ -1,0 +1,366 @@
+import { describe, expect, it } from 'vitest';
+
+import type { AlarmDraft } from '@/alarms';
+import {
+    alarmDraftChanged,
+    alarmProblems,
+    alarmValueProblems,
+    BUILT_IN_ALARMS,
+    describeAlarmList,
+    describeAlarmText,
+    formatAlarm,
+    parseAlarm,
+    readAlarmDefaults,
+    readAlarmDraft,
+    readAlarmList,
+    readAlarmsIfSet,
+    readTaskAlarms,
+    sameAlarms,
+    sameTaskAlarms,
+    TASK_DATE_ALARM_DEFAULT,
+    taskAlarmOf,
+    taskAlarmsToWrite,
+    withBuiltInAlarms,
+    writeAlarmDefaults,
+} from '@/alarms';
+
+import grammar from '../../fixtures/calendar/alarm-grammar.json';
+
+// The grammar's cases are the fixture's, which `backend/src/alarms.rs` reads too: it is what rings
+// them.
+
+function canonical(text: string): string {
+    const parsed = parseAlarm(text);
+    if (!('spec' in parsed)) {
+        throw new Error(`${text}: ${parsed.error}`);
+    }
+    return formatAlarm(parsed.spec);
+}
+
+describe('parseAlarm', () => {
+    it('spells an alarm one way, however it was written', () => {
+        for (const [written, spelt] of grammar.canonical) {
+            expect(canonical(written), written).toBe(spelt);
+        }
+    });
+
+    it('refuses an offset without a sign, rather than reading it as after', () => {
+        const parsed = parseAlarm('10m');
+        expect('error' in parsed && parsed.error).toContain('needs a sign');
+        expect('error' in parseAlarm('1d 09:00')).toBe(true);
+        // Zero is neither before nor after.
+        expect('spec' in parseAlarm('0m')).toBe(true);
+        expect('spec' in parseAlarm('0d 09:00')).toBe(true);
+    });
+
+    it('refuses what is not an alarm', () => {
+        for (const text of [...grammar.refused, ...grammar.tooFar]) {
+            expect('error' in parseAlarm(text), JSON.stringify(text)).toBe(true);
+        }
+        for (const text of grammar.tooFar) {
+            const parsed = parseAlarm(text);
+            expect('error' in parsed && parsed.error, text).toContain('more than a year');
+        }
+        // A year is as far as an alarm goes.
+        for (const text of grammar.atTheLimit) {
+            expect('spec' in parseAlarm(text), text).toBe(true);
+        }
+    });
+
+    it('reads a zero as zero, however it is signed', () => {
+        expect(parseAlarm('-0m')).toEqual({ spec: { kind: 'elapsed', ms: 0 } });
+        expect(parseAlarm('-0d')).toEqual({ spec: { kind: 'days', days: 0 } });
+        expect(parseAlarm('-0d 09:00')).toEqual({ spec: { kind: 'at', days: 0, hour: 9, minute: 0 } });
+    });
+});
+
+describe('alarmProblems', () => {
+    it('says a sentence for each entry that is not an alarm, in the order written', () => {
+        expect(alarmProblems([])).toEqual([]);
+        expect(alarmProblems(['-10m', ' 09:00 ', '-1d 18:00'])).toEqual([]);
+
+        const problems = alarmProblems(['-10m', 'soon', '10m', '0m']);
+        expect(problems).toHaveLength(2);
+        expect(problems[0]).toContain('"soon"');
+        expect(problems[1]).toContain('needs a sign');
+    });
+});
+
+describe('alarmValueProblems', () => {
+    it('says nothing of a value that is not set, empty or all alarms', () => {
+        for (const value of [undefined, null, [], ['-10m', '09:00'], '-1h']) {
+            expect(alarmValueProblems(value), JSON.stringify(value)).toEqual([]);
+        }
+    });
+
+    it('says what is wrong with each entry that is not an alarm', () => {
+        const problems = alarmValueProblems(['-10m', '10m', 5, null, { at: 1 }]);
+        expect(problems).toHaveLength(4);
+        expect(problems[0]).toContain('needs a sign');
+        expect(problems.slice(1)).toEqual(['5 is not an alarm', 'null is not an alarm', '{"at":1} is not an alarm']);
+        expect(alarmValueProblems(5)).toEqual(['5 is not an alarm']);
+    });
+});
+
+describe('describeAlarmText', () => {
+    it('says an alarm in words', () => {
+        for (const [written, said] of [
+            ['0m', 'at the start'], ['+0d', 'at the start'],
+            ['-10m', '10 minutes before'], ['-1m', '1 minute before'], ['+1h', '1 hour after'],
+            ['-90m', '90 minutes before'], ['-1.5h', '90 minutes before'], ['-30s', '30 seconds before'],
+            ['-2 hours', '2 hours before'], ['-1d', '1 day before'], ['-3d', '3 days before'],
+            ['-1w', '1 week before'], ['-2w', '2 weeks before'], ['+10d', '10 days after'],
+            ['09:00', 'at 09:00'], ['-1d 18:00', 'the day before at 18:00'],
+            ['+1d 08:30', 'the day after at 08:30'], ['-3d 09:00', '3 days before at 09:00'],
+            ['-1w 09:00', '1 week before at 09:00'],
+        ]) {
+            expect(describeAlarmText(written), written).toBe(said);
+        }
+    });
+
+    it('leaves what is not an alarm as written', () => {
+        expect(describeAlarmText('10m')).toBe('10m');
+    });
+});
+
+describe('describeAlarmList', () => {
+    it('says a list in words, and an empty one as never', () => {
+        expect(describeAlarmList(['-10m', '0m'])).toBe('Rings 10 minutes before, at the start');
+        expect(describeAlarmList(['-1d 18:00'])).toBe('Rings the day before at 18:00');
+        expect(describeAlarmList([])).toBe('Never rings');
+    });
+});
+
+describe('readAlarmList', () => {
+    it('drops what is not an alarm and keeps the rest as written', () => {
+        expect(readAlarmList(['-10m', ' 09:00 ', '-1d 18:00'])).toEqual({
+            alarms: ['-10m', '09:00', '-1d 18:00'],
+            invalid: [],
+        });
+        expect(readAlarmList(['-10m', '10m', 5, null, ['-1h'], 'bogus', '-5m'])).toEqual({
+            alarms: ['-10m', '-5m'],
+            invalid: ['10m', 5, null, ['-1h'], 'bogus'],
+        });
+    });
+
+    it('reads a single string as a list of one, and anything else as no alarm', () => {
+        expect(readAlarmList('-1d 18:00')).toEqual({ alarms: ['-1d 18:00'], invalid: [] });
+        expect(readAlarmList([])).toEqual({ alarms: [], invalid: [] });
+        expect(readAlarmList('10m')).toEqual({ alarms: [], invalid: ['10m'] });
+        expect(readAlarmList(5)).toEqual({ alarms: [], invalid: [5] });
+        expect(readAlarmList({ at: '-10m' })).toEqual({ alarms: [], invalid: [{ at: '-10m' }] });
+    });
+});
+
+describe('readAlarmsIfSet', () => {
+    it('tells a value that is not set from an empty list, which is a setting', () => {
+        expect(readAlarmsIfSet(undefined)).toBeUndefined();
+        expect(readAlarmsIfSet(null)).toBeUndefined();
+        expect(readAlarmsIfSet([])).toEqual([]);
+        expect(readAlarmsIfSet(['-10m', 'bogus'])).toEqual(['-10m']);
+        expect(readAlarmsIfSet('09:00')).toEqual(['09:00']);
+        // Set, but to nothing usable: an entry that is not an alarm is dropped and the list stands.
+        expect(readAlarmsIfSet(5)).toEqual([]);
+    });
+});
+
+describe('readAlarmDefaults', () => {
+    it('reads each kind the file sets', () => {
+        expect(readAlarmDefaults({
+            timed: ['-10m'],
+            all_day: '-1d 18:00',
+            due_by: ['09:00', 'bogus'],
+            deadline: [],
+        })).toEqual({
+            timed: ['-10m'],
+            allDay: ['-1d 18:00'],
+            dueBy: ['09:00'],
+            deadline: [],
+        });
+    });
+
+    it('leaves a kind out that is missing or empty, which is not the same as silenced', () => {
+        expect(readAlarmDefaults({ timed: null, all_day: undefined })).toEqual({});
+        expect(readAlarmDefaults({})).toEqual({});
+    });
+
+    it('takes a block that is not a mapping as setting nothing', () => {
+        for (const value of [null, undefined, 5, 'timed', ['timed']]) {
+            expect(readAlarmDefaults(value)).toEqual({});
+        }
+        // A value that is there but holds nothing usable is a setting, an empty one.
+        expect(readAlarmDefaults({ timed: 5 })).toEqual({ timed: [] });
+    });
+});
+
+describe('readAlarmDefaults, reporting', () => {
+    it('says each entry it drops, by where it is written', () => {
+        const problems: string[] = [];
+        expect(readAlarmDefaults({ timed: ['-5m', '10m'], all_day: 'soon', due_by: [] }, problems))
+            .toEqual({ timed: ['-5m'], allDay: [], dueBy: [] });
+        expect(problems).toHaveLength(2);
+        expect(problems[0]).toMatch(/^alarms\.timed: "10m" needs a sign/);
+        expect(problems[1]).toMatch(/^alarms\.all_day: "soon"/);
+    });
+
+    it('says nothing of a block that is absent or sound', () => {
+        const problems: string[] = [];
+        readAlarmDefaults(undefined, problems);
+        readAlarmDefaults(null, problems);
+        readAlarmDefaults({ timed: ['-5m'], deadline: [] }, problems);
+        expect(problems).toEqual([]);
+    });
+
+    it('says a block that is not a mapping, which sets nothing', () => {
+        for (const value of ['-5m', ['-5m'], 5]) {
+            const problems: string[] = [];
+            expect(readAlarmDefaults(value, problems)).toEqual({});
+            expect(problems, JSON.stringify(value)).toEqual(['alarms: is not a mapping of kinds to the alarms they ring at']);
+        }
+    });
+});
+
+describe('BUILT_IN_ALARMS', () => {
+    it('rings a timed event at its start and nothing else', () => {
+        expect(BUILT_IN_ALARMS).toEqual({ timed: ['0m'], allDay: [], dueBy: [], deadline: [] });
+    });
+});
+
+describe('withBuiltInAlarms', () => {
+    it('fills each kind the file leaves unset, and keeps one it sets, even to nothing', () => {
+        expect(withBuiltInAlarms(undefined)).toEqual(BUILT_IN_ALARMS);
+        expect(withBuiltInAlarms({})).toEqual(BUILT_IN_ALARMS);
+        expect(withBuiltInAlarms({ timed: [], dueBy: ['09:00'] })).toEqual({
+            timed: [],
+            allDay: [],
+            dueBy: ['09:00'],
+            deadline: [],
+        });
+    });
+
+    it('hands out lists of its own, so that changing one does not change the built-in', () => {
+        withBuiltInAlarms(undefined).timed.push('-5m');
+        expect(BUILT_IN_ALARMS.timed).toEqual(['0m']);
+        expect(withBuiltInAlarms(undefined).timed).toEqual(['0m']);
+    });
+});
+
+describe('taskAlarmOf', () => {
+    it('reads the list of one date as written, from a mapping only', () => {
+        expect(taskAlarmOf({ due_by: ['09:00'], deadline: null }, 'due_by')).toEqual(['09:00']);
+        expect(taskAlarmOf({ due_by: ['09:00'] }, 'deadline')).toBeUndefined();
+        for (const alarms of [undefined, null, 5, '-1h', ['-1h']]) {
+            expect(taskAlarmOf(alarms, 'due_by')).toBeUndefined();
+        }
+    });
+
+    it('is told where each date finds its default by TASK_DATE_ALARM_DEFAULT', () => {
+        expect(TASK_DATE_ALARM_DEFAULT).toEqual({ due_by: 'dueBy', deadline: 'deadline' });
+    });
+});
+
+describe('readTaskAlarms', () => {
+    it('reads the alarms of each date a task sets, dropping what is not an alarm', () => {
+        expect(readTaskAlarms({ due_by: ['09:00', 'bogus'], deadline: '-1d 18:00' }))
+            .toEqual({ due_by: ['09:00'], deadline: ['-1d 18:00'] });
+    });
+
+    it('keeps an empty list, which silences, and leaves a date that is empty or missing out', () => {
+        expect(readTaskAlarms({ due_by: [], deadline: null })).toEqual({ due_by: [] });
+        expect(readTaskAlarms({ other: ['-1h'] })).toBeUndefined();
+        expect(readTaskAlarms({})).toBeUndefined();
+    });
+
+    it('takes anything but a mapping as setting nothing', () => {
+        for (const value of [undefined, null, 5, '-1h', ['-1h']]) {
+            expect(readTaskAlarms(value)).toBeUndefined();
+        }
+    });
+});
+
+describe('taskAlarmsToWrite', () => {
+    const form = {
+        due_by: '2026-10-10',
+        deadline: '2026-10-20',
+        due_by_alarms: ['09:00', ' -1h '] as string[] | null,
+        deadline_alarms: null as string[] | null,
+    };
+
+    it('writes the lists a task set itself for the dates it has, trimmed', () => {
+        expect(taskAlarmsToWrite(form)).toEqual({ due_by: ['09:00', '-1h'] });
+        expect(taskAlarmsToWrite({ ...form, deadline_alarms: [] })).toEqual({
+            due_by: ['09:00', '-1h'],
+            deadline: [],
+        });
+        expect(taskAlarmsToWrite({ ...form, due_by_alarms: null })).toEqual({});
+    });
+
+    // Setting a deadline, editing its alarms and clearing it again leaves the list in the form.
+    it('leaves out the list of a date the task does not have', () => {
+        expect(taskAlarmsToWrite({ ...form, deadline: '', deadline_alarms: ['-1h'] }))
+            .toEqual({ due_by: ['09:00', '-1h'] });
+        expect(taskAlarmsToWrite({ ...form, due_by: '', deadline: '' })).toEqual({});
+    });
+});
+
+describe('sameTaskAlarms', () => {
+    it('tells a list that is empty from one that is not set', () => {
+        expect(sameTaskAlarms({}, {})).toBe(true);
+        expect(sameTaskAlarms({ due_by: [] }, { due_by: [] })).toBe(true);
+        expect(sameTaskAlarms({ due_by: [] }, {})).toBe(false);
+        expect(sameTaskAlarms({}, { deadline: [] })).toBe(false);
+    });
+
+    it('compares what the lists hold, in order', () => {
+        expect(sameTaskAlarms({ due_by: ['-1h', '0m'] }, { due_by: ['-1h', '0m'] })).toBe(true);
+        expect(sameTaskAlarms({ due_by: ['-1h', '0m'] }, { due_by: ['0m', '-1h'] })).toBe(false);
+        expect(sameTaskAlarms({ due_by: ['-1h'] }, { due_by: ['-1h', '0m'] })).toBe(false);
+        expect(sameTaskAlarms({ due_by: ['-1h'] }, { due_by: ['-1h'], deadline: ['0m'] })).toBe(false);
+    });
+});
+
+describe('writeAlarmDefaults', () => {
+    it('writes the kinds that are set, in the file\'s spelling and order', () => {
+        const block = writeAlarmDefaults({ deadline: [], timed: ['-10m'], allDay: ['09:00'] });
+        expect(block).toEqual({ timed: ['-10m'], all_day: ['09:00'], deadline: [] });
+        expect(Object.keys(block)).toEqual(['timed', 'all_day', 'deadline']);
+        expect(writeAlarmDefaults({})).toEqual({});
+    });
+});
+
+describe('the draft of the alarm defaults', () => {
+    // Every box shows what its kind rings at now, so a draft of the built-ins is the file with nothing
+    // in it.
+    const builtIn = (): AlarmDraft => ({ timed: ['0m'], allDay: [], dueBy: [], deadline: [] });
+
+    it('compares typed entries with what is written, not by the space around them', () => {
+        expect(sameAlarms([' -10m ', '0m'], ['-10m', '0m'])).toBe(true);
+        expect(sameAlarms(['-10m'], ['-10m', '0m'])).toBe(false);
+        expect(sameAlarms(['-10m', '0m'], ['0m', '-10m'])).toBe(false);
+        expect(sameAlarms([], [])).toBe(true);
+    });
+
+    it('is unchanged while it says what is in force, and changed once any box does not', () => {
+        const inForce = withBuiltInAlarms({ timed: ['-5m'] });
+        expect(alarmDraftChanged({ ...builtIn(), timed: ['-5m'] }, inForce)).toBe(false);
+        expect(alarmDraftChanged({ ...builtIn(), timed: [' -5m '] }, inForce)).toBe(false);
+        expect(alarmDraftChanged(builtIn(), inForce)).toBe(true);
+        expect(alarmDraftChanged({ ...builtIn(), timed: ['-5m'], deadline: ['-1d 09:00'] }, inForce)).toBe(true);
+    });
+
+    it('reads as the file, trimmed, and without a kind that is back at the default', () => {
+        expect(readAlarmDraft(builtIn())).toEqual({ defaults: {} });
+        expect(readAlarmDraft({ timed: [' -5m ', '0m'], allDay: ['-1d 18:00'], dueBy: [], deadline: ['-2h'] }))
+            .toEqual({ defaults: { timed: ['-5m', '0m'], allDay: ['-1d 18:00'], deadline: ['-2h'] } });
+    });
+
+    it('keeps a box that is empty where the default is not, which silences it', () => {
+        expect(readAlarmDraft({ ...builtIn(), timed: [] })).toEqual({ defaults: { timed: [] } });
+    });
+
+    it('stops at the first entry that is not an alarm, naming its kind', () => {
+        const reading = readAlarmDraft({ ...builtIn(), allDay: ['10m'], deadline: ['soon'] });
+        expect(reading).toMatchObject({ field: 'allDay' });
+        expect('problem' in reading && reading.problem).toContain('needs a sign');
+    });
+});
