@@ -1,5 +1,5 @@
 <template>
-    <div class="task-date-alarms mb-4">
+    <div class="mb-4">
         <v-switch
             v-bind:hint="hint"
             v-bind:model-value="modelValue === null"

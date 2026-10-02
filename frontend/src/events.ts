@@ -48,8 +48,8 @@ export const DEFAULT_EVENT_COLOR = '#666666';
 /// What a category, configured under `categories:` in `.mory/calendars.yaml`, supplies to the
 /// events that name it: a default for the same keys an event has.
 ///
-/// Only how an event is drawn, never when or where it happens -- those stay in the note, which has
-/// to say everything about its events on its own.
+/// How an event is drawn, and when it rings; never when or where it happens -- those stay in the
+/// note, which has to say everything about its events on its own.
 export interface EventCategory {
     color?: string;
     /// A template for the drawn name, in which `{{name}}` stands for the event's own.
