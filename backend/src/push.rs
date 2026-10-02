@@ -397,13 +397,34 @@ async fn send(state: &AppState, due: &[(Alarm, Vec<&Subscription>)]) -> HashSet<
     gone
 }
 
+/// The listing and the calendar configuration as of now, or `None` if the listing cannot be read.
+async fn load_schedule(state: &AppState) -> Option<Schedule> {
+    let listing = match state.read_entries(None).await {
+        Ok((_, listing)) => listing,
+        Err(e) => {
+            tracing::error!("The alarm scheduler could not read the listing: {:?}", e);
+            return None;
+        },
+    };
+    // Read from git with the listing, so that an idle minute asks the database for nothing. A file
+    // moried cannot read leaves every alarm at its default.
+    let defaults = match crate::v2::read_calendar_config(state).await {
+        Ok(config) => config.alarm_defaults(),
+        Err(e) => {
+            tracing::error!("The alarm scheduler could not read the calendar configuration: {:?}", e);
+            Defaults::default()
+        },
+    };
+    Some(Schedule::new(listing, defaults))
+}
+
 pub fn spawn(state: AppState) {
     tokio::spawn(run(state));
 }
 
 async fn run(state: AppState) {
     let mut subscriptions = load_subscriptions(&state).await;
-    // The listing, read again only once a sync says it moved.
+    // Loaded again only once a sync says the listing moved.
     let mut schedule: Option<Schedule> = None;
     let mut done = state.cache_sync.done.clone();
     // The HEAD a nudge was sent for, with what the last sync had reached then.
@@ -428,29 +449,15 @@ async fn run(state: AppState) {
         let mut next = None;
         if !subscriptions.is_empty() {
             if schedule.is_none() {
-                match state.read_entries(None).await {
-                    Ok((_, listing)) => {
-                        // Read from git with the listing, so that an idle minute asks the database
-                        // for nothing. A file moried cannot read leaves every alarm at its default.
-                        let defaults = match crate::v2::read_calendar_config(&state).await {
-                            Ok(config) => config.alarm_defaults(),
-                            Err(e) => {
-                                tracing::error!("The alarm scheduler could not read the calendar configuration: {:?}", e);
-                                Defaults::default()
-                            },
-                        };
-                        schedule = Some(Schedule::new(listing, defaults));
-                    },
-                    Err(e) => tracing::error!("The alarm scheduler could not read the listing: {:?}", e),
-                }
+                schedule = load_schedule(&state).await;
             }
             // Without a listing, what fell due is still unsent: look at the span again next time,
             // rather than pass over it as though it held nothing.
-            let Some(listing) = schedule.as_ref() else {
+            let Some(current) = schedule.as_ref() else {
                 wait(&state, &mut done, &mut subscriptions, &mut schedule, CHECK_INTERVAL).await;
                 continue;
             };
-            let plan = plan(listing, &subscriptions, checked_up_to, now);
+            let plan = plan(current, &subscriptions, checked_up_to, now);
             next = plan.next;
             let gone = send(&state, &plan.due).await;
             if !gone.is_empty() {
