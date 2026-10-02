@@ -16,8 +16,6 @@
 // `d` and `w` count calendar days and take whole numbers; `h m s` count elapsed time and may be
 // decimal. No alarm is more than a year from its start.
 
-import YAML from 'yaml';
-
 /// One alarm, read.
 export type AlarmSpec =
     /// Whole calendar days from the start, keeping its wall clock.
@@ -395,23 +393,6 @@ export function readTaskAlarms(value: unknown): TaskAlarms | undefined {
     }
     const alarms: TaskAlarms = readAlarmFields(mapping, TASK_DATES.map((field) => [field, field] as const));
     return Object.keys(alarms).length > 0 ? alarms : undefined;
-}
-
-/// `YAML.stringify`, with each list under an `alarms:` key written on the line that names it, as a
-/// note writes them: `timed: [-10m, 0m]`, and not a list of `- -10m` under it. Nothing else is
-/// written in flow style, so the rest of the document keeps the layout it has everywhere.
-export function stringifyWithFlowAlarms(value: unknown, options: YAML.ToStringOptions = {}): string {
-    const document = new YAML.Document(value);
-    YAML.visit(document, {
-        Seq(_key, seq, path) {
-            const inAlarms = path.some((node) => YAML.isPair(node)
-                && YAML.isScalar(node.key) && node.key.value === 'alarms');
-            if (inAlarms) {
-                seq.flow = true;
-            }
-        },
-    });
-    return document.toString({ flowCollectionPadding: false, ...options });
 }
 
 /// The `alarms:` block as the file holds it, for a kind that is set: the keys in the file's own

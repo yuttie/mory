@@ -16,7 +16,6 @@ import YAML from 'yaml';
 import type { AlarmDefaults } from '@/alarms';
 import {
     readAlarmDefaults,
-    stringifyWithFlowAlarms,
     withBuiltInAlarms,
     writeAlarmDefaults,
 } from '@/alarms';
@@ -27,6 +26,7 @@ import type {
 } from '@/api';
 import { getImportedEvents } from '@/api';
 import type { ConfiguredCategory, EventCategories, TaskDateColors } from '@/events';
+import { stringifyWithFlowAlarms } from '@/frontmatter';
 import { categoryMapOf, readCategories } from '@/events';
 import { useFilesStore } from '@/stores/files';
 

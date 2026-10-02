@@ -16,7 +16,6 @@ import {
     TASK_DATE_ALARM_DEFAULT,
     taskAlarmOf,
     taskAlarmsToWrite,
-    stringifyWithFlowAlarms,
     withBuiltInAlarms,
     writeAlarmDefaults,
 } from '@/alarms';
@@ -313,31 +312,6 @@ describe('sameTaskAlarms', () => {
         expect(sameTaskAlarms({ due_by: ['-1h', '0m'] }, { due_by: ['0m', '-1h'] })).toBe(false);
         expect(sameTaskAlarms({ due_by: ['-1h'] }, { due_by: ['-1h', '0m'] })).toBe(false);
         expect(sameTaskAlarms({ due_by: ['-1h'] }, { due_by: ['-1h'], deadline: ['0m'] })).toBe(false);
-    });
-});
-
-describe('stringifyWithFlowAlarms', () => {
-    it('writes a list under alarms on the line that names it, and nothing else that way', () => {
-        expect(stringifyWithFlowAlarms({
-            tags: ['a', 'b'],
-            task: { alarms: { due_by: ['09:00'], deadline: [] }, scheduled_dates: ['2026-09-28'] },
-            alarms: { timed: ['-10m', '0m'] },
-            categories: { meeting: { alarms: ['-1h'] } },
-        }, { indent: 4 })).toBe(`tags:
-    - a
-    - b
-task:
-    alarms:
-        due_by: [09:00]
-        deadline: []
-    scheduled_dates:
-        - 2026-09-28
-alarms:
-    timed: [-10m, 0m]
-categories:
-    meeting:
-        alarms: [-1h]
-`);
     });
 });
 

@@ -6,6 +6,9 @@
 // and reindents sequences. So an edit splices the source text at the ranges the parser reports, and
 // the result is parsed again to check it means what was intended. The MCP server's
 // `mcp::frontmatter` edits the same way.
+//
+// Where a whole file has to be written afresh, as the task editor and the calendar settings do,
+// `stringifyWithFlowAlarms` is the layout the app writes it in.
 
 import YAML from 'yaml';
 import type { Pair, Scalar } from 'yaml';
@@ -75,4 +78,21 @@ export function sameValue(a: unknown, b: unknown): boolean {
             aKeys.every((key) => Object.hasOwn(bRecord, key) && sameValue(aRecord[key], bRecord[key]));
     }
     return Object.is(a, b);
+}
+
+// `YAML.stringify`, with each list under an `alarms:` key written on the line that names it, as a
+// note writes them: `timed: [-10m, 0m]`, and not a list of `- -10m` under it. Nothing else is
+// written in flow style, so the rest of the document keeps the layout it has everywhere.
+export function stringifyWithFlowAlarms(value: unknown, options: YAML.ToStringOptions = {}): string {
+    const document = new YAML.Document(value);
+    YAML.visit(document, {
+        Seq(_key, seq, path) {
+            const inAlarms = path.some((node) => YAML.isPair(node)
+                && YAML.isScalar(node.key) && node.key.value === 'alarms');
+            if (inAlarms) {
+                seq.flow = true;
+            }
+        },
+    });
+    return document.toString({ flowCollectionPadding: false, ...options });
 }

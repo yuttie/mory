@@ -1,7 +1,7 @@
 import YAML from 'yaml';
 import { describe, expect, it } from 'vitest';
 
-import { editFrontmatter, hasKey, indentBlock, parsesTo, sameValue } from '@/frontmatter';
+import { editFrontmatter, hasKey, indentBlock, parsesTo, sameValue, stringifyWithFlowAlarms } from '@/frontmatter';
 
 describe('editFrontmatter', () => {
     it('hands over the text between the fences and keeps the rest', () => {
@@ -45,5 +45,30 @@ describe('parsesTo and sameValue', () => {
         expect(parsesTo('b: [2, 1]\n', { b: [1, 2] })).toBe(false);
         expect(parsesTo('a: [\n', { a: [] })).toBe(false);
         expect(sameValue({ a: 1 }, { a: 1, b: undefined })).toBe(false);
+    });
+});
+
+describe('stringifyWithFlowAlarms', () => {
+    it('writes a list under alarms on the line that names it, and nothing else that way', () => {
+        expect(stringifyWithFlowAlarms({
+            tags: ['a', 'b'],
+            task: { alarms: { due_by: ['09:00'], deadline: [] }, scheduled_dates: ['2026-09-28'] },
+            alarms: { timed: ['-10m', '0m'] },
+            categories: { meeting: { alarms: ['-1h'] } },
+        }, { indent: 4 })).toBe(`tags:
+    - a
+    - b
+task:
+    alarms:
+        due_by: [09:00]
+        deadline: []
+    scheduled_dates:
+        - 2026-09-28
+alarms:
+    timed: [-10m, 0m]
+categories:
+    meeting:
+        alarms: [-1h]
+`);
     });
 });

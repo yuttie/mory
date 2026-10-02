@@ -1,7 +1,7 @@
 import YAML from 'yaml';
 import dayjs from 'dayjs';
 
-import { stringifyWithFlowAlarms } from '@/alarms';
+import { stringifyWithFlowAlarms } from '@/frontmatter';
 import type { TaskAlarms } from '@/alarms';
 import type { UUID } from '@/api';
 import { columnOf, editFrontmatter, hasKey, indentBlock, lineEnding, parsesTo, sameValue, splice } from '@/frontmatter';
