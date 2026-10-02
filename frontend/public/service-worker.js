@@ -68,6 +68,13 @@ const WEEKDAY_ENOUGH_MS = 6 * 24 * 60 * 60 * 1000;
 
 const startOfDay = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 
+// How a time is said, which is in the locale and zone of whoever is reading it, as `undefined` is to
+// `Intl`: the part of a day, a weekday, and the day itself.
+const TIME = { hour: 'numeric', minute: '2-digit' };
+const WEEKDAY = { weekday: 'short' };
+const DATE = { weekday: 'short', month: 'short', day: 'numeric' };
+const say = (date, options) => new Intl.DateTimeFormat(undefined, options).format(date);
+
 // When the occurrence an alarm is for starts, as its reader would say it. moried sends the moment
 // and leaves the words to this worker, which is in the reader's zone and locale where moried is not:
 // the time alone for one today, a weekday and the time for one within the week, and the date as well
@@ -80,23 +87,25 @@ function whenIs(alarm, now) {
     if (alarm.all_day === true) {
         const [year, month, day] = alarm.start.split('-').map(Number);
         const date = new Date(year, month - 1, day);
-        if (Number.isNaN(date.getTime())) {
-            return undefined;
-        }
-        return new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).format(date);
+        return Number.isNaN(date.getTime()) ? undefined : say(date, DATE);
     }
     const start = new Date(alarm.start);
     if (Number.isNaN(start.getTime())) {
         return undefined;
     }
-    const time = { hour: 'numeric', minute: '2-digit' };
     if (startOfDay(start) === startOfDay(now)) {
-        return new Intl.DateTimeFormat(undefined, time).format(start);
+        return say(start, TIME);
     }
     const near = Math.abs(start.getTime() - now.getTime()) < WEEKDAY_ENOUGH_MS;
-    return new Intl.DateTimeFormat(undefined, near
-        ? { weekday: 'short', ...time }
-        : { weekday: 'short', month: 'short', day: 'numeric', ...time }).format(start);
+    return say(start, near ? { ...WEEKDAY, ...TIME } : { ...DATE, ...TIME });
+}
+
+// What a notification says under its title: when the event is, then what moried added to it, such as
+// where. Only text is said, and an empty part is no part.
+function bodyOf(alarm, now) {
+    return [whenIs(alarm, now), alarm.body]
+        .filter((part) => typeof part === 'string' && part !== '')
+        .join(' · ');
 }
 
 // An event alarm, which moried sends ahead of or at the event's start; see `backend/src/push.rs`.
@@ -116,7 +125,7 @@ self.addEventListener('push', (event) => {
         alarm = { title: 'mory', body: event.data?.text() };
     }
     // An alarm ahead of its event says when the event is, which the moment it is shown does not.
-    const body = [whenIs(alarm, new Date()), alarm.body].filter((part) => part !== undefined && part !== '' && part !== null).join(' · ');
+    const body = bodyOf(alarm, new Date());
     event.waitUntil(self.registration.showNotification(alarm.title, {
         body: body === '' ? undefined : body,
         tag: alarm.tag,
