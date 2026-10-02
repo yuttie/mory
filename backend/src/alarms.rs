@@ -153,7 +153,7 @@ impl Spec {
         }
     }
 
-    /// How far from its start it can ring: (before, after), neither negative.
+    /// How far from its start it can ring: (lead, lag), neither negative.
     ///
     /// Whole days are counted a day more than they come to in the direction they point, which
     /// covers a daylight-saving change. A time of day can fall anywhere on the day it names, so it
@@ -360,22 +360,25 @@ fn lineage(id: &str) -> Vec<&str> {
     found
 }
 
-/// How far before and after an occurrence's start any alarm in the listing rings.
+/// How far before and after an occurrence's start any alarm in the listing rings: the longest
+/// lead, and the longest lag.
 ///
 /// A rule is expanded over a window, and an alarm a week before its occurrence is only found if the
 /// window reaches a week past where the alarm is wanted. Read once per listing rather than every
 /// minute: it asks about every note.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Reach {
-    pub before: Duration,
-    pub after: Duration,
+    /// How long before the start an alarm rings.
+    pub lead: Duration,
+    /// How long after the start an alarm rings.
+    pub lag: Duration,
 }
 
 impl Reach {
     pub fn of(entries: &[ListEntry], defaults: &Defaults) -> Reach {
         let mut reach = Reach::default();
         for spec in defaults.specs() {
-            reach.include(std::slice::from_ref(spec));
+            reach.include(spec);
         }
         for entry in entries {
             if let Some(events) = entry.metadata.as_ref().and_then(|metadata| metadata.get("events")) {
@@ -385,12 +388,10 @@ impl Reach {
         reach
     }
 
-    pub fn include(&mut self, specs: &[Spec]) {
-        for spec in specs {
-            let (before, after) = spec.spread();
-            self.before = self.before.max(before);
-            self.after = self.after.max(after);
-        }
+    pub fn include(&mut self, spec: &Spec) {
+        let (lead, lag) = spec.spread();
+        self.lead = self.lead.max(lead);
+        self.lag = self.lag.max(lag);
     }
 
     /// Every `alarms:` anywhere in `value`. Looked for at any depth rather than at the places
@@ -400,7 +401,9 @@ impl Reach {
             Value::Mapping(map) => {
                 for (key, value) in map {
                     if key.as_str() == Some("alarms") && !value.is_mapping() {
-                        self.include(&Spec::list_from(value));
+                        for spec in Spec::list_from(value) {
+                            self.include(&spec);
+                        }
                     }
                     else {
                         self.scan(value);
@@ -893,17 +896,17 @@ task:
             entry("tags: [alarms]"),
         ], &none);
         // A week, and the day more that whole days are counted with.
-        assert_eq!(reach.before, Duration::days(8));
-        assert_eq!(reach.after, Duration::hours(2));
+        assert_eq!(reach.lead, Duration::days(8));
+        assert_eq!(reach.lag, Duration::hours(2));
         // An event that happens to be called `alarms` is looked into, not mistaken for a list.
         let named = Reach::of(&[entry("events: { alarms: { start: '2024-05-06 09:00', alarms: -2h } }")], &none);
-        assert_eq!(named.before, Duration::hours(2));
+        assert_eq!(named.lead, Duration::hours(2));
         // A time of day on the day before can be anywhere in it, which is up to two days early.
         let at = Reach::of(&[entry("events: { A: { start: '2024-05-06', alarms: [-1d 18:00] } }")], &none);
-        assert_eq!((at.before, at.after), (Duration::days(2), Duration::zero()));
+        assert_eq!((at.lead, at.lag), (Duration::days(2), Duration::zero()));
         // What the configuration sets counts as well, before any note names it.
         let configured = defaults("alarms: { timed: [-1h], all_day: [+2h] }\ncategories: { a: { alarms: [-3d] } }");
         let reach = Reach::of(&[], &configured);
-        assert_eq!((reach.before, reach.after), (Duration::days(4), Duration::hours(2)));
+        assert_eq!((reach.lead, reach.lag), (Duration::days(4), Duration::hours(2)));
     }
 }

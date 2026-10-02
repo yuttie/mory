@@ -323,8 +323,8 @@ pub(crate) fn alarms_between(
     // An alarm in the span belongs to an occurrence that starts as far after it as the longest
     // lead any alarm has, or as far before it as the longest lag.
     let (from, to) = note_events::day_window(
-        local_date(after - schedule.reach.after),
-        local_date(until + schedule.reach.before),
+        local_date(after - schedule.reach.lag),
+        local_date(until + schedule.reach.lead),
         reader,
     );
     let mut alarms = Vec::new();
