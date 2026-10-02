@@ -39,41 +39,42 @@ const DAYS = /^([+-]?)([0-9]+) *(weeks?|days?|w|d)$/;
 const ELAPSED = /^([+-]?)([0-9]+(?:\.[0-9]+)?) *(hours?|minutes?|seconds?|h|m|s)$/;
 const CLOCK = /^(?:([+-]?)([0-9]+) *(weeks?|days?|w|d) +)?([0-9]{2}):([0-9]{2})$/;
 
+// Where a reading of one alarm stops, with what to tell whoever wrote it. It is thrown inside
+// `parseAlarm` and caught there, so that each step reads as the value it gives and not as a value or
+// a refusal to hand up: `parseAlarm` itself never throws.
+class Refusal extends Error {}
+
 // `1` or `-1` for the sign written, which is required unless the amount is zero.
-function signOf(text: string, written: string, isZero: boolean): number | { error: string } {
+function signOf(text: string, written: string, isZero: boolean): number {
     if (written === '-') {
         return -1;
     }
     if (written === '+' || isZero) {
         return 1;
     }
-    return { error: `${JSON.stringify(text)} needs a sign: -${text} is before the start, +${text} after it` };
+    throw new Refusal(`${JSON.stringify(text)} needs a sign: -${text} is before the start, +${text} after it`);
 }
 
 // `-0m` is zero; `-0` is a value `toEqual` tells from it.
 const nonNegativeZero = (n: number) => (n === 0 ? 0 : n);
 
-const TOO_FAR = (text: string) => ({ error: `${JSON.stringify(text)} is more than a year from the start` });
+const tooFar = (text: string) => new Refusal(`${JSON.stringify(text)} is more than a year from the start`);
 
 // A signed count of whole days, as `-2 days` and `+1w` say it, for the offset and for the day prefix
 // of a time of day alike. The sign is checked before the size, as in the Rust twin.
-function wholeDays(text: string, written: string, count: string, unit: string): number | { error: string } {
+function wholeDays(text: string, written: string, count: string, unit: string): number {
     const days = Number(count) * (unit.startsWith('w') ? 7 : 1);
     const sign = signOf(text, written, days === 0);
-    if (typeof sign !== 'number') {
-        return sign;
+    if (days > MAX_DAYS) {
+        throw tooFar(text);
     }
-    return days > MAX_DAYS ? TOO_FAR(text) : nonNegativeZero(sign * days);
+    return nonNegativeZero(sign * days);
 }
 
-/// Reads one alarm.
-export function parseAlarm(written: string): AlarmParse {
-    const text = written.trim();
-
+function readSpec(text: string): AlarmSpec {
     let parts = DAYS.exec(text);
     if (parts !== null) {
-        const days = wholeDays(text, parts[1], parts[2], parts[3]);
-        return typeof days === 'number' ? { spec: { kind: 'days', days } } : days;
+        return { kind: 'days', days: wholeDays(text, parts[1], parts[2], parts[3]) };
     }
 
     parts = ELAPSED.exec(text);
@@ -81,37 +82,38 @@ export function parseAlarm(written: string): AlarmParse {
         const amount = Number(parts[2]);
         const perUnit = { h: 3_600, m: 60, s: 1 }[parts[3][0] as 'h' | 'm' | 's'];
         const sign = signOf(text, parts[1], amount === 0);
-        if (typeof sign !== 'number') {
-            return sign;
-        }
         if (amount * perUnit > MAX_SHIFT_SECONDS) {
-            return TOO_FAR(text);
+            throw tooFar(text);
         }
-        return { spec: { kind: 'elapsed', ms: nonNegativeZero(sign * Math.round(amount * perUnit * 1000)) } };
+        return { kind: 'elapsed', ms: nonNegativeZero(sign * Math.round(amount * perUnit * 1000)) };
     }
 
     parts = CLOCK.exec(text);
     if (parts !== null) {
-        let days = 0;
-        if (parts[2] !== undefined) {
-            const counted = wholeDays(text, parts[1], parts[2], parts[3]);
-            if (typeof counted !== 'number') {
-                return counted;
-            }
-            days = counted;
-        }
+        const days = parts[2] === undefined ? 0 : wholeDays(text, parts[1], parts[2], parts[3]);
         const hour = Number(parts[4]);
         const minute = Number(parts[5]);
         if (hour > 23 || minute > 59) {
-            return { error: `${JSON.stringify(text)} is not a time of day` };
+            throw new Refusal(`${JSON.stringify(text)} is not a time of day`);
         }
-        return { spec: { kind: 'at', days, hour, minute } };
+        return { kind: 'at', days, hour, minute };
     }
 
-    return {
-        error: `${JSON.stringify(text)} is neither an offset such as -10m nor a time such as `
-            + '09:00 or -1d 18:00',
-    };
+    throw new Refusal(
+        `${JSON.stringify(text)} is neither an offset such as -10m nor a time such as 09:00 or -1d 18:00`);
+}
+
+/// Reads one alarm.
+export function parseAlarm(written: string): AlarmParse {
+    try {
+        return { spec: readSpec(written.trim()) };
+    }
+    catch (error) {
+        if (error instanceof Refusal) {
+            return { error: error.message };
+        }
+        throw error;
+    }
 }
 
 /// What is wrong with a list of alarms as typed: a sentence for each entry that is not one, in the
