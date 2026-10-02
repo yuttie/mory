@@ -31,6 +31,7 @@ import type {
 import { occurrencesOf, validateEvent } from '@/api';
 import type { AlarmDefaults, EffectiveAlarmDefaults } from '@/alarms';
 import {
+    alarmValueProblems,
     readAlarmList,
     readAlarmsIfSet,
     TASK_DATE_ALARM_DEFAULT,
@@ -63,6 +64,59 @@ export interface EventCategory {
 
 /// The configured categories by id.
 export type EventCategories = ReadonlyMap<string, EventCategory>;
+
+/// An event category as configured under `categories:`: its id, and the defaults it supplies.
+///
+/// Kept as a list rather than a map so the settings show them in the order the file has them.
+export interface ConfiguredCategory extends EventCategory {
+    id: string;
+}
+
+/// The `categories:` block of the calendar configuration, which is hand-written, as a list in the
+/// file's order. A category with nothing after its id is one that sets nothing of its own
+/// and inherits it all, so it is kept; one that is not a mapping at all is dropped, and the notes
+/// naming it are then reported rather than drawn with half a category. `backend/src/alarms.rs`
+/// reads the same rule for the alarms a category sets.
+///
+/// Each entry dropped from an `alarms:` list is said in `problems`, if given, as
+/// `categories.<id>.alarms: <what is wrong>`.
+export function readCategories(value: unknown, problems?: string[]): ConfiguredCategory[] {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        return [];
+    }
+    const categories: ConfiguredCategory[] = [];
+    for (const [id, entry] of Object.entries(value)) {
+        if (entry === null) {
+            categories.push({ id });
+            continue;
+        }
+        if (typeof entry !== 'object' || Array.isArray(entry)) {
+            continue;
+        }
+        const category: ConfiguredCategory = { id };
+        for (const field of ['color', 'name'] as const) {
+            const text = (entry as Record<string, unknown>)[field];
+            if (typeof text === 'string' && text.trim() !== '') {
+                category[field] = text.trim();
+            }
+        }
+        // Set, even to nothing: an empty list silences the category's events, where an empty
+        // `alarms:` leaves them to the configuration's.
+        const written = (entry as Record<string, unknown>).alarms;
+        problems?.push(...alarmValueProblems(written).map((problem) => `categories.${id}.alarms: ${problem}`));
+        const alarms = readAlarmsIfSet(written);
+        if (alarms !== undefined) {
+            category.alarms = alarms;
+        }
+        categories.push(category);
+    }
+    return categories;
+}
+
+/// The categories by id, as the event derivation takes them.
+export function categoryMapOf(categories: readonly ConfiguredCategory[]): EventCategories {
+    return new Map(categories.map(({ id, ...defaults }) => [id, defaults]));
+}
 
 /// The name an event is drawn with, given its category's template.
 ///

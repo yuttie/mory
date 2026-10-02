@@ -319,9 +319,9 @@ import {
     applyNameTemplate,
     resolveCategory,
 } from '@/events';
-import type { EventCategory, TaskDateColors } from '@/events';
+import type { ConfiguredCategory, EventCategory, TaskDateColors } from '@/events';
 import { CALENDARS_PATH, useCalendarsStore } from '@/stores/calendars';
-import type { CalendarSubscription, ConfiguredCategory } from '@/stores/calendars';
+import type { CalendarSubscription } from '@/stores/calendars';
 
 // The two fields, with what each falls back to when it is left empty.
 const TASK_DATE_FIELDS = [

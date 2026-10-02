@@ -15,9 +15,7 @@ import YAML from 'yaml';
 
 import type { AlarmDefaults } from '@/alarms';
 import {
-    alarmValueProblems,
     readAlarmDefaults,
-    readAlarmsIfSet,
     stringifyWithFlowAlarms,
     withBuiltInAlarms,
     writeAlarmDefaults,
@@ -28,7 +26,8 @@ import type {
     ImportedSeries,
 } from '@/api';
 import { getImportedEvents } from '@/api';
-import type { EventCategories, EventCategory, TaskDateColors } from '@/events';
+import type { ConfiguredCategory, EventCategories, TaskDateColors } from '@/events';
+import { categoryMapOf, readCategories } from '@/events';
 import { useFilesStore } from '@/stores/files';
 
 export const CALENDARS_PATH = '.mory/calendars.yaml';
@@ -53,15 +52,6 @@ export interface CalendarSubscription {
 // than in this browser's storage because they are the same kind of thing as a calendar's colour:
 // how one source of dates is told from another, and something the user would otherwise have to set
 // again on every device.
-
-/// An event category as configured under `categories:`: its id, and the defaults it supplies.
-///
-/// Kept as a list rather than a map so the settings show them in the order the file has them.
-/// They live here for the reason the task date colours do: how one kind of event is told from
-/// another is the same kind of thing as a calendar's colour.
-export interface ConfiguredCategory extends EventCategory {
-    id: string;
-}
 
 /// A calendar as a view needs to list it: what to call it, and what colour it draws in.
 export interface CalendarSummary {
@@ -146,7 +136,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
         if (categories.value === null) {
             return undefined;
         }
-        return new Map(categories.value.map(({ id, ...defaults }) => [id, defaults]));
+        return categoryMapOf(categories.value);
     });
 
     /// The calendars whose events this window could contain, in the order they are configured.
@@ -377,43 +367,6 @@ function readTaskDateColors(value: unknown): TaskDateColors {
         }
     }
     return colors;
-}
-
-// Hand-edited YAML too. A category with nothing after its id is one that sets nothing of its own
-// and inherits it all, so it is kept; one that is not a mapping at all is dropped, and the notes
-// naming it are then reported rather than drawn with half a category. `backend/src/alarms.rs`
-// reads the same rule for the alarms a category sets.
-function readCategories(value: unknown, problems?: string[]): ConfiguredCategory[] {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-        return [];
-    }
-    const categories: ConfiguredCategory[] = [];
-    for (const [id, entry] of Object.entries(value)) {
-        if (entry === null) {
-            categories.push({ id });
-            continue;
-        }
-        if (typeof entry !== 'object' || Array.isArray(entry)) {
-            continue;
-        }
-        const category: ConfiguredCategory = { id };
-        for (const field of ['color', 'name'] as const) {
-            const text = (entry as Record<string, unknown>)[field];
-            if (typeof text === 'string' && text.trim() !== '') {
-                category[field] = text.trim();
-            }
-        }
-        // Set, even to nothing: an empty list silences the category's events, where an empty
-        // `alarms:` leaves them to the configuration's.
-        const written = (entry as Record<string, unknown>).alarms;
-        problems?.push(...alarmValueProblems(written).map((problem) => `categories.${id}.alarms: ${problem}`));
-        const alarms = readAlarmsIfSet(written);
-        if (alarms !== undefined) {
-            category.alarms = alarms;
-        }
-        categories.push(category);
-    }
-    return categories;
 }
 
 function isMissing(error: unknown): boolean {
