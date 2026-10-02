@@ -405,7 +405,9 @@ function buildOccurrence(
         url: time.url || parent.url,
         source: 'note',
         notePath: entry.path,
-        ...(parent.ical === undefined
+        // Only a mapping is provenance: `ical:` with nothing after it is null, and read as one
+        // that threw inside the computed.
+        ...(typeof parent.ical !== 'object' || parent.ical === null || Array.isArray(parent.ical)
             ? {}
             : {
                 calendar: parent.ical.calendar,

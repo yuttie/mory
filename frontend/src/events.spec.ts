@@ -1484,3 +1484,25 @@ describe('an overrides list written by hand', () => {
         expect(series([{ name: 'No at' }]).errors).toEqual([['at', undefined, 'Standup', 'a.md', null]]);
     });
 });
+
+describe('an ical key written by hand', () => {
+    // `ical:` with nothing after it is null, which the provenance read as a mapping and threw on.
+    it('is no provenance when it is blank or not a mapping, and the event is drawn as any other', () => {
+        for (const ical of [null, 5, 'text', true, []]) {
+            const derived = eventsFromEntries([entry('a.md', {
+                Standup: { start: '2024-05-06 09:00', ical: ical as never },
+            })], ANY_WINDOW);
+            expect(derived.errors, JSON.stringify(ical)).toEqual([]);
+            expect(derived.events, JSON.stringify(ical)).toHaveLength(1);
+            expect(derived.events[0].uid, JSON.stringify(ical)).toBeUndefined();
+            expect(derived.events[0].calendar, JSON.stringify(ical)).toBeUndefined();
+        }
+    });
+
+    it('is the provenance of an imported event when it is a mapping', () => {
+        const [event] = eventsFromEntries([entry('a.md', {
+            Standup: { start: '2024-05-06 09:00', ical: { calendar: 'work', uid: 'u1' } },
+        })], ANY_WINDOW).events;
+        expect([event.calendar, event.uid]).toEqual(['work', 'u1']);
+    });
+});
