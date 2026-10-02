@@ -1656,7 +1656,10 @@ Important:
     impl CalendarConfig {
         /// What the configuration says alarms ring at where a note does not.
         pub(crate) fn alarm_defaults(&self) -> crate::alarms::Defaults {
-            crate::alarms::Defaults::read(self.alarms.as_mapping(), self.categories())
+            crate::alarms::Defaults::read(crate::alarms::Blocks {
+                alarms: self.alarms.as_mapping(),
+                categories: self.categories(),
+            })
         }
 
         /// The `categories:` block as declared, or `None` when there is no usable one.

@@ -266,12 +266,20 @@ pub(crate) fn configured_categories(
     })
 }
 
+/// The two blocks of the calendar configuration that alarms are read from, each as declared. They
+/// are both mappings, and named so that neither is put where the other goes.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Blocks<'a> {
+    pub alarms: Option<&'a Mapping>,
+    pub categories: Option<&'a Mapping>,
+}
+
 impl Defaults {
     /// The `alarms:` and `categories:` blocks of the calendar configuration. Hand-written, so
     /// whatever is not usable is not there, as `readCategories` reads them in the frontend: a
     /// category with nothing after its id is configured and sets nothing, and one that is not a
     /// mapping is not configured at all.
-    pub fn read(alarms: Option<&Mapping>, categories: Option<&Mapping>) -> Defaults {
+    pub fn read(Blocks { alarms, categories }: Blocks) -> Defaults {
         let set = |key: &str| alarms.and_then(|alarms| present(alarms.get(key))).map(list_of);
         let categories = configured_categories(categories)
             .map(|(id, entry)| (id, entry.and_then(|entry| present(entry.get("alarms"))).map(list_of)))

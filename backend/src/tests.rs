@@ -2193,7 +2193,7 @@ fn note_fixture_config() -> (serde_yaml::Value, crate::v2::CalendarConfig) {
 /// layer between the two. Both sides read both.
 fn note_fixture_defaults(config: &crate::v2::CalendarConfig) -> [alarms::Defaults; 2] {
     [
-        alarms::Defaults::read(None, config.categories()),
+        alarms::Defaults::read(alarms::Blocks { categories: config.categories(), ..Default::default() }),
         config.alarm_defaults(),
     ]
 }
