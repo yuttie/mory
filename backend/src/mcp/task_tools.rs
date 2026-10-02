@@ -382,15 +382,17 @@ fn date_changes(args: &SetTaskDatesArgs, text: &str) -> Result<Vec<Change>, Stri
             ));
         }
     }
-    // Taking the last key out of a mapping leaves `alarms:` with nothing under it, which the
-    // in-place editor cannot tell from the empty mapping it means and so refuses. A task whose
-    // alarms all go loses `alarms` instead.
-    let left = alarm_keys(text).into_iter().any(|key| !cleared_alarms.contains(&key.as_str()));
-    if !cleared_alarms.is_empty() && !left {
-        changes.push(Change::remove(&["task", "alarms"]));
-    }
-    else {
-        changes.extend(cleared_alarms.iter().map(|date| Change::remove(&alarms_path(date))));
+    // A task whose alarms all go loses `alarms` itself, not just what was under it, which the
+    // editor would leave behind as an empty key: setting alarms and clearing them again then
+    // leaves the note as it was.
+    if !cleared_alarms.is_empty() {
+        let left = alarm_keys(text).into_iter().any(|key| !cleared_alarms.contains(&key.as_str()));
+        if left {
+            changes.extend(cleared_alarms.iter().map(|date| Change::remove(&alarms_path(date))));
+        }
+        else {
+            changes.push(Change::remove(&["task", "alarms"]));
+        }
     }
     for (field, alarms) in [
         (TaskField::DueBy, &args.due_by_alarms),
@@ -730,7 +732,7 @@ mod tests {
         let silenced = apply(TASK, &date_changes(&dates(serde_json::json!({ "due_by_alarms": [] })), TASK).unwrap());
         assert_eq!(alarms_of(&silenced), yaml("{ due_by: [] }"));
 
-        // The only one goes with `alarms` itself, which the editor could not leave empty.
+        // The only one goes with `alarms` itself, so the note is as it was before there were any.
         let clear = |what: &str| dates(serde_json::json!({ "clear": [what] }));
         let cleared = apply(&silenced, &date_changes(&clear("due_by_alarms"), &silenced).unwrap());
         assert_eq!(cleared, TASK);
