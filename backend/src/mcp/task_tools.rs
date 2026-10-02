@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
 
 use super::frontmatter::{self, Change};
-use super::tools::{alarm_list, note_text, safe_path, write_note, WriteOutput};
+use super::tools::{alarm_list, commit_edit, note_text, safe_path, WriteOutput};
 use super::{json_result, tool_error};
 use crate::models::AppState;
 use crate::tasks::{TaskField, STATUS_KINDS};
@@ -206,16 +206,7 @@ pub async fn update_task(
         ));
     }
 
-    let edited = match frontmatter::apply(&text, &changes) {
-        Ok(edited) => edited,
-        Err(e) => return Ok(tool_error(e.to_string())),
-    };
-    if edited == text {
-        return Ok(tool_error(format!(
-            "{path:?} already says all of that, so nothing was committed.",
-        )));
-    }
-    write_note(state, &path, &edited, &args.message).await
+    commit_edit(state, &path, &text, &changes, &args.message).await
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -440,16 +431,7 @@ pub async fn set_task_dates(
         ));
     }
 
-    let edited = match frontmatter::apply(&text, &changes) {
-        Ok(edited) => edited,
-        Err(e) => return Ok(tool_error(e.to_string())),
-    };
-    if edited == text {
-        return Ok(tool_error(format!(
-            "{path:?} already says all of that, so nothing was committed.",
-        )));
-    }
-    write_note(state, &path, &edited, &args.message).await
+    commit_edit(state, &path, &text, &changes, &args.message).await
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]

@@ -11,7 +11,7 @@ use serde::Deserialize;
 use serde_yaml::{Mapping, Value};
 
 use super::frontmatter::{self, Change};
-use super::tools::{alarm_list, note_text, safe_path, write_note};
+use super::tools::{alarm_list, commit_edit, note_text, safe_path, write_note};
 use super::tool_error;
 use crate::models::AppState;
 
@@ -375,16 +375,7 @@ async fn apply_event(
             return Ok(tool_error(message));
         }
     }
-    let edited = match frontmatter::apply(text, &changes) {
-        Ok(edited) => edited,
-        Err(e) => return Ok(tool_error(e.to_string())),
-    };
-    if edited == text {
-        return Ok(tool_error(format!(
-            "{path:?} already says all of that, so nothing was committed.",
-        )));
-    }
-    write_note(state, path, &edited, &args.message).await
+    commit_edit(state, path, text, &changes, &args.message).await
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]

@@ -4,6 +4,7 @@ use rmcp::{model::CallToolResult, ErrorData};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use super::frontmatter::{self, Change};
 use super::{json_result, tool_error};
 use crate::models::AppState;
 use crate::search::{run_search, validate_search_request, SearchRequest};
@@ -766,6 +767,33 @@ pub async fn note_text(state: &AppState, path: &str) -> Result<Option<String>, E
         .map_err(|_| ErrorData::invalid_params(format!("{path} is not UTF-8 text"), None))
 }
 
+/// The note `text` becomes under `changes`, or why it cannot, in words a model can act on.
+///
+/// It is refused when the in-place editor cannot make the edit, which it says why, and when the
+/// note already says everything the edit would: that would be an empty commit, and the caller
+/// should hear that nothing was needed rather than that something was done.
+pub fn edited_note(text: &str, changes: &[Change], path: &str) -> Result<String, String> {
+    let edited = frontmatter::apply(text, changes).map_err(|e| e.to_string())?;
+    if edited == text {
+        return Err(format!("{path:?} already says all of that, so nothing was committed."));
+    }
+    Ok(edited)
+}
+
+/// Apply `changes` to the note at `path`, whose text is `text`, and commit what comes of it.
+pub async fn commit_edit(
+    state: &AppState,
+    path: &str,
+    text: &str,
+    changes: &[Change],
+    message: &str,
+) -> Result<CallToolResult, ErrorData> {
+    match edited_note(text, changes, path) {
+        Ok(edited) => write_note(state, path, &edited, message).await,
+        Err(reason) => Ok(tool_error(reason)),
+    }
+}
+
 /// Commit an edited note and report where it landed.
 pub async fn write_note(
     state: &AppState,
@@ -960,6 +988,23 @@ mod tests {
 
     fn yaml(text: &str) -> serde_yaml::Value {
         serde_yaml::from_str(text).expect("the fixture should be YAML")
+    }
+
+    #[test]
+    fn an_edit_is_refused_when_the_editor_cannot_make_it_or_the_note_already_says_it() {
+        let note = "---\ntask:\n    progress: 50\n---\n# Title\n";
+
+        let edited = edited_note(note, &[Change::set(&["task", "progress"], 75)], "t.md").expect("an edit");
+        assert_eq!(edited, "---\ntask:\n    progress: 75\n---\n# Title\n");
+
+        // Says what the note says already: nothing to commit, and the path says which note.
+        let same = edited_note(note, &[Change::set(&["task", "progress"], 50)], "t.md").expect_err("a no-op");
+        assert_eq!(same, r#""t.md" already says all of that, so nothing was committed."#);
+
+        // Frontmatter that is not YAML is not edited in place, and the editor says so.
+        let broken = "---\ntags: [unclosed\n---\n";
+        let refused = edited_note(broken, &[Change::set(&["task", "progress"], 75)], "t.md").expect_err("invalid");
+        assert!(refused.contains("not valid YAML"), "{refused}");
     }
 
     /// Frontmatter is whatever the file said, so every one of these has to be a shrug rather than
