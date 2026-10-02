@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import type { AlarmDraft } from '@/alarms';
 import {
+    alarmDraftChanged,
     alarmProblems,
     alarmValueProblems,
     BUILT_IN_ALARMS,
@@ -9,9 +11,11 @@ import {
     formatAlarm,
     parseAlarm,
     readAlarmDefaults,
+    readAlarmDraft,
     readAlarmList,
     readAlarmsIfSet,
     readTaskAlarms,
+    sameAlarms,
     sameTaskAlarms,
     TASK_DATE_ALARM_DEFAULT,
     taskAlarmOf,
@@ -321,5 +325,42 @@ describe('writeAlarmDefaults', () => {
         expect(block).toEqual({ timed: ['-10m'], all_day: ['09:00'], deadline: [] });
         expect(Object.keys(block)).toEqual(['timed', 'all_day', 'deadline']);
         expect(writeAlarmDefaults({})).toEqual({});
+    });
+});
+
+describe('the draft of the alarm defaults', () => {
+    // Every box shows what its kind rings at now, so a draft of the built-ins is the file with nothing
+    // in it.
+    const builtIn = (): AlarmDraft => ({ timed: ['0m'], allDay: [], dueBy: [], deadline: [] });
+
+    it('compares typed entries with what is written, not by the space around them', () => {
+        expect(sameAlarms([' -10m ', '0m'], ['-10m', '0m'])).toBe(true);
+        expect(sameAlarms(['-10m'], ['-10m', '0m'])).toBe(false);
+        expect(sameAlarms(['-10m', '0m'], ['0m', '-10m'])).toBe(false);
+        expect(sameAlarms([], [])).toBe(true);
+    });
+
+    it('is unchanged while it says what is in force, and changed once any box does not', () => {
+        const inForce = withBuiltInAlarms({ timed: ['-5m'] });
+        expect(alarmDraftChanged({ ...builtIn(), timed: ['-5m'] }, inForce)).toBe(false);
+        expect(alarmDraftChanged({ ...builtIn(), timed: [' -5m '] }, inForce)).toBe(false);
+        expect(alarmDraftChanged(builtIn(), inForce)).toBe(true);
+        expect(alarmDraftChanged({ ...builtIn(), timed: ['-5m'], deadline: ['-1d 09:00'] }, inForce)).toBe(true);
+    });
+
+    it('reads as the file, trimmed, and without a kind that is back at the default', () => {
+        expect(readAlarmDraft(builtIn())).toEqual({ defaults: {} });
+        expect(readAlarmDraft({ timed: [' -5m ', '0m'], allDay: ['-1d 18:00'], dueBy: [], deadline: ['-2h'] }))
+            .toEqual({ defaults: { timed: ['-5m', '0m'], allDay: ['-1d 18:00'], deadline: ['-2h'] } });
+    });
+
+    it('keeps a box that is empty where the default is not, which silences it', () => {
+        expect(readAlarmDraft({ ...builtIn(), timed: [] })).toEqual({ defaults: { timed: [] } });
+    });
+
+    it('stops at the first entry that is not an alarm, naming its kind', () => {
+        const reading = readAlarmDraft({ ...builtIn(), allDay: ['10m'], deadline: ['soon'] });
+        expect(reading).toMatchObject({ field: 'allDay' });
+        expect('problem' in reading && reading.problem).toContain('needs a sign');
     });
 });

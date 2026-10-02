@@ -408,6 +408,43 @@ export function writeAlarmDefaults(defaults: AlarmDefaults): Record<string, stri
     return block;
 }
 
+/// The four lists of alarms a person edits, a box for each kind. Each shows what its kind rings at
+/// now, the built-in default included, so that an empty one is "never" and not "unset".
+export type AlarmDraft = Record<keyof AlarmDefaults, string[]>;
+
+/// Whether two lists of alarms say the same. A draft's entries were typed, so what surrounds one is
+/// not a difference; the other list is from a file, already as it is written.
+export function sameAlarms(draft: readonly string[], written: readonly string[]): boolean {
+    return draft.length === written.length && draft.every((entry, index) => entry.trim() === written[index]);
+}
+
+/// Whether a draft differs from what is in force.
+export function alarmDraftChanged(draft: AlarmDraft, inForce: EffectiveAlarmDefaults): boolean {
+    return ALARM_DEFAULT_ENTRIES.some(([field]) => !sameAlarms(draft[field], inForce[field]));
+}
+
+/// What a draft says for the file, or the first entry in it that is not an alarm and the kind it is
+/// in. Each list is as typed but trimmed, and a kind back at its built-in default is left out, which
+/// the file says by not saying it.
+export type DraftReading =
+    | { defaults: AlarmDefaults }
+    | { field: keyof AlarmDefaults; problem: string };
+
+export function readAlarmDraft(draft: AlarmDraft): DraftReading {
+    const defaults: AlarmDefaults = {};
+    for (const [field] of ALARM_DEFAULT_ENTRIES) {
+        const list = draft[field].map((alarm) => alarm.trim());
+        const [problem] = alarmProblems(list);
+        if (problem !== undefined) {
+            return { field, problem };
+        }
+        if (!sameAlarms(list, BUILT_IN_ALARMS[field])) {
+            defaults[field] = list;
+        }
+    }
+    return { defaults };
+}
+
 /// The `alarms:` block of the calendar configuration, which is hand-written: whatever is not usable
 /// is not there. An entry that is not an alarm is dropped from its list, as in a note.
 ///
