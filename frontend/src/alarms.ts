@@ -300,6 +300,38 @@ export function withBuiltInAlarms(defaults: AlarmDefaults | undefined): Effectiv
     };
 }
 
+// A value that is a mapping, as hand-written YAML has it: not null, and not a list.
+function asMapping(value: unknown): Record<string, unknown> | undefined {
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+        ? value as Record<string, unknown>
+        : undefined;
+}
+
+// `ALARM_DEFAULT_KEYS` as pairs, typed once, for the reading and the writing of the block to share.
+const ALARM_DEFAULT_ENTRIES = Object.entries(ALARM_DEFAULT_KEYS) as [keyof AlarmDefaults, string][];
+
+// The lists a mapping holds under the keys `entries` name, for each that is set: an entry is the field
+// it is kept in and the key it is written under. What each entry says that is not an alarm goes to
+// `report`, with the key, if given.
+function readAlarmFields<K extends string>(
+    mapping: Record<string, unknown>,
+    entries: readonly (readonly [K, string])[],
+    report?: (key: string, problem: string) => void,
+): Partial<Record<K, string[]>> {
+    const fields: Partial<Record<K, string[]>> = {};
+    for (const [field, key] of entries) {
+        const written = mapping[key];
+        for (const problem of alarmValueProblems(written)) {
+            report?.(key, problem);
+        }
+        const set = readAlarmsIfSet(written);
+        if (set !== undefined) {
+            fields[field] = set;
+        }
+    }
+    return fields;
+}
+
 /// The alarms a task sets for its own dates, under `task.alarms`. A date left out takes the
 /// configuration's; an empty list silences it.
 export interface TaskAlarms {
@@ -316,10 +348,7 @@ export const TASK_DATE_ALARM_DEFAULT = {
 /// What `task.alarms` holds for one of the task's dates, as written, which is `undefined` unless
 /// `task.alarms` is a mapping. The guard for reading it, wherever it is read.
 export function taskAlarmOf(alarms: unknown, field: keyof TaskAlarms): unknown {
-    if (typeof alarms !== 'object' || alarms === null || Array.isArray(alarms)) {
-        return undefined;
-    }
-    return (alarms as Record<string, unknown>)[field];
+    return asMapping(alarms)?.[field];
 }
 
 // The dates of a task that have alarms.
@@ -360,13 +389,11 @@ export function sameTaskAlarms(a: TaskAlarms, b: TaskAlarms): boolean {
 /// not usable is not there: an entry that is not an alarm is dropped, and a date left empty is not
 /// set, which is not the same as an empty list.
 export function readTaskAlarms(value: unknown): TaskAlarms | undefined {
-    const alarms: TaskAlarms = {};
-    for (const field of TASK_DATES) {
-        const set = readAlarmsIfSet(taskAlarmOf(value, field));
-        if (set !== undefined) {
-            alarms[field] = set;
-        }
+    const mapping = asMapping(value);
+    if (mapping === undefined) {
+        return undefined;
     }
+    const alarms: TaskAlarms = readAlarmFields(mapping, TASK_DATES.map((field) => [field, field] as const));
     return Object.keys(alarms).length > 0 ? alarms : undefined;
 }
 
@@ -391,7 +418,7 @@ export function stringifyWithFlowAlarms(value: unknown, options: YAML.ToStringOp
 /// spelling and order. The reverse of `readAlarmDefaults`, up to the entries that were not alarms.
 export function writeAlarmDefaults(defaults: AlarmDefaults): Record<string, string[]> {
     const block: Record<string, string[]> = {};
-    for (const [field, key] of Object.entries(ALARM_DEFAULT_KEYS) as [keyof AlarmDefaults, string][]) {
+    for (const [field, key] of ALARM_DEFAULT_ENTRIES) {
         const alarms = defaults[field];
         if (alarms !== undefined) {
             block[key] = [...alarms];
@@ -409,18 +436,14 @@ export function readAlarmDefaults(value: unknown, problems?: string[]): AlarmDef
     if (value === undefined || value === null) {
         return {};
     }
-    if (typeof value !== 'object' || Array.isArray(value)) {
+    const mapping = asMapping(value);
+    if (mapping === undefined) {
         problems?.push('alarms: is not a mapping of kinds to the alarms they ring at');
         return {};
     }
-    const defaults: AlarmDefaults = {};
-    for (const [field, key] of Object.entries(ALARM_DEFAULT_KEYS) as [keyof AlarmDefaults, string][]) {
-        const written = (value as Record<string, unknown>)[key];
-        problems?.push(...alarmValueProblems(written).map((problem) => `alarms.${key}: ${problem}`));
-        const set = readAlarmsIfSet(written);
-        if (set !== undefined) {
-            defaults[field] = set;
-        }
-    }
-    return defaults;
+    return readAlarmFields(
+        mapping,
+        ALARM_DEFAULT_ENTRIES,
+        (key, problem) => problems?.push(`alarms.${key}: ${problem}`),
+    );
 }
