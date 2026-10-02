@@ -352,16 +352,16 @@ fn alarm_keys(text: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// The changes a `SetTaskDatesArgs` asks for, under `task`, to the note `text`.
-fn date_changes(args: &SetTaskDatesArgs, text: &str) -> Result<Vec<Change>, String> {
-    let mut changes = Vec::new();
+/// What `clear` names: the changes that remove dates, and the dates whose alarms are to go.
+fn read_clear(args: &SetTaskDatesArgs) -> Result<(Vec<Change>, Vec<&'static str>), String> {
+    let mut removals = Vec::new();
     let mut cleared_alarms = Vec::new();
     for key in args.clear.as_deref().unwrap_or_default() {
         if let Some((_, field)) = ALARM_KEYS.iter().find(|(name, _)| name == key) {
             cleared_alarms.push(field.key());
         }
         else if DATE_KEYS.contains(&key.as_str()) {
-            changes.push(Change::remove(&["task", key]));
+            removals.push(Change::remove(&["task", key]));
         }
         else {
             let known = DATE_KEYS.into_iter().chain(ALARM_KEYS.map(|(name, _)| name));
@@ -371,18 +371,30 @@ fn date_changes(args: &SetTaskDatesArgs, text: &str) -> Result<Vec<Change>, Stri
             ));
         }
     }
-    // A task whose alarms all go loses `alarms` itself, not just what was under it, which the
-    // editor would leave behind as an empty key: setting alarms and clearing them again then
-    // leaves the note as it was.
-    if !cleared_alarms.is_empty() {
-        let left = alarm_keys(text).into_iter().any(|key| !cleared_alarms.contains(&key.as_str()));
-        if left {
-            changes.extend(cleared_alarms.iter().map(|date| Change::remove(&alarms_path(date))));
-        }
-        else {
-            changes.push(Change::remove(&["task", "alarms"]));
-        }
+    Ok((removals, cleared_alarms))
+}
+
+/// The changes that remove the alarms of `cleared` dates from the note `text`.
+///
+/// A task whose alarms all go loses `alarms` itself, not just what was under it, which the editor
+/// would leave behind as an empty key: setting alarms and clearing them again then leaves the note
+/// as it was.
+fn alarm_removals(cleared: &[&str], text: &str) -> Vec<Change> {
+    if cleared.is_empty() {
+        return Vec::new();
     }
+    let left = alarm_keys(text).into_iter().any(|key| !cleared.contains(&key.as_str()));
+    if left {
+        cleared.iter().map(|date| Change::remove(&alarms_path(date))).collect()
+    }
+    else {
+        vec![Change::remove(&["task", "alarms"])]
+    }
+}
+
+/// The changes that set the alarms `args` gives for a date.
+fn alarm_sets(args: &SetTaskDatesArgs) -> Result<Vec<Change>, String> {
+    let mut changes = Vec::new();
     for (field, alarms) in [
         (TaskField::DueBy, &args.due_by_alarms),
         (TaskField::Deadline, &args.deadline_alarms),
@@ -391,6 +403,12 @@ fn date_changes(args: &SetTaskDatesArgs, text: &str) -> Result<Vec<Change>, Stri
             changes.push(Change::set(&alarms_path(field.key()), alarm_list(alarms)?));
         }
     }
+    Ok(changes)
+}
+
+/// The changes that set the dates `args` gives.
+fn date_sets(args: &SetTaskDatesArgs) -> Vec<Change> {
+    let mut changes = Vec::new();
     for (key, value) in [
         ("start_at", &args.start_at),
         ("due_by", &args.due_by),
@@ -406,6 +424,18 @@ fn date_changes(args: &SetTaskDatesArgs, text: &str) -> Result<Vec<Change>, Stri
             Value::Sequence(dates.iter().map(|date| Value::String(date.clone())).collect()),
         ));
     }
+    changes
+}
+
+/// The changes a `SetTaskDatesArgs` asks for, under `task`, to the note `text`.
+///
+/// What is cleared goes first, so that a request which clears a date and sets it in the same call
+/// ends up setting it.
+fn date_changes(args: &SetTaskDatesArgs, text: &str) -> Result<Vec<Change>, String> {
+    let (mut changes, cleared_alarms) = read_clear(args)?;
+    changes.extend(alarm_removals(&cleared_alarms, text));
+    changes.extend(alarm_sets(args)?);
+    changes.extend(date_sets(args));
     Ok(changes)
 }
 
