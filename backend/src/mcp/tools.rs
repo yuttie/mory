@@ -436,18 +436,18 @@ struct EventSummary {
 
 /// One of a task's dates, which the web app draws on the calendar as an event of its own.
 #[derive(Debug, PartialEq, Serialize)]
-struct TaskDateSummary {
+pub(crate) struct TaskDateSummary {
     path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     title: Option<String>,
     /// `due_by` or `deadline`.
-    field: &'static str,
+    pub(crate) field: &'static str,
     /// The value exactly as the task declares it.
-    date: String,
+    pub(crate) date: String,
     /// The task's `status.kind`. A done or canceled task's dates are still listed, as the calendar
     /// still draws them, so this is what tells a date that stands from one that is settled.
     #[serde(skip_serializing_if = "Option::is_none")]
-    status: Option<String>,
+    pub(crate) status: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -506,7 +506,7 @@ fn declared_starts(event: &serde_yaml::Value) -> Vec<String> {
 /// would miss every deadline in it. The same rules apply: only a note on a path the task tree
 /// accepts, one entry per field holding a date, and a finished task's dates kept. There is nothing
 /// to expand -- a task has at most one of each -- so no expander is at stake.
-fn task_dates_in_window(
+pub(crate) fn task_dates_in_window(
     entries: &[crate::models::ListEntry],
     from: chrono::NaiveDate,
     to: chrono::NaiveDate,

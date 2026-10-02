@@ -2255,6 +2255,25 @@ fn alarms_of_task_fixture(entry: &crate::models::ListEntry, defaults: &alarms::D
     lines
 }
 
+/// `field  date  status` for every date of a task that `list_events` returns inside the window, in
+/// order: the date exactly as the note writes it, since the tool does not convert an offset, and
+/// the `status.kind` it reports, `none` where the task has none. The frontend's
+/// `taskDatesFromEntries` is required to find the same dates, and the same of them finished.
+fn window_dates_of_task_fixture(entry: &crate::models::ListEntry) -> Vec<String> {
+    let day = |text: &str| chrono::NaiveDate::parse_from_str(text, "%Y-%m-%d").expect("a date");
+    let dates = crate::mcp::tools::task_dates_in_window(
+        std::slice::from_ref(entry),
+        day(FIXTURE_WINDOW.0),
+        day(FIXTURE_WINDOW.1),
+    );
+    let mut lines: Vec<String> = dates
+        .iter()
+        .map(|date| format!("{}  {}  {}", date.field, date.date, date.status.as_deref().unwrap_or("none")))
+        .collect();
+    lines.sort();
+    lines
+}
+
 #[test]
 fn note_fixtures_draw_as_recorded() {
     let (config_value, config) = note_fixture_config();
@@ -2281,6 +2300,7 @@ fn note_fixtures_draw_as_recorded() {
                 "metadata": entry.metadata,
                 "alarms": alarms_of_task_fixture(&entry, &categories_only),
                 "alarmsWithDefaults": alarms_of_task_fixture(&entry, &with_alarms),
+                "windowDates": window_dates_of_task_fixture(&entry),
             }),
         );
     }

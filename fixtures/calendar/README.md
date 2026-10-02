@@ -57,9 +57,17 @@ ring, in the same two readings. `note-fixtures.spec.ts` requires `taskDatesFromE
 the same, and a task that is done or canceled to draw its dates and ring for neither.
 
 A task whose name carries no UUID is not in the task tree, and rings for nothing whatever it says;
-one with a date that is not a date has no such date. Both are fixtures. The MCP tool
-`list_events` has a copy of the same rules of its own, `task_dates_in_window`, which nothing here
-compares.
+one with a date that is not a date has no such date. Both are fixtures.
+
+The MCP tool `list_events` has a copy of the same rules of its own, `task_dates_in_window`, and
+`notes.json` records what it returns for each task as `windowDates`: one `field  date  status` line
+for every date inside the window. `note-fixtures.spec.ts` requires `taskDatesFromEntries` to draw
+those same dates, and each finished exactly when the tool's `status` is `done` or `canceled`. The
+date is compared as the note writes it, since the tool reads its leading `YYYY-MM-DD` and converts
+no offset, where the calendar converts to the reader's zone: the fixtures keep to values that give
+the same day either way. They do not agree on a day that is not in its month, such as `2024-02-30`,
+or on an unpadded month or day, such as `2024-8-9`: `dayjs` reads both, the calendar draws them, and
+the tool leaves them out. Neither is a fixture.
 
 `dayjs.tz` resolves an hour that happens twice by the season the reader is in *now*, so a rule
 with `tz` whose occurrences fall in such an hour would make the comparison depend on the date it

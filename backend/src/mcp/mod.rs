@@ -29,7 +29,7 @@ use crate::oauth::{AccessClaims, SCOPE_WRITE};
 pub(crate) mod frontmatter;
 mod event_tools;
 mod task_tools;
-mod tools;
+pub(crate) mod tools;
 
 /// What every tool returns: text the model reads.
 ///

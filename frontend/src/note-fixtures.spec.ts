@@ -1,7 +1,7 @@
 // The frontend's note expander and the backend's must agree: this requires `eventsFromEntries` to
 // draw, and to resolve the alarms of, what `backend/src/note_events.rs` and `backend/src/alarms.rs`
-// recorded in `notes.json`, and `taskDatesFromEntries` to resolve those of a task's dates. See
-// `fixtures/calendar/README.md`.
+// recorded in `notes.json`, and `taskDatesFromEntries` to resolve those of a task's dates, and to
+// find the dates the MCP tool `list_events` returns for a task. See `fixtures/calendar/README.md`.
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import dayjs from 'dayjs';
@@ -25,8 +25,14 @@ interface RecordedNote extends Recorded {
     drawn: string[];
 }
 
+// A task fixture also records the dates the MCP tool returns for it inside the window, one
+// `field  date  status` line each: the date as the note writes it, and the tool's `status.kind`.
+interface RecordedTask extends Recorded {
+    windowDates: string[];
+}
+
 const notes = golden.notes as unknown as Record<string, RecordedNote>;
-const tasks = golden.tasks as unknown as Record<string, Recorded>;
+const tasks = golden.tasks as unknown as Record<string, RecordedTask>;
 const window = golden.window as { from: string; to: string };
 
 // What `.mory/calendars.yaml` held, as the backend parsed it, for the fixtures to be read under:
@@ -114,6 +120,29 @@ function taskAlarmsOf(name: string, task: Recorded, alarmDefaults?: AlarmDefault
         .sort();
 }
 
+// `field  date  finished|open` for every date of a task that `taskDatesFromEntries` draws inside the
+// window, the date as the note writes it: the tool gives it so, with no offset converted, and the
+// fixtures keep to dates whose day is the same either way.
+function drawnTaskDates(name: string, task: Recorded): string[] {
+    const written = (task.metadata?.task ?? {}) as Record<string, unknown>;
+    const { events } = taskDatesFromEntries([taskEntryOf(name, task)], window);
+    return events
+        .map((event) => `${event.taskDate}  ${written[event.taskDate ?? '']}  ${event.finished ? 'finished' : 'open'}`)
+        .sort();
+}
+
+// The same of what the tool returned. It gives a task's `status.kind` and leaves the reading to the
+// caller, and its own note says a task whose status is `done` or `canceled` is settled, which is
+// what the calendar draws as finished.
+function returnedTaskDates(task: RecordedTask): string[] {
+    return task.windowDates
+        .map((line) => {
+            const [field, date, status] = line.split('  ');
+            return `${field}  ${date}  ${status === 'done' || status === 'canceled' ? 'finished' : 'open'}`;
+        })
+        .sort();
+}
+
 it('runs in the zone the golden was recorded in', () => {
     expect(dayjs('2024-07-01 00:00').utcOffset()).toBe(-7 * 60);
     expect(dayjs('2024-01-01 00:00').utcOffset()).toBe(-8 * 60);
@@ -155,4 +184,15 @@ describe.each(Object.keys(tasks))('%s', (name) => {
     it('rings for its dates at what the backend rings at, under the configuration\'s alarms', () => {
         expect(taskAlarmsOf(name, tasks[name], configuredDefaults)).toEqual(tasks[name].alarmsWithDefaults);
     });
+
+    it('has the dates the MCP tool returns for it, finished as the tool says', () => {
+        expect(drawnTaskDates(name, tasks[name])).toEqual(returnedTaskDates(tasks[name]));
+    });
+});
+
+it('compares some dates, and some of them finished', () => {
+    const returned = Object.values(tasks).flatMap(returnedTaskDates);
+    expect(returned.length).toBeGreaterThan(5);
+    expect(returned.some((line) => line.endsWith('  finished'))).toBe(true);
+    expect(returned.some((line) => line.endsWith('  open'))).toBe(true);
 });
