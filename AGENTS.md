@@ -11,7 +11,8 @@ Layout of the tracked sources:
 - `backend/src/note_events.rs` — expanding the events a note declares, the Rust twin of `eventsFromEntries`, for event alarms.
 - `backend/src/alarms.rs` — when each alarm rings: the `alarms:` grammar, the defaults `.mory/calendars.yaml` sets, and a task's dates.
 - `backend/src/tasks.rs` — which notes are in the task tree, and a task's status: the checks the MCP tools and the alarm scheduler share.
-- `backend/src/push.rs` — event alarms sent as Web Push: the VAPID key, the subscription endpoints, and the scheduler.
+- `backend/src/schedule.rs` — which alarms ring in a span of time, from the listing and the calendar configuration.
+- `backend/src/push.rs` — event alarms sent as Web Push: the VAPID key, the subscription endpoints, and the loop that asks the schedule once a minute and sends what is due.
 - `backend/src/oauth.rs` — the OAuth 2.1 authorization server the MCP endpoint needs.
 - `backend/src/mcp/` — the MCP server: `mod.rs` holds the tool router, `frontmatter.rs` the
   in-place frontmatter editor, and the rest the tools grouped by area.

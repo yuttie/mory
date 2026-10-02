@@ -68,6 +68,7 @@ mod mcp;
 mod note_events;
 mod oauth;
 mod push;
+mod schedule;
 mod search;
 mod tasks;
 

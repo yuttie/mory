@@ -2731,7 +2731,7 @@ fn scheduler_cost_on_a_real_corpus() {
     use crate::alarms::{task_dates, Defaults, Reach};
     use crate::models::ListEntry;
     use crate::note_events::Reader;
-    use crate::push::{alarms_between, Schedule};
+    use crate::schedule::{alarms_between, Schedule};
 
     let Ok(dir) = std::env::var("MORY_CORPUS") else {
         eprintln!("set MORY_CORPUS to a notes repository to run this");
