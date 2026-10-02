@@ -817,14 +817,7 @@ mod tests {
     }
 
     fn entry(yaml: &str) -> ListEntry {
-        ListEntry {
-            path: "note.md".into(),
-            size: 1,
-            mime_type: "text/markdown".to_owned(),
-            metadata: Some(serde_yaml::from_str(yaml).expect("valid YAML")),
-            title: None,
-            time: "2024-01-01T00:00:00+00:00".parse().unwrap(),
-        }
+        ListEntry::note("note.md", yaml)
     }
 
     /// What a reader in Los Angeles sees over 2024: `start  name`, in order.

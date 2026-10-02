@@ -2311,6 +2311,22 @@ mod models {
         pub time: DateTime<FixedOffset>,
     }
 
+    #[cfg(test)]
+    impl ListEntry {
+        /// A markdown note as the listing holds it, its frontmatter given as YAML and nothing else
+        /// about it mattering, which is all a test of how notes are read needs of one.
+        pub(crate) fn note(path: &str, frontmatter: &str) -> ListEntry {
+            ListEntry {
+                path: path.into(),
+                size: 1,
+                mime_type: "text/markdown".to_owned(),
+                metadata: Some(serde_yaml::from_str(frontmatter).expect("valid YAML")),
+                title: None,
+                time: "2024-01-01T00:00:00+00:00".parse().expect("a valid time"),
+            }
+        }
+    }
+
     #[derive(Debug, Serialize, Clone)]
     pub struct TreeNode {
         pub uuid: Uuid,

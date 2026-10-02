@@ -627,14 +627,7 @@ mod tests {
     /// `start  name  spec|spec` in order.
     fn resolved(config: &str, note: &str) -> Vec<String> {
         let defaults = defaults(config);
-        let entry = ListEntry {
-            path: "note.md".into(),
-            size: 1,
-            mime_type: "text/markdown".to_owned(),
-            metadata: Some(serde_yaml::from_str(note).unwrap()),
-            title: None,
-            time: "2024-01-01T00:00:00+00:00".parse().unwrap(),
-        };
+        let entry = ListEntry::note("note.md", note);
         let reader = reader();
         let (from, to) = crate::note_events::day_window(
             NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
@@ -789,12 +782,8 @@ events:
         let entries: Vec<ListEntry> = tasks
             .iter()
             .map(|(path, title, yaml)| ListEntry {
-                path: (*path).into(),
-                size: 1,
-                mime_type: "text/markdown".to_owned(),
-                metadata: Some(serde_yaml::from_str(yaml).unwrap()),
                 title: title.map(str::to_owned),
-                time: "2024-01-01T00:00:00+00:00".parse().unwrap(),
+                ..ListEntry::note(path, yaml)
             })
             .collect();
         let mut lines: Vec<String> = task_dates(&entries, &reader())
@@ -893,14 +882,7 @@ task:
 
     #[test]
     fn the_reach_is_the_furthest_alarm_in_either_direction() {
-        let entry = |yaml: &str| ListEntry {
-            path: "note.md".into(),
-            size: 1,
-            mime_type: "text/markdown".to_owned(),
-            metadata: Some(serde_yaml::from_str(yaml).unwrap()),
-            title: None,
-            time: "2024-01-01T00:00:00+00:00".parse().unwrap(),
-        };
+        let entry = |yaml: &str| ListEntry::note("note.md", yaml);
         let none = Defaults::default();
         assert_eq!(Reach::of(&[entry("events: { A: { start: '2024-05-06 09:00' } }")], &none), Reach::default());
         let reach = Reach::of(&[

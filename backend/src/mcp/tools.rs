@@ -1019,12 +1019,9 @@ mod tests {
 
     fn listed(path: &str, frontmatter: &str) -> crate::models::ListEntry {
         crate::models::ListEntry {
-            path: path.into(),
-            size: 1,
-            mime_type: "text/markdown".to_owned(),
-            metadata: Some(yaml(frontmatter)),
             title: Some(format!("title of {path}")),
             time: chrono::DateTime::parse_from_rfc3339("2026-09-01T00:00:00+09:00").unwrap(),
+            ..crate::models::ListEntry::note(path, frontmatter)
         }
     }
 

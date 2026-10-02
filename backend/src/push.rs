@@ -595,14 +595,7 @@ mod tests {
     const LOS_ANGELES: Zone = chrono_tz::America::Los_Angeles;
 
     fn entry(yaml: &str) -> ListEntry {
-        ListEntry {
-            path: "note.md".into(),
-            size: 1,
-            mime_type: "text/markdown".to_owned(),
-            metadata: Some(serde_yaml::from_str(yaml).expect("valid YAML")),
-            title: None,
-            time: "2024-01-01T00:00:00+00:00".parse().unwrap(),
-        }
+        ListEntry::note("note.md", yaml)
     }
 
     fn at(text: &str) -> DateTime<Utc> {
