@@ -30,6 +30,18 @@ async function load() {
     return await import('@/stores/calendars');
 }
 
+// A store as a page load makes one, over modules `load` has reset.
+async function freshStore() {
+    const { useCalendarsStore } = await load();
+    return useCalendarsStore();
+}
+
+// A store whose configuration file holds `yaml`, which is read when a test loads it.
+async function storeWith(yaml: string) {
+    apiMocks.getNote.mockResolvedValue({ data: yaml });
+    return await freshStore();
+}
+
 function missing(): Error {
     return Object.assign(new Error('Not Found'), { response: { status: 404 } });
 }
@@ -69,8 +81,7 @@ afterEach(() => {
 describe('available', () => {
     it('lists what the backend reported for the loaded window', async () => {
         apiMocks.getImportedEvents.mockResolvedValue(response());
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await freshStore();
 
         await store.load('2024-05-01', '2024-05-31');
 
@@ -79,9 +90,7 @@ describe('available', () => {
 
     // So the view's control is not empty on its first paint, before any events have arrived.
     it('falls back to the enabled subscriptions before anything is loaded', async () => {
-        apiMocks.getNote.mockResolvedValue({ data: YAML_FILE });
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await storeWith(YAML_FILE);
 
         await store.loadSubscriptions();
 
@@ -93,9 +102,7 @@ describe('available', () => {
 
 describe('subscriptions', () => {
     it('reads the list out of the repository', async () => {
-        apiMocks.getNote.mockResolvedValue({ data: YAML_FILE });
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await storeWith(YAML_FILE);
 
         await store.loadSubscriptions();
 
@@ -121,8 +128,7 @@ describe('subscriptions', () => {
     // The normal state before any calendar is added, which is not an error.
     it('treats a missing file as no calendars', async () => {
         apiMocks.getNote.mockRejectedValue(missing());
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await freshStore();
 
         await store.loadSubscriptions();
 
@@ -133,16 +139,14 @@ describe('subscriptions', () => {
     it('does not swallow a failure that is not a missing file', async () => {
         apiMocks.getNote.mockRejectedValue(
             Object.assign(new Error('boom'), { response: { status: 500 } }));
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await freshStore();
 
         await expect(store.loadSubscriptions()).rejects.toThrow('boom');
     });
 
     it('writes the list back and drops what was loaded for the old one', async () => {
         apiMocks.getImportedEvents.mockResolvedValue(response());
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await freshStore();
 
         await store.load('2024-05-01', '2024-05-31');
         expect(store.events).toHaveLength(1);
@@ -167,8 +171,7 @@ describe('subscriptions', () => {
 describe('loading events', () => {
     it('fetches a window once and serves the same one from memory', async () => {
         apiMocks.getImportedEvents.mockResolvedValue(response());
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await freshStore();
 
         await store.load('2024-05-01', '2024-05-31');
         await store.load('2024-05-01', '2024-05-31');
@@ -179,8 +182,7 @@ describe('loading events', () => {
 
     it('fetches again for a different window', async () => {
         apiMocks.getImportedEvents.mockResolvedValue(response());
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await freshStore();
 
         await store.load('2024-05-01', '2024-05-31');
         await store.load('2024-06-01', '2024-06-30');
@@ -190,8 +192,7 @@ describe('loading events', () => {
 
     it('does not fire two requests for one window at once', async () => {
         apiMocks.getImportedEvents.mockResolvedValue(response());
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await freshStore();
 
         await Promise.all([
             store.load('2024-05-01', '2024-05-31'),
@@ -209,8 +210,7 @@ describe('loading events', () => {
                 { id: 'dead', name: 'Broken', color: null, error: 'the calendar responded 404' },
             ],
         }));
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await freshStore();
 
         await store.load('2024-05-01', '2024-05-31');
 
@@ -221,8 +221,7 @@ describe('loading events', () => {
     it('reports the colour and name each calendar was configured with', async () => {
         apiMocks.getNote.mockResolvedValue({ data: YAML_FILE });
         apiMocks.getImportedEvents.mockResolvedValue(response());
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await freshStore();
 
         await store.loadSubscriptions();
         await store.load('2024-05-01', '2024-05-31');
@@ -235,8 +234,7 @@ describe('loading events', () => {
     // marked unloaded is what lets a later navigation retry it.
     it('drops what was loaded when a later window fails', async () => {
         apiMocks.getImportedEvents.mockResolvedValueOnce(response());
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await freshStore();
 
         await store.load('2024-05-01', '2024-05-31');
         expect(store.events).toHaveLength(1);
@@ -253,8 +251,7 @@ describe('loading events', () => {
         apiMocks.getImportedEvents
             .mockRejectedValueOnce(new Error('offline'))
             .mockResolvedValueOnce(response());
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await freshStore();
 
         const first = store.load('2024-05-01', '2024-05-31');
         const second = store.load('2024-06-01', '2024-06-30');
@@ -268,8 +265,7 @@ describe('loading events', () => {
 
     it('does not refetch a window a queued caller is already waiting on', async () => {
         apiMocks.getImportedEvents.mockResolvedValue(response());
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await freshStore();
 
         await Promise.all([
             store.load('2024-05-01', '2024-05-31'),
@@ -283,8 +279,7 @@ describe('loading events', () => {
 
     it('clears the loading flag even when the request fails', async () => {
         apiMocks.getImportedEvents.mockRejectedValue(new Error('offline'));
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await freshStore();
 
         await expect(store.load('2024-05-01', '2024-05-31')).rejects.toThrow('offline');
         expect(store.isLoading).toBe(false);
@@ -298,9 +293,7 @@ describe('task date colours', () => {
 `;
 
     it('reads them out of the same file', async () => {
-        apiMocks.getNote.mockResolvedValue({ data: WITH_COLORS });
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await storeWith(WITH_COLORS);
 
         await store.loadSubscriptions();
 
@@ -312,8 +305,7 @@ describe('task date colours', () => {
         apiMocks.getNote.mockResolvedValue({
             data: `${YAML_FILE}task_dates:\n    due_by: 12\n    deadline: "  "\n`,
         });
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await freshStore();
 
         await store.loadSubscriptions();
 
@@ -321,9 +313,7 @@ describe('task date colours', () => {
     });
 
     it('keeps the subscriptions when only the colours are saved', async () => {
-        apiMocks.getNote.mockResolvedValue({ data: WITH_COLORS });
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await storeWith(WITH_COLORS);
 
         await store.loadSubscriptions();
         await store.saveTaskDateColors({ deadline: '#b71c1c' });
@@ -336,9 +326,7 @@ describe('task date colours', () => {
     });
 
     it('keeps the colours when only the subscriptions are saved', async () => {
-        apiMocks.getNote.mockResolvedValue({ data: WITH_COLORS });
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await storeWith(WITH_COLORS);
 
         await store.loadSubscriptions();
         await store.saveSubscriptions([{
@@ -363,9 +351,7 @@ describe('alarm defaults', () => {
 `;
 
     it('reads each kind the file sets, a single string as a list of one', async () => {
-        apiMocks.getNote.mockResolvedValue({ data: WITH_ALARMS });
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await storeWith(WITH_ALARMS);
 
         await store.loadSubscriptions();
 
@@ -383,8 +369,7 @@ describe('alarm defaults', () => {
         apiMocks.getNote.mockResolvedValue({
             data: `${YAML_FILE}alarms:\n    timed: [10m, -5m, soon]\n    all_day:\n    due_by: 5\n`,
         });
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await freshStore();
 
         await store.loadSubscriptions();
 
@@ -393,8 +378,7 @@ describe('alarm defaults', () => {
 
     it('has none when there is no file, or none is set', async () => {
         apiMocks.getNote.mockRejectedValue(missing());
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await freshStore();
 
         await store.loadSubscriptions();
 
@@ -405,8 +389,7 @@ describe('alarm defaults', () => {
         apiMocks.getNote.mockResolvedValue({
             data: `${YAML_FILE}alarms:\n    timed: [-5m]\n    deadline: []\n`,
         });
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await freshStore();
 
         expect(store.effectiveAlarmDefaults).toEqual({ timed: ['0m'], allDay: [], dueBy: [], deadline: [] });
         await store.loadSubscriptions();
@@ -427,9 +410,7 @@ categories:
 `;
 
         it('are reported, by where they are written, and dropped', async () => {
-            apiMocks.getNote.mockResolvedValue({ data: BAD });
-            const { useCalendarsStore } = await load();
-            const store = useCalendarsStore();
+            const store = await storeWith(BAD);
 
             await store.loadSubscriptions();
 
@@ -442,9 +423,7 @@ categories:
         });
 
         it('are not reported when there are none, or no file', async () => {
-            apiMocks.getNote.mockResolvedValue({ data: WITH_ALARMS });
-            const { useCalendarsStore } = await load();
-            const store = useCalendarsStore();
+            const store = await storeWith(WITH_ALARMS);
             await store.loadSubscriptions();
             expect(store.errors).toEqual([]);
 
@@ -454,9 +433,7 @@ categories:
         });
 
         it('stop being reported once a save has rewritten the file without them', async () => {
-            apiMocks.getNote.mockResolvedValue({ data: BAD });
-            const { useCalendarsStore } = await load();
-            const store = useCalendarsStore();
+            const store = await storeWith(BAD);
             await store.loadSubscriptions();
             expect(store.errors).not.toEqual([]);
 
@@ -467,9 +444,7 @@ categories:
         });
 
         it('are reported again when the file is read again and still has them', async () => {
-            apiMocks.getNote.mockResolvedValue({ data: BAD });
-            const { useCalendarsStore } = await load();
-            const store = useCalendarsStore();
+            const store = await storeWith(BAD);
 
             await store.loadSubscriptions();
             await store.loadSubscriptions();
@@ -480,9 +455,7 @@ categories:
 
     // The whole file is rewritten from what the store holds, so what it does not hold is lost.
     it('keeps them when the subscriptions, the colours or the categories are saved', async () => {
-        apiMocks.getNote.mockResolvedValue({ data: WITH_ALARMS });
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await storeWith(WITH_ALARMS);
 
         await store.loadSubscriptions();
         await store.saveSubscriptions([{
@@ -506,9 +479,7 @@ categories:
     });
 
     it('writes only the kinds that are set, in the file\'s order, and keeps the rest of it', async () => {
-        apiMocks.getNote.mockResolvedValue({ data: WITH_ALARMS });
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await storeWith(WITH_ALARMS);
 
         await store.loadSubscriptions();
         await store.saveAlarmDefaults({ deadline: ['-1d 18:00', '-2h'], timed: [] });
@@ -524,9 +495,7 @@ categories:
 
     // Read back by hand as often as by the app, and short enough to sit on the line that names it.
     it('writes each list on the line that names it', async () => {
-        apiMocks.getNote.mockResolvedValue({ data: WITH_ALARMS });
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await storeWith(WITH_ALARMS);
 
         await store.loadSubscriptions();
         await store.saveAlarmDefaults({ timed: ['-10m', '0m'], allDay: ['-1d 18:00'] });
@@ -542,9 +511,7 @@ categories:
     });
 
     it('leaves the block out of the file when none is set', async () => {
-        apiMocks.getNote.mockResolvedValue({ data: WITH_ALARMS });
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await storeWith(WITH_ALARMS);
 
         await store.loadSubscriptions();
         await store.saveAlarmDefaults({});
@@ -565,9 +532,7 @@ describe('event categories', () => {
 `;
 
     it('reads them out of the same file, in its order', async () => {
-        apiMocks.getNote.mockResolvedValue({ data: WITH_CATEGORIES });
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await storeWith(WITH_CATEGORIES);
 
         await store.loadSubscriptions();
 
@@ -585,8 +550,7 @@ describe('event categories', () => {
         apiMocks.getNote.mockResolvedValue({
             data: `${YAML_FILE}categories:\n    meeting: blue\n    trip:\n        color: 12\n        name: "  "\n`,
         });
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await freshStore();
 
         await store.loadSubscriptions();
 
@@ -595,16 +559,14 @@ describe('event categories', () => {
 
     // Every category a note names would otherwise be reported as unknown on the first paint.
     it('has no map to check against until the file is read', async () => {
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await freshStore();
 
         expect(store.categoryMap).toBeUndefined();
     });
 
     it('has none, rather than unknown ones, when there is no file', async () => {
         apiMocks.getNote.mockRejectedValue(missing());
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await freshStore();
 
         await store.loadSubscriptions();
 
@@ -613,17 +575,14 @@ describe('event categories', () => {
 
     it('has no map to check against when the file cannot be read', async () => {
         apiMocks.getNote.mockRejectedValue(new Error('offline'));
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await freshStore();
 
         await expect(store.loadSubscriptions()).rejects.toThrow('offline');
         expect(store.categoryMap).toBeUndefined();
     });
 
     it('keeps them when only the subscriptions are saved', async () => {
-        apiMocks.getNote.mockResolvedValue({ data: WITH_CATEGORIES });
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await storeWith(WITH_CATEGORIES);
 
         await store.loadSubscriptions();
         await store.saveSubscriptions([{
@@ -656,9 +615,7 @@ describe('event categories', () => {
 
         // A set list is not an unset one, which is what an empty `alarms:` is.
         it('reads a category\'s, an empty list as set and an empty value as not', async () => {
-            apiMocks.getNote.mockResolvedValue({ data: WITH_ALARMS });
-            const { useCalendarsStore } = await load();
-            const store = useCalendarsStore();
+            const store = await storeWith(WITH_ALARMS);
 
             await store.loadSubscriptions();
 
@@ -673,9 +630,7 @@ describe('event categories', () => {
         });
 
         it('keeps them when the subscriptions are saved, as written', async () => {
-            apiMocks.getNote.mockResolvedValue({ data: WITH_ALARMS });
-            const { useCalendarsStore } = await load();
-            const store = useCalendarsStore();
+            const store = await storeWith(WITH_ALARMS);
 
             await store.loadSubscriptions();
             await store.saveSubscriptions([{
@@ -696,9 +651,7 @@ describe('event categories', () => {
         });
 
         it('writes what the settings give', async () => {
-            apiMocks.getNote.mockResolvedValue({ data: WITH_ALARMS });
-            const { useCalendarsStore } = await load();
-            const store = useCalendarsStore();
+            const store = await storeWith(WITH_ALARMS);
 
             await store.loadSubscriptions();
             await store.saveCategories([{ id: 'meeting', alarms: ['-1h'] }, { id: 'quiet', alarms: [] }]);
@@ -712,9 +665,7 @@ describe('event categories', () => {
     });
 
     it('keeps the subscriptions when only the categories are saved', async () => {
-        apiMocks.getNote.mockResolvedValue({ data: WITH_CATEGORIES });
-        const { useCalendarsStore } = await load();
-        const store = useCalendarsStore();
+        const store = await storeWith(WITH_CATEGORIES);
 
         await store.loadSubscriptions();
         await store.saveCategories([{ id: 'meeting', color: '#0d47a1' }]);
