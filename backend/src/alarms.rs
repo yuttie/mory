@@ -211,14 +211,16 @@ pub fn check_list(alarms: &[String]) -> Result<Vec<String>, String> {
         .collect()
 }
 
-/// The alarms a note's `alarms:` value holds: a list, or a single string for a list of one, as
-/// `byday` is read. An entry that is not a valid alarm is dropped and the rest stand; the web app
-/// is what reports it. Anything else is no alarm at all, which is what `alarms: []` silences with.
-pub fn list_of(value: &Value) -> Vec<Spec> {
-    let parse = |value: &Value| value.as_str().and_then(|text| Spec::parse(text).ok());
-    match value {
-        Value::Sequence(items) => items.iter().filter_map(parse).collect(),
-        single => parse(single).into_iter().collect(),
+impl Spec {
+    /// The alarms a note's `alarms:` value holds: a list, or a single string for a list of one, as
+    /// `byday` is read. An entry that is not a valid alarm is dropped and the rest stand; the web app
+    /// is what reports it. Anything else is no alarm at all, which is what `alarms: []` silences with.
+    pub fn list_from(value: &Value) -> Vec<Spec> {
+        let parse = |value: &Value| value.as_str().and_then(|text| Spec::parse(text).ok());
+        match value {
+            Value::Sequence(items) => items.iter().filter_map(parse).collect(),
+            single => parse(single).into_iter().collect(),
+        }
     }
 }
 
@@ -280,9 +282,9 @@ impl Defaults {
     /// category with nothing after its id is configured and sets nothing, and one that is not a
     /// mapping is not configured at all.
     pub fn read(Blocks { alarms, categories }: Blocks) -> Defaults {
-        let set = |key: &str| alarms.and_then(|alarms| present(alarms.get(key))).map(list_of);
+        let set = |key: &str| alarms.and_then(|alarms| present(alarms.get(key))).map(Spec::list_from);
         let categories = configured_categories(categories)
-            .map(|(id, entry)| (id, entry.and_then(|entry| present(entry.get("alarms"))).map(list_of)))
+            .map(|(id, entry)| (id, entry.and_then(|entry| present(entry.get("alarms"))).map(Spec::list_from)))
             .collect();
         Defaults {
             timed: set("timed"),
@@ -301,7 +303,7 @@ impl Defaults {
     /// note had before alarms could be set, and none for an all-day one.
     pub fn specs_of(&self, occurrence: &Occurrence) -> Vec<Spec> {
         if let Some(declared) = &occurrence.alarms {
-            return list_of(declared);
+            return Spec::list_from(declared);
         }
         let in_category = occurrence.category.as_deref().and_then(|id| self.category_alarms(id));
         if let Some(specs) = in_category {
@@ -317,7 +319,7 @@ impl Defaults {
     /// configured one, else none.
     pub fn task_specs_of(&self, date: &TaskDate) -> Vec<Spec> {
         if let Some(declared) = &date.alarms {
-            return list_of(declared);
+            return Spec::list_from(declared);
         }
         match date.field {
             TaskField::DueBy => self.due_by.clone().unwrap_or_default(),
@@ -398,7 +400,7 @@ impl Reach {
             Value::Mapping(map) => {
                 for (key, value) in map {
                     if key.as_str() == Some("alarms") && !value.is_mapping() {
-                        self.include(&list_of(value));
+                        self.include(&Spec::list_from(value));
                     }
                     else {
                         self.scan(value);
@@ -612,7 +614,7 @@ mod tests {
     fn a_list_drops_what_is_not_an_alarm_and_a_string_is_a_list_of_one() {
         let list = |yaml: &str| -> Vec<String> {
             let value: Value = serde_yaml::from_str(yaml).unwrap();
-            list_of(&value).iter().map(Spec::to_string).collect()
+            Spec::list_from(&value).iter().map(Spec::to_string).collect()
         };
         assert_eq!(list("[-10m, 09:00, -1d 18:00]"), ["-10m", "09:00", "-1d 18:00"]);
         assert_eq!(list("[-10m, 10m, 5, null, [-1h], bogus, -5m]"), ["-10m", "-5m"]);

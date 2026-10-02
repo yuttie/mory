@@ -478,15 +478,19 @@ impl<'a> Parent<'a> {
             color: detail.get("color"),
             location: detail.get("location"),
             alarms: detail.get("alarms"),
-            ..Parent::category_of(detail)
+            category: category_of(detail),
         }
     }
 
     /// An event's own start inherits nothing but its category from the event it is.
-    fn category_of(detail: &'a Mapping) -> Self {
-        // `categoryOf`: a category that is not text is reported and the event drawn without it.
-        Parent { category: detail.get("category").and_then(Value::as_str), ..Parent::default() }
+    fn category_only(detail: &'a Mapping) -> Self {
+        Parent { category: category_of(detail), ..Parent::default() }
     }
+}
+
+/// `categoryOf`: a category that is not text is reported and the event drawn without it.
+fn category_of(detail: &Mapping) -> Option<&str> {
+    detail.get("category").and_then(Value::as_str)
 }
 
 /// `buildOccurrence`, as far as it decides whether and where the occurrence is drawn. `own` is the
@@ -565,7 +569,7 @@ fn events_of_entry(
             expand_series(event_name, detail, path, window, reader, out);
         } else {
             let start = StartInput::Written(detail.get("start"));
-            build_occurrence(Some(detail), start, &Parent::category_of(detail), event_name, path, reader, out);
+            build_occurrence(Some(detail), start, &Parent::category_only(detail), event_name, path, reader, out);
         }
     }
     // `instances ?? times`, and only the entries that are objects.
