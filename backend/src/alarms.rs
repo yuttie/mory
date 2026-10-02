@@ -35,9 +35,7 @@ use regex::Regex;
 use serde_yaml::{Mapping, Value};
 
 use crate::models::ListEntry;
-use crate::note_events::{
-    Occurrence, Reader, Start, dayjs_parse, key_name, present, resolve_local, to_wall_clock,
-};
+use crate::note_events::{Occurrence, Reader, Start, key_name, present, task_date_start};
 use crate::tasks::{date_texts, is_over, task_of, task_status_of, TaskField};
 
 /// The furthest from its start an alarm may be set. Anything further is a typo or worse: the
@@ -142,18 +140,15 @@ impl Spec {
     /// The instant it rings for an occurrence starting at `start`; `None` where the arithmetic
     /// leaves the calendar, which an alarm held to a year cannot, but nothing here may panic on.
     pub fn instant(&self, start: Start, reader: &Reader) -> Option<DateTime<Utc>> {
-        let wall = match start {
-            Start::Date(date) => date.and_time(NaiveTime::MIN),
-            Start::Time(wall) => wall,
-        };
         match *self {
             Spec::Elapsed(by) => start.begins(reader).checked_add_signed(by),
             Spec::Days(days) => {
-                Some(resolve_local(wall.checked_add_signed(Duration::try_days(days)?)?, reader.zone))
+                let moved = start.wall().checked_add_signed(Duration::try_days(days)?)?;
+                Some(Start::Time(moved).begins(reader))
             },
             Spec::At { days, time } => {
-                let day = wall.date().checked_add_signed(Duration::try_days(days)?)?;
-                Some(resolve_local(day.and_time(time), reader.zone))
+                let day = start.wall().date().checked_add_signed(Duration::try_days(days)?)?;
+                Some(Start::Time(day.and_time(time)).begins(reader))
             },
         }
     }
@@ -447,10 +442,7 @@ pub fn task_dates(entries: &[ListEntry], reader: &Reader) -> Vec<TaskDate> {
         let title = entry.title.as_deref().unwrap_or(&path);
         let own = task.get("alarms").and_then(Value::as_mapping);
         for (field, text) in date_texts(task) {
-            if dayjs_parse(text, reader.zone).is_none() {
-                continue;
-            }
-            let Some(start) = to_wall_clock(text, reader.zone) else {
+            let Some(start) = task_date_start(text, reader.zone) else {
                 continue;
             };
             found.push(TaskDate {

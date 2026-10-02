@@ -59,13 +59,18 @@ pub enum Start {
 }
 
 impl Start {
+    /// The wall clock it is at: a date is the first moment of its day.
+    pub fn wall(&self) -> NaiveDateTime {
+        match self {
+            Start::Date(date) => date.and_time(NaiveTime::MIN),
+            Start::Time(wall) => *wall,
+        }
+    }
+
     /// When it begins: `dayjs(start)`, which reads a date as its first moment and resolves a wall
     /// clock as the calendar does.
     pub fn begins(&self, reader: &Reader) -> DateTime<Utc> {
-        match self {
-            Start::Date(date) => resolve_local(date.and_time(NaiveTime::MIN), reader.zone),
-            Start::Time(wall) => resolve_local(*wall, reader.zone),
-        }
+        resolve_local(self.wall(), reader.zone)
     }
 }
 
@@ -251,7 +256,7 @@ fn make_date(year: i64, month: i64, day: i64, hour: i64, minute: i64, second: i6
 /// A time in a daylight-saving gap takes the offset from before the change, which moves it
 /// forward by the gap: 02:30 on the spring-forward night is 03:30. A time that happens twice is
 /// the first of the two.
-pub(crate) fn resolve_local(wall: NaiveDateTime, zone: Zone) -> DateTime<Utc> {
+fn resolve_local(wall: NaiveDateTime, zone: Zone) -> DateTime<Utc> {
     match zone.from_local_datetime(&wall) {
         LocalResult::Single(at) => at.with_timezone(&Utc),
         LocalResult::Ambiguous(first, second) => first.min(second).with_timezone(&Utc),
@@ -298,7 +303,7 @@ fn wall_clock_at(at: DateTime<Utc>, zone: Zone) -> NaiveDateTime {
 }
 
 /// `dayjs(text)`: the instant it names, or `None` where `isValid()` is false.
-pub(crate) fn dayjs_parse(text: &str, zone: Zone) -> Option<DateTime<Utc>> {
+fn dayjs_parse(text: &str, zone: Zone) -> Option<DateTime<Utc>> {
     let ends_in_z = text.ends_with(['Z', 'z']);
     if !ends_in_z {
         if let Some(parts) = DAYJS_PARSE.captures(text) {
@@ -374,6 +379,13 @@ pub(crate) fn to_wall_clock(text: &str, zone: Zone) -> Option<Start> {
         }
     }
     Some(Start::Time(wall))
+}
+
+/// Where the calendar draws a task's date, as `taskDateEvent` reads one: `None` for a value `dayjs`
+/// cannot read, which is reported and drawn nowhere, and otherwise where `toWallClock` puts it.
+pub(crate) fn task_date_start(text: &str, zone: Zone) -> Option<Start> {
+    dayjs_parse(text, zone)?;
+    to_wall_clock(text, zone)
 }
 
 /// Where the calendar draws a start `toWallClock` hands it as written, having no wall clock to read
