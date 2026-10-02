@@ -952,7 +952,7 @@ describe('event categories', () => {
     it('reads an empty category as none', () => {
         const { events, errors } = categorised([
             entry('a.md', {
-                'Weekly sync': { start: '2024-05-01 10:00', category: null as unknown as string },
+                'Weekly sync': { start: '2024-05-01 10:00', category: null },
             }),
         ]);
 
@@ -1296,7 +1296,7 @@ describe('event alarms', () => {
     it('reads a single string as a list of one and leaves an empty value to inherit', () => {
         expect(ringing({
             Single: { start: '2024-05-06 09:00', alarms: '-1h' },
-            Empty: { start: '2024-05-06 10:00', alarms: null as unknown as string[] },
+            Empty: { start: '2024-05-06 10:00', alarms: null },
         }, { alarmDefaults })).toEqual({ Single: ['-1h'], Empty: ['-5m'] });
     });
 
@@ -1322,7 +1322,7 @@ describe('event alarms', () => {
                 instances: [
                     { start: '2024-05-10 14:00' },
                     { start: '2024-05-11 14:00', alarms: ['0m'] },
-                    { start: '2024-05-12 14:00', alarms: null as unknown as string[] },
+                    { start: '2024-05-12 14:00', alarms: null },
                 ],
             },
         })], ANY_WINDOW);
@@ -1400,7 +1400,7 @@ describe('event alarms', () => {
         it('for nothing that is not set, or silences', () => {
             expect(derive({
                 None: { start: '2024-05-06 09:00' },
-                Empty: { start: '2024-05-06 10:00', alarms: null as unknown as string[] },
+                Empty: { start: '2024-05-06 10:00', alarms: null },
                 Silenced: { start: '2024-05-06 11:00', alarms: [] },
             }).errors).toEqual([]);
         });
