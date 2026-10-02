@@ -9,9 +9,9 @@
 
 use chrono::{DateTime, NaiveDate, Utc};
 
-use crate::alarms::{self, Defaults, Reach, instants_of, task_dates};
+use crate::alarms::{self, Defaults, Reach, TaskDate, instants_of, task_dates};
 use crate::models::ListEntry;
-use crate::note_events::{self, Reader, Start};
+use crate::note_events::{self, Occurrence, Reader, Start};
 
 /// When the occurrence an alarm is for starts: a moment, or a day for an all-day one.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -58,6 +58,58 @@ impl Schedule {
     }
 }
 
+/// What is rung for: an occurrence of an event, or one of a task's dates, with the alarms it rings
+/// at already worked out. The two are told apart only in how their alarms are, which is a different
+/// precedence for each.
+struct Subject<'a> {
+    specs: Vec<alarms::Spec>,
+    start: Start,
+    name: &'a str,
+    path: &'a str,
+    location: Option<&'a str>,
+}
+
+impl<'a> Subject<'a> {
+    fn of_occurrence(occurrence: &'a Occurrence, defaults: &Defaults) -> Self {
+        Subject {
+            specs: defaults.specs_of(occurrence),
+            start: occurrence.start,
+            name: &occurrence.name,
+            path: &occurrence.path,
+            location: occurrence.location.as_deref(),
+        }
+    }
+
+    fn of_date(date: &'a TaskDate, defaults: &Defaults) -> Self {
+        Subject {
+            specs: defaults.task_specs_of(date),
+            start: date.start,
+            name: &date.name,
+            path: &date.path,
+            location: None,
+        }
+    }
+
+    /// Each alarm it rings after `after` and no later than `until`.
+    fn alarms_between(&self, after: DateTime<Utc>, until: DateTime<Utc>, reader: &Reader) -> Vec<Alarm> {
+        let moment = match self.start {
+            Start::Date(day) => Moment::Day(day),
+            Start::Time(_) => Moment::At(self.start.begins(reader)),
+        };
+        instants_of(&self.specs, self.start, reader)
+            .into_iter()
+            .filter(|at| after < *at && *at <= until)
+            .map(|at| Alarm {
+                at,
+                name: self.name.to_owned(),
+                path: self.path.to_owned(),
+                location: self.location.map(str::to_owned),
+                start: moment,
+            })
+            .collect()
+    }
+}
+
 /// The alarms ringing after `after` and no later than `until`, soonest first.
 ///
 /// An occurrence rings at what its `alarms` say, then its category, then the configuration; failing
@@ -76,36 +128,19 @@ pub(crate) fn alarms_between(
         local_date(until + schedule.reach.lead),
         reader,
     );
-    let mut alarms = Vec::new();
-    let mut ring = |specs: &[alarms::Spec], start: Start, name: &str, path: &str, location: Option<&str>| {
-        let moment = match start {
-            Start::Date(day) => Moment::Day(day),
-            Start::Time(_) => Moment::At(start.begins(reader)),
-        };
-        for at in instants_of(specs, start, reader) {
-            if after < at && at <= until {
-                alarms.push(Alarm {
-                    at,
-                    name: name.to_owned(),
-                    path: path.to_owned(),
-                    location: location.map(str::to_owned),
-                    start: moment,
-                });
-            }
-        }
-    };
+    let mut found = Vec::new();
     for occurrence in note_events::occurrences(&schedule.entries, from, to, reader) {
         if !occurrence.finished {
-            let specs = schedule.defaults.specs_of(&occurrence);
-            ring(&specs, occurrence.start, &occurrence.name, &occurrence.path, occurrence.location.as_deref());
+            let subject = Subject::of_occurrence(&occurrence, &schedule.defaults);
+            found.extend(subject.alarms_between(after, until, reader));
         }
     }
     for date in task_dates(&schedule.entries, reader) {
-        let specs = schedule.defaults.task_specs_of(&date);
-        ring(&specs, date.start, &date.name, &date.path, None);
+        let subject = Subject::of_date(&date, &schedule.defaults);
+        found.extend(subject.alarms_between(after, until, reader));
     }
-    alarms.sort_by(|a, b| a.at.cmp(&b.at).then_with(|| a.name.cmp(&b.name)));
-    alarms
+    found.sort_by(|a, b| a.at.cmp(&b.at).then_with(|| a.name.cmp(&b.name)));
+    found
 }
 
 #[cfg(test)]
