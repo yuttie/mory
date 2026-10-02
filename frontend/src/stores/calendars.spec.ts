@@ -100,6 +100,81 @@ describe('available', () => {
     });
 });
 
+describe('loading the configuration', () => {
+    // A held read, to have a load in flight while another is asked for.
+    function held() {
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        apiMocks.getNote.mockImplementation(async () => {
+            await gate;
+            return { data: YAML_FILE };
+        });
+        return release;
+    }
+
+    it('reads the file once for loads that overlap, and gives each the same answer', async () => {
+        const release = held();
+        const store = await freshStore();
+
+        const first = store.loadConfiguration();
+        const second = store.loadConfiguration();
+        release();
+
+        expect((await first).map(({ id }) => id)).toEqual(['work', 'old']);
+        expect(await second).toEqual(await first);
+        expect(apiMocks.getNote).toHaveBeenCalledTimes(1);
+    });
+
+    it('reads it again for a load asked for afterwards, which is how a view finds a changed file', async () => {
+        apiMocks.getNote.mockResolvedValue({ data: YAML_FILE });
+        const store = await freshStore();
+
+        await store.loadConfiguration();
+        await store.loadConfiguration();
+
+        expect(apiMocks.getNote).toHaveBeenCalledTimes(2);
+    });
+
+    it('is loaded for good once it has been read, and ensureLoaded reads it only until then', async () => {
+        apiMocks.getNote.mockResolvedValue({ data: YAML_FILE });
+        const store = await freshStore();
+        expect(store.hasLoadedConfiguration).toBe(false);
+
+        await store.ensureLoaded();
+        await store.ensureLoaded();
+
+        expect(store.hasLoadedConfiguration).toBe(true);
+        expect(apiMocks.getNote).toHaveBeenCalledTimes(1);
+    });
+
+    it('lets ensureLoaded join a load in flight rather than start another', async () => {
+        const release = held();
+        const store = await freshStore();
+
+        const loading = store.loadConfiguration();
+        const ensured = store.ensureLoaded();
+        release();
+        await Promise.all([loading, ensured]);
+
+        expect(apiMocks.getNote).toHaveBeenCalledTimes(1);
+    });
+
+    it('tries again from ensureLoaded when the file could not be read, and not for one that is missing', async () => {
+        apiMocks.getNote.mockRejectedValueOnce(Object.assign(new Error('Server Error'), { response: { status: 500 } }));
+        const store = await freshStore();
+        await expect(store.ensureLoaded()).rejects.toThrow('Server Error');
+        expect(store.hasLoadedConfiguration).toBe(false);
+
+        apiMocks.getNote.mockRejectedValue(missing());
+        await store.ensureLoaded();
+        expect(store.hasLoadedConfiguration).toBe(true);
+        await store.ensureLoaded();
+        expect(apiMocks.getNote).toHaveBeenCalledTimes(2);
+    });
+});
+
 describe('subscriptions', () => {
     it('reads the list out of the repository', async () => {
         const store = await storeWith(YAML_FILE);

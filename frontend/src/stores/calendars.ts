@@ -171,7 +171,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
             .map((calendar) => `${calendar.name}: ${calendar.error}`),
     ]);
 
-    async function loadConfiguration(): Promise<CalendarSubscription[]> {
+    async function readConfiguration(): Promise<CalendarSubscription[]> {
         try {
             const text = await files.read(CALENDARS_PATH);
             const parsed = YAML.parse(text);
@@ -204,6 +204,27 @@ export const useCalendarsStore = defineStore('calendars', () => {
         }
         hasLoadedConfiguration.value = true;
         return subscriptions.value;
+    }
+
+    // The read under way, which a view that asks while one is joins rather than repeats: every view
+    // that shows what the file holds asks as it mounts, and two of them mount together.
+    let reading: Promise<CalendarSubscription[]> | null = null;
+
+    /// Reads the configuration, again if it has been: a view that is opened finds the file as it is
+    /// now, however it was changed since.
+    function loadConfiguration(): Promise<CalendarSubscription[]> {
+        reading ??= readConfiguration().finally(() => {
+            reading = null;
+        });
+        return reading;
+    }
+
+    /// Reads the configuration only if it has not been read, for what wants it there rather than
+    /// fresh: a box that shows the defaults beside a task's own.
+    async function ensureLoaded(): Promise<void> {
+        if (!hasLoadedConfiguration.value) {
+            await loadConfiguration();
+        }
     }
 
     async function saveSubscriptions(next: CalendarSubscription[]): Promise<void> {
@@ -344,6 +365,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
         nameOf,
         isLoading,
         loadConfiguration,
+        ensureLoaded,
         saveSubscriptions,
         saveTaskDateColors,
         saveAlarmDefaults,
