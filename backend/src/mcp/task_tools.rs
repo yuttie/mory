@@ -355,9 +355,7 @@ fn alarms_path(date: &str) -> [&str; 3] {
 
 /// The keys under `task.alarms` in a note, as it is now.
 fn alarm_keys(text: &str) -> Vec<String> {
-    let block = frontmatter::Note::parse(text).block;
-    serde_yaml::from_str::<Value>(&block)
-        .ok()
+    frontmatter::value(text)
         .and_then(|root| root.get("task")?.get("alarms")?.as_mapping().cloned())
         .map(|alarms| alarms.keys().filter_map(|key| key.as_str().map(str::to_owned)).collect())
         .unwrap_or_default()
@@ -703,8 +701,7 @@ mod tests {
     }
 
     fn alarms_of(note: &str) -> serde_yaml::Value {
-        let block = note.trim_start_matches("---\n").split("\n---").next().unwrap();
-        serde_yaml::from_str::<Value>(block).unwrap()["task"]["alarms"].clone()
+        frontmatter::value(note).expect("valid YAML")["task"]["alarms"].clone()
     }
 
     fn yaml(text: &str) -> serde_yaml::Value {

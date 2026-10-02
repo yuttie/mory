@@ -121,6 +121,13 @@ impl Change {
     }
 }
 
+/// What the note's frontmatter says, for a tool that only looks: `None` when it is not valid YAML,
+/// and `Null` when there is none, which asks nothing of a caller that reads keys by `get`. An edit
+/// has its own reasons to refuse a block and says them, so it does not come through here.
+pub fn value(text: &str) -> Option<Value> {
+    serde_yaml::from_str(&Note::parse(text).block).ok()
+}
+
 /// Why an edit was refused, in words a model can act on.
 #[derive(Debug)]
 pub struct EditError(pub String);
@@ -633,6 +640,22 @@ fn spell_scalar(value: &Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_value_of_a_note_is_its_frontmatter_read_as_yaml() {
+        let note = "---\ntask:\n    alarms:\n        due_by: [09:00]\n---\n# Body\n\nnot: yaml: at all\n";
+        let read = value(note).expect("valid YAML");
+        assert_eq!(read["task"]["alarms"]["due_by"][0], "09:00");
+        // Nothing past the closing fence is the frontmatter's, however it reads.
+        assert_eq!(read.as_mapping().map(Mapping::len), Some(1));
+
+        // No frontmatter is nothing to look at, not a failure to read it.
+        let bare = value("# Just a note\n").expect("nothing to read is not an error");
+        assert!(bare.is_null(), "{bare:?}");
+        assert!(bare.get("events").is_none());
+        // And a block that is not YAML says nothing at all.
+        assert_eq!(value("---\ntags: [unclosed\n---\n"), None);
+    }
 
     fn set(text: &str, path: &[&str], value: impl Into<Value>) -> String {
         apply(text, &[Change::set(path, value)]).expect("the edit should apply")

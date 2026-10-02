@@ -302,9 +302,7 @@ fn check_category(id: &str, configured: &[String]) -> Result<(), String> {
 
 /// Whether the note already declares an event by this name.
 fn has_event(text: &str, name: &str) -> bool {
-    let block = frontmatter::Note::parse(text).block;
-    serde_yaml::from_str::<Value>(&block)
-        .ok()
+    frontmatter::value(text)
         .and_then(|root| root.get("events")?.as_mapping()?.get(name).cloned())
         .is_some()
 }
@@ -560,7 +558,7 @@ mod tests {
                 .expect("valid changes"),
         )
         .expect("an edit");
-        let parsed: Value = serde_yaml::from_str(edited.trim_start_matches("---\n").split("---").next().unwrap()).unwrap();
+        let parsed = frontmatter::value(&edited).expect("valid YAML");
         let written: Vec<&str> = parsed["events"]["Standup"]["alarms"]
             .as_sequence()
             .unwrap()
