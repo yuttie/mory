@@ -96,36 +96,7 @@
 
             <v-divider class="mt-6 mb-4"></v-divider>
 
-            <v-card-subtitle class="px-0">Alarms</v-card-subtitle>
-            <p class="text-medium-emphasis mb-4">
-                When mory rings, for an event or a task date whose note, or whose category, does not
-                say. An alarm is an offset from the start, <code>-10m</code> before it or
-                <code>+1h</code> after, or a time on the start's day, <code>09:00</code> or
-                <code>-1d 18:00</code>. A note sets its own with <code>alarms:</code>. Stored in the
-                same file, so they follow the notes rather than the browser.
-            </p>
-            <div class="alarm-defaults">
-                <AlarmField
-                    v-for="field of ALARM_FIELDS"
-                    v-bind:key="field.name"
-                    v-model="alarmDraft[field.name]"
-                    v-bind:label="field.label"
-                ></AlarmField>
-            </div>
-            <v-btn
-                v-bind:disabled="!alarmsChanged"
-                v-bind:loading="isSavingAlarms"
-                variant="tonal"
-                v-on:click="saveAlarmDefaults"
-            >
-                Save alarms
-            </v-btn>
-            <v-alert
-                v-if="alarmError"
-                class="mt-4"
-                type="error"
-                variant="tonal"
-            >{{ alarmError }}</v-alert>
+            <AlarmDefaultsSettings></AlarmDefaultsSettings>
 
             <v-divider class="mt-6 mb-4"></v-divider>
 
@@ -300,9 +271,8 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 
 import { mdiDelete, mdiPencil, mdiPlus } from '@mdi/js';
 
-import { alarmProblems, BUILT_IN_ALARMS, describeAlarmText } from '@/alarms';
-import type { AlarmDefaults } from '@/alarms';
-import AlarmField from '@/components/AlarmField.vue';
+import { alarmProblems, describeAlarmText } from '@/alarms';
+import AlarmDefaultsSettings from '@/components/AlarmDefaultsSettings.vue';
 import InheritableAlarms from '@/components/InheritableAlarms.vue';
 import ColorField from '@/components/ColorField.vue';
 import { parseEventColor } from '@/event-color';
@@ -324,14 +294,6 @@ const TASK_DATE_FIELDS = [
     { name: 'deadline', label: 'Deadline colour', fallback: DEFAULT_DEADLINE_COLOR },
 ] as const;
 
-// The four kinds of alarm the file sets, with what each is called.
-const ALARM_FIELDS = [
-    { name: 'timed', label: 'Events with a time' },
-    { name: 'allDay', label: 'All-day events' },
-    { name: 'dueBy', label: 'Task due dates' },
-    { name: 'deadline', label: 'Task deadlines' },
-] as const satisfies readonly { name: keyof AlarmDefaults; label: string }[];
-
 // Composables
 const calendars = useCalendarsStore();
 
@@ -349,16 +311,6 @@ const draft = reactive<CalendarSubscription>({
     enabled: true,
 });
 
-const isSavingAlarms = ref(false);
-const alarmError = ref('');
-// Each box shows what the kind rings at now, built-in default included, so an empty one is
-// "never" and not "unset". Saving leaves out a kind that is back at the default.
-const alarmDraft = reactive<Record<keyof AlarmDefaults, string[]>>({
-    timed: [],
-    allDay: [],
-    dueBy: [],
-    deadline: [],
-});
 
 const isSavingColors = ref(false);
 const colorError = ref('');
@@ -378,13 +330,6 @@ const categoryAlarms = ref<string[] | null>(null);
 // Computed properties
 const taskDateColorsChanged = computed(() => TASK_DATE_FIELDS.some(
     (field) => taskDateDraft[field.name].trim() !== (calendars.taskDateColors[field.name] ?? ''),
-));
-
-const sameList = (a: readonly string[], b: readonly string[]) =>
-    a.length === b.length && a.every((entry, index) => entry.trim() === b[index].trim());
-
-const alarmsChanged = computed(() => ALARM_FIELDS.some(
-    (field) => !sameList(alarmDraft[field.name], calendars.effectiveAlarmDefaults[field.name]),
 ));
 
 // `null` while the file is unread or unreadable; there is nothing to list either way.
@@ -427,12 +372,6 @@ onMounted(() => {
 watch(() => calendars.taskDateColors, (colors) => {
     for (const field of TASK_DATE_FIELDS) {
         taskDateDraft[field.name] = colors[field.name] ?? '';
-    }
-}, { immediate: true });
-
-watch(() => calendars.alarmDefaults, () => {
-    for (const field of ALARM_FIELDS) {
-        alarmDraft[field.name] = [...calendars.effectiveAlarmDefaults[field.name]];
     }
 }, { immediate: true });
 
@@ -528,34 +467,6 @@ async function saveTaskDateColors() {
     }
     finally {
         isSavingColors.value = false;
-    }
-}
-
-async function saveAlarmDefaults() {
-    const next: AlarmDefaults = {};
-    for (const field of ALARM_FIELDS) {
-        const list = alarmDraft[field.name].map((alarm) => alarm.trim());
-        const [problem] = alarmProblems(list);
-        if (problem !== undefined) {
-            alarmError.value = `${field.label}: ${problem}.`;
-            return;
-        }
-        // A kind that is back at the built-in default is left out of the file, which means the same.
-        if (!sameList(list, BUILT_IN_ALARMS[field.name])) {
-            next[field.name] = list;
-        }
-    }
-
-    isSavingAlarms.value = true;
-    alarmError.value = '';
-    try {
-        await calendars.saveAlarmDefaults(next);
-    }
-    catch (err) {
-        alarmError.value = `Could not save ${CALENDARS_PATH}: ${err}`;
-    }
-    finally {
-        isSavingAlarms.value = false;
     }
 }
 
@@ -671,8 +582,7 @@ async function persist(next: CalendarSubscription[], onSaved?: () => void) {
 
 <style scoped lang="scss">
 // Side by side where there is room, so the two colours are compared rather than read in turn.
-.task-date-colors,
-.alarm-defaults {
+.task-date-colors {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(14em, 1fr));
     gap: 0 1rem;
