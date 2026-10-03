@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import axios from 'axios';
 import YAML from 'yaml';
 import { readTaskSettings, type TaskSettings } from '@/urgency';
@@ -33,5 +33,8 @@ export const useTaskSettingsStore = defineStore('task-settings', () => {
             loading = null;
         }
     }
+    watch(() => files.entries.find((entry) => entry.path === TASK_SETTINGS_PATH)?.time, () => {
+        void load();
+    });
     return { settings, problems, load };
 });

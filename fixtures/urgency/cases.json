@@ -513,6 +513,58 @@
                 "actionable": true,
                 "short_window": true
             }
+        },
+        {
+            "name": "minute datetime with offset",
+            "task": {
+                "deadline": "2026-10-04 10:00+09:00"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "urgent",
+                "slack_ratio": 0.005952380952380952,
+                "reference": "2026-10-04T01:00:00.000Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "invalid calendar date",
+            "task": {
+                "deadline": "2026-99-99"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "none",
+                "slack_ratio": null,
+                "reference": null,
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "huge lead safely resolves",
+            "task": {
+                "deadline": "2026-10-15",
+                "lead_time": "9007199254740991d"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "urgent",
+                "slack_ratio": 1.2906342648417642e-15,
+                "reference": "2026-10-15T14:59:59.999Z",
+                "actionable": true,
+                "short_window": false
+            }
         }
     ],
     "grammar": [

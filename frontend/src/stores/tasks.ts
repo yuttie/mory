@@ -318,6 +318,7 @@ export const useTasksStore = defineStore('tasks', () => {
         // === Actions ===
         node,
         urgency,
+        now,
         ownUrgency,
         progress,
         childrenOf,

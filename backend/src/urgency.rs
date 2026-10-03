@@ -106,7 +106,13 @@ pub fn instant(value: Option<&Value>, zone: Tz, end: bool) -> Option<DateTime<Ut
         }
         return Some(time);
     }
-    DateTime::parse_from_rfc3339(&text.replace(' ', "T")).ok().map(|dt| dt.with_timezone(&Utc))
+    static DATETIME: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}[ T]([0-9]{2}):([0-9]{2})(?::([0-9]{2})(?:\.[0-9]{1,3})?)?(Z|[+-][0-9]{2}:[0-9]{2})$").unwrap());
+    let parts = DATETIME.captures(text)?;
+    if parts[1].parse::<u8>().ok()? > 23 || parts[2].parse::<u8>().ok()? > 59 || parts.get(3).is_some_and(|seconds| seconds.as_str().parse::<u8>().is_ok_and(|value| value > 59)) {
+        return None;
+    }
+    let written = if parts.get(3).is_none() { format!("{}:00{}", &text[..16], &parts[4]) } else { text.to_owned() };
+    DateTime::parse_from_rfc3339(&written.replace(' ', "T")).ok().map(|dt| dt.with_timezone(&Utc))
 }
 
 pub fn calculate(task: &Value, tags: &[String], settings: &Settings, now: DateTime<Utc>, zone: Tz) -> Urgency {

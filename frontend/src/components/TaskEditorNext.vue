@@ -388,7 +388,7 @@ const tasks = useTasksStore();
 const settings = useTaskSettingsStore();
 const derivedProgress = computed(() => tasks.progress(uuid.value));
 const defaultLeadTime = computed(() => resolvedLeadTime({}, form.tags, settings.settings));
-const derivedUrgency = computed(() => urgencyOf(form, form.tags, settings.settings));
+const derivedUrgency = computed(() => urgencyOf(form, form.tags, settings.settings, tasks.now));
 const plans = usePlansStore();
 const plannedDays = computed(() => plans.plannedDays(uuid.value));
 const leadTimeRule = (value: string) => !value?.trim() || leadTimeDays(value) !== undefined || 'Use whole days or weeks, such as 14d or 2w.';

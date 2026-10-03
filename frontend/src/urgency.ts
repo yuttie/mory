@@ -96,7 +96,7 @@ export function resolvedLeadTime(task: UrgencyTask, tags: readonly string[], set
     if (own !== undefined) {
         return own;
     }
-    const tagged = tags.map((tag) => leadTimeDays(settings.lead_time_by_tag?.[tag])).filter((days): days is number => days !== undefined);
+    const tagged = (Array.isArray(tags) ? tags : []).filter((tag) => typeof tag === 'string').map((tag) => leadTimeDays(settings.lead_time_by_tag?.[tag])).filter((days): days is number => days !== undefined);
     return tagged.length > 0 ? Math.max(...tagged) : leadTimeDays(settings.default_lead_time) ?? 7;
 }
 
@@ -107,6 +107,10 @@ export function taskInstant(value: unknown, zone: string, endOfDay = false): num
     }
     const text = value.trim();
     if (/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(text)) {
+        const canonical = new Date(`${text}T00:00:00Z`);
+        if (!Number.isFinite(canonical.valueOf()) || canonical.toISOString().slice(0, 10) !== text) {
+            return undefined;
+        }
         const parsed = dayjs.tz(text, zone);
         if (!parsed.isValid() || parsed.format('YYYY-MM-DD') !== text) {
             return undefined;
@@ -116,10 +120,14 @@ export function taskInstant(value: unknown, zone: string, endOfDay = false): num
     if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:\.[0-9]{1,3})?)?(?:Z|[+-][0-9]{2}:[0-9]{2})$/.test(text)) {
         return undefined;
     }
+    const clock = text.slice(11).match(/^([0-9]{2}):([0-9]{2})(?::([0-9]{2}))?/);
+    if (!clock || Number(clock[1]) > 23 || Number(clock[2]) > 59 || Number(clock[3] ?? 0) > 59) {
+        return undefined;
+    }
     const instant = Date.parse(text.replace(' ', 'T'));
     const date = text.slice(0, 10);
-    const validDay = dayjs.tz(date, zone);
-    return Number.isFinite(instant) && validDay.format('YYYY-MM-DD') === date ? instant : undefined;
+    const canonical = new Date(`${date}T00:00:00Z`);
+    return Number.isFinite(instant) && Number.isFinite(canonical.valueOf()) && canonical.toISOString().slice(0, 10) === date ? instant : undefined;
 }
 
 export function urgencyOf(task: UrgencyTask, tags: readonly string[] = [], settings: TaskSettings = {}, now = Date.now(), zone = dayjs.tz.guess()): Urgency {
@@ -148,7 +156,8 @@ export function urgencyOf(task: UrgencyTask, tags: readonly string[] = [], setti
     result.reference = new Date(reference).toISOString();
     // Subtract calendar days while retaining the reference's local wall clock across DST.
     const localReference = dayjs(reference).tz(zone);
-    const begins = dayjs.tz(localReference.subtract(lead, 'day').format('YYYY-MM-DD HH:mm:ss.SSS'), zone).valueOf();
+    const shifted = localReference.subtract(lead, 'day');
+    const begins = shifted.isValid() ? dayjs.tz(shifted.format('YYYY-MM-DD HH:mm:ss.SSS'), zone).valueOf() : -Infinity;
     result.short_window = available !== undefined && available > begins;
     return result;
 }
