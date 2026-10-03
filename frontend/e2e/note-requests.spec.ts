@@ -84,3 +84,19 @@ test('checks the path typed in the rename dialog against the notes there are', a
 
     expect(checks).toContain(`${new URL(API_URL).pathname}v2/files/${ENCODED_ODD_PATH}`);
 });
+
+test('closes the rename dialog when Enter renames the note', async ({ context, page }) => {
+    await mockBackend(context, { 'notes/old.md': '# Old\n' });
+    await page.goto('/note/notes/old.md');
+
+    await page.getByRole('button', { name: 'Rename' }).click();
+    const dialog = page.getByRole('dialog');
+    const field = page.getByLabel('New path');
+    await field.fill('notes/new.md');
+    // Enter is only taken once the existence check has answered, as the button is only enabled then.
+    await expect(dialog.getByRole('button', { name: 'Rename' })).toBeEnabled();
+    await field.press('Enter');
+
+    await expect(page).toHaveURL(/\/note\/notes\/new\.md$/);
+    await expect(dialog).toBeHidden();
+});
