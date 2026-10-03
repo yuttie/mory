@@ -11,7 +11,7 @@
                 {{ isEdit ? 'Edit task' : getNewTaskTitle() }}
                 <v-btn
                     v-if="isEdit"
-                    v-bind:to="{ path: `/note/${taskPath}` }"
+                    v-bind:to="{ name: 'Note', params: { path: taskPath.split('/') } }"
                     target="_blank"
                     title="Open as note"
                     class="ml-1"

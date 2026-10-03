@@ -66,6 +66,14 @@ export async function mockBackend(context: BrowserContext, notes: Record<string,
         }
         if (path.startsWith('/api/notes/')) {
             const notePath = path.slice('/api/notes/'.length);
+            if (request.method() === 'PUT' && 'Rename' in request.postDataJSON()) {
+                const from = request.postDataJSON().Rename.from as string;
+                files.set(notePath, files.get(from) ?? '');
+                files.delete(from);
+                commit += 1;
+                await route.fulfill({ json: null });
+                return;
+            }
             if (request.method() === 'PUT') {
                 const content = request.postDataJSON().Save.content as string;
                 files.set(notePath, content);

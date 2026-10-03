@@ -258,7 +258,7 @@
             <ul>
                 <li
                     v-for="[prop, value, eventName, entryPath, entryTitle] of eventErrors"
-                >Invalid event {{ prop }} value "{{ value }}" of "{{ eventName }}" defined in <router-link v-bind:to="{ path: `/note/${entryPath}` }">{{ entryTitle ?? entryPath }}</router-link></li>
+                >Invalid event {{ prop }} value "{{ value }}" of "{{ eventName }}" defined in <router-link v-bind:to="{ name: 'Note', params: { path: entryPath.split('/') } }">{{ entryTitle ?? entryPath }}</router-link></li>
                 <li v-for="message of calendars.errors" v-bind:key="message">{{ message }}</li>
             </ul>
         </v-alert>

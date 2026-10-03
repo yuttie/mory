@@ -1058,15 +1058,18 @@ function onNewPathInput(path: string) {
 function rename() {
     const oldPath = notePath.value;
 
-    if (newPath.value !== null && newPath.value !== oldPath) {
+    const renamedTo = newPath.value;
+    if (renamedTo !== null && renamedTo !== oldPath) {
         isRenaming.value = true;
         files.rename(
             oldPath,
-            newPath.value,
+            renamedTo,
         ).then(() => {
                 skipNextPathWatch = true;
+                // Segments rather than a `/note/...` string, which would end the path at a `#` or a `?`.
                 router.replace({
-                    path: `/note/${newPath.value}`,
+                    name: 'Note',
+                    params: { path: renamedTo.split('/') },
                 });
                 isRenaming.value = false;
             }).catch(error => {
