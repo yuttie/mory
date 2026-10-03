@@ -7,7 +7,44 @@
         </template>
         <template v-else>
             <AppBarContent>
-                <v-toolbar-title class="ms-5">{{ title }}</v-toolbar-title>
+                <v-toolbar-title class="ms-5">
+                    <nav
+                        ref="breadcrumbScroller"
+                        class="note-breadcrumbs"
+                        v-bind:class="{ 'clipped-left': breadcrumbsClippedLeft, 'clipped-right': breadcrumbsClippedRight }"
+                        aria-label="Note breadcrumbs"
+                        v-on:scroll.passive="updateBreadcrumbOverflow"
+                    >
+                        <ol class="note-breadcrumb-list">
+                            <li
+                                v-for="(crumb, index) in breadcrumbs"
+                                v-bind:key="index"
+                                v-bind:aria-current="index === breadcrumbs.length - 1 ? 'page' : undefined"
+                            >
+                                <span
+                                    v-if="index > 0"
+                                    class="divider"
+                                    aria-hidden="true"
+                                >
+                                    /
+                                </span>
+                                <router-link
+                                    v-if="crumb.to"
+                                    v-bind:to="crumb.to"
+                                    v-bind:title="crumb.title"
+                                >
+                                    {{ crumb.title }}
+                                </router-link>
+                                <span
+                                    v-else
+                                    v-bind:title="crumb.title"
+                                >
+                                    {{ crumb.title }}
+                                </span>
+                            </li>
+                        </ol>
+                    </nav>
+                </v-toolbar-title>
                 <!-- Three panes side by side need room the title also wants. Below `md` the bar
                      gets one button instead, showing the pane the tap would bring up; the pair it
                      swaps between are the two a narrow screen is wide enough for. -->
@@ -354,8 +391,9 @@ import Ajv from 'ajv';
 import type { DefinedError } from 'ajv';
 import AppBarContent from '@/components/AppBarContent.vue';
 import EditableViewer from '@/components/EditableViewer.vue';
-import { useFilesStore } from '@/stores/files';
+import { LAGGING_RETRY_MS, useFilesStore } from '@/stores/files';
 import { loadConfigValue } from '@/config';
+import { noteBreadcrumbs } from '@/note-forest';
 
 const ajv = new Ajv();
 const validateMetadata = ajv.compile(metadataSchema);
@@ -398,6 +436,8 @@ const notFound = ref(false);
 const showConfirmationDialog = ref(false);
 const error = ref(false);
 const errorText = ref('');
+const breadcrumbsClippedLeft = ref(false);
+const breadcrumbsClippedRight = ref(false);
 
 // Set right before a note path change that we've already handled locally
 // (e.g. after a rename), so the route watcher below doesn't reload the note again.
@@ -407,6 +447,16 @@ let skipNextPathWatch = false;
 const editableViewer = ref<InstanceType<typeof EditableViewer> | null>(null);
 const newPathField = ref<{ focus: () => void } | null>(null);
 const tocEl = ref<HTMLElement | null>(null);
+const breadcrumbScroller = ref<HTMLElement | null>(null);
+const breadcrumbResizeObserver = new ResizeObserver(() => {
+    // Preserve a reader's scroll back toward ancestors when the viewport changes.
+    if (breadcrumbsClippedRight.value) {
+        updateBreadcrumbOverflow();
+    }
+    else {
+        revealCurrentBreadcrumb();
+    }
+});
 
 // Computed properties
 const editorMode = computed(() => {
@@ -433,17 +483,20 @@ const selectedMode = computed(() => {
     }
 });
 
-const title = computed(() => {
+const renderedTitle = computed(() => {
     const root = document.createElement('div');
     root.innerHTML = rendered.value.content;
     const h1 = root.querySelector('h1');
-    if (h1) {
-        return h1.textContent;
-    }
-    else {
-        return notePath.value;
-    }
+    return h1?.textContent ?? null;
 });
+
+const title = computed(() => renderedTitle.value ?? notePath.value);
+
+const breadcrumbs = computed(() => noteBreadcrumbs(
+    files.entries,
+    notePath.value,
+    renderedTitle.value ?? notePath.value.slice(notePath.value.lastIndexOf('/') + 1),
+));
 
 const toc = computed(() => {
     const root = document.createElement('div');
@@ -525,6 +578,7 @@ const newPathMessages = computed((): string[] => {
 async function loadNoteFromRoute() {
     error.value = false;
     errorText.value = '';
+    void refreshBreadcrumbListing();
 
     if (route.query.mode === 'create') {
         // A newly created note has no saved copy on the server yet, so the
@@ -581,6 +635,8 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+    breadcrumbResizeObserver.disconnect();
+
     window.removeEventListener('focus', notifyUpstreamState);
     window.removeEventListener('focus', focusOrBlurEditor);
 
@@ -590,6 +646,51 @@ onUnmounted(() => {
 });
 
 // Methods
+async function refreshBreadcrumbListing() {
+    try {
+        await files.list();
+        // A just-saved parent can precede the backend's cache. Give it the same bounded retry
+        // as the task and note trees, without delaying the note's own load.
+        if (files.commitId === null) {
+            await new Promise(resolve => setTimeout(resolve, LAGGING_RETRY_MS));
+            await files.refresh();
+        }
+    }
+    catch (cause) {
+        if ((cause as { response?: { status: number } }).response?.status === 401) {
+            emit('tokenExpired', refreshBreadcrumbListing);
+        }
+        else {
+            error.value = true;
+            errorText.value = String(cause);
+        }
+    }
+}
+
+function updateBreadcrumbOverflow() {
+    const scroller = breadcrumbScroller.value;
+    // Scroll offsets can be fractional while the width measurements are rounded to pixels.
+    breadcrumbsClippedLeft.value = scroller !== null && scroller.scrollLeft > 1;
+    breadcrumbsClippedRight.value = scroller !== null
+        && scroller.scrollWidth - scroller.clientWidth - scroller.scrollLeft > 1;
+}
+
+function revealCurrentBreadcrumb() {
+    const scroller = breadcrumbScroller.value;
+    const current = scroller?.querySelector<HTMLElement>('[aria-current="page"] > span:last-child');
+    if (scroller !== null && current) {
+        const start = current.getBoundingClientRect().left - scroller.getBoundingClientRect().left
+            + scroller.scrollLeft;
+        // A long title needs its beginning visible, with room for the one-em fade over ancestors.
+        const fadeWidth = parseFloat(getComputedStyle(scroller).fontSize);
+        scroller.scrollLeft = Math.max(0, Math.min(
+            start - fadeWidth,
+            scroller.scrollWidth - scroller.clientWidth,
+        ));
+    }
+    updateBreadcrumbOverflow();
+}
+
 function jumpTo(id: string) {
     editableViewer.value?.jumpTo(id);
 }
@@ -1109,6 +1210,20 @@ function rename() {
 }
 
 // Watchers
+watch(breadcrumbScroller, (scroller) => {
+    breadcrumbResizeObserver.disconnect();
+    if (scroller !== null) {
+        breadcrumbResizeObserver.observe(scroller);
+        // The content can grow without the viewport changing, including when fonts finish loading.
+        if (scroller.firstElementChild !== null) {
+            breadcrumbResizeObserver.observe(scroller.firstElementChild);
+        }
+    }
+    revealCurrentBreadcrumb();
+}, { flush: 'post' });
+
+watch(breadcrumbs, revealCurrentBreadcrumb, { flush: 'post' });
+
 watch(renameDialogIsVisible, async (isVisible: boolean) => {
     if (isVisible) {
         newPath.value = notePath.value;
@@ -1143,6 +1258,55 @@ watch(notePath, async (newPath, oldPath) => {
     // panes under the edge of the window by the height of the app bar.
     height: calc(100dvh - var(--v-layout-top, 0px) - var(--v-layout-bottom, 0px));
     display: flex;
+}
+
+.note-breadcrumbs {
+    overflow-x: auto;
+    mask-image: linear-gradient(
+        to right,
+        transparent,
+        black var(--breadcrumb-fade-left, 0px),
+        black calc(100% - var(--breadcrumb-fade-right, 0px)),
+        transparent
+    );
+
+    &.clipped-left {
+        --breadcrumb-fade-left: 1em;
+    }
+
+    &.clipped-right {
+        --breadcrumb-fade-right: 1em;
+    }
+}
+
+.note-breadcrumb-list {
+    display: flex;
+    width: max-content;
+    min-width: 100%;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    white-space: nowrap;
+
+    li {
+        display: flex;
+        align-items: center;
+        flex-shrink: 0;
+    }
+
+    .divider {
+        margin-inline: 0.5em;
+        opacity: 0.6;
+    }
+
+    a {
+        color: inherit;
+        text-decoration: none;
+
+        &:hover {
+            text-decoration: underline;
+        }
+    }
 }
 
 .sidebar {
