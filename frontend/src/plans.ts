@@ -34,7 +34,7 @@ export function readPlan(text: string, month: string): MonthPlan {
                 throw new Error(`Invalid plan entry on ${date}.`);
             }
             const item = entry as Record<string, unknown>;
-            if (Object.keys(item).some((key) => !['task', 'origin', 'result'].includes(key)) || typeof item.task !== 'string' || !PLAN_UUID.test(item.task) || !['planned', 'interruption'].includes(String(item.origin)) || (item.result !== undefined && !['worked', 'missed'].includes(String(item.result)))) {
+            if (Object.keys(item).some((key) => !['task', 'origin', 'result'].includes(key)) || typeof item.task !== 'string' || !PLAN_UUID.test(item.task) || typeof item.origin !== 'string' || !['planned', 'interruption'].includes(item.origin) || (item.result !== undefined && (typeof item.result !== 'string' || !['worked', 'missed'].includes(item.result)))) {
                 throw new Error(`Invalid plan entry on ${date}. Use task UUID, origin planned/interruption and optional result worked/missed.`);
             }
             const task = item.task.toLowerCase();

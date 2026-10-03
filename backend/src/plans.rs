@@ -29,7 +29,7 @@ pub fn date(text: &str) -> Result<NaiveDate, String> {
 
 pub fn task_uuid(text: &str) -> Result<String, String> {
     let uuid = uuid::Uuid::parse_str(text).map_err(|_| "A task reference must be a UUIDv4.".to_owned())?;
-    if uuid.get_version() != Some(uuid::Version::Random) || text.len() != 36 {
+    if uuid.get_version() != Some(uuid::Version::Random) || uuid.get_variant() != uuid::Variant::RFC4122 || text.len() != 36 {
         return Err("A task reference must be a UUIDv4.".into());
     }
     Ok(uuid.to_string())
@@ -75,6 +75,13 @@ pub fn put(plan: &mut Month, day: &str, task: &str, origin: Origin) {
 mod tests {
     use super::*;
     const UUID: &str = "4955857d-3267-4b94-83f2-538a428970d7";
+    #[test]
+    fn shared_validation_fixtures() {
+        let cases: serde_json::Value = serde_json::from_str(include_str!("../../fixtures/plans/cases.json")).unwrap();
+        for case in cases.as_array().unwrap() {
+            assert_eq!(read(case["yaml"].as_str().unwrap(), "2026-10").is_ok(), case["valid"].as_bool().unwrap(), "{}", case["name"]);
+        }
+    }
     #[test]
     fn plans_preserve_order_history_and_unknown_references() {
         let mut plan = Month::new();
