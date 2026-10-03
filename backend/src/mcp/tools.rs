@@ -311,8 +311,38 @@ struct TaskSummary {
     title: Option<String>,
     /// The `task:` block exactly as the file declares it, not a re-derived view of it.
     task: serde_json::Value,
+    urgency: crate::urgency::Urgency,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    progress: Option<f64>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     tags: Vec<String>,
+}
+
+pub async fn task_settings(state: &AppState) -> Result<(crate::urgency::Settings, Vec<String>), ErrorData> {
+    let Some(text) = note_text(state, ".mory/tasks.yaml").await? else {
+        return Ok((crate::urgency::Settings::default(), vec![]));
+    };
+    match serde_yaml::from_str(&text) {
+        Ok(value) => Ok(crate::urgency::read_settings(&value)),
+        Err(error) => Ok((crate::urgency::Settings::default(), vec![format!("Invalid task settings: {error}")])),
+    }
+}
+
+fn canonical_task(block: &serde_yaml::Mapping) -> serde_json::Value {
+    let mut task = serde_json::to_value(block).unwrap_or(serde_json::json!({}));
+    if let Some(map) = task.as_object_mut() {
+        for key in ["urgency", "progress", "scheduled_dates"] {
+            map.remove(key);
+        }
+        if let Some(start) = map.remove("start_at") {
+            map.entry("available_from").or_insert(start);
+        }
+        match block.get("importance").and_then(crate::urgency::importance) {
+            Some(level) => { map.insert("importance".into(), level.into()); },
+            None => { map.remove("importance"); },
+        }
+    }
+    task
 }
 
 pub async fn list_tasks(
@@ -339,16 +369,41 @@ pub async fn list_tasks(
         },
     };
 
+    let (settings, warnings) = task_settings(state).await?;
+    let now = chrono::Utc::now();
+    let zone = crate::urgency::local_zone();
+    let valid = entries.iter().filter(|entry| task_of(entry).is_some()).collect::<Vec<_>>();
+    let own = |entry: &crate::models::ListEntry| crate::urgency::calculate(
+        entry.metadata.as_ref().and_then(|root| root.get("task")).unwrap(),
+        &tags_of(entry.metadata.as_ref()), &settings, now, zone,
+    );
     let mut tasks = Vec::new();
     for entry in &entries {
-        let Some(block) = entry.metadata.as_ref().and_then(|value| value.get("task")) else {
+        let Some((_, block)) = task_of(entry) else {
             continue;
         };
-        // A note whose `task:` is malformed is skipped rather than failing the call, for the same
-        // reason the calendar does it: frontmatter is whatever the file said.
-        let Ok(task) = serde_json::to_value(block) else {
-            tracing::debug!("Skipping an unreadable task block in {}", entry.path.display());
-            continue;
+        let task = canonical_task(block);
+        let path = entry.path.to_string_lossy();
+        let prefix = format!("{}/", path.strip_suffix(".md").unwrap_or(&path));
+        let descendants = valid.iter().copied().filter(|child| child.path.to_string_lossy().starts_with(&prefix)).collect::<Vec<_>>();
+        let mut urgency = own(entry);
+        if !crate::tasks::is_over(task_status_of(entry.metadata.as_ref()).as_deref()) {
+            for child in &descendants {
+                if !crate::tasks::is_over(task_status_of(child.metadata.as_ref()).as_deref()) {
+                    let derived = own(child);
+                    if crate::urgency::compare(&derived, &urgency).is_lt() {
+                        urgency = crate::urgency::Urgency { actionable: urgency.actionable, short_window: urgency.short_window, ..derived };
+                    }
+                }
+            }
+        }
+        let progress = if descendants.is_empty() { None } else {
+            let leaves = descendants.iter().copied().filter(|child| {
+                let child_prefix = format!("{}/", child.path.with_extension("").to_string_lossy());
+                !descendants.iter().any(|other| other.path.to_string_lossy().starts_with(&child_prefix))
+            }).filter(|child| task_status_of(child.metadata.as_ref()).as_deref() != Some("canceled")).collect::<Vec<_>>();
+            let done = leaves.iter().filter(|child| task_status_of(child.metadata.as_ref()).as_deref() == Some("done")).count();
+            Some(if leaves.is_empty() { 0.0 } else { done as f64 / leaves.len() as f64 * 100.0 })
         };
         if let Some(wanted) = args.status.as_deref() {
             if task_status_of(entry.metadata.as_ref()).as_deref() != Some(wanted) {
@@ -367,6 +422,8 @@ pub async fn list_tasks(
                 path: entry.path.to_string_lossy().into_owned(),
                 title: entry.title.clone(),
                 task,
+                urgency,
+                progress,
                 tags,
             },
         ));
@@ -384,7 +441,14 @@ pub async fn list_tasks(
         .collect::<Vec<_>>();
     let next_offset = (offset + items.len() < total).then_some(offset + items.len());
 
-    json_result(&ListOutput { commit: commit.to_string(), total, items, next_offset })
+    #[derive(Serialize)]
+    struct TaskOutput {
+        #[serde(flatten)]
+        listing: ListOutput<TaskSummary>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        warnings: Vec<String>,
+    }
+    json_result(&TaskOutput { listing: ListOutput { commit: commit.to_string(), total, items, next_offset }, warnings })
 }
 
 // ---------------------------------------------------------------------------------------------

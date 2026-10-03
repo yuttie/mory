@@ -40,7 +40,7 @@ interface Spec {
 function entry(spec: Spec): ListEntry2 {
     const metadata: TaskMetadata = {
         tags: spec.tags ?? [],
-        task: { status: { kind: (spec.status ?? 'todo') } as never, progress: 0 },
+        task: { status: { kind: (spec.status ?? 'todo') } as never },
     };
     return {
         path: spec.path,
@@ -320,10 +320,6 @@ describe('save', () => {
         title: 'Written',
         tags: [],
         status: { kind: 'todo' },
-        progress: 0,
-        importance: 3,
-        urgency: 3,
-        scheduled_dates: [],
         note: '',
     });
 
@@ -456,5 +452,20 @@ describe('move', () => {
     it('refuses to move a task it does not hold', async () => {
         const { store } = await storeWith(sample);
         await expect(store.move('unknown', null)).rejects.toThrow(/unknown/);
+    });
+});
+
+describe('derived parent progress', () => {
+    it('counts done leaves, excluding canceled leaves and intermediate parents', async () => {
+        const { store } = await storeWith([
+            { path: `.tasks/${uuid(1)}.md` },
+            { path: `.tasks/${uuid(1)}/${uuid(2)}.md`, status: 'done' },
+            { path: `.tasks/${uuid(1)}/${uuid(3)}.md`, status: 'done' },
+            { path: `.tasks/${uuid(1)}/${uuid(3)}/${uuid(4)}.md`, status: 'todo' },
+            { path: `.tasks/${uuid(1)}/${uuid(5)}.md`, status: 'canceled' },
+        ]);
+        expect(store.progress(uuid(1))).toBe(50);
+        expect(store.progress(uuid(2))).toBeUndefined();
+        expect(store.progress(uuid(3))).toBe(0);
     });
 });

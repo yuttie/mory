@@ -8,6 +8,7 @@
 
 import type { UUID } from '@/api';
 import type { Status } from '@/task';
+import type { Importance } from '@/urgency';
 import type { ForestNode } from '@/forest';
 import type { PathForestPolicy } from '@/path-forest';
 import { stripExtension } from '@/path-forest';
@@ -18,18 +19,18 @@ export const TASKS_DIR = '.tasks/';
 const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export interface TaskMetadata {
+    created_at?: string;
     tags?: string[];
     task?: {
         status?: Status;
-        progress?: number;
-        importance?: number;
-        urgency?: number;
+        importance?: Importance | number;
+        available_from?: string;
+        lead_time?: string;
         start_at?: string;
         due_by?: string;
         deadline?: string;
         // `task.alarms` as the frontmatter held it: `readTaskAlarms` gives it its shape.
         alarms?: unknown;
-        scheduled_dates?: string[];
     };
     // Virtual tag-group nodes only; a real task never carries this.
     tag_group?: string;

@@ -5,6 +5,7 @@
     <router-link
         v-bind:to="to"
         class="task-list-item"
+        v-bind:class="{ 'text-disabled': !urgency.actionable }"
     >
         <v-icon class="mr-1">
             {{ done ? mdiCheckboxMarkedOutline : canceled ? mdiCheckboxBlankOffOutline : mdiCheckboxBlankOutline }}
@@ -12,21 +13,10 @@
         <div>
             <span
                 class="tag"
-                v-for="tag of value.metadata.tags"
+                v-for="tag of value.metadata?.tags ?? []"
                 v-bind:key="tag"
             >{{ tag }}</span>
             <span class="title-text" v-bind:class="{ strikethrough: canceled }">{{ value.title }}</span>
-            <span
-                class="additional-info"
-                v-if="value.note"
-            >
-                <v-tooltip location="bottom">
-                    <template v-slot:activator="{ props: tooltipProps }">
-                        <v-icon v-bind="tooltipProps">{{ mdiNoteTextOutline }}</v-icon>
-                    </template>
-                    <div class="note-tooltip">{{ value.note }}</div>
-                </v-tooltip>
-            </span>
             <span
                 class="additional-info"
                 v-if="startAt"
@@ -69,6 +59,9 @@
                     <div>{{ deadline }}</div>
                 </v-tooltip>
             </span>
+            <v-chip size="x-small" class="ml-1">{{ URGENCY_LABEL[urgency.level] }}</v-chip>
+            <span v-if="progress !== undefined" class="ml-1">{{ Math.round(progress) }}%</span>
+            <span v-if="urgency.short_window" class="ml-1 text-warning">Window shorter than lead time</span>
             <!-- Below the title rather than before it, so the checkbox stays level with the title
                  and the titles in a column still line up to be scanned. -->
             <div
@@ -90,12 +83,12 @@ import {
     mdiCheckboxBlankOutline,
     mdiCheckboxMarkedOutline,
     mdiCheckboxBlankOffOutline,
-    mdiNoteTextOutline,
 } from '@mdi/js';
 
 import type { UUID } from '@/task';
 import type { TaskNode } from '@/task-forest';
 import { useTasksStore } from '@/stores/tasks';
+import { URGENCY_LABEL } from '@/urgency';
 
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -127,6 +120,8 @@ const props = defineProps<{
 
 // Stores
 const store = useTasksStore();
+const urgency = computed(() => store.urgency(props.value.uuid));
+const progress = computed(() => store.progress(props.value.uuid));
 
 // Computed properties
 // A list gathers tasks from anywhere in the tree, and a title alone often does not say which
@@ -144,7 +139,7 @@ const canceled = computed<boolean>(() => {
 });
 
 const startAt = computed<string | null>(() => {
-    return props.value.metadata?.task?.start_at ?? null;
+    return props.value.metadata?.task?.available_from ?? props.value.metadata?.task?.start_at ?? null;
 });
 
 const startAtText = computed<string>(() => {

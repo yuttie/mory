@@ -1345,10 +1345,8 @@ mod v2 {
         pub title: String,
         pub tags: Option<Vec<String>>,
         pub status: Option<serde_json::Value>,
-        pub progress: Option<f32>,
-        pub importance: Option<i32>,
-        pub urgency: Option<i32>,
-        pub start_at: Option<String>,
+        pub importance: Option<String>,
+        pub available_from: Option<String>,
         pub due_by: Option<String>,
         pub deadline: Option<String>,
         pub note: Option<String>,
@@ -1511,10 +1509,8 @@ The task information is provided as JSON containing:
 - title: The main task description
 - tags: Categories/labels associated with the task
 - status: Current state of the task (todo, in_progress, waiting, etc.)
-- progress: Completion percentage (0-100%)
-- importance: Priority level (1-5, where 5 is most important)
-- urgency: Time sensitivity (1-5, where 5 is most urgent)
-- start_at: Planned start date/time
+- importance: Optional judgement: low, medium or high; absent means unrated
+- available_from: Earliest date/time work can begin
 - due_by: Preferred completion date/time
 - deadline: Hard deadline
 - note: Any current notes about the task

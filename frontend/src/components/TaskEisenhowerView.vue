@@ -32,6 +32,7 @@ import { type UUID } from '@/task';
 // Props
 defineProps<{
     eisenhowerQuadrants: {
+        unrated: TaskNode[];
         doFirst: TaskNode[];
         schedule: TaskNode[];
         delegate: TaskNode[];
@@ -43,6 +44,7 @@ defineProps<{
 
 // In the order the 2×2 grid places them: left to right, then top to bottom.
 const QUADRANTS = [
+    { key: 'unrated', title: 'Unrated', subtitle: 'Choose importance when useful', class: '' },
     { key: 'doFirst', title: 'Do First', subtitle: 'Urgent & Important', class: 'urgent-important' },
     { key: 'schedule', title: 'Schedule', subtitle: 'Important, Not Urgent', class: 'important-not-urgent' },
     { key: 'delegate', title: 'Delegate', subtitle: 'Urgent, Not Important', class: 'urgent-not-important' },

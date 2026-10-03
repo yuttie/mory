@@ -200,6 +200,7 @@
                                 </v-list>
                             </v-menu>
                         </v-toolbar>
+                        <v-alert v-for="problem of taskSettings.problems" v-bind:key="problem" type="warning">{{ problem }}</v-alert>
                         <div class="view-container flex-grow-1">
                             <!-- Status view -->
                             <TaskStatusView
@@ -213,7 +214,7 @@
                             <!-- Schedule view -->
                             <TaskScheduleView
                                 v-else-if="descendantsViewMode === 'schedule'"
-                                v-bind:scheduled="scheduled"
+                                v-bind:scheduled="{}"
                                 v-bind:route-for="taskRouteFor"
                                 v-bind:list-root="listRoot"
                             />
@@ -246,6 +247,8 @@
 </template>
 
 <script lang="ts" setup>
+import { readImportance, isUrgent, compareUrgency } from '@/urgency';
+import { useTaskSettingsStore } from '@/stores/taskSettings';
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue';
 import { type RouteLocationRaw, useRoute, useRouter } from 'vue-router';
 import { useDisplay } from 'vuetify';
@@ -269,6 +272,8 @@ import dayjs from 'dayjs';
 
 // Stores
 const store = useTasksStore();
+const taskSettings = useTaskSettingsStore();
+void taskSettings.load();
 
 // Router
 const router = useRouter();
@@ -568,32 +573,6 @@ const tasksLeftText = computed<string>(() => {
     return `${count} ${count === 1 ? 'task' : 'tasks'} left`;
 });
 
-const scheduled = computed<Record<string, TaskNode[]>>(() => {
-    // Keep today, tomorrow, or other dates that have some undone tasks
-    const today = dayjs().format('YYYY-MM-DD');
-    const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
-    const scheduled: Record<string, TaskNode[]> = {
-        [today]: [],
-        [tomorrow]: [],
-    };
-
-    for (const t of filteredSelectedNodeDescendants.value) {
-        if (t.metadata?.task?.scheduled_dates) {
-            for (const date of t.metadata.task.scheduled_dates) {
-                scheduled[date] ??= [];
-                scheduled[date].push(t);
-            }
-        }
-    }
-    
-    // Sort tasks within each scheduled date by due date/deadline
-    for (const date in scheduled) {
-        scheduled[date] = sortTasksByDueDate(scheduled[date]);
-    }
-    
-    return scheduled;
-});
-
 const knownTags = computed<[string, number][]>(() => {
     // Collect tags
     const tagCounts = new Map();
@@ -626,14 +605,18 @@ const eisenhowerQuadrants = computed(() => {
         doFirst: [] as TaskNode[],      // High importance, High urgency
         schedule: [] as TaskNode[],     // High importance, Low urgency
         delegate: [] as TaskNode[],     // Low importance, High urgency
+        unrated: [] as TaskNode[],
         eliminate: [] as TaskNode[],    // Low importance, Low urgency
     };
 
     for (const task of filteredSelectedNodeDescendants.value) {
-        const importance = task.metadata?.task?.importance ?? 3;
-        const urgency = task.metadata?.task?.urgency ?? 3;
-        const isHighImportance = importance >= 4;
-        const isHighUrgency = urgency >= 4;
+        const importance = readImportance(task.metadata?.task?.importance);
+        const isHighImportance = importance === 'medium' || importance === 'high';
+        const isHighUrgency = isUrgent(store.urgency(task.uuid));
+        if (!importance) {
+            quadrants.unrated.push(task);
+            continue;
+        }
 
         if (isHighImportance && isHighUrgency) {
             quadrants.doFirst.push(task);
@@ -646,13 +629,10 @@ const eisenhowerQuadrants = computed(() => {
         }
     }
 
-    // Sort tasks within each quadrant by due date/deadline
-    return {
-        doFirst: sortTasksByDueDate(quadrants.doFirst),
-        schedule: sortTasksByDueDate(quadrants.schedule),
-        delegate: sortTasksByDueDate(quadrants.delegate),
-        eliminate: sortTasksByDueDate(quadrants.eliminate),
-    };
+    for (const tasks of Object.values(quadrants)) {
+        tasks.sort((a, b) => compareUrgency(store.urgency(a.uuid), store.urgency(b.uuid)) || a.uuid.localeCompare(b.uuid));
+    }
+    return quadrants;
 });
 
 const viewModeOptions = computed(() => [

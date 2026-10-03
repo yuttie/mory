@@ -201,7 +201,7 @@ describe('metadata schema, alarms', () => {
 
 describe('metadata schema, tasks', () => {
     const task = (status: unknown) => ({
-        task: { status, progress: 0, importance: 3, urgency: 3, scheduled_dates: [] },
+        task: { status },
     });
 
     it('accepts a backlog status carrying only its kind', () => {
@@ -219,10 +219,6 @@ describe('metadata schema, task alarms', () => {
     const task = (alarms: unknown) => ({
         task: {
             status: { kind: 'todo' },
-            progress: 0,
-            importance: 3,
-            urgency: 3,
-            scheduled_dates: [],
             due_by: '2024-05-10',
             alarms,
         },
@@ -241,5 +237,34 @@ describe('metadata schema, task alarms', () => {
         expect(ok(task({ start_at: ['-1h'] }))).toBe(false);
         expect(ok(task(['-1h']))).toBe(false);
         expect(ok(task('-1h'))).toBe(false);
+    });
+});
+
+
+describe('metadata schema, task revision', () => {
+    const task = (fields: object) => ({ task: { status: { kind: 'todo' }, ...fields } });
+    it('accepts unrated and all three named levels', () => {
+        expect(ok(task({}))).toBe(true);
+        for (const importance of ['low', 'medium', 'high']) {
+            expect(ok(task({ importance }))).toBe(true);
+        }
+        for (const importance of [null, 1, 3, 5, 'urgent']) {
+            expect(ok(task({ importance }))).toBe(false);
+        }
+    });
+    it('rejects removed storage fields and validates whole day/week lead times', () => {
+        for (const key of ['urgency', 'progress', 'scheduled_dates', 'start_at']) {
+            expect(ok(task({ [key]: 3 }))).toBe(false);
+        }
+        for (const lead_time of ['7d', '2w', '3 days', '0d']) {
+            expect(ok(task({ lead_time }))).toBe(true);
+        }
+        for (const lead_time of ['1.5d', '-7d', '3h']) {
+            expect(ok(task({ lead_time }))).toBe(false);
+        }
+    });
+    it('validates the creation timestamp format', () => {
+        expect(ok({ created_at: '2026-10-04 14:05:12+09:00' })).toBe(true);
+        expect(ok({ created_at: '2026-10-04' })).toBe(false);
     });
 });

@@ -47,22 +47,7 @@
                             class="mb-2"
                             v-on:keydown="handleTaskKeydown"
                         ></v-text-field>
-                        <v-radio-group
-                            v-model="quickTaskScheduledDay"
-                            hide-details="auto"
-                            class="mb-2"
-                            inline
-                        >
-                            <template v-slot:label>
-                                <div>Schedule</div>
-                            </template>
-                            <v-radio
-                                v-for="option in scheduledDayOptions"
-                                v-bind:key="option.value"
-                                v-bind:label="option.text"
-                                v-bind:value="option.value"
-                            ></v-radio>
-                        </v-radio-group>
+
                         <DateSelector
                             v-model="quickTaskDueBy"
                             label="Due by (optional)"
@@ -393,7 +378,6 @@ const sortOrders: Ref<Map<string, [string, boolean]>> = ref(new Map());
 // Quick create states
 const quickNoteContent = ref('');
 const quickTaskName = ref('');
-const quickTaskScheduledDay = ref('none');
 const quickTaskDueBy = ref('');
 const quickTaskDeadline = ref('');
 
@@ -402,11 +386,6 @@ const noteTextarea = ref(null);
 const taskNameField = ref(null);
 
 // Scheduled day options
-const scheduledDayOptions = [
-    { text: 'None', value: 'none' },
-    { text: 'Today', value: 'today' },
-    { text: 'Tomorrow', value: 'tomorrow' }
-];
 
 // Success/error messaging
 const successMessage = ref(false);
@@ -529,7 +508,7 @@ const todayTasks = computed(() => {
     if (!taskStore.allTasks || taskStore.allTasks.length === 0) return [];
 
     return taskStore.allTasks.filter(task => {
-        const scheduledDates = task.metadata?.task?.scheduled_dates;
+        const scheduledDates: string[] = [];
         const status = task.metadata?.task?.status?.kind;
         
         // Skip done and canceled tasks
@@ -699,27 +678,15 @@ async function createQuickTask() {
         const taskUuid = crypto.randomUUID();
         const taskPath = `.tasks/${taskUuid}.md`;
 
-        // Determine scheduled dates based on selection
-        let scheduledDates: string[] = [];
-        if (quickTaskScheduledDay.value === 'today') {
-            scheduledDates = [today];
-        } else if (quickTaskScheduledDay.value === 'tomorrow') {
-            scheduledDates = [tomorrow];
-        }
-
         const newTask: Task = {
             uuid: taskUuid,
             title: quickTaskName.value.trim(),
             tags: ['quick-create'],
             // Scheduling it for today or tomorrow is the commitment that makes it To do; without
             // one it waits in the backlog like any other new task.
-            status: { kind: scheduledDates.length > 0 ? 'todo' : 'backlog' },
-            progress: 0,
-            importance: 3,
-            urgency: 3,
+            status: { kind: 'backlog' },
             due_by: quickTaskDueBy.value || undefined,
             deadline: quickTaskDeadline.value || undefined,
-            scheduled_dates: scheduledDates,
             note: '',
         };
 
@@ -732,7 +699,6 @@ async function createQuickTask() {
         quickTaskName.value = '';
         quickTaskDueBy.value = '';
         quickTaskDeadline.value = '';
-        quickTaskScheduledDay.value = 'none';
 
         // Focus the task name field for creating another task
         if (taskNameField.value) {

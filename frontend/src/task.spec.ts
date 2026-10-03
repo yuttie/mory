@@ -10,11 +10,8 @@ function task(overrides: Partial<Task> = {}): Task {
         title: 'Write the report',
         tags: ['work'],
         status: { kind: 'waiting', waiting_for: 'the figures', contact: 'Alice' },
-        progress: 40,
-        importance: 3,
-        urgency: 4,
+        importance: 'medium',
         due_by: '2026-10-01',
-        scheduled_dates: ['2026-09-28'],
         note: 'Some notes.\n',
         ...overrides,
     };
@@ -38,8 +35,7 @@ describe('render, alarms', () => {
         // Beside the dates, and with `scheduled_dates` still last, where it always was.
         const keys = Object.keys((frontmatterOf(markdown) as { task: object }).task);
         expect(keys).toEqual([
-            'status', 'progress', 'importance', 'urgency', 'due_by', 'deadline', 'alarms',
-            'scheduled_dates',
+            'status', 'importance', 'due_by', 'deadline', 'alarms',
         ]);
     });
 
@@ -64,12 +60,8 @@ task:
         kind: waiting
         waiting_for: the figures
         contact: Alice
-    progress: 40
-    importance: 3
-    urgency: 4
+    importance: medium
     due_by: 2026-10-01
-    scheduled_dates:
-        - 2026-09-28
 tags:
     - work
 ---
@@ -247,5 +239,20 @@ describe('withoutBlanks', () => {
     it('keeps every field that says something', () => {
         const done: Status = { kind: 'done', completed_at: '2026-09-27', completion_note: 'Shipped' };
         expect(withoutBlanks(done)).toEqual(done);
+    });
+});
+
+describe('render, frontmatter preservation', () => {
+    it('preserves unrelated metadata and comments while removing legacy task fields', () => {
+        const source = "---\ncreated_at: 2020-01-01 12:00:00+09:00\n# Keep\ncustom: [one, two]\nevents: {Meet: {start: 2026-10-10}}\ntask:\n    status: {kind: todo}\n    progress: 30\n    urgency: 5\n    scheduled_dates: [2025-01-01]\n    start_at: 2026-10-01\n    importance: 3\n---\n# Old\n";
+        const result = render(task({ source, created_at: '2020-01-01 12:00:00+09:00', importance: undefined }));
+        expect(result).toContain('# Keep');
+        expect(frontmatterOf(result)).toMatchObject({ custom: ['one', 'two'], events: { Meet: { start: '2026-10-10' } }, created_at: '2020-01-01 12:00:00+09:00' });
+        const metadata = frontmatterOf(result) as { task: object };
+        expect(metadata.task).not.toHaveProperty('progress');
+        expect(metadata.task).not.toHaveProperty('urgency');
+        expect(metadata.task).not.toHaveProperty('scheduled_dates');
+        expect(metadata.task).not.toHaveProperty('start_at');
+        expect(metadata.task).not.toHaveProperty('importance');
     });
 });

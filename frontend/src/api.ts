@@ -504,10 +504,8 @@ export async function assessTask(task: {
     title: string; 
     tags?: string[];
     status?: Status;
-    progress?: number;
-    importance?: number;
-    urgency?: number;
-    start_at?: string;
+    importance?: 'low' | 'medium' | 'high';
+    available_from?: string;
     due_by?: string;
     deadline?: string;
     note?: string;
@@ -518,10 +516,8 @@ export async function assessTask(task: {
         title: task.title,
         tags: task.tags,
         status: task.status,
-        progress: task.progress,
         importance: task.importance,
-        urgency: task.urgency,
-        start_at: task.start_at,
+        available_from: task.available_from,
         due_by: task.due_by,
         deadline: task.deadline,
         note: task.note,

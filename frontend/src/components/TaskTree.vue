@@ -22,12 +22,14 @@
         <template v-slot:title="{ item }">
             <span
                 v-bind:title="item.title ?? undefined"
+                v-bind:class="{ 'text-disabled': !item.metadata?.tag_group && !tasks.ownUrgency(item.uuid).actionable }"
                 v-bind:style="{ textDecorationLine: item.metadata?.task?.status?.kind === 'canceled' ? 'line-through' : 'none' }"
             >
                 {{ item.title }}
             </span>
         </template>
         <template v-slot:append="{ item }">
+            <span v-if="tasks.progress(item.uuid) !== undefined" class="mr-2">{{ Math.round(tasks.progress(item.uuid) ?? 0) }}%</span>
             <!-- Inside the row, which may be a link. Stopping the click keeps the row from routing,
                  but the browser would still follow the link, reloading the app, unless prevented. -->
             <v-icon-btn
@@ -57,6 +59,8 @@ import {
 import type { RouteLocationRaw } from 'vue-router';
 
 import EntryTree from '@/components/EntryTree.vue';
+import { useTasksStore } from '@/stores/tasks';
+const tasks = useTasksStore();
 import type { UUID } from '@/api';
 import type { TaskTreeItem } from '@/task-forest';
 

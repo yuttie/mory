@@ -143,43 +143,19 @@
                         v-bind:known-contacts="knownContacts"
                         class="ml-10"
                     />
-                    <!-- Progress -->
-                    <v-label>
-                        <v-icon>{{ mdiPercentOutline }}</v-icon>
-                        Progress (%)
-                    </v-label>
-                    <v-progress-linear
-                        v-model="progress"
-                        v-bind:rules="[range(0, 100, 'Progress must be 0..100')]"
-                        striped
-                    >
-                        <template v-slot:default="{ value }">
-                            <strong>{{ value }}%</strong>
-                        </template>
+                    <v-progress-linear v-if="derivedProgress !== undefined" v-bind:model-value="derivedProgress" height="20">
+                        <strong>{{ Math.round(derivedProgress) }}% of leaves done</strong>
                     </v-progress-linear>
-                    <!-- Importance -->
-                    <v-label>
-                        <v-icon>{{ mdiPriorityHigh }}</v-icon>
-                        Importance
-                    </v-label>
-                    <v-rating
-                        v-model="form.importance"
-                        v-bind:rules="[range(1, 5, 'Importance must be 1..5')]"
-                    />
-                    <!-- Urgency -->
-                    <v-label>
-                        <v-icon>{{ mdiTimerSand }}</v-icon>
-                        Urgency
-                    </v-label>
-                    <v-rating
-                        v-model="form.urgency"
-                        v-bind:rules="[range(1, 5, 'Urgency must be 1..5')]"
-                    />
+                    <v-select v-model="form.importance" v-bind:items="['low', 'medium', 'high']" clearable label="Importance (unrated if empty)"></v-select>
+                    <v-text-field v-model="form.lead_time" label="Lead time" v-bind:placeholder="`${defaultLeadTime}d (resolved default)`" persistent-placeholder v-bind:rules="[leadTimeRule]"></v-text-field>
+                    <v-chip class="mb-3">{{ URGENCY_LABEL[derivedUrgency.level] }}</v-chip>
+                    <v-alert v-if="derivedUrgency.short_window" type="warning" class="mb-3">Window shorter than lead time</v-alert>
+                    <v-alert v-if="!derivedUrgency.actionable" type="info" class="mb-3">Not yet actionable</v-alert>
                     <!-- Start date -->
                     <DateSelector
-                        v-model="form.start_at"
+                        v-model="form.available_from"
                         v-bind:rules="[optionalDateTime]"
-                        label="Start date"
+                        label="Available from"
                     >
                         <template v-slot:prepend>
                             <v-icon>{{ mdiCalendarOutline }}</v-icon>
@@ -215,26 +191,9 @@
                         v-model="form.deadline_alarms"
                         v-bind:fallback="calendars.effectiveAlarmDefaults.deadline"
                     ></InheritableAlarms>
-                    <!-- Scheduled dates -->
-                    <v-label>
-                        <v-icon>{{ mdiCalendarCursorOutline }}</v-icon>
-                        Scheduled dates
-                    </v-label>
-                    <v-date-picker
-                        v-bind:model-value="scheduledDatesAsDates"
-                        v-on:update:model-value="onScheduledDatesChange"
-                        multiple
-                        hide-header
-                        width="100%"
-                    />
-                    <template v-if="form.scheduled_dates.length > 0">
-                        <v-list-subheader>All selected dates</v-list-subheader>
-                        <ul class="date-list">
-                            <li v-for="date of form.scheduled_dates.toSorted()">
-                                {{ date }}
-                            </li>
-                        </ul>
-                    </template>
+                    <v-list-subheader>Planned days</v-list-subheader>
+                    <div v-if="plannedDays.length === 0">No planned days</div>
+                    <ul><li v-for="date of plannedDays" v-bind:key="date">{{ date }}</li></ul>
                 </div>
                 <div class="note-pane flex-grow-1 pl-3">
                     <!-- Note -->
@@ -356,7 +315,6 @@
 import { ref, reactive, computed, watch, toRef, onMounted, onUnmounted } from 'vue';
 
 import {
-    mdiCalendarCursorOutline,
     mdiCalendarOutline,
     mdiClose,
     mdiContentSave,
@@ -370,12 +328,9 @@ import {
     mdiLockOpenVariant,
     mdiNoteTextOutline,
     mdiPencil,
-    mdiPercentOutline,
     mdiPencilBoxOutline,
     mdiPlus,
-    mdiPriorityHigh,
     mdiTagMultipleOutline,
-    mdiTimerSand,
     mdiTrafficLightOutline,
 } from '@mdi/js';
 
@@ -390,26 +345,26 @@ import { STATUS_LABEL, nextOptions, makeDefaultStatus, canTransition, withoutBla
 import { useFetchTask } from '@/composables/fetchTask';
 import { useLocalStorage } from '@/composables/localStorage';
 import { loadConfigValue } from '@/config';
-import { optionalDateTime, range, required } from '@/rules';
+import { optionalDateTime, required } from '@/rules';
 import { useCalendarsStore } from '@/stores/calendars';
 
-import dayjs from 'dayjs';
+import { leadTimeDays, resolvedLeadTime, urgencyOf, URGENCY_LABEL, type Importance } from '@/urgency';
+import { useTasksStore } from '@/stores/tasks';
+import { useTaskSettingsStore } from '@/stores/taskSettings';
 
 type EditableTask = {
     title: string;
     tags: string[];
     status: Status;
-    progress: number;
-    importance: number;
-    urgency: number;
-    start_at: string;
+    importance: Importance | null;
+    lead_time: string;
+    available_from: string;
     due_by: string;
     deadline: string;
     // When each date rings: `null` is the default from the settings, which the note does not
     // mention, and a list, even an empty one, is the task's own.
     due_by_alarms: string[] | null;
     deadline_alarms: string[] | null;
-    scheduled_dates: string[];
     note: string;
 };
 
@@ -427,6 +382,13 @@ const pathRef = toRef(props, 'taskPath');
 // Composables
 const { task, loading, error, refresh } = useFetchTask(pathRef);
 const calendars = useCalendarsStore();
+const tasks = useTasksStore();
+const settings = useTaskSettingsStore();
+const derivedProgress = computed(() => tasks.progress(uuid.value));
+const defaultLeadTime = computed(() => resolvedLeadTime({}, form.tags, settings.settings));
+const derivedUrgency = computed(() => urgencyOf(form, form.tags, settings.settings));
+const plannedDays = computed<string[]>(() => []);
+const leadTimeRule = (value: string) => !value?.trim() || leadTimeDays(value) !== undefined || 'Use whole days or weeks, such as 14d or 2w.';
 
 // Emits
 const emit = defineEmits<{
@@ -444,15 +406,13 @@ const form = reactive<EditableTask>({
     tags: props.selectedTag ? [props.selectedTag] : [],
     // A new task starts in the backlog: To do is a commitment the author makes by moving it there.
     status: { kind: 'backlog' },
-    progress: 0,
-    importance: 3,
-    urgency: 3,
-    start_at: '',
+    importance: null,
+    lead_time: '',
+    available_from: '',
     due_by: '',
     deadline: '',
     due_by_alarms: null,
     deadline_alarms: null,
-    scheduled_dates: [],
     note: '',
 });
 const uiValid = ref(true);
@@ -482,15 +442,13 @@ const initialForm = computed<EditableTask>(() => {
             title: '',
             tags: defaultTags,
             status: { kind: 'backlog' },
-            progress: 0,
-            importance: 3,
-            urgency: 3,
-            start_at: '',
+            importance: null,
+            lead_time: '',
+            available_from: '',
             due_by: '',
             deadline: '',
             due_by_alarms: null,
             deadline_alarms: null,
-            scheduled_dates: [],
             note: '',
         };
     }
@@ -498,24 +456,15 @@ const initialForm = computed<EditableTask>(() => {
         title: t.title ?? '',
         tags: Array.isArray(t.tags) ? [...t.tags] : [],
         status: (t.status === undefined || t.status === null) ? { kind: 'backlog' } : { ...t.status },
-        progress: t.progress ?? 0,
-        importance: t.importance ?? 3,
-        urgency: t.urgency ?? 3,
-        start_at: t.start_at ?? '',
+        importance: t.importance ?? null,
+        lead_time: t.lead_time ?? '',
+        available_from: t.available_from ?? '',
         due_by: t.due_by ?? '',
         deadline: t.deadline ?? '',
         due_by_alarms: t.alarms?.due_by ? [...t.alarms.due_by] : null,
         deadline_alarms: t.alarms?.deadline ? [...t.alarms.deadline] : null,
-        scheduled_dates: Array.isArray(t.scheduled_dates) ? [...t.scheduled_dates] : [],
         note: t.note ?? '',
     };
-});
-
-const progress = computed<number>({
-    get: () => form.progress,
-    set: (p) => {
-        form.progress = Math.round(p);
-    },
 });
 
 const statusOptions = computed<{ kind: StatusKind, label: string }[]>(() => {
@@ -563,28 +512,17 @@ const tagItems = computed<{ title: string; value: string; }[]>(() =>
     })
 );
 
-// v3 <v-date-picker multiple> works with Date objects rather than formatted strings
-const scheduledDatesAsDates = computed<Date[]>(() =>
-    form.scheduled_dates.map((date) => dayjs(date).toDate())
-);
-
-function onScheduledDatesChange(dates: unknown) {
-    form.scheduled_dates = (dates as Date[]).map((date) => dayjs(date).format('YYYY-MM-DD'));
-}
-
 const isModified = computed<boolean>(() => {
     return (
         form.title !== initialForm.value.title ||
         !arraysEqual(form.tags, initialForm.value.tags) ||
         !statusEqual(form.status, initialForm.value.status) ||
-        form.progress !== initialForm.value.progress ||
         form.importance !== initialForm.value.importance ||
-        form.urgency !== initialForm.value.urgency ||
-        form.start_at !== initialForm.value.start_at ||
+        form.lead_time !== initialForm.value.lead_time ||
+        form.available_from !== initialForm.value.available_from ||
         form.due_by !== initialForm.value.due_by ||
         form.deadline !== initialForm.value.deadline ||
         !sameTaskAlarms(taskAlarmsToWrite(form), taskAlarmsToWrite(initialForm.value)) ||
-        !arraysEqual(form.scheduled_dates, initialForm.value.scheduled_dates) ||
         form.note !== initialForm.value.note
     );
 });
@@ -632,6 +570,7 @@ onMounted(() => {
     window.addEventListener('beforeunload', onBeforeunload);
     // The default alarms are shown beside a date's own, and live in the calendar configuration.
     // Without it they read as the built-in ones, which is only wrong until it has loaded.
+    void settings.load();
     calendars.ensureLoaded().catch(() => undefined);
 });
 
@@ -670,30 +609,26 @@ function resetFromTask(t?: Task | undefined | null): void {
         form.title = '';
         form.tags = defaultTags;
         form.status = { kind: 'backlog' };
-        form.progress = 0;
-        form.importance = 3;
-        form.urgency = 3;
-        form.start_at = '';
+        form.importance = null;
+        form.lead_time = '';
+        form.available_from = '';
         form.due_by = '';
         form.deadline = '';
         form.due_by_alarms = null;
         form.deadline_alarms = null;
-        form.scheduled_dates = [];
         form.note = '';
     }
     else {
         form.title = t.title ?? '';
         form.tags = Array.isArray(t.tags) ? [...t.tags] : [];
         form.status = (t.status === undefined || t.status === null) ? { kind: 'backlog' } : { ...t.status };
-        form.progress = t.progress ?? 0;
-        form.importance  = t.importance ?? 3;
-        form.urgency = t.urgency ?? 3;
-        form.start_at = t.start_at ?? '';
+        form.importance = t.importance ?? null;
+        form.lead_time = t.lead_time ?? '';
+        form.available_from = t.available_from ?? '';
         form.due_by = t.due_by ?? '';
         form.deadline = t.deadline ?? '';
         form.due_by_alarms = t.alarms?.due_by ? [...t.alarms.due_by] : null;
         form.deadline_alarms = t.alarms?.deadline ? [...t.alarms.deadline] : null;
-        form.scheduled_dates = Array.isArray(t.scheduled_dates) ? [...t.scheduled_dates] : [];
         form.note = t.note ?? '';
 
         // Automatically assess the task for existing tasks
@@ -723,23 +658,22 @@ async function onSave(): Promise<void> {
     }
     const alarms = taskAlarmsToWrite(form);
     // Create a Task value
-    const task = {
+    const savedTask: Task = {
+        source: task.value?.source,
         created_at: task.value?.created_at,
         uuid: uuid.value,
         title: form.title.trim(),
         tags: [...form.tags],
         status: withoutBlanks(form.status),
-        progress: form.progress,
-        importance: form.importance,
-        urgency: form.urgency,
-        ...(form.start_at !== '' ? { start_at: form.start_at } : {}),
+        importance: form.importance ?? undefined,
+        ...(form.lead_time.trim() ? { lead_time: form.lead_time.trim() } : {}),
+        ...(form.available_from !== '' ? { available_from: form.available_from } : {}),
         ...(form.due_by !== '' ? { due_by: form.due_by } : {}),
         ...(form.deadline !== '' ? { deadline: form.deadline } : {}),
         ...(Object.keys(alarms).length > 0 ? { alarms } : {}),
-        scheduled_dates: [...form.scheduled_dates],
         note: form.note,
     };
-    emit('save', task);
+    emit('save', savedTask);
 }
 
 function onDelete(): void {
@@ -807,10 +741,8 @@ async function performTaskAssessment(title: string) {
             title: title,
             tags: (form.tags || []).filter((t) => t !== 'quick-create'),
             status: form.status,
-            progress: form.progress,
-            importance: form.importance,
-            urgency: form.urgency,
-            start_at: form.start_at,
+            importance: form.importance ?? undefined,
+            available_from: form.available_from,
             due_by: form.due_by,
             deadline: form.deadline,
             note: form.note,

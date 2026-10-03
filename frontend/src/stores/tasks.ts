@@ -1,4 +1,6 @@
-import { computed } from 'vue';
+import { urgencyOf, mostUrgent, type Urgency } from '@/urgency';
+import { useTaskSettingsStore } from '@/stores/taskSettings';
+import { onScopeDispose, ref, computed } from 'vue';
 import { defineStore } from 'pinia';
 
 import type { UUID } from '@/api';
@@ -98,6 +100,10 @@ function toItem(node: TaskNode, children: TaskTreeItem[] | undefined): TaskTreeI
 
 export const useTasksStore = defineStore('tasks', () => {
     const files = useFilesStore();
+    const taskSettings = useTaskSettingsStore();
+    const now = ref(Date.now());
+    const timer = setInterval(() => { now.value = Date.now(); }, 60_000);
+    onScopeDispose(() => clearInterval(timer));
     const subset = useEntrySubset(TASKS_DIR);
 
     const forest = computed(() => buildPathForest(subset.entries.value, TASKS_DIR, taskPolicy));
@@ -187,6 +193,31 @@ export const useTasksStore = defineStore('tasks', () => {
 
     function flattenDescendants(id: UUID): TaskNode[] {
         return nodesOf(forest.value, descendants(forest.value, id));
+    }
+
+    function ownUrgency(id: string): Urgency {
+        const task = node(id);
+        return urgencyOf(task?.metadata?.task ?? {}, task?.metadata?.tags ?? [], taskSettings.settings, now.value);
+    }
+
+    function urgency(id: string): Urgency {
+        const own = ownUrgency(id);
+        const current = node(id);
+        if (current?.metadata?.task?.status?.kind === 'done' || current?.metadata?.task?.status?.kind === 'canceled') {
+            return own;
+        }
+        const descendants = flattenDescendants(id).filter((task) => !['done', 'canceled'].includes(task.metadata?.task?.status?.kind ?? ''));
+        const highest = mostUrgent([own, ...descendants.map((task) => ownUrgency(task.uuid))]);
+        return { ...highest, actionable: own.actionable, short_window: own.short_window };
+    }
+
+    function progress(id: string): number | undefined {
+        if (childrenOf(id).length === 0 || isTagGroupId(id)) {
+            return undefined;
+        }
+        const leaves = flattenDescendants(id).filter((task) => childrenOf(task.uuid).length === 0);
+        const counted = leaves.filter((task) => task.metadata?.task?.status?.kind !== 'canceled');
+        return counted.length > 0 ? counted.filter((task) => task.metadata?.task?.status?.kind === 'done').length / counted.length * 100 : 0;
     }
 
     // --- Mutations. Server first, then wait for the listing to show the result. ---
@@ -286,6 +317,9 @@ export const useTasksStore = defineStore('tasks', () => {
 
         // === Actions ===
         node,
+        urgency,
+        ownUrgency,
+        progress,
         childrenOf,
         parentOf,
         ancestorsOf,
