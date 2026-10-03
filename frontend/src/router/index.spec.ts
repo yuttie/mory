@@ -73,4 +73,12 @@ describe('creating a note', () => {
         await router.push({ name: 'Create', query: { parent: ['a.md', 'b.md'] } });
         expect(router.currentRoute.value.params.path).toHaveLength(1);
     });
+
+    it('keeps the template when a parent is given too', async () => {
+        await router.push({ name: 'Create', query: { from: 'x.template', parent: 'a/b.md' } });
+        const { params, query } = router.currentRoute.value;
+        expect((params.path as string[]).slice(0, 2)).toEqual(['a', 'b']);
+        expect(query.template).toBe('x.template');
+        expect(query.mode).toBe('create');
+    });
 });
