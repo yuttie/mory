@@ -147,7 +147,7 @@ ignored by default; point `MORY_CORPUS` at a real repository and run it whenever
 changes.
 
 A path under `.tasks/` must keep the UUIDv4 naming `entries_to_tree` derives the task tree from,
-and `.mory/tasks.yaml` is read-only through MCP — 600 KB of legacy YAML using anchors and aliases
+and `.mory/tasks-v1.yaml` is read-only through MCP — 600 KB of legacy YAML using anchors and aliases
 that a rewrite would silently expand into independent copies.
 
 `list_events` does **not** expand recurrence rules: it returns the rule as declared and says so in

@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { getAxios } from '@/axios';
 import { encodePath } from '@/encode-path';
 import YAML from 'yaml';
@@ -382,16 +381,7 @@ export async function getTaskData(eTag?: string): Promise<[string, TaskData | nu
         headers: headers,
         validateStatus: (status) => (status >= 200 && status < 300) || status === 304,
     });
-    let res;
-    try {
-        res = await request(TASK_DATA_PATH);
-    }
-    catch (error) {
-        if (!axios.isAxiosError(error) || error.response?.status !== 404) {
-            throw error;
-        }
-        res = await request('.mory/tasks.yaml');
-    }
+    const res = await request(TASK_DATA_PATH);
     if (res.status === 304) {
         return [res.headers.etag, null];
     }
