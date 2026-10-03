@@ -86,6 +86,12 @@ const notePolicy: PathForestPolicy<NoteNode> = {
     // No `sort`: `latest` is not known until the tree is linked.
 };
 
+// Where a new note under `parentPath` goes: in the directory the parent covers, which is what
+// makes `notePolicy` parent it -- `coverOf` read in the other direction.
+export function childNotePath(parentPath: string, id: string): string {
+    return `${stripExtension(parentPath)}/${id}.md`;
+}
+
 // Newest first, mixing directories and files. Ties break on the path so that the tree cannot
 // reorder itself between renders.
 export function compareByLatestDesc(a: NoteNode, b: NoteNode): number {

@@ -1,6 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import type { RouteRecordRaw } from 'vue-router';
 
+import { childNotePath } from '@/note-forest';
+
 const Home      = () => import('../views/Home.vue');
 const Calendar  = () => import('../views/Calendar.vue');
 const Tasks     = () => import('../views/Tasks.vue');
@@ -71,9 +73,14 @@ const routes: Array<RouteRecordRaw> = [
         path: '/create',
         name: 'Create',
         redirect: to => {
+            // A query value may be an array or absent; anything but a path starts a root note.
+            const parent = typeof to.query.parent === 'string' && to.query.parent !== '' ? to.query.parent : null;
+            const path = parent === null
+                ? crypto.randomUUID() + '.md'
+                : childNotePath(parent, crypto.randomUUID());
             return {
                 name: 'Note',
-                params: { path: [crypto.randomUUID() + '.md'] },
+                params: { path: path.split('/') },
                 query: { mode: 'create', template: to.query.from },
             };
         },

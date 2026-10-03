@@ -4,6 +4,7 @@ import type { ListEntry2 } from '@/api';
 import { toNestedForest } from '@/forest';
 import {
     buildNoteForest,
+    childNotePath,
     compareByLatestDesc,
     isDirectory,
     isHiddenPath,
@@ -230,5 +231,20 @@ describe('the nested shape', () => {
         const [leaf] = toNestedForest<NoteNode, NoteTreeItem>(forest, forest.roots, (node, kids) =>
             ({ ...node, ...(kids !== undefined ? { children: kids } : {}) }));
         expect('children' in leaf).toBe(false);
+    });
+});
+
+describe('childNotePath', () => {
+    it('names a file in the directory the parent covers', () => {
+        expect(childNotePath('foo/bar.md', 'x')).toBe('foo/bar/x.md');
+        expect(childNotePath('top.md', 'x')).toBe('top/x.md');
+        expect(childNotePath('foo/bar.markdown', 'x')).toBe('foo/bar/x.md');
+    });
+
+    it('is nested under the parent by the note tree', () => {
+        const child = childNotePath('foo/bar.md', 'x');
+        expect(shapeOf([entry('foo/bar.md'), entry(child)])).toEqual([
+            { id: 'foo', children: [{ id: 'foo/bar.md', children: [{ id: child }] }] },
+        ]);
     });
 });
