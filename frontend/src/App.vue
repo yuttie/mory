@@ -113,30 +113,12 @@
                                 title="New child note"
                             ></v-list-item>
                             <v-list-subheader>Templates</v-list-subheader>
-                            <v-list-item
+                            <TemplateMenuItem
                                 v-for="path in templates"
                                 v-bind:key="path"
-                                v-bind:to="{ name: 'Create', query: { from: path } }"
-                                v-bind:prepend-icon="mdiFileDocumentOutline"
-                                v-bind:title="path.replace(/\.template$/i, '')"
-                            >
-                                <template v-slot:append>
-                                    <!-- v-icon-btn has no `to`. The click still bubbles to the list item, whose own link
-                                         would create a note from the template instead; the router skips a click whose
-                                         default is already prevented. -->
-                                    <v-tooltip location="top">
-                                        <template v-slot:activator="{ props }">
-                                            <v-icon-btn
-                                                v-bind:icon="mdiPencil"
-                                                variant="text"
-                                                v-bind="props"
-                                                v-on:click.prevent="$router.push({ name: 'Note', params: { path: path.split('/') } })"
-                                            ></v-icon-btn>
-                                        </template>
-                                        <span>Edit template</span>
-                                    </v-tooltip>
-                                </template>
-                            </v-list-item>
+                                v-bind:path="path"
+                                v-bind:parent="openNotePath"
+                            ></TemplateMenuItem>
                         </v-list>
                     </v-menu>
                     <v-menu
@@ -335,30 +317,12 @@
                                 title="New child note"
                             ></v-list-item>
                             <v-list-subheader>Templates</v-list-subheader>
-                            <v-list-item
+                            <TemplateMenuItem
                                 v-for="path in templates"
                                 v-bind:key="path"
-                                v-bind:to="{ name: 'Create', query: { from: path } }"
-                                v-bind:prepend-icon="mdiFileDocumentOutline"
-                                v-bind:title="path.replace(/\.template$/i, '')"
-                            >
-                                <template v-slot:append>
-                                    <!-- v-icon-btn has no `to`. The click still bubbles to the list item, whose own link
-                                         would create a note from the template instead; the router skips a click whose
-                                         default is already prevented. -->
-                                    <v-tooltip location="top">
-                                        <template v-slot:activator="{ props }">
-                                            <v-icon-btn
-                                                v-bind:icon="mdiPencil"
-                                                variant="text"
-                                                v-bind="props"
-                                                v-on:click.prevent="$router.push({ name: 'Note', params: { path: path.split('/') } })"
-                                            ></v-icon-btn>
-                                        </template>
-                                        <span>Edit template</span>
-                                    </v-tooltip>
-                                </template>
-                            </v-list-item>
+                                v-bind:path="path"
+                                v-bind:parent="openNotePath"
+                            ></TemplateMenuItem>
                         </v-list>
                     </v-menu>
                     <v-menu
@@ -574,7 +538,6 @@ import {
     mdiCloudUploadOutline,
     mdiCogOutline,
     mdiExclamationThick,
-    mdiFileDocumentOutline,
     mdiFileMultipleOutline,
     mdiFileOutline,
     mdiFolderOutline,
@@ -585,7 +548,6 @@ import {
     mdiLock,
     mdiLogout,
     mdiMagnify,
-    mdiPencil,
     mdiPlus,
     mdiSubdirectoryArrowRight,
     mdiUpload,
@@ -596,6 +558,7 @@ import { useAppStore } from '@/stores/app';
 import { loadConfigValue, saveConfigValue } from '@/config';
 import type { Claim, IndexingStop, ListEntry2, UploadEntry } from '@/api';
 import IndexingStopsItem from '@/components/IndexingStopsItem.vue';
+import TemplateMenuItem from '@/components/TemplateMenuItem.vue';
 import { requestEventAlarms } from '@/event-alarms';
 import { useFilesStore } from '@/stores/files';
 import { jwtDecode } from 'jwt-decode';
