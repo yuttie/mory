@@ -1,13 +1,12 @@
 <template>
   <div
-    v-on:click="$emit('click', $event)"
     class="task-list-item"
   >
     <v-checkbox-btn
       color="primary"
       v-bind:ripple="false"
       v-bind:model-value="value.done"
-      v-on:update:model-value="$emit('done-toggle', $event)"
+      readonly
       v-on:click.stop
     ></v-checkbox-btn>
     <span
@@ -41,7 +40,6 @@
         <div>{{ value.deadline }}</div>
       </v-tooltip>
     </span>
-    <v-btn v-if="!migrated" variant="outlined" v-on:click.stop="onMigrate">Migrate</v-btn>
   </div>
 </template>
 
@@ -76,14 +74,6 @@ dayjs.extend(relativeTime, {
 // Props
 const props = defineProps<{
   value: Task;
-  migrated: boolean;
-}>();
-
-// Emits
-const emit = defineEmits<{
-  (e: 'click', event: Event): void;
-  (e: 'done-toggle', event: Event): void;
-  (e: 'migrate', value: Task): void;
 }>();
 
 // Computed properties
@@ -111,10 +101,6 @@ const deadlineStyle = computed((): Record<string, string> => {
   }
 });
 
-// Methods
-function onMigrate() {
-    emit('migrate', props.value);
-}
 </script>
 
 <style scoped lang="scss">

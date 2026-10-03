@@ -9,7 +9,7 @@ const client = vi.hoisted(() => ({
 
 vi.mock('@/axios', () => ({ getAxios: () => client }));
 
-import { addNote, deleteNote, getNote, noteExists, renameNote } from '@/api';
+import { addNote, deleteNote, getNote, getTaskData, noteExists, renameNote } from '@/api';
 
 // A path with the characters that end a URL's path early when they are not encoded.
 const ODD_PATH = 'notes/name#draft?100%.md';
@@ -55,5 +55,38 @@ describe('the requests for a note', () => {
     it('keeps the slashes of an ordinary path', async () => {
         await getNote('research/programming-learning/codewalker.md');
         expect(client.get).toHaveBeenCalledWith('/notes/research/programming-learning/codewalker.md');
+    });
+});
+
+
+describe('legacy task archive', () => {
+    const data = 'tasks:\n    backlog: []\n    scheduled: {}\ngroups: []\n';
+
+    it('reads the renamed archive first', async () => {
+        client.get.mockResolvedValue({ status: 200, data, headers: { etag: 'archive' } });
+        const [etag, archive] = await getTaskData();
+        expect(etag).toBe('archive');
+        expect(archive?.tasks.backlog).toEqual([]);
+        expect(client.get.mock.calls[0][0]).toBe('/v2/files/.mory/tasks-v1.yaml');
+        expect(client.get).toHaveBeenCalledTimes(1);
+    });
+
+    it('reads the old path only when the archive is missing', async () => {
+        client.get.mockRejectedValueOnce({ isAxiosError: true, response: { status: 404 } });
+        client.get.mockResolvedValueOnce({ status: 200, data, headers: { etag: 'old' } });
+        await getTaskData();
+        expect(client.get.mock.calls[1][0]).toBe('/v2/files/.mory/tasks.yaml');
+    });
+
+    it('does not create a file when neither path exists', async () => {
+        client.get.mockRejectedValue({ isAxiosError: true, response: { status: 404 } });
+        await expect(getTaskData()).rejects.toMatchObject({ response: { status: 404 } });
+        expect(client.put).not.toHaveBeenCalled();
+    });
+
+    it('does not fall back after an authorization failure', async () => {
+        client.get.mockRejectedValue({ isAxiosError: true, response: { status: 401 } });
+        await expect(getTaskData()).rejects.toMatchObject({ response: { status: 401 } });
+        expect(client.get).toHaveBeenCalledTimes(1);
     });
 });

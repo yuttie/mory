@@ -701,7 +701,7 @@ pub async fn list_imported_events(
 /// 600 KB of legacy YAML held together by anchors and aliases (`&a1` / `*a1`), which a naive
 /// parse-and-serialize round-trip silently expands into independent copies. Nothing here writes
 /// it; it is readable through `read_note` like any other file.
-const READ_ONLY_PATHS: [&str; 1] = [".mory/tasks.yaml"];
+const READ_ONLY_PATHS: [&str; 2] = [".mory/tasks.yaml", ".mory/tasks-v1.yaml"];
 
 /// Check a path a tool was asked to touch, and return it in its canonical spelling.
 ///
@@ -1185,6 +1185,7 @@ mod tests {
     #[test]
     fn the_legacy_task_yaml_is_read_only() {
         assert!(safe_path(".mory/tasks.yaml").is_err());
+        assert!(safe_path(".mory/tasks-v1.yaml").is_err());
         // Its neighbours are not.
         assert!(safe_path(".mory/calendars.yaml").is_ok());
     }
