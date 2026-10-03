@@ -457,7 +457,7 @@
             <v-app-bar-nav-icon
                 v-if="$vuetify.display.smAndDown"
                 v-on:click="mobileDrawer = !mobileDrawer"
-                class="mx-2"
+                class="ml-2"
             />
             <v-toolbar-title v-if="appStore.appBarClaims === 0">
                 {{ $route.name?.replace(/With.*$/, '') ?? '' }}

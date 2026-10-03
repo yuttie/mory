@@ -7,7 +7,7 @@
         </template>
         <template v-else>
             <AppBarContent>
-                <v-toolbar-title class="ms-5">
+                <v-toolbar-title v-bind:class="{ 'ms-2': $vuetify.display.smAndDown, 'ms-3': !$vuetify.display.smAndDown }">
                     <nav
                         ref="breadcrumbScroller"
                         class="note-breadcrumbs"
