@@ -6,9 +6,9 @@ import { mockBackend } from './backend';
 // query and a percent sign.
 const ODD_PATH = 'notes/name#draft?100%.md';
 
-// Where the page is, with its path decoded. A URL built by hand ends its path at the first `#` or
-// `?`, so what lands in the fragment and the query is part of what the tests compare.
-function openNote(page: Page): { path: string; search: string; hash: string } {
+// Where the page is, with its path decoded. The fragment and the query are compared as well, so a
+// URL that moved part of the path into either of them fails too.
+function pageLocation(page: Page): { path: string; search: string; hash: string } {
     const url = new URL(page.url());
     return {
         path: decodeURIComponent(url.pathname),
@@ -35,10 +35,10 @@ test('links an event error to the note it is defined in, whatever its name', asy
     const link = page.getByRole('alert').getByRole('link', { name: 'Odd name' });
     await link.click();
 
-    await expect.poll(() => openNote(page)).toEqual({ path: `/note/${ODD_PATH}`, search: '', hash: '' });
+    await expect.poll(() => pageLocation(page)).toEqual({ path: `/note/${ODD_PATH}`, search: '', hash: '' });
 });
 
-test('renames a note to a path with a fragment and a query, and shows it there', async ({ context, page }) => {
+test('redirects to the path a note is renamed to, whatever its name', async ({ context, page }) => {
     await mockBackend(context, { 'notes/old.md': '# Old\n' });
     await page.goto('/note/notes/old.md');
 
@@ -47,5 +47,5 @@ test('renames a note to a path with a fragment and a query, and shows it there',
     await field.fill(ODD_PATH);
     await page.getByRole('dialog').getByRole('button', { name: 'Rename' }).click();
 
-    await expect.poll(() => openNote(page)).toEqual({ path: `/note/${ODD_PATH}`, search: '', hash: '' });
+    await expect.poll(() => pageLocation(page)).toEqual({ path: `/note/${ODD_PATH}`, search: '', hash: '' });
 });

@@ -138,6 +138,7 @@ self.addEventListener('push', (event) => {
 });
 
 // Where the app shows a note: `/note/:path*` in `src/router/index.ts`, a segment per directory.
+// Encoded as `encodePath` in `src/encode-path.ts` does, which a plain script cannot import.
 function noteUrl(path) {
     return new URL(`note/${path.split('/').map(encodeURIComponent).join('/')}`, self.registration.scope).href;
 }

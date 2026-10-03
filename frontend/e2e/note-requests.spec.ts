@@ -21,6 +21,20 @@ test('reads the note a name with a fragment and a query names', async ({ context
     await expect(page.getByRole('heading', { name: 'Wrong note' })).toHaveCount(0);
 });
 
+test('saves a note to the path its name gives', async ({ context, page }) => {
+    const repository = await mockBackend(context, { [ODD_PATH]: '# Odd name\n' });
+    await page.goto(`/note/${ENCODED_ODD_PATH}`);
+    // Loading the note resets the panes, so the switch waits for the note to be drawn.
+    await expect(page.getByRole('heading', { name: 'Odd name' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Editor and viewer' }).click();
+    await page.locator('.cm-content').click();
+    await page.keyboard.type('More text.');
+    await page.getByTitle('Save').click();
+
+    await expect.poll(() => repository.writes.map((write) => write.path)).toEqual([ODD_PATH]);
+});
+
 test('renames a note by the path it is renamed to', async ({ context, page }) => {
     await mockBackend(context, { 'notes/old.md': '# Old\n' });
     const writes: string[] = [];
