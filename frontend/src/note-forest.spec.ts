@@ -9,6 +9,7 @@ import {
     compareByLatestDesc,
     isDirectory,
     isHiddenPath,
+    noteBreadcrumbs,
     noteRouteFor,
 } from '@/note-forest';
 import type { NoteNode, NoteTreeItem } from '@/note-forest';
@@ -26,6 +27,43 @@ function entry(path: string, options: Partial<ListEntry2> = {}): ListEntry2 {
 }
 
 const at = (day: number) => `2024-05-${String(day).padStart(2, '0')}T12:00:00+00:00`;
+
+describe('note breadcrumbs', () => {
+    it('uses note titles and the directory-cover rule for ancestors', () => {
+        expect(noteBreadcrumbs([
+            entry('projects.md', { title: 'Projects' }),
+            entry('projects/team.markdown', { title: 'Our team' }),
+        ], 'projects/team/drafts/new.md', 'New idea')).toEqual([
+            { title: 'Projects', to: { name: 'Note', params: { path: ['projects.md'] } } },
+            { title: 'Our team', to: { name: 'Note', params: { path: ['projects', 'team.markdown'] } } },
+            { title: 'drafts' },
+            { title: 'New idea' },
+        ]);
+    });
+
+    it('does not link a directory to a non-Markdown file', () => {
+        expect(noteBreadcrumbs([
+            entry('photo.jpg', { mime_type: 'image/jpeg', title: 'Photo' }),
+        ], 'photo/note.md', 'Note')).toEqual([{ title: 'photo' }, { title: 'Note' }]);
+    });
+
+    it('keeps reserved characters in route segments and falls back to a parent filename', () => {
+        expect(noteBreadcrumbs([
+            entry('Q&A #1.md'),
+        ], 'Q&A #1/new.md', 'New')).toEqual([
+            { title: 'Q&A #1.md', to: { name: 'Note', params: { path: ['Q&A #1.md'] } } },
+            { title: 'New' },
+        ]);
+    });
+
+    it('shows ancestors for unsaved and hidden notes, and a lone title at the root', () => {
+        expect(noteBreadcrumbs([], '.events/new.md', 'Meeting')).toEqual([
+            { title: '.events' },
+            { title: 'Meeting' },
+        ]);
+        expect(noteBreadcrumbs([], 'new.md', 'New note')).toEqual([{ title: 'New note' }]);
+    });
+});
 
 interface Shape { id: string; children?: Shape[] }
 

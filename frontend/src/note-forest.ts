@@ -147,3 +147,39 @@ export function noteRouteFor(node: NoteNode): RouteLocationRaw | null {
     }
     return routeForMime(node.path, node.entry.mime_type);
 }
+
+export interface NoteBreadcrumb {
+    title: string;
+    to?: RouteLocationRaw;
+}
+
+export function noteBreadcrumbs(
+    entries: readonly ListEntry2[],
+    path: string,
+    title: string,
+): NoteBreadcrumb[] {
+    const covering = new Map<string, ListEntry2>();
+    for (const entry of entries) {
+        const cover = notePolicy.coverOf(entry);
+        if (cover !== null && !covering.has(cover)) {
+            covering.set(cover, entry);
+        }
+    }
+
+    // Walk the path rather than requiring a listed node: unsaved notes and files in the app's
+    // hidden directories still have ancestors, even though the drawer does not show them.
+    const segments = path.split('/');
+    return segments.map((segment, index) => {
+        if (index === segments.length - 1) {
+            return { title };
+        }
+        const parent = covering.get(segments.slice(0, index + 1).join('/'));
+        if (parent === undefined) {
+            return { title: segment };
+        }
+        return {
+            title: parent.title ?? nameOf(parent.path),
+            to: routeForMime(parent.path, parent.mime_type),
+        };
+    });
+}

@@ -7,7 +7,38 @@
         </template>
         <template v-else>
             <AppBarContent>
-                <v-toolbar-title class="ms-5">{{ title }}</v-toolbar-title>
+                <v-toolbar-title class="ms-5">
+                    <nav aria-label="Note breadcrumbs">
+                        <ol class="note-breadcrumbs">
+                            <li
+                                v-for="(crumb, index) in breadcrumbs"
+                                v-bind:key="index"
+                                v-bind:aria-current="index === breadcrumbs.length - 1 ? 'page' : undefined"
+                            >
+                                <span
+                                    v-if="index > 0"
+                                    class="divider"
+                                    aria-hidden="true"
+                                >
+                                    /
+                                </span>
+                                <router-link
+                                    v-if="crumb.to"
+                                    v-bind:to="crumb.to"
+                                    v-bind:title="crumb.title"
+                                >
+                                    {{ crumb.title }}
+                                </router-link>
+                                <span
+                                    v-else
+                                    v-bind:title="crumb.title"
+                                >
+                                    {{ crumb.title }}
+                                </span>
+                            </li>
+                        </ol>
+                    </nav>
+                </v-toolbar-title>
                 <!-- Three panes side by side need room the title also wants. Below `md` the bar
                      gets one button instead, showing the pane the tap would bring up; the pair it
                      swaps between are the two a narrow screen is wide enough for. -->
@@ -356,6 +387,7 @@ import AppBarContent from '@/components/AppBarContent.vue';
 import EditableViewer from '@/components/EditableViewer.vue';
 import { useFilesStore } from '@/stores/files';
 import { loadConfigValue } from '@/config';
+import { noteBreadcrumbs } from '@/note-forest';
 
 const ajv = new Ajv();
 const validateMetadata = ajv.compile(metadataSchema);
@@ -433,17 +465,20 @@ const selectedMode = computed(() => {
     }
 });
 
-const title = computed(() => {
+const renderedTitle = computed(() => {
     const root = document.createElement('div');
     root.innerHTML = rendered.value.content;
     const h1 = root.querySelector('h1');
-    if (h1) {
-        return h1.textContent;
-    }
-    else {
-        return notePath.value;
-    }
+    return h1?.textContent ?? null;
 });
+
+const title = computed(() => renderedTitle.value ?? notePath.value);
+
+const breadcrumbs = computed(() => noteBreadcrumbs(
+    files.entries,
+    notePath.value,
+    renderedTitle.value ?? notePath.value.slice(notePath.value.lastIndexOf('/') + 1),
+));
 
 const toc = computed(() => {
     const root = document.createElement('div');
@@ -1143,6 +1178,35 @@ watch(notePath, async (newPath, oldPath) => {
     // panes under the edge of the window by the height of the app bar.
     height: calc(100dvh - var(--v-layout-top, 0px) - var(--v-layout-bottom, 0px));
     display: flex;
+}
+
+.note-breadcrumbs {
+    display: flex;
+    overflow-x: auto;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    white-space: nowrap;
+
+    li {
+        display: flex;
+        align-items: center;
+        flex-shrink: 0;
+    }
+
+    .divider {
+        margin-inline: 0.5em;
+        opacity: 0.6;
+    }
+
+    a {
+        color: inherit;
+        text-decoration: none;
+
+        &:hover {
+            text-decoration: underline;
+        }
+    }
 }
 
 .sidebar {
