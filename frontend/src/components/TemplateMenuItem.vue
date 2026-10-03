@@ -1,12 +1,15 @@
 <template>
     <v-list-item
+        link
         v-bind:prepend-icon="mdiFileDocumentOutline"
         v-bind:title="path.replace(/\.template$/i, '')"
+        v-on:click.stop="submenuIsVisible = true"
     >
         <template v-slot:append>
             <v-icon>{{ mdiChevronRight }}</v-icon>
         </template>
         <v-menu
+            v-model="submenuIsVisible"
             activator="parent"
             submenu
             open-on-hover
@@ -34,6 +37,8 @@
 </template>
 
 <script lang="ts" setup>
+import { ref } from 'vue';
+
 import {
     mdiChevronRight,
     mdiFileDocumentOutline,
@@ -41,6 +46,14 @@ import {
     mdiPencil,
     mdiSubdirectoryArrowRight,
 } from '@mdi/js';
+
+// Reactive states
+//
+// The row is `link` so that it is focusable, which a row with no destination is not, and the
+// keyboard can reach it. Its click is stopped and the submenu opened by hand: left to bubble, the
+// click reaches the Add note menu around this one, which closes on a click in its content, and
+// `open-on-hover` turns off opening on click, so a tap would only close both menus.
+const submenuIsVisible = ref(false);
 
 // Props
 defineProps<{
