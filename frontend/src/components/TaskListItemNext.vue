@@ -61,6 +61,7 @@
             </span>
             <v-chip size="x-small" class="ml-1">{{ URGENCY_LABEL[urgency.level] }}</v-chip>
             <span v-if="progress !== undefined" class="ml-1">{{ Math.round(progress) }}%</span>
+            <span v-if="plans.missedCount(value.uuid) >= 3" class="ml-1 text-warning">Consider splitting or re-rating importance ({{ plans.missedCount(value.uuid) }} missed days)</span>
             <span v-if="urgency.short_window" class="ml-1 text-warning">Window shorter than lead time</span>
             <!-- Below the title rather than before it, so the checkbox stays level with the title
                  and the titles in a column still line up to be scanned. -->
@@ -89,6 +90,7 @@ import type { UUID } from '@/task';
 import type { TaskNode } from '@/task-forest';
 import { useTasksStore } from '@/stores/tasks';
 import { URGENCY_LABEL } from '@/urgency';
+import { usePlansStore } from '@/stores/plans';
 
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -120,6 +122,7 @@ const props = defineProps<{
 
 // Stores
 const store = useTasksStore();
+const plans = usePlansStore();
 const urgency = computed(() => store.urgency(props.value.uuid));
 const progress = computed(() => store.progress(props.value.uuid));
 

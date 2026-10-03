@@ -2887,14 +2887,10 @@ fn the_task_tools_emit_frontmatter_the_frontend_would_accept() {
     for status in statuses {
         let mut changes = vec![
             Change::set(&["tags"], serde_yaml::Value::Sequence(vec!["work".into()])),
-            Change::set(&["task", "progress"], 0),
-            Change::set(&["task", "importance"], 3),
-            Change::set(&["task", "urgency"], 3),
+            Change::set(&["task", "importance"], "medium"),
+            Change::set(&["task", "lead_time"], "2w"),
+            Change::set(&["created_at"], "2026-10-04 14:05:12+09:00"),
             Change::set(&["task", "due_by"], "2026-03-15"),
-            Change::set(
-                &["task", "scheduled_dates"],
-                serde_yaml::Value::Sequence(vec!["2026-03-01".into()]),
-            ),
         ];
         changes.extend(status.clone());
 

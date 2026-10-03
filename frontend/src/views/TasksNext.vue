@@ -214,7 +214,7 @@
                             <!-- Schedule view -->
                             <TaskScheduleView
                                 v-else-if="descendantsViewMode === 'schedule'"
-                                v-bind:scheduled="{}"
+                                v-bind:candidates="filteredSelectedNodeDescendants"
                                 v-bind:route-for="taskRouteFor"
                                 v-bind:list-root="listRoot"
                             />

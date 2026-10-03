@@ -29,6 +29,7 @@ use crate::oauth::{AccessClaims, SCOPE_WRITE};
 pub(crate) mod frontmatter;
 mod event_tools;
 mod task_tools;
+mod plan_tools;
 pub(crate) mod tools;
 
 /// What every tool returns: text the model reads.
@@ -457,6 +458,43 @@ impl Mory {
     ) -> Result<CallToolResult, ErrorData> {
         tools::read_note(&self.state, args).await
     }
+    #[tool(name = "list_plan", description = "Read ordered plan entries between inclusive start/end dates. Unknown task UUIDs and invalid files are reported in warnings. Results describe work on a day, not completion status.",
+        annotations(title = "List day plans", read_only_hint = true, destructive_hint = false,
+                    idempotent_hint = true, open_world_hint = false))]
+    pub async fn list_plan(&self, Parameters(args): Parameters<plan_tools::ListArgs>) -> Result<CallToolResult, ErrorData> {
+        plan_tools::list_plan(&self.state, args).await
+    }
+
+    #[tool(name = "plan_task", description = "Append a task UUID once to a day. origin planned adds an unrecorded entry; interruption records worked. Requires notes:write.",
+        annotations(title = "Plan a task", read_only_hint = false, destructive_hint = false,
+                    idempotent_hint = true, open_world_hint = false))]
+    pub async fn plan_task(&self, Parameters(args): Parameters<plan_tools::PlanArgs>, context: RequestContext<RoleServer>) -> Result<CallToolResult, ErrorData> {
+        if !granted(&context, SCOPE_WRITE) {
+            return Ok(needs_write_scope());
+        }
+        plan_tools::plan_task(&self.state, args).await
+    }
+
+    #[tool(name = "record_plan_result", description = "Record worked or missed for a task on a day; omit result to clear it. worked records effort, not task completion. Requires notes:write.",
+        annotations(title = "Record plan result", read_only_hint = false, destructive_hint = false,
+                    idempotent_hint = true, open_world_hint = false))]
+    pub async fn record_plan_result(&self, Parameters(args): Parameters<plan_tools::ResultArgs>, context: RequestContext<RoleServer>) -> Result<CallToolResult, ErrorData> {
+        if !granted(&context, SCOPE_WRITE) {
+            return Ok(needs_write_scope());
+        }
+        plan_tools::record_result(&self.state, args).await
+    }
+
+    #[tool(name = "unplan_task", description = "Remove a task UUID from one day, preserving other entries and the task note. Also works for unknown UUIDs. Requires notes:write.",
+        annotations(title = "Remove plan entry", read_only_hint = false, destructive_hint = false,
+                    idempotent_hint = true, open_world_hint = false))]
+    pub async fn unplan_task(&self, Parameters(args): Parameters<plan_tools::UnplanArgs>, context: RequestContext<RoleServer>) -> Result<CallToolResult, ErrorData> {
+        if !granted(&context, SCOPE_WRITE) {
+            return Ok(needs_write_scope());
+        }
+        plan_tools::unplan_task(&self.state, args).await
+    }
+
 }
 
 // Naming the field is not cosmetic: left to its default the handler calls `Self::tool_router()`

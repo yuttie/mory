@@ -250,6 +250,18 @@ export function renameNote(oldPath: string, newPath: string) {
   });
 }
 
+export async function getFile(path: string, etag?: string): Promise<{ content: string | null; etag: string }> {
+    const response = await getAxios().get(`/v2/files/${encodePath(path)}`, {
+        headers: etag ? { 'If-None-Match': etag } : {},
+        validateStatus: (status) => status === 304 || status >= 200 && status < 300,
+    });
+    return { content: response.status === 304 ? null : response.data, etag: response.headers.etag };
+}
+
+export async function saveFileChecked(path: string, content: string, expectedETag: string): Promise<void> {
+    await getAxios().put(`/notes/${encodePath(path)}`, { Save: { content, message: `Update ${path}`, expected_etag: expectedETag } });
+}
+
 export function getNote(path: string) {
   return getAxios().get(`/notes/${encodePath(path)}`);
 }

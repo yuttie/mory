@@ -1,5 +1,6 @@
 mod note_time;
 mod urgency;
+mod plans;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::ffi::OsStr;
@@ -991,8 +992,17 @@ async fn put_notes_path(
     tracing::debug!("{:?}", note_save);
 
     let written = match note_save {
-        NoteSave::Save { content, message } => {
-            state.save_note(&path, content.as_bytes(), &message).await.map(Some)
+        NoteSave::Save { content, message, expected_etag } => {
+            if let Some(expected) = expected_etag {
+                match state.save_note_checked(&path, content.as_bytes(), &message, &expected).await {
+                    Ok(Some(commit)) => Ok(Some(commit)),
+                    Ok(None) => return StatusCode::PRECONDITION_FAILED.into_response(),
+                    Err(error) => Err(error),
+                }
+            }
+            else {
+                state.save_note(&path, content.as_bytes(), &message).await.map(Some)
+            }
         },
         NoteSave::Rename { from } => {
             let message = format!("Rename {} to {}", &from, &path);
@@ -2900,6 +2910,26 @@ mod models {
             Ok(commit_id)
         }
 
+        /// Refuse a stale plan edit while holding the same repository lock as its commit.
+        /// `absent` means this operation expects to create a file.
+        pub async fn save_note_checked(&self, path: &str, content: &[u8], message: &str, expected: &str) -> Result<Option<Oid>> {
+            let committed = {
+                let repo = self.repo.lock().unwrap();
+                let tree = repo.head()?.peel_to_commit()?.tree()?;
+                let current = tree.get_path(std::path::Path::new(path)).ok().map(|entry| entry.id());
+                let matches = match current {
+                    Some(oid) => expected == format!("\"{oid}\""),
+                    None => expected == "absent",
+                };
+                if !matches {
+                    return Ok(None);
+                }
+                commit_save(&repo, path, content, message)?
+            };
+            self.nudge_cache().await;
+            Ok(Some(committed))
+        }
+
         /// Move the blob at `from` to `to`. `None` when `from` is not in HEAD.
         pub async fn rename_note(
             &self,
@@ -2974,6 +3004,8 @@ mod models {
         Save {
             content: String,
             message: String,
+            #[serde(default)]
+            expected_etag: Option<String>,
         },
         Rename {
             from: String,

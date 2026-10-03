@@ -253,6 +253,15 @@ export const useFilesStore = defineStore('files', () => {
         await clearEntries();
     }
 
+    async function readVersion(path: string, etag?: string): Promise<{ content: string | null; etag: string }> {
+        return api.getFile(path, etag);
+    }
+
+    async function writeChecked(path: string, content: string, expectedETag: string): Promise<void> {
+        await api.saveFileChecked(path, content, expectedETag);
+        invalidate();
+    }
+
     async function read(path: string): Promise<string> {
         const res = await api.getNote(path);
         return res.data;
@@ -347,6 +356,8 @@ export const useFilesStore = defineStore('files', () => {
         refresh,
         entry,
         read,
+        readVersion,
+        writeChecked,
         write,
         rename,
         remove,

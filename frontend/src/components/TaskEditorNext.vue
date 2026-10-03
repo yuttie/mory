@@ -191,6 +191,7 @@
                         v-model="form.deadline_alarms"
                         v-bind:fallback="calendars.effectiveAlarmDefaults.deadline"
                     ></InheritableAlarms>
+                    <v-alert v-for="problem of Object.values(plans.errors)" v-bind:key="problem" type="warning">{{ problem }}</v-alert>
                     <v-list-subheader>Planned days</v-list-subheader>
                     <div v-if="plannedDays.length === 0">No planned days</div>
                     <ul><li v-for="date of plannedDays" v-bind:key="date">{{ date }}</li></ul>
@@ -351,6 +352,7 @@ import { useCalendarsStore } from '@/stores/calendars';
 import { leadTimeDays, resolvedLeadTime, urgencyOf, URGENCY_LABEL, type Importance } from '@/urgency';
 import { useTasksStore } from '@/stores/tasks';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
+import { usePlansStore } from '@/stores/plans';
 
 type EditableTask = {
     title: string;
@@ -387,7 +389,8 @@ const settings = useTaskSettingsStore();
 const derivedProgress = computed(() => tasks.progress(uuid.value));
 const defaultLeadTime = computed(() => resolvedLeadTime({}, form.tags, settings.settings));
 const derivedUrgency = computed(() => urgencyOf(form, form.tags, settings.settings));
-const plannedDays = computed<string[]>(() => []);
+const plans = usePlansStore();
+const plannedDays = computed(() => plans.plannedDays(uuid.value));
 const leadTimeRule = (value: string) => !value?.trim() || leadTimeDays(value) !== undefined || 'Use whole days or weeks, such as 14d or 2w.';
 
 // Emits
@@ -570,6 +573,7 @@ onMounted(() => {
     window.addEventListener('beforeunload', onBeforeunload);
     // The default alarms are shown beside a date's own, and live in the calendar configuration.
     // Without it they read as the built-in ones, which is only wrong until it has loaded.
+    void plans.loadAll().catch(() => undefined);
     void settings.load();
     calendars.ensureLoaded().catch(() => undefined);
 });

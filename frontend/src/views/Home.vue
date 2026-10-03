@@ -305,6 +305,7 @@
 
 <script lang="ts" setup>
 import { nowLocal } from '@/time';
+import { usePlansStore } from '@/stores/plans';
 import { ref, computed, watch, onMounted } from 'vue';
 import type { Ref } from 'vue';
 import { useRouter } from 'vue-router';
@@ -504,11 +505,13 @@ const dayAfterTomorrowEvents = computed(() => {
     }).sort((a, b) => a.start.localeCompare(b.start));
 });
 
+const plans = usePlansStore();
+void plans.loadMonths([today.slice(0, 7)]).catch(() => undefined);
 const todayTasks = computed(() => {
     if (!taskStore.allTasks || taskStore.allTasks.length === 0) return [];
 
     return taskStore.allTasks.filter(task => {
-        const scheduledDates: string[] = [];
+        const scheduledDates = plans.plannedDays(task.uuid);
         const status = task.metadata?.task?.status?.kind;
         
         // Skip done and canceled tasks
