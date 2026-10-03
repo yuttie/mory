@@ -4,6 +4,7 @@ import type { ListEntry2 } from '@/api';
 import { toNestedForest } from '@/forest';
 import {
     buildNoteForest,
+    canHaveChildNote,
     childNotePath,
     compareByLatestDesc,
     isDirectory,
@@ -246,5 +247,44 @@ describe('childNotePath', () => {
         expect(shapeOf([entry('foo/bar.md'), entry(child)])).toEqual([
             { id: 'foo', children: [{ id: 'foo/bar.md', children: [{ id: child }] }] },
         ]);
+    });
+});
+
+describe('canHaveChildNote', () => {
+    it('accepts a Markdown file, wherever it is', () => {
+        expect(canHaveChildNote('top.md')).toBe(true);
+        expect(canHaveChildNote('foo/bar.md')).toBe(true);
+        expect(canHaveChildNote('foo/bar.MARKDOWN')).toBe(true);
+    });
+
+    it('refuses what the note tree would not nest a child under', () => {
+        // Only a Markdown file covers a directory, so these would get a synthesized sibling.
+        expect(canHaveChildNote('notes/todo.txt')).toBe(false);
+        expect(canHaveChildNote('notes/foo.mkd')).toBe(false);
+        expect(canHaveChildNote('proj/readme')).toBe(false);
+        // The tree leaves out the application's own directories.
+        expect(canHaveChildNote('.tasks/a.md')).toBe(false);
+        expect(canHaveChildNote('.events/a.md')).toBe(false);
+        expect(canHaveChildNote('notes/.hidden/a.md')).toBe(false);
+        // A path with an empty segment names no file.
+        expect(canHaveChildNote('')).toBe(false);
+        expect(canHaveChildNote('/a.md')).toBe(false);
+        expect(canHaveChildNote('a//b.md')).toBe(false);
+    });
+
+    it('agrees with the tree: a child of every accepted path nests under it', () => {
+        for (const parent of ['top.md', 'foo/bar.md', 'foo/bar.markdown', 'a/b/c.md']) {
+            expect(canHaveChildNote(parent)).toBe(true);
+            const child = childNotePath(parent, 'x');
+            const forest = buildNoteForest([entry(parent), entry(child)]);
+            expect(forest.byId.get(child)?.parent).toBe(parent);
+        }
+    });
+
+    it('agrees with the tree: a child of a refused file is not nested under it', () => {
+        const parent = 'notes/todo.txt';
+        const child = childNotePath(parent, 'x');
+        const forest = buildNoteForest([entry(parent, { mime_type: 'text/plain' }), entry(child)]);
+        expect(forest.byId.get(child)?.parent).not.toBe(parent);
     });
 });

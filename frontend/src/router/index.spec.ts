@@ -81,4 +81,18 @@ describe('creating a note', () => {
         expect(query.template).toBe('x.template');
         expect(query.mode).toBe('create');
     });
+
+    it.each([
+        ['empty', ''],
+        ['a bare slash', '/'],
+        ['a trailing slash', 'foo/bar/'],
+        ['a hidden directory', '.tasks/a.md'],
+        ['a parent directory', '../../x.md'],
+        ['a file no note covers', 'notes/todo.txt'],
+    ])('starts a root note when the parent is %s', async (_name, parent) => {
+        await router.push({ name: 'Create', query: { parent } });
+        const path = router.currentRoute.value.params.path as string[];
+        expect(path).toHaveLength(1);
+        expect(path[0]).toMatch(uuid);
+    });
 });

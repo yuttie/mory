@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import type { RouteRecordRaw } from 'vue-router';
 
-import { childNotePath } from '@/note-forest';
+import { canHaveChildNote, childNotePath } from '@/note-forest';
 
 const Home      = () => import('../views/Home.vue');
 const Calendar  = () => import('../views/Calendar.vue');
@@ -73,8 +73,11 @@ const routes: Array<RouteRecordRaw> = [
         path: '/create',
         name: 'Create',
         redirect: to => {
-            // A query value may be an array or absent; anything but a path starts a root note.
-            const parent = typeof to.query.parent === 'string' && to.query.parent !== '' ? to.query.parent : null;
+            // A query value may be an array or absent, and a typed address can name anything:
+            // whatever cannot have a child the note tree would show starts a root note instead.
+            const parent = typeof to.query.parent === 'string' && canHaveChildNote(to.query.parent)
+                ? to.query.parent
+                : null;
             const path = parent === null
                 ? crypto.randomUUID() + '.md'
                 : childNotePath(parent, crypto.randomUUID());
