@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import YAML from 'yaml';
-import { mockBackend, uuid } from './backend';
+import { API_URL, mockBackend, uuid } from './backend';
 
 test.use({ viewport: { width: 3000, height: 1000 }, timezoneId: 'Asia/Tokyo' });
 const A = uuid(1);
@@ -83,4 +83,37 @@ test('loads missed history when opening the status view directly', async ({ cont
     });
     await page.goto('/tasks-next/_/descendants/status');
     await expect(page.locator('.status-view .task-list-item').filter({ hasText: 'Alpha' })).toContainText('3 missed days');
+});
+
+test('keeps the interruption selection fixed while its plan is saving', async ({ context, page }) => {
+    await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
+    const repository = await mockBackend(context, {
+        [`.tasks/${A}.md`]: task('Alpha'),
+        [`.tasks/${B}.md`]: task('Beta'),
+        '.mory/plans/2026-10.yaml': `2026-10-04:\n    - task: ${B}\n      origin: planned\n`,
+    });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    await context.route(`${API_URL}notes/**`, async (route) => {
+        if (route.request().method() === 'PUT') {
+            await gate;
+        }
+        await route.fallback();
+    });
+    await page.goto('/tasks-next/_/descendants/schedule');
+    await page.locator('.day.today').getByRole('button', { name: 'Record interruption' }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByRole('combobox', { name: 'Task worked on' }).click();
+    await page.getByRole('option', { name: 'Alpha', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Record worked' }).click();
+    try {
+        await expect(dialog.getByRole('combobox', { name: 'Task worked on' })).toBeDisabled();
+        await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    }
+    finally {
+        release();
+    }
+    await expect(dialog).not.toBeVisible();
+    const write = repository.writes.at(-1)!;
+    expect(YAML.parse(write.content)['2026-10-04']).toEqual([{ task: B, origin: 'planned' }, { task: A, origin: 'interruption', result: 'worked' }]);
 });

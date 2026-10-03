@@ -20,7 +20,6 @@
                                 <span class="plan-drag-handle" title="Drag onto a day"><v-icon v-bind:icon="mdiDragVertical"></v-icon></span>
                                 <TaskListItemNext draggable="false" v-bind:value="task" v-bind:to="routeFor(task)" v-bind:list-root="listRoot"></TaskListItemNext>
                             </div>
-                            <small v-if="plans.missedCount(task.uuid) >= 3" class="text-warning">Missed {{ plans.missedCount(task.uuid) }} times: consider splitting or re-rating importance</small>
                         </div>
                     </template>
                 </draggable>
@@ -47,13 +46,13 @@
                 </draggable>
             </v-card>
         </div>
-        <v-dialog v-bind:model-value="interruptionDate !== null" max-width="550" v-on:update:model-value="!$event && (interruptionDate = null)">
+        <v-dialog v-bind:model-value="interruptionDate !== null" v-bind:persistent="busy" max-width="550" v-on:update:model-value="!$event && (interruptionDate = null)">
             <v-card title="Record interruption">
                 <v-card-text>
-                    <v-autocomplete v-model="interruptionTask" v-bind:items="tasks.allTasks" item-title="title" item-value="uuid" label="Task worked on" clearable></v-autocomplete>
+                    <v-autocomplete v-model="interruptionTask" v-bind:disabled="busy" v-bind:items="tasks.allTasks" item-title="title" item-value="uuid" label="Task worked on" clearable></v-autocomplete>
                 </v-card-text>
                 <v-card-actions>
-                    <v-btn v-on:click="interruptionDate = null">Cancel</v-btn>
+                    <v-btn v-bind:disabled="busy" v-on:click="interruptionDate = null">Cancel</v-btn>
                     <v-btn v-bind:disabled="!interruptionTask || busy" v-on:click="run(recordInterruption)">Record worked</v-btn>
                 </v-card-actions>
             </v-card>
@@ -69,7 +68,7 @@ import draggable from 'vuedraggable';
 import { mdiDragVertical } from '@mdi/js';
 import type { TaskNode } from '@/task-forest';
 import { makeDefaultStatus } from '@/task';
-import { readImportance, isUrgent, compareUrgency } from '@/urgency';
+import { readImportance, isUrgent } from '@/urgency';
 import type { PlanEntry } from '@/plans';
 import { useTasksStore } from '@/stores/tasks';
 import { usePlansStore } from '@/stores/plans';
@@ -98,7 +97,7 @@ function quadrant(task: TaskNode): number {
     const important = importance === 'medium' || importance === 'high';
     return important ? (isUrgent(tasks.urgency(task.uuid)) ? 0 : 1) : (isUrgent(tasks.urgency(task.uuid)) ? 2 : 3);
 }
-const candidates = computed(() => props.candidates.filter((task) => tasks.ownUrgency(task.uuid).actionable && !['done', 'canceled'].includes(task.metadata?.task?.status?.kind ?? '')).sort((a, b) => quadrant(a) - quadrant(b) || compareUrgency(tasks.urgency(a.uuid), tasks.urgency(b.uuid)) || a.uuid.localeCompare(b.uuid)));
+const candidates = computed(() => props.candidates.filter((task) => tasks.ownUrgency(task.uuid).actionable && !['done', 'canceled'].includes(task.metadata?.task?.status?.kind ?? '')).sort((a, b) => quadrant(a) - quadrant(b) || (tasks.urgency(a.uuid).slack_ratio ?? Infinity) - (tasks.urgency(b.uuid).slack_ratio ?? Infinity) || a.uuid.localeCompare(b.uuid)));
 const cloneTask = (task: TaskNode): PlanEntry => ({ task: task.uuid.toLowerCase(), origin: 'planned' });
 const cloneEntry = (entry: PlanEntry): PlanEntry => ({ task: entry.task, origin: 'planned' });
 async function run(operation: () => Promise<void>): Promise<void> {
@@ -139,10 +138,12 @@ async function complete(date: string, uuid: string): Promise<void> {
     await tasks.setStatus(task.path, makeDefaultStatus('done'));
 }
 async function recordInterruption(): Promise<void> {
-    if (interruptionDate.value && interruptionTask.value) {
-        await plans.planTask(interruptionDate.value, interruptionTask.value, 'interruption');
+    const date = interruptionDate.value;
+    const task = interruptionTask.value;
+    if (date && task) {
+        await plans.planTask(date, task, 'interruption');
         // An already planned task keeps its origin but still records that work happened.
-        await plans.recordResult(interruptionDate.value, interruptionTask.value, 'worked');
+        await plans.recordResult(date, task, 'worked');
         interruptionDate.value = null;
     }
 }
