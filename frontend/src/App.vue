@@ -107,8 +107,8 @@
                                 title="Copy of this note"
                             ></v-list-item>
                             <v-list-item
-                                v-if="openNotePath !== null"
-                                v-bind:to="{ name: 'Create', query: { parent: openNotePath } }"
+                                v-if="parentNotePath !== null"
+                                v-bind:to="{ name: 'Create', query: { parent: parentNotePath } }"
                                 v-bind:prepend-icon="mdiSubdirectoryArrowRight"
                                 title="New child note"
                             ></v-list-item>
@@ -117,7 +117,7 @@
                                 v-for="path in templates"
                                 v-bind:key="path"
                                 v-bind:path="path"
-                                v-bind:parent="openNotePath"
+                                v-bind:parent="parentNotePath"
                             ></TemplateMenuItem>
                         </v-list>
                     </v-menu>
@@ -311,8 +311,8 @@
                                 title="Copy of this note"
                             ></v-list-item>
                             <v-list-item
-                                v-if="openNotePath !== null"
-                                v-bind:to="{ name: 'Create', query: { parent: openNotePath } }"
+                                v-if="parentNotePath !== null"
+                                v-bind:to="{ name: 'Create', query: { parent: parentNotePath } }"
                                 v-bind:prepend-icon="mdiSubdirectoryArrowRight"
                                 title="New child note"
                             ></v-list-item>
@@ -321,7 +321,7 @@
                                 v-for="path in templates"
                                 v-bind:key="path"
                                 v-bind:path="path"
-                                v-bind:parent="openNotePath"
+                                v-bind:parent="parentNotePath"
                             ></TemplateMenuItem>
                         </v-list>
                     </v-menu>
@@ -560,6 +560,7 @@ import type { Claim, IndexingStop, ListEntry2, UploadEntry } from '@/api';
 import IndexingStopsItem from '@/components/IndexingStopsItem.vue';
 import TemplateMenuItem from '@/components/TemplateMenuItem.vue';
 import { requestEventAlarms } from '@/event-alarms';
+import { canHaveChildNote } from '@/note-forest';
 import { useFilesStore } from '@/stores/files';
 import { jwtDecode } from 'jwt-decode';
 
@@ -598,7 +599,19 @@ const openNotePath = computed((): string | null => {
         return null;
     }
     const path = route.params.path;
-    return Array.isArray(path) ? path.join('/') : path;
+    // `/note` alone has no path at all, which is neither a note nor a reason to offer one.
+    return (Array.isArray(path) ? path.join('/') : path) || null;
+});
+
+// The open note when a new note can go under it, otherwise `null`. A note not saved yet has no
+// file for the tree to nest a child under, and the tree has its own rule for which saved notes
+// can have one.
+const parentNotePath = computed((): string | null => {
+    const path = openNotePath.value;
+    if (path === null || route.query.mode === 'create' || !canHaveChildNote(path)) {
+        return null;
+    }
+    return path;
 });
 
 const needRequestForNotificationPermission = computed(() => {

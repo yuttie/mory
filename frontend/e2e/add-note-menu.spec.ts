@@ -5,6 +5,8 @@ import { mockBackend } from './backend';
 const NOTES = {
     'projects/plan.md': '# Plan\n',
     'meeting.template': '# Meeting\n',
+    'plain.txt': 'text\n',
+    '.events/party.md': '# Party\n',
 };
 
 // An item of the template's submenu, the last of its name since the menu above has its own.
@@ -47,3 +49,19 @@ test('edits the template', async ({ context, page }) => {
     await submenu(page, /^Edit$/).click();
     await expect(page).toHaveURL(/\/note\/meeting\.template$/);
 });
+
+// A child of these would not be listed under the note: the tree nests one only under a saved
+// Markdown file outside the application's own directories.
+for (const [name, address] of [
+    ['a file that is not Markdown', '/note/plain.txt'],
+    ['a note of the application\'s own', '/note/.events/party.md'],
+    ['a note not saved yet', '/note/projects/draft.md?mode=create'],
+]) {
+    test(`offers no child note for ${name}`, async ({ context, page }) => {
+        await mockBackend(context, NOTES);
+        await page.goto(address);
+        await page.getByRole('listitem').filter({ hasText: 'Add note' }).first().click();
+        await expect(page.getByRole('link', { name: 'New note', exact: true })).toBeVisible();
+        await expect(page.getByText('New child note')).toHaveCount(0);
+    });
+}
