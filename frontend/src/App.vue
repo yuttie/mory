@@ -102,6 +102,12 @@
                             <v-list-item to="/create" v-bind:prepend-icon="mdiFileOutline" title="New note"></v-list-item>
                             <v-list-item
                                 v-if="openNotePath !== null"
+                                v-bind:to="{ name: 'Create', query: { parent: openNotePath } }"
+                                v-bind:prepend-icon="mdiSubdirectoryArrowRight"
+                                title="New child note"
+                            ></v-list-item>
+                            <v-list-item
+                                v-if="openNotePath !== null"
                                 v-bind:to="{ name: 'Create', query: { from: openNotePath } }"
                                 v-bind:prepend-icon="mdiFileMultipleOutline"
                                 title="Copy of this note"
@@ -316,6 +322,12 @@
                         <v-list>
                             <v-list-subheader>Create</v-list-subheader>
                             <v-list-item to="/create" v-bind:prepend-icon="mdiFileOutline" title="New note"></v-list-item>
+                            <v-list-item
+                                v-if="openNotePath !== null"
+                                v-bind:to="{ name: 'Create', query: { parent: openNotePath } }"
+                                v-bind:prepend-icon="mdiSubdirectoryArrowRight"
+                                title="New child note"
+                            ></v-list-item>
                             <v-list-item
                                 v-if="openNotePath !== null"
                                 v-bind:to="{ name: 'Create', query: { from: openNotePath } }"
@@ -575,6 +587,7 @@ import {
     mdiMagnify,
     mdiPencil,
     mdiPlus,
+    mdiSubdirectoryArrowRight,
     mdiUpload,
 } from '@mdi/js';
 
