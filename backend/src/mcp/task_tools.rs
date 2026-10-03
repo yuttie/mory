@@ -401,8 +401,15 @@ fn alarm_sets(args: &SetTaskDatesArgs) -> Result<Vec<Change>, String> {
     Ok(changes)
 }
 
+fn validate_task_date(key: &str, value: &str) -> Result<(), String> {
+    if crate::urgency::instant(Some(&Value::String(value.to_owned())), crate::urgency::local_zone(), false).is_none() {
+        return Err(format!("{key}: use a valid YYYY-MM-DD date or a datetime with its UTC offset."));
+    }
+    Ok(())
+}
+
 /// The changes that set the dates `args` gives.
-fn date_sets(args: &SetTaskDatesArgs) -> Vec<Change> {
+fn date_sets(args: &SetTaskDatesArgs) -> Result<Vec<Change>, String> {
     let mut changes = Vec::new();
     for (key, value) in [
         ("available_from", &args.available_from),
@@ -410,10 +417,11 @@ fn date_sets(args: &SetTaskDatesArgs) -> Vec<Change> {
         ("deadline", &args.deadline),
     ] {
         if let Some(value) = value {
+            validate_task_date(key, value)?;
             changes.push(Change::set(&["task", key], value.as_str()));
         }
     }
-    changes
+    Ok(changes)
 }
 
 /// The changes a `SetTaskDatesArgs` asks for, under `task`, to the note `text`.
@@ -424,7 +432,7 @@ fn date_changes(args: &SetTaskDatesArgs, text: &str) -> Result<Vec<Change>, Stri
     let (mut changes, cleared_alarms) = read_clear(args)?;
     changes.extend(alarm_removals(&cleared_alarms, text));
     changes.extend(alarm_sets(args)?);
-    changes.extend(date_sets(args));
+    changes.extend(date_sets(args)?);
     Ok(changes)
 }
 
@@ -545,6 +553,9 @@ pub async fn create_task(
         ("deadline", &args.deadline),
     ] {
         if let Some(value) = value {
+            if let Err(error) = validate_task_date(key, value) {
+                return Ok(tool_error(error));
+            }
             changes.push(Change::set(&["task", key], value.as_str()));
         }
     }
@@ -589,6 +600,16 @@ pub async fn create_task(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn task_dates_are_accepted_only_when_urgency_can_read_them() {
+        for date in ["2026-02-30", "2026-13-01", "2026-10-15 12:00", ""] {
+            assert!(validate_task_date("deadline", date).is_err());
+        }
+        for date in ["2026-10-15", "2026-10-15 12:00+09:00", "2026-10-15T12:00:00Z"] {
+            assert!(validate_task_date("deadline", date).is_ok());
+        }
+    }
 
     fn args(path: &str) -> UpdateTaskArgs {
         UpdateTaskArgs {

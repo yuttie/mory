@@ -501,6 +501,18 @@ impl Mory {
 // and rebuilds the whole router on every request.
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for Mory {
+    async fn call_tool(
+        &self,
+        request: rmcp::model::CallToolRequestParams,
+        context: RequestContext<RoleServer>,
+    ) -> Result<rmcp::model::CallToolResponse, ErrorData> {
+        if let Some(message) = obsolete_task_arguments(&request.name, request.arguments.as_ref()) {
+            return Ok(tool_error(message).into());
+        }
+        let call = rmcp::handler::server::tool::ToolCallContext::new(self, request, context);
+        self.tool_router.call(call).await
+    }
+
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(
@@ -539,6 +551,36 @@ Two things are easy to get wrong and expensive to fix:
 ordinal: `3wed` is the third Wednesday of the month.
 
 Start with search_notes to find a path, then read_note to read it.";
+
+fn obsolete_task_arguments(name: &str, arguments: Option<&serde_json::Map<String, serde_json::Value>>) -> Option<String> {
+    if !matches!(name, "create_task" | "update_task" | "set_task_dates") {
+        return None;
+    }
+    let arguments = arguments?;
+    let replacements = [
+        ("start_at", "start_at was renamed to available_from."),
+        ("scheduled_dates", "scheduled_dates was removed; use plan_task(date, task, origin)."),
+        ("urgency", "urgency is derived from dates and lead_time; set those instead."),
+        ("progress", "progress is derived from descendant statuses; update their status instead."),
+    ];
+    let messages: Vec<_> = replacements.iter().filter(|(key, _)| arguments.contains_key(*key) || arguments.get("clear").and_then(serde_json::Value::as_array).is_some_and(|keys| keys.iter().any(|value| value.as_str() == Some(*key)))).map(|(_, message)| *message).collect();
+    (!messages.is_empty()).then(|| messages.join(" "))
+}
+
+#[cfg(test)]
+mod argument_tests {
+    use super::*;
+    #[test]
+    fn obsolete_task_arguments_name_the_replacements() {
+        for (key, replacement) in [("start_at", "available_from"), ("scheduled_dates", "plan_task"), ("urgency", "lead_time"), ("progress", "status")] {
+            let arguments = serde_json::json!({key: null});
+            assert!(obsolete_task_arguments("create_task", arguments.as_object()).unwrap().contains(replacement));
+            assert!(obsolete_task_arguments("update_task", arguments.as_object()).unwrap().contains(replacement));
+        }
+        assert!(obsolete_task_arguments("set_task_dates", serde_json::json!({"clear": ["start_at"]}).as_object()).unwrap().contains("available_from"));
+        assert!(obsolete_task_arguments("create_note", serde_json::json!({"start_at": null}).as_object()).is_none());
+    }
+}
 
 /// The tower service to mount at `{MORIED_ROOT_PATH}v2/mcp`.
 pub fn service(
