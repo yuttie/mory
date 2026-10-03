@@ -45,7 +45,7 @@ test('renames a note to a path with a fragment and a query, and shows it there',
     await page.getByRole('button', { name: 'Rename' }).click();
     const field = page.getByLabel('New path');
     await field.fill(ODD_PATH);
-    await field.press('Enter');
+    await page.getByRole('dialog').getByRole('button', { name: 'Rename' }).click();
 
     await expect.poll(() => openNote(page)).toEqual({ path: `/note/${ODD_PATH}`, search: '', hash: '' });
 });

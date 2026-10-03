@@ -64,6 +64,11 @@ export async function mockBackend(context: BrowserContext, notes: Record<string,
             await route.fulfill({ json: TOKEN });
             return;
         }
+        // Whether a path exists, as the rename dialog asks while the path is typed.
+        if (path.startsWith('/api/v2/files/') && request.method() === 'HEAD') {
+            await route.fulfill({ status: files.has(path.slice('/api/v2/files/'.length)) ? 200 : 404 });
+            return;
+        }
         if (path.startsWith('/api/notes/')) {
             const notePath = path.slice('/api/notes/'.length);
             if (request.method() === 'PUT' && 'Rename' in request.postDataJSON()) {

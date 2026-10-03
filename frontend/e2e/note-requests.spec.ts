@@ -34,7 +34,39 @@ test('renames a note by the path it is renamed to', async ({ context, page }) =>
     await page.getByRole('button', { name: 'Rename' }).click();
     const field = page.getByLabel('New path');
     await field.fill(ODD_PATH);
-    await field.press('Enter');
+    await page.getByRole('dialog').getByRole('button', { name: 'Rename' }).click();
 
     await expect.poll(() => writes).toEqual([`${new URL(API_URL).pathname}notes/${ENCODED_ODD_PATH}`]);
+});
+
+test('checks the path typed in the rename dialog against the notes there are', async ({ context, page }) => {
+    await mockBackend(context, {
+        'notes/old.md': '# Old\n',
+        [ODD_PATH]: '# Odd name\n',
+    });
+    const checks: string[] = [];
+    page.on('request', (request) => {
+        if (request.method() === 'HEAD') {
+            checks.push(new URL(request.url()).pathname);
+        }
+    });
+    await page.goto('/note/notes/old.md');
+
+    await page.getByRole('button', { name: 'Rename' }).click();
+    const dialog = page.getByRole('dialog');
+    const field = page.getByLabel('New path');
+    const rename = dialog.getByRole('button', { name: 'Rename' });
+
+    await field.fill(ODD_PATH);
+    await expect(dialog.getByText('Conflicting with existing path')).toBeVisible();
+    await expect(rename).toBeDisabled();
+    // Enter waits for the same answer the button does.
+    await field.press('Enter');
+    await expect(page).toHaveURL(/\/note\/notes\/old\.md$/);
+
+    await field.fill('notes/free.md');
+    await expect(dialog.getByText('Conflicting with existing path')).toHaveCount(0);
+    await expect(rename).toBeEnabled();
+
+    expect(checks).toContain(`${new URL(API_URL).pathname}v2/files/${ENCODED_ODD_PATH}`);
 });
