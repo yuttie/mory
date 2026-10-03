@@ -125,7 +125,12 @@ impl Change {
 /// and `Null` when there is none, which asks nothing of a caller that reads keys by `get`. An edit
 /// has its own reasons to refuse a block and says them, so it does not come through here.
 pub fn value(text: &str) -> Option<Value> {
-    serde_yaml::from_str(&Note::parse(text).block).ok()
+    if let Some((_, block, _)) = creation_block(text) {
+        serde_yaml::from_str(block).ok()
+    }
+    else {
+        serde_yaml::from_str(&Note::parse(text).block).ok()
+    }
 }
 
 /// Why an edit was refused, in words a model can act on.
@@ -144,6 +149,9 @@ fn refuse(message: impl Into<String>) -> EditError {
 
 /// Apply `changes` to `text`'s frontmatter and return the whole note.
 pub fn apply(text: &str, changes: &[Change]) -> Result<String, EditError> {
+    if text.starts_with("---\r\n") {
+        return Err(refuse("CRLF frontmatter cannot be edited safely here; use read_note and update_note."));
+    }
     let mut note = Note::parse(text);
 
     let before: Value = if note.block.trim().is_empty() {
@@ -850,19 +858,61 @@ mod tests {
 
 /// Stamp a new note, or carry an existing creation time into a full replacement.
 /// The in-place editor preserves every other frontmatter byte.
-pub fn with_created_at(text: &str, existing: Option<&str>) -> Result<String, EditError> {
-    if value(text).and_then(|root| root.get("created_at").cloned()).is_some() {
-        return Ok(text.to_owned());
+fn creation_block(text: &str) -> Option<(usize, &str, &str)> {
+    let opening = if text.starts_with("---\r\n") { 5 } else if text.starts_with("---\n") { 4 } else { return None; };
+    let rest = &text[opening..];
+    let mut offset = 0;
+    for line in rest.split_inclusive('\n') {
+        if matches!(line.trim_end_matches(['\r', '\n']), "---" | "...") {
+            return Some((opening, &rest[..offset], if opening == 5 { "\r\n" } else { "\n" }));
+        }
+        offset += line.len();
     }
+    None
+}
+
+pub fn with_created_at(text: &str, existing: Option<&str>) -> Result<String, EditError> {
     let timestamp = existing.and_then(value)
         .and_then(|root| root.get("created_at").cloned())
         .unwrap_or_else(|| crate::note_time::now_local().into());
+    if let Some((opening, block, eol)) = creation_block(text) {
+        let before: Value = serde_yaml::from_str(block).map_err(|error| refuse(format!("Invalid frontmatter: {error}")))?;
+        let mut expected = match before {
+            Value::Mapping(mapping) => mapping,
+            Value::Null => Mapping::new(),
+            _ => return Err(refuse("The frontmatter must be a mapping.")),
+        };
+        if expected.contains_key("created_at") {
+            return Ok(text.to_owned());
+        }
+        expected.insert("created_at".into(), timestamp.clone());
+        let scalar = serde_yaml::to_string(&timestamp).map_err(|error| refuse(error.to_string()))?;
+        let inserted = format!("created_at: {}{eol}{block}", scalar.trim());
+        if serde_yaml::from_str::<Value>(&inserted).ok() != Some(Value::Mapping(expected)) {
+            return Err(refuse("Adding created_at would change other frontmatter."));
+        }
+        return Ok(format!("{}created_at: {}{eol}{}", &text[..opening], scalar.trim(), &text[opening..]));
+    }
+    if text.starts_with("---\n") || text.starts_with("---\r\n") {
+        return Err(refuse("Unclosed frontmatter; refusing to add a second block."));
+    }
     apply(text, &[Change::set(&["created_at"], timestamp)])
 }
 
 #[cfg(test)]
 mod creation_tests {
     use super::*;
+
+    #[test]
+    fn creation_preserves_crlf_frontmatter_and_refuses_unclosed_fences() {
+        let before = "---\r\n# Keep\r\ntags: [work]\r\n---\r\n\r\n# Body\r\n";
+        let after = with_created_at(before, None).unwrap();
+        assert!(after.ends_with(&before[5..]));
+        assert_eq!(value(&after).unwrap()["tags"], value(before).unwrap()["tags"]);
+        assert_eq!(with_created_at(&after, None).unwrap(), after);
+        assert!(with_created_at("---\nmissing fence\n", None).is_err());
+        assert!(apply(before, &[Change::set(&["tags"], "other")]).is_err());
+    }
 
     #[test]
     fn a_replacement_carries_the_original_creation_time() {
