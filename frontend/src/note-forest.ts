@@ -86,6 +86,22 @@ const notePolicy: PathForestPolicy<NoteNode> = {
     // No `sort`: `latest` is not known until the tree is linked.
 };
 
+// Whether a note can be given a child that the note tree then shows under it. Only a Markdown file
+// covers a directory (`coverOf`), and the tree leaves out the application's own directories. The
+// test is on the extension, not the MIME type, because a caller holding only a path has no entry;
+// `.mkd`, whose type is `text/x-markdown`, is therefore refused rather than guessed at.
+export function canHaveChildNote(path: string): boolean {
+    return /\.(md|markdown)$/i.test(path)
+        && !isHiddenPath(path)
+        && path.split('/').every((segment) => segment !== '');
+}
+
+// Where a new note under `parentPath` goes: in the directory the parent covers, which is what
+// makes `notePolicy` parent it -- `coverOf` read in the other direction.
+export function childNotePath(parentPath: string, id: string): string {
+    return `${stripExtension(parentPath)}/${id}.md`;
+}
+
 // Newest first, mixing directories and files. Ties break on the path so that the tree cannot
 // reorder itself between renders.
 export function compareByLatestDesc(a: NoteNode, b: NoteNode): number {

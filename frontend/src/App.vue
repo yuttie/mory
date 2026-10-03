@@ -101,36 +101,24 @@
                             <v-list-subheader>Create</v-list-subheader>
                             <v-list-item to="/create" v-bind:prepend-icon="mdiFileOutline" title="New note"></v-list-item>
                             <v-list-item
-                                v-if="$route.name === 'Note'"
-                                v-bind:to="{ name: 'Create', query: { from: Array.isArray($route.params.path) ? $route.params.path.join('/') : $route.params.path } }"
+                                v-if="openNotePath !== null"
+                                v-bind:to="{ name: 'Create', query: { from: openNotePath } }"
                                 v-bind:prepend-icon="mdiFileMultipleOutline"
                                 title="Copy of this note"
                             ></v-list-item>
-                            <v-list-subheader>Templates</v-list-subheader>
                             <v-list-item
+                                v-if="parentNotePath !== null"
+                                v-bind:to="{ name: 'Create', query: { parent: parentNotePath } }"
+                                v-bind:prepend-icon="mdiSubdirectoryArrowRight"
+                                title="New child note"
+                            ></v-list-item>
+                            <v-list-subheader>Templates</v-list-subheader>
+                            <TemplateMenuItem
                                 v-for="path in templates"
                                 v-bind:key="path"
-                                v-bind:to="{ name: 'Create', query: { from: path } }"
-                                v-bind:prepend-icon="mdiFileDocumentOutline"
-                                v-bind:title="path.replace(/\.template$/i, '')"
-                            >
-                                <template v-slot:append>
-                                    <!-- v-icon-btn has no `to`. The click still bubbles to the list item, whose own link
-                                         would create a note from the template instead; the router skips a click whose
-                                         default is already prevented. -->
-                                    <v-tooltip location="top">
-                                        <template v-slot:activator="{ props }">
-                                            <v-icon-btn
-                                                v-bind:icon="mdiPencil"
-                                                variant="text"
-                                                v-bind="props"
-                                                v-on:click.prevent="$router.push({ name: 'Note', params: { path: path.split('/') } })"
-                                            ></v-icon-btn>
-                                        </template>
-                                        <span>Edit template</span>
-                                    </v-tooltip>
-                                </template>
-                            </v-list-item>
+                                v-bind:path="path"
+                                v-bind:parent="parentNotePath"
+                            ></TemplateMenuItem>
                         </v-list>
                     </v-menu>
                     <v-menu
@@ -317,36 +305,24 @@
                             <v-list-subheader>Create</v-list-subheader>
                             <v-list-item to="/create" v-bind:prepend-icon="mdiFileOutline" title="New note"></v-list-item>
                             <v-list-item
-                                v-if="$route.name === 'Note'"
-                                v-bind:to="{ name: 'Create', query: { from: Array.isArray($route.params.path) ? $route.params.path.join('/') : $route.params.path } }"
+                                v-if="openNotePath !== null"
+                                v-bind:to="{ name: 'Create', query: { from: openNotePath } }"
                                 v-bind:prepend-icon="mdiFileMultipleOutline"
                                 title="Copy of this note"
                             ></v-list-item>
-                            <v-list-subheader>Templates</v-list-subheader>
                             <v-list-item
+                                v-if="parentNotePath !== null"
+                                v-bind:to="{ name: 'Create', query: { parent: parentNotePath } }"
+                                v-bind:prepend-icon="mdiSubdirectoryArrowRight"
+                                title="New child note"
+                            ></v-list-item>
+                            <v-list-subheader>Templates</v-list-subheader>
+                            <TemplateMenuItem
                                 v-for="path in templates"
                                 v-bind:key="path"
-                                v-bind:to="{ name: 'Create', query: { from: path } }"
-                                v-bind:prepend-icon="mdiFileDocumentOutline"
-                                v-bind:title="path.replace(/\.template$/i, '')"
-                            >
-                                <template v-slot:append>
-                                    <!-- v-icon-btn has no `to`. The click still bubbles to the list item, whose own link
-                                         would create a note from the template instead; the router skips a click whose
-                                         default is already prevented. -->
-                                    <v-tooltip location="top">
-                                        <template v-slot:activator="{ props }">
-                                            <v-icon-btn
-                                                v-bind:icon="mdiPencil"
-                                                variant="text"
-                                                v-bind="props"
-                                                v-on:click.prevent="$router.push({ name: 'Note', params: { path: path.split('/') } })"
-                                            ></v-icon-btn>
-                                        </template>
-                                        <span>Edit template</span>
-                                    </v-tooltip>
-                                </template>
-                            </v-list-item>
+                                v-bind:path="path"
+                                v-bind:parent="parentNotePath"
+                            ></TemplateMenuItem>
                         </v-list>
                     </v-menu>
                     <v-menu
@@ -562,7 +538,6 @@ import {
     mdiCloudUploadOutline,
     mdiCogOutline,
     mdiExclamationThick,
-    mdiFileDocumentOutline,
     mdiFileMultipleOutline,
     mdiFileOutline,
     mdiFolderOutline,
@@ -573,8 +548,8 @@ import {
     mdiLock,
     mdiLogout,
     mdiMagnify,
-    mdiPencil,
     mdiPlus,
+    mdiSubdirectoryArrowRight,
     mdiUpload,
 } from '@mdi/js';
 
@@ -583,7 +558,9 @@ import { useAppStore } from '@/stores/app';
 import { loadConfigValue, saveConfigValue } from '@/config';
 import type { Claim, IndexingStop, ListEntry2, UploadEntry } from '@/api';
 import IndexingStopsItem from '@/components/IndexingStopsItem.vue';
+import TemplateMenuItem from '@/components/TemplateMenuItem.vue';
 import { requestEventAlarms } from '@/event-alarms';
+import { canHaveChildNote } from '@/note-forest';
 import { useFilesStore } from '@/stores/files';
 import { jwtDecode } from 'jwt-decode';
 
@@ -613,6 +590,28 @@ const routerViewEl = ref(null);
 // Computed properties
 const isDev = computed(() => {
     return import.meta.env.DEV;
+});
+
+// The path of the note being read, or `null` on any other screen. The route holds it as the
+// segments of a repeatable parameter.
+const openNotePath = computed((): string | null => {
+    if (route.name !== 'Note') {
+        return null;
+    }
+    const path = route.params.path;
+    // `/note` alone has no path at all, which is neither a note nor a reason to offer one.
+    return (Array.isArray(path) ? path.join('/') : path) || null;
+});
+
+// The open note when a new note can go under it, otherwise `null`. A note not saved yet has no
+// file for the tree to nest a child under, and the tree has its own rule for which saved notes
+// can have one.
+const parentNotePath = computed((): string | null => {
+    const path = openNotePath.value;
+    if (path === null || route.query.mode === 'create' || !canHaveChildNote(path)) {
+        return null;
+    }
+    return path;
 });
 
 const needRequestForNotificationPermission = computed(() => {
