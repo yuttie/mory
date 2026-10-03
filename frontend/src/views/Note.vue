@@ -391,7 +391,7 @@ import Ajv from 'ajv';
 import type { DefinedError } from 'ajv';
 import AppBarContent from '@/components/AppBarContent.vue';
 import EditableViewer from '@/components/EditableViewer.vue';
-import { useFilesStore } from '@/stores/files';
+import { LAGGING_RETRY_MS, useFilesStore } from '@/stores/files';
 import { loadConfigValue } from '@/config';
 import { noteBreadcrumbs } from '@/note-forest';
 
@@ -570,6 +570,7 @@ const newPathMessages = computed((): string[] => {
 async function loadNoteFromRoute() {
     error.value = false;
     errorText.value = '';
+    void refreshBreadcrumbListing();
 
     if (route.query.mode === 'create') {
         // A newly created note has no saved copy on the server yet, so the
@@ -637,6 +638,27 @@ onUnmounted(() => {
 });
 
 // Methods
+async function refreshBreadcrumbListing() {
+    try {
+        await files.list();
+        // A just-saved parent can precede the backend's cache. Give it the same bounded retry
+        // as the task and note trees, without delaying the note's own load.
+        if (files.commitId === null) {
+            await new Promise(resolve => setTimeout(resolve, LAGGING_RETRY_MS));
+            await files.refresh();
+        }
+    }
+    catch (cause) {
+        if ((cause as { response?: { status: number } }).response?.status === 401) {
+            emit('tokenExpired', refreshBreadcrumbListing);
+        }
+        else {
+            error.value = true;
+            errorText.value = String(cause);
+        }
+    }
+}
+
 function updateBreadcrumbOverflow() {
     const scroller = breadcrumbScroller.value;
     // Scroll offsets can be fractional while the width measurements are rounded to pixels.
