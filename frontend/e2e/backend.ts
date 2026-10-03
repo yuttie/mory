@@ -46,11 +46,12 @@ export async function mockBackend(context: BrowserContext, notes: Record<string,
                 const [, frontmatter, body] = content.startsWith('---\n')
                     ? content.split(/^---$/m)
                     : [undefined, undefined, content];
+                const document = frontmatter === undefined ? null : YAML.parseDocument(frontmatter);
                 return {
                     path: notePath,
                     size: content.length,
                     mime_type: 'text/markdown',
-                    metadata: frontmatter === undefined ? null : YAML.parse(frontmatter),
+                    metadata: document && document.errors.length === 0 ? document.toJSON() : null,
                     title: /^# (.*)$/m.exec(body)?.[1] ?? null,
                     time: '2026-09-01T12:00:00+00:00',
                 };

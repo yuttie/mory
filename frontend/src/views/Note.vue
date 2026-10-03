@@ -1103,48 +1103,37 @@ function saveIfNeeded() {
     }
 }
 
-function save() {
+function save(): void {
     isSaving.value = true;
     const path = notePath.value;
-    const content = noteHasUpstream.value ? text.value : withCreatedAt(text.value);
-    text.value = content;
-    files.write(
-        path,
-        content
-    ).then(() => {
-            initialText.value = content;
-            noteHasUpstream.value = true;
-            isSaving.value = false;
-            // Remove 'mode' and 'template' query parameters
-            if (Object.hasOwn(route.query, 'mode')) {
-                const newQuery = { ...route.query };
-                delete newQuery.mode;
-                delete newQuery.template;
-                router.replace({ query: newQuery });
-            }
-        }).catch(error => {
-            if (error.response) {
-                if (error.response.status === 401) {
-                    // Unauthorized
-                    emit('tokenExpired', () => {
-                        save();
-                        focusOrBlurEditor();
-                    });
-                }
-                else {
-                    error.value = true;
-                    errorText.value = error.response;
-                    isSaving.value = false;
-                    throw error;
-                }
-            }
-            else {
-                error.value = true;
-                errorText.value = error.toString();
-                isSaving.value = false;
-                throw error;
-            }
-        });
+    let content = text.value;
+    void Promise.resolve().then(() => {
+        content = noteHasUpstream.value ? text.value : withCreatedAt(text.value);
+        text.value = content;
+        return files.write(path, content);
+    }).then(() => {
+        initialText.value = content;
+        noteHasUpstream.value = true;
+        if (Object.hasOwn(route.query, 'mode')) {
+            const newQuery = { ...route.query };
+            delete newQuery.mode;
+            delete newQuery.template;
+            void router.replace({ query: newQuery });
+        }
+    }).catch((failure) => {
+        if (failure.response?.status === 401) {
+            emit('tokenExpired', () => {
+                save();
+                focusOrBlurEditor();
+            });
+        }
+        else {
+            error.value = true;
+            errorText.value = failure.response ?? String(failure);
+        }
+    }).finally(() => {
+        isSaving.value = false;
+    });
 }
 
 function onNewPathKeydown(e: KeyboardEvent) {
