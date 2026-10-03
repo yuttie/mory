@@ -357,6 +357,9 @@ fn read_clear(args: &SetTaskDatesArgs) -> Result<(Vec<Change>, Vec<&'static str>
         }
         else if DATE_KEYS.contains(&key.as_str()) {
             removals.push(Change::remove(&["task", key]));
+            if key == "available_from" {
+                removals.push(Change::remove(&["task", "start_at"]));
+            }
         }
         else {
             let known = DATE_KEYS.into_iter().chain(ALARM_KEYS.map(|(name, _)| name));
@@ -418,6 +421,9 @@ fn date_sets(args: &SetTaskDatesArgs) -> Result<Vec<Change>, String> {
     ] {
         if let Some(value) = value {
             validate_task_date(key, value)?;
+            if key == "available_from" {
+                changes.push(Change::remove(&["task", "start_at"]));
+            }
             changes.push(Change::set(&["task", key], value.as_str()));
         }
     }
@@ -601,6 +607,17 @@ pub async fn create_task(
 mod tests {
     use super::*;
 
+    #[test]
+    fn changing_availability_removes_the_legacy_fallback() {
+        let before = "---\ntask:\n    status: {kind: todo}\n    start_at: 2026-10-15\n---\n# T\n";
+        let mut args: SetTaskDatesArgs = serde_json::from_value(serde_json::json!({"path": "unused", "message": "Test", "clear": ["available_from"]})).unwrap();
+        let after = frontmatter::apply(before, &date_changes(&args, before).unwrap()).unwrap();
+        assert!(!after.contains("start_at"));
+        args.available_from = Some("2026-10-16".into());
+        let after = frontmatter::apply(before, &date_changes(&args, before).unwrap()).unwrap();
+        assert!(!after.contains("start_at"));
+        assert!(after.contains("available_from: 2026-10-16"));
+    }
     #[test]
     fn task_dates_are_accepted_only_when_urgency_can_read_them() {
         for date in ["2026-02-30", "2026-13-01", "2026-10-15 12:00", ""] {
