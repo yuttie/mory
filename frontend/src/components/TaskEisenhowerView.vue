@@ -44,7 +44,7 @@ defineProps<{
 
 // In the order the 2×2 grid places them: left to right, then top to bottom.
 const QUADRANTS = [
-    { key: 'unrated', title: 'Unrated', subtitle: 'Choose importance when useful', class: '' },
+    { key: 'unrated', title: 'Unrated', subtitle: 'Choose importance when useful', class: 'unrated' },
     { key: 'doFirst', title: 'Do First', subtitle: 'Urgent & Important', class: 'urgent-important' },
     { key: 'schedule', title: 'Schedule', subtitle: 'Important, Not Urgent', class: 'important-not-urgent' },
     { key: 'delegate', title: 'Delegate', subtitle: 'Urgent, Not Important', class: 'urgent-not-important' },
@@ -60,11 +60,14 @@ $space: 12px;
     flex: 1 1 0;
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    grid-template-rows: repeat(2, 1fr);
+    grid-template-rows: minmax(48px, 1fr) repeat(2, minmax(0, 2fr));
     gap: $space;
     padding: $space;
     height: 100%;
+    min-height: 0;
 }
+
+.unrated { grid-column: 1 / -1; }
 
 /* Mobile responsive adjustments for Eisenhower matrix */
 @media (max-width: 959px) { /* md breakpoint in Vuetify 2 */
@@ -79,6 +82,7 @@ $space: 12px;
     flex-direction: column;
     max-height: 100%;
     overflow: auto;
+    min-height: 0;
 }
 
 /* Mobile responsive adjustments for quadrants */
