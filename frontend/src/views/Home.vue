@@ -290,7 +290,7 @@
                                 v-for="entry of category[1]"
                                 v-bind:key="entry.path"
                             >
-                                <router-link v-bind:to="{ name: 'Note', params: { path: entry.path } }">{{ entry.title || entry.path }}</router-link>
+                                <router-link v-bind:to="{ name: 'Note', params: { path: entry.path.split('/') } }">{{ entry.title || entry.path }}</router-link>
                                 <span class="age ml-1">({{ formatDistanceToNow(parseISO(entry.time)) }})</span>
                             </li>
                         </ul>
