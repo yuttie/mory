@@ -200,10 +200,8 @@ export const useTasksStore = defineStore('tasks', () => {
         return urgencyOf(task?.metadata?.task ?? {}, task?.metadata?.tags ?? [], taskSettings.settings, now.value);
     }
 
-    function urgency(id: string): Urgency {
-        const own = ownUrgency(id);
-        const current = node(id);
-        if (current?.metadata?.task?.status?.kind === 'done' || current?.metadata?.task?.status?.kind === 'canceled') {
+    function urgency(id: string, own = ownUrgency(id), status = node(id)?.metadata?.task?.status?.kind): Urgency {
+        if (status === 'done' || status === 'canceled') {
             return own;
         }
         const descendants = flattenDescendants(id).filter((task) => !['done', 'canceled'].includes(task.metadata?.task?.status?.kind ?? ''));

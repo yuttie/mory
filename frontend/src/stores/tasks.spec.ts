@@ -35,12 +35,13 @@ interface Spec {
     title?: string;
     day?: number;
     status?: string;
+    deadline?: string;
 }
 
 function entry(spec: Spec): ListEntry2 {
     const metadata: TaskMetadata = {
         tags: spec.tags ?? [],
-        task: { status: { kind: (spec.status ?? 'todo') } as never },
+        task: { status: { kind: (spec.status ?? 'todo') } as never, deadline: spec.deadline },
     };
     return {
         path: spec.path,
@@ -456,6 +457,19 @@ describe('move', () => {
 });
 
 describe('derived parent progress', () => {
+    it('combines an edited parent with its open descendants while keeping its own availability', async () => {
+        const { store } = await storeWith([
+            { path: `.tasks/${uuid(1)}.md` },
+            { path: `.tasks/${uuid(1)}/${uuid(2)}.md`, deadline: '1970-01-01' },
+        ]);
+        const { urgencyOf } = await import('@/urgency');
+        const edited = urgencyOf({ deadline: '2099-01-01', available_from: '2098-01-01' });
+        const inherited = store.urgency(uuid(1), edited, 'todo');
+        expect(inherited.level).toBe('overdue');
+        expect(inherited.actionable).toBe(false);
+        expect(inherited.short_window).toBe(edited.short_window);
+        expect(store.urgency(uuid(1), edited, 'done')).toEqual(edited);
+    });
     it('counts done leaves, excluding canceled leaves and intermediate parents', async () => {
         const { store } = await storeWith([
             { path: `.tasks/${uuid(1)}.md` },

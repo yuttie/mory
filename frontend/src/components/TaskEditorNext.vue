@@ -154,7 +154,7 @@
                     <!-- Start date -->
                     <DateSelector
                         v-model="form.available_from"
-                        v-bind:rules="[optionalDateTime]"
+                        v-bind:rules="[() => taskDateRule(form.available_from)]"
                         label="Available from"
                     >
                         <template v-slot:prepend>
@@ -164,7 +164,7 @@
                     <!-- Due date -->
                     <DateSelector
                         v-model="form.due_by"
-                        v-bind:rules="[optionalDateTime]"
+                        v-bind:rules="[() => taskDateRule(form.due_by)]"
                         label="Due date (soft target)"
                     >
                         <template v-slot:prepend>
@@ -179,7 +179,7 @@
                     <!-- Deadline -->
                     <DateSelector
                         v-model="form.deadline"
-                        v-bind:rules="[optionalDateTime]"
+                        v-bind:rules="[() => taskDateRule(form.deadline)]"
                         label="Deadline (hard cutoff)"
                     >
                         <template v-slot:prepend>
@@ -346,10 +346,10 @@ import { STATUS_LABEL, nextOptions, makeDefaultStatus, canTransition, withoutBla
 import { useFetchTask } from '@/composables/fetchTask';
 import { useLocalStorage } from '@/composables/localStorage';
 import { loadConfigValue } from '@/config';
-import { optionalDateTime, required } from '@/rules';
+import { required } from '@/rules';
 import { useCalendarsStore } from '@/stores/calendars';
 
-import { leadTimeDays, resolvedLeadTime, urgencyOf, URGENCY_LABEL, type Importance } from '@/urgency';
+import { leadTimeDays, resolvedLeadTime, taskInstant, urgencyOf, URGENCY_LABEL, type Importance } from '@/urgency';
 import { useTasksStore } from '@/stores/tasks';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
 import { usePlansStore } from '@/stores/plans';
@@ -388,10 +388,11 @@ const tasks = useTasksStore();
 const settings = useTaskSettingsStore();
 const derivedProgress = computed(() => tasks.progress(uuid.value));
 const defaultLeadTime = computed(() => resolvedLeadTime({}, form.tags, settings.settings));
-const derivedUrgency = computed(() => urgencyOf(form, form.tags, settings.settings, tasks.now));
+const derivedUrgency = computed(() => tasks.urgency(uuid.value, urgencyOf(form, form.tags, settings.settings, tasks.now), form.status.kind));
 const plans = usePlansStore();
 const plannedDays = computed(() => plans.plannedDays(uuid.value));
 const leadTimeRule = (value: string) => !value?.trim() || leadTimeDays(value) !== undefined || 'Use whole days or weeks, such as 14d or 2w.';
+const taskDateRule = (value: string) => !value || taskInstant(value, dayjs.tz.guess()) !== undefined || 'Use a valid YYYY-MM-DD date or a datetime with its UTC offset.';
 
 // Emits
 const emit = defineEmits<{
