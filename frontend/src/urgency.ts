@@ -101,6 +101,14 @@ export function resolvedLeadTime(task: UrgencyTask, tags: readonly string[], set
 }
 
 // Date-only limits last through their local day; availability starts at midnight.
+function localInstant(wall: string, zone: string): number {
+    const local = dayjs.utc(wall).valueOf();
+    const offsets = [...new Set([-2, 0, 2].map((days) => dayjs(local + days * 86_400_000).tz(zone).utcOffset()))];
+    const matches = offsets.map((offset) => local - offset * 60_000).filter((instant) => dayjs(instant).tz(zone).format('YYYY-MM-DD HH:mm:ss.SSS') === wall);
+    // Pick the first repeated clock time; a missing time moves forward by the gap.
+    return matches.length > 0 ? Math.min(...matches) : local - dayjs(local - 86_400_000).tz(zone).utcOffset() * 60_000;
+}
+
 export function taskInstant(value: unknown, zone: string, endOfDay = false): number | undefined {
     if (typeof value !== 'string') {
         return undefined;
@@ -111,11 +119,7 @@ export function taskInstant(value: unknown, zone: string, endOfDay = false): num
         if (!Number.isFinite(canonical.valueOf()) || canonical.toISOString().slice(0, 10) !== text) {
             return undefined;
         }
-        const parsed = dayjs.tz(text, zone);
-        if (!parsed.isValid() || parsed.format('YYYY-MM-DD') !== text) {
-            return undefined;
-        }
-        return (endOfDay ? parsed.endOf('day') : parsed.startOf('day')).valueOf();
+        return localInstant(`${text} ${endOfDay ? '23:59:59.999' : '00:00:00.000'}`, zone);
     }
     if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:\.[0-9]{1,3})?)?(?:Z|[+-][0-9]{2}:[0-9]{2})$/.test(text)) {
         return undefined;
@@ -152,12 +156,12 @@ export function urgencyOf(task: UrgencyTask, tags: readonly string[] = [], setti
     if (result.level === 'none') {
         result.level = ratio > 2 ? 'calm' : ratio > 1 ? 'notice' : 'urgent';
     }
-    result.slack_ratio = Number.isFinite(ratio) ? ratio : null;
+    result.slack_ratio = ratio;
     result.reference = new Date(reference).toISOString();
     // Subtract calendar days while retaining the reference's local wall clock across DST.
     const localReference = dayjs(reference).tz(zone);
-    const shifted = localReference.subtract(lead, 'day');
-    const begins = shifted.isValid() ? dayjs.tz(shifted.format('YYYY-MM-DD HH:mm:ss.SSS'), zone).valueOf() : -Infinity;
+    const shifted = dayjs.utc(localReference.format('YYYY-MM-DD HH:mm:ss.SSS')).subtract(lead, 'day');
+    const begins = shifted.isValid() ? localInstant(shifted.format('YYYY-MM-DD HH:mm:ss.SSS'), zone) : -Infinity;
     result.short_window = available !== undefined && available > begins;
     return result;
 }

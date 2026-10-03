@@ -1,7 +1,7 @@
 //! Derived urgency. Golden fixtures in fixtures/urgency are shared with the frontend.
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
-use chrono::{DateTime, Duration, NaiveDate, TimeZone, Utc, Days};
+use chrono::{LocalResult, NaiveDateTime, Offset, DateTime, Duration, NaiveDate, TimeZone, Utc, Days};
 use chrono_tz::Tz;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -21,10 +21,10 @@ pub fn importance(value: &Value) -> Option<&'static str> {
         Some("low") => Some("low"),
         Some("medium") => Some("medium"),
         Some("high") => Some("high"),
-        _ => match value.as_i64() {
-            Some(1 | 2) => Some("low"),
-            Some(4) => Some("medium"),
-            Some(5) => Some("high"),
+        _ => match value.as_f64() {
+            Some(1.0 | 2.0) => Some("low"),
+            Some(4.0) => Some("medium"),
+            Some(5.0) => Some("high"),
             _ => None,
         },
     }
@@ -92,6 +92,18 @@ pub struct Urgency {
     pub short_window: bool,
 }
 
+// Match the frontend's explicit policy for repeated and missing wall-clock times.
+fn local_instant(wall: NaiveDateTime, zone: Tz) -> DateTime<Utc> {
+    match zone.from_local_datetime(&wall) {
+        LocalResult::Single(at) => at.with_timezone(&Utc),
+        LocalResult::Ambiguous(a, b) => a.min(b).with_timezone(&Utc),
+        LocalResult::None => {
+            let offset = zone.offset_from_utc_datetime(&(wall - Duration::days(1))).fix().local_minus_utc();
+            (wall - Duration::seconds(i64::from(offset))).and_utc()
+        },
+    }
+}
+
 pub fn instant(value: Option<&Value>, zone: Tz, end: bool) -> Option<DateTime<Utc>> {
     let text = value?.as_str()?.trim();
     if text.len() == 10 {
@@ -99,12 +111,8 @@ pub fn instant(value: Option<&Value>, zone: Tz, end: bool) -> Option<DateTime<Ut
         if date.format("%Y-%m-%d").to_string() != text {
             return None;
         }
-        let at = if end { date.succ_opt()? } else { date }.and_hms_opt(0, 0, 0)?;
-        let mut time = zone.from_local_datetime(&at).earliest()?.with_timezone(&Utc);
-        if end {
-            time -= Duration::milliseconds(1);
-        }
-        return Some(time);
+        let at = if end { date.and_hms_milli_opt(23, 59, 59, 999)? } else { date.and_hms_opt(0, 0, 0)? };
+        return Some(local_instant(at, zone));
     }
     static DATETIME: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}[ T]([0-9]{2}):([0-9]{2})(?::([0-9]{2})(?:\.[0-9]{1,3})?)?(Z|[+-][0-9]{2}:[0-9]{2})$").unwrap());
     let parts = DATETIME.captures(text)?;
@@ -146,9 +154,9 @@ pub fn calculate(task: &Value, tags: &[String], settings: &Settings, now: DateTi
     if result.level == "none" {
         result.level = if ratio > 2.0 { "calm" } else if ratio > 1.0 { "notice" } else { "urgent" }.into();
     }
-    result.slack_ratio = ratio.is_finite().then_some(ratio);
+    result.slack_ratio = Some(ratio);
     result.reference = Some(reference.to_rfc3339_opts(chrono::SecondsFormat::Millis, true));
-    let begins = reference.with_timezone(&zone).checked_sub_days(Days::new(lead)).map(|dt| dt.with_timezone(&Utc));
+    let begins = reference.with_timezone(&zone).naive_local().checked_sub_days(Days::new(lead)).map(|wall| local_instant(wall, zone));
     result.short_window = available.is_some_and(|at| begins.is_none_or(|begin| at > begin));
     result
 }
@@ -168,6 +176,15 @@ pub fn local_zone() -> Tz {
 mod tests {
     use super::*;
     #[test]
+    fn zero_leads_keep_infinite_slack_for_sorting() {
+        let now = DateTime::parse_from_rfc3339("2026-10-04T00:00:00Z").unwrap().with_timezone(&Utc);
+        let zero = calculate(&serde_yaml::from_str("deadline: 2026-10-01\nlead_time: 0d").unwrap(), &[], &Settings::default(), now, chrono_tz::Asia::Tokyo);
+        let finite = calculate(&serde_yaml::from_str("deadline: 2026-10-01\nlead_time: 7d").unwrap(), &[], &Settings::default(), now, chrono_tz::Asia::Tokyo);
+        assert_eq!(zero.slack_ratio, Some(f64::NEG_INFINITY));
+        assert!(compare(&zero, &finite).is_lt());
+        assert_eq!(serde_json::to_value(&zero).unwrap()["slack_ratio"], serde_json::Value::Null);
+    }
+    #[test]
     fn shared_golden_fixtures() {
         let fixtures: serde_json::Value = serde_json::from_str(include_str!("../../fixtures/urgency/cases.json")).unwrap();
         for case in fixtures["cases"].as_array().unwrap() {
@@ -183,8 +200,12 @@ mod tests {
             assert_eq!(result.short_window, expected.short_window, "{}", case["name"]);
             match (result.slack_ratio, expected.slack_ratio) {
                 (Some(a), Some(b)) => assert!((a - b).abs() < 1e-9, "{}: {a} != {b}", case["name"]),
+                (Some(a), None) if !a.is_finite() => {},
                 (a, b) => assert_eq!(a, b, "{}", case["name"]),
             }
+        }
+        for case in fixtures["importance"].as_array().unwrap() {
+            assert_eq!(serde_json::to_value(importance(&serde_yaml::to_value(&case["value"]).unwrap())).unwrap(), case["expected"]);
         }
         for case in fixtures["grammar"].as_array().unwrap() {
             assert_eq!(serde_json::to_value(lead_time_days(&serde_yaml::to_value(&case["value"]).unwrap())).unwrap(), case["days"]);

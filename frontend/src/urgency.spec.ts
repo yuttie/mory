@@ -9,7 +9,7 @@ describe('shared urgency fixtures', () => {
             const result = urgencyOf(test.task, test.tags, settings, Date.parse(test.now), test.zone);
             expect({ ...result, slack_ratio: null }).toEqual({ ...test.expected, slack_ratio: null });
             if (test.expected.slack_ratio === null) {
-                expect(result.slack_ratio).toBeNull();
+                expect(JSON.parse(JSON.stringify(result)).slack_ratio).toBeNull();
             }
             else {
                 expect(result.slack_ratio).toBeCloseTo(test.expected.slack_ratio, 9);
@@ -19,6 +19,11 @@ describe('shared urgency fixtures', () => {
     for (const test of fixtures.grammar) {
         it(`lead time ${JSON.stringify(test.value)}`, () => {
             expect(leadTimeDays(test.value) ?? null).toBe(test.days);
+        });
+    }
+    for (const test of fixtures.importance) {
+        it(`importance ${JSON.stringify(test.value)}`, () => {
+            expect(readImportance(test.value) ?? null).toBe(test.expected);
         });
     }
     it('ignores legacy settings and reports malformed values', () => {
@@ -32,5 +37,12 @@ describe('shared urgency fixtures', () => {
         const a = urgencyOf({ deadline: '2026-10-15' }, [], {}, Date.parse('2026-10-04T00:00:00Z'), 'Asia/Tokyo');
         const b = urgencyOf({ due_by: '2026-10-01' }, [], {}, Date.parse('2026-10-04T00:00:00Z'), 'Asia/Tokyo');
         expect(mostUrgent([a, b])).toEqual(b);
+    });
+    it('keeps the sign of infinite slack internally when sorting zero-day leads', () => {
+        const now = Date.parse('2026-10-04T00:00:00Z');
+        const zero = urgencyOf({ deadline: '2026-10-01', lead_time: '0d' }, [], {}, now, 'Asia/Tokyo');
+        const finite = urgencyOf({ deadline: '2026-10-01', lead_time: '7d' }, [], {}, now, 'Asia/Tokyo');
+        expect(zero.slack_ratio).toBe(-Infinity);
+        expect(mostUrgent([finite, zero])).toEqual(zero);
     });
 });

@@ -565,6 +565,61 @@
                 "actionable": true,
                 "short_window": false
             }
+        },
+        {
+            "name": "DST gap at urgency window",
+            "task": {
+                "deadline": "2026-03-15 02:30:00-04:00",
+                "available_from": "2026-03-01",
+                "lead_time": "7d"
+            },
+            "tags": [],
+            "settings": {},
+            "now": "2026-03-01T12:00:00Z",
+            "zone": "America/New_York",
+            "expected": {
+                "level": "notice",
+                "slack_ratio": 1.9672619047619049,
+                "reference": "2026-03-15T06:30:00.000Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "Midnight gap after date-only limit",
+            "task": {
+                "deadline": "2018-11-03"
+            },
+            "tags": [],
+            "settings": {},
+            "now": "2018-11-01T12:00:00Z",
+            "zone": "America/Sao_Paulo",
+            "expected": {
+                "level": "urgent",
+                "slack_ratio": 0.37499999834656084,
+                "reference": "2018-11-04T02:59:59.999Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "Repeated clock at urgency window",
+            "task": {
+                "deadline": "2026-11-08 01:30:00-05:00",
+                "available_from": "2026-11-01 01:45:00-04:00",
+                "lead_time": "7d"
+            },
+            "tags": [],
+            "settings": {},
+            "now": "2026-10-28T12:00:00Z",
+            "zone": "America/New_York",
+            "expected": {
+                "level": "notice",
+                "slack_ratio": 1.5386904761904763,
+                "reference": "2026-11-08T06:30:00.000Z",
+                "actionable": false,
+                "short_window": true
+            }
         }
     ],
     "grammar": [
@@ -619,6 +674,48 @@
         {
             "value": null,
             "days": null
+        }
+    ],
+    "importance": [
+        {
+            "value": 1.0,
+            "expected": "low"
+        },
+        {
+            "value": 2.0,
+            "expected": "low"
+        },
+        {
+            "value": 3.0,
+            "expected": null
+        },
+        {
+            "value": 4.0,
+            "expected": "medium"
+        },
+        {
+            "value": 5.0,
+            "expected": "high"
+        },
+        {
+            "value": 3.5,
+            "expected": null
+        },
+        {
+            "value": true,
+            "expected": null
+        },
+        {
+            "value": false,
+            "expected": null
+        },
+        {
+            "value": "high",
+            "expected": "high"
+        },
+        {
+            "value": null,
+            "expected": null
         }
     ]
 }
