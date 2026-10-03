@@ -21,6 +21,7 @@ services:
             # These name the mounts and the port below, so they are fixed here. An .env begun
             # from backend/.env.template carries development values for them, which would
             # otherwise win over the image's.
+            TZ: Asia/Tokyo
             MORIED_GIT_DIR: /repo
             MORIED_IMAGE_CACHE_DIR: /cache
             MORIED_LISTEN: 0.0.0.0:3030

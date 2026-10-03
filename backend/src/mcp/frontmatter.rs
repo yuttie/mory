@@ -847,3 +847,33 @@ mod tests {
         assert!(after.contains("progress: 50"));
     }
 }
+
+/// Stamp a new note, or carry an existing creation time into a full replacement.
+/// The in-place editor preserves every other frontmatter byte.
+pub fn with_created_at(text: &str, existing: Option<&str>) -> Result<String, EditError> {
+    if value(text).and_then(|root| root.get("created_at").cloned()).is_some() {
+        return Ok(text.to_owned());
+    }
+    let timestamp = existing.and_then(value)
+        .and_then(|root| root.get("created_at").cloned())
+        .unwrap_or_else(|| crate::note_time::now_local().into());
+    apply(text, &[Change::set(&["created_at"], timestamp)])
+}
+
+#[cfg(test)]
+mod creation_tests {
+    use super::*;
+
+    #[test]
+    fn a_replacement_carries_the_original_creation_time() {
+        let original = "---\ncreated_at: 2026-10-04 14:05:12+09:00\n---\nOld\n";
+        let replacement = "---\n# Keep this comment\ntags: [work]\n---\nNew\n";
+        let stamped = with_created_at(replacement, Some(original)).unwrap();
+        assert_eq!(value(&stamped).unwrap()["created_at"], value(original).unwrap()["created_at"]);
+        assert!(stamped.contains("# Keep this comment\ntags: [work]"));
+        assert!(stamped.ends_with("New\n"));
+        assert_eq!(with_created_at(original, None).unwrap(), original);
+        assert!(with_created_at("# Plain\n", None).unwrap().starts_with("---\ncreated_at:"));
+        assert!(with_created_at("---\ntags: [\n---\n", None).is_err());
+    }
+}

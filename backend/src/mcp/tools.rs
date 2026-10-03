@@ -835,7 +835,7 @@ pub struct CreateNoteArgs {
 
 pub async fn create_note(
     state: &AppState,
-    args: CreateNoteArgs,
+    mut args: CreateNoteArgs,
 ) -> Result<CallToolResult, ErrorData> {
     // UUIDv4 rather than v7, matching the frontend's `crypto.randomUUID()`: `entries_to_tree`
     // rejects every other version, so a v7 name would break the tree it appears in.
@@ -853,6 +853,13 @@ pub async fn create_note(
         return Ok(tool_error(format!(
             "{path:?} already exists. Use update_note to replace its content.",
         )));
+    }
+
+    if path.ends_with(".md") {
+        args.content = match frontmatter::with_created_at(&args.content, None) {
+            Ok(content) => content,
+            Err(error) => return Ok(tool_error(error.to_string())),
+        };
     }
 
     match state.save_note(&path, args.content.as_bytes(), &args.message).await {
@@ -881,7 +888,7 @@ pub struct UpdateNoteArgs {
 
 pub async fn update_note(
     state: &AppState,
-    args: UpdateNoteArgs,
+    mut args: UpdateNoteArgs,
 ) -> Result<CallToolResult, ErrorData> {
     // `safe_path`, not `writable_path`: the name is already whatever it is, and refusing to edit
     // the content of a badly-named note would help nobody.
@@ -893,6 +900,14 @@ pub async fn update_note(
         return Ok(tool_error(format!(
             "No file at {path:?}. Use create_note to make one, or search_notes to find the path.",
         )));
+    }
+
+    if path.ends_with(".md") {
+        let existing = note_text(state, &path).await?;
+        args.content = match frontmatter::with_created_at(&args.content, existing.as_deref()) {
+            Ok(content) => content,
+            Err(error) => return Ok(tool_error(error.to_string())),
+        };
     }
 
     match state.save_note(&path, args.content.as_bytes(), &args.message).await {

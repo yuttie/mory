@@ -724,6 +724,7 @@ async function onSave(): Promise<void> {
     const alarms = taskAlarmsToWrite(form);
     // Create a Task value
     const task = {
+        created_at: task.value?.created_at,
         uuid: uuid.value,
         title: form.title.trim(),
         tags: [...form.tags],

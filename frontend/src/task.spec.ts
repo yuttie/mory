@@ -5,6 +5,7 @@ import { type Status, type Task, STATUS_KINDS, hasFields, makeDefaultStatus, ren
 
 function task(overrides: Partial<Task> = {}): Task {
     return {
+        created_at: '2026-10-04 14:05:12+09:00',
         uuid: '00000000-0000-4000-8000-000000000000',
         title: 'Write the report',
         tags: ['work'],
@@ -57,6 +58,7 @@ describe('render, alarms', () => {
     it('writes a task without alarms exactly as it was written before they existed', () => {
         // The same layout as ever: block lists, four spaces, and nothing in flow style.
         expect(render(task())).toBe(`---
+created_at: 2026-10-04 14:05:12+09:00
 task:
     status:
         kind: waiting

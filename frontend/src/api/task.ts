@@ -28,6 +28,7 @@ export async function getTask(taskPath: string, eTag?: string): Promise<[string,
         const uuid = extractFileUuid(taskPath);
         const alarms = readTaskAlarms(metadata.task.alarms);
         const task = {
+            created_at: metadata.created_at,
             uuid: uuid,
             title: title,
             tags: metadata.tags,

@@ -365,6 +365,7 @@
 </template>
 
 <script lang="ts" setup>
+import { withCreatedAt } from '@/time';
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 
 import {
@@ -1105,7 +1106,8 @@ function saveIfNeeded() {
 function save() {
     isSaving.value = true;
     const path = notePath.value;
-    const content = text.value;
+    const content = noteHasUpstream.value ? text.value : withCreatedAt(text.value);
+    text.value = content;
     files.write(
         path,
         content

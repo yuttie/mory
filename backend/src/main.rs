@@ -1,3 +1,4 @@
+mod note_time;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::ffi::OsStr;

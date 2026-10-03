@@ -1,5 +1,5 @@
 import YAML from 'yaml';
-import dayjs from 'dayjs';
+import { nowLocal } from '@/time';
 
 import { stringifyWithFlowAlarms } from '@/frontmatter';
 import type { TaskAlarms } from '@/alarms';
@@ -91,6 +91,7 @@ export const STATUS_TRANSITION = {
 } as const satisfies Record<StatusKind, readonly StatusKind[]>;
 
 export interface Task {
+    created_at?: string;
     uuid: UUID;
     title: string;
     tags: string[];
@@ -122,7 +123,7 @@ export function hasFields(kind: StatusKind): boolean {
 
 // What a task switched to `kind` starts with. Done and Canceled say when, and that is now.
 export function makeDefaultStatus(kind: StatusKind): Status {
-    const now = dayjs().format().replace('T', ' ');
+    const now = nowLocal();
     switch (kind) {
         case 'backlog': return { kind: 'backlog' };
         case 'todo': return { kind: 'todo' };
@@ -150,6 +151,7 @@ export function canTransition(from: StatusKind, to: StatusKind): boolean {
 
 export function render(task: Task): string {
     const metadata = {
+        created_at: task.created_at ?? nowLocal(),
         task: {
             status: task.status,
             progress: task.progress,

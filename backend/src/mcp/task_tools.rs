@@ -10,6 +10,7 @@ use super::frontmatter::{self, Change};
 use super::tools::{alarm_list, commit_edit, note_text, safe_path, WriteOutput};
 use super::{json_result, tool_error};
 use crate::models::AppState;
+use crate::note_time::now_local;
 use crate::tasks::{TaskField, STATUS_KINDS};
 
 /// What `create_task` writes when the caller names no status. The web app's editor starts a new
@@ -139,14 +140,6 @@ fn status_changes(args: &UpdateTaskArgs, kind: &str) -> Result<Vec<Change>, Stri
         _ => {},
     }
     Ok(vec![Change::set(&["task", "status"], Value::Mapping(status))])
-}
-
-/// Now, spelled the way the notes spell a datetime: local wall clock carrying its own offset.
-///
-/// The offset is not decoration. A task completed at 18:17 in Tokyo and one completed at 18:17
-/// in London are different moments, and a bare datetime cannot say which this was.
-fn now_local() -> String {
-    chrono::Local::now().format("%Y-%m-%d %H:%M:%S%:z").to_string()
 }
 
 /// The numeric fields, with the bounds the schema puts on them.
@@ -545,6 +538,7 @@ pub async fn create_task(
         Ok(changes) => changes,
         Err(message) => return Ok(tool_error(message)),
     };
+    changes.push(Change::set(&["created_at"], now_local()));
     match status_changes(&update, update.status.as_deref().unwrap_or(NEW_TASK_STATUS)) {
         Ok(status) => changes.extend(status),
         Err(message) => return Ok(tool_error(message)),

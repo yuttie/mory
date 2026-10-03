@@ -319,6 +319,7 @@
 </template>
 
 <script lang="ts" setup>
+import { nowLocal } from '@/time';
 import { ref, computed, watch, onMounted } from 'vue';
 import type { Ref } from 'vue';
 import { useRouter } from 'vue-router';
@@ -667,6 +668,7 @@ async function createQuickNote() {
 
         // Add metadata with quick-create tag
         const metadata = {
+            created_at: nowLocal(),
             tags: ['quick-create']
         };
         const yamlHeader = '---\n' + Object.entries(metadata).map(([key, value]) => `${key}: ${JSON.stringify(value)}`).join('\n') + '\n---\n\n';

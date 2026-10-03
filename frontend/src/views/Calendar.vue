@@ -272,6 +272,7 @@
 </template>
 
 <script lang="ts" setup>
+import { withCreatedAt } from '@/time';
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 
 import { useRoute, useRouter } from 'vue-router';
@@ -612,7 +613,7 @@ async function convertSelected() {
         const note = canConvertSeries(series)
             ? buildSeriesNote(occurrence, series)
             : buildOccurrenceNote(occurrence, series);
-        await files.write(note.path, note.content);
+        await files.write(note.path, withCreatedAt(note.content));
         await settle(note.path);
 
         // `selectedEvent` holds the imported object by reference, so rebuilding `events` leaves
