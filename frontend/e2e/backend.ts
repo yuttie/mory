@@ -63,6 +63,10 @@ export async function mockBackend(context: BrowserContext, notes: Record<string,
             await route.fulfill({ json: commitId() });
             return;
         }
+        if (path === '/api/v2/assess-task') {
+            await route.fulfill({ json: { quality_score: 8, feedback: '', suggestions: [], note_suggestions: [] } });
+            return;
+        }
         if (path === '/api/login') {
             await route.fulfill({ json: TOKEN });
             return;

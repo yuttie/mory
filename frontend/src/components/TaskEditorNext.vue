@@ -347,6 +347,7 @@ import { useFetchTask } from '@/composables/fetchTask';
 import { useLocalStorage } from '@/composables/localStorage';
 import { loadConfigValue } from '@/config';
 import { required } from '@/rules';
+import dayjs from 'dayjs';
 import { useCalendarsStore } from '@/stores/calendars';
 
 import { leadTimeDays, resolvedLeadTime, taskInstant, urgencyOf, URGENCY_LABEL, type Importance } from '@/urgency';
