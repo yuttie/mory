@@ -97,6 +97,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { apiFilesUrl } from '@/api-url';
 import { getAxios } from '@/axios';
+import { encodePath } from '@/encode-path';
 import { useFilesStore } from '@/stores/files';
 
 // Emits
@@ -130,7 +131,7 @@ const mediaUrl = computed(() => {
   }
   // Construct the API endpoint URL for the media file
   // Using the same /files/ endpoint that serves file content
-  return apiFilesUrl + filename.value;
+  return apiFilesUrl + encodePath(filename.value);
 });
 
 const mediaType = computed(() => {
@@ -218,7 +219,7 @@ function onMediaError() {
 async function loadPdfContent() {
     try {
         const axios = getAxios();
-        const response = await axios.get(`/files/${filename.value}`, {
+        const response = await axios.get(`/files/${encodePath(filename.value)}`, {
             responseType: 'arraybuffer'
         });
 
