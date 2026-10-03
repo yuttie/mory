@@ -101,8 +101,8 @@
                             <v-list-subheader>Create</v-list-subheader>
                             <v-list-item to="/create" v-bind:prepend-icon="mdiFileOutline" title="New note"></v-list-item>
                             <v-list-item
-                                v-if="$route.name === 'Note'"
-                                v-bind:to="{ name: 'Create', query: { from: Array.isArray($route.params.path) ? $route.params.path.join('/') : $route.params.path } }"
+                                v-if="openNotePath !== null"
+                                v-bind:to="{ name: 'Create', query: { from: openNotePath } }"
                                 v-bind:prepend-icon="mdiFileMultipleOutline"
                                 title="Copy of this note"
                             ></v-list-item>
@@ -317,8 +317,8 @@
                             <v-list-subheader>Create</v-list-subheader>
                             <v-list-item to="/create" v-bind:prepend-icon="mdiFileOutline" title="New note"></v-list-item>
                             <v-list-item
-                                v-if="$route.name === 'Note'"
-                                v-bind:to="{ name: 'Create', query: { from: Array.isArray($route.params.path) ? $route.params.path.join('/') : $route.params.path } }"
+                                v-if="openNotePath !== null"
+                                v-bind:to="{ name: 'Create', query: { from: openNotePath } }"
                                 v-bind:prepend-icon="mdiFileMultipleOutline"
                                 title="Copy of this note"
                             ></v-list-item>
@@ -613,6 +613,16 @@ const routerViewEl = ref(null);
 // Computed properties
 const isDev = computed(() => {
     return import.meta.env.DEV;
+});
+
+// The path of the note being read, or `null` on any other screen. The route holds it as the
+// segments of a repeatable parameter.
+const openNotePath = computed((): string | null => {
+    if (route.name !== 'Note') {
+        return null;
+    }
+    const path = route.params.path;
+    return Array.isArray(path) ? path.join('/') : path;
 });
 
 const needRequestForNotificationPermission = computed(() => {
