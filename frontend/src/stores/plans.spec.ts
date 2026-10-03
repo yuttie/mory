@@ -35,6 +35,15 @@ beforeEach(() => {
 });
 
 describe('monthly plan store', () => {
+    it('discovers the first external plan after an empty history load', async () => {
+        const store = usePlansStore();
+        await store.loadAll();
+        repository.set('.mory/plans/2026-11.yaml', { content: YAML.stringify({ '2026-11-05': [{ task: A, origin: 'planned' }] }), etag: 'external' });
+        const shared = reactive(files);
+        shared.entries = [{ path: '.mory/plans/2026-11.yaml' }];
+        shared.commitId = 'first-plan';
+        await vi.waitFor(() => expect(store.plannedDays(A)).toEqual(['2026-11-05']));
+    });
     it('discovers months added externally after history was first loaded', async () => {
         const store = usePlansStore();
         await store.loadMonths(['2026-10']);

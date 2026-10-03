@@ -12,6 +12,7 @@ export const usePlansStore = defineStore('plans', () => {
     const errors = ref<Record<string, string>>({});
     const etags = new Map<string, string>();
     let queue: Promise<unknown> = Promise.resolve();
+    let historyRequested = false;
     function serialize<T>(operation: () => Promise<T>): Promise<T> {
         const result = queue.then(operation);
         queue = result.catch(() => undefined);
@@ -50,6 +51,7 @@ export const usePlansStore = defineStore('plans', () => {
         });
     }
     async function loadAll(): Promise<void> {
+        historyRequested = true;
         await files.refresh();
         const listed = files.entries.map((entry) => /^\.mory\/plans\/([0-9]{4}-[0-9]{2})\.yaml$/.exec(entry.path)?.[1]).filter((month): month is string => month !== undefined);
         for (const month of new Set([...Object.keys(months.value), ...listed])) {
@@ -149,7 +151,7 @@ export const usePlansStore = defineStore('plans', () => {
     }
     // Repository commits include external MCP edits and deleted plan files.
     watch(() => files.commitId, (commit) => {
-        if (commit && Object.keys(months.value).length > 0) {
+        if (commit && (historyRequested || Object.keys(months.value).length > 0)) {
             const listed = files.entries.map((entry) => /^\.mory\/plans\/([0-9]{4}-[0-9]{2})\.yaml$/.exec(entry.path)?.[1]).filter((month): month is string => month !== undefined);
             void loadMonths([...Object.keys(months.value), ...listed]).catch(() => undefined);
         }
