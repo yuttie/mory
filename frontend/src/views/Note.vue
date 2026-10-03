@@ -1048,6 +1048,7 @@ function onNewPathKeydown(e: KeyboardEvent) {
     // The Rename button is disabled while the path is taken, and Enter has to wait for the same answer.
     if (e.key === 'Enter' && !newPathConflicting.value) {
         rename();
+        renameDialogIsVisible.value = false;
     }
 }
 
