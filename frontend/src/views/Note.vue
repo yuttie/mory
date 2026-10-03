@@ -8,8 +8,14 @@
         <template v-else>
             <AppBarContent>
                 <v-toolbar-title class="ms-5">
-                    <nav aria-label="Note breadcrumbs">
-                        <ol class="note-breadcrumbs">
+                    <nav
+                        ref="breadcrumbScroller"
+                        class="note-breadcrumbs"
+                        v-bind:class="{ 'clipped-left': breadcrumbsClippedLeft, 'clipped-right': breadcrumbsClippedRight }"
+                        aria-label="Note breadcrumbs"
+                        v-on:scroll.passive="updateBreadcrumbOverflow"
+                    >
+                        <ol class="note-breadcrumb-list">
                             <li
                                 v-for="(crumb, index) in breadcrumbs"
                                 v-bind:key="index"
@@ -430,6 +436,8 @@ const notFound = ref(false);
 const showConfirmationDialog = ref(false);
 const error = ref(false);
 const errorText = ref('');
+const breadcrumbsClippedLeft = ref(false);
+const breadcrumbsClippedRight = ref(false);
 
 // Set right before a note path change that we've already handled locally
 // (e.g. after a rename), so the route watcher below doesn't reload the note again.
@@ -439,6 +447,8 @@ let skipNextPathWatch = false;
 const editableViewer = ref<InstanceType<typeof EditableViewer> | null>(null);
 const newPathField = ref<{ focus: () => void } | null>(null);
 const tocEl = ref<HTMLElement | null>(null);
+const breadcrumbScroller = ref<HTMLElement | null>(null);
+const breadcrumbResizeObserver = new ResizeObserver(updateBreadcrumbOverflow);
 
 // Computed properties
 const editorMode = computed(() => {
@@ -616,6 +626,8 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+    breadcrumbResizeObserver.disconnect();
+
     window.removeEventListener('focus', notifyUpstreamState);
     window.removeEventListener('focus', focusOrBlurEditor);
 
@@ -625,6 +637,14 @@ onUnmounted(() => {
 });
 
 // Methods
+function updateBreadcrumbOverflow() {
+    const scroller = breadcrumbScroller.value;
+    // Scroll offsets can be fractional while the width measurements are rounded to pixels.
+    breadcrumbsClippedLeft.value = scroller !== null && scroller.scrollLeft > 1;
+    breadcrumbsClippedRight.value = scroller !== null
+        && scroller.scrollWidth - scroller.clientWidth - scroller.scrollLeft > 1;
+}
+
 function jumpTo(id: string) {
     editableViewer.value?.jumpTo(id);
 }
@@ -1144,6 +1164,20 @@ function rename() {
 }
 
 // Watchers
+watch(breadcrumbScroller, (scroller) => {
+    breadcrumbResizeObserver.disconnect();
+    if (scroller !== null) {
+        breadcrumbResizeObserver.observe(scroller);
+        // The content can grow without the viewport changing, including when fonts finish loading.
+        if (scroller.firstElementChild !== null) {
+            breadcrumbResizeObserver.observe(scroller.firstElementChild);
+        }
+    }
+    updateBreadcrumbOverflow();
+}, { flush: 'post' });
+
+watch(breadcrumbs, updateBreadcrumbOverflow, { flush: 'post' });
+
 watch(renameDialogIsVisible, async (isVisible: boolean) => {
     if (isVisible) {
         newPath.value = notePath.value;
@@ -1181,8 +1215,28 @@ watch(notePath, async (newPath, oldPath) => {
 }
 
 .note-breadcrumbs {
-    display: flex;
     overflow-x: auto;
+    mask-image: linear-gradient(
+        to right,
+        transparent,
+        black var(--breadcrumb-fade-left, 0px),
+        black calc(100% - var(--breadcrumb-fade-right, 0px)),
+        transparent
+    );
+
+    &.clipped-left {
+        --breadcrumb-fade-left: 1em;
+    }
+
+    &.clipped-right {
+        --breadcrumb-fade-right: 1em;
+    }
+}
+
+.note-breadcrumb-list {
+    display: flex;
+    width: max-content;
+    min-width: 100%;
     margin: 0;
     padding: 0;
     list-style: none;
