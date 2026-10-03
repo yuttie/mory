@@ -448,7 +448,15 @@ const editableViewer = ref<InstanceType<typeof EditableViewer> | null>(null);
 const newPathField = ref<{ focus: () => void } | null>(null);
 const tocEl = ref<HTMLElement | null>(null);
 const breadcrumbScroller = ref<HTMLElement | null>(null);
-const breadcrumbResizeObserver = new ResizeObserver(updateBreadcrumbOverflow);
+const breadcrumbResizeObserver = new ResizeObserver(() => {
+    // Preserve a reader's scroll back toward ancestors when the viewport changes.
+    if (breadcrumbsClippedRight.value) {
+        updateBreadcrumbOverflow();
+    }
+    else {
+        revealCurrentBreadcrumb();
+    }
+});
 
 // Computed properties
 const editorMode = computed(() => {
@@ -665,6 +673,22 @@ function updateBreadcrumbOverflow() {
     breadcrumbsClippedLeft.value = scroller !== null && scroller.scrollLeft > 1;
     breadcrumbsClippedRight.value = scroller !== null
         && scroller.scrollWidth - scroller.clientWidth - scroller.scrollLeft > 1;
+}
+
+function revealCurrentBreadcrumb() {
+    const scroller = breadcrumbScroller.value;
+    const current = scroller?.querySelector<HTMLElement>('[aria-current="page"] > span:last-child');
+    if (scroller !== null && current) {
+        const start = current.getBoundingClientRect().left - scroller.getBoundingClientRect().left
+            + scroller.scrollLeft;
+        // A long title needs its beginning visible, with room for the one-em fade over ancestors.
+        const fadeWidth = parseFloat(getComputedStyle(scroller).fontSize);
+        scroller.scrollLeft = Math.max(0, Math.min(
+            start - fadeWidth,
+            scroller.scrollWidth - scroller.clientWidth,
+        ));
+    }
+    updateBreadcrumbOverflow();
 }
 
 function jumpTo(id: string) {
@@ -1195,10 +1219,10 @@ watch(breadcrumbScroller, (scroller) => {
             breadcrumbResizeObserver.observe(scroller.firstElementChild);
         }
     }
-    updateBreadcrumbOverflow();
+    revealCurrentBreadcrumb();
 }, { flush: 'post' });
 
-watch(breadcrumbs, updateBreadcrumbOverflow, { flush: 'post' });
+watch(breadcrumbs, revealCurrentBreadcrumb, { flush: 'post' });
 
 watch(renameDialogIsVisible, async (isVisible: boolean) => {
     if (isVisible) {
