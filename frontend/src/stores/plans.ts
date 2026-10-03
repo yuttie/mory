@@ -150,7 +150,8 @@ export const usePlansStore = defineStore('plans', () => {
     // Repository commits include external MCP edits and deleted plan files.
     watch(() => files.commitId, (commit) => {
         if (commit && Object.keys(months.value).length > 0) {
-            void loadMonths(Object.keys(months.value)).catch(() => undefined);
+            const listed = files.entries.map((entry) => /^\.mory\/plans\/([0-9]{4}-[0-9]{2})\.yaml$/.exec(entry.path)?.[1]).filter((month): month is string => month !== undefined);
+            void loadMonths([...Object.keys(months.value), ...listed]).catch(() => undefined);
         }
     });
     return { months, days, errors, loadMonths, loadAll: () => serialize(loadAll), planTask, recordResult, unplanTask, reorder, collect, plannedDays, missedCount };

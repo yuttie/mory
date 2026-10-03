@@ -75,3 +75,12 @@ test('shows an unknown task as removable history', async ({ context, page }) => 
     await entry.getByRole('button', { name: 'Remove', exact: true }).click();
     await expect.poll(() => YAML.parse(repository.writes.at(-1)?.content ?? '{}')['2026-10-04']).toEqual([]);
 });
+
+test('loads missed history when opening the status view directly', async ({ context, page }) => {
+    await mockBackend(context, {
+        [`.tasks/${A}.md`]: task('Alpha'),
+        '.mory/plans/2026-09.yaml': ['2026-09-01', '2026-09-02', '2026-09-03'].map((date) => `${date}:\n    - task: ${A}\n      origin: planned\n      result: missed\n`).join(''),
+    });
+    await page.goto('/tasks-next/_/descendants/status');
+    await expect(page.locator('.status-view .task-list-item').filter({ hasText: 'Alpha' })).toContainText('3 missed days');
+});

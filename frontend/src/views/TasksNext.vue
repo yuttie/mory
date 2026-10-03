@@ -200,6 +200,7 @@
                                 </v-list>
                             </v-menu>
                         </v-toolbar>
+                        <v-alert v-if="planHistoryError" type="warning">{{ planHistoryError }}</v-alert>
                         <v-alert v-for="problem of taskSettings.problems" v-bind:key="problem" type="warning">{{ problem }}</v-alert>
                         <div class="view-container flex-grow-1">
                             <!-- Status view -->
@@ -250,6 +251,7 @@
 import { readImportance, isUrgent, compareUrgency } from '@/urgency';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue';
+import { usePlansStore } from '@/stores/plans';
 import { type RouteLocationRaw, useRoute, useRouter } from 'vue-router';
 import { useDisplay } from 'vuetify';
 import { useLocalStorage } from '@/composables/localStorage';
@@ -273,6 +275,7 @@ import dayjs from 'dayjs';
 // Stores
 const store = useTasksStore();
 const taskSettings = useTaskSettingsStore();
+const planHistoryError = ref('');
 void taskSettings.load();
 
 // Router
@@ -684,6 +687,12 @@ onMounted(async () => {
     document.title = `Tasks | ${import.meta.env.VITE_APP_NAME}`;
     window.addEventListener('focus', onWindowFocus);
     await load(true);
+    try {
+        await usePlansStore().loadAll();
+    }
+    catch (failure) {
+        planHistoryError.value = String(failure);
+    }
 });
 
 onUnmounted(() => {

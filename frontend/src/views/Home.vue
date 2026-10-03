@@ -195,7 +195,7 @@
                                 v-for="task in todayTasks"
                                 v-bind:key="task.uuid"
                                 class="task-item mb-2 pa-2 clickable-task"
-                                v-bind:class="{ 'task-done': task.metadata?.task?.status?.kind === 'done' }"
+                                v-bind:class="{ 'task-done': task.metadata?.task?.status?.kind === 'done', 'text-disabled': !taskStore.ownUrgency(task.uuid).actionable }"
                                 v-on:click="navigateToTask(task)"
                             >
                                 <div class="task-content">
@@ -228,7 +228,7 @@
                                 v-for="task in upcomingTasks"
                                 v-bind:key="task.uuid"
                                 class="task-item mb-2 pa-2 clickable-task"
-                                v-bind:class="{ 'task-done': task.metadata?.task?.status?.kind === 'done' }"
+                                v-bind:class="{ 'task-done': task.metadata?.task?.status?.kind === 'done', 'text-disabled': !taskStore.ownUrgency(task.uuid).actionable }"
                                 v-on:click="navigateToTask(task)"
                             >
                                 <div class="task-content">
@@ -508,19 +508,7 @@ const dayAfterTomorrowEvents = computed(() => {
 const plans = usePlansStore();
 void plans.loadMonths([today.slice(0, 7)]).catch(() => undefined);
 const todayTasks = computed(() => {
-    if (!taskStore.allTasks || taskStore.allTasks.length === 0) return [];
-
-    return taskStore.allTasks.filter(task => {
-        const scheduledDates = plans.plannedDays(task.uuid);
-        const status = task.metadata?.task?.status?.kind;
-        
-        // Skip done and canceled tasks
-        if (status === 'done' || status === 'canceled') {
-            return false;
-        }
-        
-        return Array.isArray(scheduledDates) && scheduledDates.includes(today);
-    });
+    return (plans.days[today] ?? []).map((entry) => taskStore.allTasks.find((task) => task.uuid.toLowerCase() === entry.task)).filter((task): task is TaskNode => task !== undefined && !['done', 'canceled'].includes(task.metadata?.task?.status?.kind ?? ''));
 });
 
 function parseDue(input: string): dayjs.Dayjs {
