@@ -13,10 +13,13 @@
             <v-card class="day candidates">
                 <v-card-title>Candidate tasks</v-card-title>
                 <v-card-subtitle>Drag onto a day to plan work</v-card-subtitle>
-                <draggable v-bind:model-value="candidates" item-key="uuid" v-bind:group="{ name: 'plans', pull: 'clone', put: false }" v-bind:clone="cloneTask" v-bind:sort="false" v-bind:disabled="busy" v-bind:delay="200" v-bind:delay-on-touch-only="true">
+                <draggable v-bind:model-value="candidates" item-key="uuid" handle=".plan-drag-handle" v-bind:group="CANDIDATE_GROUP" v-bind:clone="cloneTask" v-bind:sort="false" v-bind:disabled="busy" v-bind:force-fallback="true" v-bind:fallback-on-body="true" v-bind:delay="200" v-bind:delay-on-touch-only="true">
                     <template v-slot:item="{ element: task }">
                         <div class="candidate">
-                            <TaskListItemNext v-bind:value="task" v-bind:to="routeFor(task)" v-bind:list-root="listRoot"></TaskListItemNext>
+                            <div class="d-flex align-center">
+                                <span class="plan-drag-handle" title="Drag onto a day"><v-icon v-bind:icon="mdiDragVertical"></v-icon></span>
+                                <TaskListItemNext draggable="false" v-bind:value="task" v-bind:to="routeFor(task)" v-bind:list-root="listRoot"></TaskListItemNext>
+                            </div>
                             <small v-if="plans.missedCount(task.uuid) >= 3" class="text-warning">Missed {{ plans.missedCount(task.uuid) }} times: consider splitting or re-rating importance</small>
                         </div>
                     </template>
@@ -25,12 +28,12 @@
             <v-card v-for="date of dates" v-bind:key="date" class="day" v-bind:class="{ today: date === dayjs().format('YYYY-MM-DD') }">
                 <v-card-title>{{ date }}<small class="ml-2">{{ dayjs(date).format('ddd') }}</small></v-card-title>
                 <v-btn variant="text" size="small" v-bind:disabled="busy" v-on:click="interruptionDate = date; interruptionTask = null">Record interruption</v-btn>
-                <draggable class="entries" v-bind:model-value="plans.days[date] ?? []" item-key="task" v-bind:group="{ name: 'plans', pull: 'clone', put: true }" v-bind:clone="cloneEntry" v-bind:disabled="busy" v-bind:delay="200" v-bind:delay-on-touch-only="true" v-on:update:model-value="replaceDay(date, $event)">
+                <draggable class="entries" v-bind:model-value="plans.days[date] ?? []" item-key="task" v-bind:group="DAY_GROUP" v-bind:clone="cloneEntry" v-bind:disabled="busy" v-bind:force-fallback="true" v-bind:fallback-on-body="true" v-bind:delay="200" v-bind:delay-on-touch-only="true" v-on:update:model-value="replaceDay(date, $event)">
                     <template v-slot:item="{ element: entry }">
                         <div class="planned-entry pa-2" v-bind:class="{ 'text-disabled': !taskOf(entry.task) || !tasks.ownUrgency(taskOf(entry.task)?.uuid ?? entry.task).actionable }">
                             <div class="d-flex align-center">
                                 <v-checkbox-btn v-bind:model-value="entry.result === 'worked'" v-bind:disabled="busy || !taskOf(entry.task)" title="Worked on this day" v-on:update:model-value="run(() => plans.recordResult(date, entry.task, $event ? 'worked' : undefined))"></v-checkbox-btn>
-                                <router-link v-if="taskOf(entry.task)" v-bind:to="routeFor(taskOf(entry.task)!)">{{ taskOf(entry.task)?.title || 'Untitled' }}</router-link>
+                                <router-link draggable="false" v-if="taskOf(entry.task)" v-bind:to="routeFor(taskOf(entry.task)!)">{{ taskOf(entry.task)?.title || 'Untitled' }}</router-link>
                                 <span v-else>Unknown task {{ entry.task }}</span>
                             </div>
                             <small>{{ entry.origin }} · {{ entry.result ?? 'unrecorded' }}</small>
@@ -63,6 +66,7 @@ import { computed, ref, watch, onMounted } from 'vue';
 import type { RouteLocationRaw } from 'vue-router';
 import dayjs from 'dayjs';
 import draggable from 'vuedraggable';
+import { mdiDragVertical } from '@mdi/js';
 import type { TaskNode } from '@/task-forest';
 import { makeDefaultStatus } from '@/task';
 import { readImportance, isUrgent, compareUrgency } from '@/urgency';
@@ -75,6 +79,8 @@ const props = defineProps<{
     routeFor: (task: TaskNode) => RouteLocationRaw;
     listRoot?: string;
 }>();
+const CANDIDATE_GROUP = { name: 'plans', pull: 'clone', put: false };
+const DAY_GROUP = { name: 'plans', pull: 'clone', put: true };
 const tasks = useTasksStore();
 const plans = usePlansStore();
 const week = ref(dayjs().startOf('day'));
@@ -159,4 +165,5 @@ onMounted(() => { void plans.loadAll().catch((failure) => { error.value = String
 .today { border: 2px solid rgb(var(--v-theme-primary)); }
 .planned-entry { border-top: 1px solid rgba(128, 128, 128, .3); }
 .planned-entry a { color: inherit; }
+.plan-drag-handle { cursor: grab; touch-action: none; }
 </style>
