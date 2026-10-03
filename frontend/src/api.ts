@@ -1,5 +1,6 @@
 import { toRaw } from 'vue';
 import { getAxios } from '@/axios';
+import { encodePath } from '@/encode-path';
 import YAML from 'yaml';
 import type { Status } from '@/task';
 
@@ -259,7 +260,7 @@ export async function getHeadCommitId(): Promise<string> {
 }
 
 export function addNote(path: string, content: string) {
-  return getAxios().put(`/notes/${path}`, {
+  return getAxios().put(`/notes/${encodePath(path)}`, {
     Save: {
       content: content,
       message: `Update ${path}`,
@@ -268,7 +269,7 @@ export function addNote(path: string, content: string) {
 }
 
 export function renameNote(oldPath: string, newPath: string) {
-  return getAxios().put(`/notes/${newPath}`, {
+  return getAxios().put(`/notes/${encodePath(newPath)}`, {
     Rename: {
       from: oldPath,
     },
@@ -276,20 +277,20 @@ export function renameNote(oldPath: string, newPath: string) {
 }
 
 export function getNote(path: string) {
-  return getAxios().get(`/notes/${path}`);
+  return getAxios().get(`/notes/${encodePath(path)}`);
 }
 
 // Whether a path exists, without transferring its content. Used for the rename dialog's
 // conflict check, which runs on every keystroke.
 export async function noteExists(path: string): Promise<boolean> {
-  const res = await getAxios().head(`/v2/files/${path}`, {
+  const res = await getAxios().head(`/v2/files/${encodePath(path)}`, {
     validateStatus: (status) => (status >= 200 && status < 300) || status === 404,
   });
   return res.status !== 404;
 }
 
 export function deleteNote(path: string) {
-  return getAxios().delete(`/notes/${path}`);
+  return getAxios().delete(`/notes/${encodePath(path)}`);
 }
 
 export function uploadFiles(fd: FormData) {

@@ -2,6 +2,7 @@ import YAML from 'yaml';
 
 import { readTaskAlarms } from '@/alarms';
 import { getAxios } from '@/axios';
+import { encodePath } from '@/encode-path';
 import type { UUID } from '@/api';
 import type { Task } from '@/task';
 
@@ -12,7 +13,7 @@ export async function getTask(taskPath: string, eTag?: string): Promise<[string,
     if (eTag) {
         headers['If-None-Match'] = eTag;
     }
-    const res = await getAxios().get(`/v2/files/${taskPath}`, {
+    const res = await getAxios().get(`/v2/files/${encodePath(taskPath)}`, {
         headers: headers,
         validateStatus: (status) => (status >= 200 && status < 300) || status === 304,
     });

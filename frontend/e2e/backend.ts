@@ -64,8 +64,21 @@ export async function mockBackend(context: BrowserContext, notes: Record<string,
             await route.fulfill({ json: TOKEN });
             return;
         }
+        // Whether a path exists, as the rename dialog asks while the path is typed.
+        if (path.startsWith('/api/v2/files/') && request.method() === 'HEAD') {
+            await route.fulfill({ status: files.has(path.slice('/api/v2/files/'.length)) ? 200 : 404 });
+            return;
+        }
         if (path.startsWith('/api/notes/')) {
             const notePath = path.slice('/api/notes/'.length);
+            if (request.method() === 'PUT' && 'Rename' in request.postDataJSON()) {
+                const from = request.postDataJSON().Rename.from as string;
+                files.set(notePath, files.get(from) ?? '');
+                files.delete(from);
+                commit += 1;
+                await route.fulfill({ json: null });
+                return;
+            }
             if (request.method() === 'PUT') {
                 const content = request.postDataJSON().Save.content as string;
                 files.set(notePath, content);

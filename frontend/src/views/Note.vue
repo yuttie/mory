@@ -109,10 +109,10 @@
                             ref="newPathField"
                             label="New path"
                             v-model="newPath"
-                            v-bind:rules="[newPathValidationResult]"
+                            v-bind:error-messages="newPathMessages"
                             v-on:focus="$event.target.select()"
                             v-on:keydown="onNewPathKeydown"
-                            v-on:input="onNewPathInput"
+                            v-on:update:model-value="onNewPathInput"
                         ></v-text-field>
                     </v-card-text>
                     <v-card-actions>
@@ -506,12 +506,15 @@ const needSave = computed((): boolean => {
     }
 });
 
-const newPathValidationResult = computed((): boolean | string => {
-    if (newPathConflicting.value) {
-        return 'Conflicting with existing path';
+// Given as the field's error rather than as a rule: a rule is judged once per keystroke, before the
+// answer for that keystroke has arrived, so the message would always describe the one before. The
+// note's own path is no reason to complain while nothing has been typed.
+const newPathMessages = computed((): string[] => {
+    if (newPathConflicting.value && newPath.value !== notePath.value) {
+        return ['Conflicting with existing path'];
     }
     else {
-        return true;
+        return [];
     }
 });
 
@@ -1042,31 +1045,40 @@ function save() {
 }
 
 function onNewPathKeydown(e: KeyboardEvent) {
-    if (e.key === 'Enter') {
+    // The Rename button is disabled while the path is taken, and Enter has to wait for the same answer.
+    if (e.key === 'Enter' && !newPathConflicting.value) {
         rename();
     }
 }
 
 function onNewPathInput(path: string) {
     files.exists(path).then(taken => {
-        newPathConflicting.value = taken;
+        // The answer for an earlier keystroke can arrive after the one for the path now typed.
+        if (path === newPath.value) {
+            newPathConflicting.value = taken;
+        }
     }).catch(() => {
-            newPathConflicting.value = false;
+            if (path === newPath.value) {
+                newPathConflicting.value = false;
+            }
         });
 }
 
 function rename() {
     const oldPath = notePath.value;
 
-    if (newPath.value !== null && newPath.value !== oldPath) {
+    const renamedTo = newPath.value;
+    if (renamedTo !== null && renamedTo !== oldPath) {
         isRenaming.value = true;
         files.rename(
             oldPath,
-            newPath.value,
+            renamedTo,
         ).then(() => {
                 skipNextPathWatch = true;
+                // Segments rather than a `/note/...` string, which would end the path at a `#` or a `?`.
                 router.replace({
-                    path: `/note/${newPath.value}`,
+                    name: 'Note',
+                    params: { path: renamedTo.split('/') },
                 });
                 isRenaming.value = false;
             }).catch(error => {
