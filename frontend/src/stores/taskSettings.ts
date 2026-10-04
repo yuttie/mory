@@ -11,29 +11,36 @@ export const useTaskSettingsStore = defineStore('task-settings', () => {
     const settings = ref<TaskSettings>({});
     const problems = ref<string[]>([]);
     let loading: Promise<void> | null = null;
-    async function load(): Promise<void> {
+    let requested = false;
+    function load(): Promise<void> {
+        requested = true;
         if (loading) {
             return loading;
         }
-        loading = (async () => {
+        loading = Promise.resolve().then(async () => {
             try {
-                const parsed = readTaskSettings(YAML.parse(await files.read(TASK_SETTINGS_PATH)));
-                settings.value = parsed.settings;
-                problems.value = parsed.problems;
+                // A commit arriving during a read still needs a read of its newer contents.
+                while (requested) {
+                    requested = false;
+                    try {
+                        const parsed = readTaskSettings(YAML.parse(await files.read(TASK_SETTINGS_PATH)));
+                        settings.value = parsed.settings;
+                        problems.value = parsed.problems;
+                    }
+                    catch (error) {
+                        settings.value = {};
+                        problems.value = axios.isAxiosError(error) && error.response?.status === 404 ? [] : [String(error)];
+                    }
+                }
             }
-            catch (error) {
-                settings.value = {};
-                problems.value = axios.isAxiosError(error) && error.response?.status === 404 ? [] : [String(error)];
+            finally {
+                loading = null;
             }
-        })();
-        try {
-            await loading;
-        }
-        finally {
-            loading = null;
-        }
+        });
+        return loading;
     }
-    watch(() => files.entries.find((entry) => entry.path === TASK_SETTINGS_PATH)?.time, () => {
+    // Git timestamps have second precision and cannot identify a settings version.
+    watch(() => files.commitId, () => {
         void load();
     }, { immediate: true });
     return { settings, problems, load };
