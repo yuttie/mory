@@ -1,35 +1,9 @@
-import { toRaw } from 'vue';
+import axios from 'axios';
 import { getAxios } from '@/axios';
 import { encodePath } from '@/encode-path';
 import YAML from 'yaml';
 import type { Status } from '@/task';
 
-// Deep-clone a data tree while unwrapping Vue reactive proxies and preserving shared
-// references (so YAML.stringify can still emit anchors/aliases for shared objects).
-// structuredClone cannot be used directly because it throws on reactive proxies.
-function deepCloneRaw<T>(value: T, seen = new Map<object, unknown>()): T {
-    const raw = (typeof value === 'object' && value !== null ? toRaw(value) : value) as T;
-    if (raw === null || typeof raw !== 'object') {
-        return raw;
-    }
-    if (seen.has(raw)) {
-        return seen.get(raw) as T;
-    }
-    if (Array.isArray(raw)) {
-        const copy: unknown[] = [];
-        seen.set(raw, copy);
-        for (const item of raw) {
-            copy.push(deepCloneRaw(item, seen));
-        }
-        return copy as T;
-    }
-    const copy: Record<string, unknown> = {};
-    seen.set(raw, copy);
-    for (const [key, item] of Object.entries(raw)) {
-        copy[key] = deepCloneRaw(item, seen);
-    }
-    return copy as T;
-}
 
 export type JsonValue =
     | { [k: string]: JsonValue }
@@ -388,14 +362,24 @@ export interface TaskData {
 }
 
 export async function getTaskData(eTag?: string): Promise<[string, TaskData | null]> {
-    const headers = {};
+    const headers: Record<string, string> = {};
     if (eTag) {
         headers['If-None-Match'] = eTag;
     }
-    const res = await getAxios().get(`/v2/files/.mory/tasks.yaml`, {
+    const request = (path: string) => getAxios().get(`/v2/files/${path}`, {
         headers: headers,
         validateStatus: (status) => (status >= 200 && status < 300) || status === 304,
     });
+    let res;
+    try {
+        res = await request(TASK_DATA_PATH);
+    }
+    catch (error) {
+        if (!axios.isAxiosError(error) || error.response?.status !== 404) {
+            throw error;
+        }
+        res = await request('.mory/tasks.yaml');
+    }
     if (res.status === 304) {
         return [res.headers.etag, null];
     }
@@ -412,100 +396,8 @@ export async function getTaskData(eTag?: string): Promise<[string, TaskData | nu
     }
 }
 
-export const TASK_DATA_PATH = '.mory/tasks.yaml';
+export const TASK_DATA_PATH = '.mory/tasks-v1.yaml';
 
-// Serializes task data to the YAML stored at `TASK_DATA_PATH`. Writing it is a file
-// mutation, so it goes through the files store rather than straight to the API — that is
-// what keeps the cached listing from surviving the commit this write produces.
-export function serializeTaskData(data: TaskData): string {
-    // Clean up
-    data = deepCloneRaw(data);
-    for (const task of data.tasks.backlog) {
-        for (const [prop, value] of Object.entries(task)) {
-            if (value === null) {
-                delete task[prop];
-            }
-        }
-    }
-    for (const [date, dailyTasks] of Object.entries(data.tasks.scheduled)) {
-        if ((dailyTasks as Task[]).length === 0) {
-            delete data.tasks.scheduled[date];
-        }
-        for (const task of dailyTasks) {
-            for (const [prop, value] of Object.entries(task)) {
-                if (value === null) {
-                    delete task[prop];
-                }
-            }
-        }
-    }
-
-    // Serialize
-    const datePattern = /\d{4}-\d{2}-\d{2}/;
-    const taskPropertyOrder: { [key: string]: number } = {
-        id: 0,
-        name: 1,
-        deadline: 2,
-        schedule: 3,
-        done: 4,
-        tags: 5,
-        note: 6,
-    };
-    const groupPropertyOrder: { [key: string]: number } = {
-        name: 0,
-        filter: 1,
-    };
-    const yaml = YAML.stringify(data, {
-        sortMapEntries: (a, b) => {
-            if (datePattern.test(a.key.value) && datePattern.test(b.key.value)) {
-                if (a.key.value < b.key.value) {
-                    return 1;
-                }
-                else if (a.key.value > b.key.value) {
-                    return -1;
-                }
-                else {
-                    return 0;
-                }
-            }
-            else if (a.key.value in taskPropertyOrder && b.key.value in taskPropertyOrder) {
-                if (taskPropertyOrder[a.key.value] < taskPropertyOrder[b.key.value]) {
-                    return -1;
-                }
-                else if (taskPropertyOrder[a.key.value] > taskPropertyOrder[b.key.value]) {
-                    return 1;
-                }
-                else {
-                    return 0;
-                }
-            }
-            else if (a.key.value in groupPropertyOrder && b.key.value in groupPropertyOrder) {
-                if (groupPropertyOrder[a.key.value] < groupPropertyOrder[b.key.value]) {
-                    return -1;
-                }
-                else if (groupPropertyOrder[a.key.value] > groupPropertyOrder[b.key.value]) {
-                    return 1;
-                }
-                else {
-                    return 0;
-                }
-            }
-            else {
-                if (a.key.value < b.key.value) {
-                    return -1;
-                }
-                else if (a.key.value > b.key.value) {
-                    return 1;
-                }
-                else {
-                    return 0;
-                }
-            }
-        },
-    });
-
-    return yaml;
-}
 
 export interface TaskAssessmentResponse {
     quality_score: number;
