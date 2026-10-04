@@ -153,7 +153,8 @@
                     <v-alert v-if="!derivedUrgency.actionable" type="info" class="mb-3">Not yet actionable</v-alert>
                     <!-- Start date -->
                     <DateSelector
-                        v-model="form.available_from"
+                        v-bind:model-value="form.available_from"
+                        v-on:update:model-value="form.available_from = $event ?? ''"
                         v-bind:rules="[() => taskDateRule(form.available_from)]"
                         label="Available from"
                     >
@@ -163,7 +164,8 @@
                     </DateSelector>
                     <!-- Due date -->
                     <DateSelector
-                        v-model="form.due_by"
+                        v-bind:model-value="form.due_by"
+                        v-on:update:model-value="form.due_by = $event ?? ''"
                         v-bind:rules="[() => taskDateRule(form.due_by)]"
                         label="Due date (soft target)"
                     >
@@ -178,7 +180,8 @@
                     ></InheritableAlarms>
                     <!-- Deadline -->
                     <DateSelector
-                        v-model="form.deadline"
+                        v-bind:model-value="form.deadline"
+                        v-on:update:model-value="form.deadline = $event ?? ''"
                         v-bind:rules="[() => taskDateRule(form.deadline)]"
                         label="Deadline (hard cutoff)"
                     >
