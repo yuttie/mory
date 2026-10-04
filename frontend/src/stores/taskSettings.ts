@@ -35,6 +35,6 @@ export const useTaskSettingsStore = defineStore('task-settings', () => {
     }
     watch(() => files.entries.find((entry) => entry.path === TASK_SETTINGS_PATH)?.time, () => {
         void load();
-    });
+    }, { immediate: true });
     return { settings, problems, load };
 });

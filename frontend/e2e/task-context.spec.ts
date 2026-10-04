@@ -33,3 +33,17 @@ test('uses consistent date instants and lead-time colors in the task lists and H
     await expect(home.locator('.task-item', { hasText: 'Timed deadline' }).locator('.task-date-cue')).toContainText('Deadline 2 hours ago');
     await expect(home.locator('.task-item', { hasText: 'Long lead' }).locator('.task-date-cue')).toHaveClass(/text-warning/);
 });
+
+test('loads lead-time defaults when navigating to Home with an existing listing', async ({ context, page }) => {
+    await page.clock.setFixedTime(new Date('2026-10-04T03:00:00Z'));
+    await mockBackend(context, {
+        [`.tasks/${A}.md`]: note('Configured lead', '    deadline: 2026-10-24\n'),
+        '.mory/tasks.yaml': 'default_lead_time: 30d\n',
+    });
+    const listed = page.waitForResponse((response) => response.url().includes('/v2/entries') && response.status() === 200);
+    await page.goto('/files');
+    await listed;
+    await page.getByRole('link', { name: 'Home', exact: true }).click();
+    const cue = page.locator('.tasks-section .task-item', { hasText: 'Configured lead' }).locator('.task-date-cue');
+    await expect(cue).toHaveClass(/text-warning/);
+});
