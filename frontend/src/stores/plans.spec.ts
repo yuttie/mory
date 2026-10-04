@@ -71,6 +71,16 @@ describe('monthly plan store', () => {
         await expect(store.loadMonths(['../../bad'])).rejects.toThrow();
         expect(files.writeChecked).not.toHaveBeenCalled();
     });
+    it('inserts a dropped task at its day position in one write and preserves existing work records', async () => {
+        const store = usePlansStore();
+        await store.planTask('2026-10-05', A, 'interruption');
+        const before = files.writeChecked.mock.calls.length;
+        await store.planTask('2026-10-05', B, 'planned', 0);
+        expect(files.writeChecked).toHaveBeenCalledTimes(before + 1);
+        expect(store.days['2026-10-05']).toEqual([{ task: B, origin: 'planned' }, { task: A, origin: 'interruption', result: 'worked' }]);
+        await store.planTask('2026-10-05', A, 'planned', 0);
+        expect(store.days['2026-10-05']).toEqual([{ task: B, origin: 'planned' }, { task: A, origin: 'interruption', result: 'worked' }]);
+    });
     it('reloads a concurrent edit after a rejected version check', async () => {
         const store = usePlansStore();
         await store.planTask('2026-10-05', A);

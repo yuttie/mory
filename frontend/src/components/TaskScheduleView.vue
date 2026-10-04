@@ -1,5 +1,8 @@
 <template>
-    <div class="planning-view d-flex flex-column">
+    <div
+        class="planning-view d-flex flex-column"
+        v-bind:class="{ dragging: draggedFrom !== null }"
+    >
         <v-toolbar
             density="compact"
             color="transparent"
@@ -46,37 +49,37 @@
             {{ month }}: {{ problem }}
         </v-alert>
         <div class="day-columns">
-            <v-card class="day candidates">
+            <v-card
+                class="day candidates"
+                v-bind:class="{ origin: draggedFrom === 'candidates' }"
+            >
                 <v-card-title>Candidate tasks</v-card-title>
                 <v-card-subtitle>Drag onto a day to plan work</v-card-subtitle>
                 <draggable
                     v-bind:model-value="candidates"
                     item-key="uuid"
-                    handle=".plan-drag-handle"
                     v-bind:group="CANDIDATE_GROUP"
                     v-bind:clone="cloneTask"
                     v-bind:sort="false"
                     v-bind:disabled="busy"
                     v-bind:force-fallback="true"
                     v-bind:fallback-on-body="true"
-                    v-bind:delay="200"
+                    v-bind:delay="500"
                     v-bind:delay-on-touch-only="true"
+                    v-on:start="draggedFrom = 'candidates'"
+                    v-on:end="draggedFrom = null"
+                    v-on:clone="onClone"
                 >
                     <template #item="{ element: task }">
-                        <div class="candidate">
-                            <div class="d-flex align-center">
-                                <span
-                                    class="plan-drag-handle"
-                                    title="Drag onto a day"
-                                ><v-icon v-bind:icon="mdiDragVertical" /></span>
-                                <TaskListItemNext
-                                    draggable="false"
-                                    v-bind:value="task"
-                                    v-bind:to="routeFor(task)"
-                                    v-bind:list-root="listRoot"
-                                />
-                            </div>
-                        </div>
+                        <TaskListItemNext
+                            class="candidate"
+                            draggable="false"
+                            v-bind:value="task"
+                            v-bind:to="routeFor(task)"
+                            v-bind:list-root="listRoot"
+                            v-on:pointerdown="onPointerDown"
+                            v-on:contextmenu="onContextMenu"
+                        />
                     </template>
                 </draggable>
             </v-card>
@@ -84,7 +87,7 @@
                 v-for="date of dates"
                 v-bind:key="date"
                 class="day"
-                v-bind:class="{ today: date === dayjs().format('YYYY-MM-DD') }"
+                v-bind:class="{ today: date === dayjs().format('YYYY-MM-DD'), origin: draggedFrom === date }"
             >
                 <v-card-title>{{ date }}<small class="ml-2">{{ dayjs(date).format('ddd') }}</small></v-card-title>
                 <v-btn
@@ -97,6 +100,8 @@
                 </v-btn>
                 <draggable
                     class="entries"
+                    filter="button, input, .v-selection-control"
+                    v-bind:prevent-on-filter="false"
                     v-bind:model-value="plans.days[date] ?? []"
                     item-key="task"
                     v-bind:group="DAY_GROUP"
@@ -104,14 +109,20 @@
                     v-bind:disabled="busy"
                     v-bind:force-fallback="true"
                     v-bind:fallback-on-body="true"
-                    v-bind:delay="200"
+                    v-bind:delay="500"
                     v-bind:delay-on-touch-only="true"
-                    v-on:update:model-value="replaceDay(date, $event)"
+                    v-on:start="draggedFrom = date"
+                    v-on:end="draggedFrom = null"
+                    v-on:clone="onClone"
+                    v-on:change="onDayChange(date, $event)"
                 >
                     <template #item="{ element: entry }">
                         <div
                             class="planned-entry pa-2"
+                            draggable="false"
                             v-bind:class="{ 'text-disabled': !taskOf(entry.task) || !tasks.ownUrgency(taskOf(entry.task)?.uuid ?? entry.task).actionable }"
+                            v-on:pointerdown="onPointerDown"
+                            v-on:contextmenu="onContextMenu"
                         >
                             <div class="d-flex align-center">
                                 <v-checkbox-btn
@@ -205,7 +216,6 @@ import { computed, ref, watch, onMounted } from 'vue';
 import type { RouteLocationRaw } from 'vue-router';
 import dayjs from 'dayjs';
 import draggable from 'vuedraggable';
-import { mdiDragVertical } from '@mdi/js';
 import type { TaskNode } from '@/task-forest';
 import { makeDefaultStatus } from '@/task';
 import { readImportance, isUrgent } from '@/urgency';
@@ -226,6 +236,7 @@ const week = ref(dayjs().startOf('day'));
 const dates = computed(() => Array.from({ length: 7 }, (_, index) => week.value.add(index, 'day').format('YYYY-MM-DD')));
 const busy = ref(false);
 const error = ref('');
+const draggedFrom = ref<string | null>(null);
 const interruptionDate = ref<string | null>(null);
 const interruptionTask = ref<string | null>(null);
 const taskOf = (uuid: string) => tasks.allTasks.find((task) => task.uuid.toLowerCase() === uuid.toLowerCase());
@@ -240,6 +251,19 @@ function quadrant(task: TaskNode): number {
 const candidates = computed(() => props.candidates.filter((task) => tasks.ownUrgency(task.uuid).actionable && !['done', 'canceled'].includes(task.metadata?.task?.status?.kind ?? '')).sort((a, b) => quadrant(a) - quadrant(b) || (tasks.urgency(a.uuid).slack_ratio ?? Infinity) - (tasks.urgency(b.uuid).slack_ratio ?? Infinity) || a.uuid.localeCompare(b.uuid)));
 const cloneTask = (task: TaskNode): PlanEntry => ({ task: task.uuid.toLowerCase(), origin: 'planned' });
 const cloneEntry = (entry: PlanEntry): PlanEntry => ({ task: entry.task, origin: 'planned' });
+// Match the Status view: touch picks up the whole row without opening the link's menu.
+let pressedWith = '';
+function onPointerDown(event: PointerEvent): void {
+    pressedWith = event.pointerType;
+}
+function onContextMenu(event: MouseEvent): void {
+    if (pressedWith === 'touch') {
+        event.preventDefault();
+    }
+}
+function onClone(event: { clone: HTMLElement }): void {
+    event.clone.classList.add('vacated');
+}
 async function run(operation: () => Promise<void>): Promise<void> {
     if (busy.value) {
         return;
@@ -256,16 +280,25 @@ async function run(operation: () => Promise<void>): Promise<void> {
         busy.value = false;
     }
 }
-function replaceDay(date: string, entries: PlanEntry[]): void {
+function onDayChange(date: string, event: { added?: { element: PlanEntry; newIndex: number }; moved?: { element: PlanEntry; newIndex: number } }): void {
     void run(async () => {
-        const unique = [...new Map(entries.map((entry) => [entry.task, entry])).values()];
-        const existing = plans.days[date] ?? [];
-        for (const entry of unique) {
-            if (!existing.some((item) => item.task === entry.task)) {
-                await plans.planTask(date, entry.task);
+        // As in Status, only the destination handles a cloned drop. A day also owns its order.
+        if (event.added) {
+            const { element, newIndex } = event.added;
+            if (!(plans.days[date] ?? []).some((entry) => entry.task === element.task)) {
+                await plans.planTask(date, element.task, 'planned', newIndex);
             }
         }
-        await plans.reorder(date, unique.map((entry) => entry.task));
+        else if (event.moved) {
+            const ordered = (plans.days[date] ?? []).map((entry) => entry.task);
+            const current = ordered.indexOf(event.moved.element.task);
+            if (current === -1) {
+                throw new Error('The plan changed during reordering. Reload and retry.');
+            }
+            const [uuid] = ordered.splice(current, 1);
+            ordered.splice(event.moved.newIndex, 0, uuid);
+            await plans.reorder(date, ordered);
+        }
     });
 }
 async function complete(date: string, uuid: string): Promise<void> {
@@ -306,5 +339,31 @@ onMounted(() => { void plans.loadAll().catch((failure) => { error.value = String
 .today { border: 2px solid rgb(var(--v-theme-primary)); }
 .planned-entry { border-top: 1px solid rgba(128, 128, 128, .3); }
 .planned-entry a { color: inherit; }
-.plan-drag-handle { cursor: grab; touch-action: none; }
+.planning-view :deep(:is(.task-list-item, .planned-entry)) {
+    -webkit-touch-callout: none;
+}
+.planning-view :deep(.sortable-chosen) {
+    background: none;
+}
+.planning-view :deep(:is(.sortable-ghost, .vacated)) {
+    visibility: hidden;
+}
+/* Keep an ordered day slot open, while marking the destination as in Status. */
+.dragging .day:not(.candidates):has(.sortable-ghost) {
+    outline: 2px solid rgb(var(--v-theme-primary));
+}
+.dragging :deep(:is(.task-list-item, .planned-entry)) {
+    cursor: inherit;
+}
+.dragging :deep(:is(.task-list-item, .planned-entry):hover) {
+    background: none;
+}
+.dragging :deep(:is(.task-list-item, .planned-entry) *) {
+    pointer-events: none;
+}
+/* Sortable mounts this copy on the body, outside the planning view. */
+.planned-entry.sortable-drag {
+    background: rgb(var(--v-theme-surface));
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
 </style>

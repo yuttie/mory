@@ -26,9 +26,8 @@ test('plans by dragging, records effort and interruptions, collects history and 
     const today = planner.locator('.day.today');
     const candidate = planner.locator('.candidate').filter({ hasText: 'Alpha' });
     await expect(candidate).toBeVisible();
-    const handle = candidate.locator('.plan-drag-handle');
-    await handle.click({ trial: true });
-    const box = await handle.boundingBox();
+    await candidate.click({ trial: true });
+    const box = await candidate.boundingBox();
     if (!box) {
         throw new Error('Candidate is not drawn');
     }
@@ -41,9 +40,13 @@ test('plans by dragging, records effort and interruptions, collects history and 
     await page.mouse.move(box.x + box.width, box.y + box.height, { steps: 5 });
     await expect(page.locator('.sortable-fallback')).toBeVisible();
     await page.mouse.move(target.x + 100, target.y + 60, { steps: 20 });
-    await expect(today.locator('.sortable-ghost')).toBeVisible();
+    await expect(today).toHaveCSS('outline-style', 'solid');
+    await expect(planner.locator('.candidates .vacated')).toHaveCSS('visibility', 'hidden');
     await page.mouse.up();
     await expect(today.locator('.planned-entry')).toContainText('Alpha');
+    await expect(planner.getByRole('button', { name: 'Collect undone' })).toBeEnabled();
+    expect(repository.writes.filter((write) => write.path === '.mory/plans/2026-10.yaml')).toHaveLength(1);
+    await expect(planner).not.toContainText('changed elsewhere');
     await today.locator('.planned-entry').getByRole('checkbox').check();
     await expect(today.locator('.planned-entry')).toContainText('worked');
     await today.getByRole('button', { name: 'Record interruption' }).click();
@@ -63,6 +66,95 @@ test('plans by dragging, records effort and interruptions, collects history and 
     const october = repository.writes.filter((write) => write.path === '.mory/plans/2026-10.yaml').at(-1);
     expect(YAML.parse(october!.content)['2026-10-04']).toEqual([{ task: A, origin: 'planned', result: 'worked' }, { task: B, origin: 'interruption', result: 'worked' }]);
     expect(failures).toEqual([]);
+});
+
+test('orders day entries and copies work to another day without losing its history', async ({ context, page }) => {
+    await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
+    const repository = await mockBackend(context, {
+        [`.tasks/${A}.md`]: task('Alpha'),
+        [`.tasks/${B}.md`]: task('Beta'),
+        '.mory/plans/2026-10.yaml': `2026-10-04:\n    - task: ${A}\n      origin: interruption\n      result: worked\n    - task: ${B}\n      origin: planned\n`,
+    });
+    await page.goto('/tasks-next/_/descendants/schedule');
+    const planner = page.locator('.planning-view');
+    const today = planner.locator('.day.today');
+    const alpha = today.locator('.planned-entry', { hasText: 'Alpha' });
+    const beta = today.locator('.planned-entry', { hasText: 'Beta' });
+    await expect(planner.getByRole('button', { name: 'Collect undone' })).toBeEnabled();
+    // Pick up the task's title, just as in Status; buttons and the effort checkbox stay clickable.
+    await beta.getByRole('link').click({ trial: true });
+    const source = await beta.getByRole('link').boundingBox();
+    const target = await alpha.boundingBox();
+    if (!source || !target) {
+        throw new Error('Plan entries are not drawn');
+    }
+    await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(source.x + source.width / 2 + 20, source.y + source.height / 2 + 20, { steps: 5 });
+    await expect(page.locator('.sortable-fallback')).toBeVisible();
+    await page.mouse.move(target.x + 100, target.y + 10, { steps: 20 });
+    await expect(today.locator('.planned-entry').first()).toContainText('Beta');
+    await page.mouse.up();
+    await expect.poll(() => repository.writes.length).toBe(1);
+    expect(YAML.parse(repository.writes[0].content)['2026-10-04']).toEqual([
+        { task: B, origin: 'planned' }, { task: A, origin: 'interruption', result: 'worked' },
+    ]);
+
+    const tomorrow = planner.locator('.day').filter({ has: page.locator('.v-card-title', { hasText: '2026-10-05' }) });
+    await alpha.getByRole('link').click({ trial: true });
+    const nextSource = await alpha.getByRole('link').boundingBox();
+    const destination = await tomorrow.locator('.entries').boundingBox();
+    if (!nextSource || !destination) {
+        throw new Error('Plan drop area is not drawn');
+    }
+    await page.mouse.move(nextSource.x + nextSource.width / 2, nextSource.y + nextSource.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(nextSource.x + nextSource.width / 2 + 20, nextSource.y + nextSource.height / 2 + 20, { steps: 5 });
+    await expect(page.locator('.sortable-fallback')).toBeVisible();
+    await page.mouse.move(destination.x + 100, destination.y + 60, { steps: 20 });
+    await expect(tomorrow).toHaveCSS('outline-style', 'solid');
+    await page.mouse.up();
+    await expect.poll(() => repository.writes.length).toBe(2);
+    expect(YAML.parse(repository.writes[1].content)).toEqual({
+        '2026-10-04': [{ task: B, origin: 'planned' }, { task: A, origin: 'interruption', result: 'worked' }],
+        '2026-10-05': [{ task: A, origin: 'planned' }],
+    });
+    await expect(planner).not.toContainText('changed elsewhere');
+});
+
+test.describe('touch planning', () => {
+    test.use({ hasTouch: true, viewport: { width: 1100, height: 900 } });
+
+    test('picks up the task row with the Status view long press', async ({ browserName, context, page }) => {
+        test.skip(browserName !== 'chromium', 'CDP supplies real touch movement in Chromium.');
+        await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
+        const repository = await mockBackend(context, { [`.tasks/${A}.md`]: task('Alpha') });
+        await page.goto('/tasks-next/_/descendants/schedule');
+        const planner = page.locator('.planning-view');
+        const candidate = planner.locator('.candidate', { hasText: 'Alpha' });
+        await candidate.click({ trial: true });
+        const source = await candidate.boundingBox();
+        const target = await planner.locator('.day.today .entries').boundingBox();
+        if (!source || !target) {
+            throw new Error('Touch drop area is not drawn');
+        }
+        const client = await context.newCDPSession(page);
+        const start = { x: source.x + source.width / 2, y: source.y + source.height / 2 };
+        await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [start] });
+        // A short press remains a tap; only a long press starts Status-style dragging.
+        await page.waitForTimeout(200);
+        await expect(page.locator('.sortable-fallback')).toHaveCount(0);
+        const prevented = await candidate.evaluate((element) => !element.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })));
+        expect(prevented).toBe(true);
+        await page.waitForTimeout(400);
+        await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: start.x + 20, y: start.y + 20 }] });
+        await expect(page.locator('.sortable-fallback')).toBeVisible();
+        await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: target.x + 100, y: target.y + 60 }] });
+        await expect(planner.locator('.day.today')).toHaveCSS('outline-style', 'solid');
+        await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        await expect.poll(() => repository.writes.length).toBe(1);
+        expect(YAML.parse(repository.writes[0].content)['2026-10-04']).toEqual([{ task: A, origin: 'planned' }]);
+    });
 });
 
 test('shows an unknown task as removable history', async ({ context, page }) => {

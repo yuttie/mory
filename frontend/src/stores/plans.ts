@@ -91,11 +91,20 @@ export const usePlansStore = defineStore('plans', () => {
             await saveMonth(month, next);
         });
     }
-    function planTask(date: string, uuid: string, origin: PlanOrigin = 'planned'): Promise<void> {
+    function planTask(date: string, uuid: string, origin: PlanOrigin = 'planned', position?: number): Promise<void> {
         if (!PLAN_UUID.test(uuid)) {
             return Promise.reject(new Error('A task reference must be a UUIDv4.'));
         }
-        return change(date, (plan) => putPlanEntry(plan, date, uuid.toLowerCase(), origin));
+        return change(date, (plan) => {
+            const id = uuid.toLowerCase();
+            const exists = plan[date]?.some((entry) => entry.task === id);
+            putPlanEntry(plan, date, id, origin);
+            if (!exists && position !== undefined) {
+                const entries = plan[date];
+                const entry = entries.pop()!;
+                entries.splice(position, 0, entry);
+            }
+        });
     }
     function recordResult(date: string, uuid: string, result?: PlanResult): Promise<void> {
         return change(date, (plan) => {
