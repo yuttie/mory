@@ -62,10 +62,13 @@ async function moveOver(page: Page, target: Locator, at: 'middle' | 'bottom' = '
 const LIFT = 20;
 
 async function startDrag(page: Page, item: Locator): Promise<void> {
+    // Coordinate events need the same readiness check that locator clicks perform.
+    await item.click({ trial: true });
     const { x, y, width, height } = await box(item);
     await page.mouse.move(x + width / 2, y + height / 2);
     await page.mouse.down();
     await page.mouse.move(x + width / 2 + LIFT, y + height / 2 + LIFT, { steps: 5 });
+    await expect(page.locator('.sortable-fallback')).toBeVisible();
 }
 
 // Measures the target only once the drag is under way: an empty column has no height to drop into
