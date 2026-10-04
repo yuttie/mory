@@ -202,12 +202,7 @@
                                     <div class="task-name" v-bind:class="{ 'text-decoration-line-through': task.metadata?.task?.status?.kind === 'done' }">
                                         {{ task.title }}
                                     </div>
-                                    <div v-if="task.metadata?.task?.due_by" class="task-due-by text-medium-emphasis text-caption">
-                                        Due by: {{ task.metadata?.task?.due_by }}
-                                    </div>
-                                    <div v-if="task.metadata?.task?.deadline" class="task-deadline text-medium-emphasis text-caption">
-                                        Deadline: {{ task.metadata?.task?.deadline }}
-                                    </div>
+                                    <TaskDateCues v-bind:value="task" v-bind:fields="['due_by', 'deadline']" stacked class="text-caption" />
                                 </div>
                             </div>
                         </div>
@@ -235,12 +230,7 @@
                                     <div class="task-name" v-bind:class="{ 'text-decoration-line-through': task.metadata?.task?.status?.kind === 'done' }">
                                         {{ task.title }}
                                     </div>
-                                    <div v-if="task.metadata?.task?.due_by" class="task-due-by text-caption" v-bind:class="getDeadlineClass(task.metadata?.task?.due_by)">
-                                        Due by: {{ task.metadata?.task?.due_by }}
-                                    </div>
-                                    <div v-if="task.metadata?.task?.deadline" class="task-deadline text-caption" v-bind:class="getDeadlineClass(task.metadata?.task?.deadline)">
-                                        Deadline: {{ task.metadata?.task?.deadline }}
-                                    </div>
+                                    <TaskDateCues v-bind:value="task" v-bind:fields="['due_by', 'deadline']" stacked class="text-caption" />
                                 </div>
                             </div>
                         </div>
@@ -305,6 +295,7 @@
 
 <script lang="ts" setup>
 import { nowLocal } from '@/time';
+import TaskDateCues from '@/components/TaskDateCues.vue';
 import { usePlansStore } from '@/stores/plans';
 import { ref, computed, watch, onMounted } from 'vue';
 import type { Ref } from 'vue';
@@ -804,21 +795,7 @@ function formatEventTime(event: { start: string; end?: string }) {
     }
 }
 
-function getDeadlineClass(deadline: string | undefined) {
-    if (!deadline) return 'text-medium-emphasis';
 
-    const deadlineDate = dayjs(deadline);
-    const now = dayjs();
-    const diffDays = deadlineDate.diff(now, 'days');
-
-    if (diffDays < 0) {
-        return 'text-error';
-    } else if (diffDays <= 3) {
-        return 'text-warning';
-    } else {
-        return 'text-medium-emphasis';
-    }
-}
 
 function sortByTitle(entries: ListEntry2[], descending: boolean = false) {
     if (descending) {
