@@ -360,6 +360,7 @@ onMounted(() => { void plans.loadAll().catch((failure) => { error.value = String
 .entries { flex: 1; min-height: 140px; }
 .today { border: 2px solid rgb(var(--v-theme-primary)); }
 .planned-entry { border-top: 1px solid rgba(128, 128, 128, .3); }
+.planned-entry:hover { background: #eeeeee; }
 .planned-entry a { color: inherit; }
 .planning-view :deep(:is(.task-list-item, .planned-entry)) {
     -webkit-touch-callout: none;
