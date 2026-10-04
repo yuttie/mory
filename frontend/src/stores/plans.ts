@@ -70,7 +70,7 @@ export const usePlansStore = defineStore('plans', () => {
         catch (error) {
             if (axios.isAxiosError(error) && error.response?.status === 412) {
                 await readMonth(month);
-                throw new Error('This plan changed elsewhere. It has been reloaded; retry your change.');
+                throw new Error('This plan changed elsewhere. It has been reloaded; retry your change.', { cause: error });
             }
             throw error;
         }
