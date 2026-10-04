@@ -143,9 +143,16 @@
                         v-bind:known-contacts="knownContacts"
                         class="ml-10"
                     />
-                    <v-progress-linear v-if="derivedProgress !== undefined" v-bind:model-value="derivedProgress" height="20">
-                        <strong>{{ Math.round(derivedProgress) }}% of leaves done</strong>
-                    </v-progress-linear>
+                    <div v-if="derivedProgress !== undefined" class="progress-row mb-5">
+                        <v-icon>{{ mdiPercent }}</v-icon>
+                        <v-progress-linear
+                            v-bind:model-value="derivedProgress"
+                            color="green"
+                            height="20"
+                        >
+                            <strong>{{ Math.round(derivedProgress) }}% of leaves done</strong>
+                        </v-progress-linear>
+                    </div>
                     <v-select
                         v-model="form.importance"
                         v-bind:items="['low', 'medium', 'high']"
@@ -353,6 +360,7 @@ import {
     mdiNoteTextOutline,
     mdiPencil,
     mdiPencilBoxOutline,
+    mdiPercent,
     mdiPlus,
     mdiTagMultipleOutline,
     mdiTimerSand,
@@ -827,6 +835,22 @@ defineExpose({
 .controls {
     display: flex;
     flex-direction: row;
+}
+
+// Laid out like a field's prepend slot, so the icon lines up with those of the fields around it.
+.progress-row {
+    display: flex;
+    align-items: center;
+    column-gap: 16px;
+
+    > .v-icon {
+        opacity: var(--v-medium-emphasis-opacity);
+    }
+
+    .v-progress-linear {
+        flex: 1 1 0;
+        min-width: 0;
+    }
 }
 
 // The widths are of the content, with the pane's padding added outside them. Vuetify's reset has
