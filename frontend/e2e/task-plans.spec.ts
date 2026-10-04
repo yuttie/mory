@@ -8,6 +8,33 @@ const B = uuid(2);
 const C = uuid(3);
 const task = (title: string, fields = '') => `---\ncreated_at: 2026-10-01 10:00:00+09:00\ntask:\n    status: {kind: todo}\n    importance: medium\n${fields}tags: [work]\n---\n\n# ${title}\n`;
 
+for (const width of [390, 600, 1000, 1600]) {
+    test(`keeps week controls reachable and scrolls the days at ${width}px`, async ({ context, page }) => {
+        await page.setViewportSize({ width, height: 900 });
+        await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
+        const repository = await mockBackend(context, {
+            [`.tasks/${A}.md`]: task('Alpha'),
+            '.mory/plans/2026-09.yaml': `2026-09-30:\n    - task: ${A}\n      origin: planned\n`,
+        });
+        await page.goto('/tasks-next/_/descendants/schedule');
+        const planner = page.locator('.planning-view');
+        const collect = planner.getByRole('button', { name: 'Collect undone' });
+        await expect(collect).toBeEnabled();
+        const bounds = await planner.boundingBox();
+        const control = await collect.boundingBox();
+        expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+        expect(control!.x + control!.width).toBeLessThanOrEqual(bounds!.x + bounds!.width);
+        await collect.click();
+        await expect.poll(() => repository.writes.some((write) => write.path === '.mory/plans/2026-09.yaml' && write.content.includes('missed'))).toBe(true);
+        const lastDay = planner.locator('.day').last();
+        await lastDay.getByRole('button', { name: 'Record interruption' }).click();
+        await expect(page.getByRole('dialog')).toBeVisible();
+        await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+        await planner.getByRole('button', { name: 'Next', exact: true }).click();
+        await expect(planner.locator('.week-range')).toContainText('2026-10-11');
+    });
+}
+
 test('plans by dragging, records effort and interruptions, collects history and completes the note', async ({ context, page }) => {
     await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
     const repository = await mockBackend(context, {

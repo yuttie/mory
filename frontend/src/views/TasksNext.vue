@@ -953,6 +953,7 @@ async function load(primed = false) {
 
 .item-view {
     flex: 1 1 0;
+    min-width: 0;
 }
 
 /* Mobile responsive adjustments for item view */

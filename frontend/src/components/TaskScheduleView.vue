@@ -3,36 +3,39 @@
         class="planning-view d-flex flex-column"
         v-bind:class="{ dragging: draggedFrom !== null }"
     >
-        <v-toolbar
-            density="compact"
-            color="transparent"
+        <div
+            class="planning-toolbar"
+            role="toolbar"
+            aria-label="Week planning"
         >
-            <v-btn
-                v-bind:disabled="busy"
-                v-on:click="week = week.subtract(7, 'day')"
-            >
-                Previous
-            </v-btn>
-            <v-btn
-                v-bind:disabled="busy"
-                v-on:click="week = dayjs().startOf('day')"
-            >
-                Today
-            </v-btn>
-            <v-btn
-                v-bind:disabled="busy"
-                v-on:click="week = week.add(7, 'day')"
-            >
-                Next
-            </v-btn>
-            <v-toolbar-title>{{ dates[0] }} – {{ dates[6] }}</v-toolbar-title>
+            <div class="week-navigation">
+                <v-btn
+                    v-bind:disabled="busy"
+                    v-on:click="week = week.subtract(7, 'day')"
+                >
+                    Previous
+                </v-btn>
+                <v-btn
+                    v-bind:disabled="busy"
+                    v-on:click="week = dayjs().startOf('day')"
+                >
+                    Today
+                </v-btn>
+                <v-btn
+                    v-bind:disabled="busy"
+                    v-on:click="week = week.add(7, 'day')"
+                >
+                    Next
+                </v-btn>
+            </div>
+            <div class="week-range">{{ dates[0] }} – {{ dates[6] }}</div>
             <v-btn
                 v-bind:disabled="busy"
                 v-on:click="run(collect)"
             >
                 Collect undone
             </v-btn>
-        </v-toolbar>
+        </div>
         <v-alert
             v-if="error"
             type="error"
@@ -360,8 +363,11 @@ onMounted(() => { void plans.loadAll().catch((failure) => { error.value = String
 </script>
 
 <style scoped>
-.planning-view { height: 100%; min-height: 0; }
-.day-columns { display: flex; flex: 1; min-height: 0; gap: 12px; padding: 12px; overflow: auto; }
+.planning-view { flex: 1 1 0; min-width: 0; min-height: 0; }
+.planning-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px; }
+.week-navigation { display: flex; }
+.week-range { flex: 1 0 auto; font-size: 1.1rem; }
+.day-columns { display: flex; flex: 1; min-width: 0; min-height: 0; gap: 12px; padding: 12px; overflow: auto; }
 .day { display: flex; flex-direction: column; min-width: 250px; width: 250px; flex-shrink: 0; overflow-y: auto; }
 .candidates { width: 290px; }
 .entries { flex: 1; min-height: 140px; }
