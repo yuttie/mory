@@ -151,7 +151,15 @@ describe('the derived forest', () => {
     for (const fixture of hierarchyFixtures) {
         it(`matches shared hierarchy: ${fixture.name}`, async () => {
             const mod = await load();
-            apiMocks.getEntries.mockResolvedValue({ kind: 'full', commit: 'hierarchy', head: 'hierarchy', entries: fixture.entries.map((item) => ({ ...entry({ path: item.path }), metadata: item.metadata })) });
+            apiMocks.getEntries.mockResolvedValue({
+                kind: 'full',
+                commit: 'hierarchy',
+                head: 'hierarchy',
+                entries: fixture.entries.map((item) => ({
+                    ...entry({ path: item.path }),
+                    metadata: item.metadata ? { tags: [], ...item.metadata } : null,
+                })),
+            });
             const store = mod.useTasksStore();
             await store.init();
             store.now = Date.parse('2026-10-04T00:00:00Z');
