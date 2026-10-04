@@ -78,9 +78,17 @@
                 <div class="editor-overview">
                     <v-chip
                         size="small"
-                        class="urgency-summary"
+                        class="overview-chip"
                     >
                         Urgency: {{ URGENCY_LABEL[derivedUrgency.level] }}
+                    </v-chip>
+                    <v-chip
+                        v-if="!derivedUrgency.actionable"
+                        size="small"
+                        color="info"
+                        class="overview-chip"
+                    >
+                        Not yet actionable
                     </v-chip>
                     <div
                         v-if="derivedProgress !== undefined"
@@ -204,8 +212,13 @@
                             <v-icon>{{ mdiTimerSand }}</v-icon>
                         </template>
                     </v-text-field>
-                    <v-alert v-if="derivedUrgency.short_window" type="warning" class="mb-3">Window shorter than lead time</v-alert>
-                    <v-alert v-if="!derivedUrgency.actionable" type="info" class="mb-3">Not yet actionable</v-alert>
+                    <v-alert
+                        v-if="derivedUrgency.short_window"
+                        type="warning"
+                        class="mb-3"
+                    >
+                        Window shorter than lead time
+                    </v-alert>
                     <!-- Start date -->
                     <DateSelector
                         v-bind:model-value="form.available_from"
@@ -897,7 +910,7 @@ defineExpose({
     line-height: 1.4;
 }
 
-.urgency-summary {
+.overview-chip {
     font-size: 12px;
 }
 
