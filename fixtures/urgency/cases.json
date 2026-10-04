@@ -620,6 +620,66 @@
                 "actionable": false,
                 "short_window": true
             }
+        },
+        {
+            "name": "short target window remains after time passes: urgent",
+            "task": {
+                "due_by": "2026-10-05",
+                "deadline": "2026-11-20",
+                "available_from": "2026-10-04",
+                "lead_time": "7d"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "urgent",
+                "slack_ratio": 0.23214285548941802,
+                "reference": "2026-10-05T14:59:59.999Z",
+                "actionable": true,
+                "short_window": true
+            }
+        },
+        {
+            "name": "short target window remains after time passes: target_missed",
+            "task": {
+                "due_by": "2026-10-05",
+                "deadline": "2026-11-20",
+                "available_from": "2026-10-04",
+                "lead_time": "7d"
+            },
+            "now": "2026-10-06T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "target_missed",
+                "slack_ratio": 6.517857141203704,
+                "reference": "2026-11-20T14:59:59.999Z",
+                "actionable": true,
+                "short_window": true
+            }
+        },
+        {
+            "name": "short target window remains after time passes: overdue",
+            "task": {
+                "due_by": "2026-10-05",
+                "deadline": "2026-11-20",
+                "available_from": "2026-10-04",
+                "lead_time": "7d"
+            },
+            "now": "2026-11-21T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "overdue",
+                "slack_ratio": -0.053571430224867725,
+                "reference": "2026-11-20T14:59:59.999Z",
+                "actionable": true,
+                "short_window": true
+            }
         }
     ],
     "grammar": [

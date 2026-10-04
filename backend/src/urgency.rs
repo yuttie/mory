@@ -137,6 +137,7 @@ pub fn calculate(task: &Value, tags: &[String], settings: &Settings, now: DateTi
     if matches!(task.get("status").and_then(|s| s.get("kind")).and_then(Value::as_str), Some("done" | "canceled")) {
         return result;
     }
+    let window_reference = reference;
     let lead = resolved_lead_time(task, tags, settings);
     if deadline.is_some_and(|at| at < now) {
         result.level = "overdue".into();
@@ -156,7 +157,7 @@ pub fn calculate(task: &Value, tags: &[String], settings: &Settings, now: DateTi
     }
     result.slack_ratio = Some(ratio);
     result.reference = Some(reference.to_rfc3339_opts(chrono::SecondsFormat::Millis, true));
-    let begins = reference.with_timezone(&zone).naive_local().checked_sub_days(Days::new(lead)).map(|wall| local_instant(wall, zone));
+    let begins = window_reference.with_timezone(&zone).naive_local().checked_sub_days(Days::new(lead)).map(|wall| local_instant(wall, zone));
     result.short_window = available.is_some_and(|at| begins.is_none_or(|begin| at > begin));
     result
 }

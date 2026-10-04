@@ -144,6 +144,7 @@ export function urgencyOf(task: UrgencyTask, tags: readonly string[] = [], setti
     if (reference === undefined || task.status?.kind === 'done' || task.status?.kind === 'canceled') {
         return result;
     }
+    const windowReference = reference;
     if (deadline !== undefined && deadline < now) {
         result.level = 'overdue';
         reference = deadline;
@@ -159,7 +160,7 @@ export function urgencyOf(task: UrgencyTask, tags: readonly string[] = [], setti
     result.slack_ratio = ratio;
     result.reference = new Date(reference).toISOString();
     // Subtract calendar days while retaining the reference's local wall clock across DST.
-    const localReference = dayjs(reference).tz(zone);
+    const localReference = dayjs(windowReference).tz(zone);
     const shifted = dayjs.utc(localReference.format('YYYY-MM-DD HH:mm:ss.SSS')).subtract(lead, 'day');
     const begins = shifted.isValid() ? localInstant(shifted.format('YYYY-MM-DD HH:mm:ss.SSS'), zone) : -Infinity;
     result.short_window = available !== undefined && available > begins;
