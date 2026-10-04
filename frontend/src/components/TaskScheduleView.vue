@@ -60,6 +60,7 @@
                     item-key="uuid"
                     v-bind:group="CANDIDATE_GROUP"
                     v-bind:clone="cloneTask"
+                    v-bind:move="canDrop"
                     v-bind:sort="false"
                     v-bind:disabled="busy"
                     v-bind:force-fallback="true"
@@ -100,12 +101,14 @@
                 </v-btn>
                 <draggable
                     class="entries"
+                    v-bind:data-date="date"
                     filter="button, input, .v-selection-control"
                     v-bind:prevent-on-filter="false"
                     v-bind:model-value="plans.days[date] ?? []"
                     item-key="task"
                     v-bind:group="DAY_GROUP"
-                    v-bind:clone="cloneEntry"
+                    v-bind:clone="(entry: PlanEntry) => cloneEntry(entry, date)"
+                    v-bind:move="canDrop"
                     v-bind:disabled="busy"
                     v-bind:force-fallback="true"
                     v-bind:fallback-on-body="true"
@@ -229,7 +232,7 @@ const props = defineProps<{
     listRoot?: string;
 }>();
 const CANDIDATE_GROUP = { name: 'plans', pull: 'clone', put: false };
-const DAY_GROUP = { name: 'plans', pull: 'clone', put: true };
+const DAY_GROUP = { name: 'plans', pull: true, put: true };
 const tasks = useTasksStore();
 const plans = usePlansStore();
 const week = ref(dayjs().startOf('day'));
@@ -250,7 +253,20 @@ function quadrant(task: TaskNode): number {
 }
 const candidates = computed(() => props.candidates.filter((task) => tasks.ownUrgency(task.uuid).actionable && !['done', 'canceled'].includes(task.metadata?.task?.status?.kind ?? '')).sort((a, b) => quadrant(a) - quadrant(b) || (tasks.urgency(a.uuid).slack_ratio ?? Infinity) - (tasks.urgency(b.uuid).slack_ratio ?? Infinity) || a.uuid.localeCompare(b.uuid)));
 const cloneTask = (task: TaskNode): PlanEntry => ({ task: task.uuid.toLowerCase(), origin: 'planned' });
-const cloneEntry = (entry: PlanEntry): PlanEntry => ({ task: entry.task, origin: 'planned' });
+interface DraggedPlanEntry extends PlanEntry {
+    sourceDate?: string;
+}
+// Carry the source with the drag, since Sortable's end event clears the view's drag state.
+const cloneEntry = (entry: PlanEntry, sourceDate: string): DraggedPlanEntry => ({ ...entry, sourceDate });
+function canDrop(event: { from: HTMLElement; to: HTMLElement; draggedContext: { element: TaskNode | PlanEntry } }): boolean {
+    if (event.from === event.to) {
+        return true;
+    }
+    const date = event.to.dataset.date;
+    const element = event.draggedContext.element;
+    const uuid = 'task' in element ? element.task : element.uuid.toLowerCase();
+    return date !== undefined && !(plans.days[date] ?? []).some((entry) => entry.task === uuid);
+}
 // Match the Status view: touch picks up the whole row without opening the link's menu.
 let pressedWith = '';
 function onPointerDown(event: PointerEvent): void {
@@ -280,12 +296,18 @@ async function run(operation: () => Promise<void>): Promise<void> {
         busy.value = false;
     }
 }
-function onDayChange(date: string, event: { added?: { element: PlanEntry; newIndex: number }; moved?: { element: PlanEntry; newIndex: number } }): void {
+function onDayChange(date: string, event: { added?: { element: DraggedPlanEntry; newIndex: number }; moved?: { element: PlanEntry; newIndex: number } }): void {
+    // A day-to-day drop also emits `removed`; the destination persists both sides together.
+    if (!event.added && !event.moved) {
+        return;
+    }
     void run(async () => {
-        // As in Status, only the destination handles a cloned drop. A day also owns its order.
         if (event.added) {
             const { element, newIndex } = event.added;
-            if (!(plans.days[date] ?? []).some((entry) => entry.task === element.task)) {
+            if (element.sourceDate !== undefined) {
+                await plans.moveTask(element.sourceDate, date, element.task, newIndex);
+            }
+            else if (!(plans.days[date] ?? []).some((entry) => entry.task === element.task)) {
                 await plans.planTask(date, element.task, 'planned', newIndex);
             }
         }

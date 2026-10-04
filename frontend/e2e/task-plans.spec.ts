@@ -68,7 +68,7 @@ test('plans by dragging, records effort and interruptions, collects history and 
     expect(failures).toEqual([]);
 });
 
-test('orders day entries and copies work to another day without losing its history', async ({ context, page }) => {
+test('orders day entries and moves an entry to another day', async ({ context, page }) => {
     await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
     const repository = await mockBackend(context, {
         [`.tasks/${A}.md`]: task('Alpha'),
@@ -116,9 +116,12 @@ test('orders day entries and copies work to another day without losing its histo
     await page.mouse.up();
     await expect.poll(() => repository.writes.length).toBe(2);
     expect(YAML.parse(repository.writes[1].content)).toEqual({
-        '2026-10-04': [{ task: B, origin: 'planned' }, { task: A, origin: 'interruption', result: 'worked' }],
-        '2026-10-05': [{ task: A, origin: 'planned' }],
+        '2026-10-04': [{ task: B, origin: 'planned' }],
+        '2026-10-05': [{ task: A, origin: 'interruption', result: 'worked' }],
     });
+    await expect(today.locator('.planned-entry')).toHaveCount(1);
+    await expect(today).not.toContainText('Alpha');
+    await expect(tomorrow.locator('.planned-entry')).toContainText('Alpha');
     await expect(planner).not.toContainText('changed elsewhere');
 });
 

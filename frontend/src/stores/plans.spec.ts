@@ -91,6 +91,57 @@ describe('monthly plan store', () => {
         await expect(store.recordResult('2026-10-05', A, 'worked')).rejects.toThrow('changed elsewhere');
         expect(store.days['2026-10-05']).toEqual([{ task: B, origin: 'planned' }]);
     });
+    it('moves an entry within a month in one write, retaining its origin and result', async () => {
+        const store = usePlansStore();
+        await store.planTask('2026-10-05', A, 'interruption');
+        await store.planTask('2026-10-06', B);
+        files.writeChecked.mockClear();
+        await store.moveTask('2026-10-05', '2026-10-06', A, 0);
+        expect(files.writeChecked).toHaveBeenCalledTimes(1);
+        expect(store.days['2026-10-05']).toEqual([]);
+        expect(store.days['2026-10-06']).toEqual([{ task: A, origin: 'interruption', result: 'worked' }, { task: B, origin: 'planned' }]);
+        expect(store.plannedDays(A)).toEqual(['2026-10-06']);
+    });
+    it('moves across months, saving the destination before removing the source', async () => {
+        const store = usePlansStore();
+        await store.planTask('2026-10-31', A);
+        await store.recordResult('2026-10-31', A, 'missed');
+        files.writeChecked.mockClear();
+        await store.moveTask('2026-10-31', '2026-11-01', A, 0);
+        expect(files.writeChecked.mock.calls.map(([path]) => path)).toEqual(['.mory/plans/2026-11.yaml', '.mory/plans/2026-10.yaml']);
+        expect(store.days['2026-10-31']).toEqual([]);
+        expect(store.days['2026-11-01']).toEqual([{ task: A, origin: 'planned', result: 'missed' }]);
+    });
+    it('keeps the source when a destination write fails and refuses missing or duplicate moves', async () => {
+        const store = usePlansStore();
+        await store.planTask('2026-10-31', A);
+        const source = repository.get('.mory/plans/2026-10.yaml')!.content;
+        files.writeChecked.mockImplementationOnce(async () => { throw new Error('Offline'); });
+        await expect(store.moveTask('2026-10-31', '2026-11-01', A, 0)).rejects.toThrow('Offline');
+        expect(repository.get('.mory/plans/2026-10.yaml')!.content).toBe(source);
+        expect(store.days['2026-10-31']).toEqual([{ task: A, origin: 'planned' }]);
+        await store.planTask('2026-11-01', A);
+        files.writeChecked.mockClear();
+        await expect(store.moveTask('2026-10-31', '2026-11-01', A, 0)).rejects.toThrow('already planned');
+        await expect(store.moveTask('2026-10-30', '2026-11-02', A, 0)).rejects.toThrow('no longer planned');
+        expect(files.writeChecked).not.toHaveBeenCalled();
+    });
+    it('keeps both records and reports a partial move when source removal fails', async () => {
+        const store = usePlansStore();
+        await store.planTask('2026-10-31', A);
+        const write = files.writeChecked.getMockImplementation()!;
+        files.writeChecked.mockImplementation(async (path: string, content: string, expected: string) => {
+            if (path.endsWith('2026-10.yaml')) {
+                throw new Error('Offline');
+            }
+            await write(path, content, expected);
+        });
+        await expect(store.moveTask('2026-10-31', '2026-11-01', A, 0)).rejects.toThrow('destination was saved');
+        expect(store.plannedDays(A)).toEqual(['2026-10-31', '2026-11-01']);
+        for (const month of ['2026-10', '2026-11']) {
+            expect(YAML.parse(repository.get(`.mory/plans/${month}.yaml`)!.content)[`${month}-${month.endsWith('10') ? '31' : '01'}`]).toEqual([{ task: A, origin: 'planned' }]);
+        }
+    });
     it('collects all past months, saves today first and counts missed days', async () => {
         const store = usePlansStore();
         repository.set('.mory/plans/2026-09.yaml', { content: YAML.stringify({ '2026-09-30': [{ task: A, origin: 'planned' }] }), etag: 'old' });

@@ -120,6 +120,44 @@ export const usePlansStore = defineStore('plans', () => {
             }
         });
     }
+    function moveTask(from: string, to: string, uuid: string, position: number): Promise<void> {
+        if (!isPlanDate(from) || !isPlanDate(to) || !PLAN_UUID.test(uuid)) {
+            return Promise.reject(new Error('Use valid dates and a task UUIDv4.'));
+        }
+        return serialize(async () => {
+            const sourceMonth = from.slice(0, 7);
+            const targetMonth = to.slice(0, 7);
+            await readMonth(sourceMonth);
+            if (sourceMonth !== targetMonth) {
+                await readMonth(targetMonth);
+            }
+            const source = JSON.parse(JSON.stringify(months.value[sourceMonth])) as MonthPlan;
+            const target = sourceMonth === targetMonth ? source : JSON.parse(JSON.stringify(months.value[targetMonth])) as MonthPlan;
+            const entries = source[from] ?? [];
+            const index = entries.findIndex((entry) => entry.task === uuid.toLowerCase());
+            if (index === -1) {
+                throw new Error('This task is no longer planned on the source day.');
+            }
+            if (from !== to && target[to]?.some((entry) => entry.task === uuid.toLowerCase())) {
+                throw new Error('This task is already planned on the destination day.');
+            }
+            const [entry] = entries.splice(index, 1);
+            (target[to] ??= []).splice(position, 0, entry);
+            if (sourceMonth === targetMonth) {
+                await saveMonth(sourceMonth, source);
+            }
+            else {
+                // Across month files, retain the source until the destination is safely written.
+                await saveMonth(targetMonth, target);
+                try {
+                    await saveMonth(sourceMonth, source);
+                }
+                catch (error) {
+                    throw new Error('The destination was saved, but moving the source failed. Reload the plans before retrying.', { cause: error });
+                }
+            }
+        });
+    }
     function unplanTask(date: string, uuid: string): Promise<void> {
         return change(date, (plan) => { plan[date] = (plan[date] ?? []).filter((entry) => entry.task !== uuid.toLowerCase()); });
     }
@@ -165,5 +203,5 @@ export const usePlansStore = defineStore('plans', () => {
             void loadMonths([...Object.keys(months.value), ...listed]).catch(() => undefined);
         }
     });
-    return { months, days, errors, loadMonths, loadAll: () => serialize(loadAll), planTask, recordResult, unplanTask, reorder, collect, plannedDays, missedCount };
+    return { months, days, errors, loadMonths, loadAll: () => serialize(loadAll), planTask, moveTask, recordResult, unplanTask, reorder, collect, plannedDays, missedCount };
 });
