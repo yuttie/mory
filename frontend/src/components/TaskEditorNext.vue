@@ -146,8 +146,27 @@
                     <v-progress-linear v-if="derivedProgress !== undefined" v-bind:model-value="derivedProgress" height="20">
                         <strong>{{ Math.round(derivedProgress) }}% of leaves done</strong>
                     </v-progress-linear>
-                    <v-select v-model="form.importance" v-bind:items="['low', 'medium', 'high']" clearable label="Importance (unrated if empty)"></v-select>
-                    <v-text-field v-model="form.lead_time" label="Lead time" v-bind:placeholder="`${defaultLeadTime}d (resolved default)`" persistent-placeholder v-bind:rules="[leadTimeRule]"></v-text-field>
+                    <v-select
+                        v-model="form.importance"
+                        v-bind:items="['low', 'medium', 'high']"
+                        clearable
+                        label="Importance (unrated if empty)"
+                    >
+                        <template v-slot:prepend>
+                            <v-icon>{{ mdiFlagOutline }}</v-icon>
+                        </template>
+                    </v-select>
+                    <v-text-field
+                        v-model="form.lead_time"
+                        label="Lead time"
+                        v-bind:placeholder="`${defaultLeadTime}d (resolved default)`"
+                        persistent-placeholder
+                        v-bind:rules="[leadTimeRule]"
+                    >
+                        <template v-slot:prepend>
+                            <v-icon>{{ mdiTimerSand }}</v-icon>
+                        </template>
+                    </v-text-field>
                     <v-chip class="mb-3">{{ URGENCY_LABEL[derivedUrgency.level] }}</v-chip>
                     <v-alert v-if="derivedUrgency.short_window" type="warning" class="mb-3">Window shorter than lead time</v-alert>
                     <v-alert v-if="!derivedUrgency.actionable" type="info" class="mb-3">Not yet actionable</v-alert>
@@ -326,6 +345,7 @@ import {
     mdiFileDocument,
     mdiFileDocumentEdit,
     mdiFileTreeOutline,
+    mdiFlagOutline,
     mdiFormatHeader1,
     mdiLightbulbOnOutline,
     mdiLock,
@@ -335,6 +355,7 @@ import {
     mdiPencilBoxOutline,
     mdiPlus,
     mdiTagMultipleOutline,
+    mdiTimerSand,
     mdiTrafficLightOutline,
 } from '@mdi/js';
 
