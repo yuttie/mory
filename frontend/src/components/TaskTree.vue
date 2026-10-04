@@ -29,7 +29,7 @@
             </span>
         </template>
         <template v-slot:append="{ item }">
-            <span v-if="tasks.progress(item.uuid) !== undefined" class="mr-2">{{ Math.round(tasks.progress(item.uuid) ?? 0) }}%</span>
+            <span v-if="tasks.progress(item.uuid) !== undefined" class="task-progress mr-2">{{ Math.round(tasks.progress(item.uuid) ?? 0) }}%</span>
             <!-- Inside the row, which may be a link. Stopping the click keeps the row from routing,
                  but the browser would still follow the link, reloading the app, unless prevented. -->
             <v-icon-btn

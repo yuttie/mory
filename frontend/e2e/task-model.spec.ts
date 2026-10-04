@@ -4,6 +4,26 @@ import { mockBackend, uuid } from './backend';
 
 test.use({ timezoneId: 'Asia/Tokyo' });
 
+for (const hasTouch of [false, true]) {
+    test.describe(hasTouch ? 'touch tree' : 'desktop tree', () => {
+        test.use({ hasTouch });
+
+        test('shows derived progress before pointing at the task', async ({ context, page }) => {
+            const parent = uuid(1);
+            await mockBackend(context, {
+                [`.tasks/${parent}.md`]: '---\ntask: {status: {kind: todo}}\n---\n\n# Project\n',
+                [`.tasks/${parent}/${uuid(2)}.md`]: '---\ntask: {status: {kind: done, completed_at: 2026-10-01 10:00:00+09:00}}\n---\n\n# Finished\n',
+                [`.tasks/${parent}/${uuid(3)}.md`]: '---\ntask: {status: {kind: todo}}\n---\n\n# Open\n',
+            });
+            await page.goto('/tasks-next/_/descendants/status');
+            const row = page.locator('.task-tree-container').getByRole('treeitem', { name: 'Project' });
+            await expect(row.locator('.task-progress')).toHaveText('50%');
+            await expect(row.locator('.task-progress')).toBeVisible();
+            expect(await row.evaluate((element) => element.matches(':hover'))).toBe(false);
+        });
+    });
+}
+
 test('opens and saves a task carrying all revised date fields', async ({ context, page }) => {
     const id = uuid(8);
     const repository = await mockBackend(context, {
