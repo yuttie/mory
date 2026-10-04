@@ -1,0 +1,182 @@
+[
+    {
+        "name": "missing intermediate parent re-roots overdue grandchild",
+        "entries": [
+            {
+                "path": ".tasks/00000001-0000-4000-8000-000000000000.md",
+                "metadata": {
+                    "task": {
+                        "status": {
+                            "kind": "todo"
+                        }
+                    }
+                }
+            },
+            {
+                "path": ".tasks/00000001-0000-4000-8000-000000000000/00000002-0000-4000-8000-000000000000/00000003-0000-4000-8000-000000000000.md",
+                "metadata": {
+                    "task": {
+                        "status": {
+                            "kind": "todo"
+                        },
+                        "deadline": "2026-10-01"
+                    }
+                }
+            }
+        ],
+        "expected": [
+            {
+                "path": ".tasks/00000001-0000-4000-8000-000000000000.md",
+                "level": "none",
+                "progress": null
+            },
+            {
+                "path": ".tasks/00000001-0000-4000-8000-000000000000/00000002-0000-4000-8000-000000000000/00000003-0000-4000-8000-000000000000.md",
+                "level": "overdue",
+                "progress": null
+            }
+        ]
+    },
+    {
+        "name": "complete chain inherits descendant urgency",
+        "entries": [
+            {
+                "path": ".tasks/00000001-0000-4000-8000-000000000000.md",
+                "metadata": {
+                    "task": {
+                        "status": {
+                            "kind": "todo"
+                        }
+                    }
+                }
+            },
+            {
+                "path": ".tasks/00000001-0000-4000-8000-000000000000/00000002-0000-4000-8000-000000000000.md",
+                "metadata": {
+                    "task": {
+                        "status": {
+                            "kind": "todo"
+                        }
+                    }
+                }
+            },
+            {
+                "path": ".tasks/00000001-0000-4000-8000-000000000000/00000002-0000-4000-8000-000000000000/00000003-0000-4000-8000-000000000000.md",
+                "metadata": {
+                    "task": {
+                        "status": {
+                            "kind": "todo"
+                        },
+                        "deadline": "2026-10-01"
+                    }
+                }
+            }
+        ],
+        "expected": [
+            {
+                "path": ".tasks/00000001-0000-4000-8000-000000000000.md",
+                "level": "overdue",
+                "progress": 0
+            },
+            {
+                "path": ".tasks/00000001-0000-4000-8000-000000000000/00000002-0000-4000-8000-000000000000.md",
+                "level": "overdue",
+                "progress": 0
+            }
+        ]
+    },
+    {
+        "name": "completion progress through a non-md parent",
+        "entries": [
+            {
+                "path": ".tasks/00000001-0000-4000-8000-000000000000.markdown",
+                "metadata": {
+                    "task": {
+                        "status": {
+                            "kind": "todo"
+                        }
+                    }
+                }
+            },
+            {
+                "path": ".tasks/00000001-0000-4000-8000-000000000000/00000002-0000-4000-8000-000000000000.md",
+                "metadata": {
+                    "task": {
+                        "status": {
+                            "kind": "done"
+                        }
+                    }
+                }
+            }
+        ],
+        "expected": [
+            {
+                "path": ".tasks/00000001-0000-4000-8000-000000000000.markdown",
+                "level": "none",
+                "progress": 100
+            }
+        ]
+    },
+    {
+        "name": "metadata-less node retains the hierarchy",
+        "entries": [
+            {
+                "path": ".tasks/00000001-0000-4000-8000-000000000000.md",
+                "metadata": {
+                    "task": {
+                        "status": {
+                            "kind": "todo"
+                        }
+                    }
+                }
+            },
+            {
+                "path": ".tasks/00000001-0000-4000-8000-000000000000/00000002-0000-4000-8000-000000000000.md",
+                "metadata": null
+            },
+            {
+                "path": ".tasks/00000001-0000-4000-8000-000000000000/00000002-0000-4000-8000-000000000000/00000003-0000-4000-8000-000000000000.md",
+                "metadata": {
+                    "task": {
+                        "status": {
+                            "kind": "done"
+                        }
+                    }
+                }
+            }
+        ],
+        "expected": [
+            {
+                "path": ".tasks/00000001-0000-4000-8000-000000000000.md",
+                "level": "none",
+                "progress": 100
+            }
+        ]
+    },
+    {
+        "name": "metadata-less leaf is an open leaf",
+        "entries": [
+            {
+                "path": ".tasks/00000001-0000-4000-8000-000000000000.md",
+                "metadata": {
+                    "task": {
+                        "status": {
+                            "kind": "todo"
+                        }
+                    }
+                }
+            },
+            {
+                "path": ".tasks/00000001-0000-4000-8000-000000000000/00000002-0000-4000-8000-000000000000.md",
+                "metadata": null
+            }
+        ],
+        "expected": [
+            {
+                "path": ".tasks/00000001-0000-4000-8000-000000000000.md",
+                "level": "none",
+                "progress": 0
+            }
+        ]
+    }
+]

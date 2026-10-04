@@ -345,6 +345,33 @@ fn canonical_task(block: &serde_yaml::Mapping) -> serde_json::Value {
     task
 }
 
+fn derived_task(index: usize, entries: &[crate::models::ListEntry], hierarchy: &crate::tasks::TaskHierarchy, settings: &crate::urgency::Settings, now: chrono::DateTime<chrono::Utc>, zone: chrono_tz::Tz) -> (crate::urgency::Urgency, Option<f64>) {
+    let entry = &entries[index];
+    let descendants = hierarchy.descendants(index);
+    let own = |entry: &crate::models::ListEntry| crate::urgency::calculate(
+        entry.metadata.as_ref().and_then(|root| root.get("task")).unwrap_or(&serde_yaml::Value::Null),
+        &tags_of(entry.metadata.as_ref()), settings, now, zone,
+    );
+    let mut urgency = own(entry);
+    if !crate::tasks::is_over(task_status_of(entry.metadata.as_ref()).as_deref()) {
+        for &child_index in &descendants {
+            let child = &entries[child_index];
+            if !crate::tasks::is_over(task_status_of(child.metadata.as_ref()).as_deref()) {
+                let derived = own(child);
+                if crate::urgency::compare(&derived, &urgency).is_lt() {
+                    urgency = crate::urgency::Urgency { actionable: urgency.actionable, short_window: urgency.short_window, ..derived };
+                }
+            }
+        }
+    }
+    let progress = if descendants.is_empty() { None } else {
+        let leaves = descendants.iter().copied().filter(|&child| hierarchy.children[child].is_empty()).map(|child| &entries[child]).filter(|child| task_status_of(child.metadata.as_ref()).as_deref() != Some("canceled")).collect::<Vec<_>>();
+        let done = leaves.iter().filter(|child| task_status_of(child.metadata.as_ref()).as_deref() == Some("done")).count();
+        Some(if leaves.is_empty() { 0.0 } else { done as f64 / leaves.len() as f64 * 100.0 })
+    };
+    (urgency, progress)
+}
+
 pub async fn list_tasks(
     state: &AppState,
     args: ListTasksArgs,
@@ -372,39 +399,15 @@ pub async fn list_tasks(
     let (settings, warnings) = task_settings(state).await?;
     let now = chrono::Utc::now();
     let zone = crate::urgency::local_zone();
-    let valid = entries.iter().filter(|entry| task_of(entry).is_some()).collect::<Vec<_>>();
-    let own = |entry: &crate::models::ListEntry| crate::urgency::calculate(
-        entry.metadata.as_ref().and_then(|root| root.get("task")).unwrap(),
-        &tags_of(entry.metadata.as_ref()), &settings, now, zone,
-    );
+    let hierarchy = crate::tasks::TaskHierarchy::new(&entries);
     let mut tasks = Vec::new();
-    for entry in &entries {
+    for (index, entry) in entries.iter().enumerate() {
+        if !hierarchy.valid[index] { continue; }
         let Some((_, block)) = task_of(entry) else {
             continue;
         };
         let task = canonical_task(block);
-        let path = entry.path.to_string_lossy();
-        let prefix = format!("{}/", path.strip_suffix(".md").unwrap_or(&path));
-        let descendants = valid.iter().copied().filter(|child| child.path.to_string_lossy().starts_with(&prefix)).collect::<Vec<_>>();
-        let mut urgency = own(entry);
-        if !crate::tasks::is_over(task_status_of(entry.metadata.as_ref()).as_deref()) {
-            for child in &descendants {
-                if !crate::tasks::is_over(task_status_of(child.metadata.as_ref()).as_deref()) {
-                    let derived = own(child);
-                    if crate::urgency::compare(&derived, &urgency).is_lt() {
-                        urgency = crate::urgency::Urgency { actionable: urgency.actionable, short_window: urgency.short_window, ..derived };
-                    }
-                }
-            }
-        }
-        let progress = if descendants.is_empty() { None } else {
-            let leaves = descendants.iter().copied().filter(|child| {
-                let child_prefix = format!("{}/", child.path.with_extension("").to_string_lossy());
-                !descendants.iter().any(|other| other.path.to_string_lossy().starts_with(&child_prefix))
-            }).filter(|child| task_status_of(child.metadata.as_ref()).as_deref() != Some("canceled")).collect::<Vec<_>>();
-            let done = leaves.iter().filter(|child| task_status_of(child.metadata.as_ref()).as_deref() == Some("done")).count();
-            Some(if leaves.is_empty() { 0.0 } else { done as f64 / leaves.len() as f64 * 100.0 })
-        };
+        let (urgency, progress) = derived_task(index, &entries, &hierarchy, &settings, now, zone);
         if let Some(wanted) = args.status.as_deref() {
             if task_status_of(entry.metadata.as_ref()).as_deref() != Some(wanted) {
                 continue;
@@ -1168,6 +1171,24 @@ mod tests {
             declared_starts(&yaml("repeat:\n  freq: weekly")),
             Vec::<String>::new(),
         );
+    }
+
+    #[test]
+    fn derived_tasks_match_shared_hierarchy_fixtures() {
+        let fixtures: serde_json::Value = serde_json::from_str(include_str!("../../../fixtures/urgency/hierarchy.json")).unwrap();
+        for fixture in fixtures.as_array().unwrap() {
+            let entries = fixture["entries"].as_array().unwrap().iter().map(|item| {
+                listed(item["path"].as_str().unwrap(), &serde_yaml::to_string(&item["metadata"]).unwrap())
+            }).collect::<Vec<_>>();
+            let hierarchy = crate::tasks::TaskHierarchy::new(&entries);
+            let now = chrono::DateTime::parse_from_rfc3339("2026-10-04T00:00:00Z").unwrap().with_timezone(&chrono::Utc);
+            for expected in fixture["expected"].as_array().unwrap() {
+                let index = entries.iter().position(|entry| entry.path.to_string_lossy() == expected["path"].as_str().unwrap()).unwrap();
+                let (urgency, progress) = derived_task(index, &entries, &hierarchy, &crate::urgency::Settings::default(), now, chrono_tz::Asia::Tokyo);
+                assert_eq!(urgency.level, expected["level"].as_str().unwrap(), "{}", fixture["name"]);
+                assert_eq!(progress, expected["progress"].as_f64(), "{}", fixture["name"]);
+            }
+        }
     }
 
     const TASK_A: &str = ".tasks/6f1c2c1e-2b1a-4d6e-9f3a-1b2c3d4e5f60.md";

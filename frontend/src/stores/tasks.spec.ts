@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EntriesResponse, ListEntry2 } from '@/api';
 import type { Task } from '@/task';
 import type { TaskMetadata, TaskTreeItem } from '@/task-forest';
+import hierarchyFixtures from '../../../fixtures/urgency/hierarchy.json';
 
 const apiMocks = vi.hoisted(() => ({
     getEntries: vi.fn<(since?: string) => Promise<EntriesResponse>>(),
@@ -147,6 +148,20 @@ const sample: Spec[] = [
 ];
 
 describe('the derived forest', () => {
+    for (const fixture of hierarchyFixtures) {
+        it(`matches shared hierarchy: ${fixture.name}`, async () => {
+            const mod = await load();
+            apiMocks.getEntries.mockResolvedValue({ kind: 'full', commit: 'hierarchy', head: 'hierarchy', entries: fixture.entries.map((item) => ({ ...entry({ path: item.path }), metadata: item.metadata })) });
+            const store = mod.useTasksStore();
+            await store.init();
+            store.now = Date.parse('2026-10-04T00:00:00Z');
+            for (const expected of fixture.expected) {
+                const id = store.allTasks.find((task) => task.path === expected.path)!.uuid;
+                expect(store.urgency(id).level).toBe(expected.level);
+                expect(store.progress(id) ?? null).toBe(expected.progress);
+            }
+        });
+    }
     it('is empty until loaded, and reports it', async () => {
         const mod = await load();
         repository(sample);
