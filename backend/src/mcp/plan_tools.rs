@@ -102,7 +102,7 @@ async fn edit(state: &AppState, day: &str, task: &str, mutation: impl FnOnce(&mu
 }
 
 pub async fn plan_task(state: &AppState, args: PlanArgs) -> Result<CallToolResult, ErrorData> {
-    edit(state, &args.date, &args.task, |plan, uuid| { plans::put(plan, &args.date, uuid, args.origin); Ok(()) }).await
+    edit(state, &args.date, &args.task, |plan, uuid| { plan_entry(plan, &args.date, uuid, args.origin); Ok(()) }).await
 }
 pub async fn record_result(state: &AppState, args: ResultArgs) -> Result<CallToolResult, ErrorData> {
     edit(state, &args.date, &args.task, |plan, uuid| {
@@ -115,4 +115,42 @@ pub async fn unplan_task(state: &AppState, args: UnplanArgs) -> Result<CallToolR
         if let Some(entries) = plan.get_mut(&args.date) { entries.retain(|entry| entry.task != uuid); }
         Ok(())
     }).await
+}
+
+// Recording an interruption also records work when the day already contains the task.
+fn plan_entry(plan: &mut Month, day: &str, uuid: &str, origin: Origin) {
+    let worked = origin == Origin::Interruption;
+    plans::put(plan, day, uuid, origin);
+    if worked {
+        if let Some(entry) = plan.get_mut(day).and_then(|entries| entries.iter_mut().find(|entry| entry.task == uuid)) {
+            entry.result = Some(Outcome::Worked);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plans::Entry;
+
+    #[test]
+    fn mcp_interruption_records_work_without_changing_existing_origin_or_order() {
+        let uuid = "4955857d-3267-4b94-83f2-538a428970d7";
+        let other = "2a997a71-0d2b-4938-b8ff-5178c28a5ad9";
+        let day = "2026-10-05";
+        for result in [None, Some(Outcome::Missed)] {
+            let mut plan = Month::new();
+            plans::put(&mut plan, day, other, Origin::Planned);
+            plans::put(&mut plan, day, uuid, Origin::Planned);
+            plan.get_mut(day).unwrap()[1].result = result.clone();
+            plan_entry(&mut plan, day, uuid, Origin::Planned);
+            assert_eq!(plan[day][1].result, result);
+            plan_entry(&mut plan, day, uuid, Origin::Interruption);
+            plan_entry(&mut plan, day, uuid, Origin::Interruption);
+            assert_eq!(plan[day], vec![
+                Entry { task: other.into(), origin: Origin::Planned, result: None },
+                Entry { task: uuid.into(), origin: Origin::Planned, result: Some(Outcome::Worked) },
+            ]);
+        }
+    }
 }
