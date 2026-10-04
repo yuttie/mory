@@ -929,33 +929,15 @@ async fn find_entry_blob(
     state: &AppState,
     path: &str,
 ) -> Option<(Oid, Vec<u8>)> {
-    // Search an index of HEAD for the given path
-    let (oid, entry) = {
-        let repo = state.repo.lock().unwrap();
+    entry_blob(&state.repo.lock().unwrap(), path)
+}
 
-        // Build an in-memory index of HEAD
-        let head_ref = repo.head().ok()?;
-        let head_oid = head_ref.target()?;
-        let head_tree = head_ref.peel_to_tree().ok()?;
-
-        let mut index = Index::new().ok()?;
-        index.read_tree(&head_tree).ok()?;
-
-        // Find the entry whose path matches our requested string
-        let entry = index
-            .iter()
-            .find(|entry| std::str::from_utf8(&entry.path).map(|p| p == path).unwrap_or(false))?;
-
-        (head_oid, entry)
-    };
-
-    // Load the blob's bytes
-    let content = {
-        let repo = state.repo.lock().unwrap();
-        repo.find_blob(entry.id).map(|blob| Vec::from(blob.content())).ok()?
-    };
-
-    Some((oid, content))
+fn entry_blob(repo: &Repository, path: &str) -> Option<(Oid, Vec<u8>)> {
+    let tree = repo.head().ok()?.peel_to_tree().ok()?;
+    let entry = tree.get_path(Path::new(path)).ok()?;
+    let blob = repo.find_blob(entry.id()).ok()?;
+    // Reads and checked writes identify the file's contents, independently of other commits.
+    Some((blob.id(), blob.content().to_vec()))
 }
 
 fn content_response(content: Vec<u8>, path: &Path) -> Response {
@@ -2672,6 +2654,26 @@ mod models {
         commit_index(repo, &mut index, &head_commit, message)
     }
 
+    /// Check the file version and commit under the caller's repository lock.
+    pub(crate) fn commit_save_checked(
+        repo: &Repository,
+        path: &str,
+        content: &[u8],
+        message: &str,
+        expected: &str,
+    ) -> Result<Option<Oid>> {
+        let tree = repo.head()?.peel_to_tree()?;
+        let current = tree.get_path(std::path::Path::new(path)).ok().map(|entry| entry.id());
+        let matches = match current {
+            Some(oid) => expected == format!("\"{oid}\""),
+            None => expected == "absent",
+        };
+        if !matches {
+            return Ok(None);
+        }
+        commit_save(repo, path, content, message).map(Some)
+    }
+
     /// Move the blob at `from` to `to`, keeping its mode. `None` when `from` is not in HEAD.
     pub(crate) fn commit_rename(
         repo: &Repository,
@@ -2913,21 +2915,11 @@ mod models {
         /// Refuse a stale plan edit while holding the same repository lock as its commit.
         /// `absent` means this operation expects to create a file.
         pub async fn save_note_checked(&self, path: &str, content: &[u8], message: &str, expected: &str) -> Result<Option<Oid>> {
-            let committed = {
-                let repo = self.repo.lock().unwrap();
-                let tree = repo.head()?.peel_to_commit()?.tree()?;
-                let current = tree.get_path(std::path::Path::new(path)).ok().map(|entry| entry.id());
-                let matches = match current {
-                    Some(oid) => expected == format!("\"{oid}\""),
-                    None => expected == "absent",
-                };
-                if !matches {
-                    return Ok(None);
-                }
-                commit_save(&repo, path, content, message)?
-            };
-            self.nudge_cache().await;
-            Ok(Some(committed))
+            let committed = commit_save_checked(&self.repo.lock().unwrap(), path, content, message, expected)?;
+            if committed.is_some() {
+                self.nudge_cache().await;
+            }
+            Ok(committed)
         }
 
         /// Move the blob at `from` to `to`. `None` when `from` is not in HEAD.
