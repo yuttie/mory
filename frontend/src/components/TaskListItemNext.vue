@@ -16,7 +16,7 @@
                 v-for="tag of value.metadata?.tags ?? []"
                 v-bind:key="tag"
             >{{ tag }}</span>
-            <span class="title-text" v-bind:class="{ strikethrough: canceled }">{{ value.title }}</span>
+            <span class="title-text" v-bind:class="{ strikethrough: canceled }">{{ value.title || 'Untitled' }}</span>
             <TaskDateCues v-bind:value="value" />
             <v-chip size="x-small" class="ml-1">{{ URGENCY_LABEL[urgency.level] }}</v-chip>
             <span v-if="progress !== undefined" class="ml-1">{{ Math.round(progress) }}%</span>
@@ -30,6 +30,7 @@
             >
                 {{ ancestorTitles.join(' › ') }}
             </div>
+            <slot />
         </div>
     </router-link>
 </template>

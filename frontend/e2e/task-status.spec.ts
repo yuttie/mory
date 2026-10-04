@@ -220,9 +220,9 @@ test('keeps the tasks a dragged one passes over from answering the pointer', asy
         [BETA]: note('Beta', ['kind: in_progress'], ['due_by: 2026-10-01']),
     });
     const beta = task(page, 'Beta');
-    const due = beta.locator('.additional-info').first();
+    const due = beta.locator('.task-date-cue[data-field="due_by"]');
     // What the date's tooltip says: the row itself says how far off the date is instead.
-    const tooltip = page.getByRole('tooltip').getByText('2026-10-01');
+    const tooltip = page.getByRole('tooltip').getByText('Due: 2026-10-01', { exact: true });
     const background = () => beta.evaluate((element) => getComputedStyle(element).backgroundColor);
     const resting = await background();
 

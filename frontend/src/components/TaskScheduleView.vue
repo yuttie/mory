@@ -127,24 +127,31 @@
                             v-on:pointerdown="onPointerDown"
                             v-on:contextmenu="onContextMenu"
                         >
-                            <div class="d-flex align-center">
+                            <TaskListItemNext
+                                v-if="taskOf(entry.task)"
+                                class="planned-task"
+                                draggable="false"
+                                v-bind:value="taskOf(entry.task)!"
+                                v-bind:to="routeFor(taskOf(entry.task)!)"
+                                v-bind:list-root="listRoot"
+                            >
+                                <div class="plan-record">
+                                    <small>{{ entry.origin }} · {{ entry.result ?? 'unrecorded' }}</small>
+                                </div>
+                            </TaskListItemNext>
+                            <template v-else>
+                                <div>Unknown task {{ entry.task }}</div>
+                                <small>{{ entry.origin }} · {{ entry.result ?? 'unrecorded' }}</small>
+                            </template>
+                            <div class="plan-actions">
                                 <v-checkbox-btn
+                                    class="plan-control"
                                     v-bind:model-value="entry.result === 'worked'"
                                     v-bind:disabled="busy || !taskOf(entry.task)"
+                                    label="Worked"
                                     title="Worked on this day"
                                     v-on:update:model-value="run(() => plans.recordResult(date, entry.task, $event ? 'worked' : undefined))"
                                 />
-                                <router-link
-                                    v-if="taskOf(entry.task)"
-                                    draggable="false"
-                                    v-bind:to="routeFor(taskOf(entry.task)!)"
-                                >
-                                    {{ taskOf(entry.task)?.title || 'Untitled' }}
-                                </router-link>
-                                <span v-else>Unknown task {{ entry.task }}</span>
-                            </div>
-                            <small>{{ entry.origin }} · {{ entry.result ?? 'unrecorded' }}</small>
-                            <div>
                                 <v-btn
                                     v-if="taskOf(entry.task) && !['done', 'canceled'].includes(taskOf(entry.task)?.metadata?.task?.status?.kind ?? '')"
                                     variant="text"
@@ -359,9 +366,21 @@ onMounted(() => { void plans.loadAll().catch((failure) => { error.value = String
 .candidates { width: 290px; }
 .entries { flex: 1; min-height: 140px; }
 .today { border: 2px solid rgb(var(--v-theme-primary)); }
-.planned-entry { border-top: 1px solid rgba(128, 128, 128, .3); }
+.planned-entry { position: relative; border-top: 1px solid rgba(128, 128, 128, .3); }
 .planned-entry:hover { background: #eeeeee; }
 .planned-entry a { color: inherit; }
+/* A real link keeps keyboard/new-tab navigation while covering the row's unused space. */
+.planned-entry :deep(.planned-task::after) {
+    content: '';
+    position: absolute;
+    inset: 0;
+}
+.plan-actions { display: flex; flex-wrap: wrap; align-items: center; }
+/* Controls stay outside the link and above its extended click area. */
+.plan-control, .plan-actions :deep(button), .planned-entry :deep(.task-date-cue) {
+    position: relative;
+    z-index: 1;
+}
 .planning-view :deep(:is(.task-list-item, .planned-entry)) {
     -webkit-touch-callout: none;
 }
