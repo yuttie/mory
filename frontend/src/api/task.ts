@@ -5,11 +5,12 @@ import { getAxios } from '@/axios';
 import { encodePath } from '@/encode-path';
 import type { UUID } from '@/api';
 import type { Task } from '@/task';
+import { readImportance } from '@/urgency';
 
 export { UUID, Task };
 
 export async function getTask(taskPath: string, eTag?: string): Promise<[string, Task | null]> {
-    const headers = {};
+    const headers: Record<string, string> = {};
     if (eTag) {
         headers['If-None-Match'] = eTag;
     }
@@ -28,18 +29,18 @@ export async function getTask(taskPath: string, eTag?: string): Promise<[string,
         const uuid = extractFileUuid(taskPath);
         const alarms = readTaskAlarms(metadata.task.alarms);
         const task = {
+            created_at: metadata.created_at,
             uuid: uuid,
             title: title,
             tags: metadata.tags,
             status: metadata.task.status,
-            progress: metadata.task.progress,
-            importance: metadata.task.importance,
-            urgency: metadata.task.urgency,
-            ...(metadata.task.start_at ? { start_at: metadata.task.start_at } : {}),
+            source: md,
+            importance: readImportance(metadata.task.importance),
+            available_from: metadata.task.available_from ?? metadata.task.start_at,
+            lead_time: typeof metadata.task.lead_time === 'string' ? metadata.task.lead_time : undefined,
             ...(metadata.task.due_by ? { due_by: metadata.task.due_by } : {}),
             ...(metadata.task.deadline ? { deadline: metadata.task.deadline } : {}),
             ...(alarms === undefined ? {} : { alarms }),
-            scheduled_dates: metadata.task.scheduled_dates,
             note: rest,
         };
 

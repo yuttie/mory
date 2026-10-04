@@ -7,59 +7,107 @@
             style="display: contents"
             v-on:submit.prevent="onSave"
         >
-            <v-card-title>
-                {{ isEdit ? 'Edit task' : getNewTaskTitle() }}
-                <v-btn
-                    v-if="isEdit"
-                    v-bind:to="{ name: 'Note', params: { path: taskPath.split('/') } }"
-                    target="_blank"
-                    title="Open as note"
-                    class="ml-1"
-                    variant="plain"
-                    icon
-                >
-                    <v-icon>{{ mdiPencilBoxOutline }}</v-icon>
-                </v-btn>
-                <v-spacer />
-                <div class="d-flex flex-row flex-grow-1 align-center">
-                    <v-spacer />
-                    <v-btn
-                        v-if="!isEdit"
-                        variant="text"
-                        class="mr-3"
-                        v-on:click="onCancel"
+            <v-card-title class="editor-header">
+                <div class="editor-heading">
+                    <div class="editor-title">
+                        <span>{{ isEdit ? 'Edit task' : getNewTaskTitle() }}</span>
+                        <v-btn
+                            v-if="isEdit"
+                            v-bind:to="{ name: 'Note', params: { path: taskPath.split('/') } }"
+                            target="_blank"
+                            title="Open as note"
+                            aria-label="Open as note"
+                            variant="plain"
+                            size="small"
+                            icon
+                        >
+                            <v-icon>{{ mdiPencilBoxOutline }}</v-icon>
+                        </v-btn>
+                    </div>
+                    <div class="editor-actions">
+                        <v-btn
+                            v-if="!isEdit"
+                            variant="text"
+                            aria-label="Cancel"
+                            title="Cancel"
+                            v-bind:icon="$vuetify.display.smAndDown"
+                            v-on:click="onCancel"
+                        >
+                            <v-icon>{{ mdiClose }}</v-icon>
+                            <span v-if="$vuetify.display.mdAndUp">Cancel</span>
+                        </v-btn>
+                        <v-btn
+                            v-if="isEdit"
+                            variant="text"
+                            color="primary"
+                            aria-label="Change Parent"
+                            title="Change Parent"
+                            v-bind:icon="$vuetify.display.smAndDown"
+                            v-on:click="onChangeParent"
+                        >
+                            <v-icon v-bind:class="{ 'mr-1': $vuetify.display.mdAndUp }">
+                                {{ mdiFileTreeOutline }}
+                            </v-icon>
+                            <span v-if="$vuetify.display.mdAndUp">Change Parent</span>
+                        </v-btn>
+                        <v-btn
+                            v-if="isEdit"
+                            color="error"
+                            variant="text"
+                            aria-label="Delete"
+                            title="Delete"
+                            v-bind:icon="$vuetify.display.smAndDown"
+                            v-on:click="onDelete"
+                        >
+                            <v-icon>{{ mdiDelete }}</v-icon>
+                            <span v-if="$vuetify.display.mdAndUp">Delete</span>
+                        </v-btn>
+                        <v-btn
+                            v-bind:disabled="!!statusGateError || alarmsInvalid || !uiValid"
+                            type="submit"
+                            color="primary"
+                            v-bind:aria-label="isEdit ? 'Save' : 'Create'"
+                            v-bind:title="isEdit ? 'Save' : 'Create'"
+                            v-bind:icon="$vuetify.display.smAndDown"
+                        >
+                            <v-icon>{{ mdiContentSave }}</v-icon>
+                            <span v-if="$vuetify.display.mdAndUp">{{ isEdit ? 'Save' : 'Create' }}</span>
+                        </v-btn>
+                    </div>
+                </div>
+                <div class="editor-overview">
+                    <v-chip
+                        size="small"
+                        class="overview-chip"
                     >
-                        <v-icon>{{ mdiClose }}</v-icon>
-                        <span v-if="$vuetify.display.mdAndUp">Cancel</span>
-                    </v-btn>
-                    <v-btn
-                        v-if="isEdit"
-                        variant="text"
-                        color="primary"
-                        class="mr-3"
-                        v-on:click="onChangeParent"
+                        Urgency: {{ URGENCY_LABEL[derivedUrgency.level] }}
+                    </v-chip>
+                    <v-chip
+                        v-if="!derivedUrgency.actionable"
+                        size="small"
+                        color="info"
+                        class="overview-chip"
                     >
-                        <v-icon class="mr-1">{{ mdiFileTreeOutline }}</v-icon>
-                        <span v-if="$vuetify.display.mdAndUp">Change Parent</span>
-                    </v-btn>
-                    <v-btn
-                        v-if="isEdit"
-                        color="error"
-                        variant="text"
-                        class="mr-3"
-                        v-on:click="onDelete"
+                        Not yet actionable
+                    </v-chip>
+                    <div
+                        v-if="derivedProgress !== undefined"
+                        class="header-progress"
                     >
-                        <v-icon>{{ mdiDelete }}</v-icon>
-                        <span v-if="$vuetify.display.mdAndUp">Delete</span>
-                    </v-btn>
-                    <v-btn
-                        v-bind:disabled="!!statusGateError || alarmsInvalid || !uiValid"
-                        type="submit"
-                        color="primary"
-                    >
-                        <v-icon>{{ mdiContentSave }}</v-icon>
-                        <span v-if="$vuetify.display.mdAndUp">{{ isEdit ? 'Save' : 'Create' }}</span>
-                    </v-btn>
+                        <v-icon size="small">
+                            {{ mdiPercent }}
+                        </v-icon>
+                        <div class="header-progress-value">
+                            <span class="text-caption">{{ Math.round(derivedProgress) }}% of leaves done</span>
+                            <v-progress-linear
+                                v-bind:model-value="derivedProgress"
+                                v-bind:aria-label="`${Math.round(derivedProgress)}% of leaves done`"
+                                color="green"
+                                height="4"
+                                rounded
+                            />
+                        </div>
+                    </div>
                 </div>
             </v-card-title>
             <v-alert
@@ -143,43 +191,40 @@
                         v-bind:known-contacts="knownContacts"
                         class="ml-10"
                     />
-                    <!-- Progress -->
-                    <v-label>
-                        <v-icon>{{ mdiPercentOutline }}</v-icon>
-                        Progress (%)
-                    </v-label>
-                    <v-progress-linear
-                        v-model="progress"
-                        v-bind:rules="[range(0, 100, 'Progress must be 0..100')]"
-                        striped
-                    >
-                        <template v-slot:default="{ value }">
-                            <strong>{{ value }}%</strong>
-                        </template>
-                    </v-progress-linear>
-                    <!-- Importance -->
-                    <v-label>
-                        <v-icon>{{ mdiPriorityHigh }}</v-icon>
-                        Importance
-                    </v-label>
-                    <v-rating
+                    <v-select
                         v-model="form.importance"
-                        v-bind:rules="[range(1, 5, 'Importance must be 1..5')]"
-                    />
-                    <!-- Urgency -->
-                    <v-label>
-                        <v-icon>{{ mdiTimerSand }}</v-icon>
-                        Urgency
-                    </v-label>
-                    <v-rating
-                        v-model="form.urgency"
-                        v-bind:rules="[range(1, 5, 'Urgency must be 1..5')]"
-                    />
+                        v-bind:items="['low', 'medium', 'high']"
+                        clearable
+                        label="Importance (unrated if empty)"
+                    >
+                        <template v-slot:prepend>
+                            <v-icon>{{ mdiFlagOutline }}</v-icon>
+                        </template>
+                    </v-select>
+                    <v-text-field
+                        v-model="form.lead_time"
+                        label="Lead time"
+                        v-bind:placeholder="`${defaultLeadTime}d (resolved default)`"
+                        persistent-placeholder
+                        v-bind:rules="[leadTimeRule]"
+                    >
+                        <template v-slot:prepend>
+                            <v-icon>{{ mdiTimerSand }}</v-icon>
+                        </template>
+                    </v-text-field>
+                    <v-alert
+                        v-if="derivedUrgency.short_window"
+                        type="warning"
+                        class="mb-3"
+                    >
+                        Window shorter than lead time
+                    </v-alert>
                     <!-- Start date -->
                     <DateSelector
-                        v-model="form.start_at"
-                        v-bind:rules="[optionalDateTime]"
-                        label="Start date"
+                        v-bind:model-value="form.available_from"
+                        v-on:update:model-value="form.available_from = $event ?? ''"
+                        v-bind:rules="[() => taskDateRule(form.available_from)]"
+                        label="Available from"
                     >
                         <template v-slot:prepend>
                             <v-icon>{{ mdiCalendarOutline }}</v-icon>
@@ -187,8 +232,9 @@
                     </DateSelector>
                     <!-- Due date -->
                     <DateSelector
-                        v-model="form.due_by"
-                        v-bind:rules="[optionalDateTime]"
+                        v-bind:model-value="form.due_by"
+                        v-on:update:model-value="form.due_by = $event ?? ''"
+                        v-bind:rules="[() => taskDateRule(form.due_by)]"
                         label="Due date (soft target)"
                     >
                         <template v-slot:prepend>
@@ -202,8 +248,9 @@
                     ></InheritableAlarms>
                     <!-- Deadline -->
                     <DateSelector
-                        v-model="form.deadline"
-                        v-bind:rules="[optionalDateTime]"
+                        v-bind:model-value="form.deadline"
+                        v-on:update:model-value="form.deadline = $event ?? ''"
+                        v-bind:rules="[() => taskDateRule(form.deadline)]"
                         label="Deadline (hard cutoff)"
                     >
                         <template v-slot:prepend>
@@ -215,26 +262,10 @@
                         v-model="form.deadline_alarms"
                         v-bind:fallback="calendars.effectiveAlarmDefaults.deadline"
                     ></InheritableAlarms>
-                    <!-- Scheduled dates -->
-                    <v-label>
-                        <v-icon>{{ mdiCalendarCursorOutline }}</v-icon>
-                        Scheduled dates
-                    </v-label>
-                    <v-date-picker
-                        v-bind:model-value="scheduledDatesAsDates"
-                        v-on:update:model-value="onScheduledDatesChange"
-                        multiple
-                        hide-header
-                        width="100%"
-                    />
-                    <template v-if="form.scheduled_dates.length > 0">
-                        <v-list-subheader>All selected dates</v-list-subheader>
-                        <ul class="date-list">
-                            <li v-for="date of form.scheduled_dates.toSorted()">
-                                {{ date }}
-                            </li>
-                        </ul>
-                    </template>
+                    <v-alert v-for="problem of Object.values(plans.errors)" v-bind:key="problem" type="warning">{{ problem }}</v-alert>
+                    <v-list-subheader>Planned days</v-list-subheader>
+                    <div v-if="plannedDays.length === 0">No planned days</div>
+                    <ul><li v-for="date of plannedDays" v-bind:key="date">{{ date }}</li></ul>
                 </div>
                 <div class="note-pane flex-grow-1 pl-3">
                     <!-- Note -->
@@ -356,7 +387,6 @@
 import { ref, reactive, computed, watch, toRef, onMounted, onUnmounted } from 'vue';
 
 import {
-    mdiCalendarCursorOutline,
     mdiCalendarOutline,
     mdiClose,
     mdiContentSave,
@@ -364,16 +394,16 @@ import {
     mdiFileDocument,
     mdiFileDocumentEdit,
     mdiFileTreeOutline,
+    mdiFlagOutline,
     mdiFormatHeader1,
     mdiLightbulbOnOutline,
     mdiLock,
     mdiLockOpenVariant,
     mdiNoteTextOutline,
     mdiPencil,
-    mdiPercentOutline,
     mdiPencilBoxOutline,
+    mdiPercent,
     mdiPlus,
-    mdiPriorityHigh,
     mdiTagMultipleOutline,
     mdiTimerSand,
     mdiTrafficLightOutline,
@@ -390,26 +420,28 @@ import { STATUS_LABEL, nextOptions, makeDefaultStatus, canTransition, withoutBla
 import { useFetchTask } from '@/composables/fetchTask';
 import { useLocalStorage } from '@/composables/localStorage';
 import { loadConfigValue } from '@/config';
-import { optionalDateTime, range, required } from '@/rules';
+import { required } from '@/rules';
+import dayjs from 'dayjs';
 import { useCalendarsStore } from '@/stores/calendars';
 
-import dayjs from 'dayjs';
+import { leadTimeDays, resolvedLeadTime, taskInstant, urgencyOf, URGENCY_LABEL, type Importance } from '@/urgency';
+import { useTasksStore } from '@/stores/tasks';
+import { useTaskSettingsStore } from '@/stores/taskSettings';
+import { usePlansStore } from '@/stores/plans';
 
 type EditableTask = {
     title: string;
     tags: string[];
     status: Status;
-    progress: number;
-    importance: number;
-    urgency: number;
-    start_at: string;
+    importance: Importance | null;
+    lead_time: string;
+    available_from: string;
     due_by: string;
     deadline: string;
     // When each date rings: `null` is the default from the settings, which the note does not
     // mention, and a list, even an empty one, is the task's own.
     due_by_alarms: string[] | null;
     deadline_alarms: string[] | null;
-    scheduled_dates: string[];
     note: string;
 };
 
@@ -427,6 +459,15 @@ const pathRef = toRef(props, 'taskPath');
 // Composables
 const { task, loading, error, refresh } = useFetchTask(pathRef);
 const calendars = useCalendarsStore();
+const tasks = useTasksStore();
+const settings = useTaskSettingsStore();
+const derivedProgress = computed(() => tasks.progress(uuid.value));
+const defaultLeadTime = computed(() => resolvedLeadTime({}, form.tags, settings.settings));
+const derivedUrgency = computed(() => tasks.urgency(uuid.value, urgencyOf(form, form.tags, settings.settings, tasks.now), form.status.kind));
+const plans = usePlansStore();
+const plannedDays = computed(() => plans.plannedDays(uuid.value));
+const leadTimeRule = (value: string) => !value?.trim() || leadTimeDays(value) !== undefined || 'Use whole days or weeks, such as 14d or 2w.';
+const taskDateRule = (value: string) => !value || taskInstant(value, dayjs.tz.guess()) !== undefined || 'Use a valid YYYY-MM-DD date or a datetime with its UTC offset.';
 
 // Emits
 const emit = defineEmits<{
@@ -444,15 +485,13 @@ const form = reactive<EditableTask>({
     tags: props.selectedTag ? [props.selectedTag] : [],
     // A new task starts in the backlog: To do is a commitment the author makes by moving it there.
     status: { kind: 'backlog' },
-    progress: 0,
-    importance: 3,
-    urgency: 3,
-    start_at: '',
+    importance: null,
+    lead_time: '',
+    available_from: '',
     due_by: '',
     deadline: '',
     due_by_alarms: null,
     deadline_alarms: null,
-    scheduled_dates: [],
     note: '',
 });
 const uiValid = ref(true);
@@ -482,15 +521,13 @@ const initialForm = computed<EditableTask>(() => {
             title: '',
             tags: defaultTags,
             status: { kind: 'backlog' },
-            progress: 0,
-            importance: 3,
-            urgency: 3,
-            start_at: '',
+            importance: null,
+            lead_time: '',
+            available_from: '',
             due_by: '',
             deadline: '',
             due_by_alarms: null,
             deadline_alarms: null,
-            scheduled_dates: [],
             note: '',
         };
     }
@@ -498,24 +535,15 @@ const initialForm = computed<EditableTask>(() => {
         title: t.title ?? '',
         tags: Array.isArray(t.tags) ? [...t.tags] : [],
         status: (t.status === undefined || t.status === null) ? { kind: 'backlog' } : { ...t.status },
-        progress: t.progress ?? 0,
-        importance: t.importance ?? 3,
-        urgency: t.urgency ?? 3,
-        start_at: t.start_at ?? '',
+        importance: t.importance ?? null,
+        lead_time: t.lead_time ?? '',
+        available_from: t.available_from ?? '',
         due_by: t.due_by ?? '',
         deadline: t.deadline ?? '',
         due_by_alarms: t.alarms?.due_by ? [...t.alarms.due_by] : null,
         deadline_alarms: t.alarms?.deadline ? [...t.alarms.deadline] : null,
-        scheduled_dates: Array.isArray(t.scheduled_dates) ? [...t.scheduled_dates] : [],
         note: t.note ?? '',
     };
-});
-
-const progress = computed<number>({
-    get: () => form.progress,
-    set: (p) => {
-        form.progress = Math.round(p);
-    },
 });
 
 const statusOptions = computed<{ kind: StatusKind, label: string }[]>(() => {
@@ -563,28 +591,17 @@ const tagItems = computed<{ title: string; value: string; }[]>(() =>
     })
 );
 
-// v3 <v-date-picker multiple> works with Date objects rather than formatted strings
-const scheduledDatesAsDates = computed<Date[]>(() =>
-    form.scheduled_dates.map((date) => dayjs(date).toDate())
-);
-
-function onScheduledDatesChange(dates: unknown) {
-    form.scheduled_dates = (dates as Date[]).map((date) => dayjs(date).format('YYYY-MM-DD'));
-}
-
 const isModified = computed<boolean>(() => {
     return (
         form.title !== initialForm.value.title ||
         !arraysEqual(form.tags, initialForm.value.tags) ||
         !statusEqual(form.status, initialForm.value.status) ||
-        form.progress !== initialForm.value.progress ||
         form.importance !== initialForm.value.importance ||
-        form.urgency !== initialForm.value.urgency ||
-        form.start_at !== initialForm.value.start_at ||
+        form.lead_time !== initialForm.value.lead_time ||
+        form.available_from !== initialForm.value.available_from ||
         form.due_by !== initialForm.value.due_by ||
         form.deadline !== initialForm.value.deadline ||
         !sameTaskAlarms(taskAlarmsToWrite(form), taskAlarmsToWrite(initialForm.value)) ||
-        !arraysEqual(form.scheduled_dates, initialForm.value.scheduled_dates) ||
         form.note !== initialForm.value.note
     );
 });
@@ -632,6 +649,8 @@ onMounted(() => {
     window.addEventListener('beforeunload', onBeforeunload);
     // The default alarms are shown beside a date's own, and live in the calendar configuration.
     // Without it they read as the built-in ones, which is only wrong until it has loaded.
+    void plans.loadAll().catch(() => undefined);
+    void settings.load();
     calendars.ensureLoaded().catch(() => undefined);
 });
 
@@ -670,30 +689,26 @@ function resetFromTask(t?: Task | undefined | null): void {
         form.title = '';
         form.tags = defaultTags;
         form.status = { kind: 'backlog' };
-        form.progress = 0;
-        form.importance = 3;
-        form.urgency = 3;
-        form.start_at = '';
+        form.importance = null;
+        form.lead_time = '';
+        form.available_from = '';
         form.due_by = '';
         form.deadline = '';
         form.due_by_alarms = null;
         form.deadline_alarms = null;
-        form.scheduled_dates = [];
         form.note = '';
     }
     else {
         form.title = t.title ?? '';
         form.tags = Array.isArray(t.tags) ? [...t.tags] : [];
         form.status = (t.status === undefined || t.status === null) ? { kind: 'backlog' } : { ...t.status };
-        form.progress = t.progress ?? 0;
-        form.importance  = t.importance ?? 3;
-        form.urgency = t.urgency ?? 3;
-        form.start_at = t.start_at ?? '';
+        form.importance = t.importance ?? null;
+        form.lead_time = t.lead_time ?? '';
+        form.available_from = t.available_from ?? '';
         form.due_by = t.due_by ?? '';
         form.deadline = t.deadline ?? '';
         form.due_by_alarms = t.alarms?.due_by ? [...t.alarms.due_by] : null;
         form.deadline_alarms = t.alarms?.deadline ? [...t.alarms.deadline] : null;
-        form.scheduled_dates = Array.isArray(t.scheduled_dates) ? [...t.scheduled_dates] : [];
         form.note = t.note ?? '';
 
         // Automatically assess the task for existing tasks
@@ -723,22 +738,22 @@ async function onSave(): Promise<void> {
     }
     const alarms = taskAlarmsToWrite(form);
     // Create a Task value
-    const task = {
+    const savedTask: Task = {
+        source: task.value?.source,
+        created_at: task.value?.created_at,
         uuid: uuid.value,
         title: form.title.trim(),
         tags: [...form.tags],
         status: withoutBlanks(form.status),
-        progress: form.progress,
-        importance: form.importance,
-        urgency: form.urgency,
-        ...(form.start_at !== '' ? { start_at: form.start_at } : {}),
+        importance: form.importance ?? undefined,
+        ...(form.lead_time.trim() ? { lead_time: form.lead_time.trim() } : {}),
+        ...(form.available_from !== '' ? { available_from: form.available_from } : {}),
         ...(form.due_by !== '' ? { due_by: form.due_by } : {}),
         ...(form.deadline !== '' ? { deadline: form.deadline } : {}),
         ...(Object.keys(alarms).length > 0 ? { alarms } : {}),
-        scheduled_dates: [...form.scheduled_dates],
         note: form.note,
     };
-    emit('save', task);
+    emit('save', savedTask);
 }
 
 function onDelete(): void {
@@ -806,10 +821,8 @@ async function performTaskAssessment(title: string) {
             title: title,
             tags: (form.tags || []).filter((t) => t !== 'quick-create'),
             status: form.status,
-            progress: form.progress,
-            importance: form.importance,
-            urgency: form.urgency,
-            start_at: form.start_at,
+            importance: form.importance ?? undefined,
+            available_from: form.available_from,
             due_by: form.due_by,
             deadline: form.deadline,
             note: form.note,
@@ -864,6 +877,59 @@ defineExpose({
 .controls {
     display: flex;
     flex-direction: row;
+}
+
+.editor-header {
+    flex-shrink: 0;
+    white-space: normal;
+}
+
+.editor-heading,
+.editor-title,
+.editor-actions,
+.editor-overview {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.editor-title {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.editor-actions {
+    margin-left: auto;
+}
+
+.editor-overview {
+    margin-top: 8px;
+    column-gap: 20px;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.overview-chip {
+    font-size: 12px;
+}
+
+.header-progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 160px;
+    max-width: 220px;
+    min-width: 0;
+
+    > .v-icon {
+        opacity: var(--v-medium-emphasis-opacity);
+    }
+
+    .header-progress-value {
+        flex: 1 1 0;
+        min-width: 0;
+    }
 }
 
 // The widths are of the content, with the pane's padding added outside them. Vuetify's reset has

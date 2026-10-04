@@ -1,0 +1,781 @@
+{
+    "cases": [
+        {
+            "name": "no dates",
+            "task": {},
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "none",
+                "slack_ratio": null,
+                "reference": null,
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "GUNet Notice October 4",
+            "task": {
+                "deadline": "2026-10-15"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "notice",
+                "slack_ratio": 1.6607142840608464,
+                "reference": "2026-10-15T14:59:59.999Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "GUNet Urgent October 9",
+            "task": {
+                "deadline": "2026-10-15"
+            },
+            "now": "2026-10-08T15:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "urgent",
+                "slack_ratio": 0.9999999983465607,
+                "reference": "2026-10-15T14:59:59.999Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "calm",
+            "task": {
+                "deadline": "2026-11-20"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "calm",
+                "slack_ratio": 6.80357142691799,
+                "reference": "2026-11-20T14:59:59.999Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "boundary 14",
+            "task": {
+                "deadline": "2026-10-18T00:00:00+00:00"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "notice",
+                "slack_ratio": 2.0,
+                "reference": "2026-10-18T00:00:00.000Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "boundary 7",
+            "task": {
+                "deadline": "2026-10-11T00:00:00+00:00"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "urgent",
+                "slack_ratio": 1.0,
+                "reference": "2026-10-11T00:00:00.000Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "boundary 0",
+            "task": {
+                "deadline": "2026-10-04T00:00:00+00:00"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "urgent",
+                "slack_ratio": 0.0,
+                "reference": "2026-10-04T00:00:00.000Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "target missed without deadline",
+            "task": {
+                "due_by": "2026-10-01"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "target_missed",
+                "slack_ratio": -0.33928571593915346,
+                "reference": "2026-10-01T14:59:59.999Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "target missed uses deadline",
+            "task": {
+                "due_by": "2026-10-01",
+                "deadline": "2026-10-20"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "target_missed",
+                "slack_ratio": 2.374999998346561,
+                "reference": "2026-10-20T14:59:59.999Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "both missed",
+            "task": {
+                "due_by": "2026-10-01",
+                "deadline": "2026-10-03"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "overdue",
+                "slack_ratio": -0.053571430224867725,
+                "reference": "2026-10-03T14:59:59.999Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "nearest deadline",
+            "task": {
+                "due_by": "2026-10-20",
+                "deadline": "2026-10-10"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "urgent",
+                "slack_ratio": 0.9464285697751321,
+                "reference": "2026-10-10T14:59:59.999Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "done has no urgency",
+            "task": {
+                "deadline": "2026-10-01",
+                "status": {
+                    "kind": "done"
+                }
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "none",
+                "slack_ratio": null,
+                "reference": null,
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "canceled has no urgency",
+            "task": {
+                "due_by": "2026-10-01",
+                "status": {
+                    "kind": "canceled"
+                }
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "none",
+                "slack_ratio": null,
+                "reference": null,
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "own lead overrides tags",
+            "task": {
+                "deadline": "2026-10-15",
+                "lead_time": "1d"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [
+                "trip",
+                "paper"
+            ],
+            "settings": {
+                "lead_time_by_tag": {
+                    "trip": "30d",
+                    "paper": "21d"
+                },
+                "default_lead_time": "2w"
+            },
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "calm",
+                "slack_ratio": 11.624999988425925,
+                "reference": "2026-10-15T14:59:59.999Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "largest tag lead",
+            "task": {
+                "deadline": "2026-10-15"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [
+                "trip",
+                "paper"
+            ],
+            "settings": {
+                "lead_time_by_tag": {
+                    "trip": "30d",
+                    "paper": "21d"
+                }
+            },
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "urgent",
+                "slack_ratio": 0.3874999996141975,
+                "reference": "2026-10-15T14:59:59.999Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "global lead",
+            "task": {
+                "deadline": "2026-10-15"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {
+                "default_lead_time": "2w"
+            },
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "urgent",
+                "slack_ratio": 0.8303571420304232,
+                "reference": "2026-10-15T14:59:59.999Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "invalid own falls back",
+            "task": {
+                "deadline": "2026-10-15",
+                "lead_time": "-2w"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {
+                "default_lead_time": "2w"
+            },
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "urgent",
+                "slack_ratio": 0.8303571420304232,
+                "reference": "2026-10-15T14:59:59.999Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "unavailable short window",
+            "task": {
+                "deadline": "2026-10-15",
+                "available_from": "2026-10-12"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "notice",
+                "slack_ratio": 1.6607142840608464,
+                "reference": "2026-10-15T14:59:59.999Z",
+                "actionable": false,
+                "short_window": true
+            }
+        },
+        {
+            "name": "available long window",
+            "task": {
+                "deadline": "2026-10-15",
+                "available_from": "2026-10-01"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "notice",
+                "slack_ratio": 1.6607142840608464,
+                "reference": "2026-10-15T14:59:59.999Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "legacy availability",
+            "task": {
+                "deadline": "2026-10-15",
+                "start_at": "2026-10-12"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "notice",
+                "slack_ratio": 1.6607142840608464,
+                "reference": "2026-10-15T14:59:59.999Z",
+                "actionable": false,
+                "short_window": true
+            }
+        },
+        {
+            "name": "invalid dates ignored",
+            "task": {
+                "deadline": "2026-02-30",
+                "due_by": true
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "none",
+                "slack_ratio": null,
+                "reference": null,
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "offset instant",
+            "task": {
+                "deadline": "2026-10-04 10:00:00+09:00"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "urgent",
+                "slack_ratio": 0.005952380952380952,
+                "reference": "2026-10-04T01:00:00.000Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "bare datetime ignored",
+            "task": {
+                "deadline": "2026-10-04 10:00:00"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "none",
+                "slack_ratio": null,
+                "reference": null,
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "day remains open",
+            "task": {
+                "deadline": "2026-10-04"
+            },
+            "now": "2026-10-04T14:59:59Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "urgent",
+                "slack_ratio": 1.6517857142857142e-06,
+                "reference": "2026-10-04T14:59:59.999Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "next local day overdue",
+            "task": {
+                "deadline": "2026-10-04"
+            },
+            "now": "2026-10-04T15:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "overdue",
+                "slack_ratio": -1.6534391534391535e-09,
+                "reference": "2026-10-04T14:59:59.999Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "zero lead ahead",
+            "task": {
+                "deadline": "2026-10-15",
+                "lead_time": "0d"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "calm",
+                "slack_ratio": null,
+                "reference": "2026-10-15T14:59:59.999Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "zero lead passed",
+            "task": {
+                "deadline": "2026-10-01",
+                "lead_time": "0d"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "overdue",
+                "slack_ratio": null,
+                "reference": "2026-10-01T14:59:59.999Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "DST date-only deadline",
+            "task": {
+                "deadline": "2026-11-01",
+                "available_from": "2026-10-26",
+                "lead_time": "1w"
+            },
+            "now": "2026-10-26T12:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "America/New_York",
+            "expected": {
+                "level": "urgent",
+                "slack_ratio": 0.9583333316798941,
+                "reference": "2026-11-02T04:59:59.999Z",
+                "actionable": true,
+                "short_window": true
+            }
+        },
+        {
+            "name": "minute datetime with offset",
+            "task": {
+                "deadline": "2026-10-04 10:00+09:00"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "urgent",
+                "slack_ratio": 0.005952380952380952,
+                "reference": "2026-10-04T01:00:00.000Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "invalid calendar date",
+            "task": {
+                "deadline": "2026-99-99"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "none",
+                "slack_ratio": null,
+                "reference": null,
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "huge lead safely resolves",
+            "task": {
+                "deadline": "2026-10-15",
+                "lead_time": "9007199254740991d"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "urgent",
+                "slack_ratio": 1.2906342648417642e-15,
+                "reference": "2026-10-15T14:59:59.999Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "DST gap at urgency window",
+            "task": {
+                "deadline": "2026-03-15 02:30:00-04:00",
+                "available_from": "2026-03-01",
+                "lead_time": "7d"
+            },
+            "tags": [],
+            "settings": {},
+            "now": "2026-03-01T12:00:00Z",
+            "zone": "America/New_York",
+            "expected": {
+                "level": "notice",
+                "slack_ratio": 1.9672619047619049,
+                "reference": "2026-03-15T06:30:00.000Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "Midnight gap after date-only limit",
+            "task": {
+                "deadline": "2018-11-03"
+            },
+            "tags": [],
+            "settings": {},
+            "now": "2018-11-01T12:00:00Z",
+            "zone": "America/Sao_Paulo",
+            "expected": {
+                "level": "urgent",
+                "slack_ratio": 0.37499999834656084,
+                "reference": "2018-11-04T02:59:59.999Z",
+                "actionable": true,
+                "short_window": false
+            }
+        },
+        {
+            "name": "Repeated clock at urgency window",
+            "task": {
+                "deadline": "2026-11-08 01:30:00-05:00",
+                "available_from": "2026-11-01 01:45:00-04:00",
+                "lead_time": "7d"
+            },
+            "tags": [],
+            "settings": {},
+            "now": "2026-10-28T12:00:00Z",
+            "zone": "America/New_York",
+            "expected": {
+                "level": "notice",
+                "slack_ratio": 1.5386904761904763,
+                "reference": "2026-11-08T06:30:00.000Z",
+                "actionable": false,
+                "short_window": true
+            }
+        },
+        {
+            "name": "short target window remains after time passes: urgent",
+            "task": {
+                "due_by": "2026-10-05",
+                "deadline": "2026-11-20",
+                "available_from": "2026-10-04",
+                "lead_time": "7d"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "urgent",
+                "slack_ratio": 0.23214285548941802,
+                "reference": "2026-10-05T14:59:59.999Z",
+                "actionable": true,
+                "short_window": true
+            }
+        },
+        {
+            "name": "short target window remains after time passes: target_missed",
+            "task": {
+                "due_by": "2026-10-05",
+                "deadline": "2026-11-20",
+                "available_from": "2026-10-04",
+                "lead_time": "7d"
+            },
+            "now": "2026-10-06T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "target_missed",
+                "slack_ratio": 6.517857141203704,
+                "reference": "2026-11-20T14:59:59.999Z",
+                "actionable": true,
+                "short_window": true
+            }
+        },
+        {
+            "name": "short target window remains after time passes: overdue",
+            "task": {
+                "due_by": "2026-10-05",
+                "deadline": "2026-11-20",
+                "available_from": "2026-10-04",
+                "lead_time": "7d"
+            },
+            "now": "2026-11-21T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "overdue",
+                "slack_ratio": -0.053571430224867725,
+                "reference": "2026-11-20T14:59:59.999Z",
+                "actionable": true,
+                "short_window": true
+            }
+        }
+    ],
+    "grammar": [
+        {
+            "value": "5d",
+            "days": 5
+        },
+        {
+            "value": "2w",
+            "days": 14
+        },
+        {
+            "value": "3 days",
+            "days": 3
+        },
+        {
+            "value": "1 week",
+            "days": 7
+        },
+        {
+            "value": "0d",
+            "days": 0
+        },
+        {
+            "value": " 2w ",
+            "days": 14
+        },
+        {
+            "value": "1.5d",
+            "days": null
+        },
+        {
+            "value": "-2w",
+            "days": null
+        },
+        {
+            "value": "+1d",
+            "days": null
+        },
+        {
+            "value": "7h",
+            "days": null
+        },
+        {
+            "value": "999999999999999999999d",
+            "days": null
+        },
+        {
+            "value": 7,
+            "days": null
+        },
+        {
+            "value": null,
+            "days": null
+        }
+    ],
+    "importance": [
+        {
+            "value": 1.0,
+            "expected": "low"
+        },
+        {
+            "value": 2.0,
+            "expected": "low"
+        },
+        {
+            "value": 3.0,
+            "expected": null
+        },
+        {
+            "value": 4.0,
+            "expected": "medium"
+        },
+        {
+            "value": 5.0,
+            "expected": "high"
+        },
+        {
+            "value": 3.5,
+            "expected": null
+        },
+        {
+            "value": true,
+            "expected": null
+        },
+        {
+            "value": false,
+            "expected": null
+        },
+        {
+            "value": "high",
+            "expected": "high"
+        },
+        {
+            "value": null,
+            "expected": null
+        }
+    ]
+}

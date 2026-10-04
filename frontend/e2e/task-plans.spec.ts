@@ -1,0 +1,241 @@
+import { expect, test } from '@playwright/test';
+import YAML from 'yaml';
+import { API_URL, mockBackend, uuid } from './backend';
+
+test.use({ viewport: { width: 3000, height: 1000 }, timezoneId: 'Asia/Tokyo' });
+const A = uuid(1);
+const B = uuid(2);
+const C = uuid(3);
+const task = (title: string, fields = '') => `---\ncreated_at: 2026-10-01 10:00:00+09:00\ntask:\n    status: {kind: todo}\n    importance: medium\n${fields}tags: [work]\n---\n\n# ${title}\n`;
+
+for (const width of [390, 600, 1000, 1600]) {
+    test(`keeps week controls reachable and scrolls the days at ${width}px`, async ({ context, page }) => {
+        await page.setViewportSize({ width, height: 900 });
+        await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
+        const repository = await mockBackend(context, {
+            [`.tasks/${A}.md`]: task('Alpha'),
+            '.mory/plans/2026-09.yaml': `2026-09-30:\n    - task: ${A}\n      origin: planned\n`,
+        });
+        await page.goto('/tasks-next/_/descendants/schedule');
+        const planner = page.locator('.planning-view');
+        const collect = planner.getByRole('button', { name: 'Collect undone' });
+        await expect(collect).toBeEnabled();
+        const bounds = await planner.boundingBox();
+        const control = await collect.boundingBox();
+        expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+        expect(control!.x + control!.width).toBeLessThanOrEqual(bounds!.x + bounds!.width);
+        await collect.click();
+        await expect.poll(() => repository.writes.some((write) => write.path === '.mory/plans/2026-09.yaml' && write.content.includes('missed'))).toBe(true);
+        const lastDay = planner.locator('.day').last();
+        await lastDay.getByRole('button', { name: 'Record interruption' }).click();
+        await expect(page.getByRole('dialog')).toBeVisible();
+        await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+        await planner.getByRole('button', { name: 'Next', exact: true }).click();
+        await expect(planner.locator('.week-range')).toContainText('2026-10-11');
+    });
+}
+
+test('plans by dragging, records effort and interruptions, collects history and completes the note', async ({ context, page }) => {
+    await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
+    const repository = await mockBackend(context, {
+        [`.tasks/${A}.md`]: task('Alpha'),
+        [`.tasks/${B}.md`]: task('Beta'),
+        [`.tasks/${C}.md`]: task('Later', '    available_from: 2026-10-10\n'),
+        '.mory/plans/2026-09.yaml': `2026-09-30:\n    - task: ${B}\n      origin: planned\n`,
+    });
+    const failures: string[] = [];
+    page.on('pageerror', (error) => failures.push(error.message));
+    await page.goto('/tasks-next/_/descendants/schedule');
+    const planner = page.locator('.planning-view');
+    await expect(planner).toBeVisible();
+    await expect(planner.locator('.candidates')).not.toContainText('Later');
+    await expect(planner.getByRole('button', { name: 'Collect undone' })).toBeEnabled();
+    const today = planner.locator('.day.today');
+    const candidate = planner.locator('.candidate').filter({ hasText: 'Alpha' });
+    await expect(candidate).toBeVisible();
+    await candidate.click({ trial: true });
+    const box = await candidate.boundingBox();
+    if (!box) {
+        throw new Error('Candidate is not drawn');
+    }
+    const target = await today.locator('.entries').boundingBox();
+    if (!target) {
+        throw new Error('Day drop area is not drawn');
+    }
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width, box.y + box.height, { steps: 5 });
+    await expect(page.locator('.sortable-fallback')).toBeVisible();
+    await page.mouse.move(target.x + 100, target.y + 60, { steps: 20 });
+    await expect(today).toHaveCSS('outline-style', 'solid');
+    await expect(planner.locator('.candidates .vacated')).toHaveCSS('visibility', 'hidden');
+    await page.mouse.up();
+    await expect(today.locator('.planned-entry')).toContainText('Alpha');
+    await expect(planner.getByRole('button', { name: 'Collect undone' })).toBeEnabled();
+    expect(repository.writes.filter((write) => write.path === '.mory/plans/2026-10.yaml')).toHaveLength(1);
+    await expect(planner).not.toContainText('changed elsewhere');
+    await today.locator('.planned-entry').getByRole('checkbox').check();
+    await expect(today.locator('.planned-entry')).toContainText('worked');
+    await today.getByRole('button', { name: 'Record interruption' }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByRole('combobox', { name: 'Task worked on' }).click();
+    await page.getByRole('option', { name: 'Beta', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Record worked' }).click();
+    await expect(today).toContainText('interruption · worked');
+    await planner.getByRole('button', { name: 'Collect undone' }).click();
+    await expect.poll(() => {
+        const write = repository.writes.filter((write) => write.path === '.mory/plans/2026-09.yaml').at(-1);
+        return write ? YAML.parse(write.content)['2026-09-30'][0].result : undefined;
+    }).toBe('missed');
+    const alpha = today.locator('.planned-entry').filter({ hasText: 'Alpha' });
+    await alpha.getByRole('button', { name: 'Complete task' }).click();
+    await expect.poll(() => repository.writes.some((write) => write.path === `.tasks/${A}.md` && write.content.includes('kind: done'))).toBe(true);
+    const october = repository.writes.filter((write) => write.path === '.mory/plans/2026-10.yaml').at(-1);
+    expect(YAML.parse(october!.content)['2026-10-04']).toEqual([{ task: A, origin: 'planned', result: 'worked' }, { task: B, origin: 'interruption', result: 'worked' }]);
+    expect(failures).toEqual([]);
+});
+
+test('orders day entries and moves an entry to another day', async ({ context, page }) => {
+    await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
+    const repository = await mockBackend(context, {
+        [`.tasks/${A}.md`]: task('Alpha'),
+        [`.tasks/${B}.md`]: task('Beta'),
+        '.mory/plans/2026-10.yaml': `2026-10-04:\n    - task: ${A}\n      origin: interruption\n      result: worked\n    - task: ${B}\n      origin: planned\n`,
+    });
+    await page.goto('/tasks-next/_/descendants/schedule');
+    const planner = page.locator('.planning-view');
+    const today = planner.locator('.day.today');
+    const alpha = today.locator('.planned-entry', { hasText: 'Alpha' });
+    const beta = today.locator('.planned-entry', { hasText: 'Beta' });
+    await expect(planner.getByRole('button', { name: 'Collect undone' })).toBeEnabled();
+    // Pick up the task's title, just as in Status; buttons and the effort checkbox stay clickable.
+    await beta.getByRole('link').click({ trial: true });
+    const source = await beta.getByRole('link').boundingBox();
+    const target = await alpha.boundingBox();
+    if (!source || !target) {
+        throw new Error('Plan entries are not drawn');
+    }
+    await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(source.x + source.width / 2 + 20, source.y + source.height / 2 + 20, { steps: 5 });
+    await expect(page.locator('.sortable-fallback')).toBeVisible();
+    await page.mouse.move(target.x + 100, target.y + 10, { steps: 20 });
+    await expect(today.locator('.planned-entry').first()).toContainText('Beta');
+    await page.mouse.up();
+    await expect.poll(() => repository.writes.length).toBe(1);
+    expect(YAML.parse(repository.writes[0].content)['2026-10-04']).toEqual([
+        { task: B, origin: 'planned' }, { task: A, origin: 'interruption', result: 'worked' },
+    ]);
+
+    const tomorrow = planner.locator('.day').filter({ has: page.locator('.v-card-title', { hasText: '2026-10-05' }) });
+    await alpha.getByRole('link').click({ trial: true });
+    const nextSource = await alpha.getByRole('link').boundingBox();
+    const destination = await tomorrow.locator('.entries').boundingBox();
+    if (!nextSource || !destination) {
+        throw new Error('Plan drop area is not drawn');
+    }
+    await page.mouse.move(nextSource.x + nextSource.width / 2, nextSource.y + nextSource.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(nextSource.x + nextSource.width / 2 + 20, nextSource.y + nextSource.height / 2 + 20, { steps: 5 });
+    await expect(page.locator('.sortable-fallback')).toBeVisible();
+    await page.mouse.move(destination.x + 100, destination.y + 60, { steps: 20 });
+    await expect(tomorrow).toHaveCSS('outline-style', 'solid');
+    await page.mouse.up();
+    await expect.poll(() => repository.writes.length).toBe(2);
+    expect(YAML.parse(repository.writes[1].content)).toEqual({
+        '2026-10-04': [{ task: B, origin: 'planned' }],
+        '2026-10-05': [{ task: A, origin: 'interruption', result: 'worked' }],
+    });
+    await expect(today.locator('.planned-entry')).toHaveCount(1);
+    await expect(today).not.toContainText('Alpha');
+    await expect(tomorrow.locator('.planned-entry')).toContainText('Alpha');
+    await expect(planner).not.toContainText('changed elsewhere');
+});
+
+test.describe('touch planning', () => {
+    test.use({ hasTouch: true, viewport: { width: 1100, height: 900 } });
+
+    test('picks up the task row with the Status view long press', async ({ browserName, context, page }) => {
+        test.skip(browserName !== 'chromium', 'CDP supplies real touch movement in Chromium.');
+        await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
+        const repository = await mockBackend(context, { [`.tasks/${A}.md`]: task('Alpha') });
+        await page.goto('/tasks-next/_/descendants/schedule');
+        const planner = page.locator('.planning-view');
+        const candidate = planner.locator('.candidate', { hasText: 'Alpha' });
+        await candidate.click({ trial: true });
+        const source = await candidate.boundingBox();
+        const target = await planner.locator('.day.today .entries').boundingBox();
+        if (!source || !target) {
+            throw new Error('Touch drop area is not drawn');
+        }
+        const client = await context.newCDPSession(page);
+        const start = { x: source.x + source.width / 2, y: source.y + source.height / 2 };
+        await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [start] });
+        // A short press remains a tap; only a long press starts Status-style dragging.
+        await page.waitForTimeout(200);
+        await expect(page.locator('.sortable-fallback')).toHaveCount(0);
+        const prevented = await candidate.evaluate((element) => !element.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })));
+        expect(prevented).toBe(true);
+        await page.waitForTimeout(400);
+        await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: start.x + 20, y: start.y + 20 }] });
+        await expect(page.locator('.sortable-fallback')).toBeVisible();
+        await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: target.x + 100, y: target.y + 60 }] });
+        await expect(planner.locator('.day.today')).toHaveCSS('outline-style', 'solid');
+        await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        await expect.poll(() => repository.writes.length).toBe(1);
+        expect(YAML.parse(repository.writes[0].content)['2026-10-04']).toEqual([{ task: A, origin: 'planned' }]);
+    });
+});
+
+test('shows an unknown task as removable history', async ({ context, page }) => {
+    await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
+    const repository = await mockBackend(context, { '.mory/plans/2026-10.yaml': `2026-10-04:\n    - task: ${A}\n      origin: planned\n` });
+    await page.goto('/tasks-next/_/descendants/schedule');
+    const entry = page.locator('.day.today .planned-entry');
+    await expect(entry).toContainText(`Unknown task ${A}`);
+    await expect(entry.getByRole('checkbox')).toBeDisabled();
+    await entry.getByRole('button', { name: 'Remove', exact: true }).click();
+    await expect.poll(() => YAML.parse(repository.writes.at(-1)?.content ?? '{}')['2026-10-04']).toEqual([]);
+});
+
+test('loads missed history when opening the status view directly', async ({ context, page }) => {
+    await mockBackend(context, {
+        [`.tasks/${A}.md`]: task('Alpha'),
+        '.mory/plans/2026-09.yaml': ['2026-09-01', '2026-09-02', '2026-09-03'].map((date) => `${date}:\n    - task: ${A}\n      origin: planned\n      result: missed\n`).join(''),
+    });
+    await page.goto('/tasks-next/_/descendants/status');
+    await expect(page.locator('.status-view .task-list-item').filter({ hasText: 'Alpha' })).toContainText('3 missed days');
+});
+
+test('keeps the interruption selection fixed while its plan is saving', async ({ context, page }) => {
+    await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
+    const repository = await mockBackend(context, {
+        [`.tasks/${A}.md`]: task('Alpha'),
+        [`.tasks/${B}.md`]: task('Beta'),
+        '.mory/plans/2026-10.yaml': `2026-10-04:\n    - task: ${B}\n      origin: planned\n`,
+    });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    await context.route(`${API_URL}notes/**`, async (route) => {
+        if (route.request().method() === 'PUT') {
+            await gate;
+        }
+        await route.fallback();
+    });
+    await page.goto('/tasks-next/_/descendants/schedule');
+    await page.locator('.day.today').getByRole('button', { name: 'Record interruption' }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByRole('combobox', { name: 'Task worked on' }).click();
+    await page.getByRole('option', { name: 'Alpha', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Record worked' }).click();
+    try {
+        await expect(dialog.getByRole('combobox', { name: 'Task worked on' })).toBeDisabled();
+        await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    }
+    finally {
+        release();
+    }
+    await expect(dialog).not.toBeVisible();
+    const write = repository.writes.at(-1)!;
+    expect(YAML.parse(write.content)['2026-10-04']).toEqual([{ task: B, origin: 'planned' }, { task: A, origin: 'interruption', result: 'worked' }]);
+});

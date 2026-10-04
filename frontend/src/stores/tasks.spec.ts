@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EntriesResponse, ListEntry2 } from '@/api';
 import type { Task } from '@/task';
 import type { TaskMetadata, TaskTreeItem } from '@/task-forest';
+import hierarchyFixtures from '../../../fixtures/urgency/hierarchy.json';
 
 const apiMocks = vi.hoisted(() => ({
     getEntries: vi.fn<(since?: string) => Promise<EntriesResponse>>(),
@@ -35,12 +36,13 @@ interface Spec {
     title?: string;
     day?: number;
     status?: string;
+    deadline?: string;
 }
 
 function entry(spec: Spec): ListEntry2 {
     const metadata: TaskMetadata = {
         tags: spec.tags ?? [],
-        task: { status: { kind: (spec.status ?? 'todo') } as never, progress: 0 },
+        task: { status: { kind: (spec.status ?? 'todo') } as never, deadline: spec.deadline },
     };
     return {
         path: spec.path,
@@ -146,6 +148,28 @@ const sample: Spec[] = [
 ];
 
 describe('the derived forest', () => {
+    for (const fixture of hierarchyFixtures) {
+        it(`matches shared hierarchy: ${fixture.name}`, async () => {
+            const mod = await load();
+            apiMocks.getEntries.mockResolvedValue({
+                kind: 'full',
+                commit: 'hierarchy',
+                head: 'hierarchy',
+                entries: fixture.entries.map((item) => ({
+                    ...entry({ path: item.path }),
+                    metadata: item.metadata ? { tags: [], ...item.metadata } : null,
+                })),
+            });
+            const store = mod.useTasksStore();
+            await store.init();
+            store.now = Date.parse('2026-10-04T00:00:00Z');
+            for (const expected of fixture.expected) {
+                const id = store.allTasks.find((task) => task.path === expected.path)!.uuid;
+                expect(store.urgency(id).level).toBe(expected.level);
+                expect(store.progress(id) ?? null).toBe(expected.progress);
+            }
+        });
+    }
     it('is empty until loaded, and reports it', async () => {
         const mod = await load();
         repository(sample);
@@ -320,10 +344,6 @@ describe('save', () => {
         title: 'Written',
         tags: [],
         status: { kind: 'todo' },
-        progress: 0,
-        importance: 3,
-        urgency: 3,
-        scheduled_dates: [],
         note: '',
     });
 
@@ -456,5 +476,33 @@ describe('move', () => {
     it('refuses to move a task it does not hold', async () => {
         const { store } = await storeWith(sample);
         await expect(store.move('unknown', null)).rejects.toThrow(/unknown/);
+    });
+});
+
+describe('derived parent progress', () => {
+    it('combines an edited parent with its open descendants while keeping its own availability', async () => {
+        const { store } = await storeWith([
+            { path: `.tasks/${uuid(1)}.md` },
+            { path: `.tasks/${uuid(1)}/${uuid(2)}.md`, deadline: '1970-01-01' },
+        ]);
+        const { urgencyOf } = await import('@/urgency');
+        const edited = urgencyOf({ deadline: '2099-01-01', available_from: '2098-01-01' });
+        const inherited = store.urgency(uuid(1), edited, 'todo');
+        expect(inherited.level).toBe('overdue');
+        expect(inherited.actionable).toBe(false);
+        expect(inherited.short_window).toBe(edited.short_window);
+        expect(store.urgency(uuid(1), edited, 'done')).toEqual(edited);
+    });
+    it('counts done leaves, excluding canceled leaves and intermediate parents', async () => {
+        const { store } = await storeWith([
+            { path: `.tasks/${uuid(1)}.md` },
+            { path: `.tasks/${uuid(1)}/${uuid(2)}.md`, status: 'done' },
+            { path: `.tasks/${uuid(1)}/${uuid(3)}.md`, status: 'done' },
+            { path: `.tasks/${uuid(1)}/${uuid(3)}/${uuid(4)}.md`, status: 'todo' },
+            { path: `.tasks/${uuid(1)}/${uuid(5)}.md`, status: 'canceled' },
+        ]);
+        expect(store.progress(uuid(1))).toBe(50);
+        expect(store.progress(uuid(2))).toBeUndefined();
+        expect(store.progress(uuid(3))).toBe(0);
     });
 });

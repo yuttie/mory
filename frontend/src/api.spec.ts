@@ -71,11 +71,11 @@ describe('legacy task archive', () => {
         expect(client.get).toHaveBeenCalledTimes(1);
     });
 
-    it('reads the old path only when the archive is missing', async () => {
-        client.get.mockRejectedValueOnce({ isAxiosError: true, response: { status: 404 } });
-        client.get.mockResolvedValueOnce({ status: 200, data, headers: { etag: 'old' } });
-        await getTaskData();
-        expect(client.get.mock.calls[1][0]).toBe('/v2/files/.mory/tasks.yaml');
+    it('never reads task settings as legacy task data', async () => {
+        client.get.mockRejectedValue({ isAxiosError: true, response: { status: 404 } });
+        await expect(getTaskData()).rejects.toMatchObject({ response: { status: 404 } });
+        expect(client.get).toHaveBeenCalledTimes(1);
+        expect(client.get.mock.calls[0][0]).toBe('/v2/files/.mory/tasks-v1.yaml');
     });
 
     it('does not create a file when neither path exists', async () => {

@@ -62,10 +62,13 @@ async function moveOver(page: Page, target: Locator, at: 'middle' | 'bottom' = '
 const LIFT = 20;
 
 async function startDrag(page: Page, item: Locator): Promise<void> {
+    // Coordinate events need the same readiness check that locator clicks perform.
+    await item.click({ trial: true });
     const { x, y, width, height } = await box(item);
     await page.mouse.move(x + width / 2, y + height / 2);
     await page.mouse.down();
     await page.mouse.move(x + width / 2 + LIFT, y + height / 2 + LIFT, { steps: 5 });
+    await expect(page.locator('.sortable-fallback')).toBeVisible();
 }
 
 // Measures the target only once the drag is under way: an empty column has no height to drop into
@@ -217,9 +220,9 @@ test('keeps the tasks a dragged one passes over from answering the pointer', asy
         [BETA]: note('Beta', ['kind: in_progress'], ['due_by: 2026-10-01']),
     });
     const beta = task(page, 'Beta');
-    const due = beta.locator('.additional-info').first();
+    const due = beta.locator('.task-date-cue[data-field="due_by"]');
     // What the date's tooltip says: the row itself says how far off the date is instead.
-    const tooltip = page.getByRole('tooltip').getByText('2026-10-01');
+    const tooltip = page.getByRole('tooltip').getByText('Due: 2026-10-01', { exact: true });
     const background = () => beta.evaluate((element) => getComputedStyle(element).backgroundColor);
     const resting = await background();
 

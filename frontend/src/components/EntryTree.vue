@@ -108,11 +108,13 @@ function findItem(items: Item[], id: unknown): Item | undefined {
 </script>
 
 <style scoped lang="scss">
-.entry-tree {
-    :deep(.v-treeview-item) {
-        // Row actions stay out of the way until the row is pointed at.
-        &:not(:hover) .v-list-item__append {
-            display: none;
+@media (hover: hover) {
+    .entry-tree {
+        :deep(.v-treeview-item) {
+            // Keep summary text visible and reserve action space so rows do not shift on hover.
+            &:not(:hover):not(:focus-within) .v-list-item__append button {
+                visibility: hidden;
+            }
         }
     }
 }

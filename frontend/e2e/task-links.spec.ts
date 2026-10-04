@@ -2,13 +2,12 @@ import { expect, test } from '@playwright/test';
 import type { Locator, Page } from '@playwright/test';
 import { mockBackend, uuid } from './backend';
 
-function note(title: string, { tags = [], scheduledDates = [] }: { tags?: string[]; scheduledDates?: string[] } = {}): string {
+function note(title: string, { tags = [] }: { tags?: string[] } = {}): string {
     return [
         '---',
         'task:',
         '  status:',
         '    kind: todo',
-        ...(scheduledDates.length > 0 ? [`  scheduled_dates: [${scheduledDates.join(', ')}]`] : []),
         ...(tags.length > 0 ? [`tags: [${tags.join(', ')}]`] : []),
         '---',
         '',
@@ -20,14 +19,13 @@ function note(title: string, { tags = [], scheduledDates = [] }: { tags?: string
 const PROJECT = uuid(1);
 // Gives Project a child, so the tree keeps it at the top rather than filing it under Untagged.
 const STEP = uuid(2);
-// A root task with no children, which the tree files under its tag rather than at the top. Scheduled,
-// so the Schedule view lists it too.
+// A root task with no children, which the tree files under its tag rather than at the top.
 const ERRAND = uuid(3);
 
 const NOTES = {
     [`.tasks/${PROJECT}.md`]: note('Project'),
     [`.tasks/${PROJECT}/${STEP}.md`]: note('Step'),
-    [`.tasks/${ERRAND}.md`]: note('Errand', { tags: ['work'], scheduledDates: ['2026-10-01'] }),
+    [`.tasks/${ERRAND}.md`]: note('Errand', { tags: ['work'] }),
 };
 
 function tree(page: Page): Locator {
@@ -122,7 +120,7 @@ test.describe('the tree', () => {
 test.describe('the lists', () => {
     test('link each task to its editor, keeping the view', async ({ context, page }) => {
         await mockBackend(context, NOTES);
-        for (const [viewMode, view] of [['status', '.status-view'], ['schedule', '.schedule-view'], ['eisenhower', '.eisenhower-matrix']]) {
+        for (const [viewMode, view] of [['status', '.status-view'], ['schedule', '.planning-view .candidates'], ['eisenhower', '.eisenhower-matrix']]) {
             await page.goto(`/tasks-next/_/descendants/${viewMode}`);
             await expect(listed(page, view, 'Errand')).toHaveAttribute('href', `/tasks-next/${ERRAND}/selected/${viewMode}`);
         }

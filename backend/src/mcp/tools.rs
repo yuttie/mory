@@ -311,8 +311,65 @@ struct TaskSummary {
     title: Option<String>,
     /// The `task:` block exactly as the file declares it, not a re-derived view of it.
     task: serde_json::Value,
+    urgency: crate::urgency::Urgency,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    progress: Option<f64>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     tags: Vec<String>,
+}
+
+pub async fn task_settings(state: &AppState) -> Result<(crate::urgency::Settings, Vec<String>), ErrorData> {
+    let Some(text) = note_text(state, ".mory/tasks.yaml").await? else {
+        return Ok((crate::urgency::Settings::default(), vec![]));
+    };
+    match serde_yaml::from_str(&text) {
+        Ok(value) => Ok(crate::urgency::read_settings(&value)),
+        Err(error) => Ok((crate::urgency::Settings::default(), vec![format!("Invalid task settings: {error}")])),
+    }
+}
+
+fn canonical_task(block: &serde_yaml::Mapping) -> serde_json::Value {
+    let mut task = serde_json::to_value(block).unwrap_or(serde_json::json!({}));
+    if let Some(map) = task.as_object_mut() {
+        for key in ["urgency", "progress", "scheduled_dates"] {
+            map.remove(key);
+        }
+        if let Some(start) = map.remove("start_at") {
+            map.entry("available_from").or_insert(start);
+        }
+        match block.get("importance").and_then(crate::urgency::importance) {
+            Some(level) => { map.insert("importance".into(), level.into()); },
+            None => { map.remove("importance"); },
+        }
+    }
+    task
+}
+
+fn derived_task(index: usize, entries: &[crate::models::ListEntry], hierarchy: &crate::tasks::TaskHierarchy, settings: &crate::urgency::Settings, now: chrono::DateTime<chrono::Utc>, zone: chrono_tz::Tz) -> (crate::urgency::Urgency, Option<f64>) {
+    let entry = &entries[index];
+    let descendants = hierarchy.descendants(index);
+    let own = |entry: &crate::models::ListEntry| crate::urgency::calculate(
+        entry.metadata.as_ref().and_then(|root| root.get("task")).unwrap_or(&serde_yaml::Value::Null),
+        &tags_of(entry.metadata.as_ref()), settings, now, zone,
+    );
+    let mut urgency = own(entry);
+    if !crate::tasks::is_over(task_status_of(entry.metadata.as_ref()).as_deref()) {
+        for &child_index in &descendants {
+            let child = &entries[child_index];
+            if !crate::tasks::is_over(task_status_of(child.metadata.as_ref()).as_deref()) {
+                let derived = own(child);
+                if crate::urgency::compare(&derived, &urgency).is_lt() {
+                    urgency = crate::urgency::Urgency { actionable: urgency.actionable, short_window: urgency.short_window, ..derived };
+                }
+            }
+        }
+    }
+    let progress = if descendants.is_empty() { None } else {
+        let leaves = descendants.iter().copied().filter(|&child| hierarchy.children[child].is_empty()).map(|child| &entries[child]).filter(|child| task_status_of(child.metadata.as_ref()).as_deref() != Some("canceled")).collect::<Vec<_>>();
+        let done = leaves.iter().filter(|child| task_status_of(child.metadata.as_ref()).as_deref() == Some("done")).count();
+        Some(if leaves.is_empty() { 0.0 } else { done as f64 / leaves.len() as f64 * 100.0 })
+    };
+    (urgency, progress)
 }
 
 pub async fn list_tasks(
@@ -339,17 +396,18 @@ pub async fn list_tasks(
         },
     };
 
+    let (settings, warnings) = task_settings(state).await?;
+    let now = chrono::Utc::now();
+    let zone = crate::urgency::local_zone();
+    let hierarchy = crate::tasks::TaskHierarchy::new(&entries);
     let mut tasks = Vec::new();
-    for entry in &entries {
-        let Some(block) = entry.metadata.as_ref().and_then(|value| value.get("task")) else {
+    for (index, entry) in entries.iter().enumerate() {
+        if !hierarchy.valid[index] { continue; }
+        let Some((_, block)) = task_of(entry) else {
             continue;
         };
-        // A note whose `task:` is malformed is skipped rather than failing the call, for the same
-        // reason the calendar does it: frontmatter is whatever the file said.
-        let Ok(task) = serde_json::to_value(block) else {
-            tracing::debug!("Skipping an unreadable task block in {}", entry.path.display());
-            continue;
-        };
+        let task = canonical_task(block);
+        let (urgency, progress) = derived_task(index, &entries, &hierarchy, &settings, now, zone);
         if let Some(wanted) = args.status.as_deref() {
             if task_status_of(entry.metadata.as_ref()).as_deref() != Some(wanted) {
                 continue;
@@ -367,6 +425,8 @@ pub async fn list_tasks(
                 path: entry.path.to_string_lossy().into_owned(),
                 title: entry.title.clone(),
                 task,
+                urgency,
+                progress,
                 tags,
             },
         ));
@@ -384,7 +444,14 @@ pub async fn list_tasks(
         .collect::<Vec<_>>();
     let next_offset = (offset + items.len() < total).then_some(offset + items.len());
 
-    json_result(&ListOutput { commit: commit.to_string(), total, items, next_offset })
+    #[derive(Serialize)]
+    struct TaskOutput {
+        #[serde(flatten)]
+        listing: ListOutput<TaskSummary>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        warnings: Vec<String>,
+    }
+    json_result(&TaskOutput { listing: ListOutput { commit: commit.to_string(), total, items, next_offset }, warnings })
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -701,7 +768,7 @@ pub async fn list_imported_events(
 /// 600 KB of legacy YAML held together by anchors and aliases (`&a1` / `*a1`), which a naive
 /// parse-and-serialize round-trip silently expands into independent copies. Nothing here writes
 /// it; it is readable through `read_note` like any other file.
-const READ_ONLY_PATHS: [&str; 2] = [".mory/tasks.yaml", ".mory/tasks-v1.yaml"];
+const READ_ONLY_PATHS: [&str; 1] = [".mory/tasks-v1.yaml"];
 
 /// Check a path a tool was asked to touch, and return it in its canonical spelling.
 ///
@@ -835,7 +902,7 @@ pub struct CreateNoteArgs {
 
 pub async fn create_note(
     state: &AppState,
-    args: CreateNoteArgs,
+    mut args: CreateNoteArgs,
 ) -> Result<CallToolResult, ErrorData> {
     // UUIDv4 rather than v7, matching the frontend's `crypto.randomUUID()`: `entries_to_tree`
     // rejects every other version, so a v7 name would break the tree it appears in.
@@ -853,6 +920,13 @@ pub async fn create_note(
         return Ok(tool_error(format!(
             "{path:?} already exists. Use update_note to replace its content.",
         )));
+    }
+
+    if path.ends_with(".md") {
+        args.content = match frontmatter::with_created_at(&args.content, None) {
+            Ok(content) => content,
+            Err(error) => return Ok(tool_error(error.to_string())),
+        };
     }
 
     match state.save_note(&path, args.content.as_bytes(), &args.message).await {
@@ -881,7 +955,7 @@ pub struct UpdateNoteArgs {
 
 pub async fn update_note(
     state: &AppState,
-    args: UpdateNoteArgs,
+    mut args: UpdateNoteArgs,
 ) -> Result<CallToolResult, ErrorData> {
     // `safe_path`, not `writable_path`: the name is already whatever it is, and refusing to edit
     // the content of a badly-named note would help nobody.
@@ -893,6 +967,14 @@ pub async fn update_note(
         return Ok(tool_error(format!(
             "No file at {path:?}. Use create_note to make one, or search_notes to find the path.",
         )));
+    }
+
+    if path.ends_with(".md") {
+        let existing = note_text(state, &path).await?;
+        args.content = match frontmatter::with_created_at(&args.content, existing.as_deref()) {
+            Ok(content) => content,
+            Err(error) => return Ok(tool_error(error.to_string())),
+        };
     }
 
     match state.save_note(&path, args.content.as_bytes(), &args.message).await {
@@ -1091,6 +1173,24 @@ mod tests {
         );
     }
 
+    #[test]
+    fn derived_tasks_match_shared_hierarchy_fixtures() {
+        let fixtures: serde_json::Value = serde_json::from_str(include_str!("../../../fixtures/urgency/hierarchy.json")).unwrap();
+        for fixture in fixtures.as_array().unwrap() {
+            let entries = fixture["entries"].as_array().unwrap().iter().map(|item| {
+                listed(item["path"].as_str().unwrap(), &serde_yaml::to_string(&item["metadata"]).unwrap())
+            }).collect::<Vec<_>>();
+            let hierarchy = crate::tasks::TaskHierarchy::new(&entries);
+            let now = chrono::DateTime::parse_from_rfc3339("2026-10-04T00:00:00Z").unwrap().with_timezone(&chrono::Utc);
+            for expected in fixture["expected"].as_array().unwrap() {
+                let index = entries.iter().position(|entry| entry.path.to_string_lossy() == expected["path"].as_str().unwrap()).unwrap();
+                let (urgency, progress) = derived_task(index, &entries, &hierarchy, &crate::urgency::Settings::default(), now, chrono_tz::Asia::Tokyo);
+                assert_eq!(urgency.level, expected["level"].as_str().unwrap(), "{}", fixture["name"]);
+                assert_eq!(progress, expected["progress"].as_f64(), "{}", fixture["name"]);
+            }
+        }
+    }
+
     const TASK_A: &str = ".tasks/6f1c2c1e-2b1a-4d6e-9f3a-1b2c3d4e5f60.md";
     const TASK_B: &str = ".tasks/report-0b7e8a52-3c4d-4e5f-8a6b-7c8d9e0f1a2b.md";
 
@@ -1184,7 +1284,7 @@ mod tests {
 
     #[test]
     fn the_legacy_task_yaml_is_read_only() {
-        assert!(safe_path(".mory/tasks.yaml").is_err());
+        assert!(safe_path(".mory/tasks.yaml").is_ok());
         assert!(safe_path(".mory/tasks-v1.yaml").is_err());
         // Its neighbours are not.
         assert!(safe_path(".mory/calendars.yaml").is_ok());

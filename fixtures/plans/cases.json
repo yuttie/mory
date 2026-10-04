@@ -1,0 +1,87 @@
+[
+    {
+        "name": "blank",
+        "yaml": "",
+        "valid": true
+    },
+    {
+        "name": "unknown UUID",
+        "yaml": "2026-10-05:\n    - task: 4955857d-3267-4b94-83f2-538a428970d7\n      origin: planned\n",
+        "valid": true
+    },
+    {
+        "name": "uppercase UUID",
+        "yaml": "2026-10-05:\n    - task: 4955857D-3267-4B94-83F2-538A428970D7\n      origin: interruption\n      result: worked\n",
+        "valid": true
+    },
+    {
+        "name": "non RFC variant",
+        "yaml": "2026-10-05:\n    - task: 4955857d-3267-4b94-03f2-538a428970d7\n      origin: planned\n",
+        "valid": false
+    },
+    {
+        "name": "version1",
+        "yaml": "2026-10-05:\n    - task: 4955857d-3267-1b94-83f2-538a428970d7\n      origin: planned\n",
+        "valid": false
+    },
+    {
+        "name": "origin sequence",
+        "yaml": "2026-10-05:\n    - task: 4955857d-3267-4b94-83f2-538a428970d7\n      origin: [planned]\n",
+        "valid": false
+    },
+    {
+        "name": "result sequence",
+        "yaml": "2026-10-05:\n    - task: 4955857d-3267-4b94-83f2-538a428970d7\n      origin: planned\n      result: [worked]\n",
+        "valid": false
+    },
+    {
+        "name": "origin mapping",
+        "yaml": "2026-10-05:\n    - task: 4955857d-3267-4b94-83f2-538a428970d7\n      origin: {planned: true}\n",
+        "valid": false
+    },
+    {
+        "name": "null result",
+        "yaml": "2026-10-05:\n    - task: 4955857d-3267-4b94-83f2-538a428970d7\n      origin: planned\n      result: null\n",
+        "valid": false
+    },
+    {
+        "name": "unknown key",
+        "yaml": "2026-10-05:\n    - task: 4955857d-3267-4b94-83f2-538a428970d7\n      origin: planned\n      extra: data\n",
+        "valid": false
+    },
+    {
+        "name": "root false",
+        "yaml": "false",
+        "valid": false
+    },
+    {
+        "name": "root 0",
+        "yaml": "0",
+        "valid": false
+    },
+    {
+        "name": "root []",
+        "yaml": "[]",
+        "valid": false
+    },
+    {
+        "name": "root ''",
+        "yaml": "''",
+        "valid": false
+    },
+    {
+        "name": "invalid date",
+        "yaml": "2026-02-30: []",
+        "valid": false
+    },
+    {
+        "name": "wrong month",
+        "yaml": "2026-11-01: []",
+        "valid": false
+    },
+    {
+        "name": "duplicateUUID",
+        "yaml": "2026-10-05:\n    - task: 4955857d-3267-4b94-83f2-538a428970d7\n      origin: planned\n    - task: 4955857D-3267-4B94-83F2-538A428970D7\n      origin: planned",
+        "valid": false
+    }
+]

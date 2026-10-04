@@ -119,6 +119,60 @@ pub(crate) fn task_status_of(metadata: Option<&serde_yaml::Value>) -> Option<Str
         .map(str::to_owned)
 }
 
+/// The frontend attaches only to a file covering the immediate directory. Missing
+/// parents re-root children; metadata is not required to occupy a place in the tree.
+pub(crate) struct TaskHierarchy {
+    pub valid: Vec<bool>,
+    pub children: Vec<Vec<usize>>,
+}
+
+impl TaskHierarchy {
+    pub fn new(entries: &[ListEntry]) -> Self {
+        use std::collections::{BTreeMap, BTreeSet};
+        let mut ids = BTreeMap::new();
+        let mut covers = BTreeMap::new();
+        for (index, entry) in entries.iter().enumerate() {
+            if !in_task_tree(&entry.path.to_string_lossy()) { continue; }
+            let Some(stem) = entry.path.file_stem().and_then(|stem| stem.to_str()) else { continue; };
+            let Some(id) = stem.len().checked_sub(36).and_then(|cut| stem.get(cut..)) else { continue; };
+            let Ok(uuid) = uuid::Uuid::parse_str(id) else { continue; };
+            if uuid.get_variant() != uuid::Variant::RFC4122 { continue; }
+            ids.entry(id.to_owned()).or_insert(index);
+            covers.entry(entry.path.with_extension("")).or_insert(id.to_owned());
+        }
+        let mut parents = vec![None; entries.len()];
+        let mut valid = vec![false; entries.len()];
+        for &index in ids.values() {
+            valid[index] = true;
+            parents[index] = entries[index].path.parent().and_then(|dir| covers.get(dir)).and_then(|id| ids.get(id)).copied();
+        }
+        let mut children = vec![Vec::new(); entries.len()];
+        for &index in ids.values() {
+            let mut seen = BTreeSet::from([index]);
+            let mut ancestor = parents[index];
+            let mut cycle = false;
+            while let Some(parent) = ancestor {
+                if !seen.insert(parent) { cycle = true; break; }
+                ancestor = parents[parent];
+            }
+            if !cycle {
+                if let Some(parent) = parents[index] { children[parent].push(index); }
+            }
+        }
+        Self { valid, children }
+    }
+
+    pub fn descendants(&self, index: usize) -> Vec<usize> {
+        let mut pending = self.children[index].clone();
+        let mut result = Vec::new();
+        while let Some(child) = pending.pop() {
+            result.push(child);
+            pending.extend(&self.children[child]);
+        }
+        result
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

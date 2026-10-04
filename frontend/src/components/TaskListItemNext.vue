@@ -5,6 +5,7 @@
     <router-link
         v-bind:to="to"
         class="task-list-item"
+        v-bind:class="{ 'text-disabled': !urgency.actionable }"
     >
         <v-icon class="mr-1">
             {{ done ? mdiCheckboxMarkedOutline : canceled ? mdiCheckboxBlankOffOutline : mdiCheckboxBlankOutline }}
@@ -12,63 +13,15 @@
         <div>
             <span
                 class="tag"
-                v-for="tag of value.metadata.tags"
+                v-for="tag of value.metadata?.tags ?? []"
                 v-bind:key="tag"
             >{{ tag }}</span>
-            <span class="title-text" v-bind:class="{ strikethrough: canceled }">{{ value.title }}</span>
-            <span
-                class="additional-info"
-                v-if="value.note"
-            >
-                <v-tooltip location="bottom">
-                    <template v-slot:activator="{ props: tooltipProps }">
-                        <v-icon v-bind="tooltipProps">{{ mdiNoteTextOutline }}</v-icon>
-                    </template>
-                    <div class="note-tooltip">{{ value.note }}</div>
-                </v-tooltip>
-            </span>
-            <span
-                class="additional-info"
-                v-if="startAt"
-                v-bind:style="startAtStyle"
-            >
-                <v-tooltip location="bottom">
-                    <template v-slot:activator="{ props: tooltipProps }">
-                        <span v-bind="tooltipProps">
-                            <v-icon v-bind:style="startAtStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ startAtText }}
-                        </span>
-                    </template>
-                    <div>{{ startAt }}</div>
-                </v-tooltip>
-            </span>
-            <span
-                class="additional-info"
-                v-if="dueBy"
-                v-bind:style="dueByStyle"
-            >
-                <v-tooltip location="bottom">
-                    <template v-slot:activator="{ props: tooltipProps }">
-                        <span v-bind="tooltipProps">
-                            <v-icon v-bind:style="dueByStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ dueByText }}
-                        </span>
-                    </template>
-                    <div>{{ dueBy }}</div>
-                </v-tooltip>
-            </span>
-            <span
-                class="additional-info"
-                v-if="deadline"
-                v-bind:style="deadlineStyle"
-            >
-                <v-tooltip location="bottom">
-                    <template v-slot:activator="{ props: tooltipProps }">
-                        <span v-bind="tooltipProps">
-                            <v-icon v-bind:style="deadlineStyle" class="mr-1">{{ mdiCalendar }}</v-icon>{{ deadlineText }}
-                        </span>
-                    </template>
-                    <div>{{ deadline }}</div>
-                </v-tooltip>
-            </span>
+            <span class="title-text" v-bind:class="{ strikethrough: canceled }">{{ value.title || 'Untitled' }}</span>
+            <TaskDateCues v-bind:value="value" />
+            <v-chip size="x-small" class="ml-1">{{ URGENCY_LABEL[urgency.level] }}</v-chip>
+            <span v-if="progress !== undefined" class="ml-1">{{ Math.round(progress) }}%</span>
+            <span v-if="plans.missedCount(value.uuid) >= 3" class="ml-1 text-warning">Consider splitting or re-rating importance ({{ plans.missedCount(value.uuid) }} missed days)</span>
+            <span v-if="urgency.short_window" class="ml-1 text-warning">Window shorter than lead time</span>
             <!-- Below the title rather than before it, so the checkbox stays level with the title
                  and the titles in a column still line up to be scanned. -->
             <div
@@ -77,6 +30,7 @@
             >
                 {{ ancestorTitles.join(' › ') }}
             </div>
+            <slot />
         </div>
     </router-link>
 </template>
@@ -86,34 +40,18 @@ import { computed } from 'vue';
 import type { RouteLocationRaw } from 'vue-router';
 
 import {
-    mdiCalendar,
     mdiCheckboxBlankOutline,
     mdiCheckboxMarkedOutline,
     mdiCheckboxBlankOffOutline,
-    mdiNoteTextOutline,
 } from '@mdi/js';
 
 import type { UUID } from '@/task';
 import type { TaskNode } from '@/task-forest';
 import { useTasksStore } from '@/stores/tasks';
+import { URGENCY_LABEL } from '@/urgency';
+import { usePlansStore } from '@/stores/plans';
 
-import dayjs from 'dayjs';
-import relativeTime from 'dayjs/plugin/relativeTime';
-dayjs.extend(relativeTime, {
-    thresholds: [
-        { l: 's', r: 1 },
-        { l: 'm', r: 1 },
-        { l: 'mm', r: 59, d: 'minute' },
-        { l: 'h', r: 1 },
-        { l: 'hh', r: 23, d: 'hour' },
-        { l: 'd', r: 1 },
-        { l: 'dd', d: 'day' },
-        { l: 'M' },
-        { l: 'MM', d: 'month' },
-        { l: 'y' },
-        { l: 'yy', d: 'year' }
-    ],
-});
+import TaskDateCues from '@/components/TaskDateCues.vue';
 
 // Props
 const props = defineProps<{
@@ -127,6 +65,9 @@ const props = defineProps<{
 
 // Stores
 const store = useTasksStore();
+const plans = usePlansStore();
+const urgency = computed(() => store.urgency(props.value.uuid));
+const progress = computed(() => store.progress(props.value.uuid));
 
 // Computed properties
 // A list gathers tasks from anywhere in the tree, and a title alone often does not say which
@@ -141,77 +82,6 @@ const done = computed<boolean>(() => {
 
 const canceled = computed<boolean>(() => {
     return props.value.metadata?.task?.status?.kind === 'canceled';
-});
-
-const startAt = computed<string | null>(() => {
-    return props.value.metadata?.task?.start_at ?? null;
-});
-
-const startAtText = computed<string>(() => {
-    return startAt.value ? dayjs(startAt.value).endOf('day').fromNow() : '';
-});
-
-const startAtStyle = computed<Record<string, string>>(() => {
-    if (!done.value && startAt.value) {
-        const now = dayjs();
-        const daysLeft = dayjs(startAt.value).diff(now, 'day');
-        const g = daysLeft < 3 ? 127 : 0;
-        const b = daysLeft < 3 ? 255 : 0;
-        const color = `rgb(0, ${g}, ${b})`;
-        return {
-            color: color,
-        };
-    }
-    else {
-        return {};
-    }
-});
-
-const dueBy = computed<string | null>(() => {
-    return props.value.metadata?.task?.due_by ?? null;
-});
-
-const dueByText = computed<string>(() => {
-    return dueBy.value ? dayjs(dueBy.value).endOf('day').fromNow() : '';
-});
-
-const dueByStyle = computed<Record<string, string>>(() => {
-    if (!done.value && dueBy.value) {
-        const now = dayjs();
-        const daysLeft = dayjs(dueBy.value).diff(now, 'day');
-        const r = daysLeft < 3 ? 255 : 0;
-        const g = daysLeft < 3 ? 127 : 0;
-        const color = `rgb(${r}, ${g}, 0)`;
-        return {
-            color: color,
-        };
-    }
-    else {
-        return {};
-    }
-});
-
-const deadline = computed<string | null>(() => {
-    return props.value.metadata?.task?.deadline ?? null;
-});
-
-const deadlineText = computed<string>(() => {
-    return deadline.value ? dayjs(deadline.value).endOf('day').fromNow() : '';
-});
-
-const deadlineStyle = computed<Record<string, string>>(() => {
-    if (!done.value && deadline.value) {
-        const now = dayjs();
-        const daysLeft = dayjs(deadline.value).diff(now, 'day');
-        const r = daysLeft < 7 ? 255 : 0;
-        const color = `rgb(${r}, 0, 0)`;
-        return {
-            color: color,
-        };
-    }
-    else {
-        return {};
-    }
 });
 </script>
 
@@ -241,11 +111,6 @@ const deadlineStyle = computed<Record<string, string>>(() => {
         display: inline;
         vertical-align: middle;
     }
-}
-.additional-info {
-    display: inline-block;
-    margin-left: 4px;
-    opacity: 0.5;
 }
 .tag {
     color: #888;

@@ -47,22 +47,7 @@
                             class="mb-2"
                             v-on:keydown="handleTaskKeydown"
                         ></v-text-field>
-                        <v-radio-group
-                            v-model="quickTaskScheduledDay"
-                            hide-details="auto"
-                            class="mb-2"
-                            inline
-                        >
-                            <template v-slot:label>
-                                <div>Schedule</div>
-                            </template>
-                            <v-radio
-                                v-for="option in scheduledDayOptions"
-                                v-bind:key="option.value"
-                                v-bind:label="option.text"
-                                v-bind:value="option.value"
-                            ></v-radio>
-                        </v-radio-group>
+
                         <DateSelector
                             v-model="quickTaskDueBy"
                             label="Due by (optional)"
@@ -210,19 +195,14 @@
                                 v-for="task in todayTasks"
                                 v-bind:key="task.uuid"
                                 class="task-item mb-2 pa-2 clickable-task"
-                                v-bind:class="{ 'task-done': task.metadata?.task?.status?.kind === 'done' }"
+                                v-bind:class="{ 'task-done': task.metadata?.task?.status?.kind === 'done', 'text-disabled': !taskStore.ownUrgency(task.uuid).actionable }"
                                 v-on:click="navigateToTask(task)"
                             >
                                 <div class="task-content">
                                     <div class="task-name" v-bind:class="{ 'text-decoration-line-through': task.metadata?.task?.status?.kind === 'done' }">
                                         {{ task.title }}
                                     </div>
-                                    <div v-if="task.metadata?.task?.due_by" class="task-due-by text-medium-emphasis text-caption">
-                                        Due by: {{ task.metadata?.task?.due_by }}
-                                    </div>
-                                    <div v-if="task.metadata?.task?.deadline" class="task-deadline text-medium-emphasis text-caption">
-                                        Deadline: {{ task.metadata?.task?.deadline }}
-                                    </div>
+                                    <TaskDateCues v-bind:value="task" v-bind:fields="['due_by', 'deadline']" stacked class="text-caption" />
                                 </div>
                             </div>
                         </div>
@@ -243,19 +223,14 @@
                                 v-for="task in upcomingTasks"
                                 v-bind:key="task.uuid"
                                 class="task-item mb-2 pa-2 clickable-task"
-                                v-bind:class="{ 'task-done': task.metadata?.task?.status?.kind === 'done' }"
+                                v-bind:class="{ 'task-done': task.metadata?.task?.status?.kind === 'done', 'text-disabled': !taskStore.ownUrgency(task.uuid).actionable }"
                                 v-on:click="navigateToTask(task)"
                             >
                                 <div class="task-content">
                                     <div class="task-name" v-bind:class="{ 'text-decoration-line-through': task.metadata?.task?.status?.kind === 'done' }">
                                         {{ task.title }}
                                     </div>
-                                    <div v-if="task.metadata?.task?.due_by" class="task-due-by text-caption" v-bind:class="getDeadlineClass(task.metadata?.task?.due_by)">
-                                        Due by: {{ task.metadata?.task?.due_by }}
-                                    </div>
-                                    <div v-if="task.metadata?.task?.deadline" class="task-deadline text-caption" v-bind:class="getDeadlineClass(task.metadata?.task?.deadline)">
-                                        Deadline: {{ task.metadata?.task?.deadline }}
-                                    </div>
+                                    <TaskDateCues v-bind:value="task" v-bind:fields="['due_by', 'deadline']" stacked class="text-caption" />
                                 </div>
                             </div>
                         </div>
@@ -319,6 +294,9 @@
 </template>
 
 <script lang="ts" setup>
+import { nowLocal } from '@/time';
+import TaskDateCues from '@/components/TaskDateCues.vue';
+import { usePlansStore } from '@/stores/plans';
 import { ref, computed, watch, onMounted } from 'vue';
 import type { Ref } from 'vue';
 import { useRouter } from 'vue-router';
@@ -392,7 +370,6 @@ const sortOrders: Ref<Map<string, [string, boolean]>> = ref(new Map());
 // Quick create states
 const quickNoteContent = ref('');
 const quickTaskName = ref('');
-const quickTaskScheduledDay = ref('none');
 const quickTaskDueBy = ref('');
 const quickTaskDeadline = ref('');
 
@@ -401,11 +378,6 @@ const noteTextarea = ref(null);
 const taskNameField = ref(null);
 
 // Scheduled day options
-const scheduledDayOptions = [
-    { text: 'None', value: 'none' },
-    { text: 'Today', value: 'today' },
-    { text: 'Tomorrow', value: 'tomorrow' }
-];
 
 // Success/error messaging
 const successMessage = ref(false);
@@ -524,20 +496,10 @@ const dayAfterTomorrowEvents = computed(() => {
     }).sort((a, b) => a.start.localeCompare(b.start));
 });
 
+const plans = usePlansStore();
+void plans.loadMonths([today.slice(0, 7)]).catch(() => undefined);
 const todayTasks = computed(() => {
-    if (!taskStore.allTasks || taskStore.allTasks.length === 0) return [];
-
-    return taskStore.allTasks.filter(task => {
-        const scheduledDates = task.metadata?.task?.scheduled_dates;
-        const status = task.metadata?.task?.status?.kind;
-        
-        // Skip done and canceled tasks
-        if (status === 'done' || status === 'canceled') {
-            return false;
-        }
-        
-        return Array.isArray(scheduledDates) && scheduledDates.includes(today);
-    });
+    return (plans.days[today] ?? []).map((entry) => taskStore.allTasks.find((task) => task.uuid.toLowerCase() === entry.task)).filter((task): task is TaskNode => task !== undefined && !['done', 'canceled'].includes(task.metadata?.task?.status?.kind ?? ''));
 });
 
 function parseDue(input: string): dayjs.Dayjs {
@@ -667,6 +629,7 @@ async function createQuickNote() {
 
         // Add metadata with quick-create tag
         const metadata = {
+            created_at: nowLocal(),
             tags: ['quick-create']
         };
         const yamlHeader = '---\n' + Object.entries(metadata).map(([key, value]) => `${key}: ${JSON.stringify(value)}`).join('\n') + '\n---\n\n';
@@ -697,27 +660,15 @@ async function createQuickTask() {
         const taskUuid = crypto.randomUUID();
         const taskPath = `.tasks/${taskUuid}.md`;
 
-        // Determine scheduled dates based on selection
-        let scheduledDates: string[] = [];
-        if (quickTaskScheduledDay.value === 'today') {
-            scheduledDates = [today];
-        } else if (quickTaskScheduledDay.value === 'tomorrow') {
-            scheduledDates = [tomorrow];
-        }
-
         const newTask: Task = {
             uuid: taskUuid,
             title: quickTaskName.value.trim(),
             tags: ['quick-create'],
             // Scheduling it for today or tomorrow is the commitment that makes it To do; without
             // one it waits in the backlog like any other new task.
-            status: { kind: scheduledDates.length > 0 ? 'todo' : 'backlog' },
-            progress: 0,
-            importance: 3,
-            urgency: 3,
+            status: { kind: 'backlog' },
             due_by: quickTaskDueBy.value || undefined,
             deadline: quickTaskDeadline.value || undefined,
-            scheduled_dates: scheduledDates,
             note: '',
         };
 
@@ -730,7 +681,6 @@ async function createQuickTask() {
         quickTaskName.value = '';
         quickTaskDueBy.value = '';
         quickTaskDeadline.value = '';
-        quickTaskScheduledDay.value = 'none';
 
         // Focus the task name field for creating another task
         if (taskNameField.value) {
@@ -845,21 +795,7 @@ function formatEventTime(event: { start: string; end?: string }) {
     }
 }
 
-function getDeadlineClass(deadline: string | undefined) {
-    if (!deadline) return 'text-medium-emphasis';
 
-    const deadlineDate = dayjs(deadline);
-    const now = dayjs();
-    const diffDays = deadlineDate.diff(now, 'days');
-
-    if (diffDays < 0) {
-        return 'text-error';
-    } else if (diffDays <= 3) {
-        return 'text-warning';
-    } else {
-        return 'text-medium-emphasis';
-    }
-}
 
 function sortByTitle(entries: ListEntry2[], descending: boolean = false) {
     if (descending) {

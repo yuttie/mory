@@ -224,28 +224,11 @@
             "type": "object",
             "properties": {
                 "status": { "$ref": "#/definitions/task-status" },
-                "progress": {
-                    "type": "number",
-                    "minimum": 0,
-                    "maximum": 100
-                },
-                "importance": {
-                    "type": "number",
-                    "minimum": 1,
-                    "maximum": 5
-                },
-                "urgency": {
-                    "type": "number",
-                    "minimum": 1,
-                    "maximum": 5
-                },
-                "start_at": { "type": "string" },
+                "importance": { "enum": ["low", "medium", "high"] },
+                "available_from": { "type": "string" },
+                "lead_time": { "type": "string", "pattern": "^[0-9]+ *(weeks?|days?|w|d)$" },
                 "due_by": { "type": "string" },
                 "deadline": { "type": "string" },
-                "scheduled_dates": {
-                    "type": "array",
-                    "items": { "type": "string" }
-                },
                 "alarms": {
                     "description": "When due_by and deadline ring. Without these, they ring as .mory/calendars.yaml says, which is not at all unless it says so.",
                     "oneOf": [
@@ -261,12 +244,16 @@
                     ]
                 }
             },
-            "required": ["status", "progress", "importance", "urgency", "scheduled_dates"],
+            "required": ["status"],
             "additionalProperties": false
         }
     },
     "type": "object",
     "properties": {
+        "created_at": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}[+-]\\d{2}:\\d{2}$"
+        },
         "tags": {
             "oneOf": [
                 { "type": "null" },

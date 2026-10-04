@@ -2887,14 +2887,10 @@ fn the_task_tools_emit_frontmatter_the_frontend_would_accept() {
     for status in statuses {
         let mut changes = vec![
             Change::set(&["tags"], serde_yaml::Value::Sequence(vec!["work".into()])),
-            Change::set(&["task", "progress"], 0),
-            Change::set(&["task", "importance"], 3),
-            Change::set(&["task", "urgency"], 3),
+            Change::set(&["task", "importance"], "medium"),
+            Change::set(&["task", "lead_time"], "2w"),
+            Change::set(&["created_at"], "2026-10-04 14:05:12+09:00"),
             Change::set(&["task", "due_by"], "2026-03-15"),
-            Change::set(
-                &["task", "scheduled_dates"],
-                serde_yaml::Value::Sequence(vec!["2026-03-01".into()]),
-            ),
         ];
         changes.extend(status.clone());
 
@@ -3037,4 +3033,35 @@ categories:
     .expect("a valid configuration");
     // Scalar keys are named as the frontend names them, JSON having only strings.
     assert_eq!(config.category_ids(), ["mapping", "nothing", "1", "true", "alarmed"]);
+}
+
+#[test]
+fn plan_reads_supply_the_version_accepted_by_checked_writes() {
+    use crate::models::{commit_save, commit_save_checked};
+    let fixture = write_fixture();
+    let path = ".mory/plans/2026-10.yaml";
+    assert!(crate::entry_blob(&fixture.repo, path).is_none());
+    assert!(commit_save_checked(&fixture.repo, path, b"{}\n", "Create plan", "absent").unwrap().is_some());
+    let (version, content) = crate::entry_blob(&fixture.repo, path).unwrap();
+    assert_eq!(content, b"{}\n");
+    assert_ne!(version, head_of(&fixture), "a file version is not the repository commit");
+    let etag = format!("\"{version}\"");
+
+    commit_save(&fixture.repo, "note.md", b"unrelated change\n", "Update another note").unwrap();
+    assert_eq!(crate::entry_blob(&fixture.repo, path).unwrap().0, version);
+    let updated = b"2026-10-04: []\n";
+    assert!(commit_save_checked(&fixture.repo, path, updated, "Update plan", &etag).unwrap().is_some());
+    let (next_version, content) = crate::entry_blob(&fixture.repo, path).unwrap();
+    assert_eq!(content, updated);
+    assert_ne!(next_version, version);
+
+    // A genuine stale write, including a stale absence check, must leave HEAD untouched.
+    let before = head_of(&fixture);
+    for stale in [&etag, "absent"] {
+        assert!(commit_save_checked(&fixture.repo, path, b"{}\n", "Stale edit", stale).unwrap().is_none());
+        assert_eq!(head_of(&fixture), before);
+        assert_eq!(crate::entry_blob(&fixture.repo, path).unwrap().1, updated);
+    }
+    let next_etag = format!("\"{next_version}\"");
+    assert!(commit_save_checked(&fixture.repo, path, b"2026-10-05: []\n", "Next edit", &next_etag).unwrap().is_some());
 }

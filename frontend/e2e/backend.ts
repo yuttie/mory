@@ -1,5 +1,6 @@
 import type { BrowserContext } from '@playwright/test';
 import YAML from 'yaml';
+import { createHash } from 'node:crypto';
 
 // The backend origin the e2e run pins. `.env` is untracked, so CI has no
 // VITE_APP_API_URL of its own: `playwright.config.ts` hands this value to the dev
@@ -32,6 +33,7 @@ export async function mockBackend(context: BrowserContext, notes: Record<string,
     const repository: Repository = { writes: [] };
     let commit = 1;
     const commitId = () => String(commit).padStart(40, '0');
+    const etagOf = (content: string) => `"${createHash('sha1').update(content).digest('hex')}"`;
 
     await signIn(context);
     await context.route(`${API_URL}**`, async (route) => {
@@ -44,11 +46,12 @@ export async function mockBackend(context: BrowserContext, notes: Record<string,
                 const [, frontmatter, body] = content.startsWith('---\n')
                     ? content.split(/^---$/m)
                     : [undefined, undefined, content];
+                const document = frontmatter === undefined ? null : YAML.parseDocument(frontmatter);
                 return {
                     path: notePath,
                     size: content.length,
                     mime_type: 'text/markdown',
-                    metadata: frontmatter === undefined ? null : YAML.parse(frontmatter),
+                    metadata: document && document.errors.length === 0 ? document.toJSON() : null,
                     title: /^# (.*)$/m.exec(body)?.[1] ?? null,
                     time: '2026-09-01T12:00:00+00:00',
                 };
@@ -60,6 +63,10 @@ export async function mockBackend(context: BrowserContext, notes: Record<string,
             await route.fulfill({ json: commitId() });
             return;
         }
+        if (path === '/api/v2/assess-task') {
+            await route.fulfill({ json: { quality_score: 8, feedback: '', suggestions: [], note_suggestions: [] } });
+            return;
+        }
         if (path === '/api/login') {
             await route.fulfill({ json: TOKEN });
             return;
@@ -67,6 +74,19 @@ export async function mockBackend(context: BrowserContext, notes: Record<string,
         // Whether a path exists, as the rename dialog asks while the path is typed.
         if (path.startsWith('/api/v2/files/') && request.method() === 'HEAD') {
             await route.fulfill({ status: files.has(path.slice('/api/v2/files/'.length)) ? 200 : 404 });
+            return;
+        }
+        if (path.startsWith('/api/v2/files/') && request.method() === 'GET') {
+            const content = files.get(path.slice('/api/v2/files/'.length));
+            if (content === undefined) {
+                await route.fulfill({ status: 404, json: {} });
+            }
+            else {
+                const etag = etagOf(content);
+                await route.fulfill(request.headers()['if-none-match'] === etag
+                    ? { status: 304, headers: { etag, 'access-control-expose-headers': 'ETag' } }
+                    : { body: content, headers: { etag, 'access-control-expose-headers': 'ETag' }, contentType: 'text/plain' });
+            }
             return;
         }
         if (path.startsWith('/api/notes/')) {
@@ -80,6 +100,12 @@ export async function mockBackend(context: BrowserContext, notes: Record<string,
                 return;
             }
             if (request.method() === 'PUT') {
+                const expected = request.postDataJSON().Save.expected_etag;
+                const current = files.get(notePath);
+                if (expected !== undefined && expected !== (current === undefined ? 'absent' : etagOf(current))) {
+                    await route.fulfill({ status: 412, json: {} });
+                    return;
+                }
                 const content = request.postDataJSON().Save.content as string;
                 files.set(notePath, content);
                 repository.writes.push({ path: notePath, content });

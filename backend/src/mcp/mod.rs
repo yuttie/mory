@@ -29,6 +29,7 @@ use crate::oauth::{AccessClaims, SCOPE_WRITE};
 pub(crate) mod frontmatter;
 mod event_tools;
 mod task_tools;
+mod plan_tools;
 pub(crate) mod tools;
 
 /// What every tool returns: text the model reads.
@@ -127,8 +128,9 @@ impl Mory {
         name = "list_tasks",
         description = "List the tasks under `.tasks/`, optionally filtered by status or tag. \
                        Each result carries the note's `task:` block exactly as the file \
-                       declares it: status kind, progress, importance, urgency, and whichever \
-                       of start_at, due_by, deadline and scheduled_dates it sets.\n\nStatuses \
+                       declares it: status kind, optional low/medium/high importance, lead_time and whichever \
+                       of available_from, due_by and deadline it sets. Urgency is derived from dates \
+                       and lead time; parent progress is derived from done leaves. Use day plans to schedule work.\n\nStatuses \
                        are backlog, todo, in_progress, waiting, blocked, on_hold, done and \
                        canceled.",
         annotations(title = "List tasks", read_only_hint = true, open_world_hint = false)
@@ -267,9 +269,9 @@ impl Mory {
         name = "create_task",
         description = "Create a task and commit it. Requires the notes:write scope.\n\nA task \
                        is an ordinary note under `.tasks/` carrying a `task:` block. The schema \
-                       requires status, progress, importance, urgency and scheduled_dates, so \
-                       whatever is not given is filled in: status backlog, progress 0, importance \
-                       and urgency 3, no scheduled dates. The result echoes the whole file back \
+                       requires only status, defaulting to backlog. Importance is optional low, medium or high. \
+                       Urgency and parent progress are derived and cannot be set. available_from replaces start_at; \
+                       lead_time is whole calendar days or weeks. Use plan_task to schedule work. The result echoes the whole file back \
                        so those defaults are visible.",
         annotations(title = "Create a task", read_only_hint = false, destructive_hint = false,
                     idempotent_hint = false, open_world_hint = false)
@@ -287,7 +289,7 @@ impl Mory {
 
     #[tool(
         name = "update_task",
-        description = "Change a task's status, progress, importance or urgency, editing its \
+        description = "Change a task's status, optional importance or lead_time, editing its \
                        frontmatter in place. Requires the notes:write scope.\n\nThe rest of the \
                        note is untouched, comments and hand-formatting included. Changing \
                        status replaces the whole status block, so the keys the new one requires \
@@ -312,7 +314,7 @@ impl Mory {
         name = "complete_task",
         description = "Mark a task done and commit it. Requires the notes:write scope.\n\nSets \
                        the status to done with a completed_at of now unless one is given, and \
-                       progress to 100 unless set_progress is false.",
+                       only the status; parent progress is derived from done leaves.",
         annotations(title = "Complete a task", read_only_hint = false, destructive_hint = false,
                     idempotent_hint = true, open_world_hint = false)
     )]
@@ -348,7 +350,7 @@ impl Mory {
 
     #[tool(
         name = "set_task_dates",
-        description = "Set or clear a task's start_at, due_by, deadline and scheduled_dates. \
+        description = "Set or clear a task's available_from, due_by and deadline. Use plan_task for scheduling; urgency and progress are derived. \
                        Requires the notes:write scope.\n\nThese are bare dates (`2026-03-15`) \
                        or datetimes carrying their offset (`2026-03-15 09:00:00+09:00`). due_by \
                        and deadline are drawn on the calendar in their own colours, so they are \
@@ -456,12 +458,61 @@ impl Mory {
     ) -> Result<CallToolResult, ErrorData> {
         tools::read_note(&self.state, args).await
     }
+    #[tool(name = "list_plan", description = "Read ordered plan entries between inclusive start/end dates. Unknown task UUIDs and invalid files are reported in warnings. Results describe work on a day, not completion status.",
+        annotations(title = "List day plans", read_only_hint = true, destructive_hint = false,
+                    idempotent_hint = true, open_world_hint = false))]
+    pub async fn list_plan(&self, Parameters(args): Parameters<plan_tools::ListArgs>) -> Result<CallToolResult, ErrorData> {
+        plan_tools::list_plan(&self.state, args).await
+    }
+
+    #[tool(name = "plan_task", description = "Append a task UUID once to a day. origin planned adds an unrecorded entry; interruption records worked. Requires notes:write.",
+        annotations(title = "Plan a task", read_only_hint = false, destructive_hint = false,
+                    idempotent_hint = true, open_world_hint = false))]
+    pub async fn plan_task(&self, Parameters(args): Parameters<plan_tools::PlanArgs>, context: RequestContext<RoleServer>) -> Result<CallToolResult, ErrorData> {
+        if !granted(&context, SCOPE_WRITE) {
+            return Ok(needs_write_scope());
+        }
+        plan_tools::plan_task(&self.state, args).await
+    }
+
+    #[tool(name = "record_plan_result", description = "Record worked or missed for a task on a day; omit result to clear it. worked records effort, not task completion. Requires notes:write.",
+        annotations(title = "Record plan result", read_only_hint = false, destructive_hint = false,
+                    idempotent_hint = true, open_world_hint = false))]
+    pub async fn record_plan_result(&self, Parameters(args): Parameters<plan_tools::ResultArgs>, context: RequestContext<RoleServer>) -> Result<CallToolResult, ErrorData> {
+        if !granted(&context, SCOPE_WRITE) {
+            return Ok(needs_write_scope());
+        }
+        plan_tools::record_result(&self.state, args).await
+    }
+
+    #[tool(name = "unplan_task", description = "Remove a task UUID from one day, preserving other entries and the task note. Also works for unknown UUIDs. Requires notes:write.",
+        annotations(title = "Remove plan entry", read_only_hint = false, destructive_hint = false,
+                    idempotent_hint = true, open_world_hint = false))]
+    pub async fn unplan_task(&self, Parameters(args): Parameters<plan_tools::UnplanArgs>, context: RequestContext<RoleServer>) -> Result<CallToolResult, ErrorData> {
+        if !granted(&context, SCOPE_WRITE) {
+            return Ok(needs_write_scope());
+        }
+        plan_tools::unplan_task(&self.state, args).await
+    }
+
 }
 
 // Naming the field is not cosmetic: left to its default the handler calls `Self::tool_router()`
 // and rebuilds the whole router on every request.
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for Mory {
+    async fn call_tool(
+        &self,
+        request: rmcp::model::CallToolRequestParams,
+        context: RequestContext<RoleServer>,
+    ) -> Result<rmcp::model::CallToolResponse, ErrorData> {
+        if let Some(message) = obsolete_task_arguments(&request.name, request.arguments.as_ref()) {
+            return Ok(tool_error(message).into());
+        }
+        let call = rmcp::handler::server::tool::ToolCallContext::new(self, request, context);
+        self.tool_router.call(call).await
+    }
+
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(
@@ -500,6 +551,36 @@ Two things are easy to get wrong and expensive to fix:
 ordinal: `3wed` is the third Wednesday of the month.
 
 Start with search_notes to find a path, then read_note to read it.";
+
+fn obsolete_task_arguments(name: &str, arguments: Option<&serde_json::Map<String, serde_json::Value>>) -> Option<String> {
+    if !matches!(name, "create_task" | "update_task" | "set_task_dates") {
+        return None;
+    }
+    let arguments = arguments?;
+    let replacements = [
+        ("start_at", "start_at was renamed to available_from."),
+        ("scheduled_dates", "scheduled_dates was removed; use plan_task(date, task, origin)."),
+        ("urgency", "urgency is derived from dates and lead_time; set those instead."),
+        ("progress", "progress is derived from descendant statuses; update their status instead."),
+    ];
+    let messages: Vec<_> = replacements.iter().filter(|(key, _)| arguments.contains_key(*key) || arguments.get("clear").and_then(serde_json::Value::as_array).is_some_and(|keys| keys.iter().any(|value| value.as_str() == Some(*key)))).map(|(_, message)| *message).collect();
+    (!messages.is_empty()).then(|| messages.join(" "))
+}
+
+#[cfg(test)]
+mod argument_tests {
+    use super::*;
+    #[test]
+    fn obsolete_task_arguments_name_the_replacements() {
+        for (key, replacement) in [("start_at", "available_from"), ("scheduled_dates", "plan_task"), ("urgency", "lead_time"), ("progress", "status")] {
+            let arguments = serde_json::json!({key: null});
+            assert!(obsolete_task_arguments("create_task", arguments.as_object()).unwrap().contains(replacement));
+            assert!(obsolete_task_arguments("update_task", arguments.as_object()).unwrap().contains(replacement));
+        }
+        assert!(obsolete_task_arguments("set_task_dates", serde_json::json!({"clear": ["start_at"]}).as_object()).unwrap().contains("available_from"));
+        assert!(obsolete_task_arguments("create_note", serde_json::json!({"start_at": null}).as_object()).is_none());
+    }
+}
 
 /// The tower service to mount at `{MORIED_ROOT_PATH}v2/mcp`.
 pub fn service(

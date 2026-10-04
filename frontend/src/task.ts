@@ -1,5 +1,6 @@
 import YAML from 'yaml';
-import dayjs from 'dayjs';
+import { nowLocal } from '@/time';
+import type { Importance } from '@/urgency';
 
 import { stringifyWithFlowAlarms } from '@/frontmatter';
 import type { TaskAlarms } from '@/alarms';
@@ -91,20 +92,20 @@ export const STATUS_TRANSITION = {
 } as const satisfies Record<StatusKind, readonly StatusKind[]>;
 
 export interface Task {
+    created_at?: string;
     uuid: UUID;
     title: string;
     tags: string[];
     status: Status;
-    progress: number;
-    importance: number;
-    urgency: number;
-    start_at?: string;
+    importance?: Importance;
+    available_from?: string;
+    lead_time?: string;
+    source?: string;
     due_by?: string;
     deadline?: string;
     // When `due_by` and `deadline` ring, where this task says so; `render` has to write it, or a
     // save from the editor would delete it.
     alarms?: TaskAlarms;
-    scheduled_dates: string[];
     note: string;
 }
 
@@ -122,7 +123,7 @@ export function hasFields(kind: StatusKind): boolean {
 
 // What a task switched to `kind` starts with. Done and Canceled say when, and that is now.
 export function makeDefaultStatus(kind: StatusKind): Status {
-    const now = dayjs().format().replace('T', ' ');
+    const now = nowLocal();
     switch (kind) {
         case 'backlog': return { kind: 'backlog' };
         case 'todo': return { kind: 'todo' };
@@ -150,20 +151,58 @@ export function canTransition(from: StatusKind, to: StatusKind): boolean {
 
 export function render(task: Task): string {
     const metadata = {
+        created_at: task.created_at ?? nowLocal(),
         task: {
             status: task.status,
-            progress: task.progress,
-            importance: task.importance,
-            urgency: task.urgency,
-            ...(task.start_at ? { start_at: task.start_at } : {}),
+            ...(task.importance ? { importance: task.importance } : {}),
+            ...(task.available_from ? { available_from: task.available_from } : {}),
+            ...(task.lead_time ? { lead_time: task.lead_time } : {}),
             ...(task.due_by ? { due_by: task.due_by } : {}),
             ...(task.deadline ? { deadline: task.deadline } : {}),
             ...(task.alarms && Object.keys(task.alarms).length > 0 ? { alarms: task.alarms } : {}),
-            scheduled_dates: task.scheduled_dates,
         },
         tags: task.tags,
     };
-    return '---\n' + stringifyWithFlowAlarms(metadata, { indent: 4 }) + '---\n' + (task.title ? `\n# ${task.title}\n` : '') + (`\n${task.note}`);
+    let frontmatter = stringifyWithFlowAlarms(metadata, { indent: 4 });
+    if (task.source) {
+        editFrontmatter(task.source, (source) => {
+            const doc = YAML.parseDocument(source);
+            if (doc.errors.length > 0 || !YAML.isMap(doc.contents)) {
+                throw new Error('The original frontmatter must be a valid mapping.');
+            }
+            const original = doc.toJS();
+            const originalTask = original.task;
+            if (!originalTask || typeof originalTask !== 'object' || Array.isArray(originalTask)) {
+                throw new Error('The original task must be a mapping.');
+            }
+            const nextTask = { ...originalTask, ...metadata.task };
+            for (const key of ['urgency', 'progress', 'scheduled_dates', 'start_at', 'importance', 'available_from', 'lead_time', 'due_by', 'deadline', 'alarms']) {
+                if (!(key in metadata.task)) {
+                    delete nextTask[key];
+                }
+            }
+            doc.set('created_at', task.created_at ?? original.created_at ?? metadata.created_at);
+            doc.set('tags', task.tags);
+            // Editing known fields keeps other frontmatter and YAML comments available to the editor.
+            for (const key of Object.keys(originalTask)) {
+                if (!(key in nextTask)) {
+                    doc.deleteIn(['task', key]);
+                }
+            }
+            for (const [key, value] of Object.entries(nextTask)) {
+                if (!sameValue(originalTask[key], value)) {
+                    doc.setIn(['task', key], value);
+                }
+            }
+            frontmatter = doc.toString({ indent: 4, lineWidth: 0 });
+            const expected = { ...original, created_at: task.created_at ?? original.created_at ?? metadata.created_at, tags: task.tags, task: nextTask };
+            if (!parsesTo(frontmatter, expected)) {
+                throw new Error('Saving the task would change other frontmatter.');
+            }
+            return source;
+        });
+    }
+    return '---\n' + frontmatter + '---\n' + (task.title ? `\n# ${task.title}\n` : '') + (`\n${task.note}`);
 }
 
 // A note with its task's status replaced, and every other byte left alone.

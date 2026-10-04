@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { getAxios } from '@/axios';
 import { encodePath } from '@/encode-path';
 import YAML from 'yaml';
@@ -250,6 +249,18 @@ export function renameNote(oldPath: string, newPath: string) {
   });
 }
 
+export async function getFile(path: string, etag?: string): Promise<{ content: string | null; etag: string }> {
+    const response = await getAxios().get(`/v2/files/${encodePath(path)}`, {
+        headers: etag ? { 'If-None-Match': etag } : {},
+        validateStatus: (status) => status === 304 || status >= 200 && status < 300,
+    });
+    return { content: response.status === 304 ? null : response.data, etag: response.headers.etag };
+}
+
+export async function saveFileChecked(path: string, content: string, expectedETag: string): Promise<void> {
+    await getAxios().put(`/notes/${encodePath(path)}`, { Save: { content, message: `Update ${path}`, expected_etag: expectedETag } });
+}
+
 export function getNote(path: string) {
   return getAxios().get(`/notes/${encodePath(path)}`);
 }
@@ -370,16 +381,7 @@ export async function getTaskData(eTag?: string): Promise<[string, TaskData | nu
         headers: headers,
         validateStatus: (status) => (status >= 200 && status < 300) || status === 304,
     });
-    let res;
-    try {
-        res = await request(TASK_DATA_PATH);
-    }
-    catch (error) {
-        if (!axios.isAxiosError(error) || error.response?.status !== 404) {
-            throw error;
-        }
-        res = await request('.mory/tasks.yaml');
-    }
+    const res = await request(TASK_DATA_PATH);
     if (res.status === 304) {
         return [res.headers.etag, null];
     }
@@ -504,10 +506,8 @@ export async function assessTask(task: {
     title: string; 
     tags?: string[];
     status?: Status;
-    progress?: number;
-    importance?: number;
-    urgency?: number;
-    start_at?: string;
+    importance?: 'low' | 'medium' | 'high';
+    available_from?: string;
     due_by?: string;
     deadline?: string;
     note?: string;
@@ -518,10 +518,8 @@ export async function assessTask(task: {
         title: task.title,
         tags: task.tags,
         status: task.status,
-        progress: task.progress,
         importance: task.importance,
-        urgency: task.urgency,
-        start_at: task.start_at,
+        available_from: task.available_from,
         due_by: task.due_by,
         deadline: task.deadline,
         note: task.note,

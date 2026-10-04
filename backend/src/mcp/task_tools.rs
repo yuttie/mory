@@ -10,6 +10,7 @@ use super::frontmatter::{self, Change};
 use super::tools::{alarm_list, commit_edit, note_text, safe_path, WriteOutput};
 use super::{json_result, tool_error};
 use crate::models::AppState;
+use crate::note_time::now_local;
 use crate::tasks::{TaskField, STATUS_KINDS};
 
 /// What `create_task` writes when the caller names no status. The web app's editor starts a new
@@ -17,6 +18,7 @@ use crate::tasks::{TaskField, STATUS_KINDS};
 const NEW_TASK_STATUS: &str = "backlog";
 
 #[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct UpdateTaskArgs {
     /// The note's exact repository path.
     pub path: String,
@@ -57,15 +59,16 @@ pub struct UpdateTaskArgs {
     #[serde(default)]
     pub cancel_reason: Option<String>,
 
-    /// 0 to 100.
+    /// low, medium or high; use clear_importance to return to unrated.
     #[serde(default)]
-    pub progress: Option<f64>,
-    /// 1 to 5, where 5 is most important.
+    pub importance: Option<Importance>,
     #[serde(default)]
-    pub importance: Option<i64>,
-    /// 1 to 5, where 5 is most urgent.
+    pub clear_importance: bool,
+    /// Whole calendar days or weeks, such as 14d or 2w.
     #[serde(default)]
-    pub urgency: Option<i64>,
+    pub lead_time: Option<String>,
+    #[serde(default)]
+    pub clear_lead_time: bool,
 }
 
 /// The `status:` mapping a kind and its companions make, or why they do not make one.
@@ -141,37 +144,32 @@ fn status_changes(args: &UpdateTaskArgs, kind: &str) -> Result<Vec<Change>, Stri
     Ok(vec![Change::set(&["task", "status"], Value::Mapping(status))])
 }
 
-/// Now, spelled the way the notes spell a datetime: local wall clock carrying its own offset.
-///
-/// The offset is not decoration. A task completed at 18:17 in Tokyo and one completed at 18:17
-/// in London are different moments, and a bare datetime cannot say which this was.
-fn now_local() -> String {
-    chrono::Local::now().format("%Y-%m-%d %H:%M:%S%:z").to_string()
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum Importance { Low, Medium, High }
+
+impl Importance {
+    fn text(&self) -> &'static str {
+        match self { Self::Low => "low", Self::Medium => "medium", Self::High => "high" }
+    }
 }
 
-/// The numeric fields, with the bounds the schema puts on them.
 fn measure_changes(args: &UpdateTaskArgs) -> Result<Vec<Change>, String> {
     let mut changes = Vec::new();
-    if let Some(progress) = args.progress {
-        if !(0.0..=100.0).contains(&progress) {
-            return Err(format!("progress must be between 0 and 100, not {progress}."));
-        }
-        // An integral percentage is written as an integer, which is how every task in the
-        // repository spells it.
-        if progress.fract() == 0.0 {
-            changes.push(Change::set(&["task", "progress"], progress as i64));
-        }
-        else {
-            changes.push(Change::set(&["task", "progress"], progress));
-        }
+    if args.clear_importance {
+        changes.push(Change::remove(&["task", "importance"]));
     }
-    for (name, value) in [("importance", args.importance), ("urgency", args.urgency)] {
-        if let Some(value) = value {
-            if !(1..=5).contains(&value) {
-                return Err(format!("{name} must be between 1 and 5, not {value}."));
-            }
-            changes.push(Change::set(&["task", name], value));
+    if let Some(importance) = &args.importance {
+        changes.push(Change::set(&["task", "importance"], importance.text()));
+    }
+    if args.clear_lead_time {
+        changes.push(Change::remove(&["task", "lead_time"]));
+    }
+    if let Some(lead) = &args.lead_time {
+        if crate::urgency::lead_time_days(&lead.clone().into()).is_none() {
+            return Err("lead_time must be whole days or weeks, such as 14d or 2w.".into());
         }
+        changes.push(Change::set(&["task", "lead_time"], lead.trim()));
     }
     Ok(changes)
 }
@@ -202,7 +200,7 @@ pub async fn update_task(
     }
     if changes.is_empty() {
         return Ok(tool_error(
-            "Nothing to change. Pass at least one of status, progress, importance or urgency.",
+            "Nothing to change. Pass status, importance or lead_time, or clear_importance/clear_lead_time. Urgency and progress are derived; use plan_task for planning.",
         ));
     }
 
@@ -210,6 +208,7 @@ pub async fn update_task(
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CompleteTaskArgs {
     /// The note's exact repository path.
     pub path: String,
@@ -221,9 +220,6 @@ pub struct CompleteTaskArgs {
     /// An optional note about how it went.
     #[serde(default)]
     pub completion_note: Option<String>,
-    /// Whether to set progress to 100 as well. Defaults to true.
-    #[serde(default)]
-    pub set_progress: Option<bool>,
 }
 
 pub async fn complete_task(
@@ -238,7 +234,6 @@ pub async fn complete_task(
             status: Some("done".to_owned()),
             completed_at: args.completed_at,
             completion_note: args.completion_note,
-            progress: args.set_progress.unwrap_or(true).then_some(100.0),
             ..empty_update()
         },
     )
@@ -246,6 +241,7 @@ pub async fn complete_task(
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CancelTaskArgs {
     /// The note's exact repository path.
     pub path: String,
@@ -293,13 +289,15 @@ fn empty_update() -> UpdateTaskArgs {
         completion_note: None,
         canceled_at: None,
         cancel_reason: None,
-        progress: None,
         importance: None,
-        urgency: None,
+        clear_importance: false,
+        lead_time: None,
+        clear_lead_time: false,
     }
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct SetTaskDatesArgs {
     /// The note's exact repository path.
     pub path: String,
@@ -307,16 +305,13 @@ pub struct SetTaskDatesArgs {
     pub message: String,
     /// When work on it starts.
     #[serde(default)]
-    pub start_at: Option<String>,
+    pub available_from: Option<String>,
     /// When it should be finished by.
     #[serde(default)]
     pub due_by: Option<String>,
     /// The hard deadline.
     #[serde(default)]
     pub deadline: Option<String>,
-    /// The days it is scheduled on, as bare dates. An empty list clears them.
-    #[serde(default)]
-    pub scheduled_dates: Option<Vec<String>>,
     /// When `due_by` rings, as a list: offsets from it (`-1h` before, `+1h` after, in w, d, h, m
     /// or s) or times on its day (`09:00`, `-1d 18:00`). Nothing rings for it unless the config
     /// says so. An empty list silences it; name `due_by_alarms` in `clear` to go back to the
@@ -326,14 +321,14 @@ pub struct SetTaskDatesArgs {
     /// When `deadline` rings, written as `due_by_alarms` is.
     #[serde(default)]
     pub deadline_alarms: Option<Vec<String>>,
-    /// Dates to remove entirely: any of `start_at`, `due_by`, `deadline`, `scheduled_dates`;
+    /// Dates to remove entirely: any of `available_from`, `due_by`, `deadline`;
     /// or `due_by_alarms` or `deadline_alarms`, to remove the alarms set for one.
     #[serde(default)]
     pub clear: Option<Vec<String>>,
 }
 
 /// What `clear` may name that is a date of its own.
-const DATE_KEYS: [&str; 4] = ["start_at", "due_by", "deadline", "scheduled_dates"];
+const DATE_KEYS: [&str; 3] = ["available_from", "due_by", "deadline"];
 
 /// What `clear` may name to remove the alarms set for one date, and the date each is for.
 const ALARM_KEYS: [(&str, TaskField); 2] =
@@ -362,6 +357,9 @@ fn read_clear(args: &SetTaskDatesArgs) -> Result<(Vec<Change>, Vec<&'static str>
         }
         else if DATE_KEYS.contains(&key.as_str()) {
             removals.push(Change::remove(&["task", key]));
+            if key == "available_from" {
+                removals.push(Change::remove(&["task", "start_at"]));
+            }
         }
         else {
             let known = DATE_KEYS.into_iter().chain(ALARM_KEYS.map(|(name, _)| name));
@@ -406,25 +404,30 @@ fn alarm_sets(args: &SetTaskDatesArgs) -> Result<Vec<Change>, String> {
     Ok(changes)
 }
 
+fn validate_task_date(key: &str, value: &str) -> Result<(), String> {
+    if crate::urgency::instant(Some(&Value::String(value.to_owned())), crate::urgency::local_zone(), false).is_none() {
+        return Err(format!("{key}: use a valid YYYY-MM-DD date or a datetime with its UTC offset."));
+    }
+    Ok(())
+}
+
 /// The changes that set the dates `args` gives.
-fn date_sets(args: &SetTaskDatesArgs) -> Vec<Change> {
+fn date_sets(args: &SetTaskDatesArgs) -> Result<Vec<Change>, String> {
     let mut changes = Vec::new();
     for (key, value) in [
-        ("start_at", &args.start_at),
+        ("available_from", &args.available_from),
         ("due_by", &args.due_by),
         ("deadline", &args.deadline),
     ] {
         if let Some(value) = value {
+            validate_task_date(key, value)?;
+            if key == "available_from" {
+                changes.push(Change::remove(&["task", "start_at"]));
+            }
             changes.push(Change::set(&["task", key], value.as_str()));
         }
     }
-    if let Some(dates) = &args.scheduled_dates {
-        changes.push(Change::set(
-            &["task", "scheduled_dates"],
-            Value::Sequence(dates.iter().map(|date| Value::String(date.clone())).collect()),
-        ));
-    }
-    changes
+    Ok(changes)
 }
 
 /// The changes a `SetTaskDatesArgs` asks for, under `task`, to the note `text`.
@@ -435,7 +438,7 @@ fn date_changes(args: &SetTaskDatesArgs, text: &str) -> Result<Vec<Change>, Stri
     let (mut changes, cleared_alarms) = read_clear(args)?;
     changes.extend(alarm_removals(&cleared_alarms, text));
     changes.extend(alarm_sets(args)?);
-    changes.extend(date_sets(args));
+    changes.extend(date_sets(args)?);
     Ok(changes)
 }
 
@@ -465,6 +468,7 @@ pub async fn set_task_dates(
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CreateTaskArgs {
     /// The task's title, which becomes the note's `#` heading.
     pub title: String,
@@ -482,23 +486,18 @@ pub struct CreateTaskArgs {
     /// Defaults to `backlog`.
     #[serde(default)]
     pub status: Option<String>,
-    /// Defaults to 0.
+    /// low, medium or high. Omit to leave unrated.
     #[serde(default)]
-    pub progress: Option<f64>,
-    /// 1 to 5. Defaults to 3.
+    pub importance: Option<Importance>,
+    /// Whole calendar days or weeks, otherwise tag/global defaults apply.
     #[serde(default)]
-    pub importance: Option<i64>,
-    /// 1 to 5. Defaults to 3.
+    pub lead_time: Option<String>,
     #[serde(default)]
-    pub urgency: Option<i64>,
-    #[serde(default)]
-    pub start_at: Option<String>,
+    pub available_from: Option<String>,
     #[serde(default)]
     pub due_by: Option<String>,
     #[serde(default)]
     pub deadline: Option<String>,
-    #[serde(default)]
-    pub scheduled_dates: Option<Vec<String>>,
     /// Required when `status` is `waiting`.
     #[serde(default)]
     pub waiting_for: Option<String>,
@@ -526,8 +525,7 @@ pub async fn create_task(
     args: CreateTaskArgs,
 ) -> Result<CallToolResult, ErrorData> {
     // Nothing is being preserved here, so this one note is written outright rather than edited.
-    // The schema requires all five of status, progress, importance, urgency and
-    // scheduled_dates, so every one of them gets a value whether the caller named it or not.
+    // A new task carries a status; unrated importance and inherited lead time stay absent.
     let update = UpdateTaskArgs {
         path: String::new(),
         message: String::new(),
@@ -536,15 +534,15 @@ pub async fn create_task(
         blocked_by: args.blocked_by.clone(),
         hold_reason: args.hold_reason.clone(),
         cancel_reason: args.cancel_reason.clone(),
-        progress: Some(args.progress.unwrap_or(0.0)),
-        importance: Some(args.importance.unwrap_or(3)),
-        urgency: Some(args.urgency.unwrap_or(3)),
+        importance: args.importance.clone(),
+        lead_time: args.lead_time.clone(),
         ..empty_update()
     };
     let mut changes = match measure_changes(&update) {
         Ok(changes) => changes,
         Err(message) => return Ok(tool_error(message)),
     };
+    changes.push(Change::set(&["created_at"], now_local()));
     match status_changes(&update, update.status.as_deref().unwrap_or(NEW_TASK_STATUS)) {
         Ok(status) => changes.extend(status),
         Err(message) => return Ok(tool_error(message)),
@@ -556,20 +554,17 @@ pub async fn create_task(
         ));
     }
     for (key, value) in [
-        ("start_at", &args.start_at),
+        ("available_from", &args.available_from),
         ("due_by", &args.due_by),
         ("deadline", &args.deadline),
     ] {
         if let Some(value) = value {
+            if let Err(error) = validate_task_date(key, value) {
+                return Ok(tool_error(error));
+            }
             changes.push(Change::set(&["task", key], value.as_str()));
         }
     }
-    let dates = args.scheduled_dates.clone().unwrap_or_default();
-    changes.push(Change::set(
-        &["task", "scheduled_dates"],
-        Value::Sequence(dates.into_iter().map(Value::String).collect()),
-    ));
-
     let path = match args.path {
         Some(path) => match super::tools::writable_path(&path) {
             Ok(path) => path,
@@ -611,6 +606,27 @@ pub async fn create_task(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn changing_availability_removes_the_legacy_fallback() {
+        let before = "---\ntask:\n    status: {kind: todo}\n    start_at: 2026-10-15\n---\n# T\n";
+        let mut args: SetTaskDatesArgs = serde_json::from_value(serde_json::json!({"path": "unused", "message": "Test", "clear": ["available_from"]})).unwrap();
+        let after = frontmatter::apply(before, &date_changes(&args, before).unwrap()).unwrap();
+        assert!(!after.contains("start_at"));
+        args.available_from = Some("2026-10-16".into());
+        let after = frontmatter::apply(before, &date_changes(&args, before).unwrap()).unwrap();
+        assert!(!after.contains("start_at"));
+        assert!(after.contains("available_from: 2026-10-16"));
+    }
+    #[test]
+    fn task_dates_are_accepted_only_when_urgency_can_read_them() {
+        for date in ["2026-02-30", "2026-13-01", "2026-10-15 12:00", ""] {
+            assert!(validate_task_date("deadline", date).is_err());
+        }
+        for date in ["2026-10-15", "2026-10-15 12:00+09:00", "2026-10-15T12:00:00Z"] {
+            assert!(validate_task_date("deadline", date).is_ok());
+        }
+    }
 
     fn args(path: &str) -> UpdateTaskArgs {
         UpdateTaskArgs {
@@ -689,20 +705,18 @@ mod tests {
     }
 
     #[test]
-    fn a_measure_outside_its_bounds_is_refused() {
-        for (progress, importance, urgency) in [
-            (Some(101.0), None, None),
-            (Some(-1.0), None, None),
-            (None, Some(0), None),
-            (None, Some(6), None),
-            (None, None, Some(0)),
-        ] {
-            let mut a = args("t.md");
-            a.progress = progress;
-            a.importance = importance;
-            a.urgency = urgency;
-            assert!(measure_changes(&a).is_err(), "{progress:?} {importance:?} {urgency:?}");
+    fn legacy_arguments_are_refused_and_named_importance_is_checked() {
+        for (key, value) in [("urgency", serde_json::json!(3)), ("progress", serde_json::json!(50)), ("scheduled_dates", serde_json::json!([])), ("start_at", serde_json::json!("2026-10-01"))] {
+            let mut args = serde_json::json!({ "title": "T", "message": "create" });
+            args[key] = value;
+            assert!(serde_json::from_value::<CreateTaskArgs>(args).is_err(), "accepted {key}");
         }
+        assert!(serde_json::from_value::<CreateTaskArgs>(serde_json::json!({"title":"T", "message":"m", "importance":3})).is_err());
+        let mut a = args("t.md");
+        a.importance = Some(Importance::High);
+        assert!(apply(TASK, &measure_changes(&a).unwrap()).contains("importance: high"));
+        a.lead_time = Some("-2w".into());
+        assert!(measure_changes(&a).is_err());
     }
 
     fn dates(json: serde_json::Value) -> SetTaskDatesArgs {
@@ -793,14 +807,4 @@ mod tests {
         assert!(error.contains("needs a sign"), "{error}");
     }
 
-    /// The notes write a whole percentage as an integer, and a task rewritten as `progress: 50.0`
-    /// would read as an app-touched file even though nothing else changed.
-    #[test]
-    fn a_whole_percentage_is_written_as_an_integer() {
-        let mut a = args("t.md");
-        a.progress = Some(50.0);
-        assert!(apply(TASK, &measure_changes(&a).unwrap()).contains("    progress: 50\n"));
-        a.progress = Some(12.5);
-        assert!(apply(TASK, &measure_changes(&a).unwrap()).contains("    progress: 12.5\n"));
-    }
 }

@@ -1,3 +1,6 @@
+mod note_time;
+mod urgency;
+mod plans;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::ffi::OsStr;
@@ -926,33 +929,15 @@ async fn find_entry_blob(
     state: &AppState,
     path: &str,
 ) -> Option<(Oid, Vec<u8>)> {
-    // Search an index of HEAD for the given path
-    let (oid, entry) = {
-        let repo = state.repo.lock().unwrap();
+    entry_blob(&state.repo.lock().unwrap(), path)
+}
 
-        // Build an in-memory index of HEAD
-        let head_ref = repo.head().ok()?;
-        let head_oid = head_ref.target()?;
-        let head_tree = head_ref.peel_to_tree().ok()?;
-
-        let mut index = Index::new().ok()?;
-        index.read_tree(&head_tree).ok()?;
-
-        // Find the entry whose path matches our requested string
-        let entry = index
-            .iter()
-            .find(|entry| std::str::from_utf8(&entry.path).map(|p| p == path).unwrap_or(false))?;
-
-        (head_oid, entry)
-    };
-
-    // Load the blob's bytes
-    let content = {
-        let repo = state.repo.lock().unwrap();
-        repo.find_blob(entry.id).map(|blob| Vec::from(blob.content())).ok()?
-    };
-
-    Some((oid, content))
+fn entry_blob(repo: &Repository, path: &str) -> Option<(Oid, Vec<u8>)> {
+    let tree = repo.head().ok()?.peel_to_tree().ok()?;
+    let entry = tree.get_path(Path::new(path)).ok()?;
+    let blob = repo.find_blob(entry.id()).ok()?;
+    // Reads and checked writes identify the file's contents, independently of other commits.
+    Some((blob.id(), blob.content().to_vec()))
 }
 
 fn content_response(content: Vec<u8>, path: &Path) -> Response {
@@ -989,8 +974,17 @@ async fn put_notes_path(
     tracing::debug!("{:?}", note_save);
 
     let written = match note_save {
-        NoteSave::Save { content, message } => {
-            state.save_note(&path, content.as_bytes(), &message).await.map(Some)
+        NoteSave::Save { content, message, expected_etag } => {
+            if let Some(expected) = expected_etag {
+                match state.save_note_checked(&path, content.as_bytes(), &message, &expected).await {
+                    Ok(Some(commit)) => Ok(Some(commit)),
+                    Ok(None) => return StatusCode::PRECONDITION_FAILED.into_response(),
+                    Err(error) => Err(error),
+                }
+            }
+            else {
+                state.save_note(&path, content.as_bytes(), &message).await.map(Some)
+            }
         },
         NoteSave::Rename { from } => {
             let message = format!("Rename {} to {}", &from, &path);
@@ -1343,10 +1337,8 @@ mod v2 {
         pub title: String,
         pub tags: Option<Vec<String>>,
         pub status: Option<serde_json::Value>,
-        pub progress: Option<f32>,
-        pub importance: Option<i32>,
-        pub urgency: Option<i32>,
-        pub start_at: Option<String>,
+        pub importance: Option<String>,
+        pub available_from: Option<String>,
         pub due_by: Option<String>,
         pub deadline: Option<String>,
         pub note: Option<String>,
@@ -1509,10 +1501,8 @@ The task information is provided as JSON containing:
 - title: The main task description
 - tags: Categories/labels associated with the task
 - status: Current state of the task (todo, in_progress, waiting, etc.)
-- progress: Completion percentage (0-100%)
-- importance: Priority level (1-5, where 5 is most important)
-- urgency: Time sensitivity (1-5, where 5 is most urgent)
-- start_at: Planned start date/time
+- importance: Optional judgement: low, medium or high; absent means unrated
+- available_from: Earliest date/time work can begin
 - due_by: Preferred completion date/time
 - deadline: Hard deadline
 - note: Any current notes about the task
@@ -2664,6 +2654,26 @@ mod models {
         commit_index(repo, &mut index, &head_commit, message)
     }
 
+    /// Check the file version and commit under the caller's repository lock.
+    pub(crate) fn commit_save_checked(
+        repo: &Repository,
+        path: &str,
+        content: &[u8],
+        message: &str,
+        expected: &str,
+    ) -> Result<Option<Oid>> {
+        let tree = repo.head()?.peel_to_tree()?;
+        let current = tree.get_path(std::path::Path::new(path)).ok().map(|entry| entry.id());
+        let matches = match current {
+            Some(oid) => expected == format!("\"{oid}\""),
+            None => expected == "absent",
+        };
+        if !matches {
+            return Ok(None);
+        }
+        commit_save(repo, path, content, message).map(Some)
+    }
+
     /// Move the blob at `from` to `to`, keeping its mode. `None` when `from` is not in HEAD.
     pub(crate) fn commit_rename(
         repo: &Repository,
@@ -2902,6 +2912,16 @@ mod models {
             Ok(commit_id)
         }
 
+        /// Refuse a stale plan edit while holding the same repository lock as its commit.
+        /// `absent` means this operation expects to create a file.
+        pub async fn save_note_checked(&self, path: &str, content: &[u8], message: &str, expected: &str) -> Result<Option<Oid>> {
+            let committed = commit_save_checked(&self.repo.lock().unwrap(), path, content, message, expected)?;
+            if committed.is_some() {
+                self.nudge_cache().await;
+            }
+            Ok(committed)
+        }
+
         /// Move the blob at `from` to `to`. `None` when `from` is not in HEAD.
         pub async fn rename_note(
             &self,
@@ -2976,6 +2996,8 @@ mod models {
         Save {
             content: String,
             message: String,
+            #[serde(default)]
+            expected_etag: Option<String>,
         },
         Rename {
             from: String,
