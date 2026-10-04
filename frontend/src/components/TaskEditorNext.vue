@@ -7,59 +7,99 @@
             style="display: contents"
             v-on:submit.prevent="onSave"
         >
-            <v-card-title>
-                {{ isEdit ? 'Edit task' : getNewTaskTitle() }}
-                <v-btn
-                    v-if="isEdit"
-                    v-bind:to="{ name: 'Note', params: { path: taskPath.split('/') } }"
-                    target="_blank"
-                    title="Open as note"
-                    class="ml-1"
-                    variant="plain"
-                    icon
-                >
-                    <v-icon>{{ mdiPencilBoxOutline }}</v-icon>
-                </v-btn>
-                <v-spacer />
-                <div class="d-flex flex-row flex-grow-1 align-center">
-                    <v-spacer />
-                    <v-btn
-                        v-if="!isEdit"
-                        variant="text"
-                        class="mr-3"
-                        v-on:click="onCancel"
+            <v-card-title class="editor-header">
+                <div class="editor-heading">
+                    <div class="editor-title">
+                        <span>{{ isEdit ? 'Edit task' : getNewTaskTitle() }}</span>
+                        <v-btn
+                            v-if="isEdit"
+                            v-bind:to="{ name: 'Note', params: { path: taskPath.split('/') } }"
+                            target="_blank"
+                            title="Open as note"
+                            aria-label="Open as note"
+                            variant="plain"
+                            size="small"
+                            icon
+                        >
+                            <v-icon>{{ mdiPencilBoxOutline }}</v-icon>
+                        </v-btn>
+                    </div>
+                    <div class="editor-actions">
+                        <v-btn
+                            v-if="!isEdit"
+                            variant="text"
+                            aria-label="Cancel"
+                            title="Cancel"
+                            v-bind:icon="$vuetify.display.smAndDown"
+                            v-on:click="onCancel"
+                        >
+                            <v-icon>{{ mdiClose }}</v-icon>
+                            <span v-if="$vuetify.display.mdAndUp">Cancel</span>
+                        </v-btn>
+                        <v-btn
+                            v-if="isEdit"
+                            variant="text"
+                            color="primary"
+                            aria-label="Change Parent"
+                            title="Change Parent"
+                            v-bind:icon="$vuetify.display.smAndDown"
+                            v-on:click="onChangeParent"
+                        >
+                            <v-icon v-bind:class="{ 'mr-1': $vuetify.display.mdAndUp }">
+                                {{ mdiFileTreeOutline }}
+                            </v-icon>
+                            <span v-if="$vuetify.display.mdAndUp">Change Parent</span>
+                        </v-btn>
+                        <v-btn
+                            v-if="isEdit"
+                            color="error"
+                            variant="text"
+                            aria-label="Delete"
+                            title="Delete"
+                            v-bind:icon="$vuetify.display.smAndDown"
+                            v-on:click="onDelete"
+                        >
+                            <v-icon>{{ mdiDelete }}</v-icon>
+                            <span v-if="$vuetify.display.mdAndUp">Delete</span>
+                        </v-btn>
+                        <v-btn
+                            v-bind:disabled="!!statusGateError || alarmsInvalid || !uiValid"
+                            type="submit"
+                            color="primary"
+                            v-bind:aria-label="isEdit ? 'Save' : 'Create'"
+                            v-bind:title="isEdit ? 'Save' : 'Create'"
+                            v-bind:icon="$vuetify.display.smAndDown"
+                        >
+                            <v-icon>{{ mdiContentSave }}</v-icon>
+                            <span v-if="$vuetify.display.mdAndUp">{{ isEdit ? 'Save' : 'Create' }}</span>
+                        </v-btn>
+                    </div>
+                </div>
+                <div class="editor-overview">
+                    <v-chip
+                        size="small"
+                        class="urgency-summary"
                     >
-                        <v-icon>{{ mdiClose }}</v-icon>
-                        <span v-if="$vuetify.display.mdAndUp">Cancel</span>
-                    </v-btn>
-                    <v-btn
-                        v-if="isEdit"
-                        variant="text"
-                        color="primary"
-                        class="mr-3"
-                        v-on:click="onChangeParent"
+                        Urgency: {{ URGENCY_LABEL[derivedUrgency.level] }}
+                    </v-chip>
+                    <div
+                        v-if="derivedProgress !== undefined"
+                        class="header-progress"
                     >
-                        <v-icon class="mr-1">{{ mdiFileTreeOutline }}</v-icon>
-                        <span v-if="$vuetify.display.mdAndUp">Change Parent</span>
-                    </v-btn>
-                    <v-btn
-                        v-if="isEdit"
-                        color="error"
-                        variant="text"
-                        class="mr-3"
-                        v-on:click="onDelete"
-                    >
-                        <v-icon>{{ mdiDelete }}</v-icon>
-                        <span v-if="$vuetify.display.mdAndUp">Delete</span>
-                    </v-btn>
-                    <v-btn
-                        v-bind:disabled="!!statusGateError || alarmsInvalid || !uiValid"
-                        type="submit"
-                        color="primary"
-                    >
-                        <v-icon>{{ mdiContentSave }}</v-icon>
-                        <span v-if="$vuetify.display.mdAndUp">{{ isEdit ? 'Save' : 'Create' }}</span>
-                    </v-btn>
+                        <v-icon size="small">
+                            {{ mdiPercent }}
+                        </v-icon>
+                        <div class="header-progress-value">
+                            <span class="text-caption">{{ Math.round(derivedProgress) }}% of leaves done</span>
+                            <v-progress-linear
+                                v-bind:model-value="derivedProgress"
+                                v-bind:aria-label="`${Math.round(derivedProgress)}% of leaves done`"
+                                color="green"
+                                height="4"
+                                rounded
+                            />
+                        </div>
+                    </div>
                 </div>
             </v-card-title>
             <v-alert
@@ -143,16 +183,6 @@
                         v-bind:known-contacts="knownContacts"
                         class="ml-10"
                     />
-                    <div v-if="derivedProgress !== undefined" class="progress-row mb-5">
-                        <v-icon>{{ mdiPercent }}</v-icon>
-                        <v-progress-linear
-                            v-bind:model-value="derivedProgress"
-                            color="green"
-                            height="20"
-                        >
-                            <strong>{{ Math.round(derivedProgress) }}% of leaves done</strong>
-                        </v-progress-linear>
-                    </div>
                     <v-select
                         v-model="form.importance"
                         v-bind:items="['low', 'medium', 'high']"
@@ -174,7 +204,6 @@
                             <v-icon>{{ mdiTimerSand }}</v-icon>
                         </template>
                     </v-text-field>
-                    <v-chip class="mb-3">{{ URGENCY_LABEL[derivedUrgency.level] }}</v-chip>
                     <v-alert v-if="derivedUrgency.short_window" type="warning" class="mb-3">Window shorter than lead time</v-alert>
                     <v-alert v-if="!derivedUrgency.actionable" type="info" class="mb-3">Not yet actionable</v-alert>
                     <!-- Start date -->
@@ -837,17 +866,54 @@ defineExpose({
     flex-direction: row;
 }
 
-// Laid out like a field's prepend slot, so the icon lines up with those of the fields around it.
-.progress-row {
+.editor-header {
+    flex-shrink: 0;
+    white-space: normal;
+}
+
+.editor-heading,
+.editor-title,
+.editor-actions,
+.editor-overview {
     display: flex;
     align-items: center;
-    column-gap: 16px;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.editor-title {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.editor-actions {
+    margin-left: auto;
+}
+
+.editor-overview {
+    margin-top: 8px;
+    column-gap: 20px;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.urgency-summary {
+    font-size: 12px;
+}
+
+.header-progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 160px;
+    max-width: 220px;
+    min-width: 0;
 
     > .v-icon {
         opacity: var(--v-medium-emphasis-opacity);
     }
 
-    .v-progress-linear {
+    .header-progress-value {
         flex: 1 1 0;
         min-width: 0;
     }
