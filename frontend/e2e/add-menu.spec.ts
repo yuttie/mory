@@ -20,17 +20,17 @@ function item(page: Page, href: string, name: string): Locator {
     return page.locator(`a[href="${href}"]`).filter({ hasText: name });
 }
 
-function addNote(page: Page): Locator {
-    return page.getByRole('listitem').filter({ hasText: 'Add note' }).first();
+function addMenu(page: Page): Locator {
+    return page.getByRole('listitem').filter({ hasText: /^Add$/ }).first();
 }
 
 function template(page: Page): Locator {
     return page.getByRole('listitem').filter({ hasText: 'meeting' });
 }
 
-// Opens the drawer's Add note menu and then the template's submenu.
+// Opens the drawer's Add menu and then the template's submenu.
 async function openTemplateMenu(page: Page) {
-    await addNote(page).click();
+    await addMenu(page).click();
     await template(page).hover();
 }
 
@@ -75,7 +75,7 @@ test('edits the template', async ({ context, page }) => {
 test('opens the submenu on a click, keeping the menu open', async ({ context, page }) => {
     await mockBackend(context, NOTES);
     await page.goto('/');
-    await addNote(page).click();
+    await addMenu(page).click();
     // Without hovering first, as a tap does. The click must not reach the menu around the row,
     // which closes on a click in its content.
     await template(page).click();
@@ -86,8 +86,8 @@ test('opens the submenu on a click, keeping the menu open', async ({ context, pa
 test('reaches a template and its submenu by keyboard', async ({ context, page }) => {
     await mockBackend(context, NOTES);
     await page.goto('/');
-    // Opened from the keyboard, so that focus moves into the menu: a click leaves it on Add note.
-    await addNote(page).focus();
+    // Opened from the keyboard, so that focus moves into the menu: a click leaves it on Add.
+    await addMenu(page).focus();
     await page.keyboard.press('Enter');
     // Arrows walk the menu's items; a row the keyboard cannot focus is walked past for good.
     for (let steps = 0; steps < 6 && !(await template(page).evaluate((el) => el.contains(document.activeElement))); steps += 1) {
@@ -114,7 +114,7 @@ test.describe('on a touch screen', () => {
         await mockBackend(context, NOTES);
         await page.goto('/note/projects/plan.md');
         await page.locator('.v-app-bar-nav-icon').tap();
-        await addNote(page).tap();
+        await addMenu(page).tap();
         await template(page).tap();
         await expect(item(page, NEW_CHILD_NOTE, 'New child note')).toBeVisible();
         await item(page, NEW_CHILD_NOTE, 'New child note').tap();
@@ -134,7 +134,7 @@ for (const [name, address] of [
     test(`offers no child note for ${name}`, async ({ context, page }) => {
         await mockBackend(context, NOTES);
         await page.goto(address);
-        await page.getByRole('listitem').filter({ hasText: 'Add note' }).first().click();
+        await page.getByRole('listitem').filter({ hasText: /^Add$/ }).first().click();
         await expect(page.getByRole('link', { name: 'New note', exact: true })).toBeVisible();
         await expect(page.getByText('New child note')).toHaveCount(0);
     });

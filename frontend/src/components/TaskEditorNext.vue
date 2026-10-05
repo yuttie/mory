@@ -881,8 +881,11 @@ function addNoteContent(suggestion: string) {
 }
 
 // Expose
+// `isModified` too, for a host that may close the editor: a draft with something typed in it is
+// worth keeping open.
 defineExpose({
-  refresh,
+    refresh,
+    isModified,
 });
 </script>
 
