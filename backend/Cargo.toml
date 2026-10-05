@@ -18,7 +18,7 @@ git2 = { version = "0.19", default-features = false }
 httpdate = "1"
 hkdf = "0.12"
 icalendar = { version = "0.17.13", features = ["recurrence"] }
-jsonwebtoken = "9"
+jsonwebtoken = "10"
 lindera = { version = "5.0.1", features = ["embed-ipadic"] }
 lindera-analysis = "5.0.1"
 lindera-tantivy = { version = "5.0.1", features = ["embed-ipadic"] }
