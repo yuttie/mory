@@ -13,6 +13,10 @@ on:
             - backend/docker/**
             - backend/src/**
             - .github/workflows/docker-backend.yml
+    # Weekly, so security fixes to the base image and the packages reach the
+    # image while nothing here changes. Monday 03:17 in Tokyo.
+    schedule:
+        - cron: '17 18 * * 0'
     workflow_dispatch:
 # Builds take turns, so two never race for `latest`. A newer push still does
 # not cancel one in progress: a build saves its cache only once it finishes,
@@ -23,7 +27,18 @@ concurrency:
 permissions:
     contents: read
 jobs:
+    # The reusable workflow's build-args cannot work out a date, so a job of
+    # its own does, in Tokyo time: there the weekly run opens a week, where in
+    # UTC it would close one that a push may already have refreshed.
+    week:
+        runs-on: ubuntu-latest
+        outputs:
+            week: ${{ steps.week.outputs.week }}
+        steps:
+            - id: week
+              run: echo "week=$(TZ=Asia/Tokyo date +%G-W%V)" >> "$GITHUB_OUTPUT"
     build:
+        needs: week
         # Builds each platform on its own runner by default. The Dockerfile's
         # build stage runs on the target platform, so on one runner rustc
         # would run under QEMU for arm64, far slower than on an arm64 runner.
@@ -33,6 +48,8 @@ jobs:
             id-token: write # signs the cache entries, and the attestations when pushing
         with:
             context: backend
+            build-args: |
+                APT_REFRESH=${{ needs.week.outputs.week }}
             output: image
             # A run started by hand on another branch only checks that it builds.
             push: ${{ github.ref == 'refs/heads/main' }}
@@ -44,10 +61,13 @@ jobs:
             cache-mode: max
             meta-images: yuttie/moried
             # `sha-<commit>` too, so the image a merge replaces as `latest`
-            # stays there to go back to.
+            # stays there to go back to. A weekly build is of a commit already
+            # tagged, so it gets the date instead, leaving the image before it
+            # under that tag to go back to.
             meta-tags: |
                 type=raw,value=latest
-                type=sha
+                type=sha,enable=${{ github.event_name != 'schedule' }}
+                type=schedule,pattern={{date 'YYYYMMDD' tz='Asia/Tokyo'}}
             set-meta-labels: true
             # The generated title is the repository's name, which is the
             # frontend's.

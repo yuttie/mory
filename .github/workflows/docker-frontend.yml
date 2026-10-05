@@ -16,6 +16,10 @@ on:
             - '!frontend/vitest.config.ts'
             - '!frontend/**/*.md'
             - '!frontend/docs/**'
+    # Weekly, so security fixes to the nginx image reach this one while
+    # nothing here changes. Monday 03:17 in Tokyo.
+    schedule:
+        - cron: '17 18 * * 0'
     workflow_dispatch:
 # Builds take turns, so two never race for `latest`. A newer push still does
 # not cancel one in progress: a build saves its cache only once it finishes,
@@ -53,10 +57,13 @@ jobs:
             cache-mode: max
             meta-images: yuttie/mory
             # `sha-<commit>` too, so the image a merge replaces as `latest`
-            # stays there to go back to.
+            # stays there to go back to. A weekly build is of a commit already
+            # tagged, so it gets the date instead, leaving the image before it
+            # under that tag to go back to.
             meta-tags: |
                 type=raw,value=latest
-                type=sha
+                type=sha,enable=${{ github.event_name != 'schedule' }}
+                type=schedule,pattern={{date 'YYYYMMDD' tz='Asia/Tokyo'}}
             set-meta-labels: true
         secrets:
             # DOCKERHUB_TOKEN is a Docker Hub access token of yuttie's, with

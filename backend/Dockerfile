@@ -15,6 +15,10 @@ RUN touch src/main.rs && cargo build --release
 # production stage
 FROM debian:trixie-slim AS production-stage
 
+# A new value reinstalls the packages below, whose security fixes a cached
+# layer would otherwise keep out until debian:trixie-slim itself changes. CI
+# passes the week, so the first build each week takes them in.
+ARG APT_REFRESH
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     ca-certificates \
