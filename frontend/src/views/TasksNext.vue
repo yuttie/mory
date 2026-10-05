@@ -350,10 +350,14 @@ const selectedTagName = computed<string | null>(() => {
     return null;
 });
 
-// The tag a task created from the selected group starts with. The Untagged group has none to give.
-const newTaskTag = computed<string | undefined>(() => {
-    if (activeNodeId.value === undefined || isUntaggedGroupId(activeNodeId.value)) {
+// The tag a task created from the selected group starts with: `null` for the Untagged group, which
+// has none to give, and `undefined` when no group is selected.
+const newTaskTag = computed<string | null | undefined>(() => {
+    if (activeNodeId.value === undefined || !isTagGroupId(activeNodeId.value)) {
         return undefined;
+    }
+    if (isUntaggedGroupId(activeNodeId.value)) {
+        return null;
     }
     return selectedTagName.value ?? undefined;
 });

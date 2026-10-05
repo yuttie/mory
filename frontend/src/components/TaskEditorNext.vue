@@ -452,7 +452,9 @@ const props = defineProps<{
     knownContacts: [string, number][];
     parentTaskTitle?: string;
     ancestorTitlesForTaskAssessment?: string[];
-    selectedTag?: string;
+    // The tag group a new task is created from: its tag, `null` for the Untagged group, which has
+    // none to give, and absent when no group is selected.
+    selectedTag?: string | null;
 }>();
 const pathRef = toRef(props, 'taskPath');
 
@@ -634,13 +636,15 @@ watch(uuid, () => {
 watch(
     () => props.selectedTag,
     (newTag, oldTag) => {
-        // Only update tags if we're creating a new task (no existing task)
-        if (!task.value && newTag !== oldTag) {
-            // The old group's tag goes even when there is a new one to put first: moving the task
-            // from one group to another would otherwise leave it filed under both.
-            const rest = form.tags.filter((tag) => tag !== oldTag && tag !== newTag);
-            form.tags = newTag ? [newTag, ...rest] : rest;
+        // Leaving the groups, for a task or for no selection, keeps the tag: nothing replaces it,
+        // and a tag is not taken away unasked.
+        if (task.value || newTag === oldTag || newTag === undefined) {
+            return;
         }
+        // From one group to another, the old group's tag goes even when there is a new one to put
+        // first: the task would otherwise be filed under both.
+        const rest = form.tags.filter((tag) => tag !== oldTag && tag !== newTag);
+        form.tags = newTag ? [newTag, ...rest] : rest;
     }
 );
 
