@@ -144,6 +144,7 @@ import type {
 import { routeForMime } from '@/file-route';
 import { useFilesStore } from '@/stores/files';
 import AppBarContent from '@/components/AppBarContent.vue';
+import { isInOverlay, isTyping } from '@/keyboard';
 
 const emit = defineEmits<{
     (e: 'tokenExpired', callback: () => void): void;
@@ -428,10 +429,10 @@ async function pollStatus(): Promise<void> {
 }
 
 function handleKeydown(event: KeyboardEvent): void {
-    const target = event.target;
-    const isEditing = target instanceof HTMLElement
-        && (target.isContentEditable || ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName));
-    if (event.key === '/' && !isEditing) {
+    if (isTyping(event) || isInOverlay(event)) {
+        return;
+    }
+    if (event.key === '/') {
         queryEl.value?.focus();
         event.preventDefault();
     }

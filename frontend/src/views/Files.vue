@@ -131,6 +131,7 @@ import { compareTags } from '@/api';
 import { useFilesStore } from '@/stores/files';
 import { routeForMime } from '@/file-route';
 import AppBarContent from '@/components/AppBarContent.vue';
+import { isInOverlay, isTyping } from '@/keyboard';
 
 import dayjs from 'dayjs';
 
@@ -323,6 +324,9 @@ function load() {
 }
 
 function handleKeydown(e: KeyboardEvent) {
+    if (isTyping(e) || isInOverlay(e)) {
+        return;
+    }
     if (e.key === '/') {
         queryEl.value?.focus();
         e.preventDefault();

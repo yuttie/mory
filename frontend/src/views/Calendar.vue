@@ -320,6 +320,7 @@ import { parseEventColor } from '@/event-color';
 import dayjs from 'dayjs';
 import { renderMarkdown } from '@/markdown';
 import AppBarContent from '@/components/AppBarContent.vue';
+import { isInOverlay, isTyping } from '@/keyboard';
 
 // Emits
 const emit = defineEmits<{
@@ -517,6 +518,9 @@ function navigateCalendar(direction: 'prev' | 'next', amount = 1) {
 }
 
 function onKeydown(e: KeyboardEvent) {
+    if (isTyping(e) || isInOverlay(e)) {
+        return;
+    }
     if (e.key === 'ArrowLeft') {
         navigateCalendar('prev');
     }
