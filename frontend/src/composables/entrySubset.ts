@@ -51,11 +51,22 @@ export function useEntrySubset(prefix: string): EntrySubset {
     async function init(): Promise<void> {
         const rows = await readEntriesByPrefix<ListEntry2>(prefix);
         // A sync may have landed while the read was in flight; it is the better answer.
-        if (rows !== null && files.entries.length === 0) {
+        if (rows !== null && rows.length > 0 && files.entries.length === 0) {
             primed.value = rows;
         }
-        hasLoadedOnce.value = true;
-        await files.list();
+        // Loaded once there is something to paint, cached or synced. An empty cache, as in a
+        // browser that has never synced, says nothing about the repository: painting it would show
+        // a view without the very node its address selects, which the task view then drops.
+        if (primed.value !== null || files.entries.length > 0) {
+            hasLoadedOnce.value = true;
+        }
+        try {
+            await files.list();
+        }
+        finally {
+            // A failed sync still ends the wait: the view shows what it has, and the error.
+            hasLoadedOnce.value = true;
+        }
     }
 
     function refresh(): Promise<ListEntry2[]> {

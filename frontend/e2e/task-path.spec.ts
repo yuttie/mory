@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Locator, Page } from '@playwright/test';
-import { mockBackend, uuid } from './backend';
+import { API_URL, mockBackend, uuid } from './backend';
 
 function note(title: string): string {
     return ['---', 'task:', '  status:', '    kind: todo', '---', '', `# ${title}`, ''].join('\n');
@@ -93,4 +93,18 @@ test('moves a task to the parent chosen for it, starting from the one it has', a
     await move.click();
     await expect(path(page).getByRole('link')).toHaveText(['All tasks']);
     await expect(path(page).locator('.app-bar-current')).toHaveText('Phase');
+});
+
+// A browser that has never synced has nothing cached to paint the tree from. Drawn before the
+// listing lands, the view had no selected task, and its tabs fell back to Descendants, dropping
+// the task from the address.
+test('keeps the task its address selects while the first listing is on its way', async ({ context, page }) => {
+    await mockBackend(context, NOTES);
+    await page.route(`${API_URL}v2/entries**`, async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await route.fallback();
+    });
+    await page.goto(`/tasks-next/${STEP}/selected/schedule`);
+    await expect(path(page).locator('.app-bar-current')).toHaveText('Step');
+    await expect(page).toHaveURL(url(STEP, 'selected', 'schedule'));
 });
