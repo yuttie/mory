@@ -506,3 +506,30 @@ describe('derived parent progress', () => {
         expect(store.progress(uuid(3))).toBe(0);
     });
 });
+
+describe('own urgency', () => {
+    // Worked out for every task at once and kept, so it must still follow each thing it depends on.
+    it('follows the clock and the settings', async () => {
+        const { store } = await storeWith([
+            { path: `.tasks/${uuid(1)}.md`, deadline: '2026-10-20' },
+        ]);
+        const { useTaskSettingsStore } = await import('@/stores/taskSettings');
+        const settings = useTaskSettingsStore();
+        store.now = Date.parse('2026-10-10T00:00:00Z');
+        // About ten days left, against the default week of lead time.
+        expect(store.ownUrgency(uuid(1)).level).toBe('notice');
+
+        settings.settings = { default_lead_time: '3 days' };
+        expect(store.ownUrgency(uuid(1)).level).toBe('calm');
+
+        store.now = Date.parse('2026-10-25T00:00:00Z');
+        expect(store.ownUrgency(uuid(1)).level).toBe('overdue');
+    });
+
+    it('gives a tag group, or a task no longer listed, no urgency', async () => {
+        const { store, tagGroupId } = await storeWith(sample);
+        for (const id of [tagGroupId('work'), uuid(99)]) {
+            expect(store.ownUrgency(id)).toMatchObject({ level: 'none', actionable: true });
+        }
+    });
+});

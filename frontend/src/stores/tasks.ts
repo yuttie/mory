@@ -2,6 +2,7 @@ import { urgencyOf, mostUrgent, type Urgency } from '@/urgency';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
 import { onScopeDispose, ref, computed } from 'vue';
 import { defineStore } from 'pinia';
+import dayjs from 'dayjs';
 
 import type { UUID } from '@/api';
 import {
@@ -195,9 +196,24 @@ export const useTasksStore = defineStore('tasks', () => {
         return nodesOf(forest.value, descendants(forest.value, id));
     }
 
+    // Every task's own urgency, worked out in one pass. It changes only with the listing, the
+    // settings and the minute, but each row of the task tree asks again whenever the tree
+    // re-renders, and `urgencyOf` left to itself guesses the time zone on every call -- the costly
+    // part, at about a tenth of the time it took to open a parent. One guess per pass instead.
+    const ownUrgencies = computed(() => {
+        const zone = dayjs.tz.guess();
+        const byId = new Map<string, Urgency>();
+        for (const task of forest.value.byId.values()) {
+            byId.set(task.id, urgencyOf(task.metadata?.task ?? {}, task.metadata?.tags ?? [], taskSettings.settings, now.value, zone));
+        }
+        // What a tag group, or an id the listing no longer holds, has: no task, so no dates.
+        const none = urgencyOf({}, [], taskSettings.settings, now.value, zone);
+        return { byId, none };
+    });
+
     function ownUrgency(id: string): Urgency {
-        const task = node(id);
-        return urgencyOf(task?.metadata?.task ?? {}, task?.metadata?.tags ?? [], taskSettings.settings, now.value);
+        const { byId, none } = ownUrgencies.value;
+        return byId.get(id) ?? none;
     }
 
     function urgency(id: string, own = ownUrgency(id), status = node(id)?.metadata?.task?.status?.kind): Urgency {
