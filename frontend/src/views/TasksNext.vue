@@ -265,7 +265,7 @@ import {
     mdiTrafficLightOutline,
 } from '@mdi/js';
 
-import { type TaskNode, type TaskTreeItem, buildTaskPath } from '@/task-forest';
+import { type TaskNode, type TaskTreeItem } from '@/task-forest';
 import { isTagGroupId, isUntaggedGroupId, tagGroupId, tagNameOf, useTasksStore } from '@/stores/tasks';
 
 import { type UUID, type Status, type StatusKind, type Task, STATUS_KINDS, STATUS_LABEL } from '@/task';
@@ -356,6 +356,15 @@ const newTaskTag = computed<string | undefined>(() => {
         return undefined;
     }
     return selectedTagName.value ?? undefined;
+});
+
+// The task a new one is created under: the selected task, or none when a tag group or nothing is
+// selected.
+const newTaskParent = computed<UUID | null>(() => {
+    if (selectedNode.value === undefined || isTagGroupSelected.value) {
+        return null;
+    }
+    return selectedNode.value.uuid;
 });
 
 // The title of the task the edited one sits under, for the editor's heading.
@@ -706,30 +715,11 @@ function onAddChildTask(parentUuid: UUID) {
     const taskUuid = crypto.randomUUID();
     // A tag group is not a directory. Its task is a root task, and selecting the group is what
     // gives it the tag.
-    newTaskPath.value = isTagGroupId(parentUuid)
-        ? buildTaskPath([], taskUuid)
-        : getNewTaskPathForParent(taskUuid, parentNode);
-}
-
-function getNewTaskPathForParent(taskUuid: string, parentNode: TaskNode): string {
-    const idx = parentNode.path.lastIndexOf('/');
-    const parentDir = parentNode.path.slice(0, idx) + '/' + parentNode.uuid;
-    return parentDir + '/' + taskUuid + '.md';
+    newTaskPath.value = store.pathUnder(isTagGroupId(parentUuid) ? null : parentUuid, taskUuid);
 }
 
 function getNewTaskPath(taskUuid: string): string {
-    let parentDir;
-    if (selectedNode.value && !isTagGroupSelected.value) {
-        // Create a task under the selected one (but not under tag groups)
-        const selected = selectedNode.value;
-        const idx = selected.path.lastIndexOf('/');
-        parentDir = selected.path.slice(0, idx) + '/' + selected.uuid;
-    }
-    else {
-        // Create a task under the root (for tag groups or no selection)
-        parentDir = '.tasks';
-    }
-    return parentDir + '/' + taskUuid + '.md';
+    return store.pathUnder(newTaskParent.value, taskUuid);
 }
 
 function updateNewTaskParent() {
