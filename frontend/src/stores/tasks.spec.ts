@@ -371,6 +371,25 @@ describe('pathUnder', () => {
         const { store } = await storeWith(sample);
         expect(store.pathUnder(null, uuid(9))).toBe(`.tasks/${uuid(9)}.md`);
     });
+
+    // 2's own parent file is gone, so the forest re-roots it, yet its children still belong in the
+    // directory its file covers.
+    it('places a task where the forest finds it under a parent re-rooted by a missing file', async () => {
+        const { store } = await storeWith([{ path: `.tasks/${uuid(1)}/${uuid(2)}.md`, title: 'Orphan' }]);
+        expect(store.parentOf(uuid(2))).not.toBe(uuid(1));
+        expect(store.pathUnder(uuid(2), uuid(9))).toBe(`.tasks/${uuid(1)}/${uuid(2)}/${uuid(9)}.md`);
+    });
+
+    // A directory must be a bare UUIDv4, so the one `named-<uuid>.md` covers can hold no task.
+    it('keeps a task a task under a parent named with a readable prefix', async () => {
+        const { store } = await storeWith([{ path: `.tasks/named-${uuid(2)}.md`, title: 'Named' }]);
+        expect(store.pathUnder(uuid(2), uuid(9))).toBe(`.tasks/${uuid(2)}/${uuid(9)}.md`);
+    });
+
+    it('refuses a parent the forest does not hold', async () => {
+        const { store } = await storeWith(sample);
+        expect(() => store.pathUnder(uuid(9), uuid(8))).toThrow();
+    });
 });
 
 describe('save', () => {
@@ -471,6 +490,17 @@ describe('remove', () => {
 });
 
 describe('move', () => {
+    it('moves a task under a parent re-rooted by a missing file, where the forest finds it', async () => {
+        const { store, repo } = await storeWith([
+            { path: `.tasks/${uuid(1)}/${uuid(2)}.md`, title: 'Orphan' },
+            { path: `.tasks/${uuid(3)}.md`, title: 'Moved' },
+        ]);
+        await store.move(uuid(3), uuid(2));
+
+        expect(repo.paths()).toContain(`.tasks/${uuid(1)}/${uuid(2)}/${uuid(3)}.md`);
+        expect(store.parentOf(uuid(3))).toBe(uuid(2));
+    });
+
     it('renames the task and every descendant, preserving the nesting', async () => {
         const { store, repo } = await storeWith(sample);
         await store.move(uuid(1), uuid(4));

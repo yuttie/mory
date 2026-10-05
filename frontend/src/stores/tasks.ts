@@ -234,13 +234,24 @@ export const useTasksStore = defineStore('tasks', () => {
         return counted.length > 0 ? counted.filter((task) => task.metadata?.task?.status?.kind === 'done').length / counted.length * 100 : 0;
     }
 
-    // Where the task `id` belongs under `parent`, or at the top for `null`: below a directory per
-    // ancestor, root first. A task created there and one moved there land at the same path.
+    // Where the task `id` belongs under `parent`, or at the top for `null`: in a directory named
+    // after the parent, beside the parent's own file. For a file named by its UUID alone, as tasks
+    // are written, that is the directory the file covers, where the forest looks for its children.
+    // A task created there and one moved there land at the same path.
+    //
+    // Not a directory per ancestor the forest gives the parent: a parent whose own parent's file is
+    // gone is re-rooted and has none, though its file still sits in that parent's directory. And
+    // not the cover itself: a file with a readable prefix covers a directory no task may be in, and
+    // a task beside it is at least still a task.
     function pathUnder(parent: UUID | null, id: UUID): string {
-        const parentChain = parent === null
-            ? []
-            : [...ancestors(forest.value, parent)].reverse().concat(parent);
-        return buildTaskPath(parentChain, id);
+        if (parent === null) {
+            return buildTaskPath([], id);
+        }
+        const node = forest.value.byId.get(parent);
+        if (node === undefined) {
+            throw new Error(`Cannot place a task under an unknown task: ${parent}`);
+        }
+        return `${node.path.slice(0, node.path.lastIndexOf('/'))}/${node.uuid}/${id}.md`;
     }
 
     // --- Mutations. Server first, then wait for the listing to show the result. ---
