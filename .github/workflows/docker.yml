@@ -121,12 +121,10 @@ jobs:
             # would leave out of the cache.
             cache-mode: max
             meta-images: yuttie/moried
-            # `sha-<commit>` too, so the image a merge replaces as `latest`
-            # stays there to go back to. A weekly build is of a commit already
-            # tagged, so it gets the date instead, leaving the image before it
-            # under that tag to go back to.
+            # `latest` is left to the promote job. `sha-<commit>` stays, to go
+            # back to. A weekly build is of a commit already tagged, so it gets
+            # the date instead, leaving the image before it under that tag.
             meta-tags: |
-                type=raw,value=latest
                 type=sha,enable=${{ github.event_name != 'schedule' }}
                 type=schedule,pattern={{date 'YYYYMMDD' tz='Asia/Tokyo'}}
             set-meta-labels: true
@@ -170,7 +168,6 @@ jobs:
             cache-mode: max
             meta-images: yuttie/mory
             meta-tags: |
-                type=raw,value=latest
                 type=sha,enable=${{ github.event_name != 'schedule' }}
                 type=schedule,pattern={{date 'YYYYMMDD' tz='Asia/Tokyo'}}
             set-meta-labels: true
@@ -179,3 +176,28 @@ jobs:
                 - registry: docker.io
                   username: yuttie
                   password: ${{ secrets.DOCKERHUB_TOKEN }}
+    # Moves `latest` once every image this run builds has been built, so it
+    # moves for both images at once, and for neither when a build fails.
+    promote:
+        needs:
+            - moried
+            - mory
+        if: >-
+            ${{ !failure() && !cancelled() && github.ref == 'refs/heads/main'
+            && (needs.moried.result == 'success' || needs.mory.result == 'success') }}
+        runs-on: ubuntu-latest
+        steps:
+            - uses: docker/login-action@v4
+              with:
+                  username: yuttie
+                  password: ${{ secrets.DOCKERHUB_TOKEN }}
+            # From one index, `create` makes a carbon copy: `latest` gets the
+            # very image the build pushed, attestations included.
+            - if: needs.moried.result == 'success'
+              env:
+                  DIGEST: ${{ needs.moried.outputs.digest }}
+              run: docker buildx imagetools create --tag yuttie/moried:latest "yuttie/moried@$DIGEST"
+            - if: needs.mory.result == 'success'
+              env:
+                  DIGEST: ${{ needs.mory.outputs.digest }}
+              run: docker buildx imagetools create --tag yuttie/mory:latest "yuttie/mory@$DIGEST"
