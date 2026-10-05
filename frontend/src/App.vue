@@ -92,7 +92,7 @@
                         <template v-slot:activator="{ props }">
                             <v-list-item
                                 variant="text"
-                                title="Add note"
+                                title="Add"
                                 v-bind="props"
                                 v-bind:prepend-icon="mdiPlus"
                             ></v-list-item>
@@ -111,6 +111,11 @@
                                 v-bind:to="{ name: 'Create', query: { parent: parentNotePath } }"
                                 v-bind:prepend-icon="mdiSubdirectoryArrowRight"
                                 title="New child note"
+                            ></v-list-item>
+                            <v-list-item
+                                v-bind:prepend-icon="mdiCheckboxMarkedOutline"
+                                title="New task"
+                                v-on:click="openNewTaskDialog"
                             ></v-list-item>
                             <v-list-subheader>Templates</v-list-subheader>
                             <TemplateMenuItem
@@ -296,7 +301,7 @@
                         <template v-slot:activator="{ props }">
                             <v-list-item
                                 variant="text"
-                                title="Add note"
+                                title="Add"
                                 v-bind="props"
                                 v-bind:prepend-icon="mdiPlus"
                             ></v-list-item>
@@ -315,6 +320,11 @@
                                 v-bind:to="{ name: 'Create', query: { parent: parentNotePath } }"
                                 v-bind:prepend-icon="mdiSubdirectoryArrowRight"
                                 title="New child note"
+                            ></v-list-item>
+                            <v-list-item
+                                v-bind:prepend-icon="mdiCheckboxMarkedOutline"
+                                title="New task"
+                                v-on:click="openNewTaskDialog"
                             ></v-list-item>
                             <v-list-subheader>Templates</v-list-subheader>
                             <TemplateMenuItem
@@ -482,6 +492,8 @@
 
         <input type="file" multiple class="d-none" ref="fileInputEl">
 
+        <NewTaskDialog v-model="newTaskDialogIsVisible" />
+
         <div v-if="!appStore.hasToken" class="login-overlay">
             <div class="form">
                 <v-alert type="error" v-show="appStore.loginError">
@@ -534,6 +546,7 @@ import {
     mdiBroom,
     mdiCalendarOutline,
     mdiCheck,
+    mdiCheckboxMarkedOutline,
     mdiCheckboxMultipleMarkedOutline,
     mdiCloudUploadOutline,
     mdiCogOutline,
@@ -558,6 +571,7 @@ import { useAppStore } from '@/stores/app';
 import { loadConfigValue, saveConfigValue } from '@/config';
 import type { Claim, IndexingStop, ListEntry2, UploadEntry } from '@/api';
 import IndexingStopsItem from '@/components/IndexingStopsItem.vue';
+import NewTaskDialog from '@/components/NewTaskDialog.vue';
 import TemplateMenuItem from '@/components/TemplateMenuItem.vue';
 import { requestEventAlarms } from '@/event-alarms';
 import { canHaveChildNote } from '@/note-forest';
@@ -579,6 +593,7 @@ const loginPassword = ref("");
 const templates = ref([] as string[]);
 const uploadList = ref([] as UploadEntry[]);
 const uploadMenuIsVisible = ref(false);
+const newTaskDialogIsVisible = ref(false);
 const errors = ref([]);
 const indexingStops = ref<IndexingStop[]>([]);
 
@@ -940,6 +955,12 @@ function uploadStatusIcon(status: string) {
     else {
         return mdiHelp;
     }
+}
+
+// The drawer below `md` slides over the view, and would be left open behind the dialog.
+function openNewTaskDialog() {
+    mobileDrawer.value = false;
+    newTaskDialogIsVisible.value = true;
 }
 
 function chooseFile() {

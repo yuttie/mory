@@ -44,7 +44,7 @@
                              link to its task, so clicking the selected one again keeps it. -->
                         <span class="app-bar-ancestors text-medium-emphasis">
                             <router-link
-                                v-bind:to="routeToState(undefined, 'descendants', descendantsViewMode)"
+                                v-bind:to="tasksRoute(undefined, 'descendants', descendantsViewMode)"
                                 class="app-bar-link"
                             >All tasks</router-link>
                             <template
@@ -55,7 +55,7 @@
                                 <!-- The tab stays: going up from a list lists the ancestor's
                                      descendants, and from the editor edits the ancestor. -->
                                 <router-link
-                                    v-bind:to="routeToState(node.uuid, itemViewTab, descendantsViewMode)"
+                                    v-bind:to="tasksRoute(node.uuid, itemViewTab, descendantsViewMode)"
                                     class="app-bar-link"
                                 >{{ node.title || 'Untitled' }}</router-link>
                             </template>
@@ -133,10 +133,8 @@
                         <TaskEditorNext
                             ref="taskEditorRef"
                             v-bind:task-path="newTaskPath ?? selectedNode.path"
-                            v-bind:known-tags="knownTags"
-                            v-bind:known-contacts="knownContacts"
-                            v-bind:parent-task-title="selectedNodeParentTitle"
-                            v-bind:ancestor-titles-for-task-assessment="selectedNodeAncestorTitlesForTaskAssessment"
+                            v-bind:known-tags="store.knownTags"
+                            v-bind:known-contacts="store.knownContacts"
                             v-bind:selected-tag="newTaskPath ? newTaskTag : undefined"
                             class="ma-4"
                             v-on:save="onSelectedTaskSave"
@@ -207,7 +205,7 @@
                             <TaskStatusView
                                 v-if="descendantsViewMode === 'status'"
                                 v-bind:task-statuses="taskStatuses"
-                                v-bind:known-contacts="knownContacts"
+                                v-bind:known-contacts="store.knownContacts"
                                 v-bind:route-for="taskRouteFor"
                                 v-bind:list-root="listRoot"
                                 v-on:status-change="onTaskStatusChange"
@@ -239,10 +237,12 @@
         <!-- Parent Selection Dialog -->
         <ParentSelectionDialog
             v-model="showParentDialog"
-            v-bind:task-uuid="selectedNode?.uuid || null"
+            v-bind:mode="newTaskPath ? 'choose' : 'move'"
+            v-bind:parent="newTaskPath ? newTaskParent : selectedNode?.parent ?? null"
+            v-bind:exclude="newTaskPath ? extractFileUuid(newTaskPath) : selectedNode?.uuid"
             v-bind:task-title="selectedNode?.title || 'Untitled'"
             v-bind:items="store.tree"
-            v-on:move="onMoveTask"
+            v-on:choose="onParentChosen"
         />
     </div>
 </template>
@@ -265,10 +265,12 @@ import {
     mdiTrafficLightOutline,
 } from '@mdi/js';
 
-import { type TaskNode, type TaskTreeItem, buildTaskPath } from '@/task-forest';
+import { type TaskNode, type TaskTreeItem } from '@/task-forest';
+import { tasksRoute } from '@/task-route';
 import { isTagGroupId, isUntaggedGroupId, tagGroupId, tagNameOf, useTasksStore } from '@/stores/tasks';
 
 import { type UUID, type Status, type StatusKind, type Task, STATUS_KINDS, STATUS_LABEL } from '@/task';
+import { extractFileUuid } from '@/api/task';
 import axios from 'axios';
 import dayjs from 'dayjs';
 
@@ -350,37 +352,25 @@ const selectedTagName = computed<string | null>(() => {
     return null;
 });
 
-// The tag a task created from the selected group starts with. The Untagged group has none to give.
-const newTaskTag = computed<string | undefined>(() => {
-    if (activeNodeId.value === undefined || isUntaggedGroupId(activeNodeId.value)) {
+// The tag a task created from the selected group starts with: `null` for the Untagged group, which
+// has none to give, and `undefined` when no group is selected.
+const newTaskTag = computed<string | null | undefined>(() => {
+    if (activeNodeId.value === undefined || !isTagGroupId(activeNodeId.value)) {
         return undefined;
+    }
+    if (isUntaggedGroupId(activeNodeId.value)) {
+        return null;
     }
     return selectedTagName.value ?? undefined;
 });
 
-// The title of the task the edited one sits under, for the editor's heading.
-const selectedNodeParentTitle = computed<string | undefined>(() => {
+// The task a new one is created under: the selected task, or none when a tag group or nothing is
+// selected.
+const newTaskParent = computed<UUID | null>(() => {
     if (selectedNode.value === undefined || isTagGroupSelected.value) {
-        return undefined;
+        return null;
     }
-    // A new task goes under the selected one.
-    const parent = newTaskPath.value ? selectedNode.value : selectedNodeAncestors.value.at(-1);
-    return parent?.title ?? undefined;
-});
-
-// The titles above the edited task, for its assessment. Untitled ones are left out: the backend
-// takes the titles as strings and refuses the whole request over a null.
-const selectedNodeAncestorTitlesForTaskAssessment = computed<string[]>(() => {
-    if (selectedNode.value === undefined || isTagGroupSelected.value) {
-        return [];
-    }
-    // A new task goes under the selected one, which makes that its last ancestor.
-    const ancestors = newTaskPath.value
-        ? [...selectedNodeAncestors.value, selectedNode.value]
-        : selectedNodeAncestors.value;
-    return ancestors
-        .map((node) => node.title)
-        .filter((title): title is string => Boolean(title));
+    return selectedNode.value.uuid;
 });
 
 // Utility function to sort tasks by due date/deadline
@@ -576,32 +566,6 @@ const tasksLeftText = computed<string>(() => {
     return `${count} ${count === 1 ? 'task' : 'tasks'} left`;
 });
 
-const knownTags = computed<[string, number][]>(() => {
-    // Collect tags
-    const tagCounts = new Map();
-    for (const node of store.allTasks) {
-        for (const tag of node.metadata?.tags ?? []) {
-            tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
-        }
-    }
-    return Array.from(tagCounts)
-        .sort(([_tag1, count1], [_tag2, count2]) => count2 - count1);
-});
-
-const knownContacts = computed<[string, number][]>(() => {
-    // Collect contacts
-    const contactCounts = new Map();
-    for (const node of store.allTasks) {
-        const status = node.metadata?.task?.status;
-        const contact = status?.kind === 'waiting' ? status.contact : undefined;
-        if (contact && contact.trim() !== '') {
-            contactCounts.set(contact, (contactCounts.get(contact) ?? 0) + 1);
-        }
-    }
-    return Array.from(contactCounts)
-        .sort(([_contact1, count1], [_contact2, count2]) => count2 - count1);
-});
-
 // Eisenhower Matrix computed properties
 const eisenhowerQuadrants = computed(() => {
     const quadrants = {
@@ -645,27 +609,16 @@ const viewModeOptions = computed(() => [
 ]);
 
 // URL management functions
-// Apart from navigating, so a link can point where a click would go and still be opened in a new tab.
-function routeToState(selectedNodeId?: string, tab?: string, viewMode?: string): RouteLocationRaw {
-    return {
-        name: 'TasksNextWithParams',
-        params: {
-            selectedNodeId: selectedNodeId || '_',
-            tab: tab || 'descendants',
-            viewMode: viewMode || 'status',
-        },
-    };
-}
 
 // Where choosing a task goes: its editor, keeping the view. A tag group is no task to edit, so it
 // lists the tasks it holds instead.
 function taskRouteFor(node: TaskNode): RouteLocationRaw {
     const tab = isTagGroupId(node.uuid) ? 'descendants' : 'selected';
-    return routeToState(node.uuid, tab, descendantsViewMode.value);
+    return tasksRoute(node.uuid, tab, descendantsViewMode.value);
 }
 
 function navigateToState(selectedNodeId?: string, tab?: string, viewMode?: string) {
-    router.push(routeToState(selectedNodeId, tab, viewMode));
+    router.push(tasksRoute(selectedNodeId, tab, viewMode));
 }
 
 // Watchers for opening tree nodes when selected node changes
@@ -732,30 +685,11 @@ function onAddChildTask(parentUuid: UUID) {
     const taskUuid = crypto.randomUUID();
     // A tag group is not a directory. Its task is a root task, and selecting the group is what
     // gives it the tag.
-    newTaskPath.value = isTagGroupId(parentUuid)
-        ? buildTaskPath([], taskUuid)
-        : getNewTaskPathForParent(taskUuid, parentNode);
-}
-
-function getNewTaskPathForParent(taskUuid: string, parentNode: TaskNode): string {
-    const idx = parentNode.path.lastIndexOf('/');
-    const parentDir = parentNode.path.slice(0, idx) + '/' + parentNode.uuid;
-    return parentDir + '/' + taskUuid + '.md';
+    newTaskPath.value = store.pathUnder(isTagGroupId(parentUuid) ? null : parentUuid, taskUuid);
 }
 
 function getNewTaskPath(taskUuid: string): string {
-    let parentDir;
-    if (selectedNode.value && !isTagGroupSelected.value) {
-        // Create a task under the selected one (but not under tag groups)
-        const selected = selectedNode.value;
-        const idx = selected.path.lastIndexOf('/');
-        parentDir = selected.path.slice(0, idx) + '/' + selected.uuid;
-    }
-    else {
-        // Create a task under the root (for tag groups or no selection)
-        parentDir = '.tasks';
-    }
-    return parentDir + '/' + taskUuid + '.md';
+    return store.pathUnder(newTaskParent.value, taskUuid);
 }
 
 function updateNewTaskParent() {
@@ -831,7 +765,13 @@ function onNewTaskCancel() {
     navigateToState(selectedNode.value?.uuid, 'descendants', descendantsViewMode.value);
 }
 
-async function onMoveTask(newParentUuid: UUID | null) {
+async function onParentChosen(newParentUuid: UUID | null) {
+    // A new task has no file to move. It goes under whatever is selected, so choosing a parent is
+    // selecting it, as a click in the tree would; the editor keeps what has been typed.
+    if (newTaskPath.value) {
+        navigateToState(newParentUuid ?? undefined, 'selected', descendantsViewMode.value);
+        return;
+    }
     if (!selectedNode.value) {
         return;
     }
@@ -848,7 +788,7 @@ async function onMoveTask(newParentUuid: UUID | null) {
 }
 
 function showChangeParentDialog() {
-    if (selectedNode.value && !isTagGroupSelected.value) {
+    if (newTaskPath.value || selectedNode.value && !isTagGroupSelected.value) {
         showParentDialog.value = true;
     }
 }

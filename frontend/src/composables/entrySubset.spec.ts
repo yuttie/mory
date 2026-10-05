@@ -133,6 +133,7 @@ describe('init', () => {
         const running = subset.init();
         await vi.waitFor(() => expect(subset.entries.value).toHaveLength(1));
         expect(subset.entries.value[0].path).toBe('.tasks/cached.md');
+        expect(subset.hasLoadedOnce.value).toBe(true);
 
         release({ kind: 'full', commit: 'c1', head: 'c1', entries: [entry('.tasks/fresh.md')] });
         await running;
@@ -166,6 +167,33 @@ describe('hasLoadedOnce', () => {
         const subset = useEntrySubset('.tasks/');
         expect(subset.hasLoadedOnce.value).toBe(false);
         await subset.init();
+        expect(subset.hasLoadedOnce.value).toBe(true);
+    });
+
+    // An empty cache is a browser that has never synced, not an empty repository.
+    it('waits for the listing when nothing is cached', async () => {
+        const { useEntrySubset } = await load();
+        let release: (value: EntriesResponse) => void = () => {};
+        apiMocks.getEntries.mockImplementation(
+            () => new Promise<EntriesResponse>((resolve) => { release = resolve; }),
+        );
+        const subset = useEntrySubset('.tasks/');
+        const running = subset.init();
+        // The listing is asked for once the cache has been read, and found empty.
+        await vi.waitFor(() => expect(apiMocks.getEntries).toHaveBeenCalled());
+        expect(subset.hasLoadedOnce.value).toBe(false);
+
+        release({ kind: 'full', commit: 'c1', head: 'c1', entries: [entry('.tasks/a.md')] });
+        await running;
+        expect(subset.hasLoadedOnce.value).toBe(true);
+        expect(subset.entries.value).toHaveLength(1);
+    });
+
+    it('ends the wait when the listing fails', async () => {
+        const { useEntrySubset } = await load();
+        apiMocks.getEntries.mockRejectedValue(new Error('offline'));
+        const subset = useEntrySubset('.tasks/');
+        await expect(subset.init()).rejects.toThrow();
         expect(subset.hasLoadedOnce.value).toBe(true);
     });
 

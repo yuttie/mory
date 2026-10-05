@@ -36,13 +36,17 @@ interface Spec {
     title?: string;
     day?: number;
     status?: string;
+    contact?: string;
     deadline?: string;
 }
 
 function entry(spec: Spec): ListEntry2 {
     const metadata: TaskMetadata = {
         tags: spec.tags ?? [],
-        task: { status: { kind: (spec.status ?? 'todo') } as never, deadline: spec.deadline },
+        task: {
+            status: { kind: (spec.status ?? 'todo'), contact: spec.contact } as never,
+            deadline: spec.deadline,
+        },
     };
     return {
         path: spec.path,
@@ -205,6 +209,24 @@ describe('the derived forest', () => {
     });
 });
 
+describe('known tags and contacts', () => {
+    it('counts each tag across every task, most used first', async () => {
+        const { store } = await storeWith(sample);
+        expect(store.knownTags).toEqual([['work', 4], ['home', 1]]);
+    });
+
+    it('counts only the contacts of tasks still waiting, and none left blank', async () => {
+        const { store } = await storeWith([
+            { path: `.tasks/${uuid(1)}.md`, status: 'waiting', contact: 'Alice' },
+            { path: `.tasks/${uuid(2)}.md`, status: 'waiting', contact: 'Bob' },
+            { path: `.tasks/${uuid(3)}.md`, status: 'waiting', contact: 'Bob' },
+            { path: `.tasks/${uuid(4)}.md`, status: 'waiting', contact: ' ' },
+            { path: `.tasks/${uuid(5)}.md`, status: 'done', contact: 'Carol' },
+        ]);
+        expect(store.knownContacts).toEqual([['Bob', 2], ['Alice', 1]]);
+    });
+});
+
 describe('tag grouping', () => {
     it('keeps a root with children at the top level and groups the childless ones by first tag', async () => {
         const { store } = await storeWith(sample);
@@ -338,6 +360,59 @@ describe('ancestorsOf', () => {
     });
 });
 
+describe('parentAt', () => {
+    it('finds the task a path sits under, listed or not', async () => {
+        const { store } = await storeWith(sample);
+        expect(store.parentAt(`.tasks/${uuid(1)}/${uuid(2)}.md`)?.uuid).toBe(uuid(1));
+        expect(store.parentAt(`.tasks/${uuid(1)}/${uuid(2)}/${uuid(9)}.md`)?.uuid).toBe(uuid(2));
+    });
+
+    it('finds none at the top, or where no file covers the directory', async () => {
+        const { store } = await storeWith([...sample, { path: `.tasks/named-${uuid(7)}.md`, title: 'Named' }]);
+        expect(store.parentAt(`.tasks/${uuid(9)}.md`)).toBeUndefined();
+        expect(store.parentAt(`.tasks/${uuid(7)}/${uuid(9)}.md`)).toBeUndefined();
+    });
+
+    it('agrees with the forest about every listed task', async () => {
+        const { store } = await storeWith(sample);
+        for (const task of store.allTasks) {
+            expect(store.parentAt(task.path)?.uuid ?? null).toBe(task.parent);
+        }
+    });
+});
+
+describe('pathUnder', () => {
+    it('places a task below a directory per ancestor of its parent, root first', async () => {
+        const { store } = await storeWith(sample);
+        expect(store.pathUnder(uuid(2), uuid(9))).toBe(`.tasks/${uuid(1)}/${uuid(2)}/${uuid(9)}.md`);
+        expect(store.pathUnder(uuid(3), uuid(9))).toBe(`.tasks/${uuid(3)}/${uuid(9)}.md`);
+    });
+
+    it('places a task without a parent at the top', async () => {
+        const { store } = await storeWith(sample);
+        expect(store.pathUnder(null, uuid(9))).toBe(`.tasks/${uuid(9)}.md`);
+    });
+
+    // 2's own parent file is gone, so the forest re-roots it, yet its children still belong in the
+    // directory its file covers.
+    it('places a task where the forest finds it under a parent re-rooted by a missing file', async () => {
+        const { store } = await storeWith([{ path: `.tasks/${uuid(1)}/${uuid(2)}.md`, title: 'Orphan' }]);
+        expect(store.parentOf(uuid(2))).not.toBe(uuid(1));
+        expect(store.pathUnder(uuid(2), uuid(9))).toBe(`.tasks/${uuid(1)}/${uuid(2)}/${uuid(9)}.md`);
+    });
+
+    // A directory must be a bare UUIDv4, so the one `named-<uuid>.md` covers can hold no task.
+    it('keeps a task a task under a parent named with a readable prefix', async () => {
+        const { store } = await storeWith([{ path: `.tasks/named-${uuid(2)}.md`, title: 'Named' }]);
+        expect(store.pathUnder(uuid(2), uuid(9))).toBe(`.tasks/${uuid(2)}/${uuid(9)}.md`);
+    });
+
+    it('refuses a parent the forest does not hold', async () => {
+        const { store } = await storeWith(sample);
+        expect(() => store.pathUnder(uuid(9), uuid(8))).toThrow();
+    });
+});
+
 describe('save', () => {
     const task = (id: string): Task => ({
         uuid: id,
@@ -436,6 +511,17 @@ describe('remove', () => {
 });
 
 describe('move', () => {
+    it('moves a task under a parent re-rooted by a missing file, where the forest finds it', async () => {
+        const { store, repo } = await storeWith([
+            { path: `.tasks/${uuid(1)}/${uuid(2)}.md`, title: 'Orphan' },
+            { path: `.tasks/${uuid(3)}.md`, title: 'Moved' },
+        ]);
+        await store.move(uuid(3), uuid(2));
+
+        expect(repo.paths()).toContain(`.tasks/${uuid(1)}/${uuid(2)}/${uuid(3)}.md`);
+        expect(store.parentOf(uuid(3))).toBe(uuid(2));
+    });
+
     it('renames the task and every descendant, preserving the nesting', async () => {
         const { store, repo } = await storeWith(sample);
         await store.move(uuid(1), uuid(4));

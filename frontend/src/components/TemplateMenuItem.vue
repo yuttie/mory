@@ -51,7 +51,7 @@ import {
 //
 // The row is `link` so that it is focusable, which a row with no destination is not, and the
 // keyboard can reach it. Its click is stopped and the submenu opened by hand: left to bubble, the
-// click reaches the Add note menu around this one, which closes on a click in its content, and
+// click reaches the Add menu around this one, which closes on a click in its content, and
 // `open-on-hover` turns off opening on click, so a tap would only close both menus.
 const submenuIsVisible = ref(false);
 

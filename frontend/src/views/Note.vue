@@ -392,6 +392,7 @@ import Ajv from 'ajv';
 import type { DefinedError } from 'ajv';
 import AppBarContent from '@/components/AppBarContent.vue';
 import EditableViewer from '@/components/EditableViewer.vue';
+import { isInOverlay } from '@/keyboard';
 import { LAGGING_RETRY_MS, useFilesStore } from '@/stores/files';
 import { loadConfigValue } from '@/config';
 import { noteBreadcrumbs } from '@/note-forest';
@@ -1022,7 +1023,8 @@ function onBeforeunload(e: any) {
 }
 
 function handleKeydown(e: KeyboardEvent) {
-    if (renameDialogIsVisible.value) {
+    // Not `isTyping`: the shortcuts are for the note's own editor too, which Ctrl+S saves from.
+    if (renameDialogIsVisible.value || isInOverlay(e)) {
         return;
     }
     if (e.key === 'e') {

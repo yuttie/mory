@@ -36,19 +36,22 @@
                             <v-icon>{{ mdiClose }}</v-icon>
                             <span v-if="$vuetify.display.mdAndUp">Cancel</span>
                         </v-btn>
+                        <!-- A new task has no file to move yet, so its parent is chosen rather than
+                             changed: the host decides where the task will be written. Hidden until
+                             the task has loaded, which is what tells the two apart. -->
                         <v-btn
-                            v-if="isEdit"
+                            v-if="!loading && !error"
                             variant="text"
                             color="primary"
-                            aria-label="Change Parent"
-                            title="Change Parent"
+                            v-bind:aria-label="parentActionLabel"
+                            v-bind:title="parentActionLabel"
                             v-bind:icon="$vuetify.display.smAndDown"
                             v-on:click="onChangeParent"
                         >
                             <v-icon v-bind:class="{ 'mr-1': $vuetify.display.mdAndUp }">
                                 {{ mdiFileTreeOutline }}
                             </v-icon>
-                            <span v-if="$vuetify.display.mdAndUp">Change Parent</span>
+                            <span v-if="$vuetify.display.mdAndUp">{{ parentActionLabel }}</span>
                         </v-btn>
                         <v-btn
                             v-if="isEdit"
@@ -417,6 +420,7 @@ import InheritableAlarms from '@/components/InheritableAlarms.vue';
 import { extractFileUuid } from '@/api/task';
 import type { UUID, Task, Status, StatusKind, WaitingStatus, BlockedStatus, OnHoldStatus, DoneStatus, CanceledStatus } from '@/task';
 import { STATUS_LABEL, nextOptions, makeDefaultStatus, canTransition, withoutBlanks } from '@/task';
+import type { TaskNode } from '@/task-forest';
 import { useFetchTask } from '@/composables/fetchTask';
 import { useLocalStorage } from '@/composables/localStorage';
 import { loadConfigValue } from '@/config';
@@ -450,9 +454,9 @@ const props = defineProps<{
     taskPath: string;
     knownTags: [string, number][];
     knownContacts: [string, number][];
-    parentTaskTitle?: string;
-    ancestorTitlesForTaskAssessment?: string[];
-    selectedTag?: string;
+    // The tag group a new task is created from: its tag, `null` for the Untagged group, which has
+    // none to give, and absent when no group is selected.
+    selectedTag?: string | null;
 }>();
 const pathRef = toRef(props, 'taskPath');
 
@@ -512,6 +516,24 @@ const formRef = ref<any>(null);
 const uuid = computed<UUID>(() => extractFileUuid(props.taskPath));
 
 const isEdit = computed<boolean>(() => !!task.value);
+
+const parentActionLabel = computed<string>(() => isEdit.value ? 'Change Parent' : 'Choose Parent');
+
+// The task this one sits under, for a new task's heading, worked out from the path so that a new
+// task has one before the listing holds it.
+const parentTask = computed<TaskNode | undefined>(() => tasks.parentAt(props.taskPath));
+
+// The titles above this task, root first, for its assessment. Untitled ones are left out: the
+// backend takes the titles as strings and refuses the whole request over a null.
+const ancestorTitles = computed<string[]>(() => {
+    const parent = parentTask.value;
+    if (parent === undefined) {
+        return [];
+    }
+    return [...tasks.ancestorsOf(parent.uuid), parent]
+        .map((node) => node.title)
+        .filter((title): title is string => Boolean(title));
+});
 
 const initialForm = computed<EditableTask>(() => {
     const t = task.value;
@@ -634,13 +656,15 @@ watch(uuid, () => {
 watch(
     () => props.selectedTag,
     (newTag, oldTag) => {
-        // Only update tags if we're creating a new task (no existing task)
-        if (!task.value && newTag !== oldTag) {
-            // The old group's tag goes even when there is a new one to put first: moving the task
-            // from one group to another would otherwise leave it filed under both.
-            const rest = form.tags.filter((tag) => tag !== oldTag && tag !== newTag);
-            form.tags = newTag ? [newTag, ...rest] : rest;
+        // Leaving the groups, for a task or for no selection, keeps the tag: nothing replaces it,
+        // and a tag is not taken away unasked.
+        if (task.value || newTag === oldTag || newTag === undefined) {
+            return;
         }
+        // From one group to another, the old group's tag goes even when there is a new one to put
+        // first: the task would otherwise be filed under both.
+        const rest = form.tags.filter((tag) => tag !== oldTag && tag !== newTag);
+        form.tags = newTag ? [newTag, ...rest] : rest;
     }
 );
 
@@ -665,8 +689,8 @@ onUnmounted(() => {
 function getNewTaskTitle(): string {
     if (props.selectedTag) {
         return `New task with tag "${props.selectedTag}"`;
-    } else if (props.parentTaskTitle) {
-        return `New subtask of "${props.parentTaskTitle}"`;
+    } else if (parentTask.value?.title) {
+        return `New subtask of "${parentTask.value.title}"`;
     } else {
         return 'New task';
     }
@@ -816,7 +840,6 @@ async function performTaskAssessment(title: string) {
     assessmentLoading.value = true;
 
     try {
-        const ancestorTitles = props.ancestorTitlesForTaskAssessment || [];
         const taskForAssessment = {
             title: title,
             tags: (form.tags || []).filter((t) => t !== 'quick-create'),
@@ -827,7 +850,7 @@ async function performTaskAssessment(title: string) {
             deadline: form.deadline,
             note: form.note,
         };
-        const response = await assessTask(taskForAssessment, ancestorTitles);
+        const response = await assessTask(taskForAssessment, ancestorTitles.value);
         taskAssessment.value = response;
     } catch (error) {
         console.warn('Failed to assess task:', error);
@@ -863,8 +886,11 @@ function addNoteContent(suggestion: string) {
 }
 
 // Expose
+// `isModified` too, for a host that may close the editor: a draft with something typed in it is
+// worth keeping open.
 defineExpose({
-  refresh,
+    refresh,
+    isModified,
 });
 </script>
 

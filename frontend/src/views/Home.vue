@@ -330,6 +330,7 @@ import dayjs from 'dayjs';
 import { useTasksStore } from '@/stores/tasks';
 import { type TaskNode } from '@/task-forest';
 import type { Task } from '@/task';
+import { taskRoute } from '@/task-route';
 
 import Color from 'color';
 import { formatDistanceToNow, parseISO } from 'date-fns';
@@ -696,15 +697,7 @@ async function createQuickTask() {
 // Takes the uuid alone rather than a whole node, so a deadline event can reach the task it names
 // without having to look the node up first.
 function navigateToTask(task: { uuid: string }) {
-    // Navigate to the TasksNext view with the selected task
-    router.push({
-        name: 'TasksNextWithParams',
-        params: {
-            selectedNodeId: task.uuid,
-            tab: 'selected',
-            viewMode: 'status'
-        }
-    });
+    router.push(taskRoute(task.uuid));
 }
 
 // Unique where `name + start` is not: the same invite arrives in two subscribed calendars, and a
@@ -760,15 +753,7 @@ function openCreatedItem() {
             }
         });
     } else if (createdItemType.value === 'task') {
-        // Navigate to the TasksNext view for the created task
-        router.push({
-            name: 'TasksNextWithParams',
-            params: {
-                selectedNodeId: createdItemPath.value,
-                tab: 'selected',
-                viewMode: 'status'
-            }
-        });
+        router.push(taskRoute(createdItemPath.value));
     }
     // Clear the success message after navigation
     successMessage.value = false;

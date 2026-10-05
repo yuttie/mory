@@ -16,6 +16,7 @@ vi.mock('@/views/Note.vue', () => ({ default: {} }));
 
 import { RouterLink } from 'vue-router';
 import router from '@/router';
+import { taskRoute, tasksRoute } from '@/task-route';
 
 // Vuetify's `v-list-item` takes its active state from RouterLink's, so asking RouterLink is
 // asking whether the sidebar highlights the item.
@@ -94,5 +95,16 @@ describe('creating a note', () => {
         const path = router.currentRoute.value.params.path as string[];
         expect(path).toHaveLength(1);
         expect(path[0]).toMatch(uuid);
+    });
+});
+
+describe('the task view\'s addresses', () => {
+    it('opens a task selected, in its editor, over the status view', () => {
+        const id = '00000001-0000-4000-8000-000000000000';
+        expect(router.resolve(taskRoute(id)).path).toBe(`/tasks-next/${id}/selected/status`);
+    });
+
+    it('stands for no selection with `_`, on the Descendants tab', () => {
+        expect(router.resolve(tasksRoute()).path).toBe('/tasks-next/_/descendants/status');
     });
 });

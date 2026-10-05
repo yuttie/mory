@@ -234,6 +234,45 @@ export const useTasksStore = defineStore('tasks', () => {
         return counted.length > 0 ? counted.filter((task) => task.metadata?.task?.status?.kind === 'done').length / counted.length * 100 : 0;
     }
 
+    // Each task by the directory its file covers, the first where two claim one, as the forest
+    // takes them.
+    const byCover = computed(() => {
+        const index = new Map<string, TaskNode>();
+        for (const node of forest.value.byId.values()) {
+            const cover = stripExtension(node.path);
+            if (!index.has(cover)) {
+                index.set(cover, node);
+            }
+        }
+        return index;
+    });
+
+    // The task one at `path` sits under, by the forest's own rule, whether or not the listing holds
+    // `path` yet: the task whose file covers the directory `path` is in. `undefined` at the top.
+    function parentAt(path: string): TaskNode | undefined {
+        return byCover.value.get(path.slice(0, path.lastIndexOf('/')));
+    }
+
+    // Where the task `id` belongs under `parent`, or at the top for `null`: in a directory named
+    // after the parent, beside the parent's own file. For a file named by its UUID alone, as tasks
+    // are written, that is the directory the file covers, where the forest looks for its children.
+    // A task created there and one moved there land at the same path.
+    //
+    // Not a directory per ancestor the forest gives the parent: a parent whose own parent's file is
+    // gone is re-rooted and has none, though its file still sits in that parent's directory. And
+    // not the cover itself: a file with a readable prefix covers a directory no task may be in, and
+    // a task beside it is at least still a task.
+    function pathUnder(parent: UUID | null, id: UUID): string {
+        if (parent === null) {
+            return buildTaskPath([], id);
+        }
+        const node = forest.value.byId.get(parent);
+        if (node === undefined) {
+            throw new Error(`Cannot place a task under an unknown task: ${parent}`);
+        }
+        return `${node.path.slice(0, node.path.lastIndexOf('/'))}/${node.uuid}/${id}.md`;
+    }
+
     // --- Mutations. Server first, then wait for the listing to show the result. ---
 
     async function save(task: Task, path: string): Promise<void> {
@@ -285,11 +324,8 @@ export const useTasksStore = defineStore('tasks', () => {
             throw new Error('A task cannot be moved under one of its own descendants.');
         }
 
-        const parentChain = newParent === null
-            ? []
-            : [...ancestors(forest.value, newParent)].reverse().concat(newParent);
         const oldPath = current.path;
-        const newPath = buildTaskPath(parentChain, id);
+        const newPath = pathUnder(newParent, id);
         if (oldPath === newPath) {
             return;
         }
@@ -311,6 +347,34 @@ export const useTasksStore = defineStore('tasks', () => {
         await subset.settle(newPath, true);
     }
 
+    const allTasks = computed<TaskNode[]>(() => flatten(forest.value));
+
+    // What a task's fields offer to fill in, most used first: the tags and the waiting-for
+    // contacts the tasks already carry.
+    const knownTags = computed<[string, number][]>(() => {
+        const tagCounts = new Map<string, number>();
+        for (const node of allTasks.value) {
+            for (const tag of node.metadata?.tags ?? []) {
+                tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+            }
+        }
+        return Array.from(tagCounts)
+            .sort(([_tag1, count1], [_tag2, count2]) => count2 - count1);
+    });
+
+    const knownContacts = computed<[string, number][]>(() => {
+        const contactCounts = new Map<string, number>();
+        for (const node of allTasks.value) {
+            const status = node.metadata?.task?.status;
+            const contact = status?.kind === 'waiting' ? status.contact : undefined;
+            if (contact && contact.trim() !== '') {
+                contactCounts.set(contact, (contactCounts.get(contact) ?? 0) + 1);
+            }
+        }
+        return Array.from(contactCounts)
+            .sort(([_contact1, count1], [_contact2, count2]) => count2 - count1);
+    });
+
     return {
         // === Getters ===
         isLoaded: computed(() => subset.hasLoadedOnce.value),
@@ -327,7 +391,9 @@ export const useTasksStore = defineStore('tasks', () => {
             ...tagGroupItems.value,
         ]),
 
-        allTasks: computed<TaskNode[]>(() => flatten(forest.value)),
+        allTasks,
+        knownTags,
+        knownContacts,
 
         // === Actions ===
         node,
@@ -339,6 +405,8 @@ export const useTasksStore = defineStore('tasks', () => {
         parentOf,
         ancestorsOf,
         idByPath,
+        parentAt,
+        pathUnder,
         flattenDescendants,
 
         init: subset.init,
