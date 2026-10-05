@@ -114,6 +114,11 @@ function findItem(items: Item[], id: unknown): Item | undefined {
             // Keep summary text visible and reserve action space so rows do not shift on hover.
             &:not(:hover):not(:focus-within) .v-list-item__append button {
                 visibility: hidden;
+                // VIconBtn transitions `all` for 0.2s, and an animated `visibility` stays visible
+                // until the end, so the buttons would linger after the pointer leaves. A
+                // transition is taken from the state being entered: this hides them at once and
+                // leaves the hover state's own transition alone.
+                transition: none;
             }
         }
     }
