@@ -36,13 +36,17 @@ interface Spec {
     title?: string;
     day?: number;
     status?: string;
+    contact?: string;
     deadline?: string;
 }
 
 function entry(spec: Spec): ListEntry2 {
     const metadata: TaskMetadata = {
         tags: spec.tags ?? [],
-        task: { status: { kind: (spec.status ?? 'todo') } as never, deadline: spec.deadline },
+        task: {
+            status: { kind: (spec.status ?? 'todo'), contact: spec.contact } as never,
+            deadline: spec.deadline,
+        },
     };
     return {
         path: spec.path,
@@ -202,6 +206,24 @@ describe('the derived forest', () => {
         const { store } = await storeWith(sample);
         expect(store.flattenDescendants(uuid(1)).map((t) => t.title)).toEqual(['Child']);
         expect(store.flattenDescendants(uuid(3))).toEqual([]);
+    });
+});
+
+describe('known tags and contacts', () => {
+    it('counts each tag across every task, most used first', async () => {
+        const { store } = await storeWith(sample);
+        expect(store.knownTags).toEqual([['work', 4], ['home', 1]]);
+    });
+
+    it('counts only the contacts of tasks still waiting, and none left blank', async () => {
+        const { store } = await storeWith([
+            { path: `.tasks/${uuid(1)}.md`, status: 'waiting', contact: 'Alice' },
+            { path: `.tasks/${uuid(2)}.md`, status: 'waiting', contact: 'Bob' },
+            { path: `.tasks/${uuid(3)}.md`, status: 'waiting', contact: 'Bob' },
+            { path: `.tasks/${uuid(4)}.md`, status: 'waiting', contact: ' ' },
+            { path: `.tasks/${uuid(5)}.md`, status: 'done', contact: 'Carol' },
+        ]);
+        expect(store.knownContacts).toEqual([['Bob', 2], ['Alice', 1]]);
     });
 });
 

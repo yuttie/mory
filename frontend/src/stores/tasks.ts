@@ -311,6 +311,34 @@ export const useTasksStore = defineStore('tasks', () => {
         await subset.settle(newPath, true);
     }
 
+    const allTasks = computed<TaskNode[]>(() => flatten(forest.value));
+
+    // What a task's fields offer to fill in, most used first: the tags and the waiting-for
+    // contacts the tasks already carry.
+    const knownTags = computed<[string, number][]>(() => {
+        const tagCounts = new Map<string, number>();
+        for (const node of allTasks.value) {
+            for (const tag of node.metadata?.tags ?? []) {
+                tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+            }
+        }
+        return Array.from(tagCounts)
+            .sort(([_tag1, count1], [_tag2, count2]) => count2 - count1);
+    });
+
+    const knownContacts = computed<[string, number][]>(() => {
+        const contactCounts = new Map<string, number>();
+        for (const node of allTasks.value) {
+            const status = node.metadata?.task?.status;
+            const contact = status?.kind === 'waiting' ? status.contact : undefined;
+            if (contact && contact.trim() !== '') {
+                contactCounts.set(contact, (contactCounts.get(contact) ?? 0) + 1);
+            }
+        }
+        return Array.from(contactCounts)
+            .sort(([_contact1, count1], [_contact2, count2]) => count2 - count1);
+    });
+
     return {
         // === Getters ===
         isLoaded: computed(() => subset.hasLoadedOnce.value),
@@ -327,7 +355,9 @@ export const useTasksStore = defineStore('tasks', () => {
             ...tagGroupItems.value,
         ]),
 
-        allTasks: computed<TaskNode[]>(() => flatten(forest.value)),
+        allTasks,
+        knownTags,
+        knownContacts,
 
         // === Actions ===
         node,

@@ -133,8 +133,8 @@
                         <TaskEditorNext
                             ref="taskEditorRef"
                             v-bind:task-path="newTaskPath ?? selectedNode.path"
-                            v-bind:known-tags="knownTags"
-                            v-bind:known-contacts="knownContacts"
+                            v-bind:known-tags="store.knownTags"
+                            v-bind:known-contacts="store.knownContacts"
                             v-bind:parent-task-title="selectedNodeParentTitle"
                             v-bind:ancestor-titles-for-task-assessment="selectedNodeAncestorTitlesForTaskAssessment"
                             v-bind:selected-tag="newTaskPath ? newTaskTag : undefined"
@@ -207,7 +207,7 @@
                             <TaskStatusView
                                 v-if="descendantsViewMode === 'status'"
                                 v-bind:task-statuses="taskStatuses"
-                                v-bind:known-contacts="knownContacts"
+                                v-bind:known-contacts="store.knownContacts"
                                 v-bind:route-for="taskRouteFor"
                                 v-bind:list-root="listRoot"
                                 v-on:status-change="onTaskStatusChange"
@@ -574,32 +574,6 @@ const tasksLeftText = computed<string>(() => {
         return `${count} left`;
     }
     return `${count} ${count === 1 ? 'task' : 'tasks'} left`;
-});
-
-const knownTags = computed<[string, number][]>(() => {
-    // Collect tags
-    const tagCounts = new Map();
-    for (const node of store.allTasks) {
-        for (const tag of node.metadata?.tags ?? []) {
-            tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
-        }
-    }
-    return Array.from(tagCounts)
-        .sort(([_tag1, count1], [_tag2, count2]) => count2 - count1);
-});
-
-const knownContacts = computed<[string, number][]>(() => {
-    // Collect contacts
-    const contactCounts = new Map();
-    for (const node of store.allTasks) {
-        const status = node.metadata?.task?.status;
-        const contact = status?.kind === 'waiting' ? status.contact : undefined;
-        if (contact && contact.trim() !== '') {
-            contactCounts.set(contact, (contactCounts.get(contact) ?? 0) + 1);
-        }
-    }
-    return Array.from(contactCounts)
-        .sort(([_contact1, count1], [_contact2, count2]) => count2 - count1);
 });
 
 // Eisenhower Matrix computed properties
