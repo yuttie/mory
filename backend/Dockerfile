@@ -1,5 +1,7 @@
 # build stage
-FROM rust:latest AS build-stage
+# On the production stage's Debian release: a binary built on a newer one can
+# need a newer glibc than that stage has, and fail to start.
+FROM rust:1-trixie AS build-stage
 
 WORKDIR /usr/src/app
 COPY Cargo.toml .
@@ -13,6 +15,10 @@ RUN touch src/main.rs && cargo build --release
 # production stage
 FROM debian:trixie-slim AS production-stage
 
+# A new value reinstalls the packages below, whose security fixes a cached
+# layer would otherwise keep out until debian:trixie-slim itself changes. CI
+# passes the week, so the first build each week takes them in.
+ARG APT_REFRESH
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     ca-certificates \
