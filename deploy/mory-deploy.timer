@@ -1,0 +1,12 @@
+[Unit]
+Description=Check for new mory images every two minutes
+
+# Every two minutes, and the default accuracy of a minute stretches that to
+# three at most: well within the 60 requests an hour GitHub's API allows one
+# address unauthenticated.
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=2min
+
+[Install]
+WantedBy=timers.target

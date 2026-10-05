@@ -6,6 +6,8 @@
 #     docker compose up -d --pull always   update: recreates only a service whose image changed
 #     docker compose restart moried        restart without recreating
 #     docker compose logs -f moried
+#
+# deploy/ runs the update by itself whenever a build of main has succeeded.
 name: mory
 
 services:
