@@ -234,6 +234,15 @@ export const useTasksStore = defineStore('tasks', () => {
         return counted.length > 0 ? counted.filter((task) => task.metadata?.task?.status?.kind === 'done').length / counted.length * 100 : 0;
     }
 
+    // Where the task `id` belongs under `parent`, or at the top for `null`: below a directory per
+    // ancestor, root first. A task created there and one moved there land at the same path.
+    function pathUnder(parent: UUID | null, id: UUID): string {
+        const parentChain = parent === null
+            ? []
+            : [...ancestors(forest.value, parent)].reverse().concat(parent);
+        return buildTaskPath(parentChain, id);
+    }
+
     // --- Mutations. Server first, then wait for the listing to show the result. ---
 
     async function save(task: Task, path: string): Promise<void> {
@@ -285,11 +294,8 @@ export const useTasksStore = defineStore('tasks', () => {
             throw new Error('A task cannot be moved under one of its own descendants.');
         }
 
-        const parentChain = newParent === null
-            ? []
-            : [...ancestors(forest.value, newParent)].reverse().concat(newParent);
         const oldPath = current.path;
-        const newPath = buildTaskPath(parentChain, id);
+        const newPath = pathUnder(newParent, id);
         if (oldPath === newPath) {
             return;
         }
@@ -369,6 +375,7 @@ export const useTasksStore = defineStore('tasks', () => {
         parentOf,
         ancestorsOf,
         idByPath,
+        pathUnder,
         flattenDescendants,
 
         init: subset.init,

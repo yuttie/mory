@@ -360,6 +360,19 @@ describe('ancestorsOf', () => {
     });
 });
 
+describe('pathUnder', () => {
+    it('places a task below a directory per ancestor of its parent, root first', async () => {
+        const { store } = await storeWith(sample);
+        expect(store.pathUnder(uuid(2), uuid(9))).toBe(`.tasks/${uuid(1)}/${uuid(2)}/${uuid(9)}.md`);
+        expect(store.pathUnder(uuid(3), uuid(9))).toBe(`.tasks/${uuid(3)}/${uuid(9)}.md`);
+    });
+
+    it('places a task without a parent at the top', async () => {
+        const { store } = await storeWith(sample);
+        expect(store.pathUnder(null, uuid(9))).toBe(`.tasks/${uuid(9)}.md`);
+    });
+});
+
 describe('save', () => {
     const task = (id: string): Task => ({
         uuid: id,
