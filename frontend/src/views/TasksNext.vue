@@ -237,10 +237,11 @@
         <!-- Parent Selection Dialog -->
         <ParentSelectionDialog
             v-model="showParentDialog"
-            v-bind:task-uuid="selectedNode?.uuid || null"
+            v-bind:parent="selectedNode?.parent ?? null"
+            v-bind:exclude="selectedNode?.uuid"
             v-bind:task-title="selectedNode?.title || 'Untitled'"
             v-bind:items="store.tree"
-            v-on:move="onMoveTask"
+            v-on:choose="onMoveTask"
         />
     </div>
 </template>

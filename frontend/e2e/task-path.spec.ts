@@ -76,3 +76,21 @@ test('assesses a task with the titles above it, new or saved', async ({ context,
     await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Draft');
     expect((await request).postDataJSON().ancestor_titles).toEqual(['Project', 'Phase']);
 });
+
+test('moves a task to the parent chosen for it, starting from the one it has', async ({ context, page }) => {
+    await mockBackend(context, NOTES);
+    await page.goto(`/tasks-next/${PHASE}/selected/status`);
+    await page.getByRole('button', { name: 'Change Parent' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.locator('.v-list-item--active')).toContainText('Project');
+    // Project is open, yet Phase is not under it: a task cannot be moved under itself.
+    await expect(dialog.getByRole('treeitem', { name: 'Project' })).toBeVisible();
+    await expect(dialog.getByRole('treeitem', { name: 'Phase' })).toHaveCount(0);
+    const move = dialog.getByRole('button', { name: 'Move Here' });
+    await expect(move).toBeDisabled();
+
+    await dialog.getByText('Root (No Parent)').click();
+    await move.click();
+    await expect(path(page).getByRole('link')).toHaveText(['All tasks']);
+    await expect(path(page).locator('.app-bar-current')).toHaveText('Phase');
+});

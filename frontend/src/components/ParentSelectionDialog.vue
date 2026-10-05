@@ -57,8 +57,8 @@
                 </v-btn>
                 <v-btn
                     color="primary"
-                    v-bind:disabled="!canMove"
-                    v-on:click="confirmMove"
+                    v-bind:disabled="!canChoose"
+                    v-on:click="confirm"
                 >
                     Move Here
                 </v-btn>
@@ -78,7 +78,11 @@ import type { TaskTreeItem } from '@/task-forest';
 // Props
 const props = defineProps<{
     modelValue: boolean;
-    taskUuid: UUID | null;
+    // The parent the task has now, `null` for none: where the dialog starts.
+    parent: UUID | null;
+    // The task being placed, left out of the tree with everything under it, since a task cannot go
+    // under itself.
+    exclude?: UUID;
     taskTitle?: string;
     items: TaskTreeItem[];
 }>();
@@ -86,7 +90,7 @@ const props = defineProps<{
 // Emits
 const emit = defineEmits<{
     (e: 'update:modelValue', value: boolean): void;
-    (e: 'move', targetParent: UUID | null): void;
+    (e: 'choose', parent: UUID | null): void;
 }>();
 
 // Reactive state
@@ -110,22 +114,21 @@ function ancestorsOf(items: TaskTreeItem[], uuid: UUID): UUID[] | null {
 }
 
 // Computed properties
-const currentAncestors = computed<UUID[]>(() => {
-    if (props.taskUuid === null) {
+// The current parent and the tasks above it, root first.
+const parentChain = computed<UUID[]>(() => {
+    if (props.parent === null) {
         return [];
     }
-    return ancestorsOf(props.items, props.taskUuid) ?? [];
+    return [...(ancestorsOf(props.items, props.parent) ?? []), props.parent];
 });
 
-const currentParent = computed<UUID | null>(() => currentAncestors.value.at(-1) ?? null);
-
 const filteredItems = computed<TaskTreeItem[]>(() => {
-    if (!props.taskUuid) return props.items;
+    if (!props.exclude) return props.items;
     
-    // Filter out the task being moved (descendants are automatically excluded)
+    // Filter out the task being placed (descendants are automatically excluded)
     function filterNode(node: TaskTreeItem): TaskTreeItem | null {
-        if (node.uuid === props.taskUuid) {
-            return null; // Exclude the task being moved
+        if (node.uuid === props.exclude) {
+            return null; // Exclude the task being placed
         }
 
         const filteredChildren = node.children
@@ -146,10 +149,8 @@ const filteredItems = computed<TaskTreeItem[]>(() => {
 
 
 
-// Moving to where the task already is would do nothing, and the dialog opens on exactly that.
-const canMove = computed<boolean>(() => {
-    return props.taskUuid !== null && selectedParent.value !== currentParent.value;
-});
+// Choosing the parent the task already has would do nothing, and the dialog opens on exactly that.
+const canChoose = computed<boolean>(() => selectedParent.value !== props.parent);
 
 // Methods  
 function selectParent(parentUuid: UUID | null | undefined): void {
@@ -157,9 +158,9 @@ function selectParent(parentUuid: UUID | null | undefined): void {
     selectedParent.value = parentUuid === undefined ? null : parentUuid;
 }
 
-function confirmMove(): void {
-    if (canMove.value) {
-        emit('move', selectedParent.value);
+function confirm(): void {
+    if (canChoose.value) {
+        emit('choose', selectedParent.value);
         emit('update:modelValue', false);
     }
 }
@@ -193,12 +194,12 @@ watch(() => props.modelValue, async (isOpen) => {
     if (!isOpen) {
         return;
     }
-    selectedParent.value = currentParent.value;
+    selectedParent.value = props.parent;
     // Every root is open for an overview; the current parent's ancestors are open too, or its row
     // would not be drawn at all.
     openNodes.value = [...new Set([
         ...props.items.map((item) => item.uuid),
-        ...currentAncestors.value.slice(0, -1),
+        ...parentChain.value.slice(0, -1),
     ])];
     await nextTick();
     revealSelected();
