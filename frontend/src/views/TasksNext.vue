@@ -44,7 +44,7 @@
                              link to its task, so clicking the selected one again keeps it. -->
                         <span class="app-bar-ancestors text-medium-emphasis">
                             <router-link
-                                v-bind:to="routeToState(undefined, 'descendants', descendantsViewMode)"
+                                v-bind:to="tasksRoute(undefined, 'descendants', descendantsViewMode)"
                                 class="app-bar-link"
                             >All tasks</router-link>
                             <template
@@ -55,7 +55,7 @@
                                 <!-- The tab stays: going up from a list lists the ancestor's
                                      descendants, and from the editor edits the ancestor. -->
                                 <router-link
-                                    v-bind:to="routeToState(node.uuid, itemViewTab, descendantsViewMode)"
+                                    v-bind:to="tasksRoute(node.uuid, itemViewTab, descendantsViewMode)"
                                     class="app-bar-link"
                                 >{{ node.title || 'Untitled' }}</router-link>
                             </template>
@@ -266,6 +266,7 @@ import {
 } from '@mdi/js';
 
 import { type TaskNode, type TaskTreeItem } from '@/task-forest';
+import { tasksRoute } from '@/task-route';
 import { isTagGroupId, isUntaggedGroupId, tagGroupId, tagNameOf, useTasksStore } from '@/stores/tasks';
 
 import { type UUID, type Status, type StatusKind, type Task, STATUS_KINDS, STATUS_LABEL } from '@/task';
@@ -632,27 +633,16 @@ const viewModeOptions = computed(() => [
 ]);
 
 // URL management functions
-// Apart from navigating, so a link can point where a click would go and still be opened in a new tab.
-function routeToState(selectedNodeId?: string, tab?: string, viewMode?: string): RouteLocationRaw {
-    return {
-        name: 'TasksNextWithParams',
-        params: {
-            selectedNodeId: selectedNodeId || '_',
-            tab: tab || 'descendants',
-            viewMode: viewMode || 'status',
-        },
-    };
-}
 
 // Where choosing a task goes: its editor, keeping the view. A tag group is no task to edit, so it
 // lists the tasks it holds instead.
 function taskRouteFor(node: TaskNode): RouteLocationRaw {
     const tab = isTagGroupId(node.uuid) ? 'descendants' : 'selected';
-    return routeToState(node.uuid, tab, descendantsViewMode.value);
+    return tasksRoute(node.uuid, tab, descendantsViewMode.value);
 }
 
 function navigateToState(selectedNodeId?: string, tab?: string, viewMode?: string) {
-    router.push(routeToState(selectedNodeId, tab, viewMode));
+    router.push(tasksRoute(selectedNodeId, tab, viewMode));
 }
 
 // Watchers for opening tree nodes when selected node changes

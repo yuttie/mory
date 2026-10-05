@@ -226,7 +226,7 @@
                             >{{ selectedEvent.url }}</a>
                         </v-list-item>
                         <v-list-item v-if="selectedEvent.taskId" v-bind:prepend-icon="mdiCheckboxMarkedOutline">
-                            <router-link v-bind:to="{ name: 'TasksNextWithParams', params: { selectedNodeId: selectedEvent.taskId, tab: 'selected', viewMode: 'status' } }">{{ selectedEvent.name }}</router-link>
+                            <router-link v-bind:to="taskRoute(selectedEvent.taskId)">{{ selectedEvent.name }}</router-link>
                         </v-list-item>
                         <v-list-item v-else-if="selectedEvent.notePath" v-bind:prepend-icon="mdiFileDocumentOutline">
                             <router-link v-bind:to="{ name: 'Note', params: { path: selectedEvent.notePath.split('/') } }">{{ selectedEvent.notePath }}</router-link>
@@ -321,6 +321,7 @@ import dayjs from 'dayjs';
 import { renderMarkdown } from '@/markdown';
 import AppBarContent from '@/components/AppBarContent.vue';
 import { isInOverlay, isTyping } from '@/keyboard';
+import { taskRoute } from '@/task-route';
 
 // Emits
 const emit = defineEmits<{
