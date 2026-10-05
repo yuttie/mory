@@ -24,6 +24,22 @@ for (const hasTouch of [false, true]) {
     });
 }
 
+test('hides the add button as soon as the pointer leaves the row', async ({ context, page }) => {
+    const parent = uuid(4);
+    await mockBackend(context, {
+        [`.tasks/${parent}.md`]: '---\ntask: {status: {kind: todo}}\n---\n\n# Project\n',
+        [`.tasks/${parent}/${uuid(5)}.md`]: '---\ntask: {status: {kind: todo}}\n---\n\n# Open\n',
+    });
+    await page.goto('/tasks-next/_/descendants/status');
+    const row = page.locator('.task-tree-container').getByRole('treeitem', { name: 'Project' });
+    const add = row.getByRole('button', { name: 'Add child task', includeHidden: true });
+    await row.hover();
+    await expect(add).toBeVisible();
+    await page.mouse.move(0, 0);
+    // Read at once: toBeHidden would wait, and pass, until a lingering transition had ended.
+    expect(await add.evaluate((element) => getComputedStyle(element).visibility)).toBe('hidden');
+});
+
 test('opens and saves a task carrying all revised date fields', async ({ context, page }) => {
     const id = uuid(8);
     const repository = await mockBackend(context, {
