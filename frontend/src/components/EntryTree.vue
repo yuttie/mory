@@ -2,6 +2,7 @@
     <v-treeview
         v-bind:items="items"
         v-bind:item-props="routeFor !== undefined ? linkProps : undefined"
+        items-registration="props"
         v-on:update:opened="$emit('update:open', $event)"
         v-on:update:activated="onActivated($event[0])"
         v-on:click:activate="onClickActivate"
@@ -32,6 +33,13 @@
 // open and which is active, how the parent hears of either, and how a row becomes a link. What a
 // row *looks* like is left to the slots, because that is the only part that differs between a task
 // tree and a tree of ordinary notes.
+//
+// `items-registration="props"` has Vuetify learn the hierarchy from `items` rather than from rows
+// registering as they mount. Its default mounts every row of every closed branch, hidden, just so
+// the row can register; and a change to what is open re-renders every mounted row, because
+// VTreeview reads the open set in its own render and its children all take slots. With the 490
+// tasks of the real notes, the task tree re-rendered 536 rows per click to open or close one
+// parent, where 76 were showing.
 
 import { type RouteLocationRaw, useRouter } from 'vue-router';
 
