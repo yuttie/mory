@@ -135,8 +135,6 @@
                             v-bind:task-path="newTaskPath ?? selectedNode.path"
                             v-bind:known-tags="store.knownTags"
                             v-bind:known-contacts="store.knownContacts"
-                            v-bind:parent-task-title="selectedNodeParentTitle"
-                            v-bind:ancestor-titles-for-task-assessment="selectedNodeAncestorTitlesForTaskAssessment"
                             v-bind:selected-tag="newTaskPath ? newTaskTag : undefined"
                             class="ma-4"
                             v-on:save="onSelectedTaskSave"
@@ -370,31 +368,6 @@ const newTaskParent = computed<UUID | null>(() => {
         return null;
     }
     return selectedNode.value.uuid;
-});
-
-// The title of the task the edited one sits under, for the editor's heading.
-const selectedNodeParentTitle = computed<string | undefined>(() => {
-    if (selectedNode.value === undefined || isTagGroupSelected.value) {
-        return undefined;
-    }
-    // A new task goes under the selected one.
-    const parent = newTaskPath.value ? selectedNode.value : selectedNodeAncestors.value.at(-1);
-    return parent?.title ?? undefined;
-});
-
-// The titles above the edited task, for its assessment. Untitled ones are left out: the backend
-// takes the titles as strings and refuses the whole request over a null.
-const selectedNodeAncestorTitlesForTaskAssessment = computed<string[]>(() => {
-    if (selectedNode.value === undefined || isTagGroupSelected.value) {
-        return [];
-    }
-    // A new task goes under the selected one, which makes that its last ancestor.
-    const ancestors = newTaskPath.value
-        ? [...selectedNodeAncestors.value, selectedNode.value]
-        : selectedNodeAncestors.value;
-    return ancestors
-        .map((node) => node.title)
-        .filter((title): title is string => Boolean(title));
 });
 
 // Utility function to sort tasks by due date/deadline

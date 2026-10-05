@@ -417,6 +417,7 @@ import InheritableAlarms from '@/components/InheritableAlarms.vue';
 import { extractFileUuid } from '@/api/task';
 import type { UUID, Task, Status, StatusKind, WaitingStatus, BlockedStatus, OnHoldStatus, DoneStatus, CanceledStatus } from '@/task';
 import { STATUS_LABEL, nextOptions, makeDefaultStatus, canTransition, withoutBlanks } from '@/task';
+import type { TaskNode } from '@/task-forest';
 import { useFetchTask } from '@/composables/fetchTask';
 import { useLocalStorage } from '@/composables/localStorage';
 import { loadConfigValue } from '@/config';
@@ -450,8 +451,6 @@ const props = defineProps<{
     taskPath: string;
     knownTags: [string, number][];
     knownContacts: [string, number][];
-    parentTaskTitle?: string;
-    ancestorTitlesForTaskAssessment?: string[];
     // The tag group a new task is created from: its tag, `null` for the Untagged group, which has
     // none to give, and absent when no group is selected.
     selectedTag?: string | null;
@@ -514,6 +513,22 @@ const formRef = ref<any>(null);
 const uuid = computed<UUID>(() => extractFileUuid(props.taskPath));
 
 const isEdit = computed<boolean>(() => !!task.value);
+
+// The task this one sits under, for a new task's heading, worked out from the path so that a new
+// task has one before the listing holds it.
+const parentTask = computed<TaskNode | undefined>(() => tasks.parentAt(props.taskPath));
+
+// The titles above this task, root first, for its assessment. Untitled ones are left out: the
+// backend takes the titles as strings and refuses the whole request over a null.
+const ancestorTitles = computed<string[]>(() => {
+    const parent = parentTask.value;
+    if (parent === undefined) {
+        return [];
+    }
+    return [...tasks.ancestorsOf(parent.uuid), parent]
+        .map((node) => node.title)
+        .filter((title): title is string => Boolean(title));
+});
 
 const initialForm = computed<EditableTask>(() => {
     const t = task.value;
@@ -669,8 +684,8 @@ onUnmounted(() => {
 function getNewTaskTitle(): string {
     if (props.selectedTag) {
         return `New task with tag "${props.selectedTag}"`;
-    } else if (props.parentTaskTitle) {
-        return `New subtask of "${props.parentTaskTitle}"`;
+    } else if (parentTask.value?.title) {
+        return `New subtask of "${parentTask.value.title}"`;
     } else {
         return 'New task';
     }
@@ -820,7 +835,6 @@ async function performTaskAssessment(title: string) {
     assessmentLoading.value = true;
 
     try {
-        const ancestorTitles = props.ancestorTitlesForTaskAssessment || [];
         const taskForAssessment = {
             title: title,
             tags: (form.tags || []).filter((t) => t !== 'quick-create'),
@@ -831,7 +845,7 @@ async function performTaskAssessment(title: string) {
             deadline: form.deadline,
             note: form.note,
         };
-        const response = await assessTask(taskForAssessment, ancestorTitles);
+        const response = await assessTask(taskForAssessment, ancestorTitles.value);
         taskAssessment.value = response;
     } catch (error) {
         console.warn('Failed to assess task:', error);

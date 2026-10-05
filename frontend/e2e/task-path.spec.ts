@@ -58,3 +58,21 @@ test('clears the selection from the root of the path', async ({ context, page })
     await expect(path(page).getByRole('link')).toHaveCount(0);
     await expect(path(page).locator('.app-bar-current')).toHaveText('All tasks');
 });
+
+// The assessment weighs a title against the tasks above it, which the editor works out from where
+// the task is, before the listing holds a new one.
+test('assesses a task with the titles above it, new or saved', async ({ context, page }) => {
+    await mockBackend(context, NOTES);
+    const assessed = () => page.waitForRequest((request) => request.url().endsWith('/v2/assess-task'));
+
+    let request = assessed();
+    await page.goto(`/tasks-next/${STEP}/selected/status`);
+    expect((await request).postDataJSON().ancestor_titles).toEqual(['Project', 'Phase']);
+
+    await page.goto(`/tasks-next/${PHASE}/descendants/status`);
+    await page.getByRole('button', { name: 'Add', exact: true }).click();
+    await expect(page.locator('.editor-title')).toHaveText('New subtask of "Phase"');
+    request = assessed();
+    await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Draft');
+    expect((await request).postDataJSON().ancestor_titles).toEqual(['Project', 'Phase']);
+});

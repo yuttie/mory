@@ -234,6 +234,25 @@ export const useTasksStore = defineStore('tasks', () => {
         return counted.length > 0 ? counted.filter((task) => task.metadata?.task?.status?.kind === 'done').length / counted.length * 100 : 0;
     }
 
+    // Each task by the directory its file covers, the first where two claim one, as the forest
+    // takes them.
+    const byCover = computed(() => {
+        const index = new Map<string, TaskNode>();
+        for (const node of forest.value.byId.values()) {
+            const cover = stripExtension(node.path);
+            if (!index.has(cover)) {
+                index.set(cover, node);
+            }
+        }
+        return index;
+    });
+
+    // The task one at `path` sits under, by the forest's own rule, whether or not the listing holds
+    // `path` yet: the task whose file covers the directory `path` is in. `undefined` at the top.
+    function parentAt(path: string): TaskNode | undefined {
+        return byCover.value.get(path.slice(0, path.lastIndexOf('/')));
+    }
+
     // Where the task `id` belongs under `parent`, or at the top for `null`: in a directory named
     // after the parent, beside the parent's own file. For a file named by its UUID alone, as tasks
     // are written, that is the directory the file covers, where the forest looks for its children.
@@ -386,6 +405,7 @@ export const useTasksStore = defineStore('tasks', () => {
         parentOf,
         ancestorsOf,
         idByPath,
+        parentAt,
         pathUnder,
         flattenDescendants,
 

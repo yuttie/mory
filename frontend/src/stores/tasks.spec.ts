@@ -360,6 +360,27 @@ describe('ancestorsOf', () => {
     });
 });
 
+describe('parentAt', () => {
+    it('finds the task a path sits under, listed or not', async () => {
+        const { store } = await storeWith(sample);
+        expect(store.parentAt(`.tasks/${uuid(1)}/${uuid(2)}.md`)?.uuid).toBe(uuid(1));
+        expect(store.parentAt(`.tasks/${uuid(1)}/${uuid(2)}/${uuid(9)}.md`)?.uuid).toBe(uuid(2));
+    });
+
+    it('finds none at the top, or where no file covers the directory', async () => {
+        const { store } = await storeWith([...sample, { path: `.tasks/named-${uuid(7)}.md`, title: 'Named' }]);
+        expect(store.parentAt(`.tasks/${uuid(9)}.md`)).toBeUndefined();
+        expect(store.parentAt(`.tasks/${uuid(7)}/${uuid(9)}.md`)).toBeUndefined();
+    });
+
+    it('agrees with the forest about every listed task', async () => {
+        const { store } = await storeWith(sample);
+        for (const task of store.allTasks) {
+            expect(store.parentAt(task.path)?.uuid ?? null).toBe(task.parent);
+        }
+    });
+});
+
 describe('pathUnder', () => {
     it('places a task below a directory per ancestor of its parent, root first', async () => {
         const { store } = await storeWith(sample);
