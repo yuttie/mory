@@ -1,0 +1,62 @@
+name: moried image
+on:
+    push:
+        branches:
+            - main
+        # Every build is a new image, since its labels carry the commit and the
+        # time, and `docker compose up -d --pull always` recreates a container
+        # for it. So only a change to what the Dockerfile copies builds it.
+        paths:
+            - backend/Cargo.toml
+            - backend/Cargo.lock
+            - backend/Dockerfile
+            - backend/docker/**
+            - backend/src/**
+            - .github/workflows/docker-backend.yml
+    workflow_dispatch:
+# Builds take turns, so two never race for `latest`. A newer push still does
+# not cancel one in progress: a build saves its cache only once it finishes,
+# so in a burst of merges a cold build would start cold every time.
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: false
+permissions:
+    contents: read
+jobs:
+    build:
+        # Builds each platform on its own runner by default. The Dockerfile's
+        # build stage runs on the target platform, so on one runner rustc
+        # would run under QEMU for arm64, far slower than on an arm64 runner.
+        uses: docker/github-builder/.github/workflows/build.yml@v1
+        permissions:
+            contents: read
+            id-token: write # signs the cache entries, and the attestations when pushing
+        with:
+            context: backend
+            output: image
+            # A run started by hand on another branch only checks that it builds.
+            push: ${{ github.ref == 'refs/heads/main' }}
+            platforms: linux/amd64,linux/arm64
+            cache: true
+            cache-scope: moried
+            # The dependencies are compiled in the build stage, which `min`
+            # would leave out of the cache.
+            cache-mode: max
+            meta-images: yuttie/moried
+            # `sha-<commit>` too, so the image a merge replaces as `latest`
+            # stays there to go back to.
+            meta-tags: |
+                type=raw,value=latest
+                type=sha
+            set-meta-labels: true
+            # The generated title is the repository's name, which is the
+            # frontend's.
+            meta-labels: |
+                org.opencontainers.image.title=moried
+        secrets:
+            # DOCKERHUB_TOKEN is a Docker Hub access token of yuttie's, with
+            # Read & Write.
+            registry-auths: |
+                - registry: docker.io
+                  username: yuttie
+                  password: ${{ secrets.DOCKERHUB_TOKEN }}

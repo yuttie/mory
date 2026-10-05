@@ -1,0 +1,67 @@
+name: mory image
+on:
+    push:
+        branches:
+            - main
+        # Every build is a new image, since its labels carry the commit and the
+        # time, and `docker compose up -d --pull always` recreates a container
+        # for it. So tests and documentation, which never reach it, build
+        # nothing.
+        paths:
+            - frontend/**
+            - .github/workflows/docker-frontend.yml
+            - '!frontend/e2e/**'
+            - '!frontend/**/*.spec.ts'
+            - '!frontend/playwright.config.ts'
+            - '!frontend/vitest.config.ts'
+            - '!frontend/**/*.md'
+            - '!frontend/docs/**'
+    workflow_dispatch:
+# Builds take turns, so two never race for `latest`. A newer push still does
+# not cancel one in progress: a build saves its cache only once it finishes,
+# so in a burst of merges a cold build would start cold every time.
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: false
+permissions:
+    contents: read
+jobs:
+    build:
+        uses: docker/github-builder/.github/workflows/build.yml@v1
+        permissions:
+            contents: read
+            id-token: write # signs the cache entries, and the attestations when pushing
+        with:
+            # A Git context, which BuildKit reads without .dockerignore, so
+            # `COPY . .` copies every tracked file. Only `dist` leaves that
+            # stage, so the image is the same.
+            context: frontend
+            output: image
+            # A run started by hand on another branch only checks that it builds.
+            push: ${{ github.ref == 'refs/heads/main' }}
+            platforms: linux/amd64,linux/arm64
+            # The Dockerfile bundles the app on the build platform, so one
+            # runner bundles it once for both platforms, where two would
+            # bundle it twice. Only the nginx stage runs under QEMU, and all it
+            # runs is `rm` and `chmod`.
+            distribute: false
+            setup-qemu: true
+            cache: true
+            cache-scope: mory
+            # `npm ci` runs in the build stage, which `min` would leave out of
+            # the cache.
+            cache-mode: max
+            meta-images: yuttie/mory
+            # `sha-<commit>` too, so the image a merge replaces as `latest`
+            # stays there to go back to.
+            meta-tags: |
+                type=raw,value=latest
+                type=sha
+            set-meta-labels: true
+        secrets:
+            # DOCKERHUB_TOKEN is a Docker Hub access token of yuttie's, with
+            # Read & Write.
+            registry-auths: |
+                - registry: docker.io
+                  username: yuttie
+                  password: ${{ secrets.DOCKERHUB_TOKEN }}
