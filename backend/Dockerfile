@@ -1,5 +1,7 @@
 # build stage
-FROM rust:latest AS build-stage
+# On the production stage's Debian release: a binary built on a newer one can
+# need a newer glibc than that stage has, and fail to start.
+FROM rust:1-trixie AS build-stage
 
 WORKDIR /usr/src/app
 COPY Cargo.toml .
