@@ -7,14 +7,19 @@
     >
         <v-card>
             <v-card-title>
-                <span class="text-h5">Change Parent</span>
+                <span class="text-h5">{{ mode === 'choose' ? 'Choose Parent' : 'Change Parent' }}</span>
             </v-card-title>
             <v-card-text>
                 <div class="mb-3">
-                    <p>Select a new parent for <strong>{{ taskTitle }}</strong>:</p>
-                    <p class="text-caption text-medium-emphasis">
-                        The task and all its subtasks will be moved under the selected parent.
+                    <p v-if="mode === 'choose'">
+                        Select a parent for the new task:
                     </p>
+                    <template v-else>
+                        <p>Select a new parent for <strong>{{ taskTitle }}</strong>:</p>
+                        <p class="text-caption text-medium-emphasis">
+                            The task and all its subtasks will be moved under the selected parent.
+                        </p>
+                    </template>
                 </div>
                 
                 <!-- Root option -->
@@ -60,7 +65,7 @@
                     v-bind:disabled="!canChoose"
                     v-on:click="confirm"
                 >
-                    Move Here
+                    {{ mode === 'choose' ? 'Choose' : 'Move Here' }}
                 </v-btn>
             </v-card-actions>
         </v-card>
@@ -78,6 +83,9 @@ import type { TaskTreeItem } from '@/task-forest';
 // Props
 const props = defineProps<{
     modelValue: boolean;
+    // `move` for a task that exists, which choosing moves along with its subtasks; `choose` for one
+    // not written yet, which choosing only places.
+    mode: 'move' | 'choose';
     // The parent the task has now, `null` for none: where the dialog starts.
     parent: UUID | null;
     // The task being placed, left out of the tree with everything under it, since a task cannot go

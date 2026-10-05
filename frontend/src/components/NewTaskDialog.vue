@@ -24,8 +24,20 @@
             v-bind:known-contacts="tasks.knownContacts"
             v-on:save="onSave"
             v-on:cancel="isOpen = false"
+            v-on:change-parent="onChooseParent"
         />
     </v-dialog>
+    <!-- Only while the editor is open: the tree it lists is the whole task forest, which no page
+         should rebuild on every sync for a dialog nobody has opened. -->
+    <ParentSelectionDialog
+        v-if="isOpen"
+        v-model="parentDialogIsVisible"
+        mode="choose"
+        v-bind:parent="placedUnder"
+        v-bind:exclude="taskUuid"
+        v-bind:items="tasks.tree"
+        v-on:choose="parent = $event"
+    />
     <v-snackbar
         v-model="error"
         color="error"
@@ -56,6 +68,7 @@
 import { computed, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
+import ParentSelectionDialog from '@/components/ParentSelectionDialog.vue';
 import TaskEditorNext from '@/components/TaskEditorNext.vue';
 import type { Task, UUID } from '@/task';
 import { taskRoute } from '@/task-route';
@@ -69,6 +82,10 @@ const isOpen = defineModel<boolean>({ required: true });
 
 // Reactive states
 const taskUuid = ref<UUID>(crypto.randomUUID());
+// The task to create the new one under, or `null` for a root task. The drawer has none selected to
+// start from, so each draft starts at the root until one is chosen.
+const parent = ref<UUID | null>(null);
+const parentDialogIsVisible = ref(false);
 // The drafts being written, by UUID. A save can outlast its draft: Cancel and Add again during
 // one, and the next draft is open by the time it ends.
 const saving = reactive(new Set<UUID>());
@@ -82,8 +99,15 @@ const createdTaskUuid = ref<UUID | null>(null);
 const editorRef = ref<InstanceType<typeof TaskEditorNext> | null>(null);
 
 // Computed properties
-// A root task: the drawer has no task selected to put it under.
-const taskPath = computed<string>(() => tasks.pathUnder(null, taskUuid.value));
+// The parent chosen, while the listing still holds it: one deleted meanwhile leaves the task at the
+// root, which the editor's heading then says too.
+const placedUnder = computed<UUID | null>(() => {
+    return parent.value !== null && tasks.node(parent.value) !== undefined ? parent.value : null;
+});
+
+// Choosing another parent changes the path but not the UUID, which is what keeps the editor from
+// starting the task afresh.
+const taskPath = computed<string>(() => tasks.pathUnder(placedUnder.value, taskUuid.value));
 
 // Watchers
 // Every opening is another task. The dialog drops the editor once closed, so the next one mounts
@@ -91,10 +115,19 @@ const taskPath = computed<string>(() => tasks.pathUnder(null, taskUuid.value));
 watch(isOpen, (open) => {
     if (open) {
         taskUuid.value = crypto.randomUUID();
+        parent.value = null;
     }
 });
 
 // Methods
+// Not while a save runs: it writes to the path it started with, and a parent chosen meanwhile would
+// be dropped without a word.
+function onChooseParent(): void {
+    if (!saving.has(taskUuid.value)) {
+        parentDialogIsVisible.value = true;
+    }
+}
+
 async function onSave(task: Task): Promise<void> {
     // The write and the sync after it take a moment, and a second press would write the task again.
     if (saving.has(task.uuid)) {

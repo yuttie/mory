@@ -108,3 +108,24 @@ test('keeps the task its address selects while the first listing is on its way',
     await expect(path(page).locator('.app-bar-current')).toHaveText('Step');
     await expect(page).toHaveURL(url(STEP, 'selected', 'schedule'));
 });
+
+// A new task goes under the selected one, so choosing its parent selects that, keeping the draft.
+test('chooses a new task\'s parent from its editor', async ({ context, page }) => {
+    const repository = await mockBackend(context, NOTES);
+    await page.goto('/tasks-next/_/descendants/status');
+    await page.getByRole('button', { name: 'Add', exact: true }).click();
+    await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Draft');
+
+    await page.getByRole('button', { name: 'Choose Parent' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText('Select a parent for the new task')).toBeVisible();
+    await dialog.getByRole('treeitem', { name: 'Project' }).click();
+    await dialog.getByRole('button', { name: 'Choose', exact: true }).click();
+
+    await expect(page).toHaveURL(url(PROJECT, 'selected', 'status'));
+    await expect(page.locator('.editor-title')).toHaveText('New subtask of "Project"');
+    await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue('Draft');
+    await page.getByRole('button', { name: 'Create', exact: true }).click();
+    await expect.poll(() => repository.writes.map((write) => write.path))
+        .toEqual([expect.stringMatching(new RegExp(`^\\.tasks/${PROJECT}/[0-9a-f-]{36}\\.md$`))]);
+});

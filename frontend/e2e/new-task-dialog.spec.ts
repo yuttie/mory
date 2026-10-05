@@ -1,15 +1,30 @@
 import { expect, test } from '@playwright/test';
 import type { Locator, Page } from '@playwright/test';
-import { API_URL, mockBackend } from './backend';
+import { API_URL, mockBackend, uuid } from './backend';
+
+const PROJECT = uuid(1);
 
 const NOTES = {
     'projects/plan.md': '# Plan\n',
+    [`.tasks/${PROJECT}.md`]: '---\ntask:\n    status: {kind: todo}\n---\n\n# Project\n',
 };
 
 const TASK = /^\.tasks\/[0-9a-f-]{36}\.md$/;
 
+// The editor's dialog, told apart from the parent picker that opens over it.
 function dialog(page: Page): Locator {
-    return page.getByRole('dialog');
+    return page.getByRole('dialog').filter({ has: page.locator('.task-editor-next') });
+}
+
+function picker(page: Page): Locator {
+    return page.getByRole('dialog').filter({ hasText: 'Select a parent for the new task' });
+}
+
+async function chooseParent(page: Page, choose: (picker: Locator) => Promise<void>) {
+    await dialog(page).getByRole('button', { name: 'Choose Parent' }).click();
+    await choose(picker(page));
+    await picker(page).getByRole('button', { name: 'Choose', exact: true }).click();
+    await expect(picker(page)).toBeHidden();
 }
 
 function title(page: Page): Locator {
@@ -85,4 +100,31 @@ test('leaves a draft opened during an earlier save open when that save ends', as
     await page.waitForTimeout(1000);
     await expect(dialog(page)).toBeVisible();
     await expect(title(page)).toHaveValue('Second');
+});
+
+test('creates the task under the parent chosen for it', async ({ context, page }) => {
+    const repository = await mockBackend(context, NOTES);
+    await page.goto('/');
+    await openNewTask(page);
+    await title(page).fill('Subtask');
+
+    await chooseParent(page, async (parents) => {
+        // It starts at the root, where the drawer puts a task, so choosing that again is no choice.
+        await expect(parents.getByRole('button', { name: 'Choose', exact: true })).toBeDisabled();
+        await parents.getByRole('treeitem', { name: 'Project' }).click();
+    });
+    await expect(dialog(page).locator('.editor-title')).toHaveText('New subtask of "Project"');
+
+    // Back to the root, from the parent chosen last.
+    await chooseParent(page, async (parents) => {
+        await expect(parents.locator('.v-list-item--active')).toContainText('Project');
+        await parents.getByText('Root (No Parent)').click();
+    });
+    await expect(dialog(page).locator('.editor-title')).toHaveText('New task');
+
+    await chooseParent(page, (parents) => parents.getByRole('treeitem', { name: 'Project' }).click());
+    await expect(title(page)).toHaveValue('Subtask');
+    await dialog(page).getByRole('button', { name: 'Create', exact: true }).click();
+    await expect.poll(() => repository.writes.map((write) => write.path))
+        .toEqual([expect.stringMatching(new RegExp(`^\\.tasks/${PROJECT}/[0-9a-f-]{36}\\.md$`))]);
 });

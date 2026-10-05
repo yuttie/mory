@@ -237,11 +237,12 @@
         <!-- Parent Selection Dialog -->
         <ParentSelectionDialog
             v-model="showParentDialog"
-            v-bind:parent="selectedNode?.parent ?? null"
-            v-bind:exclude="selectedNode?.uuid"
+            v-bind:mode="newTaskPath ? 'choose' : 'move'"
+            v-bind:parent="newTaskPath ? newTaskParent : selectedNode?.parent ?? null"
+            v-bind:exclude="newTaskPath ? extractFileUuid(newTaskPath) : selectedNode?.uuid"
             v-bind:task-title="selectedNode?.title || 'Untitled'"
             v-bind:items="store.tree"
-            v-on:choose="onMoveTask"
+            v-on:choose="onParentChosen"
         />
     </div>
 </template>
@@ -269,6 +270,7 @@ import { tasksRoute } from '@/task-route';
 import { isTagGroupId, isUntaggedGroupId, tagGroupId, tagNameOf, useTasksStore } from '@/stores/tasks';
 
 import { type UUID, type Status, type StatusKind, type Task, STATUS_KINDS, STATUS_LABEL } from '@/task';
+import { extractFileUuid } from '@/api/task';
 import axios from 'axios';
 import dayjs from 'dayjs';
 
@@ -763,7 +765,13 @@ function onNewTaskCancel() {
     navigateToState(selectedNode.value?.uuid, 'descendants', descendantsViewMode.value);
 }
 
-async function onMoveTask(newParentUuid: UUID | null) {
+async function onParentChosen(newParentUuid: UUID | null) {
+    // A new task has no file to move. It goes under whatever is selected, so choosing a parent is
+    // selecting it, as a click in the tree would; the editor keeps what has been typed.
+    if (newTaskPath.value) {
+        navigateToState(newParentUuid ?? undefined, 'selected', descendantsViewMode.value);
+        return;
+    }
     if (!selectedNode.value) {
         return;
     }
@@ -780,7 +788,7 @@ async function onMoveTask(newParentUuid: UUID | null) {
 }
 
 function showChangeParentDialog() {
-    if (selectedNode.value && !isTagGroupSelected.value) {
+    if (newTaskPath.value || selectedNode.value && !isTagGroupSelected.value) {
         showParentDialog.value = true;
     }
 }

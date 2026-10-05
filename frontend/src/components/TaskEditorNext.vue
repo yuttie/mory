@@ -36,19 +36,22 @@
                             <v-icon>{{ mdiClose }}</v-icon>
                             <span v-if="$vuetify.display.mdAndUp">Cancel</span>
                         </v-btn>
+                        <!-- A new task has no file to move yet, so its parent is chosen rather than
+                             changed: the host decides where the task will be written. Hidden until
+                             the task has loaded, which is what tells the two apart. -->
                         <v-btn
-                            v-if="isEdit"
+                            v-if="!loading && !error"
                             variant="text"
                             color="primary"
-                            aria-label="Change Parent"
-                            title="Change Parent"
+                            v-bind:aria-label="parentActionLabel"
+                            v-bind:title="parentActionLabel"
                             v-bind:icon="$vuetify.display.smAndDown"
                             v-on:click="onChangeParent"
                         >
                             <v-icon v-bind:class="{ 'mr-1': $vuetify.display.mdAndUp }">
                                 {{ mdiFileTreeOutline }}
                             </v-icon>
-                            <span v-if="$vuetify.display.mdAndUp">Change Parent</span>
+                            <span v-if="$vuetify.display.mdAndUp">{{ parentActionLabel }}</span>
                         </v-btn>
                         <v-btn
                             v-if="isEdit"
@@ -513,6 +516,8 @@ const formRef = ref<any>(null);
 const uuid = computed<UUID>(() => extractFileUuid(props.taskPath));
 
 const isEdit = computed<boolean>(() => !!task.value);
+
+const parentActionLabel = computed<string>(() => isEdit.value ? 'Change Parent' : 'Choose Parent');
 
 // The task this one sits under, for a new task's heading, worked out from the path so that a new
 // task has one before the listing holds it.
