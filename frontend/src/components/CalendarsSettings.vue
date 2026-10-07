@@ -7,7 +7,8 @@
 
         <v-card-subtitle class="px-0">Subscriptions</v-card-subtitle>
         <p class="text-medium-emphasis mb-4">
-            Events from a subscribed calendar are read-only until converted to a note.
+            Only the subscription is stored: a subscribed calendar's events are fetched live, and
+            are read-only until converted to a note.
         </p>
 
         <v-list

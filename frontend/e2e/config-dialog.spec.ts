@@ -486,7 +486,9 @@ test('names the file each repository settings panel is stored in', async ({ cont
     for (const [name, path] of Object.entries(files)) {
         await configDialog(page).getByRole('tab', { name, exact: true }).click();
         const panel = configDialog(page).getByRole('tabpanel', { name, exact: true });
-        await expect(panel.getByRole('note')).toContainText(`Stored in the repository as ${path} and shared by every browser.`);
+        await expect(panel.getByRole('note')).toHaveText(
+            `Stored in the repository as ${path} and shared by every browser. Every change here is a commit.`,
+        );
     }
 });
 

@@ -10,7 +10,7 @@
         role="note"
     >
         Stored in the repository as <code>{{ path }}</code> and shared by every browser.
-        Each save is a commit.
+        Every change here is a commit.
     </v-alert>
 </template>
 
