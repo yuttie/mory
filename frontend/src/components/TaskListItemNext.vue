@@ -6,6 +6,7 @@
         class="task-list-item"
         v-bind:to="to"
         v-bind:class="{ 'text-disabled': !urgency.actionable }"
+        v-bind:style="{ backgroundColor: ground }"
     >
         <div
             class="title-text"
@@ -62,6 +63,7 @@ import type { TaskNode } from '@/task-forest';
 import { useTasksStore } from '@/stores/tasks';
 import { URGENCY_LABEL } from '@/urgency';
 import { usePlansStore } from '@/stores/plans';
+import { statusGround } from '@/status-color';
 
 import TaskDateCues from '@/components/TaskDateCues.vue';
 
@@ -90,6 +92,11 @@ const ancestorTitles = computed<string[]>(() => {
 
 const tags = computed<string[]>(() => {
     return props.value.metadata?.tags ?? [];
+});
+
+// Tinted by the task's status, in the colour the task tree draws its icon in.
+const ground = computed<string | undefined>(() => {
+    return statusGround(props.value.metadata?.task?.status?.kind);
 });
 
 const canceled = computed<boolean>(() => {

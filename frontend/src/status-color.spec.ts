@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { STATUS_KINDS } from '@/task';
-import { statusColor } from '@/status-color';
+import { statusColor, statusGround } from '@/status-color';
 
 describe('statusColor', () => {
     it('gives the palette colours the task tree has always drawn', () => {
@@ -21,5 +21,15 @@ describe('statusColor', () => {
         for (const kind of [undefined, null, 3, '', 'started', 'toString', '__proto__']) {
             expect(statusColor(kind)).toBeUndefined();
         }
+    });
+});
+
+describe('statusGround', () => {
+    it('mixes the status colour faintly into the theme surface', () => {
+        expect(statusGround('done')).toBe('color-mix(in srgb, #4caf50 12%, rgb(var(--v-theme-surface)))');
+    });
+
+    it('gives no ground for what is not a status', () => {
+        expect(statusGround('toString')).toBeUndefined();
     });
 });

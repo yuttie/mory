@@ -132,6 +132,7 @@
                             class="planned-entry"
                             draggable="false"
                             v-bind:class="{ 'text-disabled': !taskOf(entry.task) || !tasks.ownUrgency(taskOf(entry.task)?.uuid ?? entry.task).actionable }"
+                            v-bind:style="{ backgroundColor: statusGround(taskOf(entry.task)?.metadata?.task?.status?.kind) }"
                             v-on:pointerdown="onPointerDown"
                             v-on:contextmenu="onContextMenu"
                         >
@@ -244,6 +245,7 @@ import { readImportance, isUrgent } from '@/urgency';
 import type { PlanEntry } from '@/plans';
 import { useTasksStore } from '@/stores/tasks';
 import { usePlansStore } from '@/stores/plans';
+import { statusGround } from '@/status-color';
 
 const props = defineProps<{
     candidates: TaskNode[];

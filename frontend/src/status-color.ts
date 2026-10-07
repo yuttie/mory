@@ -26,3 +26,10 @@ export function statusColor(kind: unknown): string | undefined {
         : undefined;
 }
 
+/// A card's ground for a status: its colour, faint over the theme's surface, so that the text and
+/// the date cues drawn in their own colours stay legible. Opaque, so a card drawn inside another of
+/// the same status shows no seam.
+export function statusGround(kind: unknown): string | undefined {
+    const color = statusColor(kind);
+    return color === undefined ? undefined : `color-mix(in srgb, ${color} 12%, rgb(var(--v-theme-surface)))`;
+}
