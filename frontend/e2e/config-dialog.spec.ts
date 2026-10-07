@@ -307,6 +307,32 @@ test('links vertical settings tabs to their named panels for keyboard navigation
     await expect(editorPanel).toBeFocused();
 });
 
+for (const width of [320, 340, 360, 390]) {
+    test(`fits task colours and calendar fields within Config at ${width}px`, async ({ context, page }) => {
+        await page.setViewportSize({ width, height: 844 });
+        await mockBackend(context, {});
+        await page.goto('/files');
+        await page.locator('.v-app-bar-nav-icon').click();
+        await openConfig(page);
+        for (const name of ['Tasks', 'Calendars']) {
+            await configDialog(page).getByRole('tab', { name, exact: true }).click();
+            const panel = configDialog(page).getByRole('tabpanel', { name, exact: true });
+            await expect(panel).toBeVisible();
+            // Only measure once the previous panel has finished sliding out.
+            await expect.poll(() => configDialog(page).getByRole('tabpanel').count()).toBe(1);
+            const panels = configDialog(page).locator('.config-panels');
+            await expect.poll(() => panels.evaluate((element) => element.scrollWidth - element.clientWidth)).toBe(0);
+            for (const grid of await panel.locator('.status-colors, .task-date-colors, .alarm-defaults').all()) {
+                const bounds = await grid.boundingBox();
+                const available = await panels.boundingBox();
+                expect(bounds!.x).toBeGreaterThanOrEqual(available!.x);
+                expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(available!.x + available!.width);
+            }
+        }
+        await expect(configDialog(page).getByRole('button', { name: 'Close Config' })).toBeInViewport();
+    });
+}
+
 test('keeps vertical tabs and the close button reachable on a phone', async ({ context, page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await mockBackend(context, {});

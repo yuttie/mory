@@ -130,7 +130,7 @@ async function save() {
 // Side by side where there is room, so the colours are compared rather than read in turn.
 .status-colors {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(14em, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(14em, 100%), 1fr));
     gap: 0 1rem;
 }
 </style>
