@@ -414,8 +414,10 @@ onMounted(() => { void plans.loadAll().catch((failure) => { error.value = String
 .planning-view :deep(:is(.task-list-item, .planned-entry)) {
     -webkit-touch-callout: none;
 }
-/* The hover shade is the card's overlay, drawn at this opacity. */
-.planning-view :deep(.sortable-chosen) {
+/* The hover shade is the card's overlay, drawn at this opacity. Every card sets the opacity again
+   for itself, through the class of its theme, so it is unset on each card in the one pressed: a
+   planned entry's own and the task's inside it. */
+.planning-view :deep(:is(.sortable-chosen, .sortable-chosen .v-card)) {
     --v-hover-opacity: 0;
 }
 .planning-view :deep(:is(.sortable-ghost, .vacated)) {
