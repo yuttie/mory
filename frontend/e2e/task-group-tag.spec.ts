@@ -2,12 +2,12 @@ import { expect, test } from '@playwright/test';
 import type { Locator, Page } from '@playwright/test';
 import { mockBackend, uuid } from './backend';
 
-function note(title: string, { tags = [] }: { tags?: string[] } = {}): string {
+function note(title: string, { tags = [], status = 'todo' }: { tags?: string[]; status?: string } = {}): string {
     return [
         '---',
         'task:',
         '  status:',
-        '    kind: todo',
+        `    kind: ${status}`,
         ...(tags.length > 0 ? [`tags: [${tags.join(', ')}]`] : []),
         '---',
         '',
@@ -67,4 +67,24 @@ test('swaps a group\'s tag for another group\'s, and drops it for Untagged', asy
     await row(page, 'Untagged').click();
     await page.getByRole('tab', { name: 'New' }).click();
     await expect(tags(page)).toHaveCount(0);
+});
+
+// A group is only a heading for its tasks, so hiding the last of them hides the group too.
+test('hides a group whose tasks are all hidden as completed', async ({ context, page }) => {
+    await mockBackend(context, {
+        ...NOTES,
+        [`.tasks/${uuid(4)}.md`]: note('Chore', { tags: ['home'], status: 'done' }),
+    });
+    await page.goto('/tasks-next');
+    await expect(row(page, 'home')).toBeVisible();
+
+    // Turned on where the switch keeps it. A page gets no storage event for its own writes, hence
+    // the reload.
+    await page.evaluate(() => {
+        localStorage.setItem('hide-completed-in-tree-view', 'true');
+    });
+    await page.reload();
+    await expect(row(page, 'work')).toBeVisible();
+    await expect(row(page, 'Untagged')).toBeVisible();
+    await expect(row(page, 'home')).toHaveCount(0);
 });
