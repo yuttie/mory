@@ -129,10 +129,12 @@
                         <template v-slot:activator="{ props: activator }">
                             <!-- Named outright: the menu points the chip at its content with
                                  aria-owns, so a name drawn from the chip's content took in the
-                                 whole assessment while it was open. -->
+                                 whole assessment while it was open. Its arrow sets it apart from
+                                 the chips beside it, which open nothing, where no pointer hovers. -->
                             <v-chip
                                 v-bind="activator"
                                 v-bind:aria-label="assessmentLabel"
+                                v-bind:append-icon="mdiMenuDown"
                                 size="small"
                                 class="overview-chip"
                                 role="button"
@@ -446,6 +448,7 @@ import {
     mdiFormatHeader1,
     mdiLightbulbOnOutline,
     mdiLoading,
+    mdiMenuDown,
     mdiLock,
     mdiLockOpenVariant,
     mdiNoteTextOutline,
