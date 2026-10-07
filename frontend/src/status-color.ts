@@ -5,7 +5,7 @@ import materialColors from 'vuetify/util/colors';
 import YAML from 'yaml';
 
 import { parseEventColor } from '@/event-color';
-import { columnOf, hasKey, indentBlock, lineEnding, parsesTo, splice } from '@/frontmatter';
+import { columnOf, hasKey, indentBlock, lineEnding, sameValue, splice } from '@/frontmatter';
 import { STATUS_KINDS, type StatusKind } from '@/task';
 
 // What a status is drawn in where `.mory/tasks.yaml` sets nothing.
@@ -152,10 +152,18 @@ export function writeStatusColors(source: string, colors: StatusColors): string 
             edited = splice(source, from, to, block);
         }
     }
-    if (!parsesTo(edited, expected)) {
+    if (!means(edited, expected)) {
         throw new Error('Saving the colours would change other settings in it.');
     }
     return edited;
+}
+
+// Whether `text` is valid YAML meaning `expected`. A document with nothing in it, or only comments,
+// is an empty mapping, as the readers take it: a file left with no settings is what removing the
+// last colours from a file of nothing else should give.
+function means(text: string, expected: Record<string, unknown>): boolean {
+    const result = YAML.parseDocument(text);
+    return result.errors.length === 0 && sameValue(result.toJS() ?? {}, expected);
 }
 
 // The author's indentation step, from the first block mapping they nested, or the app's own.

@@ -103,6 +103,11 @@ describe('writeStatusColors', () => {
         expect(writeStatusColors('a: 1\n', {})).toBe('a: 1\n');
     });
 
+    it('leaves a file of nothing but the block empty when every status takes its default', () => {
+        expect(writeStatusColors('status_colors:\n    done: red\n', {})).toBe('');
+        expect(writeStatusColors('# Colours\nstatus_colors:\n    done: red\n', {})).toBe('# Colours\n');
+    });
+
     it('keeps the line endings the file has', () => {
         expect(writeStatusColors('a: 1\r\n', { done: 'red' })).toBe('a: 1\r\nstatus_colors:\r\n    done: red\r\n');
     });
