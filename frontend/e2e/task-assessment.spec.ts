@@ -98,3 +98,21 @@ test('keeps the chip its width while the assessment loads', async ({ context, pa
     await expect(chip.locator('.assessment-loading')).toBeVisible();
     answer();
 });
+
+// Where the buttons above it drop their labels, the chip drops its word too, and so fits beside
+// the progress bar on a phone rather than on a header row of its own. Not yet actionable, the task
+// fills the first row with chips and puts its progress on the second.
+test('fits the chip beside the progress bar on a phone', async ({ context, page }) => {
+    await page.setViewportSize({ width: 360, height: 680 });
+    const task = (title: string, fields: string[] = []) => ['---', 'task:', '  status:', '    kind: todo', ...fields, '---', '', `# ${title}`, ''].join('\n');
+    await mockBackend(context, {
+        [`.tasks/${TASK}.md`]: task('Write the report', ['  available_from: 2099-01-01']),
+        [`.tasks/${TASK}/${uuid(2)}.md`]: task('Outline it'),
+    });
+    await page.goto(`/tasks-next/${TASK}/selected/status`);
+    const chip = page.getByRole('button', { name: 'Task assessment: 8.0 out of 10' });
+    await expect(chip).toBeVisible();
+    const c = (await chip.boundingBox())!;
+    const p = (await page.locator('.header-progress').boundingBox())!;
+    expect(c.y < p.y + p.height && p.y < c.y + c.height).toBe(true);
+});

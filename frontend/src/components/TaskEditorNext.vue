@@ -147,7 +147,11 @@
                                     v-bind:class="{ 'assessment-loading': assessmentLoading }"
                                     start
                                 />
-                                Assessment:&nbsp;<span class="assessment-score">{{ assessmentScore }}</span>
+                                <!-- Where the buttons above drop their labels, the lightbulb says
+                                     what the score is, so on a phone the chip fits beside the
+                                     progress bar rather than on a row of its own. -->
+                                <span v-if="$vuetify.display.mdAndUp">Assessment:&nbsp;</span>
+                                <span class="assessment-score">{{ assessmentScore }}</span>
                             </v-chip>
                         </template>
                         <v-card
