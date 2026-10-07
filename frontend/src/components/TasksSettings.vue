@@ -1,54 +1,54 @@
 <template>
-    <v-card class="mt-6">
-        <v-card-text>
-            <v-card-title>Tasks</v-card-title>
-            <v-card-subtitle class="px-0">
-                Status colours
-            </v-card-subtitle>
-            <p class="text-medium-emphasis mb-4">
-                The colour each status is drawn in: its icon in the task tree, and the ground of its
-                cards in the Status, Schedule and Eisenhower views. Stored in the repository as
-                <code>{{ TASK_SETTINGS_PATH }}</code>, so they follow the notes rather than the
-                browser. Leave one empty for its default.
-            </p>
-            <div class="status-colors">
-                <ColorField
-                    v-for="kind of STATUS_KINDS"
-                    v-bind:key="kind"
-                    v-model="draft[kind]"
-                    v-bind:fallback="DEFAULT_STATUS_COLOR[kind]"
-                    v-bind:label="STATUS_LABEL[kind]"
-                />
-            </div>
-            <v-btn
-                v-bind:disabled="!changed"
-                v-bind:loading="isSaving"
-                variant="tonal"
-                v-on:click="save"
-            >
-                Save colours
-            </v-btn>
-            <v-alert
-                v-if="error"
-                class="mt-4"
-                type="error"
-                variant="tonal"
-            >
-                {{ error }}
-            </v-alert>
-            <!-- What reading the file dropped. Saving rewrites the colours from the fields, so a
-                 colour dropped here is gone from the file after the next save. -->
-            <v-alert
-                v-for="problem of taskSettings.problems"
-                v-bind:key="problem"
-                class="mt-4"
-                type="warning"
-                variant="tonal"
-            >
-                {{ TASK_SETTINGS_PATH }}: {{ problem }}
-            </v-alert>
-        </v-card-text>
-    </v-card>
+    <section>
+        <h2 class="text-h6 mb-4">
+            Tasks
+        </h2>
+        <v-card-subtitle class="px-0">
+            Status colours
+        </v-card-subtitle>
+        <p class="text-medium-emphasis mb-4">
+            The colour each status is drawn in: its icon in the task tree, and the ground of its
+            cards in the Status, Schedule and Eisenhower views. Stored in the repository as
+            <code>{{ TASK_SETTINGS_PATH }}</code>, so they follow the notes rather than the
+            browser. Leave one empty for its default.
+        </p>
+        <div class="status-colors">
+            <ColorField
+                v-for="kind of STATUS_KINDS"
+                v-bind:key="kind"
+                v-model="draft[kind]"
+                v-bind:fallback="DEFAULT_STATUS_COLOR[kind]"
+                v-bind:label="STATUS_LABEL[kind]"
+            />
+        </div>
+        <v-btn
+            v-bind:disabled="!changed"
+            v-bind:loading="isSaving"
+            variant="tonal"
+            v-on:click="save"
+        >
+            Save colours
+        </v-btn>
+        <v-alert
+            v-if="error"
+            class="mt-4"
+            type="error"
+            variant="tonal"
+        >
+            {{ error }}
+        </v-alert>
+        <!-- What reading the file dropped. Saving rewrites the colours from the fields, so a
+             colour dropped here is gone from the file after the next save. -->
+        <v-alert
+            v-for="problem of taskSettings.problems"
+            v-bind:key="problem"
+            class="mt-4"
+            type="warning"
+            variant="tonal"
+        >
+            {{ TASK_SETTINGS_PATH }}: {{ problem }}
+        </v-alert>
+    </section>
 </template>
 
 <script lang="ts" setup>

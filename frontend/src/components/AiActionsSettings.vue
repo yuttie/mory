@@ -1,43 +1,43 @@
 <template>
-    <v-card class="mt-6">
-        <v-card-text>
-            <v-card-title>AI Actions</v-card-title>
-            <v-alert variant="tonal" type="info" class="mb-4">
-                Unlike the settings above, AI Actions are stored in the repository
-                as <code>{{ AI_ACTIONS_PATH }}</code> and are shared across browsers.
-            </v-alert>
+    <section>
+        <h2 class="text-h6 mb-4">
+            AI Actions
+        </h2>
+        <v-alert variant="tonal" type="info" class="mb-4">
+            AI Actions are stored in the repository
+            as <code>{{ AI_ACTIONS_PATH }}</code> and are shared across browsers.
+        </v-alert>
 
-            <v-list v-if="sortedActions.length > 0">
-                <v-list-item
-                    v-for="action of sortedActions"
-                    v-bind:key="action.id"
-                    v-bind:title="action.name"
-                    v-bind:subtitle="action.id"
-                >
-                    <template v-slot:append>
-                        <v-icon-btn
-                            v-bind:icon="mdiPencil"
-                            variant="text"
-                            v-on:click="openEditDialog(action)"
-                        ></v-icon-btn>
-                        <v-icon-btn
-                            v-bind:icon="mdiDelete"
-                            variant="text"
-                            v-on:click="openDeleteDialog(action)"
-                        ></v-icon-btn>
-                    </template>
-                </v-list-item>
-            </v-list>
-            <p v-else class="text-medium-emphasis">
-                No AI Actions defined yet.
-            </p>
+        <v-list v-if="sortedActions.length > 0">
+            <v-list-item
+                v-for="action of sortedActions"
+                v-bind:key="action.id"
+                v-bind:title="action.name"
+                v-bind:subtitle="action.id"
+            >
+                <template v-slot:append>
+                    <v-icon-btn
+                        v-bind:icon="mdiPencil"
+                        variant="text"
+                        v-on:click="openEditDialog(action)"
+                    ></v-icon-btn>
+                    <v-icon-btn
+                        v-bind:icon="mdiDelete"
+                        variant="text"
+                        v-on:click="openDeleteDialog(action)"
+                    ></v-icon-btn>
+                </template>
+            </v-list-item>
+        </v-list>
+        <p v-else class="text-medium-emphasis">
+            No AI Actions defined yet.
+        </p>
 
-            <v-btn
-                class="mt-2"
-                v-bind:prepend-icon="mdiPlus"
-                v-on:click="openAddDialog"
-            >Add</v-btn>
-        </v-card-text>
+        <v-btn
+            class="mt-2"
+            v-bind:prepend-icon="mdiPlus"
+            v-on:click="openAddDialog"
+        >Add</v-btn>
 
         <v-dialog
             v-model="editDialogIsVisible"
@@ -117,7 +117,7 @@
         </v-dialog>
 
         <v-snackbar v-model="error" color="error" location="top" timeout="5000">{{ errorText }}</v-snackbar>
-    </v-card>
+    </section>
 </template>
 
 <script lang="ts" setup>
