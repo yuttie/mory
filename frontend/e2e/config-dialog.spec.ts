@@ -340,6 +340,23 @@ test('groups settings tabs by where they are stored without trapping the arrow k
     await expect(general).toBeFocused();
 });
 
+test('names the file each repository settings panel is stored in', async ({ context, page }) => {
+    await mockBackend(context, {});
+    await page.goto('/files');
+    await openConfig(page);
+    const files = {
+        'Tasks': '.mory/tasks.yaml',
+        'Calendars': '.mory/calendars.yaml',
+        'AI Actions': '.mory/ai-actions.toml',
+    };
+    for (const [name, path] of Object.entries(files)) {
+        await configDialog(page).getByRole('tab', { name, exact: true }).click();
+        const panel = configDialog(page).getByRole('tabpanel', { name, exact: true });
+        const notice = panel.locator('.v-alert').filter({ hasText: 'Stored in the repository' });
+        await expect(notice).toContainText(`Stored in the repository as ${path} and shared by every browser.`);
+    }
+});
+
 for (const width of [320, 340, 360, 390]) {
     test(`fits task colours and calendar fields within Config at ${width}px`, async ({ context, page }) => {
         await page.setViewportSize({ width, height: 844 });

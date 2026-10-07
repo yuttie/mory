@@ -3,14 +3,14 @@
         <h2 class="text-title-medium mb-4">
             Tasks
         </h2>
+        <StoredInRepository v-bind:path="TASK_SETTINGS_PATH" />
         <v-card-subtitle class="px-0">
             Status colours
         </v-card-subtitle>
         <p class="text-medium-emphasis mb-4">
             The colour each status is drawn in: its icon in the task tree, and the ground of its
-            cards in the Status, Schedule and Eisenhower views. Stored in the repository as
-            <code>{{ TASK_SETTINGS_PATH }}</code>, so they follow the notes rather than the
-            browser. Leave one empty for its default.
+            cards in the Status, Schedule and Eisenhower views. Leave one empty for its
+            default.
         </p>
         <div class="status-colors">
             <ColorField
@@ -55,6 +55,7 @@
 import { computed, reactive, ref, watch } from 'vue';
 
 import ColorField from '@/components/ColorField.vue';
+import StoredInRepository from '@/components/StoredInRepository.vue';
 import { DEFAULT_STATUS_COLOR, parseStatusColor, type StatusColorEdits, type StatusColors } from '@/status-color';
 import { TASK_SETTINGS_PATH, useTaskSettingsStore } from '@/stores/taskSettings';
 import { STATUS_KINDS, STATUS_LABEL, type StatusKind } from '@/task';

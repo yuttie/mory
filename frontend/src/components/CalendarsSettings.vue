@@ -3,15 +3,12 @@
         <h2 class="text-title-medium mb-4">
             Calendars
         </h2>
-        <v-alert
-            class="mb-4"
-            type="info"
-            variant="tonal"
-        >
-            Subscribed calendars are stored in the repository
-            as <code>{{ CALENDARS_PATH }}</code> and are shared across browsers.
-            Their events are read-only until converted to a note.
-        </v-alert>
+        <StoredInRepository v-bind:path="CALENDARS_PATH" />
+
+        <v-card-subtitle class="px-0">Subscriptions</v-card-subtitle>
+        <p class="text-medium-emphasis mb-4">
+            Events from a subscribed calendar are read-only until converted to a note.
+        </p>
 
         <v-list
             v-if="calendars.subscriptions.length > 0"
@@ -68,8 +65,7 @@
         <v-card-subtitle class="px-0">Task dates</v-card-subtitle>
         <p class="text-medium-emphasis mb-4">
             The colours a task's due date and deadline are drawn in, on the calendar and on the
-            home page. Stored in the same file, so they follow the notes rather than the
-            browser. Leave one empty for its default.
+            home page. Leave one empty for its default.
         </p>
         <div class="task-date-colors">
             <ColorField
@@ -104,8 +100,7 @@
         <v-card-subtitle class="px-0">Event categories</v-card-subtitle>
         <p class="text-medium-emphasis mb-4">
             An event joins one by naming it, as in <code>category: meeting</code>, and is drawn
-            in its colour and with its name template unless it sets its own colour. Stored in the
-            same file.
+            in its colour and with its name template unless it sets its own colour.
         </p>
         <v-list
             v-if="categoryList.length > 0"
@@ -275,6 +270,7 @@ import { alarmProblems, describeAlarmText } from '@/alarms';
 import AlarmDefaultsSettings from '@/components/AlarmDefaultsSettings.vue';
 import InheritableAlarms from '@/components/InheritableAlarms.vue';
 import ColorField from '@/components/ColorField.vue';
+import StoredInRepository from '@/components/StoredInRepository.vue';
 import { parseEventColor } from '@/event-color';
 import {
     DEFAULT_DEADLINE_COLOR,

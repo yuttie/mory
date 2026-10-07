@@ -3,10 +3,7 @@
         <h2 class="text-title-medium mb-4">
             AI Actions
         </h2>
-        <v-alert variant="tonal" type="info" class="mb-4">
-            AI Actions are stored in the repository
-            as <code>{{ AI_ACTIONS_PATH }}</code> and are shared across browsers.
-        </v-alert>
+        <StoredInRepository v-bind:path="AI_ACTIONS_PATH" />
 
         <v-list v-if="sortedActions.length > 0">
             <v-list-item
@@ -126,6 +123,7 @@ import { mdiDelete, mdiPencil, mdiPlus } from '@mdi/js';
 
 import { AI_ACTIONS_PATH, loadAiActions, saveAiActions } from '@/ai-actions';
 import type { AiAction } from '@/ai-actions';
+import StoredInRepository from '@/components/StoredInRepository.vue';
 
 // Bound rather than written inline in the template, so the placeholder's own
 // braces cannot be read as an interpolation.

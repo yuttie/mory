@@ -5,8 +5,7 @@
             When mory rings, for an event or a task date whose note, or whose category, does not
             say. An alarm is an offset from the start, <code>-10m</code> before it or
             <code>+1h</code> after, or a time on the start's day, <code>09:00</code> or
-            <code>-1d 18:00</code>. A note sets its own with <code>alarms:</code>. Stored in the
-            same file, so they follow the notes rather than the browser.
+            <code>-1d 18:00</code>. A note sets its own with <code>alarms:</code>.
         </p>
         <div class="alarm-defaults">
             <AlarmField
