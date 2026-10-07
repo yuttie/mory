@@ -7,7 +7,10 @@
             style="display: contents"
             v-on:submit.prevent="onSave"
         >
-            <v-card-title class="editor-header">
+            <v-card-title
+                ref="headerRef"
+                class="editor-header"
+            >
                 <div class="editor-heading">
                     <div class="editor-title">
                         <span>{{ isEdit ? 'Edit task' : getNewTaskTitle() }}</span>
@@ -119,8 +122,9 @@
                         ref="assessmentMenu"
                         v-bind:close-on-content-click="false"
                         v-bind:max-height="assessmentMaxHeight"
+                        v-bind:viewport-margin="MENU_MARGIN"
                         location="bottom"
-                        v-on:update:model-value="onAssessmentToggle"
+                        v-on:update:model-value="fitAssessment"
                     >
                         <template v-slot:activator="{ props: activator }">
                             <v-chip
@@ -424,7 +428,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive, computed, watch, toRef, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, watch, toRef, onMounted, onUnmounted, type ComponentPublicInstance } from 'vue';
 import type { VMenu } from 'vuetify/components';
 
 import {
@@ -546,14 +550,16 @@ const lockScroll = useConfigValue('lock-scroll', false);
 const taskAssessment = ref<TaskAssessmentResponse | null>(null);
 const assessmentLoading = ref(false);
 let assessmentTimeout: number | null = null;
-// Vuetify shifts a menu taller than the room below its activator up over the activator rather than
-// shortening it, so a long assessment hid the chip that opened it. Capped at the larger room beside
-// the chip, it scrolls below the chip, or above it where there is more room and the menu flips.
-const assessmentMenu = ref<InstanceType<typeof VMenu> | null>(null);
 const assessmentMaxHeight = ref<number>();
+// The room Vuetify keeps clear of each edge of the window, given to the assessment's menu here
+// because its cap counts it too.
+const MENU_MARGIN = 12;
+const headerObserver = new ResizeObserver(() => fitAssessment());
 
 // Template refs
 const formRef = ref<any>(null);
+const headerRef = ref<ComponentPublicInstance | null>(null);
+const assessmentMenu = ref<InstanceType<typeof VMenu> | null>(null);
 
 // Computed properties
 const uuid = computed<UUID>(() => extractFileUuid(props.taskPath));
@@ -714,6 +720,8 @@ watch(
 // Lifecycle hooks
 onMounted(() => {
     window.addEventListener('beforeunload', onBeforeunload);
+    window.addEventListener('resize', fitAssessment);
+    headerObserver.observe(headerRef.value!.$el);
     // The default alarms are shown beside a date's own, and live in the calendar configuration.
     // Without it they read as the built-in ones, which is only wrong until it has loaded.
     void plans.loadAll().catch(() => undefined);
@@ -723,6 +731,8 @@ onMounted(() => {
 
 onUnmounted(() => {
     window.removeEventListener('beforeunload', onBeforeunload);
+    window.removeEventListener('resize', fitAssessment);
+    headerObserver.disconnect();
     if (assessmentTimeout) {
         clearTimeout(assessmentTimeout);
     }
@@ -915,15 +925,21 @@ function onTitleInput() {
     }, 1000);
 }
 
-function onAssessmentToggle(open: boolean): void {
-    // The menu's own, since the activator's props carry the ref Vuetify finds the chip by.
+// Vuetify shifts a menu taller than the room below its activator up over the activator rather than
+// shortening it, so a long assessment would cover the chip that opened it. Capped at the larger room
+// above or below the chip, it scrolls there instead, flipping above where there is more room. An open
+// menu is placed again as the window or the chip resizes, with the cap it was given, so the cap is
+// measured whenever the menu opens or closes, the window resizes, or the header does: the chip moves
+// without resizing when the row above it rewraps.
+function fitAssessment(): void {
+    // Read from the menu: the activator props already carry Vuetify's ref to the chip, which a
+    // template ref would replace.
     const chip = assessmentMenu.value?.activatorEl;
-    if (!open || !chip) {
+    if (!chip) {
         return;
     }
     const { top, bottom } = chip.getBoundingClientRect();
-    // Less the 12 px Vuetify keeps clear of each edge of the window.
-    assessmentMaxHeight.value = Math.max(top, document.documentElement.clientHeight - bottom) - 12;
+    assessmentMaxHeight.value = Math.max(top, document.documentElement.clientHeight - bottom) - MENU_MARGIN;
 }
 
 function addNoteContent(suggestion: string) {
