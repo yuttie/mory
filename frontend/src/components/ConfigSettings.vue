@@ -551,6 +551,23 @@ const editorEnableEmacsStyleBindings = useConfigValue('editor-enable-emacs-style
 const editorVimInsertUnmapCtCd = useConfigValue('editor-vim-insert-unmap-ct-cd', false);
 const currentHighlightjsTheme = useConfigValue('highlightjs-theme', 'default');
 
+// Every browser setting under its name in DEFAULT_CONFIG_PATH. Saving and loading both walk this
+// one list, so a setting added here is in both, and one left out is in neither.
+const DEFAULT_CONFIG_FIELDS: Record<string, { value: unknown }> = {
+    useSimpleEditor: currentUseSimpleEditor,
+    lockScroll: currentLockScroll,
+    editorFontFamily: currentEditorFontFamily,
+    editorFontSize: currentEditorFontSize,
+    editorIndentSize,
+    editorTheme: currentEditorTheme,
+    editorKeybinding: currentEditorKeybinding,
+    editorEnableEmacsStyleBindings,
+    editorVimInsertUnmapCtCd,
+    highlightjsTheme: currentHighlightjsTheme,
+    noteTreeInitialRows,
+    noteTreeRowIncrement,
+};
+
 // Methods
 function panelAttributes(value: string) {
     return {
@@ -563,37 +580,21 @@ function panelAttributes(value: string) {
 
 async function loadDefault() {
     const config = YAML.parse(await files.read(DEFAULT_CONFIG_PATH));
-    currentUseSimpleEditor.value = config.useSimpleEditor;
-    currentLockScroll.value = config.lockScroll;
-    currentEditorFontFamily.value = config.editorFontFamily;
-    currentEditorFontSize.value = config.editorFontSize;
-    editorIndentSize.value = config.editorIndentSize;
-    currentEditorTheme.value = config.editorTheme;
-    currentEditorKeybinding.value = config.editorKeybinding;
-    editorEnableEmacsStyleBindings.value = config.editorEnableEmacsStyleBindings;
-    editorVimInsertUnmapCtCd.value = config.editorVimInsertUnmapCtCd;
-    currentHighlightjsTheme.value = config.highlightjsTheme;
-    // Guarded: a default_config.yaml written before these keys existed would set undefined,
-    // which saveConfigValue stores as the string "undefined" and loadConfigValue then throws on.
-    noteTreeInitialRows.value = config.noteTreeInitialRows ?? NOTE_TREE_INITIAL_ROWS;
-    noteTreeRowIncrement.value = config.noteTreeRowIncrement ?? NOTE_TREE_ROW_INCREMENT;
+    for (const [name, setting] of Object.entries(DEFAULT_CONFIG_FIELDS)) {
+        const value = config?.[name];
+        // A file saved before a setting existed lacks it, and that setting keeps the value it
+        // has here: assigning undefined would store the string "undefined", which
+        // loadConfigValue throws on at the next start.
+        if (value !== undefined) {
+            setting.value = value;
+        }
+    }
 }
 
 function saveAsDefault() {
-    const config = {
-        useSimpleEditor: currentUseSimpleEditor.value,
-        lockScroll: currentLockScroll.value,
-        editorFontFamily: currentEditorFontFamily.value,
-        editorFontSize: currentEditorFontSize.value,
-        editorIndentSize: editorIndentSize.value,
-        editorTheme: currentEditorTheme.value,
-        editorKeybinding: currentEditorKeybinding.value,
-        editorEnableEmacsStyleBindings: editorEnableEmacsStyleBindings.value,
-        editorVimInsertUnmapCtCd: editorVimInsertUnmapCtCd.value,
-        highlightjsTheme: currentHighlightjsTheme.value,
-        noteTreeInitialRows: noteTreeInitialRows.value,
-        noteTreeRowIncrement: noteTreeRowIncrement.value,
-    };
+    const config = Object.fromEntries(
+        Object.entries(DEFAULT_CONFIG_FIELDS).map(([name, setting]) => [name, setting.value]),
+    );
     files.write(DEFAULT_CONFIG_PATH, YAML.stringify(config));
 }
 

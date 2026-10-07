@@ -200,6 +200,44 @@ test('loads and saves browser defaults from every browser panel', async ({ conte
     expect(YAML.parse(repository.writes[0].content)).toEqual({ ...defaults, editorFontFamily: 'serif' });
 });
 
+test('keeps the settings an older default file lacks when loading it', async ({ context, page }) => {
+    // As Save to repository wrote it before indent size, the Emacs and Vim options, the note tree
+    // rows and highlight.js existed.
+    await mockBackend(context, {
+        '.mory/default_config.yaml': YAML.stringify({
+            useSimpleEditor: false,
+            lockScroll: true,
+            editorFontFamily: 'serif',
+            editorFontSize: 12,
+            editorTheme: 'default',
+            editorKeybinding: 'default',
+            prismTheme: 'okaidia',
+        }),
+    });
+    await page.addInitScript(() => {
+        if (sessionStorage.getItem('seeded') === null) {
+            sessionStorage.setItem('seeded', 'true');
+            localStorage.setItem('editor-indent-size', '4');
+        }
+    });
+    await page.goto('/note/draft.md?mode=create');
+    await openConfig(page);
+    await configDialog(page).getByRole('tab', { name: 'Editor', exact: true }).click();
+    const editor = configDialog(page).getByRole('tabpanel', { name: 'Editor', exact: true });
+    await editor.getByRole('button', { name: 'Load from repository', exact: true }).click();
+    await expect(editor.getByRole('textbox', { name: 'Font Family' })).toHaveValue('serif');
+    const stored = await page.evaluate(() => ({ ...localStorage }));
+    expect(Object.entries(stored).filter(([, value]) => value === 'undefined')).toEqual([]);
+    expect(stored['editor-indent-size']).toBe('4');
+
+    await page.reload();
+    await expect(page.locator('.cm-editor')).toHaveCSS('font-family', 'serif');
+    await page.locator('.cm-content').fill('Draft');
+    await page.locator('.cm-content').press('Home');
+    await page.locator('.cm-content').press('Tab');
+    await expect(page.locator('.cm-content')).toHaveText('    Draft');
+});
+
 test('keeps browser focus and typing in Config over a note draft', async ({ context, page }) => {
     await mockBackend(context, {});
     await page.goto('/note/draft.md?mode=create');
