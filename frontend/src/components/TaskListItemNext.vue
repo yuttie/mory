@@ -1,6 +1,6 @@
 <!-- Nothing may sit beside the root element, a comment included: a development build keeps template
-     comments as nodes, and a second root node leaves vuedraggable unable to tell which task the
-     dragged element is, so the status view drops nothing. -->
+     comments as nodes, and beside a second root node the attributes and listeners a list puts on a
+     task -- `draggable`, `variant`, its pointer handlers -- would reach neither. -->
 <template>
     <v-card
         class="task-list-item"

@@ -112,6 +112,33 @@ test('moves a task to the status it is dropped on, rewriting nothing but the sta
     ]);
 });
 
+test('takes a task dropped in the space between two tasks of another status', async ({ context, page }) => {
+    const before = note('Alpha', ['kind: todo']);
+    const repository = await openStatusView(context, page, {
+        [ALPHA]: before,
+        [BETA]: note('Beta', ['kind: in_progress']),
+        [GAMMA]: note('Gamma', ['kind: in_progress']),
+    });
+    const target = column(page, 'In progress');
+    const [upper, lower] = (await Promise.all([box(task(page, 'Beta')), box(task(page, 'Gamma'))])).sort((a, b) => a.y - b.y);
+    expect(lower.y).toBeGreaterThan(upper.y + upper.height);
+
+    const from = await box(task(page, 'Alpha'));
+    const gap = (upper.y + upper.height + lower.y) / 2;
+
+    await startDrag(page, task(page, 'Alpha'));
+    // Into the space between the two cards, which is neither's, from the side, so the pointer
+    // passes over no task of the column on its way there.
+    await page.mouse.move(from.x + from.width / 2, gap, { steps: 5 });
+    await page.mouse.move(upper.x + upper.width / 2, gap, { steps: 10 });
+    await expect(target).toHaveCSS('outline-style', 'solid');
+    await page.mouse.up();
+
+    await expect.poll(() => repository.writes).toEqual([
+        { path: ALPHA, content: before.replace('    kind: todo', '    kind: in_progress') },
+    ]);
+});
+
 test('keeps the dragged task\'s place open, and only that, wherever it is held', async ({ context, page }) => {
     const repository = await openStatusView(context, page, {
         [ALPHA]: note('Alpha', ['kind: todo']),
@@ -284,7 +311,7 @@ test.describe('on iOS', () => {
         await startDrag(page, task(page, 'Alpha'));
         await moveOver(page, column(page, 'Done').locator('.task-list'));
         await expect(column(page, 'Done')).toHaveCSS('outline-style', 'solid');
-        await expect(page.locator('.task-list-item.sortable-drag')).toBeInViewport();
+        await expect(page.locator('.sortable-drag .task-list-item')).toBeInViewport();
         await page.mouse.up();
     });
 });

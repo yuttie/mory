@@ -42,14 +42,16 @@
                 v-on:change="onChange(column.kind, $event)"
             >
                 <template v-slot:item="{ element: task }">
-                    <TaskListItemNext
-                        v-bind:value="task"
-                        v-bind:to="routeFor(task)"
-                        v-bind:list-root="listRoot"
-                        draggable="false"
-                        v-on:pointerdown="onPointerDown"
-                        v-on:contextmenu="onContextMenu"
-                    />
+                    <div class="task-list-entry">
+                        <TaskListItemNext
+                            v-bind:value="task"
+                            v-bind:to="routeFor(task)"
+                            v-bind:list-root="listRoot"
+                            draggable="false"
+                            v-on:pointerdown="onPointerDown"
+                            v-on:contextmenu="onContextMenu"
+                        />
+                    </div>
                 </template>
             </draggable>
         </TaskGroup>
@@ -233,7 +235,14 @@ $space: 8px;
     min-height: 100%;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+}
+
+/* The space between two cards is the upper one's entry's, not a gap of the list's: Sortable takes a
+   task held over another task, or past either end of the list, and one held over the list itself
+   anywhere else goes nowhere. Below the card, so the hidden copy held at the top of another column
+   opens no space above the first task there. */
+.task-list-entry:not(:last-child) {
+    padding-bottom: 16px;
 }
 
 .refused {
@@ -251,7 +260,7 @@ $space: 8px;
 
 /* A task pressed to be picked up shows no hover shade: it is being taken, not pointed at. The
    shade is the card's overlay, drawn at this opacity. */
-.groups :deep(.task-list-item.sortable-chosen) {
+.groups :deep(.sortable-chosen .task-list-item) {
     --v-hover-opacity: 0;
 }
 

@@ -76,15 +76,17 @@
                     v-on:clone="onClone"
                 >
                     <template #item="{ element: task }">
-                        <TaskListItemNext
-                            class="candidate"
-                            draggable="false"
-                            v-bind:value="task"
-                            v-bind:to="routeFor(task)"
-                            v-bind:list-root="listRoot"
-                            v-on:pointerdown="onPointerDown"
-                            v-on:contextmenu="onContextMenu"
-                        />
+                        <div class="task-list-entry">
+                            <TaskListItemNext
+                                class="candidate"
+                                draggable="false"
+                                v-bind:value="task"
+                                v-bind:to="routeFor(task)"
+                                v-bind:list-root="listRoot"
+                                v-on:pointerdown="onPointerDown"
+                                v-on:contextmenu="onContextMenu"
+                            />
+                        </div>
                     </template>
                 </draggable>
             </TaskGroup>
@@ -128,71 +130,73 @@
                     v-on:change="onDayChange(date, $event)"
                 >
                     <template #item="{ element: entry }">
-                        <v-card
-                            class="planned-entry"
-                            draggable="false"
-                            v-bind:class="{ 'text-disabled': !taskOf(entry.task) || !tasks.ownUrgency(taskOf(entry.task)?.uuid ?? entry.task).actionable }"
-                            v-bind:style="{ backgroundColor: statusGround(taskOf(entry.task)?.metadata?.task?.status?.kind, taskSettings.resolvedStatusColors) }"
-                            v-on:pointerdown="onPointerDown"
-                            v-on:contextmenu="onContextMenu"
-                        >
-                            <TaskListItemNext
-                                v-if="taskOf(entry.task)"
-                                class="planned-task"
-                                variant="text"
+                        <div class="task-list-entry">
+                            <v-card
+                                class="planned-entry"
                                 draggable="false"
-                                v-bind:value="taskOf(entry.task)!"
-                                v-bind:to="routeFor(taskOf(entry.task)!)"
-                                v-bind:list-root="listRoot"
+                                v-bind:class="{ 'text-disabled': !taskOf(entry.task) || !tasks.ownUrgency(taskOf(entry.task)?.uuid ?? entry.task).actionable }"
+                                v-bind:style="{ backgroundColor: statusGround(taskOf(entry.task)?.metadata?.task?.status?.kind, taskSettings.resolvedStatusColors) }"
+                                v-on:pointerdown="onPointerDown"
+                                v-on:contextmenu="onContextMenu"
                             >
-                                <div class="plan-record">
+                                <TaskListItemNext
+                                    v-if="taskOf(entry.task)"
+                                    class="planned-task"
+                                    variant="text"
+                                    draggable="false"
+                                    v-bind:value="taskOf(entry.task)!"
+                                    v-bind:to="routeFor(taskOf(entry.task)!)"
+                                    v-bind:list-root="listRoot"
+                                >
+                                    <div class="plan-record">
+                                        <small>{{ entry.origin }} · {{ entry.result ?? 'unrecorded' }}</small>
+                                    </div>
+                                </TaskListItemNext>
+                                <div
+                                    v-else
+                                    class="pa-2"
+                                >
+                                    <div>Unknown task {{ entry.task }}</div>
                                     <small>{{ entry.origin }} · {{ entry.result ?? 'unrecorded' }}</small>
                                 </div>
-                            </TaskListItemNext>
-                            <div
-                                v-else
-                                class="pa-2"
-                            >
-                                <div>Unknown task {{ entry.task }}</div>
-                                <small>{{ entry.origin }} · {{ entry.result ?? 'unrecorded' }}</small>
-                            </div>
-                            <div class="plan-actions">
-                                <v-checkbox-btn
-                                    class="plan-control"
-                                    v-bind:model-value="entry.result === 'worked'"
-                                    v-bind:disabled="busy || !taskOf(entry.task)"
-                                    label="Worked"
-                                    title="Worked on this day"
-                                    v-on:update:model-value="run(() => plans.recordResult(date, entry.task, $event ? 'worked' : undefined))"
-                                />
-                                <v-btn
-                                    v-if="taskOf(entry.task) && !['done', 'canceled'].includes(taskOf(entry.task)?.metadata?.task?.status?.kind ?? '')"
-                                    variant="text"
-                                    size="x-small"
-                                    v-bind:disabled="busy"
-                                    v-on:click="run(() => complete(date, entry.task))"
-                                >
-                                    Complete task
-                                </v-btn>
-                                <v-btn
-                                    v-if="entry.origin === 'planned'"
-                                    variant="text"
-                                    size="x-small"
-                                    v-bind:disabled="busy"
-                                    v-on:click="run(() => plans.recordResult(date, entry.task, 'missed'))"
-                                >
-                                    Missed
-                                </v-btn>
-                                <v-btn
-                                    variant="text"
-                                    size="x-small"
-                                    v-bind:disabled="busy"
-                                    v-on:click="run(() => plans.unplanTask(date, entry.task))"
-                                >
-                                    Remove
-                                </v-btn>
-                            </div>
-                        </v-card>
+                                <div class="plan-actions">
+                                    <v-checkbox-btn
+                                        class="plan-control"
+                                        v-bind:model-value="entry.result === 'worked'"
+                                        v-bind:disabled="busy || !taskOf(entry.task)"
+                                        label="Worked"
+                                        title="Worked on this day"
+                                        v-on:update:model-value="run(() => plans.recordResult(date, entry.task, $event ? 'worked' : undefined))"
+                                    />
+                                    <v-btn
+                                        v-if="taskOf(entry.task) && !['done', 'canceled'].includes(taskOf(entry.task)?.metadata?.task?.status?.kind ?? '')"
+                                        variant="text"
+                                        size="x-small"
+                                        v-bind:disabled="busy"
+                                        v-on:click="run(() => complete(date, entry.task))"
+                                    >
+                                        Complete task
+                                    </v-btn>
+                                    <v-btn
+                                        v-if="entry.origin === 'planned'"
+                                        variant="text"
+                                        size="x-small"
+                                        v-bind:disabled="busy"
+                                        v-on:click="run(() => plans.recordResult(date, entry.task, 'missed'))"
+                                    >
+                                        Missed
+                                    </v-btn>
+                                    <v-btn
+                                        variant="text"
+                                        size="x-small"
+                                        v-bind:disabled="busy"
+                                        v-on:click="run(() => plans.unplanTask(date, entry.task))"
+                                    >
+                                        Remove
+                                    </v-btn>
+                                </div>
+                            </v-card>
+                        </div>
                     </template>
                 </draggable>
             </TaskGroup>
@@ -390,7 +394,12 @@ onMounted(() => { void plans.loadAll().catch((failure) => { error.value = String
     min-height: 100%;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+}
+/* The space between two cards is the upper one's entry's, not a gap of the list's: Sortable takes a
+   task held over another, or past either end of the list, and one held over the list itself
+   anywhere else goes nowhere. */
+.task-list-entry:not(:last-child) {
+    padding-bottom: 16px;
 }
 /* The task's card is drawn flat inside the entry's and left unpositioned, so its link's cover and
    its hover shade reach over the whole entry rather than its own part of it. Important because
