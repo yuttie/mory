@@ -3,16 +3,16 @@
         class="status-view groups"
         v-bind:class="{ dragging: draggedFrom !== null }"
     >
-        <v-card
+        <TaskGroup
             v-for="column of COLUMNS"
             v-bind:key="column.kind"
             class="group"
+            v-bind:title="STATUS_LABEL[column.kind]"
             v-bind:class="{
                 origin: column.kind === draggedFrom,
                 refused: draggedFrom !== null && !canTransition(draggedFrom, column.kind),
             }"
         >
-            <v-card-title>{{ STATUS_LABEL[column.kind] }}</v-card-title>
             <!-- `model-value` rather than `list`: the lists are derived from the listing, so a drop
                  is reported and the parent writes it; nothing here moves a task itself.
                  `force-fallback` because Sortable scrolls near an edge only for a drag it runs
@@ -20,8 +20,8 @@
                  that has native ones is scrolled by neither -- and on a phone each column is the
                  width of the screen, so no other column could be reached.
                  `fallback-on-body` because on iOS Sortable positions that copy absolutely inside
-                 the column it left, and the card clips it: it vanished as soon as it left its
-                 column.
+                 the column it left, and the column's scrolling body clips it: it vanished as soon
+                 as it left its column.
                  Each task is a link made undraggable, or the browser would start a drag of its own
                  to carry off the address, and Sortable's would stop at the first move. Said here,
                  away from `draggable`, because a comment in the `item` slot is a second node in a
@@ -52,7 +52,7 @@
                     />
                 </template>
             </draggable>
-        </v-card>
+        </TaskGroup>
         <v-dialog
             v-bind:model-value="awaiting !== null"
             max-width="500px"
@@ -198,26 +198,20 @@ async function onFieldsSubmit() {
 
 <style scoped lang="scss">
 $group-width: 270px;
-$space: 12px;
+$space: 8px;
 
 .groups {
     flex: 1 1 0;
     display: flex;
-    flex-direction: row;
     width: 0;
     height: 100%;
     overflow-x: auto;
-    gap: $space;
+    gap: 16px;
     padding: $space;
 }
 
 .group {
-    flex-grow: 0;
-    flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
-    align-self: flex-start;
-    max-height: 100%;
+    flex: 1 0 auto;
     width: $group-width;
 }
 
@@ -229,21 +223,17 @@ $space: 12px;
     }
 
     .group {
-        flex-shrink: 0;
-        flex-grow: 1;
         width: 100%;
     }
 }
 
+/* As tall as its column at least, so a task dropped below the last one, or into an empty column,
+   still lands in the list. */
 .task-list {
-    overflow-y: auto;
-}
-
-/* Room to drop into, which an empty column otherwise does not have. Only while dragging, so a
-   column at rest looks as it did, and not in the column the task came from: a drop there changes
-   nothing, and the task's place is held open there already. */
-.dragging .group:not(.refused):not(.origin) .task-list {
-    min-height: 32px;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
 }
 
 .refused {
@@ -259,9 +249,10 @@ $space: 12px;
     -webkit-touch-callout: none;
 }
 
-/* A task pressed to be picked up shows no hover shade: it is being taken, not pointed at. */
+/* A task pressed to be picked up shows no hover shade: it is being taken, not pointed at. The
+   shade is the card's overlay, drawn at this opacity. */
 .groups :deep(.task-list-item.sortable-chosen) {
-    background: none;
+    --v-hover-opacity: 0;
 }
 
 /* A drop decides the column and nothing else, since each column is ordered by date. So a task held
@@ -284,11 +275,8 @@ $space: 12px;
    inside a task stops taking the pointer, which is where the tooltips are. The task itself still
    takes it: Sortable finds the column under the pointer through the task there. */
 .dragging :deep(.task-list-item) {
+    --v-hover-opacity: 0;
     cursor: inherit;
-
-    &:hover {
-        background: none;
-    }
 
     & * {
         pointer-events: none;

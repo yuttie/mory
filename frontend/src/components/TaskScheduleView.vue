@@ -373,8 +373,14 @@ onMounted(() => { void plans.loadAll().catch((failure) => { error.value = String
 .entries { flex: 1; min-height: 140px; }
 .today { border: 2px solid rgb(var(--v-theme-primary)); }
 .planned-entry { position: relative; border-top: 1px solid rgba(128, 128, 128, .3); }
-.planned-entry:hover { background: #eeeeee; }
 .planned-entry a { color: inherit; }
+/* The task's card is left unpositioned, so its link's cover and its hover shade reach over the
+   whole row rather than the card's part of it. Important because Vuetify's ripple positions the
+   card while it plays: a press would land on the cover and the release outside it, and the click
+   would go to neither. */
+.planned-entry :deep(.planned-task) {
+    position: static !important;
+}
 /* A real link keeps keyboard/new-tab navigation while covering the row's unused space. */
 .planned-entry :deep(.planned-task::after) {
     content: '';
@@ -390,8 +396,9 @@ onMounted(() => { void plans.loadAll().catch((failure) => { error.value = String
 .planning-view :deep(:is(.task-list-item, .planned-entry)) {
     -webkit-touch-callout: none;
 }
+/* The hover shade is the card's overlay, drawn at this opacity. */
 .planning-view :deep(.sortable-chosen) {
-    background: none;
+    --v-hover-opacity: 0;
 }
 .planning-view :deep(:is(.sortable-ghost, .vacated)) {
     visibility: hidden;
@@ -401,10 +408,8 @@ onMounted(() => { void plans.loadAll().catch((failure) => { error.value = String
     outline: 2px solid rgb(var(--v-theme-primary));
 }
 .dragging :deep(:is(.task-list-item, .planned-entry)) {
+    --v-hover-opacity: 0;
     cursor: inherit;
-}
-.dragging :deep(:is(.task-list-item, .planned-entry):hover) {
-    background: none;
 }
 .dragging :deep(:is(.task-list-item, .planned-entry) *) {
     pointer-events: none;

@@ -34,7 +34,7 @@ async function openStatusView(context: BrowserContext, page: Page, notes: Record
 
 function column(page: Page, title: string): Locator {
     return page.locator('.status-view .group').filter({
-        has: page.locator('.v-card-title', { hasText: new RegExp(`^${title}$`) }),
+        has: page.locator('.task-group-title', { hasText: new RegExp(`^${title}$`) }),
     });
 }
 
@@ -58,8 +58,9 @@ async function moveOver(page: Page, target: Locator, at: 'middle' | 'bottom' = '
     await page.mouse.move(x + width / 2, at === 'bottom' ? y + height : y + height / 2, { steps: 10 });
 }
 
-// How far, down and right, the pointer moves to pick up the task it was pressed on.
-const LIFT = 20;
+// How far, down and right, the pointer moves to pick up the task it was pressed on. Far enough to
+// reach the next card down from the middle of a two-line one.
+const LIFT = 80;
 
 async function startDrag(page: Page, item: Locator): Promise<void> {
     // Coordinate events need the same readiness check that locator clicks perform.
@@ -130,7 +131,8 @@ test('keeps the dragged task\'s place open, and only that, wherever it is held',
     };
 
     // Lifted onto the next task: a gap that followed the pointer would move below it.
-    expect(LIFT).toBeGreaterThan((await box(items.nth(0))).height / 2);
+    const first = await box(items.nth(0));
+    expect(first.y + first.height / 2 + LIFT).toBeGreaterThan(place);
     await startDrag(page, items.nth(0));
     await unchanged();
 
@@ -223,13 +225,14 @@ test('keeps the tasks a dragged one passes over from answering the pointer', asy
     const due = beta.locator('.task-date-cue[data-field="due_by"]');
     // What the date's tooltip says: the row itself says how far off the date is instead.
     const tooltip = page.getByRole('tooltip').getByText('Due: 2026-10-01', { exact: true });
-    const background = () => beta.evaluate((element) => getComputedStyle(element).backgroundColor);
-    const resting = await background();
+    // The hover shade is the card's overlay, shown by its opacity.
+    const shade = () => beta.evaluate((element) => getComputedStyle(element.querySelector(':scope > .v-card__overlay')!).opacity);
+    const resting = await shade();
 
     // At rest a task answers the pointer, which is what a drag must not look like.
     await due.hover();
     await expect(beta).toHaveCSS('cursor', 'pointer');
-    await expect.poll(background).not.toBe(resting);
+    await expect.poll(shade).not.toBe(resting);
     await expect(tooltip).toBeVisible();
     await page.mouse.move(0, 0);
     await expect(tooltip).toBeHidden();
@@ -239,7 +242,7 @@ test('keeps the tasks a dragged one passes over from answering the pointer', asy
     // Long enough for the tooltip to open, were it going to.
     await page.waitForTimeout(500);
     await expect(beta).not.toHaveCSS('cursor', 'pointer');
-    await expect.poll(background).toBe(resting);
+    await expect.poll(shade).toBe(resting);
     await expect(tooltip).toBeHidden();
 
     // Let go over Beta's date: the column still takes the task.

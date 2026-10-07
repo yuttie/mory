@@ -2,37 +2,50 @@
      comments as nodes, and a second root node leaves vuedraggable unable to tell which task the
      dragged element is, so the status view drops nothing. -->
 <template>
-    <router-link
-        v-bind:to="to"
+    <v-card
         class="task-list-item"
+        v-bind:to="to"
         v-bind:class="{ 'text-disabled': !urgency.actionable }"
     >
-        <v-icon class="mr-1">
-            {{ done ? mdiCheckboxMarkedOutline : canceled ? mdiCheckboxBlankOffOutline : mdiCheckboxBlankOutline }}
-        </v-icon>
-        <div>
-            <span
-                class="tag"
-                v-for="tag of value.metadata?.tags ?? []"
-                v-bind:key="tag"
-            >{{ tag }}</span>
-            <span class="title-text" v-bind:class="{ strikethrough: canceled }">{{ value.title || 'Untitled' }}</span>
-            <TaskDateCues v-bind:value="value" />
-            <v-chip size="x-small" class="ml-1">{{ URGENCY_LABEL[urgency.level] }}</v-chip>
-            <span v-if="progress !== undefined" class="ml-1">{{ Math.round(progress) }}%</span>
-            <span v-if="plans.missedCount(value.uuid) >= 3" class="ml-1 text-warning">Consider splitting or re-rating importance ({{ plans.missedCount(value.uuid) }} missed days)</span>
-            <span v-if="urgency.short_window" class="ml-1 text-warning">Window shorter than lead time</span>
-            <!-- Below the title rather than before it, so the checkbox stays level with the title
-                 and the titles in a column still line up to be scanned. -->
-            <div
-                v-if="ancestorTitles.length > 0"
-                class="ancestors"
-            >
-                {{ ancestorTitles.join(' › ') }}
-            </div>
-            <slot />
+        <div
+            class="title-text"
+            v-bind:class="{ strikethrough: canceled }"
+        >
+            {{ value.title || 'Untitled' }}
         </div>
-    </router-link>
+        <div
+            v-if="ancestorTitles.length > 0"
+            class="ancestors"
+        >
+            <v-icon>{{ mdiFileTreeOutline }}</v-icon>
+            {{ ancestorTitles.join(' › ') }}
+        </div>
+        <div
+            v-if="tags.length > 0"
+            class="tags"
+        >
+            <v-icon>{{ mdiTagOutline }}</v-icon>
+            <span
+                v-for="tag of tags"
+                v-bind:key="tag"
+                class="tag"
+            >{{ tag }}</span>
+        </div>
+        <TaskDateCues v-bind:value="value" />
+        <v-chip size="x-small">
+            {{ URGENCY_LABEL[urgency.level] }}
+        </v-chip>
+        <span v-if="progress !== undefined">{{ Math.round(progress) }}%</span>
+        <span
+            v-if="plans.missedCount(value.uuid) >= 3"
+            class="text-warning"
+        >Consider splitting or re-rating importance ({{ plans.missedCount(value.uuid) }} missed days)</span>
+        <span
+            v-if="urgency.short_window"
+            class="text-warning"
+        >Window shorter than lead time</span>
+        <slot />
+    </v-card>
 </template>
 
 <script lang="ts" setup>
@@ -40,9 +53,8 @@ import { computed } from 'vue';
 import type { RouteLocationRaw } from 'vue-router';
 
 import {
-    mdiCheckboxBlankOutline,
-    mdiCheckboxMarkedOutline,
-    mdiCheckboxBlankOffOutline,
+    mdiFileTreeOutline,
+    mdiTagOutline,
 } from '@mdi/js';
 
 import type { UUID } from '@/task';
@@ -76,8 +88,8 @@ const ancestorTitles = computed<string[]>(() => {
     return store.ancestorsOf(props.value.uuid, props.listRoot).map((node) => node.title || 'Untitled');
 });
 
-const done = computed<boolean>(() => {
-    return props.value.metadata?.task?.status?.kind === 'done';
+const tags = computed<string[]>(() => {
+    return props.value.metadata?.tags ?? [];
 });
 
 const canceled = computed<boolean>(() => {
@@ -88,29 +100,16 @@ const canceled = computed<boolean>(() => {
 <style scoped lang="scss">
 .task-list-item {
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
     align-items: flex-start;
+    gap: 4px;
+    padding: 8px;
     font-size: 14px;
-    padding: 4px 4px;
     word-break: break-all;
-    color: inherit;
-    text-decoration: none;
-
-    &:hover {
-        background: #eeeeee;
-    }
-
-    /* The copy that follows the pointer while the task is dragged. It is drawn over other tasks,
-       so it needs a ground of its own to be read against. */
-    &.sortable-drag {
-        background: rgb(var(--v-theme-surface));
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-    }
-
-    & > * {
-        display: inline;
-        vertical-align: middle;
-    }
+}
+.title-text {
+    font-weight: bold;
+    font-size: 1.2em;
 }
 .tag {
     color: #888;
@@ -125,8 +124,5 @@ const canceled = computed<boolean>(() => {
 .ancestors {
     font-size: 12px;
     color: #888;
-}
-.note-tooltip {
-    white-space: pre-wrap;
 }
 </style>
