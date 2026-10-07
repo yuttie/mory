@@ -95,14 +95,16 @@ test('moves a task to the status it is dropped on, rewriting nothing but the sta
         [GAMMA]: note('Gamma', ['kind: in_progress']),
     });
     const target = column(page, 'In progress');
-    const { height } = await box(target);
+    // Where the column's tasks sit: the column itself is as tall as the view, gap or none.
+    const places = async () => [(await box(task(page, 'Beta'))).y, (await box(task(page, 'Gamma'))).y];
+    const resting = await places();
 
     await startDrag(page, task(page, 'Alpha'));
     // Held between two tasks: the column is ordered by date, so no gap may open there as if the
     // task could be placed between them. The column is marked instead.
     await moveOver(page, task(page, 'Beta'), 'bottom');
     await expect(target).toHaveCSS('outline-style', 'solid');
-    expect((await box(target)).height).toBe(height);
+    expect(await places()).toEqual(resting);
     await dropOn(page, target);
 
     await expect(target).toContainText('Alpha');
@@ -148,12 +150,16 @@ test('keeps the dragged task\'s place open, and only that, wherever it is held',
     const list = column(page, 'To do').locator('.task-list');
     const items = list.locator('.task-list-item');
     await expect(items).toHaveCount(2);
-    const { height } = await box(list);
+    // How far down the list what it holds reaches: the list itself is at least as tall as its
+    // column, gap or none.
+    const reach = () => list.evaluate((element) => Math.max(...[...element.children].map(
+        (child) => child.getBoundingClientRect().bottom)) - element.getBoundingClientRect().top);
+    const extent = await reach();
     const next = items.nth(1);
     const { y: place } = await box(next);
-    // The column's height and where the next task sits, together: one gap, at the task's place.
+    // How far the list reaches and where the next task sits, together: one gap, at the task's place.
     const unchanged = async () => {
-        await expect.poll(async () => (await box(list)).height).toBe(height);
+        await expect.poll(reach).toBe(extent);
         await expect.poll(async () => (await box(next)).y).toBe(place);
     };
 
