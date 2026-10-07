@@ -55,8 +55,7 @@
 import { computed, reactive, ref, watch } from 'vue';
 
 import ColorField from '@/components/ColorField.vue';
-import { parseEventColor } from '@/event-color';
-import { DEFAULT_STATUS_COLOR, type StatusColorEdits, type StatusColors } from '@/status-color';
+import { DEFAULT_STATUS_COLOR, parseStatusColor, type StatusColorEdits, type StatusColors } from '@/status-color';
 import { TASK_SETTINGS_PATH, useTaskSettingsStore } from '@/stores/taskSettings';
 import { STATUS_KINDS, STATUS_LABEL, type StatusKind } from '@/task';
 
@@ -106,8 +105,8 @@ async function save() {
         }
         // Read as the views read it, so a typo is refused here rather than saved and then drawn
         // as the default, which would look as if it had been ignored.
-        if (parseEventColor(value) === null) {
-            error.value = `"${value}" is not a colour this can draw.`;
+        if (parseStatusColor(value) === null) {
+            error.value = `"${value}" is not an opaque colour this can draw.`;
             return;
         }
         edits[kind] = value;

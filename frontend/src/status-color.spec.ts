@@ -66,6 +66,11 @@ describe('readStatusColors', () => {
             ],
         });
         expect(readStatusColors({ status_colors: ['red'] })).toEqual({ colors: {}, problems: ['status_colors must be a mapping.'] });
+        // A ground mixed from one would be seen through.
+        expect(readStatusColors({ status_colors: { done: '#ff000080', todo: 'transparent', waiting: 'rgba(0, 0, 0, 1)' } })).toEqual({
+            colors: { waiting: 'rgba(0, 0, 0, 1)' },
+            problems: ['Invalid colour for status done.', 'Invalid colour for status todo.'],
+        });
     });
 
     it('leaves a file it cannot read to readTaskSettings to report', () => {

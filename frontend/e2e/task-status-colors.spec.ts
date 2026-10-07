@@ -17,7 +17,7 @@ test('sets a status colour in the Config view, writing only its own lines', asyn
     // A colour this cannot draw is refused, rather than saved and then drawn as the default.
     await section.getByLabel('Done', { exact: true }).fill('not a colour');
     await save.click();
-    await expect(section.getByText('"not a colour" is not a colour this can draw.')).toBeVisible();
+    await expect(section.getByText('"not a colour" is not an opaque colour this can draw.')).toBeVisible();
     expect(repository.writes).toEqual([]);
 
     await section.getByLabel('Done', { exact: true }).fill('#ff0000');

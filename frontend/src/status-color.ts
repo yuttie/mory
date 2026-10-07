@@ -46,9 +46,18 @@ export function statusGround(kind: unknown, configured: StatusColors = {}): stri
     return color === undefined ? undefined : `color-mix(in srgb, ${color} 12%, rgb(var(--v-theme-surface)))`;
 }
 
+/// The colour a status's colour names, read as the calendar reads one, so a palette name such as
+/// `light-green` is as good as `#8bc34a`; or `null` when it names none, or one that can be seen
+/// through. A card's ground is mixed from it and must stay opaque, or the page would show through
+/// it, and through a card drawn on another, twice.
+export function parseStatusColor(value: unknown): ReturnType<typeof parseEventColor> {
+    const color = parseEventColor(value);
+    return color !== null && color.alpha() === 1 ? color : null;
+}
+
 /// The `status_colors:` a parsed `.mory/tasks.yaml` sets, as written, with what is wrong with any it
-/// had to drop. A colour is read as the calendar reads one, so a palette name such as `light-green`
-/// is as good as `#8bc34a`; an empty one means the default, as in the calendar's settings.
+/// had to drop. A colour is read by `parseStatusColor`; an empty one means the default, as in the
+/// calendar's settings.
 ///
 /// A file that is not a mapping, or that still holds legacy task data, sets no colours, and says so
 /// through `readTaskSettings` rather than twice.
@@ -72,7 +81,7 @@ export function readStatusColors(value: unknown): { colors: StatusColors; proble
         else if (color === null || (typeof color === 'string' && color.trim() === '')) {
             continue;
         }
-        else if (typeof color !== 'string' || parseEventColor(color.trim()) === null) {
+        else if (typeof color !== 'string' || parseStatusColor(color.trim()) === null) {
             problems.push(`Invalid colour for status ${kind}.`);
         }
         else {
@@ -86,7 +95,7 @@ export function readStatusColors(value: unknown): { colors: StatusColors; proble
 export function resolveStatusColors(colors: StatusColors): StatusColors {
     const resolved: StatusColors = {};
     for (const kind of STATUS_KINDS) {
-        const color = parseEventColor(colors[kind]);
+        const color = parseStatusColor(colors[kind]);
         if (color !== null) {
             resolved[kind] = color.rgb().string();
         }
