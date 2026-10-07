@@ -127,8 +127,12 @@
                         v-on:update:model-value="fitAssessment"
                     >
                         <template v-slot:activator="{ props: activator }">
+                            <!-- Named outright: the menu points the chip at its content with
+                                 aria-owns, so a name drawn from the chip's content took in the
+                                 whole assessment while it was open. -->
                             <v-chip
                                 v-bind="activator"
+                                v-bind:aria-label="assessmentLabel"
                                 size="small"
                                 class="overview-chip"
                                 role="button"
@@ -567,6 +571,14 @@ const parentActionLabel = computed<string>(() => isEdit.value ? 'Change Parent' 
 const assessmentScore = computed<string>(() => taskAssessment.value
     ? `${taskAssessment.value.quality_score.toFixed(1)}/10`
     : '–/10');
+
+const assessmentLabel = computed<string>(() => {
+    if (!taskAssessment.value) {
+        return 'Task assessment: loading';
+    }
+    const score = `Task assessment: ${taskAssessment.value.quality_score.toFixed(1)} out of 10`;
+    return assessmentLoading.value ? `${score}, updating` : score;
+});
 
 // The task this one sits under, for a new task's heading, worked out from the path so that a new
 // task has one before the listing holds it.

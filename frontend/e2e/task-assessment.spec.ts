@@ -30,13 +30,14 @@ test('shows the assessment from its score, open while suggestions go into the no
         },
     }));
     await page.goto(`/tasks-next/${TASK}/selected/status`);
-    const chip = page.getByRole('button', { name: 'Assessment: 6.0/10' });
+    const chip = page.getByRole('button', { name: 'Task assessment: 6.0 out of 10' });
     await expect(chip).toBeVisible();
     await expect(page.getByText('Say which report.')).toHaveCount(0);
 
     await chip.click();
     const assessment = page.locator('.assessment');
     await expect(assessment.getByText('Say which report.')).toBeVisible();
+    await expect(chip).toHaveAccessibleName('Task assessment: 6.0 out of 10');
     await expect(assessment.getByText('Name its audience.')).toBeVisible();
     await assessment.getByRole('button', { name: 'Add to note' }).click();
     await expect(page.locator('.cm-content')).toHaveText('## Scope');
@@ -58,7 +59,7 @@ test('keeps a long assessment beside its chip as the window shrinks', async ({ c
         },
     }));
     await page.goto(`/tasks-next/${TASK}/selected/status`);
-    const chip = page.getByRole('button', { name: 'Assessment: 6.0/10' });
+    const chip = page.getByRole('button', { name: 'Task assessment: 6.0 out of 10' });
     await chip.click();
     const card = page.locator('.assessment');
     await expect(card.getByText('Suggestion 1,')).toBeVisible();
