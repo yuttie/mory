@@ -39,9 +39,15 @@ test('shows the assessment from its score, open while suggestions go into the no
     await expect(assessment.getByText('Say which report.')).toBeVisible();
     await expect(chip).toHaveAccessibleName('Task assessment: 6.0 out of 10');
     await expect(assessment.getByText('Name its audience.')).toBeVisible();
-    await assessment.getByRole('button', { name: 'Add to note' }).click();
+    await assessment.getByRole('button', { name: 'Add to note: ## Scope' }).click();
     await expect(page.locator('.cm-content')).toHaveText('## Scope');
     await expect(chip).toHaveAttribute('aria-expanded', 'true');
+    // The note lies behind the menu, so the button says the suggestion is in it, and adds it once.
+    const added = assessment.getByRole('button', { name: 'In the note: ## Scope' });
+    await expect(added).toHaveAttribute('aria-disabled', 'true');
+    // Forced, as Playwright will not press what says it is disabled: the press must change nothing.
+    await added.click({ force: true });
+    await expect(page.locator('.cm-content')).toHaveText('## Scope');
 });
 
 // Vuetify shifts a menu too tall for the room below its activator up over the activator. A long

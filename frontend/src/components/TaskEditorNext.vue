@@ -211,13 +211,19 @@
                                         >
                                             <div class="d-flex align-center">
                                                 <span class="text-caption flex-grow-1">{{ suggestion }}</span>
+                                                <!-- The note an added suggestion goes into lies
+                                                     behind the menu, or off a phone's screen, so
+                                                     the button says it was added, and is named by
+                                                     its suggestion among the others alike. -->
                                                 <v-icon-btn
-                                                    v-bind:icon="mdiPlus"
+                                                    v-bind:icon="inNote(suggestion) ? mdiCheck : mdiPlus"
+                                                    v-bind:aria-label="`${inNote(suggestion) ? 'In the note' : 'Add to note'}: ${suggestion}`"
+                                                    v-bind:aria-disabled="inNote(suggestion)"
+                                                    v-bind:title="inNote(suggestion) ? 'In the note' : 'Add to note'"
                                                     variant="text"
                                                     class="ml-1"
-                                                    v-on:click="addNoteContent(suggestion)"
-                                                    title="Add to note"
                                                     color="primary"
+                                                    v-on:click="addNoteContent(suggestion)"
                                                 ></v-icon-btn>
                                             </div>
                                         </div>
@@ -442,6 +448,7 @@ import type { VMenu } from 'vuetify/components';
 
 import {
     mdiCalendarOutline,
+    mdiCheck,
     mdiClose,
     mdiContentSave,
     mdiDelete,
@@ -965,7 +972,17 @@ function fitAssessment(): void {
     assessmentMaxHeight.value = Math.max(top, document.documentElement.clientHeight - bottom) - MENU_MARGIN;
 }
 
+// A suggestion goes into the note as it is, so finding it there is how its button knows it was
+// added, and knows again once it has been edited away.
+function inNote(suggestion: string): boolean {
+    return form.note.includes(suggestion);
+}
+
 function addNoteContent(suggestion: string) {
+    // The menu stays open after an addition, so a second press is likely, and would add it twice.
+    if (inNote(suggestion)) {
+        return;
+    }
     let currentNote = form.note;
     if (currentNote.trim() === '') {
         form.note = suggestion;
