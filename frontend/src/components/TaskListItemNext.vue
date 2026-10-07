@@ -8,11 +8,16 @@
         v-bind:class="{ 'text-disabled': !urgency.actionable }"
         v-bind:style="{ backgroundColor: ground }"
     >
-        <div
-            class="title-text"
-            v-bind:class="{ strikethrough: canceled }"
-        >
-            {{ value.title || 'Untitled' }}
+        <div class="title">
+            <span class="status-icon">
+                <v-icon v-bind:color="color">
+                    {{ icon }}
+                </v-icon>
+            </span>
+            <span
+                class="title-text"
+                v-bind:class="{ strikethrough: canceled }"
+            >{{ value.title || 'Untitled' }}</span>
         </div>
         <div
             v-if="ancestorTitles.length > 0"
@@ -64,7 +69,8 @@ import { useTasksStore } from '@/stores/tasks';
 import { URGENCY_LABEL } from '@/urgency';
 import { usePlansStore } from '@/stores/plans';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
-import { statusGround } from '@/status-color';
+import { statusColor, statusGround } from '@/status-color';
+import { statusIcon } from '@/status-icon';
 
 import TaskDateCues from '@/components/TaskDateCues.vue';
 
@@ -96,13 +102,24 @@ const tags = computed<string[]>(() => {
     return props.value.metadata?.tags ?? [];
 });
 
-// Tinted by the task's status, in the colour the task tree draws its icon in.
+const kind = computed(() => props.value.metadata?.task?.status?.kind);
+
+// The status as the task tree draws it: the same icon in the same colour, beside the title.
+const icon = computed<string>(() => {
+    return statusIcon(kind.value, store.childrenOf(props.value.uuid).length > 0);
+});
+
+const color = computed<string | undefined>(() => {
+    return statusColor(kind.value, taskSettings.resolvedStatusColors);
+});
+
+// Tinted by the task's status, in the colour of its icon.
 const ground = computed<string | undefined>(() => {
-    return statusGround(props.value.metadata?.task?.status?.kind, taskSettings.resolvedStatusColors);
+    return statusGround(kind.value, taskSettings.resolvedStatusColors);
 });
 
 const canceled = computed<boolean>(() => {
-    return props.value.metadata?.task?.status?.kind === 'canceled';
+    return kind.value === 'canceled';
 });
 </script>
 
@@ -116,9 +133,21 @@ const canceled = computed<boolean>(() => {
     font-size: 14px;
     word-break: break-all;
 }
+.title {
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+    font-size: 1.2em;
+}
+/* One line of the title tall, so the icon is centred on the first line however many the title
+   wraps onto. */
+.status-icon {
+    display: flex;
+    align-items: center;
+    height: 1lh;
+}
 .title-text {
     font-weight: bold;
-    font-size: 1.2em;
 }
 .tag {
     color: #888;
