@@ -12,10 +12,10 @@
             <v-icon v-if="item.metadata?.tag_group">
                 {{ mdiTag }}
             </v-icon>
-            <v-icon v-else-if="item.children" v-bind:color="getTaskColor(item)">
+            <v-icon v-else-if="item.children" v-bind:color="statusColor(item.metadata?.task?.status?.kind)">
                 {{ item.metadata?.task?.status?.kind === 'done' ? mdiFolderCheck : item.metadata?.task?.status?.kind === 'canceled' ? mdiFolderOff : mdiFolder }}
             </v-icon>
-            <v-icon v-else v-bind:color="getTaskColor(item)">
+            <v-icon v-else v-bind:color="statusColor(item.metadata?.task?.status?.kind)">
                 {{ item.metadata?.task?.status?.kind === 'done' ? mdiCheckboxMarkedOutline : item.metadata?.task?.status?.kind === 'canceled' ? mdiCheckboxBlankOffOutline : mdiCheckboxBlankOutline }}
             </v-icon>
         </template>
@@ -63,28 +63,7 @@ import { useTasksStore } from '@/stores/tasks';
 const tasks = useTasksStore();
 import type { UUID } from '@/api';
 import type { TaskTreeItem } from '@/task-forest';
-
-function getTaskColor(item: TaskTreeItem): string | undefined {
-    switch (item.metadata?.task?.status?.kind) {
-        // A paler To do: the same work, not yet committed to.
-        case "backlog":
-            return "blue-grey-lighten-2";
-        case "todo":
-            return "blue-grey";
-        case "in_progress":
-            return "blue";
-        case "waiting":
-            return "orange";
-        case "blocked":
-            return "red";
-        case "on_hold":
-            return "purple";
-        case "done":
-            return "green";
-        case "canceled":
-            return "grey";
-    }
-}
+import { statusColor } from '@/status-color';
 
 // Props
 defineProps<{
