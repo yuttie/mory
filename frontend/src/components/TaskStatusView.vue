@@ -249,8 +249,14 @@ $space: 8px;
     opacity: 0.4;
 }
 
-/* The drag styles of the tasks in the columns. How a task looks while it follows the pointer is the
-   task's own (see TaskListItemNext): Sortable draws that copy outside this view. */
+/* The drag styles of the tasks in the columns. */
+
+/* The copy that follows the pointer is Sortable's copy of the task's entry, drawn on the page's body
+   and carrying whatever the task held when the drag began -- the ripple of the press that picked it
+   up included, which nothing would ever fade there. */
+.sortable-drag :deep(.v-ripple__container) {
+    display: none;
+}
 
 /* iOS answers a long press on a link with its preview of the link, and fires no event that could be
    canceled first, as `onContextMenu` cancels Android's menu. */

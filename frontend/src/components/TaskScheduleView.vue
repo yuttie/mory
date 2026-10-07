@@ -432,6 +432,11 @@ onMounted(() => { void plans.loadAll().catch((failure) => { error.value = String
 .planning-view :deep(:is(.sortable-ghost, .vacated)) {
     visibility: hidden;
 }
+/* Sortable's copy that follows the pointer keeps the ripple of the press that picked it up, which
+   nothing would ever fade there. */
+.sortable-drag :deep(.v-ripple__container) {
+    display: none;
+}
 /* Keep an ordered day slot open, while marking the destination as in Status. */
 .dragging .day:not(.candidates):has(.sortable-ghost) {
     outline: 2px solid rgb(var(--v-theme-primary));
