@@ -127,7 +127,7 @@ test('orders day entries and moves an entry to another day', async ({ context, p
         { task: B, origin: 'planned' }, { task: A, origin: 'interruption', result: 'worked' },
     ]);
 
-    const tomorrow = planner.locator('.day').filter({ has: page.locator('.v-card-title', { hasText: '2026-10-05' }) });
+    const tomorrow = planner.locator('.day').filter({ has: page.locator('.task-group-title', { hasText: '2026-10-05' }) });
     await alpha.getByRole('link').click({ trial: true });
     const nextSource = await alpha.getByRole('link').boundingBox();
     const destination = await tomorrow.locator('.entries').boundingBox();

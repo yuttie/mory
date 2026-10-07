@@ -81,8 +81,9 @@ test('day entries share task context while effort controls remain independent of
     await report.getByRole('button', { name: 'Missed', exact: true }).click();
     await expect.poll(() => YAML.parse(repository.writes.at(-1)?.content ?? '{}')['2026-10-04']?.[1]?.result).toBe('missed');
     await expect(page).toHaveURL(/\/tasks-next\/_\/descendants\/schedule$/);
-    // Padding belongs to the row's real link, rather than only the title being clickable.
-    await report.click({ position: { x: 4, y: 4 } });
+    // The space below the controls belongs to the task's real link too, not only the task's card.
+    const { width, height } = (await report.boundingBox())!;
+    await report.click({ position: { x: width / 2, y: height - 2 } });
     await expect(page).toHaveURL(new RegExp(`/tasks-next/${B}/selected/schedule$`));
 });
 
@@ -94,8 +95,9 @@ test('unused day-entry space supports new tabs and keyboard navigation', async (
     });
     await page.goto('/tasks-next/_/descendants/schedule');
     const entry = page.locator('.day.today .planned-entry');
+    const { width, height } = (await entry.boundingBox())!;
     const opened = context.waitForEvent('page');
-    await entry.click({ position: { x: 4, y: 4 }, modifiers: ['ControlOrMeta'] });
+    await entry.click({ position: { x: width / 2, y: height - 2 }, modifiers: ['ControlOrMeta'] });
     const newTab = await opened;
     await expect(newTab).toHaveURL(new RegExp(`/tasks-next/${A}/selected/schedule$`));
     await expect(page).toHaveURL(/\/tasks-next\/_\/descendants\/schedule$/);
