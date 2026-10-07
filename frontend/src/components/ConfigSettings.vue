@@ -608,6 +608,7 @@ watch(noteTreeRowIncrement, (newNoteTreeRowIncrement: number) => {
     flex: 1;
     min-width: 0;
     overflow-y: auto;
+    padding: 8px;
 }
 
 @media (max-width: 599px) {
