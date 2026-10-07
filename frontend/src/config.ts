@@ -8,6 +8,9 @@ export const EDITOR_FONT_SIZE = 14;
 export const NOTE_TREE_INITIAL_ROWS = 10;
 export const NOTE_TREE_ROW_INCREMENT = 10;
 
+// A copy of the browser's settings, read only when asked, for another browser to start from.
+export const DEFAULT_CONFIG_PATH = '.mory/default_config.yaml';
+
 const values = new Map<string, Ref<unknown>>();
 
 export function loadConfigValue<T>(key: string, default_: T): T {

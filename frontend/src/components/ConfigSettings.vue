@@ -51,23 +51,10 @@
                 <h2 class="text-title-medium mb-4">
                     General
                 </h2>
-                <v-alert
-                    variant="tonal"
-                    type="info"
-                    class="mb-4"
-                >
-                    General, Editor, Markdown Rendering, and Navigation Drawer settings
-                    are saved automatically in this browser. Save them to the repository
-                    for other browsers to load.
-                </v-alert>
-                <div class="d-flex flex-wrap ga-2 mb-4">
-                    <v-btn v-on:click="loadDefault">
-                        Load from repository
-                    </v-btn>
-                    <v-btn v-on:click="saveAsDefault">
-                        Save to repository
-                    </v-btn>
-                </div>
+                <StoredInBrowser
+                    v-on:load="loadDefault"
+                    v-on:save="saveAsDefault"
+                />
                 <v-checkbox
                     v-model="currentLockScroll"
                     label="Lock Scroll by Default"
@@ -80,6 +67,10 @@
                 <h2 class="text-title-medium mb-4">
                     Editor
                 </h2>
+                <StoredInBrowser
+                    v-on:load="loadDefault"
+                    v-on:save="saveAsDefault"
+                />
                 <v-checkbox
                     v-model="currentUseSimpleEditor"
                     label="Use Simple Editor"
@@ -155,6 +146,10 @@
                 <h2 class="text-title-medium mb-4">
                     Markdown Rendering
                 </h2>
+                <StoredInBrowser
+                    v-on:load="loadDefault"
+                    v-on:save="saveAsDefault"
+                />
                 <v-select
                     v-model="currentHighlightjsTheme"
                     v-bind:items="highlightjsThemes"
@@ -170,6 +165,10 @@
                 <h2 class="text-title-medium mb-4">
                     Navigation Drawer
                 </h2>
+                <StoredInBrowser
+                    v-on:load="loadDefault"
+                    v-on:save="saveAsDefault"
+                />
                 <p class="text-body-2 text-medium-emphasis mb-4">
                     The note tree shows the most recently changed notes and directories.
                     Pressing &ldquo;Show older&rdquo; reveals the next batch.
@@ -238,9 +237,11 @@ import { ref, useId } from 'vue';
 
 import AiActionsSettings from '@/components/AiActionsSettings.vue';
 import CalendarsSettings from '@/components/CalendarsSettings.vue';
+import StoredInBrowser from '@/components/StoredInBrowser.vue';
 import TasksSettings from '@/components/TasksSettings.vue';
 import { useFilesStore } from '@/stores/files';
 import {
+    DEFAULT_CONFIG_PATH,
     NOTE_TREE_INITIAL_ROWS,
     NOTE_TREE_ROW_INCREMENT,
     EDITOR_FONT_SIZE,
@@ -560,7 +561,7 @@ function panelAttributes(value: string) {
 }
 
 async function loadDefault() {
-    const config = YAML.parse(await files.read('.mory/default_config.yaml'));
+    const config = YAML.parse(await files.read(DEFAULT_CONFIG_PATH));
     currentUseSimpleEditor.value = config.useSimpleEditor;
     currentLockScroll.value = config.lockScroll;
     currentEditorFontFamily.value = config.editorFontFamily;
@@ -592,7 +593,7 @@ function saveAsDefault() {
         noteTreeInitialRows: noteTreeInitialRows.value,
         noteTreeRowIncrement: noteTreeRowIncrement.value,
     };
-    files.write('.mory/default_config.yaml', YAML.stringify(config));
+    files.write(DEFAULT_CONFIG_PATH, YAML.stringify(config));
 }
 
 </script>

@@ -158,7 +158,7 @@ test('switches to the simple editor and back without losing the rich editor hist
     await expect(editor).toHaveText('Draft');
 });
 
-test('loads and saves browser defaults from General', async ({ context, page }) => {
+test('loads and saves browser defaults from every browser panel', async ({ context, page }) => {
     const defaults = {
         useSimpleEditor: false,
         lockScroll: true,
@@ -176,15 +176,25 @@ test('loads and saves browser defaults from General', async ({ context, page }) 
     const repository = await mockBackend(context, { '.mory/default_config.yaml': YAML.stringify(defaults) });
     await page.goto('/files');
     await openConfig(page);
-    await configDialog(page).getByRole('button', { name: 'Load from repository', exact: true }).click();
-    await expect(configDialog(page).getByLabel('Lock Scroll by Default')).toBeChecked();
+    for (const name of ['General', 'Editor', 'Markdown Rendering', 'Navigation Drawer']) {
+        await configDialog(page).getByRole('tab', { name, exact: true }).click();
+        const panel = configDialog(page).getByRole('tabpanel', { name, exact: true });
+        await expect(panel.getByText('copies every tab under This browser into .mory/default_config.yaml;')).toBeVisible();
+        await expect(panel.getByRole('button', { name: 'Load from repository', exact: true })).toBeVisible();
+        await expect(panel.getByRole('button', { name: 'Save to repository', exact: true })).toBeVisible();
+    }
+
+    await configDialog(page).getByRole('tab', { name: 'General', exact: true }).click();
+    const general = configDialog(page).getByRole('tabpanel', { name: 'General', exact: true });
+    await general.getByRole('button', { name: 'Load from repository', exact: true }).click();
+    await expect(general.getByLabel('Lock Scroll by Default')).toBeChecked();
     expect(repository.writes).toEqual([]);
 
     await configDialog(page).getByRole('tab', { name: 'Editor', exact: true }).click();
-    await expect(configDialog(page).getByRole('textbox', { name: 'Font Family' })).toHaveValue('monospace');
-    await configDialog(page).getByRole('textbox', { name: 'Font Family' }).fill('serif');
-    await configDialog(page).getByRole('tab', { name: 'General', exact: true }).click();
-    await configDialog(page).getByRole('button', { name: 'Save to repository', exact: true }).click();
+    const editor = configDialog(page).getByRole('tabpanel', { name: 'Editor', exact: true });
+    await expect(editor.getByRole('textbox', { name: 'Font Family' })).toHaveValue('monospace');
+    await editor.getByRole('textbox', { name: 'Font Family' }).fill('serif');
+    await editor.getByRole('button', { name: 'Save to repository', exact: true }).click();
     await expect.poll(() => repository.writes.length).toBe(1);
     expect(repository.writes[0].path).toBe('.mory/default_config.yaml');
     expect(YAML.parse(repository.writes[0].content)).toEqual({ ...defaults, editorFontFamily: 'serif' });
