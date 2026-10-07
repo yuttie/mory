@@ -12,25 +12,26 @@
                 v-for="group of SETTINGS_GROUPS"
                 v-bind:key="group.value"
             >
-                <!-- A tablist may own only tabs, so the heading is hidden and each tab is described
-                     by it instead. `disabled` is what makes the arrow keys step over it: the slide
-                     group moves focus to the next sibling without that attribute. -->
-                <div
-                    v-bind:id="`${tabsId}-group-${group.value}`"
-                    class="config-tab-group text-label-small text-medium-emphasis"
-                    aria-hidden="true"
-                    disabled
-                >
-                    {{ group.label }}
-                </div>
+                <!-- The heading is drawn above the group's first tab but lives inside it, because
+                     the slide group finds the selected tab to scroll into view by its index among
+                     the tabs, and walks siblings for the arrow keys: an element of its own between
+                     the tabs would put both off by one. A tablist may own only tabs anyway, so the
+                     heading is hidden and describes each tab of its group instead. -->
                 <v-tab
-                    v-for="tab of group.tabs"
+                    v-for="(tab, index) of group.tabs"
                     v-bind:id="`${tabsId}-tab-${tab.value}`"
                     v-bind:key="tab.value"
                     v-bind:value="tab.value"
+                    v-bind:class="{ 'config-tab-first': index === 0 }"
                     v-bind:aria-controls="`${tabsId}-panel-${tab.value}`"
                     v-bind:aria-describedby="`${tabsId}-group-${group.value}`"
                 >
+                    <span
+                        v-if="index === 0"
+                        v-bind:id="`${tabsId}-group-${group.value}`"
+                        class="config-tab-group text-label-small text-medium-emphasis"
+                        aria-hidden="true"
+                    >{{ group.label }}</span>
                     {{ tab.label }}
                 </v-tab>
             </template>
@@ -252,7 +253,7 @@ import YAML from 'yaml';
 // Composables
 const files = useFilesStore();
 
-// Grouped by where the settings are kept, which decides who else sees them.
+// Grouped by where the settings are kept, which decides which browsers see them.
 const SETTINGS_GROUPS = [
     {
         value: 'browser',
@@ -621,12 +622,25 @@ function saveAsDefault() {
     }
 }
 
-.config-tab-group {
-    padding: 8px 16px;
+// The heading is drawn in the margin above its tab, outside the tab's box, so that hovering or
+// selecting the tab does not shade it; the button clips its content unless told otherwise.
+.config-tab-first {
+    overflow: visible;
+    margin-top: 32px;
 
     &:not(:first-child) {
-        margin-top: 16px;
+        margin-top: 48px;
     }
+}
+
+.config-tab-group {
+    position: absolute;
+    right: 0;
+    bottom: 100%;
+    left: 0;
+    padding: 8px 16px;
+    // A press on the heading is not a press on the tab it belongs to.
+    pointer-events: none;
 }
 
 .config-panels {

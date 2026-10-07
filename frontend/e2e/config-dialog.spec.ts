@@ -25,7 +25,7 @@ for (const address of ['/files', '/calendar/week/2026/10/07', '/tasks-next/_/des
         await openConfig(page);
         await expect(page).toHaveURL(new RegExp(`${address}$`));
         expect(await page.title()).toBe(title);
-        await expect(configDialog(page).getByRole('tab', { selected: true })).toHaveText('General');
+        await expect(configDialog(page).getByRole('tab', { selected: true })).toHaveAccessibleName('General');
         await page.keyboard.press('Escape');
         await expect(configDialog(page)).toBeHidden();
         expect(await view!.evaluate((element) => element.isConnected)).toBe(true);
@@ -332,7 +332,7 @@ test('groups settings tabs by where they are stored without trapping the arrow k
     }
     await expect(configDialog(page).getByRole('tab')).toHaveCount(7);
 
-    // The headings sit between the tabs, so each key below would stop on one if it could.
+    // Each key below would stop at a heading drawn as an element of its own between the tabs.
     const general = configDialog(page).getByRole('tab', { name: 'General', exact: true });
     const navigation = configDialog(page).getByRole('tab', { name: 'Navigation Drawer', exact: true });
     const tasks = configDialog(page).getByRole('tab', { name: 'Tasks', exact: true });
@@ -348,6 +348,25 @@ test('groups settings tabs by where they are stored without trapping the arrow k
     await expect(aiActions).toBeFocused();
     await page.keyboard.press('ArrowDown');
     await expect(general).toBeFocused();
+});
+
+test('keeps the selected tab in view when the tab list scrolls', async ({ context, page }) => {
+    await page.setViewportSize({ width: 844, height: 390 });
+    await mockBackend(context, {});
+    await page.goto('/files');
+    await openConfig(page);
+    const tabList = configDialog(page).locator('.config-tabs .v-slide-group__container');
+    await expect.poll(() => tabList.evaluate((element) => element.scrollHeight - element.clientHeight)).toBeGreaterThan(0);
+    const aiActions = configDialog(page).getByRole('tab', { name: 'AI Actions', exact: true });
+    await aiActions.click();
+    await tabList.evaluate((element) => {
+        element.scrollTop = 0;
+    });
+    await expect(aiActions).not.toBeInViewport();
+    // A resize is one of the changes after which the slide group scrolls the selected tab back
+    // into view; it finds that tab by its index among the tabs.
+    await page.setViewportSize({ width: 844, height: 380 });
+    await expect(aiActions).toBeInViewport({ ratio: 0.9 });
 });
 
 test('names the file each repository settings panel is stored in', async ({ context, page }) => {
