@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue';
 import axios from 'axios';
 import YAML from 'yaml';
 import { readTaskSettings, type TaskSettings } from '@/urgency';
-import { readStatusColors, resolveStatusColors, writeStatusColors, type StatusColors } from '@/status-color';
+import { readStatusColors, resolveStatusColors, writeStatusColors, type StatusColorEdits, type StatusColors } from '@/status-color';
 import { useFilesStore } from '@/stores/files';
 
 export const TASK_SETTINGS_PATH = '.mory/tasks.yaml';
@@ -51,23 +51,41 @@ export const useTaskSettingsStore = defineStore('task-settings', () => {
     watch(() => files.commitId, () => {
         void load();
     }, { immediate: true });
-    /// Set the colours the statuses are drawn in, changing only the `status_colors:` lines of the
-    /// file. A status left out takes its default.
-    async function saveStatusColors(next: StatusColors): Promise<void> {
+    /// Make `edits` to the colours the statuses are drawn in, changing only their lines of the file.
+    ///
+    /// Made to the file as it is now, not as it was last read, so a colour set meanwhile -- by hand,
+    /// through MCP, on another machine -- survives; and the write is refused if the file changes
+    /// again before it lands, rather than putting back what that change replaced.
+    async function saveStatusColors(edits: StatusColorEdits): Promise<void> {
         let source = '';
+        let etag = 'absent';
         try {
-            source = await files.read(TASK_SETTINGS_PATH);
+            const version = await files.readVersion(TASK_SETTINGS_PATH);
+            if (typeof version.content !== 'string') {
+                throw new Error(`${TASK_SETTINGS_PATH} could not be read as text.`);
+            }
+            source = version.content;
+            etag = version.etag;
         }
         catch (error) {
             if (!isMissing(error)) {
                 throw error;
             }
         }
-        const edited = writeStatusColors(source, next);
+        const edited = writeStatusColors(source, edits);
         if (edited !== source) {
-            await files.write(TASK_SETTINGS_PATH, edited);
+            try {
+                await files.writeChecked(TASK_SETTINGS_PATH, edited, etag);
+            }
+            catch (error) {
+                if (axios.isAxiosError(error) && error.response?.status === 412) {
+                    void load();
+                    throw new Error(`${TASK_SETTINGS_PATH} changed while saving. It has been read again; save once more.`, { cause: error });
+                }
+                throw error;
+            }
         }
-        statusColors.value = next;
+        statusColors.value = readStatusColors(YAML.parse(edited)).colors;
     }
     return { settings, statusColors, resolvedStatusColors, problems, load, saveStatusColors };
 });

@@ -92,14 +92,23 @@ export function resolveStatusColors(colors: StatusColors): StatusColors {
     return resolved;
 }
 
-/// `.mory/tasks.yaml` with its `status_colors:` replaced by `colors`, every other byte left alone:
-/// the file is written by hand, comments and all, and nothing else in it is this view's to change.
-/// The block goes where the old one was, or at the end; with no colours left, it goes altogether.
+// A change to the colours: a colour to set, or `null` for the default again. A status left out is
+// left as the file has it.
+export type StatusColorEdits = Partial<Record<StatusKind, string | null>>;
+
+/// `.mory/tasks.yaml` with `edits` made to its `status_colors:`, every other byte left alone: the
+/// file is written by hand, comments and all, and only the entries edited are this view's to
+/// change. An entry is changed where it is, keeping a comment after it; a new one goes after the
+/// last, or into a new block after the other settings; with no entries left, the block goes, with
+/// whatever comments it held.
 ///
 /// Throws, writing nothing, on a file this cannot read or edit, or when the result would mean
-/// anything other than the original with these colours.
-export function writeStatusColors(source: string, colors: StatusColors): string {
-    const doc = YAML.parseDocument(source);
+/// anything other than the original with these edits.
+export function writeStatusColors(source: string, edits: StatusColorEdits): string {
+    // A byte-order mark is no part of the YAML, and goes back where it was.
+    const bom = source.startsWith('﻿') ? '﻿' : '';
+    const text = source.slice(bom.length);
+    const doc = YAML.parseDocument(text);
     if (doc.errors.length > 0) {
         throw new Error(`It is not valid YAML: ${doc.errors[0].message}`);
     }
@@ -107,70 +116,165 @@ export function writeStatusColors(source: string, colors: StatusColors): string 
     if (root !== null && !(YAML.isMap(root) && !root.flow)) {
         throw new Error('It must be a block mapping.');
     }
-    const before = (doc.toJS() ?? {}) as Record<string, unknown>;
+    const before = valueOf(doc);
+    if (before === undefined) {
+        throw new Error('It could not be read.');
+    }
     if ('tasks' in before) {
         throw new Error('It still holds legacy task data; move that to tasks-v1.yaml first.');
     }
-    // In the order the statuses are listed, whatever order they were set in.
-    const entries = STATUS_KINDS.flatMap((kind) => colors[kind] === undefined ? [] : [[kind, colors[kind]]]);
-    const expected = { ...before };
-    delete expected.status_colors;
-    if (entries.length > 0) {
-        expected.status_colors = Object.fromEntries(entries);
-    }
-
-    const eol = lineEnding(source);
-    const pairs = YAML.isMap(root) ? root.items : [];
-    const pair = pairs.find((item) => hasKey(item, 'status_colors'));
-    const block = entries.length === 0
-        ? ''
-        : 'status_colors:' + eol + indentBlock(YAML.stringify(Object.fromEntries(entries), { lineWidth: 0 }), indentStep(source, pairs), eol);
-
-    let edited: string;
-    if (pair?.key.range === undefined || pair.key.range === null) {
-        if (block === '') {
-            return source;
-        }
-        const body = source.trimEnd();
-        edited = (body === '' ? '' : body + eol) + block + eol;
-    }
-    else {
-        const from = pair.key.range[0];
-        const value = YAML.isNode(pair.value) ? pair.value : null;
-        // A block mapping's range runs on through the line break after it; a flow one's does not.
-        let to = value?.range ? value.range[1] : pair.key.range[1];
-        while (to > from && /\s/.test(source[to - 1])) {
-            to -= 1;
-        }
-        if (block === '') {
-            // The whole lines it took, so no blank line is left where it was.
-            const lineStart = source.lastIndexOf('\n', from - 1) + 1;
-            const lineEnd = source.indexOf('\n', to);
-            edited = splice(source, lineStart, lineEnd === -1 ? source.length : lineEnd + 1, '');
+    const old = before.status_colors;
+    const colors: Record<string, unknown> = isMapping(old) ? { ...old } : {};
+    const kinds = STATUS_KINDS.filter((kind) => edits[kind] !== undefined);
+    for (const kind of kinds) {
+        if (edits[kind] === null) {
+            delete colors[kind];
         }
         else {
-            edited = splice(source, from, to, block);
+            colors[kind] = edits[kind];
         }
     }
-    if (!means(edited, expected)) {
-        throw new Error('Saving the colours would change other settings in it.');
+    const expected = { ...before };
+    delete expected.status_colors;
+    if (Object.keys(colors).length > 0) {
+        expected.status_colors = colors;
     }
-    return edited;
+    if (sameValue(before, expected)) {
+        return source;
+    }
+
+    const eol = lineEnding(text);
+    const pairs = YAML.isMap(root) ? root.items : [];
+    const pair = pairs.find((item) => hasKey(item, 'status_colors'));
+    const block = pair?.value;
+    let edited: string;
+    if (pair === undefined) {
+        edited = insertBlock(text, YAML.isMap(root) ? root : null, colors, eol);
+    }
+    else if (YAML.isMap(block) && !block.flow && Object.keys(colors).length > 0 && block.items.every((item) => YAML.isScalar(item.key) && item.key.range)) {
+        edited = editEntries(text, block, kinds.map((kind) => [kind, edits[kind] as string | null]), eol);
+    }
+    else {
+        edited = replacePair(text, pair, colors, indentStep(text, pairs), eol);
+    }
+    if (!sameValue(valueOf(YAML.parseDocument(edited)), expected)) {
+        throw new Error('It is written in a way this cannot edit in place; change status_colors: in it by hand.');
+    }
+    return bom + edited;
 }
 
-// Whether `text` is valid YAML meaning `expected`. A document with nothing in it, or only comments,
-// is an empty mapping, as the readers take it: a file left with no settings is what removing the
-// last colours from a file of nothing else should give.
-function means(text: string, expected: Record<string, unknown>): boolean {
-    const result = YAML.parseDocument(text);
-    return result.errors.length === 0 && sameValue(result.toJS() ?? {}, expected);
+// Each edit made to the entry it is about: changed on its own line, its line removed, or a line
+// added after the last entry, at the entries' indentation.
+function editEntries(text: string, block: YAML.YAMLMap, edits: [StatusKind, string | null][], eol: string): string {
+    const items = block.items as YAML.Pair<YAML.Scalar, unknown>[];
+    const column = columnOf(text, items[0].key.range![0]);
+    const splices: { from: number; to: number; text: string }[] = [];
+    const added: string[] = [];
+    for (const [kind, color] of edits) {
+        const item = items.find((candidate) => hasKey(candidate, kind));
+        if (item === undefined) {
+            if (color !== null) {
+                added.push(' '.repeat(column) + entry(kind, color));
+            }
+        }
+        else if (color === null) {
+            splices.push({ ...wholeLines(text, item.key.range![0], endOf(text, item)), text: '' });
+        }
+        else {
+            // From the key, so an entry with no value, or one that is no colour, is written afresh.
+            splices.push({ from: item.key.range![0], to: endOf(text, item), text: entry(kind, color) });
+        }
+    }
+    if (added.length > 0) {
+        const lineEnd = text.indexOf('\n', endOf(text, items[items.length - 1]));
+        splices.push(lineEnd === -1
+            ? { from: text.length, to: text.length, text: added.map((line) => eol + line).join('') }
+            : { from: lineEnd + 1, to: lineEnd + 1, text: added.map((line) => line + eol).join('') });
+    }
+    // From the end, so each splice leaves the offsets of those before it where they were.
+    return splices
+        .sort((a, b) => b.from - a.from)
+        .reduce((result, edit) => splice(result, edit.from, edit.to, edit.text), text);
+}
+
+// The pair written afresh in block style, or, with no colours left, removed: the lines it took,
+// its own comments with them, so neither an empty key nor a stray comment is left behind.
+function replacePair(text: string, pair: YAML.Pair<YAML.Scalar, unknown>, colors: Record<string, unknown>, step: number, eol: string): string {
+    const from = pair.key.range![0];
+    const value = YAML.isNode(pair.value) && pair.value.range ? pair.value.range : null;
+    if (Object.keys(colors).length === 0) {
+        const lines = wholeLines(text, from, trimmedEnd(text, from, value ? value[2] : pair.key.range![1]));
+        return splice(text, lines.from, lines.to, '');
+    }
+    const column = columnOf(text, from);
+    const written = 'status_colors:' + eol + indentBlock(YAML.stringify(colors, { lineWidth: 0 }), column + step, eol);
+    return splice(text, from, trimmedEnd(text, from, value ? value[1] : pair.key.range![1]), written);
+}
+
+// A new block, after the other settings and before anything that follows them -- a comment at the
+// end, or the `...` that ends the document -- at the settings' own indentation.
+function insertBlock(text: string, root: YAML.YAMLMap | null, colors: Record<string, unknown>, eol: string): string {
+    const pairs = root === null ? [] : root.items;
+    const first = pairs[0]?.key;
+    const column = YAML.isScalar(first) && first.range ? columnOf(text, first.range[0]) : 0;
+    const written = ' '.repeat(column) + 'status_colors:' + eol
+        + indentBlock(YAML.stringify(colors, { lineWidth: 0 }), column + indentStep(text, pairs), eol) + eol;
+    const at = root?.range ? root.range[1] : text.length;
+    const atLineStart = at === 0 || text[at - 1] === '\n';
+    return splice(text, at, at, (atLineStart ? '' : eol) + written);
+}
+
+// `kind: colour`, the colour quoted where YAML needs it to be, as `"#ff0000"` does.
+function entry(kind: StatusKind, color: string): string {
+    return `${kind}: ${YAML.stringify(color, { lineWidth: 0 }).trimEnd()}`;
+}
+
+// Where an entry's value ends, before any comment or line break after it.
+function endOf(text: string, item: YAML.Pair<YAML.Scalar, unknown>): number {
+    const value = YAML.isNode(item.value) && item.value.range ? item.value.range[1] : item.key.range![1];
+    return trimmedEnd(text, item.key.range![0], value);
+}
+
+// `to`, moved back over the whitespace before it: a block's range runs on through the line break
+// after it, a flow one's does not.
+function trimmedEnd(text: string, from: number, to: number): number {
+    let end = to;
+    while (end > from && /\s/.test(text[end - 1])) {
+        end -= 1;
+    }
+    return end;
+}
+
+// The whole lines from `from` to `to`, line break included.
+function wholeLines(text: string, from: number, to: number): { from: number; to: number } {
+    const lineEnd = text.indexOf('\n', to);
+    return { from: text.lastIndexOf('\n', from - 1) + 1, to: lineEnd === -1 ? text.length : lineEnd + 1 };
+}
+
+// The document as values, a document with nothing in it, or only comments, being an empty mapping
+// as the readers take it; `undefined` if it cannot be read as values at all, as an alias with
+// nothing to refer to cannot.
+function valueOf(doc: YAML.Document.Parsed): Record<string, unknown> | undefined {
+    if (doc.errors.length > 0) {
+        return undefined;
+    }
+    try {
+        return (doc.toJS() ?? {}) as Record<string, unknown>;
+    }
+    catch {
+        return undefined;
+    }
+}
+
+function isMapping(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 // The author's indentation step, from the first block mapping they nested, or the app's own.
-function indentStep(source: string, pairs: YAML.Pair<unknown, unknown>[]): number {
+function indentStep(text: string, pairs: YAML.Pair<unknown, unknown>[]): number {
     for (const pair of pairs) {
         if (YAML.isScalar(pair.key) && pair.key.range && YAML.isMap(pair.value) && !pair.value.flow && pair.value.range) {
-            return columnOf(source, pair.value.range[0]) - columnOf(source, pair.key.range[0]);
+            return columnOf(text, pair.value.range[0]) - columnOf(text, pair.key.range[0]);
         }
     }
     return 4;

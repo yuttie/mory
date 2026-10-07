@@ -77,39 +77,60 @@ describe('resolveStatusColors', () => {
 });
 
 describe('writeStatusColors', () => {
-    it('adds the block at the end, leaving the rest of the file as it was', () => {
+    it('adds a block after the other settings, leaving them as they were', () => {
         const source = '# Lead times\ndefault_lead_time: 7d   # a week\nlead_time_by_tag:\n  work: 2w\n';
-        expect(writeStatusColors(source, { todo: 'blue', done: '#00ff00' }))
-            .toBe(source + "status_colors:\n  todo: blue\n  done: \"#00ff00\"\n");
-    });
-
-    it('writes the statuses in the order they are listed', () => {
+        expect(writeStatusColors(source, { done: '#00ff00', todo: 'blue' }))
+            .toBe(source + 'status_colors:\n  todo: blue\n  done: "#00ff00"\n');
         expect(writeStatusColors('', { canceled: 'grey', backlog: 'blue' })).toBe('status_colors:\n    backlog: blue\n    canceled: grey\n');
     });
 
-    it('replaces the block where it was, in whatever style it was written', () => {
-        const block = 'default_lead_time: 7d\nstatus_colors:\n    done: green # mine\n    todo: blue\n# Tags\nlead_time_by_tag:\n    work: 2w\n';
-        expect(writeStatusColors(block, { done: 'red' }))
-            .toBe('default_lead_time: 7d\nstatus_colors:\n    done: red\n# Tags\nlead_time_by_tag:\n    work: 2w\n');
-        expect(writeStatusColors('status_colors: {done: green}\ndefault_lead_time: 7d\n', { done: 'red' }))
-            .toBe('status_colors:\n    done: red\ndefault_lead_time: 7d\n');
-        expect(writeStatusColors('status_colors:\ndefault_lead_time: 7d\n', { done: 'red' }))
-            .toBe('status_colors:\n    done: red\ndefault_lead_time: 7d\n');
+    it('adds the block before what follows the settings, rather than after it', () => {
+        expect(writeStatusColors('a: 1\n\n# The end\n', { done: 'red' })).toBe('a: 1\nstatus_colors:\n    done: red\n\n# The end\n');
+        expect(writeStatusColors('a: 1\n...\n', { done: 'red' })).toBe('a: 1\nstatus_colors:\n    done: red\n...\n');
+        expect(writeStatusColors('a: 1', { done: 'red' })).toBe('a: 1\nstatus_colors:\n    done: red\n');
+        expect(writeStatusColors('# Only this\n', { done: 'red' })).toBe('# Only this\nstatus_colors:\n    done: red\n');
+        expect(writeStatusColors('  a: 1\n', { done: 'red' })).toBe('  a: 1\n  status_colors:\n      done: red\n');
     });
 
-    it('removes the block when every status takes its default', () => {
-        expect(writeStatusColors('a: 1\nstatus_colors:\n  done: green\nb: 2\n', {})).toBe('a: 1\nb: 2\n');
-        expect(writeStatusColors('a: 1\nstatus_colors: {done: green}\n', {})).toBe('a: 1\n');
-        expect(writeStatusColors('a: 1\n', {})).toBe('a: 1\n');
+    it('changes only the entries edited, keeping every comment in the block', () => {
+        const source = 'a: 1\nstatus_colors: # mine\n    # Brand colours\n    todo: blue   # do not change\n    done: green # for now\n    # More later\nb: 2\n';
+        expect(writeStatusColors(source, { done: '#ff0000' }))
+            .toBe('a: 1\nstatus_colors: # mine\n    # Brand colours\n    todo: blue   # do not change\n    done: "#ff0000" # for now\n    # More later\nb: 2\n');
+        expect(writeStatusColors(source, { waiting: 'amber', backlog: 'grey' }))
+            .toBe('a: 1\nstatus_colors: # mine\n    # Brand colours\n    todo: blue   # do not change\n    done: green # for now\n    backlog: grey\n    waiting: amber\n    # More later\nb: 2\n');
+        expect(writeStatusColors(source, { todo: null }))
+            .toBe('a: 1\nstatus_colors: # mine\n    # Brand colours\n    done: green # for now\n    # More later\nb: 2\n');
     });
 
-    it('leaves a file of nothing but the block empty when every status takes its default', () => {
-        expect(writeStatusColors('status_colors:\n    done: red\n', {})).toBe('');
-        expect(writeStatusColors('# Colours\nstatus_colors:\n    done: red\n', {})).toBe('# Colours\n');
+    it('leaves the entries not edited as the file has them, even ones it cannot use', () => {
+        expect(writeStatusColors('status_colors:\n    started: red\n    blocked: nope\n', { done: 'green' }))
+            .toBe('status_colors:\n    started: red\n    blocked: nope\n    done: green\n');
+        expect(writeStatusColors('status_colors:\n    done:\n    todo: blue\n', { done: 'red' })).toBe('status_colors:\n    done: red\n    todo: blue\n');
     });
 
-    it('keeps the line endings the file has', () => {
+    it('writes a block it cannot edit entry by entry afresh', () => {
+        expect(writeStatusColors('status_colors: {done: green, todo: blue}\nb: 1\n', { done: 'red' }))
+            .toBe('status_colors:\n    done: red\n    todo: blue\nb: 1\n');
+        expect(writeStatusColors('status_colors:\nb: 1\n', { done: 'red' })).toBe('status_colors:\n    done: red\nb: 1\n');
+    });
+
+    it('removes the block, its comments with it, when every status takes its default', () => {
+        expect(writeStatusColors('a: 1\nstatus_colors: # mine\n    done: green\n    # More later\nb: 2\n', { done: null })).toBe('a: 1\nb: 2\n');
+        expect(writeStatusColors('a: 1\nstatus_colors: {done: green}\n', { done: null })).toBe('a: 1\n');
+        expect(writeStatusColors('status_colors:\n    done: red\n', { done: null })).toBe('');
+        expect(writeStatusColors('# Colours\nstatus_colors:\n    done: red\n', { done: null })).toBe('# Colours\n');
+    });
+
+    it('returns the file as it is when nothing changes', () => {
+        const source = 'a: 1   \n\n\nstatus_colors:\n    done: red\n\n';
+        expect(writeStatusColors(source, {})).toBe(source);
+        expect(writeStatusColors(source, { done: 'red', todo: null })).toBe(source);
+    });
+
+    it('keeps the line endings and the byte-order mark the file has', () => {
         expect(writeStatusColors('a: 1\r\n', { done: 'red' })).toBe('a: 1\r\nstatus_colors:\r\n    done: red\r\n');
+        expect(writeStatusColors('﻿status_colors:\n    done: red\nb: 2\n', { done: null })).toBe('﻿b: 2\n');
+        expect(writeStatusColors('﻿a:\n    b: 1\n', { done: 'red' })).toBe('﻿a:\n    b: 1\nstatus_colors:\n    done: red\n');
     });
 
     it('refuses a file it cannot edit, writing nothing', () => {
@@ -117,5 +138,6 @@ describe('writeStatusColors', () => {
         expect(() => writeStatusColors('- a\n', { done: 'red' })).toThrow('block mapping');
         expect(() => writeStatusColors('{a: 1}\n', { done: 'red' })).toThrow('block mapping');
         expect(() => writeStatusColors('tasks:\n  backlog: []\n', { done: 'red' })).toThrow('legacy task data');
+        expect(() => writeStatusColors('status_colors: &mine {done: green}\nother: *mine\n', { done: 'red' })).toThrow('by hand');
     });
 });

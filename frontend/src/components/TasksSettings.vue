@@ -56,7 +56,7 @@ import { computed, reactive, ref, watch } from 'vue';
 
 import ColorField from '@/components/ColorField.vue';
 import { parseEventColor } from '@/event-color';
-import { DEFAULT_STATUS_COLOR, type StatusColors } from '@/status-color';
+import { DEFAULT_STATUS_COLOR, type StatusColorEdits, type StatusColors } from '@/status-color';
 import { TASK_SETTINGS_PATH, useTaskSettingsStore } from '@/stores/taskSettings';
 import { STATUS_KINDS, STATUS_LABEL, type StatusKind } from '@/task';
 
@@ -92,10 +92,16 @@ watch(() => taskSettings.statusColors, (colors) => {
 
 // Methods
 async function save() {
-    const next: StatusColors = {};
+    // Only the fields edited, so a colour set in the file meanwhile is not put back to what this
+    // page last read.
+    const edits: StatusColorEdits = {};
     for (const kind of STATUS_KINDS) {
         const value = draft[kind].trim();
+        if (value === (base[kind] ?? '')) {
+            continue;
+        }
         if (value === '') {
+            edits[kind] = null;
             continue;
         }
         // Read as the views read it, so a typo is refused here rather than saved and then drawn
@@ -104,13 +110,13 @@ async function save() {
             error.value = `"${value}" is not a colour this can draw.`;
             return;
         }
-        next[kind] = value;
+        edits[kind] = value;
     }
 
     isSaving.value = true;
     error.value = '';
     try {
-        await taskSettings.saveStatusColors(next);
+        await taskSettings.saveStatusColors(edits);
     }
     catch (err) {
         error.value = `Could not save ${TASK_SETTINGS_PATH}: ${err}`;
