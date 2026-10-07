@@ -357,6 +357,21 @@ test('names the file each repository settings panel is stored in', async ({ cont
     }
 });
 
+test('moves Tab from a tab to its panel when the panel scrolls', async ({ context, page }) => {
+    await mockBackend(context, {});
+    await page.goto('/files');
+    await openConfig(page);
+    const tab = configDialog(page).getByRole('tab', { name: 'Calendars', exact: true });
+    await tab.click();
+    await expect.poll(() => configDialog(page).getByRole('tabpanel').count()).toBe(1);
+    const panels = configDialog(page).locator('.config-panels');
+    expect(await panels.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+    await tab.press('Tab');
+    await expect(configDialog(page).getByRole('tabpanel', { name: 'Calendars', exact: true })).toBeFocused();
+    await page.keyboard.press('PageDown');
+    await expect.poll(() => panels.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+});
+
 for (const width of [320, 340, 360, 390]) {
     test(`fits task colours and calendar fields within Config at ${width}px`, async ({ context, page }) => {
         await page.setViewportSize({ width, height: 844 });

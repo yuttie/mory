@@ -35,10 +35,14 @@
                 </v-tab>
             </template>
         </v-tabs>
+        <!-- Firefox puts a scrolling element in the tab order, so a panel taller than the
+             dialog made Tab from its tab stop on this scroller first. The panel itself is
+             focusable, and the keys that scroll it reach this element from there. -->
         <v-tabs-window
             v-model="selectedTab"
             v-bind:touch="false"
             class="config-panels"
+            tabindex="-1"
         >
             <v-tabs-window-item
                 value="general"
