@@ -53,15 +53,15 @@
                     class="mb-4"
                 >
                     General, Editor, Markdown Rendering, and Navigation Drawer settings
-                    are saved automatically in this browser. Save them as default to store
-                    them in the repository for other browsers to load.
+                    are saved automatically in this browser. Save them to the repository
+                    for other browsers to load.
                 </v-alert>
                 <div class="d-flex flex-wrap ga-2 mb-4">
                     <v-btn v-on:click="loadDefault">
-                        Load default
+                        Load from repository
                     </v-btn>
                     <v-btn v-on:click="saveAsDefault">
-                        Save as default
+                        Save to repository
                     </v-btn>
                 </div>
                 <v-checkbox

@@ -79,7 +79,7 @@ test('applies loaded editor preferences to the current draft', async ({ context,
     const editor = page.locator('.cm-content');
     await editor.fill('Draft');
     await openConfig(page);
-    await configDialog(page).getByRole('button', { name: 'Load default', exact: true }).click();
+    await configDialog(page).getByRole('button', { name: 'Load from repository', exact: true }).click();
     await configDialog(page).getByRole('button', { name: 'Close Config' }).click();
     await expect(page.locator('.cm-editor')).toHaveCSS('font-family', 'serif');
     await expect(page.locator('.cm-editor')).toHaveCSS('font-size', '24px');
@@ -176,7 +176,7 @@ test('loads and saves browser defaults from General', async ({ context, page }) 
     const repository = await mockBackend(context, { '.mory/default_config.yaml': YAML.stringify(defaults) });
     await page.goto('/files');
     await openConfig(page);
-    await configDialog(page).getByRole('button', { name: 'Load default', exact: true }).click();
+    await configDialog(page).getByRole('button', { name: 'Load from repository', exact: true }).click();
     await expect(configDialog(page).getByLabel('Lock Scroll by Default')).toBeChecked();
     expect(repository.writes).toEqual([]);
 
@@ -184,7 +184,7 @@ test('loads and saves browser defaults from General', async ({ context, page }) 
     await expect(configDialog(page).getByRole('textbox', { name: 'Font Family' })).toHaveValue('monospace');
     await configDialog(page).getByRole('textbox', { name: 'Font Family' }).fill('serif');
     await configDialog(page).getByRole('tab', { name: 'General', exact: true }).click();
-    await configDialog(page).getByRole('button', { name: 'Save as default', exact: true }).click();
+    await configDialog(page).getByRole('button', { name: 'Save to repository', exact: true }).click();
     await expect.poll(() => repository.writes.length).toBe(1);
     expect(repository.writes[0].path).toBe('.mory/default_config.yaml');
     expect(YAML.parse(repository.writes[0].content)).toEqual({ ...defaults, editorFontFamily: 'serif' });
