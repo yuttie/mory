@@ -74,13 +74,20 @@ const changed = computed(() => STATUS_KINDS.some(
     (kind) => draft[kind].trim() !== (taskSettings.statusColors[kind] ?? ''),
 ));
 
+// The colours the fields were last filled from.
+let base: StatusColors = {};
+
 // Watchers
-// The file is read after this component mounts, and again on every commit, so the fields follow
-// what it holds rather than what it held at setup.
+// The file is read after this component mounts, and again on every commit -- a save elsewhere on
+// this page included -- so the fields follow what it holds rather than what it held at setup. A
+// field the user has edited keeps the edit, or a reload would throw away what they typed.
 watch(() => taskSettings.statusColors, (colors) => {
     for (const kind of STATUS_KINDS) {
-        draft[kind] = colors[kind] ?? '';
+        if (draft[kind].trim() === (base[kind] ?? '')) {
+            draft[kind] = colors[kind] ?? '';
+        }
     }
+    base = colors;
 }, { immediate: true });
 
 // Methods

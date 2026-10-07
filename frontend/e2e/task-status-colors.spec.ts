@@ -30,3 +30,21 @@ test('sets a status colour in the Config view, writing only its own lines', asyn
     const card = page.locator('.status-view .task-list-item', { hasText: 'Shipped' });
     await expect(card).toHaveAttribute('style', /color-mix\(in srgb, rgb\(255, 0, 0\) 12%/);
 });
+
+test('keeps a colour being edited when the settings are read again', async ({ context, page }) => {
+    const repository = await mockBackend(context, { '.mory/tasks.yaml': SETTINGS });
+    await page.goto('/config');
+    const section = page.locator('.v-card', { hasText: 'Status colours' });
+    await section.getByLabel('Done', { exact: true }).fill('#ff0000');
+
+    // Any commit reads the settings again: here, saving the calendar's colours on the same page.
+    const calendars = page.locator('.v-card', { hasText: 'Task dates' });
+    await calendars.getByLabel('Due date colour').fill('#00ff00');
+    const reread = page.waitForResponse((response) => response.url().endsWith('/.mory/tasks.yaml'));
+    await calendars.getByRole('button', { name: 'Save colours' }).click();
+    await reread;
+    expect(repository.writes.map((write) => write.path)).toEqual(['.mory/calendars.yaml']);
+
+    await expect(section.getByLabel('Done', { exact: true })).toHaveValue('#ff0000');
+    await expect(section.getByRole('button', { name: 'Save colours' })).toBeEnabled();
+});
