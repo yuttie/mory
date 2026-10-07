@@ -116,7 +116,10 @@
                     </div>
                     <!-- The assessment is advice, read now and then rather than while writing, so it
                          waits behind its score instead of taking a pane beside the note. Its note
-                         suggestions are added from inside it, so a click there leaves it open. -->
+                         suggestions are added from inside it, so a click there leaves it open. It
+                         keeps Tab to itself: drawn outside the new-task dialog, it would otherwise
+                         lose Tab to the dialog's trap, which sent it back to the dialog's first
+                         button before it reached a suggestion. -->
                     <v-menu
                         v-if="(taskAssessment || assessmentLoading) && form.title.length >= 3"
                         ref="assessmentMenu"
@@ -124,6 +127,7 @@
                         v-bind:max-height="assessmentMaxHeight"
                         v-bind:viewport-margin="MENU_MARGIN"
                         location="bottom"
+                        retain-focus
                         v-on:update:model-value="fitAssessment"
                     >
                         <template v-slot:activator="{ props: activator }">

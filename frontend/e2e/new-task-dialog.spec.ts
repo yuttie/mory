@@ -128,3 +128,27 @@ test('creates the task under the parent chosen for it', async ({ context, page }
     await expect.poll(() => repository.writes.map((write) => write.path))
         .toEqual([expect.stringMatching(new RegExp(`^\\.tasks/${PROJECT}/[0-9a-f-]{36}\\.md$`))]);
 });
+
+// The assessment's menu is drawn outside the dialog, whose focus trap took Tab from the menu back
+// to the dialog's first button. The menu keeps its own, so its suggestions can be reached and
+// added from the keyboard.
+test('adds an assessment suggestion to the note from the keyboard', async ({ context, page }) => {
+    await mockBackend(context, NOTES);
+    await page.route(`${API_URL}v2/assess-task`, (route) => route.fulfill({
+        json: { quality_score: 6, feedback: '', suggestions: [], note_suggestions: ['## Scope'] },
+    }));
+    await page.goto('/note/projects/plan.md');
+    await openNewTask(page);
+    await title(page).fill('Write the review');
+    const chip = dialog(page).getByRole('button', { name: 'Task assessment: 6.0 out of 10' });
+    await chip.focus();
+    await page.keyboard.press('Enter');
+    const add = page.locator('.assessment').getByRole('button', { name: 'Add to note' });
+    await expect(add).toBeVisible();
+    for (let i = 0; i < 5 && !await add.evaluate((element) => element === document.activeElement); i++) {
+        await page.keyboard.press('Tab');
+    }
+    await expect(add).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(dialog(page).locator('.cm-content')).toHaveText('## Scope');
+});
