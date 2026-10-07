@@ -5,6 +5,9 @@
 // leaving the editor with an answer it cannot read. They may say what each part of the answer
 // should hold, but never its JSON.
 
+// The whole file is the prompt, so it reads and edits as one in any text editor.
+export const TASK_ASSESSMENT_PROMPT_PATH = '.mory/task-assessment.md';
+
 export const DEFAULT_TASK_ASSESSMENT_PROMPT = `Analyze the task and provide comprehensive assistance.
 
 Primary Focus: Evaluate the TASK AS A WHOLE and suggest improvements for overall clarity and completeness.
@@ -39,3 +42,10 @@ Important:
 - Consider the complete task context when making suggestions.
 - Be concise but thorough in your suggestions.`;
 
+/// The prompt a file holds, or `null` when it holds none and the default applies. Blank is not set,
+/// as an empty value is elsewhere in `.mory/`: no instructions at all would only ask the model to
+/// guess what to look for.
+export function readTaskAssessmentPrompt(content: string): string | null {
+    const prompt = content.trim();
+    return prompt === '' ? null : prompt;
+}
