@@ -474,14 +474,17 @@ function filterTreeNodes(nodes: TaskTreeItem[], hideCompleted: boolean): TaskTre
             // Check if this is a tag group node (virtual parent)
             if (isTagGroupId(node.uuid)) {
                 // For tag groups, filter children individually since they're virtual parents
-                let filteredChildren = node.children;
-                if (node.children && node.children.length > 0) {
-                    filteredChildren = node.children.filter((child: TaskTreeItem) => {
-                        const taskStatus = child.metadata?.task?.status?.kind;
-                        const shouldFilterOut =
-                            hideCompleted && (taskStatus === 'done' || taskStatus === 'canceled');
-                        return !shouldFilterOut;
-                    });
+                const filteredChildren = (node.children ?? []).filter((child: TaskTreeItem) => {
+                    const taskStatus = child.metadata?.task?.status?.kind;
+                    const shouldFilterOut =
+                        hideCompleted && (taskStatus === 'done' || taskStatus === 'canceled');
+                    return !shouldFilterOut;
+                });
+
+                // A group is only a heading for its members, so one whose members are all hidden
+                // has nothing to show.
+                if (filteredChildren.length === 0) {
+                    return null;
                 }
 
                 // Return the tag group with filtered children
