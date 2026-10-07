@@ -1159,7 +1159,9 @@ defineExpose({
     .note-suggestions {
         .note-suggestion-item {
             padding: 4px 0;
-            border-bottom: 1px solid #e0e0e0;
+            // The theme's, as the menu floats over the page in a dark theme too, where a fixed
+            // light grey drew bright rules.
+            border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
 
             &:last-child {
                 border-bottom: none;
