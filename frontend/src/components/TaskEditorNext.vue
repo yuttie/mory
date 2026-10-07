@@ -111,6 +111,108 @@
                             />
                         </div>
                     </div>
+                    <!-- The assessment is advice, read now and then rather than while writing, so it
+                         waits behind its score instead of taking a pane beside the note. Its note
+                         suggestions are added from inside it, so a click there leaves it open. -->
+                    <v-menu
+                        v-if="(taskAssessment || assessmentLoading) && form.title.length >= 3"
+                        ref="assessmentMenu"
+                        v-bind:close-on-content-click="false"
+                        v-bind:max-height="assessmentMaxHeight"
+                        location="bottom"
+                        v-on:update:model-value="onAssessmentToggle"
+                    >
+                        <template v-slot:activator="{ props: activator }">
+                            <v-chip
+                                v-bind="activator"
+                                size="small"
+                                class="overview-chip"
+                                role="button"
+                            >
+                                <v-icon
+                                    v-bind:icon="mdiLightbulbOnOutline"
+                                    start
+                                />
+                                <template v-if="assessmentLoading">
+                                    Assessing
+                                    <v-progress-circular
+                                        indeterminate
+                                        size="12"
+                                        width="2"
+                                        class="ml-1"
+                                    />
+                                </template>
+                                <template v-else-if="taskAssessment">
+                                    Assessment: {{ taskAssessment.quality_score.toFixed(1) }}/10
+                                </template>
+                            </v-chip>
+                        </template>
+                        <v-card
+                            max-width="360"
+                            class="assessment pa-3"
+                        >
+                            <v-card-subtitle class="pa-0 pb-2">
+                                <v-icon class="mr-1">{{ mdiLightbulbOnOutline }}</v-icon>
+                                Task Assessment
+                                <v-progress-circular
+                                    v-if="assessmentLoading"
+                                    indeterminate
+                                    size="16"
+                                    width="2"
+                                    class="ml-2"
+                                ></v-progress-circular>
+                            </v-card-subtitle>
+                            <div v-if="taskAssessment && !assessmentLoading">
+                                <div class="d-flex align-center mb-2">
+                                    <span class="text-caption mr-2">Quality Score:</span>
+                                    <v-rating
+                                        v-bind:model-value="taskAssessment.quality_score / 2"
+                                        readonly
+                                        length="5"
+                                        half-increments
+                                        color="amber"
+                                    ></v-rating>
+                                    <span class="text-caption ml-1">({{ taskAssessment.quality_score.toFixed(1) }}/10)</span>
+                                </div>
+                                <p class="text-caption mb-2" v-if="taskAssessment.feedback">
+                                    {{ taskAssessment.feedback }}
+                                </p>
+                                <div v-if="taskAssessment.suggestions.length > 0">
+                                    <p class="text-caption font-weight-bold mb-1">Suggestions:</p>
+                                    <ul class="text-caption">
+                                        <li v-for="(suggestion, index) in taskAssessment.suggestions" v-bind:key="index">
+                                            {{ suggestion }}
+                                        </li>
+                                    </ul>
+                                </div>
+                                <div v-if="taskAssessment.note_suggestions && taskAssessment.note_suggestions.length > 0" class="mt-3">
+                                    <p class="text-caption font-weight-bold mb-1">
+                                        Note Suggestions:
+                                        <span class="font-weight-normal">(click + to add to note)</span>
+                                    </p>
+                                    <div class="note-suggestions">
+                                        <div
+                                            v-for="(suggestion, index) in taskAssessment.note_suggestions"
+                                            v-bind:key="'note-' + index"
+                                            class="note-suggestion-item"
+                                        >
+                                            <div class="d-flex align-center">
+                                                <span class="text-caption flex-grow-1">{{ suggestion }}</span>
+                                                <v-icon-btn
+                                                    v-bind:icon="mdiPlus"
+                                                    variant="text"
+                                                    class="ml-1"
+                                                    v-on:click="addNoteContent(suggestion)"
+                                                    title="Add to note"
+                                                    color="primary"
+                                                ></v-icon-btn>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </v-card>
+                    </v-menu>
                 </div>
             </v-card-title>
             <v-alert
@@ -316,71 +418,6 @@
                         class="border"
                     />
                 </div>
-                <div v-if="(taskAssessment || assessmentLoading) && form.title.length >= 3" class="assessment-pane pl-3">
-                    <!-- Task Assessment -->
-                    <v-card variant="outlined" class="pa-3">
-                        <v-card-subtitle class="pa-0 pb-2">
-                            <v-icon class="mr-1">{{ mdiLightbulbOnOutline }}</v-icon>
-                            Task Assessment
-                            <v-progress-circular
-                                v-if="assessmentLoading"
-                                indeterminate
-                                size="16"
-                                width="2"
-                                class="ml-2"
-                            ></v-progress-circular>
-                        </v-card-subtitle>
-                        <div v-if="!assessmentLoading">
-                            <div class="d-flex align-center mb-2">
-                                <span class="text-caption mr-2">Quality Score:</span>
-                                <v-rating
-                                    v-bind:model-value="taskAssessment.quality_score / 2"
-                                    readonly
-                                    length="5"
-                                    half-increments
-                                    color="amber"
-                                ></v-rating>
-                                <span class="text-caption ml-1">({{ taskAssessment.quality_score.toFixed(1) }}/10)</span>
-                            </div>
-                            <p class="text-caption mb-2" v-if="taskAssessment.feedback">
-                                {{ taskAssessment.feedback }}
-                            </p>
-                            <div v-if="taskAssessment.suggestions.length > 0">
-                                <p class="text-caption font-weight-bold mb-1">Suggestions:</p>
-                                <ul class="text-caption">
-                                    <li v-for="(suggestion, index) in taskAssessment.suggestions" v-bind:key="index">
-                                        {{ suggestion }}
-                                    </li>
-                                </ul>
-                            </div>
-                            <div v-if="taskAssessment.note_suggestions && taskAssessment.note_suggestions.length > 0" class="mt-3">
-                                <p class="text-caption font-weight-bold mb-1">
-                                    Note Suggestions:
-                                    <span class="font-weight-normal">(click + to add to note)</span>
-                                </p>
-                                <div class="note-suggestions">
-                                    <div
-                                        v-for="(suggestion, index) in taskAssessment.note_suggestions"
-                                        v-bind:key="'note-' + index"
-                                        class="note-suggestion-item"
-                                    >
-                                        <div class="d-flex align-center">
-                                            <span class="text-caption flex-grow-1">{{ suggestion }}</span>
-                                            <v-icon-btn
-                                                v-bind:icon="mdiPlus"
-                                                variant="text"
-                                                class="ml-1"
-                                                v-on:click="addNoteContent(suggestion)"
-                                                title="Add to note"
-                                                color="primary"
-                                            ></v-icon-btn>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </v-card>
-                </div>
             </v-card-text>
         </v-form>
     </v-card>
@@ -388,6 +425,7 @@
 
 <script lang="ts" setup>
 import { ref, reactive, computed, watch, toRef, onMounted, onUnmounted } from 'vue';
+import type { VMenu } from 'vuetify/components';
 
 import {
     mdiCalendarOutline,
@@ -508,6 +546,11 @@ const lockScroll = useConfigValue('lock-scroll', false);
 const taskAssessment = ref<TaskAssessmentResponse | null>(null);
 const assessmentLoading = ref(false);
 let assessmentTimeout: number | null = null;
+// Vuetify shifts a menu taller than the room below its activator up over the activator rather than
+// shortening it, so a long assessment hid the chip that opened it. Capped at the larger room beside
+// the chip, it scrolls below the chip, or above it where there is more room and the menu flips.
+const assessmentMenu = ref<InstanceType<typeof VMenu> | null>(null);
+const assessmentMaxHeight = ref<number>();
 
 // Template refs
 const formRef = ref<any>(null);
@@ -872,6 +915,17 @@ function onTitleInput() {
     }, 1000);
 }
 
+function onAssessmentToggle(open: boolean): void {
+    // The menu's own, since the activator's props carry the ref Vuetify finds the chip by.
+    const chip = assessmentMenu.value?.activatorEl;
+    if (!open || !chip) {
+        return;
+    }
+    const { top, bottom } = chip.getBoundingClientRect();
+    // Less the 12 px Vuetify keeps clear of each edge of the window.
+    assessmentMaxHeight.value = Math.max(top, document.documentElement.clientHeight - bottom) - 12;
+}
+
 function addNoteContent(suggestion: string) {
     let currentNote = form.note;
     if (currentNote.trim() === '') {
@@ -962,8 +1016,7 @@ defineExpose({
 // every element inherit its box-sizing, though, so each field inside would take content-box too and
 // grow its padding outside its 40px minimum: a compact field came out 56px tall. Restore it on the
 // children, which is where the inheritance starts again.
-.props-pane,
-.assessment-pane {
+.props-pane {
     box-sizing: content-box;
 
     > * {
@@ -1016,14 +1069,7 @@ defineExpose({
     padding-inline-start: 0.1em;
 }
 
-.assessment-pane {
-    max-width: 300px;
-    overflow-y: auto;
-
-    .v-card {
-        border-left: 3px solid #1976d2;
-    }
-
+.assessment {
     .text-caption {
         line-height: 1.4;
     }
