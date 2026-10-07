@@ -12,11 +12,8 @@
             <v-icon v-if="item.metadata?.tag_group">
                 {{ mdiTag }}
             </v-icon>
-            <v-icon v-else-if="item.children" v-bind:color="statusColor(item.metadata?.task?.status?.kind, taskSettings.resolvedStatusColors)">
-                {{ item.metadata?.task?.status?.kind === 'done' ? mdiFolderCheck : item.metadata?.task?.status?.kind === 'canceled' ? mdiFolderOff : mdiFolder }}
-            </v-icon>
             <v-icon v-else v-bind:color="statusColor(item.metadata?.task?.status?.kind, taskSettings.resolvedStatusColors)">
-                {{ item.metadata?.task?.status?.kind === 'done' ? mdiCheckboxMarkedOutline : item.metadata?.task?.status?.kind === 'canceled' ? mdiCheckboxBlankOffOutline : mdiCheckboxBlankOutline }}
+                {{ statusIcon(item.metadata?.task?.status?.kind, item.children !== undefined) }}
             </v-icon>
         </template>
         <template v-slot:title="{ item }">
@@ -46,12 +43,6 @@
 
 <script lang="ts" setup>
 import {
-    mdiCheckboxBlankOffOutline,
-    mdiCheckboxBlankOutline,
-    mdiCheckboxMarkedOutline,
-    mdiFolder,
-    mdiFolderCheck,
-    mdiFolderOff,
     mdiPlus,
     mdiTag,
 } from '@mdi/js';
@@ -66,6 +57,7 @@ const taskSettings = useTaskSettingsStore();
 import type { UUID } from '@/api';
 import type { TaskTreeItem } from '@/task-forest';
 import { statusColor } from '@/status-color';
+import { statusIcon } from '@/status-icon';
 
 // Props
 defineProps<{
