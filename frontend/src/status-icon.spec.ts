@@ -52,9 +52,14 @@ describe('statusIcon', () => {
         expect(new Set(icons).size).toBe(STATUS_KINDS.length);
     });
 
+    it('draws a task whose note gives no status as Backlog, where the Status view files it', () => {
+        expect(statusIcon(undefined, false)).toBe(mdiHelpBoxOutline);
+        expect(statusIcon(null, true)).toBe(mdiFolderQuestion);
+    });
+
     it('draws a task whose status is not one as To do', () => {
-        expect(statusIcon(undefined, false)).toBe(mdiCheckboxBlankOutline);
         expect(statusIcon('started', true)).toBe(mdiFolder);
         expect(statusIcon('toString', false)).toBe(mdiCheckboxBlankOutline);
+        expect(statusIcon(3, false)).toBe(mdiCheckboxBlankOutline);
     });
 });

@@ -25,15 +25,17 @@ export const DEFAULT_STATUS_COLOR: Record<StatusKind, string> = {
 // resolved for drawing. A status left out takes its default.
 export type StatusColors = Partial<Record<StatusKind, string>>;
 
-/// The colour of a status, or `undefined` when `kind` is none.
+/// The colour of a status, or `undefined` when `kind` is none. A task whose note gives no kind is in
+/// the backlog, as the Status view files it and the editor opens it, and is drawn so.
 ///
 /// Takes what the note said rather than a `StatusKind`: frontmatter is whatever the file holds, and
 /// a lookup by an unchecked key would find `toString` and the rest of an object's prototype.
 export function statusColor(kind: unknown, configured: StatusColors = {}): string | undefined {
-    if (!isStatusKind(kind)) {
+    const status = kind ?? 'backlog';
+    if (!isStatusKind(status)) {
         return undefined;
     }
-    return configured[kind] ?? DEFAULT_STATUS_COLOR[kind];
+    return configured[status] ?? DEFAULT_STATUS_COLOR[status];
 }
 
 /// A card's ground for a status: its colour, faint over the theme's surface, so that the text and

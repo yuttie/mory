@@ -38,11 +38,13 @@ const STATUS_ICON: Record<StatusKind, { task: string; parent: string }> = {
     canceled: { task: mdiCloseThick, parent: mdiFolderRemove },
 };
 
-/// The icon of a status, as a folder for a task with subtasks. A task whose status is not one is
+/// The icon of a status, as a folder for a task with subtasks. A task whose note gives no kind is in
+/// the backlog, as the Status view files it and the editor opens it; one whose kind is no status is
 /// drawn as To do, as one not yet finished.
 export function statusIcon(kind: unknown, hasSubtasks: boolean): string {
-    const icons = typeof kind === 'string' && Object.hasOwn(STATUS_ICON, kind)
-        ? STATUS_ICON[kind as StatusKind]
+    const status = kind ?? 'backlog';
+    const icons = typeof status === 'string' && Object.hasOwn(STATUS_ICON, status)
+        ? STATUS_ICON[status as StatusKind]
         : STATUS_ICON.todo;
     return hasSubtasks ? icons.parent : icons.task;
 }

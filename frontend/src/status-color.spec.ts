@@ -22,8 +22,13 @@ describe('statusColor', () => {
         expect(statusColor('todo', { done: 'rgb(1, 2, 3)' })).toBe('#607d8b');
     });
 
+    it('gives a task whose note gives no status the colour of Backlog, where the Status view files it', () => {
+        expect(statusColor(undefined)).toBe('#cfd8dc');
+        expect(statusColor(null, { backlog: 'rgb(1, 2, 3)' })).toBe('rgb(1, 2, 3)');
+    });
+
     it('gives nothing for what is not a status', () => {
-        for (const kind of [undefined, null, 3, '', 'started', 'toString', '__proto__']) {
+        for (const kind of [3, '', 'started', 'toString', '__proto__']) {
             expect(statusColor(kind, { done: 'rgb(1, 2, 3)' })).toBeUndefined();
         }
     });
