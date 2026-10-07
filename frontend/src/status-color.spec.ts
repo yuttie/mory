@@ -4,16 +4,16 @@ import { STATUS_KINDS } from '@/task';
 import { readStatusColors, resolveStatusColors, statusColor, statusGround, writeStatusColors } from '@/status-color';
 
 describe('statusColor', () => {
-    it('gives the palette colours the task tree has always drawn', () => {
+    it('gives each status its default colour from the palette', () => {
         expect(STATUS_KINDS.map((kind) => statusColor(kind))).toEqual([
-            '#90a4ae', // blue-grey-lighten-2
+            '#cfd8dc', // blue-grey-lighten-4
             '#607d8b', // blue-grey
             '#2196f3', // blue
-            '#ff9800', // orange
-            '#f44336', // red
-            '#9c27b0', // purple
+            '#ffc107', // amber
+            '#e91e63', // pink
+            '#3f51b5', // indigo
             '#4caf50', // green
-            '#9e9e9e', // grey
+            '#000000', // black
         ]);
     });
 

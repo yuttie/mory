@@ -11,14 +11,14 @@ import { STATUS_KINDS, type StatusKind } from '@/task';
 // What a status is drawn in where `.mory/tasks.yaml` sets nothing.
 export const DEFAULT_STATUS_COLOR: Record<StatusKind, string> = {
     // A paler To do: the same work, not yet committed to.
-    backlog: materialColors.blueGrey.lighten2,
+    backlog: materialColors.blueGrey.lighten4,
     todo: materialColors.blueGrey.base,
     in_progress: materialColors.blue.base,
-    waiting: materialColors.orange.base,
-    blocked: materialColors.red.base,
-    on_hold: materialColors.purple.base,
+    waiting: materialColors.amber.base,
+    blocked: materialColors.pink.base,
+    on_hold: materialColors.indigo.base,
     done: materialColors.green.base,
-    canceled: materialColors.grey.base,
+    canceled: materialColors.shades.black,
 };
 
 // Colours by status: as `.mory/tasks.yaml` writes them where read from the file, and as CSS where
