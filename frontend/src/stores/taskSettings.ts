@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue';
 import axios from 'axios';
 import YAML from 'yaml';
 import { readTaskSettings, type TaskSettings } from '@/urgency';
-import { readStatusColors, resolveStatusColors, type StatusColors } from '@/status-color';
+import { readStatusColors, resolveStatusColors, writeStatusColors, type StatusColors } from '@/status-color';
 import { useFilesStore } from '@/stores/files';
 
 export const TASK_SETTINGS_PATH = '.mory/tasks.yaml';
@@ -37,7 +37,7 @@ export const useTaskSettingsStore = defineStore('task-settings', () => {
                     catch (error) {
                         settings.value = {};
                         statusColors.value = {};
-                        problems.value = axios.isAxiosError(error) && error.response?.status === 404 ? [] : [String(error)];
+                        problems.value = isMissing(error) ? [] : [String(error)];
                     }
                 }
             }
@@ -51,5 +51,27 @@ export const useTaskSettingsStore = defineStore('task-settings', () => {
     watch(() => files.commitId, () => {
         void load();
     }, { immediate: true });
-    return { settings, statusColors, resolvedStatusColors, problems, load };
+    /// Set the colours the statuses are drawn in, changing only the `status_colors:` lines of the
+    /// file. A status left out takes its default.
+    async function saveStatusColors(next: StatusColors): Promise<void> {
+        let source = '';
+        try {
+            source = await files.read(TASK_SETTINGS_PATH);
+        }
+        catch (error) {
+            if (!isMissing(error)) {
+                throw error;
+            }
+        }
+        const edited = writeStatusColors(source, next);
+        if (edited !== source) {
+            await files.write(TASK_SETTINGS_PATH, edited);
+        }
+        statusColors.value = next;
+    }
+    return { settings, statusColors, resolvedStatusColors, problems, load, saveStatusColors };
 });
+
+function isMissing(error: unknown): boolean {
+    return axios.isAxiosError(error) && error.response?.status === 404;
+}

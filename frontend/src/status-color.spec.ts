@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { STATUS_KINDS } from '@/task';
-import { readStatusColors, resolveStatusColors, statusColor, statusGround } from '@/status-color';
+import { readStatusColors, resolveStatusColors, statusColor, statusGround, writeStatusColors } from '@/status-color';
 
 describe('statusColor', () => {
     it('gives the palette colours the task tree has always drawn', () => {
@@ -76,3 +76,41 @@ describe('resolveStatusColors', () => {
     });
 });
 
+describe('writeStatusColors', () => {
+    it('adds the block at the end, leaving the rest of the file as it was', () => {
+        const source = '# Lead times\ndefault_lead_time: 7d   # a week\nlead_time_by_tag:\n  work: 2w\n';
+        expect(writeStatusColors(source, { todo: 'blue', done: '#00ff00' }))
+            .toBe(source + "status_colors:\n  todo: blue\n  done: \"#00ff00\"\n");
+    });
+
+    it('writes the statuses in the order they are listed', () => {
+        expect(writeStatusColors('', { canceled: 'grey', backlog: 'blue' })).toBe('status_colors:\n    backlog: blue\n    canceled: grey\n');
+    });
+
+    it('replaces the block where it was, in whatever style it was written', () => {
+        const block = 'default_lead_time: 7d\nstatus_colors:\n    done: green # mine\n    todo: blue\n# Tags\nlead_time_by_tag:\n    work: 2w\n';
+        expect(writeStatusColors(block, { done: 'red' }))
+            .toBe('default_lead_time: 7d\nstatus_colors:\n    done: red\n# Tags\nlead_time_by_tag:\n    work: 2w\n');
+        expect(writeStatusColors('status_colors: {done: green}\ndefault_lead_time: 7d\n', { done: 'red' }))
+            .toBe('status_colors:\n    done: red\ndefault_lead_time: 7d\n');
+        expect(writeStatusColors('status_colors:\ndefault_lead_time: 7d\n', { done: 'red' }))
+            .toBe('status_colors:\n    done: red\ndefault_lead_time: 7d\n');
+    });
+
+    it('removes the block when every status takes its default', () => {
+        expect(writeStatusColors('a: 1\nstatus_colors:\n  done: green\nb: 2\n', {})).toBe('a: 1\nb: 2\n');
+        expect(writeStatusColors('a: 1\nstatus_colors: {done: green}\n', {})).toBe('a: 1\n');
+        expect(writeStatusColors('a: 1\n', {})).toBe('a: 1\n');
+    });
+
+    it('keeps the line endings the file has', () => {
+        expect(writeStatusColors('a: 1\r\n', { done: 'red' })).toBe('a: 1\r\nstatus_colors:\r\n    done: red\r\n');
+    });
+
+    it('refuses a file it cannot edit, writing nothing', () => {
+        expect(() => writeStatusColors('a: [1\n', { done: 'red' })).toThrow('not valid YAML');
+        expect(() => writeStatusColors('- a\n', { done: 'red' })).toThrow('block mapping');
+        expect(() => writeStatusColors('{a: 1}\n', { done: 'red' })).toThrow('block mapping');
+        expect(() => writeStatusColors('tasks:\n  backlog: []\n', { done: 'red' })).toThrow('legacy task data');
+    });
+});

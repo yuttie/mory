@@ -2,7 +2,7 @@ import { createPinia, disposePinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { nextTick, reactive } from 'vue';
 
-const files = vi.hoisted(() => ({ read: vi.fn(), commitId: 'initial', entries: [{ path: '.mory/tasks.yaml', time: '2026-10-04T00:00:00Z' }] }));
+const files = vi.hoisted(() => ({ read: vi.fn(), write: vi.fn(), commitId: 'initial', entries: [{ path: '.mory/tasks.yaml', time: '2026-10-04T00:00:00Z' }] }));
 vi.mock('@/stores/files', async () => {
     const { reactive } = await import('vue');
     return { useFilesStore: () => reactive(files) };
@@ -59,5 +59,35 @@ describe('status colours', () => {
             'Invalid default_lead_time; use whole days or weeks, such as 7d or 2w.',
             'Invalid colour for status todo.',
         ]);
+    });
+
+    it('saves them into the file as it is, and draws them at once', async () => {
+        files.read.mockResolvedValue('# Mine\ndefault_lead_time: 7d\n');
+        const store = useTaskSettingsStore();
+        await store.load();
+        await store.saveStatusColors({ done: 'red' });
+        expect(files.write).toHaveBeenCalledWith('.mory/tasks.yaml', '# Mine\ndefault_lead_time: 7d\nstatus_colors:\n    done: red\n');
+        expect(store.statusColors).toEqual({ done: 'red' });
+    });
+
+    it('creates the file when there is none', async () => {
+        files.read.mockRejectedValue(Object.assign(new Error('Not found'), { isAxiosError: true, response: { status: 404 } }));
+        const store = useTaskSettingsStore();
+        await store.saveStatusColors({ done: 'red' });
+        expect(files.write).toHaveBeenCalledWith('.mory/tasks.yaml', 'status_colors:\n    done: red\n');
+    });
+
+    it('commits nothing when nothing changes', async () => {
+        files.read.mockResolvedValue('default_lead_time: 7d\n');
+        const store = useTaskSettingsStore();
+        await store.saveStatusColors({});
+        expect(files.write).not.toHaveBeenCalled();
+    });
+
+    it('writes nothing to a file it cannot edit', async () => {
+        files.read.mockResolvedValue('tasks:\n    backlog: []\n');
+        const store = useTaskSettingsStore();
+        await expect(store.saveStatusColors({ done: 'red' })).rejects.toThrow('legacy task data');
+        expect(files.write).not.toHaveBeenCalled();
     });
 });

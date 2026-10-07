@@ -1,0 +1,32 @@
+import { expect, test } from '@playwright/test';
+import { mockBackend, uuid } from './backend';
+
+const DONE = uuid(31);
+const SETTINGS = '# Lead times\ndefault_lead_time: 7d\n';
+
+test('sets a status colour in the Config view, writing only its own lines', async ({ context, page }) => {
+    const repository = await mockBackend(context, {
+        '.mory/tasks.yaml': SETTINGS,
+        [`.tasks/${DONE}.md`]: '---\ntask:\n    status:\n        kind: done\n        completed_at: 2026-10-01 10:00:00+09:00\n---\n\n# Shipped\n',
+    });
+    await page.goto('/config');
+    const section = page.locator('.v-card', { hasText: 'Status colours' });
+    const save = section.getByRole('button', { name: 'Save colours' });
+    await expect(save).toBeDisabled();
+
+    // A colour this cannot draw is refused, rather than saved and then drawn as the default.
+    await section.getByLabel('Done', { exact: true }).fill('not a colour');
+    await save.click();
+    await expect(section.getByText('"not a colour" is not a colour this can draw.')).toBeVisible();
+    expect(repository.writes).toEqual([]);
+
+    await section.getByLabel('Done', { exact: true }).fill('#ff0000');
+    await save.click();
+    await expect.poll(() => repository.writes).toEqual([
+        { path: '.mory/tasks.yaml', content: SETTINGS + 'status_colors:\n    done: "#ff0000"\n' },
+    ]);
+
+    await page.goto('/tasks-next/_/descendants/status');
+    const card = page.locator('.status-view .task-list-item', { hasText: 'Shipped' });
+    await expect(card).toHaveAttribute('style', /color-mix\(in srgb, rgb\(255, 0, 0\) 12%/);
+});

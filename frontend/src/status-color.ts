@@ -2,8 +2,10 @@
 // `.mory/tasks.yaml` that sets them.
 
 import materialColors from 'vuetify/util/colors';
+import YAML from 'yaml';
 
 import { parseEventColor } from '@/event-color';
+import { columnOf, hasKey, indentBlock, lineEnding, parsesTo, splice } from '@/frontmatter';
 import { STATUS_KINDS, type StatusKind } from '@/task';
 
 // What a status is drawn in where `.mory/tasks.yaml` sets nothing.
@@ -88,6 +90,82 @@ export function resolveStatusColors(colors: StatusColors): StatusColors {
         }
     }
     return resolved;
+}
+
+/// `.mory/tasks.yaml` with its `status_colors:` replaced by `colors`, every other byte left alone:
+/// the file is written by hand, comments and all, and nothing else in it is this view's to change.
+/// The block goes where the old one was, or at the end; with no colours left, it goes altogether.
+///
+/// Throws, writing nothing, on a file this cannot read or edit, or when the result would mean
+/// anything other than the original with these colours.
+export function writeStatusColors(source: string, colors: StatusColors): string {
+    const doc = YAML.parseDocument(source);
+    if (doc.errors.length > 0) {
+        throw new Error(`It is not valid YAML: ${doc.errors[0].message}`);
+    }
+    const root = doc.contents;
+    if (root !== null && !(YAML.isMap(root) && !root.flow)) {
+        throw new Error('It must be a block mapping.');
+    }
+    const before = (doc.toJS() ?? {}) as Record<string, unknown>;
+    if ('tasks' in before) {
+        throw new Error('It still holds legacy task data; move that to tasks-v1.yaml first.');
+    }
+    // In the order the statuses are listed, whatever order they were set in.
+    const entries = STATUS_KINDS.flatMap((kind) => colors[kind] === undefined ? [] : [[kind, colors[kind]]]);
+    const expected = { ...before };
+    delete expected.status_colors;
+    if (entries.length > 0) {
+        expected.status_colors = Object.fromEntries(entries);
+    }
+
+    const eol = lineEnding(source);
+    const pairs = YAML.isMap(root) ? root.items : [];
+    const pair = pairs.find((item) => hasKey(item, 'status_colors'));
+    const block = entries.length === 0
+        ? ''
+        : 'status_colors:' + eol + indentBlock(YAML.stringify(Object.fromEntries(entries), { lineWidth: 0 }), indentStep(source, pairs), eol);
+
+    let edited: string;
+    if (pair?.key.range === undefined || pair.key.range === null) {
+        if (block === '') {
+            return source;
+        }
+        const body = source.trimEnd();
+        edited = (body === '' ? '' : body + eol) + block + eol;
+    }
+    else {
+        const from = pair.key.range[0];
+        const value = YAML.isNode(pair.value) ? pair.value : null;
+        // A block mapping's range runs on through the line break after it; a flow one's does not.
+        let to = value?.range ? value.range[1] : pair.key.range[1];
+        while (to > from && /\s/.test(source[to - 1])) {
+            to -= 1;
+        }
+        if (block === '') {
+            // The whole lines it took, so no blank line is left where it was.
+            const lineStart = source.lastIndexOf('\n', from - 1) + 1;
+            const lineEnd = source.indexOf('\n', to);
+            edited = splice(source, lineStart, lineEnd === -1 ? source.length : lineEnd + 1, '');
+        }
+        else {
+            edited = splice(source, from, to, block);
+        }
+    }
+    if (!parsesTo(edited, expected)) {
+        throw new Error('Saving the colours would change other settings in it.');
+    }
+    return edited;
+}
+
+// The author's indentation step, from the first block mapping they nested, or the app's own.
+function indentStep(source: string, pairs: YAML.Pair<unknown, unknown>[]): number {
+    for (const pair of pairs) {
+        if (YAML.isScalar(pair.key) && pair.key.range && YAML.isMap(pair.value) && !pair.value.flow && pair.value.range) {
+            return columnOf(source, pair.value.range[0]) - columnOf(source, pair.key.range[0]);
+        }
+    }
+    return 4;
 }
 
 function isStatusKind(kind: unknown): kind is StatusKind {
