@@ -49,6 +49,7 @@ test('keeps a note draft and its undo history while editing Config', async ({ co
     await configDialog(page).getByRole('button', { name: 'Close Config' }).click();
     await expect(configDialog(page)).toBeHidden();
     await expect(page).toHaveURL(/\/note\/draft\.md\?mode=create$/);
+    await expect(page.locator('.cm-editor')).toHaveCSS('font-family', 'Menlo, serif');
     await expect(editor).toHaveText('An unsaved note with a draft');
     await editor.press('ControlOrMeta+z');
     await expect(editor).toHaveText('An unsaved note');
@@ -57,6 +58,104 @@ test('keeps a note draft and its undo history while editing Config', async ({ co
     await openConfig(page);
     await configDialog(page).getByRole('tab', { name: 'Editor', exact: true }).click();
     await expect(configDialog(page).getByRole('textbox', { name: 'Font Family' })).toHaveValue('Menlo, serif');
+});
+
+test('applies loaded editor preferences to the current draft', async ({ context, page }) => {
+    await mockBackend(context, {
+        '.mory/default_config.yaml': YAML.stringify({
+            useSimpleEditor: false,
+            lockScroll: true,
+            editorFontFamily: 'serif',
+            editorFontSize: 18,
+            editorIndentSize: 4,
+            editorTheme: 'one-dark',
+            editorKeybinding: 'default',
+            editorEnableEmacsStyleBindings: false,
+            editorVimInsertUnmapCtCd: false,
+            highlightjsTheme: 'a11y-dark',
+        }),
+    });
+    await page.goto('/note/draft.md?mode=create');
+    const editor = page.locator('.cm-content');
+    await editor.fill('Draft');
+    await openConfig(page);
+    await configDialog(page).getByRole('button', { name: 'Load default', exact: true }).click();
+    await configDialog(page).getByRole('button', { name: 'Close Config' }).click();
+    await expect(page.locator('.cm-editor')).toHaveCSS('font-family', 'serif');
+    await expect(page.locator('.cm-editor')).toHaveCSS('font-size', '24px');
+    await expect(page.locator('.cm-editor')).toHaveCSS('background-color', 'rgb(40, 44, 52)');
+    await expect.poll(() => page.locator('.viewer-pane style').first().evaluate((element) => element.textContent)).toContain('background:#2b2b2b');
+    await editor.press('Home');
+    await editor.press('Tab');
+    await expect(editor).toHaveText('    Draft');
+    await editor.press('ControlOrMeta+z');
+    await expect(editor).toHaveText('Draft');
+
+    await openConfig(page);
+    await configDialog(page).getByRole('tab', { name: 'Editor', exact: true }).click();
+    await configDialog(page).getByRole('combobox', { name: 'Keybinding', exact: true }).press('Enter');
+    await page.getByRole('option', { name: 'Emacs', exact: true }).click();
+    await configDialog(page).getByRole('button', { name: 'Close Config' }).click();
+    await expect(page.locator('.cm-scroller')).toHaveClass(/cm-emacsMode/);
+    await editor.press('Control+Home');
+    await editor.pressSequentially('X');
+    await expect(editor).toHaveText('XDraft');
+});
+
+test('reconfigures Vim and restores its insert bindings when unmapping is turned off', async ({ context, page }) => {
+    await mockBackend(context, {});
+    await page.goto('/note/draft.md?mode=create');
+    const editor = page.locator('.cm-content');
+    await editor.fill('    Draft');
+    await openConfig(page);
+    await configDialog(page).getByRole('tab', { name: 'Editor', exact: true }).click();
+    await configDialog(page).getByRole('combobox', { name: 'Keybinding', exact: true }).press('Enter');
+    await page.getByRole('option', { name: 'Vim', exact: true }).click();
+    await configDialog(page).getByRole('button', { name: 'Close Config' }).click();
+    await expect(page.locator('.cm-scroller')).toHaveClass(/cm-vimMode/);
+    await editor.press('0');
+    await editor.press('i');
+    await editor.press('Control+d');
+    await expect(editor).toHaveText('  Draft');
+
+    await openConfig(page);
+    await configDialog(page).getByRole('tab', { name: 'Editor', exact: true }).click();
+    await configDialog(page).getByLabel('Unmap <C-t>/<C-d> in Vim insert mode').check();
+    await configDialog(page).getByRole('button', { name: 'Close Config' }).click();
+    await editor.press('Control+d');
+    await expect(editor).toHaveText(/^ +Draft$/);
+
+    await openConfig(page);
+    await configDialog(page).getByRole('tab', { name: 'Editor', exact: true }).click();
+    await configDialog(page).getByLabel('Unmap <C-t>/<C-d> in Vim insert mode').uncheck();
+    await configDialog(page).getByRole('button', { name: 'Close Config' }).click();
+    await editor.press('Control+d');
+    await expect(editor).toHaveText('Draft');
+});
+
+test('switches to the simple editor and back without losing the rich editor history', async ({ context, page }) => {
+    await mockBackend(context, {});
+    await page.goto('/note/draft.md?mode=create');
+    const editor = page.locator('.cm-content');
+    await editor.fill('Draft');
+    const richEditor = await editor.elementHandle();
+    await editor.press('End');
+    await editor.pressSequentially(' with edits');
+    await openConfig(page);
+    await configDialog(page).getByRole('tab', { name: 'Editor', exact: true }).click();
+    await configDialog(page).getByLabel('Use Simple Editor', { exact: true }).check();
+    await configDialog(page).getByRole('button', { name: 'Close Config' }).click();
+    await expect(page.locator('textarea.simple-editor')).toHaveValue('Draft with edits');
+    await expect(editor).toBeHidden();
+
+    await openConfig(page);
+    await configDialog(page).getByRole('tab', { name: 'Editor', exact: true }).click();
+    await configDialog(page).getByLabel('Use Simple Editor', { exact: true }).uncheck();
+    await configDialog(page).getByRole('button', { name: 'Close Config' }).click();
+    await expect(editor).toBeVisible();
+    expect(await richEditor!.evaluate((element) => element.isConnected)).toBe(true);
+    await editor.press('ControlOrMeta+z');
+    await expect(editor).toHaveText('Draft');
 });
 
 test('loads and saves browser defaults from General', async ({ context, page }) => {
@@ -169,6 +268,7 @@ test('closes a nested settings dialog before Config on Escape', async ({ context
     await configDialog(page).getByRole('button', { name: 'Add calendar' }).click();
     const nested = page.getByRole('dialog').filter({ has: page.getByRole('textbox', { name: 'iCal URL' }) });
     await expect(nested).toBeVisible();
+    await nested.getByRole('textbox', { name: 'iCal URL' }).click();
     await page.keyboard.press('Escape');
     await expect(nested).toBeHidden();
     await expect(configDialog(page)).toBeVisible();

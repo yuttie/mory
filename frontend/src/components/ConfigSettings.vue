@@ -203,7 +203,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, watch } from 'vue';
+import { ref } from 'vue';
 
 import AiActionsSettings from '@/components/AiActionsSettings.vue';
 import CalendarsSettings from '@/components/CalendarsSettings.vue';
@@ -212,8 +212,8 @@ import { useFilesStore } from '@/stores/files';
 import {
     NOTE_TREE_INITIAL_ROWS,
     NOTE_TREE_ROW_INCREMENT,
-    loadConfigValue,
-    saveConfigValue,
+    EDITOR_FONT_SIZE,
+    useConfigValue,
 } from '@/config';
 import YAML from 'yaml';
 
@@ -481,18 +481,18 @@ const highlightjsThemes = ref([
     { name: 'Xcode',                                value: 'xcode'                               },
     { name: 'Xt256',                                value: 'xt256'                               },
 ]);
-const currentUseSimpleEditor = ref(loadConfigValue('use-simple-editor', false));
-const currentLockScroll = ref(loadConfigValue('lock-scroll', false));
-const currentEditorFontFamily = ref(loadConfigValue('editor-font-family', 'Menlo, monospace'));
-const currentEditorFontSize = ref(loadConfigValue('editor-font-size', 10));
-const editorIndentSize = ref(loadConfigValue('editor-indent-size', 2));
-const noteTreeInitialRows = ref(loadConfigValue('note-tree-initial-rows', NOTE_TREE_INITIAL_ROWS));
-const noteTreeRowIncrement = ref(loadConfigValue('note-tree-row-increment', NOTE_TREE_ROW_INCREMENT));
-const currentEditorTheme = ref(loadConfigValue('editor-theme', 'default'));
-const currentEditorKeybinding = ref(loadConfigValue('editor-keybinding', 'default'));
-const editorEnableEmacsStyleBindings = ref(loadConfigValue('editor-enable-emacs-style-bindings', false));
-const editorVimInsertUnmapCtCd = ref(loadConfigValue('editor-vim-insert-unmap-ct-cd', false));
-const currentHighlightjsTheme = ref(loadConfigValue('highlightjs-theme', 'default'));
+const currentUseSimpleEditor = useConfigValue('use-simple-editor', false);
+const currentLockScroll = useConfigValue('lock-scroll', false);
+const currentEditorFontFamily = useConfigValue('editor-font-family', 'Menlo, monospace');
+const currentEditorFontSize = useConfigValue('editor-font-size', EDITOR_FONT_SIZE);
+const editorIndentSize = useConfigValue('editor-indent-size', 2);
+const noteTreeInitialRows = useConfigValue('note-tree-initial-rows', NOTE_TREE_INITIAL_ROWS);
+const noteTreeRowIncrement = useConfigValue('note-tree-row-increment', NOTE_TREE_ROW_INCREMENT);
+const currentEditorTheme = useConfigValue('editor-theme', 'default');
+const currentEditorKeybinding = useConfigValue('editor-keybinding', 'default');
+const editorEnableEmacsStyleBindings = useConfigValue('editor-enable-emacs-style-bindings', false);
+const editorVimInsertUnmapCtCd = useConfigValue('editor-vim-insert-unmap-ct-cd', false);
+const currentHighlightjsTheme = useConfigValue('highlightjs-theme', 'default');
 
 // Methods
 async function loadDefault() {
@@ -531,54 +531,6 @@ function saveAsDefault() {
     files.write('.mory/default_config.yaml', YAML.stringify(config));
 }
 
-// Watchers
-watch(currentUseSimpleEditor, (newUseSimpleEditor: boolean) => {
-    saveConfigValue('use-simple-editor', newUseSimpleEditor);
-});
-
-watch(currentLockScroll, (newLockScroll: boolean) => {
-    saveConfigValue('lock-scroll', newLockScroll);
-});
-
-watch(currentEditorFontFamily, (newEditorFontFamily: string) => {
-    saveConfigValue('editor-font-family', newEditorFontFamily);
-});
-
-watch(currentEditorFontSize, (newEditorFontSize: number) => {
-    saveConfigValue('editor-font-size', newEditorFontSize);
-});
-
-watch(editorIndentSize, (newEditorIndentSize: number) => {
-    saveConfigValue('editor-indent-size', newEditorIndentSize);
-});
-
-watch(currentEditorTheme, (newEditorTheme: string) => {
-    saveConfigValue('editor-theme', newEditorTheme);
-});
-
-watch(currentEditorKeybinding, (newEditorKeybinding: string) => {
-    saveConfigValue('editor-keybinding', newEditorKeybinding);
-});
-
-watch(editorEnableEmacsStyleBindings, (newEditorEnableEmacsStyleBindings: string) => {
-    saveConfigValue('editor-enable-emacs-style-bindings', newEditorEnableEmacsStyleBindings);
-});
-
-watch(editorVimInsertUnmapCtCd, (newEditorVimInsertUnmapCtCd: string) => {
-    saveConfigValue('editor-vim-insert-unmap-ct-cd', newEditorVimInsertUnmapCtCd);
-});
-
-watch(currentHighlightjsTheme, (newHighlightjsTheme: string) => {
-    saveConfigValue('highlightjs-theme', newHighlightjsTheme);
-});
-
-watch(noteTreeInitialRows, (newNoteTreeInitialRows: number) => {
-    saveConfigValue('note-tree-initial-rows', newNoteTreeInitialRows);
-});
-
-watch(noteTreeRowIncrement, (newNoteTreeRowIncrement: number) => {
-    saveConfigValue('note-tree-row-increment', newNoteTreeRowIncrement);
-});
 </script>
 
 <style scoped lang="scss">

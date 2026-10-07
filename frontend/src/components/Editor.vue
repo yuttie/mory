@@ -7,7 +7,7 @@
 <script lang="ts" setup>
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 
-import { loadConfigValue } from '@/config';
+import { EDITOR_FONT_SIZE, useConfigValue } from '@/config';
 import { Compartment, EditorState, Extension, Prec, SelectionRange } from '@codemirror/state';
 import { EditorView, keymap, highlightSpecialChars, drawSelection, dropCursor, rectangularSelection, crosshairCursor, lineNumbers, highlightActiveLine, highlightActiveLineGutter, scrollPastEnd, BlockInfo } from '@codemirror/view';
 import { defaultHighlightStyle, syntaxHighlighting, indentOnInput, indentUnit, bracketMatching, foldGutter, foldKeymap } from '@codemirror/language';
@@ -35,6 +35,9 @@ const emit = defineEmits<{
 
 // Non-reactive state
 let editor: EditorView | null = null;
+let disposed = false;
+let themeRevision = 0;
+let keybindingRevision = 0;
 let lastKnownScrollTop = 0;
 
 // `scrollTo()` applies its scroll asynchronously over one or more measure
@@ -61,19 +64,23 @@ let pendingScrollTarget: { line: number, from: number } | null = null;
 // and the selection.
 const editableCompartment = new Compartment();
 const lineWrappingCompartment = new Compartment();
+const themeCompartment = new Compartment();
+const keybindingCompartment = new Compartment();
+const indentCompartment = new Compartment();
 
-// Ctrl+Enter and Shift+Enter toggle the editor and the viewer panes, and that
-// is decided by a window-level handler in the parent. CodeMirror runs its own
-// keymaps first, though, so without claiming these keys here both of them reach
-// the default `Enter` binding and insert a newline before the pane ever
-// toggles. Claiming them makes CodeMirror do nothing and call
-// `preventDefault()`; the event still bubbles to the window handler, which is
-// what performs the toggle. Highest precedence so the Vim and Emacs keymaps,
-// which are prepended to the extensions, cannot take these first.
-const shortcutKeymap = Prec.highest(keymap.of([
-    { key: 'Ctrl-Enter', run: () => true },
-    { key: 'Shift-Enter', run: () => true },
-]));
+const fontSize = useConfigValue('editor-font-size', EDITOR_FONT_SIZE);
+const fontFamily = useConfigValue('editor-font-family', 'Menlo, monospace');
+const theme = useConfigValue('editor-theme', 'default');
+const keybinding = useConfigValue('editor-keybinding', 'default');
+const indentSize = useConfigValue('editor-indent-size', 2);
+const enableEmacsStyleBindings = useConfigValue('editor-enable-emacs-style-bindings', false);
+const vimInsertUnmapCtCd = useConfigValue('editor-vim-insert-unmap-ct-cd', false);
+
+// These pane shortcuts belong to the parent's window handler. Claim them before either a keymap
+// or Vim/Emacs's DOM handlers can insert a newline, while still letting the event bubble.
+const shortcutHandlers = Prec.highest(EditorView.domEventHandlers({
+    keydown: (event) => event.key === 'Enter' && (event.ctrlKey || event.shiftKey),
+}));
 
 // `readOnly` stops the editing commands, including the Vim and Emacs ones, and
 // `editable` stops typing and pasting straight into the DOM. Neither blocks the
@@ -185,18 +192,14 @@ const editorEl = ref<HTMLElement | null>(null);
 
 // Lifecycle hooks
 onMounted(async () => {
-    if (!editorEl.value) return;
-
-    const fontSize = loadConfigValue('editor-font-size', 14);
-    const fontFamily = loadConfigValue('editor-font-family', 'Menlo, monospace');
-    const theme = loadConfigValue('editor-theme', 'default');
-    const keybinding = loadConfigValue('editor-keybinding', 'default');
-    const indentSize = loadConfigValue('editor-indent-size', 2);
-    const enableEmacsStyleBindings = loadConfigValue('editor-enable-emacs-style-bindings', false);
-    const vimInsertUnmapCtCd = loadConfigValue('editor-vim-insert-unmap-ct-cd', false);
+    if (!editorEl.value) {
+        return;
+    }
 
     const extensions: Extension[] = [
-        shortcutKeymap,
+        Prec.high(keybindingCompartment.of([])),
+        themeCompartment.of([]),
+        shortcutHandlers,
         lineNumbers(),
         foldGutter(),
         highlightSpecialChars(),
@@ -205,7 +208,6 @@ onMounted(async () => {
         dropCursor(),
         EditorState.allowMultipleSelections.of(true),
         indentOnInput(),
-        indentUnit.of(" ".repeat(indentSize)),
         syntaxHighlighting(defaultHighlightStyle),
         bracketMatching(),
         closeBrackets(),
@@ -244,30 +246,11 @@ onMounted(async () => {
 
     // Add language support
     const langExtension = await getLangExtension(props.mode);
+    if (disposed) {
+        return;
+    }
     if (langExtension) {
         extensions.push(langExtension);
-    }
-
-    // Add theme
-    const themeExtension = await getThemeExtension(theme);
-    if (themeExtension) {
-        extensions.push(themeExtension);
-    }
-
-    // Add keybinding
-    if (keybinding !== 'emacs' && enableEmacsStyleBindings) {
-        extensions.unshift(keymap.of(emacsStyleKeymap.filter(({ key }) => /^Ctrl-(b|f|p|n|a|e|d|h)$/.test(key))));
-    }
-    const keybindingExtension = await getKeybindingExtension(keybinding);
-    if (keybindingExtension) {
-        // Vim and Emacs keybindings must be included before other keymaps
-        extensions.unshift(keybindingExtension);
-    }
-
-    if (keybinding === 'vim' && vimInsertUnmapCtCd) {
-        const { Vim } = await import('@replit/codemirror-vim');
-        Vim.unmap('<C-t>', 'insert');
-        Vim.unmap('<C-d>', 'insert');
     }
 
     // Pushed after the awaits above rather than declared with the rest, so the
@@ -275,6 +258,7 @@ onMounted(async () => {
     // actually created.
     extensions.push(editableCompartment.of(editableExtension(props.readonly === true)));
     extensions.push(lineWrappingCompartment.of(lineWrappingExtension(props.lineWrapping)));
+    extensions.push(indentCompartment.of(indentUnit.of(' '.repeat(indentSize.value))));
 
     const state = EditorState.create({
         doc: props.value,
@@ -287,16 +271,16 @@ onMounted(async () => {
     });
     lastKnownScrollTop = editor.scrollDOM.scrollTop;
 
-    // Apply font settings
-    if (editor.dom) {
-        editor.dom.style.fontSize = `${fontSize}pt`;
-        editor.dom.style.fontFamily = fontFamily;
-    }
+    applyFont();
+    applyTheme();
+    applyKeybinding();
 });
 
 onBeforeUnmount(() => {
+    disposed = true;
     if (editor) {
         editor.destroy();
+        editor = null;
     }
 });
 
@@ -312,7 +296,63 @@ function blur() {
 }
 
 function resize() {
-    // CodeMirror 6 handles resizing automatically
+    editor?.requestMeasure();
+}
+
+function applyFont() {
+    if (editor) {
+        editor.dom.style.fontSize = `${fontSize.value}pt`;
+        editor.dom.style.fontFamily = fontFamily.value;
+        editor.requestMeasure();
+    }
+}
+
+async function applyTheme() {
+    if (!editor) {
+        return;
+    }
+    const revision = ++themeRevision;
+    const extension = await getThemeExtension(theme.value);
+    // Lazy imports may finish after another choice or after the editor was removed.
+    if (editor && revision === themeRevision) {
+        editor.dispatch({ effects: themeCompartment.reconfigure(extension ?? []) });
+    }
+}
+
+async function applyKeybinding() {
+    if (!editor) {
+        return;
+    }
+    const revision = ++keybindingRevision;
+    const binding = keybinding.value;
+    const extension = await getKeybindingExtension(binding);
+    if (!editor || revision !== keybindingRevision) {
+        return;
+    }
+    const extensions: Extension[] = [extension ?? []];
+    if (binding !== 'emacs' && enableEmacsStyleBindings.value) {
+        extensions.push(keymap.of(emacsStyleKeymap.filter(({ key }) => /^Ctrl-(b|f|p|n|a|e|d|h)$/.test(key ?? ''))));
+    }
+    editor.dispatch({ effects: keybindingCompartment.reconfigure(extensions) });
+    await applyVimInsertBindings();
+}
+
+async function applyVimInsertBindings() {
+    if (keybinding.value !== 'vim') {
+        return;
+    }
+    const { Vim } = await import('@replit/codemirror-vim');
+    if (!editor || keybinding.value !== 'vim') {
+        return;
+    }
+    // Vim's mappings are global and survive removing its extension. Restore both defaults when
+    // the option is turned off, without replacing the editor or resetting Vim's current mode.
+    for (const [key, indentRight] of [['<C-t>', true], ['<C-d>', false]] as const) {
+        Vim.unmap(key, 'insert');
+        if (!vimInsertUnmapCtCd.value) {
+            Vim.mapCommand(key, 'action', 'indent', { indentRight }, { context: 'insert' });
+        }
+    }
 }
 
 // The target for `scrollWithinEditor()` that puts `lineNumber`, a 1-based
@@ -377,7 +417,7 @@ function replaceRange(from: number, to: number, newText: string) {
     });
 }
 
-async function getLangExtension(lang: string): Extension | null {
+async function getLangExtension(lang: string): Promise<Extension | null> {
     if (lang === 'css') {
         const { css } = await import('@codemirror/lang-css');
         return css();
@@ -393,10 +433,10 @@ async function getLangExtension(lang: string): Extension | null {
         });
     }
 
-    return null
+    return null;
 }
 
-async function getThemeExtension(theme: string): Extension | null {
+async function getThemeExtension(theme: string): Promise<Extension | null> {
     // Map Ace themes to CodeMirror themes
     // For now, we only support oneDark theme, others will use default
     const darkThemes = [
@@ -405,7 +445,7 @@ async function getThemeExtension(theme: string): Extension | null {
         'merbivore_soft', 'mono_industrial', 'monokai', 'nord_dark',
         'pastel_on_dark', 'solarized_dark', 'terminal', 'tomorrow_night',
         'tomorrow_night_blue', 'tomorrow_night_bright', 'tomorrow_night_eighties',
-        'twilight', 'vibrant_ink'
+        'twilight', 'vibrant_ink',
     ];
 
     if (theme === 'one-dark' || darkThemes.includes(theme)) {
@@ -416,7 +456,7 @@ async function getThemeExtension(theme: string): Extension | null {
     return null;
 }
 
-async function getKeybindingExtension(keybinding: string): Extension | null {
+async function getKeybindingExtension(keybinding: string): Promise<Extension | null> {
     if (keybinding === 'vim') {
         const { vim } = await import('@replit/codemirror-vim');
         return vim();
@@ -431,6 +471,14 @@ async function getKeybindingExtension(keybinding: string): Extension | null {
 }
 
 // Watchers
+watch([fontSize, fontFamily], applyFont);
+watch(theme, applyTheme);
+watch([keybinding, enableEmacsStyleBindings], applyKeybinding);
+watch(vimInsertUnmapCtCd, applyVimInsertBindings);
+watch(indentSize, (size) => {
+    editor?.dispatch({ effects: indentCompartment.reconfigure(indentUnit.of(' '.repeat(size))) });
+});
+
 watch(() => props.value, (value: string) => {
     if (!editor) {
         return;

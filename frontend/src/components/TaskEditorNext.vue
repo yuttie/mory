@@ -423,7 +423,7 @@ import { STATUS_LABEL, nextOptions, makeDefaultStatus, canTransition, withoutBla
 import type { TaskNode } from '@/task-forest';
 import { useFetchTask } from '@/composables/fetchTask';
 import { useLocalStorage } from '@/composables/localStorage';
-import { loadConfigValue } from '@/config';
+import { useConfigValue } from '@/config';
 import { required } from '@/rules';
 import dayjs from 'dayjs';
 import { useCalendarsStore } from '@/stores/calendars';
@@ -502,7 +502,7 @@ const uiValid = ref(true);
 const statusOptionRestricted = ref(true);
 // Kept across tasks and visits, as one way of working with notes rather than a property of a task.
 const notePanes = useLocalStorage<'viewer' | 'both' | 'editor'>('task-editor-note-panes', 'both');
-const lockScroll = loadConfigValue('lock-scroll', false);
+const lockScroll = useConfigValue('lock-scroll', false);
 
 // Task assessment data
 const taskAssessment = ref<TaskAssessmentResponse | null>(null);
