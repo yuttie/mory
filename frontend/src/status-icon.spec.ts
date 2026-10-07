@@ -5,17 +5,17 @@ import {
     mdiCheckboxMarkedOutline,
     mdiClockOutline,
     mdiCloseThick,
-    mdiCogOutline,
     mdiFolder,
     mdiFolderCancel,
     mdiFolderCheck,
     mdiFolderClock,
-    mdiFolderCog,
     mdiFolderLock,
+    mdiFolderPlay,
     mdiFolderQuestion,
     mdiFolderRemove,
     mdiHelpBoxOutline,
     mdiLockOutline,
+    mdiPlayCircleOutline,
 } from '@mdi/js';
 
 import { STATUS_KINDS } from '@/task';
@@ -27,7 +27,7 @@ describe('statusIcon', () => {
         expect(icons).toEqual([
             mdiHelpBoxOutline,
             mdiCheckboxBlankOutline,
-            mdiCogOutline,
+            mdiPlayCircleOutline,
             mdiClockOutline,
             mdiCancel,
             mdiLockOutline,
@@ -42,7 +42,7 @@ describe('statusIcon', () => {
         expect(icons).toEqual([
             mdiFolderQuestion,
             mdiFolder,
-            mdiFolderCog,
+            mdiFolderPlay,
             mdiFolderClock,
             mdiFolderCancel,
             mdiFolderLock,

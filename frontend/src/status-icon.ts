@@ -6,17 +6,17 @@ import {
     mdiCheckboxMarkedOutline,
     mdiClockOutline,
     mdiCloseThick,
-    mdiCogOutline,
     mdiFolder,
     mdiFolderCancel,
     mdiFolderCheck,
     mdiFolderClock,
-    mdiFolderCog,
     mdiFolderLock,
+    mdiFolderPlay,
     mdiFolderQuestion,
     mdiFolderRemove,
     mdiHelpBoxOutline,
     mdiLockOutline,
+    mdiPlayCircleOutline,
 } from '@mdi/js';
 
 import type { StatusKind } from '@/task';
@@ -28,7 +28,7 @@ const STATUS_ICON: Record<StatusKind, { task: string; parent: string }> = {
     // Not yet committed to: an open question rather than an empty box to tick.
     backlog: { task: mdiHelpBoxOutline, parent: mdiFolderQuestion },
     todo: { task: mdiCheckboxBlankOutline, parent: mdiFolder },
-    in_progress: { task: mdiCogOutline, parent: mdiFolderCog },
+    in_progress: { task: mdiPlayCircleOutline, parent: mdiFolderPlay },
     waiting: { task: mdiClockOutline, parent: mdiFolderClock },
     blocked: { task: mdiCancel, parent: mdiFolderCancel },
     on_hold: { task: mdiLockOutline, parent: mdiFolderLock },
