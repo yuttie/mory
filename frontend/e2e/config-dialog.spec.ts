@@ -238,6 +238,71 @@ test('keeps the settings an older default file lacks when loading it', async ({ 
     await expect(page.locator('.cm-content')).toHaveText('    Draft');
 });
 
+test('says why the repository defaults could not be loaded or saved', async ({ context, page }) => {
+    const repository = await mockBackend(context, {});
+    const errors: Error[] = [];
+    page.on('pageerror', (error) => errors.push(error));
+    await page.goto('/files');
+    await openConfig(page);
+    const general = configDialog(page).getByRole('tabpanel', { name: 'General', exact: true });
+    await general.getByRole('button', { name: 'Load from repository', exact: true }).click();
+    await expect(general.getByRole('alert').filter({ hasText: 'default_config.yaml' })).toHaveText(
+        'The repository has no .mory/default_config.yaml yet. Save to repository writes one.',
+    );
+
+    await page.route(`${API_URL}notes/.mory/default_config.yaml`, async (route) => {
+        if (route.request().method() === 'PUT') {
+            await route.fulfill({ status: 500, json: {} });
+            return;
+        }
+        await route.fallback();
+    });
+    await configDialog(page).getByRole('tab', { name: 'Editor', exact: true }).click();
+    const editor = configDialog(page).getByRole('tabpanel', { name: 'Editor', exact: true });
+    await editor.getByRole('button', { name: 'Save to repository', exact: true }).click();
+    await expect(editor.getByRole('alert').filter({ hasText: 'default_config.yaml' })).toContainText(
+        'Could not save .mory/default_config.yaml:',
+    );
+    expect(repository.writes).toEqual([]);
+    expect(errors).toEqual([]);
+});
+
+test('commits the repository defaults once however often Save is pressed', async ({ context, page }) => {
+    const repository = await mockBackend(context, {});
+    let release = (): void => {};
+    const released = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+    // Counted as each request arrives, while the first is held, so a second press that got
+    // through shows here before either finishes.
+    let saves = 0;
+    await page.route(`${API_URL}notes/.mory/default_config.yaml`, async (route) => {
+        if (route.request().method() === 'PUT') {
+            saves += 1;
+            await released;
+        }
+        await route.fallback();
+    });
+    await page.goto('/files');
+    await openConfig(page);
+    const general = configDialog(page).getByRole('tabpanel', { name: 'General', exact: true });
+    const save = general.getByRole('button', { name: 'Save to repository', exact: true });
+    const load = general.getByRole('button', { name: 'Load from repository', exact: true });
+    await save.click();
+    await expect(save).toHaveAttribute('aria-busy', 'true');
+    await expect(load).toBeDisabled();
+    // A pointer press where the button is, as a second click would land; Playwright's own click
+    // would wait for the busy button to take presses again.
+    const bounds = (await save.boundingBox())!;
+    await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    await page.evaluate(() => new Promise<number>((resolve) => requestAnimationFrame(resolve)));
+    expect(saves).toBe(1);
+    release();
+    await expect(save).not.toHaveAttribute('aria-busy', 'true');
+    await expect(load).toBeEnabled();
+    expect(repository.writes.map((write) => write.path)).toEqual(['.mory/default_config.yaml']);
+});
+
 test('keeps browser focus and typing in Config over a note draft', async ({ context, page }) => {
     await mockBackend(context, {});
     await page.goto('/note/draft.md?mode=create');

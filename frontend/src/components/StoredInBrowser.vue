@@ -18,13 +18,29 @@
         <!-- Outside the alert: inside, its padding leaves a 320px phone too little width for
              the longer label. -->
         <div class="d-flex flex-wrap ga-2">
-            <v-btn v-on:click="emit('load')">
+            <v-btn
+                v-bind:loading="busy === 'load'"
+                v-bind:disabled="busy === 'save'"
+                v-on:click="emit('load')"
+            >
                 Load from repository
             </v-btn>
-            <v-btn v-on:click="emit('save')">
+            <v-btn
+                v-bind:loading="busy === 'save'"
+                v-bind:disabled="busy === 'load'"
+                v-on:click="emit('save')"
+            >
                 Save to repository
             </v-btn>
         </div>
+        <v-alert
+            v-if="error"
+            class="mt-4"
+            type="error"
+            variant="tonal"
+        >
+            {{ error }}
+        </v-alert>
     </div>
 </template>
 
@@ -32,6 +48,11 @@
 import { mdiMonitor } from '@mdi/js';
 
 import { DEFAULT_CONFIG_PATH } from '@/config';
+
+defineProps<{
+    busy: 'load' | 'save' | null;
+    error: string;
+}>();
 
 const emit = defineEmits<{
     load: [];

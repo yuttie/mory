@@ -53,6 +53,8 @@
                     General
                 </h2>
                 <StoredInBrowser
+                    v-bind:busy="defaultConfigBusy"
+                    v-bind:error="defaultConfigError"
                     v-on:load="loadDefault"
                     v-on:save="saveAsDefault"
                 />
@@ -69,6 +71,8 @@
                     Editor
                 </h2>
                 <StoredInBrowser
+                    v-bind:busy="defaultConfigBusy"
+                    v-bind:error="defaultConfigError"
                     v-on:load="loadDefault"
                     v-on:save="saveAsDefault"
                 />
@@ -148,6 +152,8 @@
                     Markdown Rendering
                 </h2>
                 <StoredInBrowser
+                    v-bind:busy="defaultConfigBusy"
+                    v-bind:error="defaultConfigError"
                     v-on:load="loadDefault"
                     v-on:save="saveAsDefault"
                 />
@@ -167,6 +173,8 @@
                     Navigation Drawer
                 </h2>
                 <StoredInBrowser
+                    v-bind:busy="defaultConfigBusy"
+                    v-bind:error="defaultConfigError"
                     v-on:load="loadDefault"
                     v-on:save="saveAsDefault"
                 />
@@ -234,6 +242,7 @@
 </template>
 
 <script lang="ts" setup>
+import axios from 'axios';
 import { ref, useId } from 'vue';
 
 import AiActionsSettings from '@/components/AiActionsSettings.vue';
@@ -279,6 +288,10 @@ const tabsId = useId();
 
 // Reactive states
 const selectedTab = ref('general');
+// Shared by the four panels that offer Load and Save, so a press on one shows on all of them and
+// none can start a second commit while the first is under way.
+const defaultConfigBusy = ref<'load' | 'save' | null>(null);
+const defaultConfigError = ref('');
 const editorThemes = ref([
     { name: 'Default (Light)',         value: 'default'                 },
     { name: 'One Dark',                value: 'one-dark'                },
@@ -579,23 +592,45 @@ function panelAttributes(value: string) {
 }
 
 async function loadDefault() {
-    const config = YAML.parse(await files.read(DEFAULT_CONFIG_PATH));
-    for (const [name, setting] of Object.entries(DEFAULT_CONFIG_FIELDS)) {
-        const value = config?.[name];
-        // A file saved before a setting existed lacks it, and that setting keeps the value it
-        // has here: assigning undefined would store the string "undefined", which
-        // loadConfigValue throws on at the next start.
-        if (value !== undefined) {
-            setting.value = value;
+    defaultConfigBusy.value = 'load';
+    defaultConfigError.value = '';
+    try {
+        const config = YAML.parse(await files.read(DEFAULT_CONFIG_PATH));
+        for (const [name, setting] of Object.entries(DEFAULT_CONFIG_FIELDS)) {
+            const value = config?.[name];
+            // A file saved before a setting existed lacks it, and that setting keeps the value it
+            // has here: assigning undefined would store the string "undefined", which
+            // loadConfigValue throws on at the next start.
+            if (value !== undefined) {
+                setting.value = value;
+            }
         }
+    }
+    catch (err) {
+        defaultConfigError.value = axios.isAxiosError(err) && err.response?.status === 404
+            ? `The repository has no ${DEFAULT_CONFIG_PATH} yet. Save to repository writes one.`
+            : `Could not load ${DEFAULT_CONFIG_PATH}: ${err}`;
+    }
+    finally {
+        defaultConfigBusy.value = null;
     }
 }
 
-function saveAsDefault() {
+async function saveAsDefault() {
     const config = Object.fromEntries(
         Object.entries(DEFAULT_CONFIG_FIELDS).map(([name, setting]) => [name, setting.value]),
     );
-    files.write(DEFAULT_CONFIG_PATH, YAML.stringify(config));
+    defaultConfigBusy.value = 'save';
+    defaultConfigError.value = '';
+    try {
+        await files.write(DEFAULT_CONFIG_PATH, YAML.stringify(config));
+    }
+    catch (err) {
+        defaultConfigError.value = `Could not save ${DEFAULT_CONFIG_PATH}: ${err}`;
+    }
+    finally {
+        defaultConfigBusy.value = null;
+    }
 }
 
 </script>
