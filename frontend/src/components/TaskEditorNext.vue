@@ -133,22 +133,17 @@
                                 class="overview-chip"
                                 role="button"
                             >
+                                <!-- The chip keeps its size while the assessment reloads, which it
+                                     does on every pause in typing the title: rewrapped, the row
+                                     moved the field being typed in. So the last score stays, a
+                                     spinning icon takes the lightbulb's place, and the first score
+                                     is held a place of the same width. -->
                                 <v-icon
-                                    v-bind:icon="mdiLightbulbOnOutline"
+                                    v-bind:icon="assessmentLoading ? mdiLoading : mdiLightbulbOnOutline"
+                                    v-bind:class="{ 'assessment-loading': assessmentLoading }"
                                     start
                                 />
-                                <template v-if="assessmentLoading">
-                                    Assessing
-                                    <v-progress-circular
-                                        indeterminate
-                                        size="12"
-                                        width="2"
-                                        class="ml-1"
-                                    />
-                                </template>
-                                <template v-else-if="taskAssessment">
-                                    Assessment: {{ taskAssessment.quality_score.toFixed(1) }}/10
-                                </template>
+                                Assessment:&nbsp;<span class="assessment-score">{{ assessmentScore }}</span>
                             </v-chip>
                         </template>
                         <v-card
@@ -166,7 +161,7 @@
                                     class="ml-2"
                                 ></v-progress-circular>
                             </v-card-subtitle>
-                            <div v-if="taskAssessment && !assessmentLoading">
+                            <div v-if="taskAssessment">
                                 <div class="d-flex align-center mb-2">
                                     <span class="text-caption mr-2">Quality Score:</span>
                                     <v-rating
@@ -442,6 +437,7 @@ import {
     mdiFlagOutline,
     mdiFormatHeader1,
     mdiLightbulbOnOutline,
+    mdiLoading,
     mdiLock,
     mdiLockOpenVariant,
     mdiNoteTextOutline,
@@ -567,6 +563,10 @@ const uuid = computed<UUID>(() => extractFileUuid(props.taskPath));
 const isEdit = computed<boolean>(() => !!task.value);
 
 const parentActionLabel = computed<string>(() => isEdit.value ? 'Change Parent' : 'Choose Parent');
+
+const assessmentScore = computed<string>(() => taskAssessment.value
+    ? `${taskAssessment.value.quality_score.toFixed(1)}/10`
+    : '–/10');
 
 // The task this one sits under, for a new task's heading, worked out from the path so that a new
 // task has one before the listing holds it.
@@ -1083,6 +1083,23 @@ defineExpose({
     break-inside: avoid;
     -webkit-column-break-inside: avoid;
     padding-inline-start: 0.1em;
+}
+
+// As wide as any score but a perfect one, so the first score takes the room its placeholder held.
+.assessment-score {
+    display: inline-block;
+    min-width: 3em;
+    font-variant-numeric: tabular-nums;
+}
+
+.assessment-loading {
+    animation: assessment-loading 1s linear infinite;
+}
+
+@keyframes assessment-loading {
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .assessment {

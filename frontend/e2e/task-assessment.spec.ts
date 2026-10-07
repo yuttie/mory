@@ -69,3 +69,31 @@ test('keeps a long assessment beside its chip as the window shrinks', async ({ c
     await page.setViewportSize({ width: 1280, height: 420 });
     expect(await besideChip(page, chip, menu)).toBe(true);
 });
+
+// The assessment reloads on every pause in typing the title. Were the chip to change its width
+// meanwhile, its row could rewrap and move the field being typed in.
+test('keeps the chip its width while the assessment loads', async ({ context, page }) => {
+    await mockBackend(context, NOTES);
+    let answer = () => {};
+    await page.route(`${API_URL}v2/assess-task`, async (route) => {
+        await new Promise<void>((resolve) => {
+            answer = resolve;
+        });
+        await route.fulfill({ json: { quality_score: 6, feedback: '', suggestions: [], note_suggestions: [] } });
+    });
+    await page.goto(`/tasks-next/${TASK}/selected/status`);
+    const chip = page.locator('.editor-overview').getByRole('button');
+    await expect(chip).toBeVisible();
+    const width = (await chip.boundingBox())!.width;
+
+    answer();
+    await expect(chip).toContainText('6.0/10');
+    expect((await chip.boundingBox())!.width).toBe(width);
+
+    const reloading = page.waitForRequest(`${API_URL}v2/assess-task`);
+    await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Write the annual report');
+    await reloading;
+    expect((await chip.boundingBox())!.width).toBe(width);
+    await expect(chip.locator('.assessment-loading')).toBeVisible();
+    answer();
+});
