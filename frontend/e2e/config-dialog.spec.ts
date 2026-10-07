@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import type { Locator, Page } from '@playwright/test';
 import YAML from 'yaml';
 
-import { mockBackend } from './backend';
+import { API_URL, mockBackend } from './backend';
 
 function configDialog(page: Page): Locator {
     return page.getByRole('dialog', { name: 'Config', exact: true });
@@ -122,6 +122,44 @@ test('keeps trackpad scrolling in Config from navigating Calendar', async ({ con
     await expect(page).toHaveURL(/\/calendar\/month\/2026\/10\/07$/);
     await expect(configDialog(page)).toBeVisible();
 });
+
+for (const view of ['Calendar', 'Home']) {
+    test(`refreshes subscribed events on ${view} after saving Config`, async ({ context, page }) => {
+        const repository = await mockBackend(context, {
+            '.mory/calendars.yaml': YAML.stringify({ calendars: [{
+                id: 'work', name: 'Work', url: 'https://example.invalid/work.ics', enabled: true,
+            }] }),
+        });
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const year = tomorrow.getFullYear();
+        const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
+        const day = String(tomorrow.getDate()).padStart(2, '0');
+        const start = `${year}-${month}-${day}`;
+        let requests = 0;
+        await context.route(`${API_URL}v2/imported-events**`, async (route) => {
+            requests += 1;
+            await route.fulfill({ json: {
+                calendars: [{ id: 'work', name: 'Work', error: null }],
+                events: [{ calendar: 'work', uid: 'standup', recurrence_id: start, name: 'Imported standup', start }],
+                series: {}, truncated: false,
+            } });
+        });
+        await page.goto(view === 'Calendar' ? `/calendar/month/${year}/${month}/${day}` : '/');
+        await expect(page.getByText('Imported standup', { exact: true }).first()).toBeVisible();
+        await openConfig(page);
+        await configDialog(page).getByRole('tab', { name: 'Calendars', exact: true }).click();
+        await configDialog(page).locator('.v-list-item').filter({ hasText: 'Work' }).locator('.v-icon-btn').first().click();
+        const nested = page.getByRole('dialog').filter({ has: page.getByRole('textbox', { name: 'iCal URL' }) });
+        await nested.getByRole('textbox', { name: 'Name', exact: true }).fill('Work renamed');
+        await nested.getByRole('button', { name: 'Save', exact: true }).click();
+        await expect.poll(() => repository.writes.length).toBe(1);
+        await expect.poll(() => requests).toBe(2);
+        await configDialog(page).getByRole('button', { name: 'Close Config' }).click();
+        await expect(configDialog(page)).toBeHidden();
+        await expect(page.getByText('Imported standup', { exact: true }).first()).toBeVisible();
+    });
+}
 
 test('closes a nested settings dialog before Config on Escape', async ({ context, page }) => {
     await mockBackend(context, {});

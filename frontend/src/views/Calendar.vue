@@ -777,7 +777,7 @@ watch(route, (newRoute) => {
 // Declared after the route watcher, and immediate like it: watchers run in declaration order, so
 // the other way round a deep-linked date fetched twice -- once for today's window, which is never
 // drawn, and again once the route had moved the cursor.
-watch(eventWindow, (window) => {
+watch([eventWindow, () => calendars.subscriptionRevision], ([window]) => {
     loadImported(window);
 }, { immediate: true });
 </script>
