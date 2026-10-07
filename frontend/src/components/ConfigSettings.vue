@@ -226,6 +226,12 @@
                 <TasksSettings />
             </v-tabs-window-item>
             <v-tabs-window-item
+                value="task-assessment"
+                v-bind="panelAttributes('task-assessment')"
+            >
+                <TaskAssessmentSettings />
+            </v-tabs-window-item>
+            <v-tabs-window-item
                 value="calendars"
                 v-bind="panelAttributes('calendars')"
             >
@@ -248,6 +254,7 @@ import { ref, useId } from 'vue';
 import AiActionsSettings from '@/components/AiActionsSettings.vue';
 import CalendarsSettings from '@/components/CalendarsSettings.vue';
 import StoredInBrowser from '@/components/StoredInBrowser.vue';
+import TaskAssessmentSettings from '@/components/TaskAssessmentSettings.vue';
 import TasksSettings from '@/components/TasksSettings.vue';
 import { useFilesStore } from '@/stores/files';
 import {
@@ -279,6 +286,7 @@ const SETTINGS_GROUPS = [
         label: 'Repository',
         tabs: [
             { value: 'tasks', label: 'Tasks' },
+            { value: 'task-assessment', label: 'Task Assessment' },
             { value: 'calendars', label: 'Calendars' },
             { value: 'ai-actions', label: 'AI Actions' },
         ],
