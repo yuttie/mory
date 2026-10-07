@@ -10,10 +10,8 @@
             variant="tonal"
             role="note"
         >
-            Saved in this browser as you change them; no other browser sees them.
-            <strong>Save to repository</strong> copies every tab under This browser into
-            <code>{{ DEFAULT_CONFIG_PATH }}</code>; <strong>Load from repository</strong> copies
-            it back here, replacing them.
+            Kept in this browser only, saved as you change them. The buttons copy every setting
+            under <em>This browser</em> to or from <code>{{ DEFAULT_CONFIG_PATH }}</code>.
         </v-alert>
         <!-- Outside the alert: inside, its padding leaves a 320px phone too little width for
              the longer label. -->

@@ -158,7 +158,7 @@ test('switches to the simple editor and back without losing the rich editor hist
     await expect(editor).toHaveText('Draft');
 });
 
-test('loads and saves browser defaults from every browser panel', async ({ context, page }) => {
+test('offers the repository defaults on every browser panel', async ({ context, page }) => {
     const defaults = {
         useSimpleEditor: false,
         lockScroll: true,
@@ -179,7 +179,9 @@ test('loads and saves browser defaults from every browser panel', async ({ conte
     for (const name of ['General', 'Editor', 'Markdown Rendering', 'Navigation Drawer']) {
         await configDialog(page).getByRole('tab', { name, exact: true }).click();
         const panel = configDialog(page).getByRole('tabpanel', { name, exact: true });
-        await expect(panel.getByRole('note')).toContainText('copies every tab under This browser into .mory/default_config.yaml;');
+        await expect(panel.getByRole('note')).toContainText(
+            'copy every setting under This browser to or from .mory/default_config.yaml.',
+        );
         await expect(panel.getByRole('button', { name: 'Load from repository', exact: true })).toBeVisible();
         await expect(panel.getByRole('button', { name: 'Save to repository', exact: true })).toBeVisible();
     }
