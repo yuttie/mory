@@ -1371,6 +1371,8 @@ mod v2 {
     struct OpenAIRequest {
         model: String,
         messages: Vec<ChatMessage>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        response_format: Option<serde_json::Value>,
     }
 
     #[derive(Serialize)]
@@ -1380,8 +1382,12 @@ mod v2 {
     }
 
     /// Send a chat completion request to the provider and return the assistant's
-    /// message content verbatim.
-    async fn chat_completion(client: &reqwest::Client, messages: Vec<ChatMessage>) -> Result<String> {
+    /// message content verbatim, in `response_format` where one is given.
+    async fn chat_completion(
+        client: &reqwest::Client,
+        messages: Vec<ChatMessage>,
+        response_format: Option<serde_json::Value>,
+    ) -> Result<String> {
         let openai_api_key = env::var("MORIED_OPENAI_API_KEY")
             .context("MORIED_OPENAI_API_KEY environment variable not set")?;
         let model = env::var("MORIED_OPENAI_MODEL")
@@ -1390,6 +1396,7 @@ mod v2 {
         let openai_request = OpenAIRequest {
             model,
             messages,
+            response_format,
         };
 
         let response = client
@@ -1423,6 +1430,31 @@ mod v2 {
             .ok_or_else(|| anyhow::anyhow!("No response from OpenAI"))?;
 
         Ok(content)
+    }
+
+    /// The shape of an assessment, as Structured Outputs enforces it. Asked for in the prompt
+    /// alone, the shape is the model's to keep or not: an answer in a code fence, or with a word
+    /// before it, fails to parse, and the editor shows no assessment at all.
+    pub(crate) fn assessment_response_format() -> serde_json::Value {
+        let strings = serde_json::json!({ "type": "array", "items": { "type": "string" } });
+        serde_json::json!({
+            "type": "json_schema",
+            "json_schema": {
+                "name": "task_assessment",
+                "strict": true,
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "quality_score": { "type": "number" },
+                        "suggestions": strings,
+                        "feedback": { "type": "string" },
+                        "note_suggestions": strings,
+                    },
+                    "required": ["quality_score", "suggestions", "feedback", "note_suggestions"],
+                    "additionalProperties": false,
+                },
+            },
+        })
     }
 
     pub async fn post_assess_task(
@@ -1552,7 +1584,7 @@ Important:
                 role: "user".to_string(),
                 content: prompt,
             },
-        ]).await?;
+        ], Some(assessment_response_format())).await?;
 
         // Parse the JSON content from OpenAI response
         let assessment: AssessmentResponse = serde_json::from_str(&content)
@@ -1616,7 +1648,7 @@ Important:
                 role: "user".to_string(),
                 content: request.prompt,
             },
-        ]).await?;
+        ], None).await?;
 
         Ok(Json(AiActionResponse { text }))
     }

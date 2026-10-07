@@ -3065,3 +3065,26 @@ fn plan_reads_supply_the_version_accepted_by_checked_writes() {
     let next_etag = format!("\"{next_version}\"");
     assert!(commit_save_checked(&fixture.repo, path, b"2026-10-05: []\n", "Next edit", &next_etag).unwrap().is_some());
 }
+
+// ---------------------------------------------------------------------------
+// Task assessment
+// ---------------------------------------------------------------------------
+
+#[test]
+fn an_assessment_is_held_to_the_shape_moried_parses() {
+    use std::collections::BTreeSet;
+    let format = crate::v2::assessment_response_format();
+    let schema = &format["json_schema"]["schema"];
+    let answer = serde_json::to_value(crate::v2::AssessmentResponse {
+        quality_score: 0.0,
+        suggestions: vec![],
+        feedback: String::new(),
+        note_suggestions: vec![],
+    }).unwrap();
+    let fields: BTreeSet<&str> = answer.as_object().unwrap().keys().map(String::as_str).collect();
+    let properties: BTreeSet<&str> = schema["properties"].as_object().unwrap().keys().map(String::as_str).collect();
+    let required: BTreeSet<&str> = schema["required"].as_array().unwrap().iter().map(|key| key.as_str().unwrap()).collect();
+    // Strict mode needs every property required, and an answer missing one would not parse.
+    assert_eq!(properties, fields);
+    assert_eq!(required, fields);
+}
