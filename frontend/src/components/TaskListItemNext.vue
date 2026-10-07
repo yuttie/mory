@@ -63,7 +63,7 @@ import {
     mdiTagOutline,
 } from '@mdi/js';
 
-import type { UUID } from '@/task';
+import type { StatusKind, UUID } from '@/task';
 import type { TaskNode } from '@/task-forest';
 import { useTasksStore } from '@/stores/tasks';
 import { URGENCY_LABEL } from '@/urgency';
@@ -82,6 +82,10 @@ const props = defineProps<{
     to: RouteLocationRaw;
     // The task whose descendants the list holds, if it holds only those.
     listRoot?: UUID;
+    // The status the list files the task under, where it knows better than the note: a task just
+    // dropped in another column is drawn there before its note is written, and drawn as its new
+    // status there.
+    status?: StatusKind;
 }>();
 
 // Stores
@@ -102,7 +106,7 @@ const tags = computed<string[]>(() => {
     return props.value.metadata?.tags ?? [];
 });
 
-const kind = computed(() => props.value.metadata?.task?.status?.kind);
+const kind = computed(() => props.status ?? props.value.metadata?.task?.status?.kind);
 
 // The status as the task tree draws it: the same icon in the same colour, beside the title.
 const icon = computed<string>(() => {

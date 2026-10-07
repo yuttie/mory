@@ -114,6 +114,30 @@ test('moves a task to the status it is dropped on, rewriting nothing but the sta
     ]);
 });
 
+test('draws a dropped task in its new status before the write lands', async ({ context, page }) => {
+    const repository = await openStatusView(context, page, { [ALPHA]: note('Alpha', ['kind: todo']) });
+    // The write held back, as a slow network would hold it.
+    let land!: () => void;
+    const landed = new Promise<void>((resolve) => { land = resolve; });
+    await page.route('**/api/notes/**', async (route) => {
+        if (route.request().method() !== 'GET') {
+            await landed;
+        }
+        await route.fallback();
+    });
+
+    await startDrag(page, task(page, 'Alpha'));
+    await dropOn(page, column(page, 'In progress'));
+    const card = column(page, 'In progress').locator('.task-list-item', { hasText: 'Alpha' });
+    // In progress's own blue, where To do's blue-grey would say it had not moved.
+    await expect(card).toHaveAttribute('style', /#2196f3/);
+    expect(repository.writes).toEqual([]);
+
+    land();
+    await expect.poll(() => repository.writes.length).toBe(1);
+    await expect(card).toHaveAttribute('style', /#2196f3/);
+});
+
 test('takes a task dropped in the space between two tasks of another status', async ({ context, page }) => {
     const before = note('Alpha', ['kind: todo']);
     const repository = await openStatusView(context, page, {

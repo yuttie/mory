@@ -47,6 +47,7 @@
                             v-bind:value="task"
                             v-bind:to="routeFor(task)"
                             v-bind:list-root="listRoot"
+                            v-bind:status="column.kind"
                             draggable="false"
                             v-on:pointerdown="onPointerDown"
                             v-on:contextmenu="onContextMenu"
