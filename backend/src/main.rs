@@ -1333,6 +1333,18 @@ mod v2 {
 
     #[derive(Deserialize, Serialize)]
     pub struct AssessmentRequest {
+        /// What to look for and how to word the answer. Sent with each request rather than kept
+        /// here, so the web app holds the only copy of the default and can let the user word
+        /// their own. Empty from a client that sends none.
+        #[serde(default)]
+        pub instructions: String,
+        #[serde(flatten)]
+        pub task: AssessedTask,
+    }
+
+    /// The task as the model is shown it.
+    #[derive(Deserialize, Serialize)]
+    pub struct AssessedTask {
         pub ancestor_titles: Option<Vec<String>>,
         pub title: String,
         pub tags: Option<Vec<String>>,
@@ -1371,6 +1383,8 @@ mod v2 {
     struct OpenAIRequest {
         model: String,
         messages: Vec<ChatMessage>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        response_format: Option<serde_json::Value>,
     }
 
     #[derive(Serialize)]
@@ -1380,8 +1394,12 @@ mod v2 {
     }
 
     /// Send a chat completion request to the provider and return the assistant's
-    /// message content verbatim.
-    async fn chat_completion(client: &reqwest::Client, messages: Vec<ChatMessage>) -> Result<String> {
+    /// message content verbatim, in `response_format` where one is given.
+    async fn chat_completion(
+        client: &reqwest::Client,
+        messages: Vec<ChatMessage>,
+        response_format: Option<serde_json::Value>,
+    ) -> Result<String> {
         let openai_api_key = env::var("MORIED_OPENAI_API_KEY")
             .context("MORIED_OPENAI_API_KEY environment variable not set")?;
         let model = env::var("MORIED_OPENAI_MODEL")
@@ -1390,6 +1408,7 @@ mod v2 {
         let openai_request = OpenAIRequest {
             model,
             messages,
+            response_format,
         };
 
         let response = client
@@ -1425,16 +1444,110 @@ mod v2 {
         Ok(content)
     }
 
+    /// The messages that ask for an assessment. The instructions come from the web app, so the
+    /// shape of the answer, which moried parses, is set here rather than among them, and held to
+    /// by `assessment_response_format`.
+    pub(crate) fn assessment_messages(request: &AssessmentRequest, today: &str) -> Result<Vec<ChatMessage>> {
+        let context_part = match request.task.ancestor_titles.as_deref() {
+            Some(ancestors) if !ancestors.is_empty() => format!(
+                "\n\nTask hierarchy context (from top-level to immediate parent):\n{}",
+                ancestors.iter().enumerate()
+                    .map(|(i, title)| format!("{}. <task-title>{}</task-title>", i + 1, title))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ),
+            _ => String::new(),
+        };
+
+        // Build complete task information as JSON for the prompt
+        let task_information = serde_json::to_string_pretty(&request.task)
+            .context("Failed to serialize task information to JSON")?;
+
+        let instructions = request.instructions.trim();
+        let prompt = format!(
+            "{}{}Today's date: {}\n\nTask Information (JSON):\n{}{}",
+            instructions,
+            if instructions.is_empty() { "" } else { "\n\n" },
+            today,
+            task_information,
+            context_part
+        );
+
+        Ok(vec![
+            ChatMessage {
+                role: "developer".to_string(),
+                content: r#"You assess a task in the user's task manager and suggest how to improve it. Any instructions before the task say what to look for.
+
+The task is given as JSON containing:
+- title: The main task description
+- tags: Categories/labels associated with the task
+- status: Current state of the task (todo, in_progress, waiting, etc.)
+- importance: Optional judgement: low, medium or high; null or absent means unrated
+- available_from: Earliest date/time work can begin
+- due_by: Preferred completion date/time
+- deadline: Hard deadline
+- note: Any current notes about the task
+- ancestor_titles: Hierarchical context (parent tasks)
+
+Always respond with valid JSON of this shape, and nothing else:
+{
+  "quality_score": <real number between 0 and 10, where 10 is best>,
+  "suggestions": ["improvement to the task 1", "suggestion 2", ...],
+  "feedback": "overall assessment of the task",
+  "note_suggestions": ["content to add to the task's note 1", "suggestion 2", ...]
+}
+
+Write note suggestions in GitHub Flavored Markdown, ready to add to the task's note."#.to_string(),
+            },
+            ChatMessage {
+                role: "user".to_string(),
+                content: prompt,
+            },
+        ])
+    }
+
+    /// The shape of an assessment, as Structured Outputs enforces it. Asked for in the prompt
+    /// alone, the shape is the model's to keep or not: an answer in a code fence, or with a word
+    /// before it, fails to parse, and the editor shows no assessment at all.
+    pub(crate) fn assessment_response_format() -> serde_json::Value {
+        let strings = serde_json::json!({ "type": "array", "items": { "type": "string" } });
+        serde_json::json!({
+            "type": "json_schema",
+            "json_schema": {
+                "name": "task_assessment",
+                "strict": true,
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "quality_score": { "type": "number" },
+                        "suggestions": strings,
+                        "feedback": { "type": "string" },
+                        "note_suggestions": strings,
+                    },
+                    "required": ["quality_score", "suggestions", "feedback", "note_suggestions"],
+                    "additionalProperties": false,
+                },
+            },
+        })
+    }
+
+    /// The key an assessment is cached under: the whole request. The instructions are part of it,
+    /// so an edited prompt is not answered with what the previous one produced.
+    pub(crate) fn assessment_cache_key(request: &AssessmentRequest) -> Result<String> {
+        let request_json = serde_json::to_string(request)
+            .context("Failed to serialize request")?;
+        let mut hasher = Sha1::new();
+        hasher.update(request_json.as_bytes());
+        Ok(format!("{:x}", hasher.finalize()))
+    }
+
     pub async fn post_assess_task(
         extract::State(state): extract::State<AppState>,
         Json(request): Json<AssessmentRequest>,
     ) -> Result<Json<AssessmentResponse>, AppError> {
-        // Create cache key from request data
         let request_json = serde_json::to_string(&request)
             .context("Failed to serialize request")?;
-        let mut hasher = Sha1::new();
-        hasher.update(request_json.as_bytes());
-        let request_hash = format!("{:x}", hasher.finalize());
+        let request_hash = assessment_cache_key(&request)?;
 
         // Check cache first (cache entries older than 24 hours are considered stale)
         let cache_expiry_hours = env::var("MORIED_OPENAI_CACHE_HOURS")
@@ -1467,92 +1580,11 @@ mod v2 {
         // Get today's date for context
         let today = Utc::now().format("%Y-%m-%d").to_string();
 
-        let context_part = if let Some(ref ancestors) = request.ancestor_titles {
-            if !ancestors.is_empty() {
-                format!(
-                    "\n\nTask hierarchy context (from top-level to immediate parent):\n{}\n\nConsider the hierarchy context when evaluating the task title. The task title may be short and rely on context, but it should still be understandable within the hierarchy.",
-                    ancestors.iter().enumerate()
-                        .map(|(i, title)| format!("{}. <task-title>{}</task-title>", i + 1, title))
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                )
-            } else {
-                String::new()
-            }
-        } else {
-            String::new()
-        };
-
-        // Build complete task information as JSON for the prompt
-        let task_information = serde_json::to_string_pretty(&request)
-            .context("Failed to serialize task information to JSON")?;
-
-        let prompt = format!(
-            r#"Analyze the following task and provide comprehensive assistance:
-
-Today's date: {}
-
-Task Information (JSON):
-{}{}
-
-Primary Focus: Evaluate the TASK AS A WHOLE and suggest improvements for overall clarity and completeness.
-
-The task information is provided as JSON containing:
-- title: The main task description
-- tags: Categories/labels associated with the task
-- status: Current state of the task (todo, in_progress, waiting, etc.)
-- importance: Optional judgement: low, medium or high; absent means unrated
-- available_from: Earliest date/time work can begin
-- due_by: Preferred completion date/time
-- deadline: Hard deadline
-- note: Any current notes about the task
-- ancestor_titles: Hierarchical context (parent tasks)
-
-Evaluate the task holistically by considering the combination of title, note, and other task information:
-1. Overall clarity: Is it clear what needs to be done when considering title + note + other information together?
-2. Completeness: Does the combined information provide sufficient context to understand and execute the task?
-3. Actionability: Are the required actions clear from the overall task description?
-4. Information sufficiency: Does the title need to be complete on its own, or does the note provide adequate context?
-
-The title may be intentionally brief or incomplete if the note provides sufficient detail. Focus on the overall task comprehensibility rather than title completeness alone.
-
-Suggest improvements that enhance overall task clarity, which may include:
-- Title refinements (if needed for clarity)
-- Note content additions or improvements
-- Better organization of existing information
-- Missing critical details that would help task execution
-
-Respond with JSON:
-{{
-  "quality_score": <real number between 0 and 10, where 10 = excellent overall task clarity>,
-  "suggestions": ["specific improvement suggestion for overall task clarity 1", "suggestion 2", ...],
-  "feedback": "overall task assessment emphasizing how well the combined title+note+info communicates the task",
-  "note_suggestions": ["helpful note content addition or improvement 1", "suggestion 2", "suggestion 3", ...]
-}}
-
-Important:
-- Use the same language as the task title.
-- Evaluate the task as a complete unit (title + note + other fields).
-- Accept brief titles if the note provides adequate context.
-- Keep suggestions practical and actionable.
-- Write note snippets in GitHub Flavored Markdown format.
-- Consider the complete task context when making suggestions.
-            "#,
-            today,
-            task_information,
-            context_part
-        );
-
-        let content = chat_completion(client, vec![
-            ChatMessage {
-                role: "developer".to_string(),
-                content: "You are a helpful assistant that provides feedback on task titles and suggests practical note content for task completion. Always respond with valid JSON. Be concise but thorough in your suggestions.".to_string(),
-            },
-            ChatMessage {
-                role: "user".to_string(),
-                content: prompt,
-            },
-        ]).await?;
+        let content = chat_completion(
+            client,
+            assessment_messages(&request, &today)?,
+            Some(assessment_response_format()),
+        ).await?;
 
         // Parse the JSON content from OpenAI response
         let assessment: AssessmentResponse = serde_json::from_str(&content)
@@ -1616,7 +1648,7 @@ Important:
                 role: "user".to_string(),
                 content: request.prompt,
             },
-        ]).await?;
+        ], None).await?;
 
         Ok(Json(AiActionResponse { text }))
     }

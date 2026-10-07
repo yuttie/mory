@@ -3065,3 +3065,68 @@ fn plan_reads_supply_the_version_accepted_by_checked_writes() {
     let next_etag = format!("\"{next_version}\"");
     assert!(commit_save_checked(&fixture.repo, path, b"2026-10-05: []\n", "Next edit", &next_etag).unwrap().is_some());
 }
+
+// ---------------------------------------------------------------------------
+// Task assessment
+// ---------------------------------------------------------------------------
+
+fn assessment_request(body: serde_json::Value) -> crate::v2::AssessmentRequest {
+    serde_json::from_value(body).expect("a request the web app sends")
+}
+
+#[test]
+fn an_assessment_puts_the_instructions_before_the_task_and_keeps_them_out_of_it() {
+    let request = assessment_request(serde_json::json!({
+        "instructions": "  Judge the title only.\n",
+        "ancestor_titles": ["Move house", "Pack"],
+        "title": "Kitchen",
+        "note": "",
+    }));
+    let messages = crate::v2::assessment_messages(&request, "2026-10-08").unwrap();
+    let [developer, user] = &messages[..] else { panic!("two messages") };
+    assert_eq!(developer.role, "developer");
+    assert!(developer.content.contains("\"quality_score\""), "the answer's shape is the app's");
+    assert_eq!(user.role, "user");
+    assert!(user.content.starts_with("Judge the title only.\n\nToday's date: 2026-10-08\n\n"), "{}", user.content);
+    assert!(user.content.contains("\"title\": \"Kitchen\""), "{}", user.content);
+    assert!(!user.content.contains("\"instructions\""), "the task JSON is the task alone");
+    assert!(user.content.ends_with("1. <task-title>Move house</task-title>\n2. <task-title>Pack</task-title>"), "{}", user.content);
+}
+
+#[test]
+fn an_assessment_without_instructions_still_shows_the_task() {
+    // What a web app from before the instructions were sent asks.
+    let request = assessment_request(serde_json::json!({ "ancestor_titles": [], "title": "Kitchen" }));
+    let messages = crate::v2::assessment_messages(&request, "2026-10-08").unwrap();
+    assert!(messages[1].content.starts_with("Today's date: 2026-10-08\n\nTask Information (JSON):\n{"), "{}", messages[1].content);
+    assert!(!messages[1].content.contains("hierarchy"), "no parents, no hierarchy");
+}
+
+#[test]
+fn an_assessment_is_held_to_the_shape_moried_parses() {
+    use std::collections::BTreeSet;
+    let format = crate::v2::assessment_response_format();
+    let schema = &format["json_schema"]["schema"];
+    let answer = serde_json::to_value(crate::v2::AssessmentResponse {
+        quality_score: 0.0,
+        suggestions: vec![],
+        feedback: String::new(),
+        note_suggestions: vec![],
+    }).unwrap();
+    let fields: BTreeSet<&str> = answer.as_object().unwrap().keys().map(String::as_str).collect();
+    let properties: BTreeSet<&str> = schema["properties"].as_object().unwrap().keys().map(String::as_str).collect();
+    let required: BTreeSet<&str> = schema["required"].as_array().unwrap().iter().map(|key| key.as_str().unwrap()).collect();
+    // Strict mode needs every property required, and an answer missing one would not parse.
+    assert_eq!(properties, fields);
+    assert_eq!(required, fields);
+}
+
+#[test]
+fn an_edited_assessment_prompt_is_not_answered_from_the_cache() {
+    let asked = |instructions: &str| crate::v2::assessment_cache_key(&assessment_request(serde_json::json!({
+        "instructions": instructions,
+        "title": "Kitchen",
+    }))).unwrap();
+    assert_eq!(asked("Judge the title only."), asked("Judge the title only."));
+    assert_ne!(asked("Judge the title only."), asked("Judge the note only."));
+}

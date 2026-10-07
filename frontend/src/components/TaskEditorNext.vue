@@ -495,6 +495,7 @@ import { useCalendarsStore } from '@/stores/calendars';
 import { leadTimeDays, resolvedLeadTime, taskInstant, urgencyOf, URGENCY_LABEL, type Importance } from '@/urgency';
 import { useTasksStore } from '@/stores/tasks';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
+import { useTaskAssessmentStore } from '@/stores/taskAssessment';
 import { usePlansStore } from '@/stores/plans';
 
 type EditableTask = {
@@ -529,6 +530,7 @@ const { task, loading, error, refresh } = useFetchTask(pathRef);
 const calendars = useCalendarsStore();
 const tasks = useTasksStore();
 const settings = useTaskSettingsStore();
+const assessmentPrompt = useTaskAssessmentStore();
 const derivedProgress = computed(() => tasks.progress(uuid.value));
 const defaultLeadTime = computed(() => resolvedLeadTime({}, form.tags, settings.settings));
 const derivedUrgency = computed(() => tasks.urgency(uuid.value, urgencyOf(form, form.tags, settings.settings, tasks.now), form.status.kind));
@@ -937,7 +939,8 @@ async function performTaskAssessment(title: string) {
             deadline: form.deadline,
             note: form.note,
         };
-        const response = await assessTask(taskForAssessment, ancestorTitles.value);
+        const instructions = await assessmentPrompt.current();
+        const response = await assessTask(taskForAssessment, ancestorTitles.value, instructions);
         taskAssessment.value = response;
     } catch (error) {
         console.warn('Failed to assess task:', error);
