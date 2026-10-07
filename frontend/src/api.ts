@@ -514,9 +514,10 @@ export async function assessTask(task: {
     due_by?: string;
     deadline?: string;
     note?: string;
-}, ancestorTitles: string[] = []): Promise<TaskAssessmentResponse> {
+}, ancestorTitles: string[], instructions: string): Promise<TaskAssessmentResponse> {
     const axios = await getAxios();
     const response = await axios.post('/v2/assess-task', {
+        instructions,
         ancestor_titles: ancestorTitles,
         title: task.title,
         tags: task.tags,

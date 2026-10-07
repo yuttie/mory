@@ -495,6 +495,7 @@ import { useCalendarsStore } from '@/stores/calendars';
 import { leadTimeDays, resolvedLeadTime, taskInstant, urgencyOf, URGENCY_LABEL, type Importance } from '@/urgency';
 import { useTasksStore } from '@/stores/tasks';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
+import { DEFAULT_TASK_ASSESSMENT_PROMPT } from '@/task-assessment';
 import { usePlansStore } from '@/stores/plans';
 
 type EditableTask = {
@@ -937,7 +938,7 @@ async function performTaskAssessment(title: string) {
             deadline: form.deadline,
             note: form.note,
         };
-        const response = await assessTask(taskForAssessment, ancestorTitles.value);
+        const response = await assessTask(taskForAssessment, ancestorTitles.value, DEFAULT_TASK_ASSESSMENT_PROMPT);
         taskAssessment.value = response;
     } catch (error) {
         console.warn('Failed to assess task:', error);
