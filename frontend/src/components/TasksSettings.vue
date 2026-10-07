@@ -1,6 +1,6 @@
 <template>
     <section>
-        <h2 class="text-h6 mb-4">
+        <h2 class="text-title-medium mb-4">
             Tasks
         </h2>
         <v-card-subtitle class="px-0">

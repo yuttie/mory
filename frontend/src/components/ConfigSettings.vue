@@ -1,216 +1,209 @@
 <template>
-    <div id="config">
-        <v-sheet class="config-sheet pa-6">
-            <h1 class="mb-4">
-                Config
-            </h1>
-            <div class="config-settings">
-                <v-tabs
-                    v-model="selectedTab"
-                    direction="vertical"
-                    color="primary"
-                    class="config-tabs"
-                    aria-label="Settings groups"
+    <div class="config-settings">
+        <v-tabs
+            v-model="selectedTab"
+            direction="vertical"
+            color="primary"
+            class="config-tabs"
+            aria-label="Settings groups"
+        >
+            <v-tab value="general">
+                General
+            </v-tab>
+            <v-tab value="editor">
+                Editor
+            </v-tab>
+            <v-tab value="markdown">
+                Markdown Rendering
+            </v-tab>
+            <v-tab value="navigation">
+                Navigation Drawer
+            </v-tab>
+            <v-tab value="tasks">
+                Tasks
+            </v-tab>
+            <v-tab value="calendars">
+                Calendars
+            </v-tab>
+            <v-tab value="ai-actions">
+                AI Actions
+            </v-tab>
+        </v-tabs>
+        <v-tabs-window
+            v-model="selectedTab"
+            v-bind:touch="false"
+            class="config-panels"
+        >
+            <v-tabs-window-item value="general">
+                <h2 class="text-title-medium mb-4">
+                    General
+                </h2>
+                <v-alert
+                    variant="tonal"
+                    type="info"
+                    class="mb-4"
                 >
-                    <v-tab value="general">
-                        General
-                    </v-tab>
-                    <v-tab value="editor">
-                        Editor
-                    </v-tab>
-                    <v-tab value="markdown">
-                        Markdown Rendering
-                    </v-tab>
-                    <v-tab value="navigation">
-                        Navigation Drawer
-                    </v-tab>
-                    <v-tab value="tasks">
-                        Tasks
-                    </v-tab>
-                    <v-tab value="calendars">
-                        Calendars
-                    </v-tab>
-                    <v-tab value="ai-actions">
-                        AI Actions
-                    </v-tab>
-                </v-tabs>
-                <v-tabs-window
-                    v-model="selectedTab"
-                    v-bind:touch="false"
-                    class="config-panels"
+                    General, Editor, Markdown Rendering, and Navigation Drawer settings
+                    are saved automatically in this browser. Save them as default to store
+                    them in the repository for other browsers to load.
+                </v-alert>
+                <div class="d-flex flex-wrap ga-2 mb-4">
+                    <v-btn v-on:click="loadDefault">
+                        Load default
+                    </v-btn>
+                    <v-btn v-on:click="saveAsDefault">
+                        Save as default
+                    </v-btn>
+                </div>
+                <v-checkbox
+                    v-model="currentLockScroll"
+                    label="Lock Scroll by Default"
+                />
+            </v-tabs-window-item>
+            <v-tabs-window-item value="editor">
+                <h2 class="text-title-medium mb-4">
+                    Editor
+                </h2>
+                <v-checkbox
+                    v-model="currentUseSimpleEditor"
+                    label="Use Simple Editor"
+                />
+                <v-text-field
+                    v-model="currentEditorFontFamily"
+                    label="Font Family"
+                />
+                <v-slider
+                    v-model="currentEditorFontSize"
+                    label="Font Size"
+                    min="1"
+                    max="64"
+                    step="0.5"
+                    thumb-label
                 >
-                    <v-tabs-window-item value="general">
-                        <h2 class="text-h6 mb-4">
-                            General
-                        </h2>
-                        <v-alert
-                            variant="tonal"
-                            type="info"
-                            class="mb-4"
-                        >
-                            General, Editor, Markdown Rendering, and Navigation Drawer settings
-                            are saved automatically in this browser. Save them as default to store
-                            them in the repository for other browsers to load.
-                        </v-alert>
-                        <div class="d-flex flex-wrap ga-2 mb-4">
-                            <v-btn v-on:click="loadDefault">
-                                Load default
-                            </v-btn>
-                            <v-btn v-on:click="saveAsDefault">
-                                Save as default
-                            </v-btn>
-                        </div>
-                        <v-checkbox
-                            v-model="currentLockScroll"
-                            label="Lock Scroll by Default"
-                        />
-                    </v-tabs-window-item>
-                    <v-tabs-window-item value="editor">
-                        <h2 class="text-h6 mb-4">
-                            Editor
-                        </h2>
-                        <v-checkbox
-                            v-model="currentUseSimpleEditor"
-                            label="Use Simple Editor"
-                        />
+                    <template #append>
                         <v-text-field
-                            v-model="currentEditorFontFamily"
-                            label="Font Family"
-                        />
-                        <v-slider
                             v-model="currentEditorFontSize"
-                            label="Font Size"
-                            min="1"
-                            max="64"
-                            step="0.5"
-                            thumb-label
-                        >
-                            <template #append>
-                                <v-text-field
-                                    v-model="currentEditorFontSize"
-                                    type="text"
-                                    style="width: 6em"
-                                    suffix="pt"
-                                    readonly
-                                />
-                            </template>
-                        </v-slider>
-                        <v-slider
+                            type="text"
+                            style="width: 6em"
+                            suffix="pt"
+                            readonly
+                        />
+                    </template>
+                </v-slider>
+                <v-slider
+                    v-model="editorIndentSize"
+                    label="Indent Size"
+                    min="1"
+                    max="16"
+                    step="1"
+                    thumb-label
+                >
+                    <template #append>
+                        <v-text-field
                             v-model="editorIndentSize"
-                            label="Indent Size"
-                            min="1"
-                            max="16"
-                            step="1"
-                            thumb-label
-                        >
-                            <template #append>
-                                <v-text-field
-                                    v-model="editorIndentSize"
-                                    type="text"
-                                    suffix="spaces"
-                                    readonly
-                                />
-                            </template>
-                        </v-slider>
-                        <v-select
-                            v-model="currentEditorTheme"
-                            v-bind:items="editorThemes"
-                            label="Theme"
-                            item-title="name"
-                            item-value="value"
+                            type="text"
+                            suffix="spaces"
+                            readonly
                         />
-                        <v-select
-                            v-model="currentEditorKeybinding"
-                            v-bind:items="editorKeybindings"
-                            label="Keybinding"
-                            item-title="name"
-                            item-value="value"
-                        />
-                        <v-checkbox
-                            v-model="editorEnableEmacsStyleBindings"
-                            label="Enable Emacs-style bindings for non-Emacs key maps"
-                            hide-details="auto"
-                        />
-                        <v-checkbox
-                            v-model="editorVimInsertUnmapCtCd"
-                            label="Unmap <C-t>/<C-d> in Vim insert mode"
-                            hide-details="auto"
-                        />
-                    </v-tabs-window-item>
-                    <v-tabs-window-item value="markdown">
-                        <h2 class="text-h6 mb-4">
-                            Markdown Rendering
-                        </h2>
-                        <v-select
-                            v-model="currentHighlightjsTheme"
-                            v-bind:items="highlightjsThemes"
-                            label="Code Block Syntax Highlight Theme"
-                            item-title="name"
-                            item-value="value"
-                        />
-                    </v-tabs-window-item>
-                    <v-tabs-window-item value="navigation">
-                        <h2 class="text-h6 mb-4">
-                            Navigation Drawer
-                        </h2>
-                        <p class="text-body-2 text-medium-emphasis mb-4">
-                            The note tree shows the most recently changed notes and directories.
-                            Pressing &ldquo;Show older&rdquo; reveals the next batch.
-                        </p>
-                        <v-slider
+                    </template>
+                </v-slider>
+                <v-select
+                    v-model="currentEditorTheme"
+                    v-bind:items="editorThemes"
+                    label="Theme"
+                    item-title="name"
+                    item-value="value"
+                />
+                <v-select
+                    v-model="currentEditorKeybinding"
+                    v-bind:items="editorKeybindings"
+                    label="Keybinding"
+                    item-title="name"
+                    item-value="value"
+                />
+                <v-checkbox
+                    v-model="editorEnableEmacsStyleBindings"
+                    label="Enable Emacs-style bindings for non-Emacs key maps"
+                    hide-details="auto"
+                />
+                <v-checkbox
+                    v-model="editorVimInsertUnmapCtCd"
+                    label="Unmap <C-t>/<C-d> in Vim insert mode"
+                    hide-details="auto"
+                />
+            </v-tabs-window-item>
+            <v-tabs-window-item value="markdown">
+                <h2 class="text-title-medium mb-4">
+                    Markdown Rendering
+                </h2>
+                <v-select
+                    v-model="currentHighlightjsTheme"
+                    v-bind:items="highlightjsThemes"
+                    label="Code Block Syntax Highlight Theme"
+                    item-title="name"
+                    item-value="value"
+                />
+            </v-tabs-window-item>
+            <v-tabs-window-item value="navigation">
+                <h2 class="text-title-medium mb-4">
+                    Navigation Drawer
+                </h2>
+                <p class="text-body-2 text-medium-emphasis mb-4">
+                    The note tree shows the most recently changed notes and directories.
+                    Pressing &ldquo;Show older&rdquo; reveals the next batch.
+                </p>
+                <v-slider
+                    v-model="noteTreeInitialRows"
+                    label="Initial Rows"
+                    min="10"
+                    max="100"
+                    step="10"
+                    thumb-label
+                >
+                    <template #append>
+                        <v-text-field
                             v-model="noteTreeInitialRows"
-                            label="Initial Rows"
-                            min="10"
-                            max="100"
-                            step="10"
-                            thumb-label
-                        >
-                            <template #append>
-                                <v-text-field
-                                    v-model="noteTreeInitialRows"
-                                    type="text"
-                                    style="width: 7em"
-                                    suffix="rows"
-                                    readonly
-                                />
-                            </template>
-                        </v-slider>
-                        <v-slider
+                            type="text"
+                            style="width: 7em"
+                            suffix="rows"
+                            readonly
+                        />
+                    </template>
+                </v-slider>
+                <v-slider
+                    v-model="noteTreeRowIncrement"
+                    label="Rows per Press"
+                    min="10"
+                    max="100"
+                    step="10"
+                    thumb-label
+                >
+                    <template #append>
+                        <v-text-field
                             v-model="noteTreeRowIncrement"
-                            label="Rows per Press"
-                            min="10"
-                            max="100"
-                            step="10"
-                            thumb-label
-                        >
-                            <template #append>
-                                <v-text-field
-                                    v-model="noteTreeRowIncrement"
-                                    type="text"
-                                    style="width: 7em"
-                                    suffix="rows"
-                                    readonly
-                                />
-                            </template>
-                        </v-slider>
-                    </v-tabs-window-item>
-                    <v-tabs-window-item value="tasks">
-                        <TasksSettings />
-                    </v-tabs-window-item>
-                    <v-tabs-window-item value="calendars">
-                        <CalendarsSettings />
-                    </v-tabs-window-item>
-                    <v-tabs-window-item value="ai-actions">
-                        <AiActionsSettings />
-                    </v-tabs-window-item>
-                </v-tabs-window>
-            </div>
-        </v-sheet>
+                            type="text"
+                            style="width: 7em"
+                            suffix="rows"
+                            readonly
+                        />
+                    </template>
+                </v-slider>
+            </v-tabs-window-item>
+            <v-tabs-window-item value="tasks">
+                <TasksSettings />
+            </v-tabs-window-item>
+            <v-tabs-window-item value="calendars">
+                <CalendarsSettings />
+            </v-tabs-window-item>
+            <v-tabs-window-item value="ai-actions">
+                <AiActionsSettings />
+            </v-tabs-window-item>
+        </v-tabs-window>
     </div>
 </template>
 
 <script lang="ts" setup>
-import { ref, watch, onMounted } from 'vue';
+import { ref, watch } from 'vue';
 
 import AiActionsSettings from '@/components/AiActionsSettings.vue';
 import CalendarsSettings from '@/components/CalendarsSettings.vue';
@@ -501,11 +494,6 @@ const editorEnableEmacsStyleBindings = ref(loadConfigValue('editor-enable-emacs-
 const editorVimInsertUnmapCtCd = ref(loadConfigValue('editor-vim-insert-unmap-ct-cd', false));
 const currentHighlightjsTheme = ref(loadConfigValue('highlightjs-theme', 'default'));
 
-// Lifecycle hooks
-onMounted(() => {
-    document.title = `Config | ${import.meta.env.VITE_APP_NAME}`;
-});
-
 // Methods
 async function loadDefault() {
     const config = YAML.parse(await files.read('.mory/default_config.yaml'));
@@ -594,21 +582,13 @@ watch(noteTreeRowIncrement, (newNoteTreeRowIncrement: number) => {
 </script>
 
 <style scoped lang="scss">
-#config {
-    display: flex;
-    justify-content: center;
-}
-
-.config-sheet {
-    width: 100%;
-    max-width: 1000px;
-    min-width: 0;
-}
-
 .config-settings {
     display: flex;
     gap: 24px;
+    padding: 16px 24px 24px;
     min-width: 0;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .config-tabs {
@@ -616,18 +596,36 @@ watch(noteTreeRowIncrement, (newNoteTreeRowIncrement: number) => {
 
     :deep(.v-tab) {
         justify-content: flex-start;
+    }
+
+    :deep(.v-btn__content) {
         white-space: normal;
+        text-align: left;
     }
 }
 
 .config-panels {
     flex: 1;
     min-width: 0;
+    overflow-y: auto;
 }
 
 @media (max-width: 599px) {
     .config-settings {
         gap: 12px;
+        padding: 12px;
+    }
+
+    .config-panels {
+        :deep(.v-slider.v-input--horizontal) {
+            grid-template-areas: "prepend prepend" "control append" "messages messages";
+            grid-template-columns: minmax(0, 1fr) max-content;
+            grid-template-rows: auto auto auto;
+        }
+
+        :deep(.v-slider > .v-input__prepend) {
+            margin-inline-end: 0;
+        }
     }
 
     .config-tabs {

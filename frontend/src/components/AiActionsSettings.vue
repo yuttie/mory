@@ -1,6 +1,6 @@
 <template>
     <section>
-        <h2 class="text-h6 mb-4">
+        <h2 class="text-title-medium mb-4">
             AI Actions
         </h2>
         <v-alert variant="tonal" type="info" class="mb-4">

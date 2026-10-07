@@ -1,0 +1,141 @@
+import { expect, test } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
+import YAML from 'yaml';
+
+import { mockBackend } from './backend';
+
+function configDialog(page: Page): Locator {
+    return page.getByRole('dialog', { name: 'Config', exact: true });
+}
+
+async function openConfig(page: Page): Promise<void> {
+    await page.locator('.account-item').click();
+    await page.locator('.v-menu').getByText('Config', { exact: true }).click();
+    await expect(configDialog(page)).toBeVisible();
+}
+
+for (const address of ['/files', '/calendar/week/2026/10/07', '/tasks-next/_/descendants/list']) {
+    test(`opens Config over ${address} without replacing the view`, async ({ context, page }) => {
+        await mockBackend(context, {});
+        await page.goto(address);
+        await expect(page.locator('.router-view')).toBeVisible();
+        const view = await page.locator('.router-view').elementHandle();
+        const title = await page.title();
+
+        await openConfig(page);
+        await expect(page).toHaveURL(new RegExp(`${address}$`));
+        expect(await page.title()).toBe(title);
+        await expect(configDialog(page).getByRole('tab', { selected: true })).toHaveText('General');
+        await page.keyboard.press('Escape');
+        await expect(configDialog(page)).toBeHidden();
+        expect(await view!.evaluate((element) => element.isConnected)).toBe(true);
+        await expect(page.locator('.account-item')).toBeFocused();
+    });
+}
+
+test('keeps a note draft and its undo history while editing Config', async ({ context, page }) => {
+    const repository = await mockBackend(context, {});
+    await page.goto('/note/draft.md?mode=create');
+    const editor = page.locator('.cm-content');
+    await editor.fill('An unsaved note');
+    await editor.press('End');
+    await editor.pressSequentially(' with a draft');
+
+    await openConfig(page);
+    await configDialog(page).getByRole('tab', { name: 'Editor', exact: true }).click();
+    const font = configDialog(page).getByRole('textbox', { name: 'Font Family' });
+    await font.fill('');
+    await font.pressSequentially('Menlo, serif');
+    await configDialog(page).getByRole('button', { name: 'Close Config' }).click();
+    await expect(configDialog(page)).toBeHidden();
+    await expect(page).toHaveURL(/\/note\/draft\.md\?mode=create$/);
+    await expect(editor).toHaveText('An unsaved note with a draft');
+    await editor.press('ControlOrMeta+z');
+    await expect(editor).toHaveText('An unsaved note');
+    expect(repository.writes).toEqual([]);
+
+    await openConfig(page);
+    await configDialog(page).getByRole('tab', { name: 'Editor', exact: true }).click();
+    await expect(configDialog(page).getByRole('textbox', { name: 'Font Family' })).toHaveValue('Menlo, serif');
+});
+
+test('loads and saves browser defaults from General', async ({ context, page }) => {
+    const defaults = {
+        useSimpleEditor: false,
+        lockScroll: true,
+        editorFontFamily: 'monospace',
+        editorFontSize: 12,
+        editorIndentSize: 4,
+        editorTheme: 'default',
+        editorKeybinding: 'default',
+        editorEnableEmacsStyleBindings: false,
+        editorVimInsertUnmapCtCd: false,
+        highlightjsTheme: 'default',
+        noteTreeInitialRows: 20,
+        noteTreeRowIncrement: 30,
+    };
+    const repository = await mockBackend(context, { '.mory/default_config.yaml': YAML.stringify(defaults) });
+    await page.goto('/files');
+    await openConfig(page);
+    await configDialog(page).getByRole('button', { name: 'Load default', exact: true }).click();
+    await expect(configDialog(page).getByLabel('Lock Scroll by Default')).toBeChecked();
+    expect(repository.writes).toEqual([]);
+
+    await configDialog(page).getByRole('tab', { name: 'Editor', exact: true }).click();
+    await expect(configDialog(page).getByRole('textbox', { name: 'Font Family' })).toHaveValue('monospace');
+    await configDialog(page).getByRole('textbox', { name: 'Font Family' }).fill('serif');
+    await configDialog(page).getByRole('tab', { name: 'General', exact: true }).click();
+    await configDialog(page).getByRole('button', { name: 'Save as default', exact: true }).click();
+    await expect.poll(() => repository.writes.length).toBe(1);
+    expect(repository.writes[0].path).toBe('.mory/default_config.yaml');
+    expect(YAML.parse(repository.writes[0].content)).toEqual({ ...defaults, editorFontFamily: 'serif' });
+});
+
+test('closes a nested settings dialog before Config on Escape', async ({ context, page }) => {
+    await mockBackend(context, {});
+    await page.goto('/files');
+    await openConfig(page);
+    await configDialog(page).getByRole('tab', { name: 'Calendars', exact: true }).click();
+    await configDialog(page).getByRole('button', { name: 'Add calendar' }).click();
+    const nested = page.getByRole('dialog').filter({ has: page.getByRole('textbox', { name: 'iCal URL' }) });
+    await expect(nested).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(nested).toBeHidden();
+    await expect(configDialog(page)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(configDialog(page)).toBeHidden();
+});
+
+test('opens the former Config address over Home', async ({ context, page }) => {
+    await mockBackend(context, {});
+    await page.goto('/config');
+    await expect(configDialog(page)).toBeVisible();
+    await expect(page).toHaveURL(/\/$/);
+    await configDialog(page).getByRole('button', { name: 'Close Config' }).click();
+    await expect(configDialog(page)).toBeHidden();
+    await expect(page.locator('#home')).toBeVisible();
+});
+
+test('keeps vertical tabs and the close button reachable on a phone', async ({ context, page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await mockBackend(context, {});
+    await page.goto('/files');
+    await page.locator('.v-app-bar-nav-icon').click();
+    await openConfig(page);
+    await expect(configDialog(page).locator('.v-tabs--vertical')).toBeVisible();
+    await configDialog(page).getByRole('tab', { name: 'Editor', exact: true }).click();
+    await configDialog(page).getByLabel('Unmap <C-t>/<C-d> in Vim insert mode').check();
+    await expect(configDialog(page).getByRole('button', { name: 'Close Config' })).toBeInViewport();
+    for (const slider of await configDialog(page).locator('.v-slider__container').all()) {
+        expect((await slider.boundingBox())!.width).toBeGreaterThan(80);
+    }
+    const panels = configDialog(page).locator('.config-panels');
+    expect(await panels.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await configDialog(page).getByRole('tab', { name: 'AI Actions', exact: true }).click();
+    await expect(configDialog(page).getByText('No AI Actions defined yet.')).toBeVisible();
+    await configDialog(page).getByRole('button', { name: 'Close Config' }).click();
+    await expect(configDialog(page)).toBeHidden();
+    await expect(page.locator('.v-navigation-drawer')).not.toBeInViewport();
+    await expect(page.locator('.v-app-bar-nav-icon')).toBeFocused();
+    await expect(page).toHaveURL(/\/files$/);
+});

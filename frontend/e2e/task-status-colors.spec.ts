@@ -4,7 +4,7 @@ import { mockBackend, uuid } from './backend';
 const DONE = uuid(31);
 const SETTINGS = '# Lead times\ndefault_lead_time: 7d\n';
 
-test('sets a status colour in the Config view, writing only its own lines', async ({ context, page }) => {
+test('sets a status colour in the Config dialog, writing only its own lines', async ({ context, page }) => {
     const repository = await mockBackend(context, {
         '.mory/tasks.yaml': SETTINGS,
         [`.tasks/${DONE}.md`]: '---\ntask:\n    status:\n        kind: done\n        completed_at: 2026-10-01 10:00:00+09:00\n---\n\n# Shipped\n',

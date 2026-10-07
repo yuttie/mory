@@ -1,6 +1,6 @@
 // Defaults live here, next to the loader, because every setting is otherwise duplicated between
-// Config.vue and its consumer -- which has already drifted once: `editor-font-size` defaults to 10
-// in one place and 14 in the other.
+// ConfigSettings.vue and its consumer -- which has already drifted once: `editor-font-size`
+// defaults to 10 in one place and 14 in the other.
 
 // How many rows the note tree shows before "Show older" is pressed, and how many each press adds.
 export const NOTE_TREE_INITIAL_ROWS = 10;

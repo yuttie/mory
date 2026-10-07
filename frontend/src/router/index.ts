@@ -11,7 +11,6 @@ const Files     = () => import('../views/Files.vue');
 const Search    = () => import('../views/Search.vue');
 const Note      = () => import('../views/Note.vue');
 const Media     = () => import('../views/Media.vue');
-const Config    = () => import('../views/Config.vue');
 const About     = () => import('../views/About.vue');
 
 
@@ -111,7 +110,7 @@ const routes: Array<RouteRecordRaw> = [
     {
         path: '/config',
         name: 'Config',
-        component: Config,
+        redirect: to => ({ name: 'Home', query: { ...to.query, config: '1' }, hash: to.hash }),
     },
     {
         path: '/about',
