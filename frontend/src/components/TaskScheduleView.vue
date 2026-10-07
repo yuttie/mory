@@ -132,7 +132,7 @@
                             class="planned-entry"
                             draggable="false"
                             v-bind:class="{ 'text-disabled': !taskOf(entry.task) || !tasks.ownUrgency(taskOf(entry.task)?.uuid ?? entry.task).actionable }"
-                            v-bind:style="{ backgroundColor: statusGround(taskOf(entry.task)?.metadata?.task?.status?.kind) }"
+                            v-bind:style="{ backgroundColor: statusGround(taskOf(entry.task)?.metadata?.task?.status?.kind, taskSettings.resolvedStatusColors) }"
                             v-on:pointerdown="onPointerDown"
                             v-on:contextmenu="onContextMenu"
                         >
@@ -245,6 +245,7 @@ import { readImportance, isUrgent } from '@/urgency';
 import type { PlanEntry } from '@/plans';
 import { useTasksStore } from '@/stores/tasks';
 import { usePlansStore } from '@/stores/plans';
+import { useTaskSettingsStore } from '@/stores/taskSettings';
 import { statusGround } from '@/status-color';
 
 const props = defineProps<{
@@ -256,6 +257,7 @@ const CANDIDATE_GROUP = { name: 'plans', pull: 'clone', put: false };
 const DAY_GROUP = { name: 'plans', pull: true, put: true };
 const tasks = useTasksStore();
 const plans = usePlansStore();
+const taskSettings = useTaskSettingsStore();
 const week = ref(dayjs().startOf('day'));
 const dates = computed(() => Array.from({ length: 7 }, (_, index) => week.value.add(index, 'day').format('YYYY-MM-DD')));
 const busy = ref(false);

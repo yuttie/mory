@@ -63,6 +63,7 @@ import type { TaskNode } from '@/task-forest';
 import { useTasksStore } from '@/stores/tasks';
 import { URGENCY_LABEL } from '@/urgency';
 import { usePlansStore } from '@/stores/plans';
+import { useTaskSettingsStore } from '@/stores/taskSettings';
 import { statusGround } from '@/status-color';
 
 import TaskDateCues from '@/components/TaskDateCues.vue';
@@ -80,6 +81,7 @@ const props = defineProps<{
 // Stores
 const store = useTasksStore();
 const plans = usePlansStore();
+const taskSettings = useTaskSettingsStore();
 const urgency = computed(() => store.urgency(props.value.uuid));
 const progress = computed(() => store.progress(props.value.uuid));
 
@@ -96,7 +98,7 @@ const tags = computed<string[]>(() => {
 
 // Tinted by the task's status, in the colour the task tree draws its icon in.
 const ground = computed<string | undefined>(() => {
-    return statusGround(props.value.metadata?.task?.status?.kind);
+    return statusGround(props.value.metadata?.task?.status?.kind, taskSettings.resolvedStatusColors);
 });
 
 const canceled = computed<boolean>(() => {

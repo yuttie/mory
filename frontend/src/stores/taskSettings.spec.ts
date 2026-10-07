@@ -47,3 +47,17 @@ describe('task settings freshness', () => {
         expect(files.read).toHaveBeenCalledTimes(2);
     });
 });
+
+describe('status colours', () => {
+    it('reads them beside the lead times, and reports the ones it drops with the rest', async () => {
+        files.read.mockResolvedValue('default_lead_time: nope\nstatus_colors:\n    done: light-green\n    todo: not a colour\n');
+        const store = useTaskSettingsStore();
+        await store.load();
+        expect(store.statusColors).toEqual({ done: 'light-green' });
+        expect(store.resolvedStatusColors).toEqual({ done: 'rgb(139, 195, 74)' });
+        expect(store.problems).toEqual([
+            'Invalid default_lead_time; use whole days or weeks, such as 7d or 2w.',
+            'Invalid colour for status todo.',
+        ]);
+    });
+});

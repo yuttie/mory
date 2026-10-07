@@ -1,14 +1,18 @@
 import { defineStore } from 'pinia';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import axios from 'axios';
 import YAML from 'yaml';
 import { readTaskSettings, type TaskSettings } from '@/urgency';
+import { readStatusColors, resolveStatusColors, type StatusColors } from '@/status-color';
 import { useFilesStore } from '@/stores/files';
 
 export const TASK_SETTINGS_PATH = '.mory/tasks.yaml';
 export const useTaskSettingsStore = defineStore('task-settings', () => {
     const files = useFilesStore();
     const settings = ref<TaskSettings>({});
+    // As the file writes them; `resolvedStatusColors` is what to draw.
+    const statusColors = ref<StatusColors>({});
+    const resolvedStatusColors = computed(() => resolveStatusColors(statusColors.value));
     const problems = ref<string[]>([]);
     let loading: Promise<void> | null = null;
     let requested = false;
@@ -23,12 +27,16 @@ export const useTaskSettingsStore = defineStore('task-settings', () => {
                 while (requested) {
                     requested = false;
                     try {
-                        const parsed = readTaskSettings(YAML.parse(await files.read(TASK_SETTINGS_PATH)));
+                        const value = YAML.parse(await files.read(TASK_SETTINGS_PATH));
+                        const parsed = readTaskSettings(value);
+                        const colors = readStatusColors(value);
                         settings.value = parsed.settings;
-                        problems.value = parsed.problems;
+                        statusColors.value = colors.colors;
+                        problems.value = [...parsed.problems, ...colors.problems];
                     }
                     catch (error) {
                         settings.value = {};
+                        statusColors.value = {};
                         problems.value = axios.isAxiosError(error) && error.response?.status === 404 ? [] : [String(error)];
                     }
                 }
@@ -43,5 +51,5 @@ export const useTaskSettingsStore = defineStore('task-settings', () => {
     watch(() => files.commitId, () => {
         void load();
     }, { immediate: true });
-    return { settings, problems, load };
+    return { settings, statusColors, resolvedStatusColors, problems, load };
 });

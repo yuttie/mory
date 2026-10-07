@@ -12,10 +12,10 @@
             <v-icon v-if="item.metadata?.tag_group">
                 {{ mdiTag }}
             </v-icon>
-            <v-icon v-else-if="item.children" v-bind:color="statusColor(item.metadata?.task?.status?.kind)">
+            <v-icon v-else-if="item.children" v-bind:color="statusColor(item.metadata?.task?.status?.kind, taskSettings.resolvedStatusColors)">
                 {{ item.metadata?.task?.status?.kind === 'done' ? mdiFolderCheck : item.metadata?.task?.status?.kind === 'canceled' ? mdiFolderOff : mdiFolder }}
             </v-icon>
-            <v-icon v-else v-bind:color="statusColor(item.metadata?.task?.status?.kind)">
+            <v-icon v-else v-bind:color="statusColor(item.metadata?.task?.status?.kind, taskSettings.resolvedStatusColors)">
                 {{ item.metadata?.task?.status?.kind === 'done' ? mdiCheckboxMarkedOutline : item.metadata?.task?.status?.kind === 'canceled' ? mdiCheckboxBlankOffOutline : mdiCheckboxBlankOutline }}
             </v-icon>
         </template>
@@ -60,7 +60,9 @@ import type { RouteLocationRaw } from 'vue-router';
 
 import EntryTree from '@/components/EntryTree.vue';
 import { useTasksStore } from '@/stores/tasks';
+import { useTaskSettingsStore } from '@/stores/taskSettings';
 const tasks = useTasksStore();
+const taskSettings = useTaskSettingsStore();
 import type { UUID } from '@/api';
 import type { TaskTreeItem } from '@/task-forest';
 import { statusColor } from '@/status-color';
