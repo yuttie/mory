@@ -1,11 +1,14 @@
 <template>
     <div class="mb-4">
-        <!-- On a phone the panel is too narrow to give the icon its column. -->
+        <!-- On a phone the panel is too narrow to give the icon its column. A note, not the alert
+             v-alert makes it by default: an alert is read out over whatever the screen reader was
+             saying, each time a panel opens. -->
         <v-alert
             v-bind:icon="$vuetify.display.xs ? false : mdiMonitor"
             class="mb-4"
             type="info"
             variant="tonal"
+            role="note"
         >
             Saved in this browser as you change them; no other browser sees them.
             <strong>Save to repository</strong> copies every tab under This browser into

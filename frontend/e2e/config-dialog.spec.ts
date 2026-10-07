@@ -179,7 +179,7 @@ test('loads and saves browser defaults from every browser panel', async ({ conte
     for (const name of ['General', 'Editor', 'Markdown Rendering', 'Navigation Drawer']) {
         await configDialog(page).getByRole('tab', { name, exact: true }).click();
         const panel = configDialog(page).getByRole('tabpanel', { name, exact: true });
-        await expect(panel.getByText('copies every tab under This browser into .mory/default_config.yaml;')).toBeVisible();
+        await expect(panel.getByRole('note')).toContainText('copies every tab under This browser into .mory/default_config.yaml;');
         await expect(panel.getByRole('button', { name: 'Load from repository', exact: true })).toBeVisible();
         await expect(panel.getByRole('button', { name: 'Save to repository', exact: true })).toBeVisible();
     }
@@ -381,8 +381,7 @@ test('names the file each repository settings panel is stored in', async ({ cont
     for (const [name, path] of Object.entries(files)) {
         await configDialog(page).getByRole('tab', { name, exact: true }).click();
         const panel = configDialog(page).getByRole('tabpanel', { name, exact: true });
-        const notice = panel.locator('.v-alert').filter({ hasText: 'Stored in the repository' });
-        await expect(notice).toContainText(`Stored in the repository as ${path} and shared by every browser.`);
+        await expect(panel.getByRole('note')).toContainText(`Stored in the repository as ${path} and shared by every browser.`);
     }
 });
 
