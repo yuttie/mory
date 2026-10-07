@@ -145,9 +145,8 @@ test('adds an assessment suggestion to the note from the keyboard', async ({ con
     await page.keyboard.press('Enter');
     const add = page.locator('.assessment').getByRole('button', { name: 'Add to note' });
     await expect(add).toBeVisible();
-    for (let i = 0; i < 5 && !await add.evaluate((element) => element === document.activeElement); i++) {
-        await page.keyboard.press('Tab');
-    }
+    // The stars above it are read-only, and take no Tab.
+    await page.keyboard.press('Tab');
     await expect(add).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(dialog(page).locator('.cm-content')).toHaveText('## Scope');

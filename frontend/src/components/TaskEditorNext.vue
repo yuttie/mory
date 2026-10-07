@@ -178,8 +178,12 @@
                             <div v-if="taskAssessment">
                                 <div class="d-flex align-center mb-2">
                                     <span class="text-caption mr-2">Quality Score:</span>
+                                    <!-- Inert: read-only, its ten half-stars still took Tab and
+                                         twenty "Rating x of 5" names, beside a score said in
+                                         words already. -->
                                     <v-rating
                                         v-bind:model-value="taskAssessment.quality_score / 2"
+                                        inert
                                         readonly
                                         length="5"
                                         half-increments
