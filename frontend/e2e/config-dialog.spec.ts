@@ -91,6 +91,38 @@ test('loads and saves browser defaults from General', async ({ context, page }) 
     expect(YAML.parse(repository.writes[0].content)).toEqual({ ...defaults, editorFontFamily: 'serif' });
 });
 
+test('keeps browser focus and typing in Config over a note draft', async ({ context, page }) => {
+    await mockBackend(context, {});
+    await page.goto('/note/draft.md?mode=create');
+    const editor = page.locator('.cm-content');
+    await editor.fill('An unsaved note');
+    await openConfig(page);
+    await configDialog(page).getByRole('tab', { name: 'Editor', exact: true }).click();
+    const font = configDialog(page).getByRole('textbox', { name: 'Font Family' });
+    await font.fill('');
+    await page.evaluate(() => {
+        window.dispatchEvent(new FocusEvent('focus'));
+        return new Promise<number>((resolve) => requestAnimationFrame(resolve));
+    });
+    await expect(font).toBeFocused();
+    await page.keyboard.type('serif');
+    await expect(font).toHaveValue('serif');
+    await expect(editor).toHaveText('An unsaved note');
+});
+
+test('keeps trackpad scrolling in Config from navigating Calendar', async ({ context, page }) => {
+    await mockBackend(context, {});
+    await page.goto('/calendar/month/2026/10/07');
+    await openConfig(page);
+    await configDialog(page).locator('.config-panels').hover();
+    await page.mouse.wheel(120, 100);
+    await page.evaluate(() => new Promise<number>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(resolve));
+    }));
+    await expect(page).toHaveURL(/\/calendar\/month\/2026\/10\/07$/);
+    await expect(configDialog(page)).toBeVisible();
+});
+
 test('closes a nested settings dialog before Config on Escape', async ({ context, page }) => {
     await mockBackend(context, {});
     await page.goto('/files');

@@ -392,7 +392,7 @@ import Ajv from 'ajv';
 import type { DefinedError } from 'ajv';
 import AppBarContent from '@/components/AppBarContent.vue';
 import EditableViewer from '@/components/EditableViewer.vue';
-import { isInOverlay } from '@/keyboard';
+import { hasActiveDialog, isInOverlay } from '@/keyboard';
 import { LAGGING_RETRY_MS, useFilesStore } from '@/stores/files';
 import { loadConfigValue } from '@/config';
 import { noteBreadcrumbs } from '@/note-forest';
@@ -972,6 +972,9 @@ function toggleViewer() {
 
 function focusOrBlurEditor() {
     nextTick(() => {
+        if (hasActiveDialog()) {
+            return;
+        }
         if (editorIsVisible.value) {
             editableViewer.value?.focus();
         }

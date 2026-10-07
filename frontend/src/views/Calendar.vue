@@ -320,7 +320,7 @@ import { parseEventColor } from '@/event-color';
 import dayjs from 'dayjs';
 import { renderMarkdown } from '@/markdown';
 import AppBarContent from '@/components/AppBarContent.vue';
-import { isInOverlay, isTyping } from '@/keyboard';
+import { hasActiveDialog, isInOverlay, isTyping } from '@/keyboard';
 import { taskRoute } from '@/task-route';
 
 // Emits
@@ -540,6 +540,9 @@ function onKeydown(e: KeyboardEvent) {
 }
 
 function onWheel(e: WheelEvent) {
+    if (hasActiveDialog() || isInOverlay(e)) {
+        return;
+    }
     if (e.deltaX < 0) {
         navigateCalendar('prev');
     }
