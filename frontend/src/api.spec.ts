@@ -9,7 +9,7 @@ const client = vi.hoisted(() => ({
 
 vi.mock('@/axios', () => ({ getAxios: () => client }));
 
-import { addNote, deleteNote, getNote, getTaskData, noteExists, renameNote } from '@/api';
+import { addNote, deleteNote, getFile, getNote, getTaskData, noteExists, renameNote } from '@/api';
 
 // A path with the characters that end a URL's path early when they are not encoded.
 const ODD_PATH = 'notes/name#draft?100%.md';
@@ -50,6 +50,12 @@ describe('the requests for a note', () => {
     it('asks whether a path exists by its encoded path', async () => {
         await noteExists(ODD_PATH);
         expect(client.head.mock.calls[0][0]).toBe(`/v2/files/${ENCODED_ODD_PATH}`);
+    });
+
+    it('reads a file\'s version as the text it holds, even where that is JSON', async () => {
+        client.get.mockResolvedValue({ status: 200, data: '{}\n', headers: { etag: '"v1"' } });
+        expect(await getFile('.mory/plans/2026-10.yaml')).toEqual({ content: '{}\n', etag: '"v1"' });
+        expect(client.get.mock.calls[0][1]).toMatchObject({ responseType: 'text' });
     });
 
     it('keeps the slashes of an ordinary path', async () => {

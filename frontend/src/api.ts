@@ -252,6 +252,9 @@ export function renameNote(oldPath: string, newPath: string) {
 export async function getFile(path: string, etag?: string): Promise<{ content: string | null; etag: string }> {
     const response = await getAxios().get(`/v2/files/${encodePath(path)}`, {
         headers: etag ? { 'If-None-Match': etag } : {},
+        // Axios otherwise parses a body that happens to be JSON, so a plan file of `{}`, which is
+        // also YAML, would arrive as an object rather than as the text it holds.
+        responseType: 'text',
         validateStatus: (status) => status === 304 || status >= 200 && status < 300,
     });
     return { content: response.status === 304 ? null : response.data, etag: response.headers.etag };
