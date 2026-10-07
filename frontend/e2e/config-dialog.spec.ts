@@ -286,6 +286,27 @@ test('opens the former Config address over Home', async ({ context, page }) => {
     await expect(page.locator('#home')).toBeVisible();
 });
 
+test('links vertical settings tabs to their named panels for keyboard navigation', async ({ context, page }) => {
+    await mockBackend(context, {});
+    await page.goto('/files');
+    await openConfig(page);
+    await expect(configDialog(page).getByRole('tablist', { name: 'Settings groups' })).toHaveAttribute('aria-orientation', 'vertical');
+    const general = configDialog(page).getByRole('tab', { name: 'General', exact: true });
+    await general.focus();
+    await general.press('ArrowDown');
+    const editorTab = configDialog(page).getByRole('tab', { name: 'Editor', exact: true });
+    await expect(editorTab).toBeFocused();
+    await editorTab.press('Enter');
+    const editorPanel = configDialog(page).getByRole('tabpanel', { name: 'Editor', exact: true });
+    await expect(editorPanel).toBeVisible();
+    await expect(editorTab).toHaveAttribute('aria-selected', 'true');
+    expect(await editorTab.getAttribute('aria-controls')).toBe(await editorPanel.getAttribute('id'));
+    expect(await editorPanel.getAttribute('aria-labelledby')).toBe(await editorTab.getAttribute('id'));
+    await expect(configDialog(page).getByRole('tabpanel', { name: 'General', exact: true })).toBeHidden();
+    await editorTab.press('Tab');
+    await expect(editorPanel).toBeFocused();
+});
+
 test('keeps vertical tabs and the close button reachable on a phone', async ({ context, page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await mockBackend(context, {});

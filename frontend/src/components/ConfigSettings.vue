@@ -6,27 +6,16 @@
             color="primary"
             class="config-tabs"
             aria-label="Settings groups"
+            aria-orientation="vertical"
         >
-            <v-tab value="general">
-                General
-            </v-tab>
-            <v-tab value="editor">
-                Editor
-            </v-tab>
-            <v-tab value="markdown">
-                Markdown Rendering
-            </v-tab>
-            <v-tab value="navigation">
-                Navigation Drawer
-            </v-tab>
-            <v-tab value="tasks">
-                Tasks
-            </v-tab>
-            <v-tab value="calendars">
-                Calendars
-            </v-tab>
-            <v-tab value="ai-actions">
-                AI Actions
+            <v-tab
+                v-for="tab of SETTINGS_TABS"
+                v-bind:id="`${tabsId}-tab-${tab.value}`"
+                v-bind:key="tab.value"
+                v-bind:value="tab.value"
+                v-bind:aria-controls="`${tabsId}-panel-${tab.value}`"
+            >
+                {{ tab.label }}
             </v-tab>
         </v-tabs>
         <v-tabs-window
@@ -34,7 +23,10 @@
             v-bind:touch="false"
             class="config-panels"
         >
-            <v-tabs-window-item value="general">
+            <v-tabs-window-item
+                value="general"
+                v-bind="panelAttributes('general')"
+            >
                 <h2 class="text-title-medium mb-4">
                     General
                 </h2>
@@ -60,7 +52,10 @@
                     label="Lock Scroll by Default"
                 />
             </v-tabs-window-item>
-            <v-tabs-window-item value="editor">
+            <v-tabs-window-item
+                value="editor"
+                v-bind="panelAttributes('editor')"
+            >
                 <h2 class="text-title-medium mb-4">
                     Editor
                 </h2>
@@ -132,7 +127,10 @@
                     hide-details="auto"
                 />
             </v-tabs-window-item>
-            <v-tabs-window-item value="markdown">
+            <v-tabs-window-item
+                value="markdown"
+                v-bind="panelAttributes('markdown')"
+            >
                 <h2 class="text-title-medium mb-4">
                     Markdown Rendering
                 </h2>
@@ -144,7 +142,10 @@
                     item-value="value"
                 />
             </v-tabs-window-item>
-            <v-tabs-window-item value="navigation">
+            <v-tabs-window-item
+                value="navigation"
+                v-bind="panelAttributes('navigation')"
+            >
                 <h2 class="text-title-medium mb-4">
                     Navigation Drawer
                 </h2>
@@ -189,13 +190,22 @@
                     </template>
                 </v-slider>
             </v-tabs-window-item>
-            <v-tabs-window-item value="tasks">
+            <v-tabs-window-item
+                value="tasks"
+                v-bind="panelAttributes('tasks')"
+            >
                 <TasksSettings />
             </v-tabs-window-item>
-            <v-tabs-window-item value="calendars">
+            <v-tabs-window-item
+                value="calendars"
+                v-bind="panelAttributes('calendars')"
+            >
                 <CalendarsSettings />
             </v-tabs-window-item>
-            <v-tabs-window-item value="ai-actions">
+            <v-tabs-window-item
+                value="ai-actions"
+                v-bind="panelAttributes('ai-actions')"
+            >
                 <AiActionsSettings />
             </v-tabs-window-item>
         </v-tabs-window>
@@ -203,7 +213,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref } from 'vue';
+import { ref, useId } from 'vue';
 
 import AiActionsSettings from '@/components/AiActionsSettings.vue';
 import CalendarsSettings from '@/components/CalendarsSettings.vue';
@@ -219,6 +229,17 @@ import YAML from 'yaml';
 
 // Composables
 const files = useFilesStore();
+
+const SETTINGS_TABS = [
+    { value: 'general', label: 'General' },
+    { value: 'editor', label: 'Editor' },
+    { value: 'markdown', label: 'Markdown Rendering' },
+    { value: 'navigation', label: 'Navigation Drawer' },
+    { value: 'tasks', label: 'Tasks' },
+    { value: 'calendars', label: 'Calendars' },
+    { value: 'ai-actions', label: 'AI Actions' },
+];
+const tabsId = useId();
 
 // Reactive states
 const selectedTab = ref('general');
@@ -495,6 +516,15 @@ const editorVimInsertUnmapCtCd = useConfigValue('editor-vim-insert-unmap-ct-cd',
 const currentHighlightjsTheme = useConfigValue('highlightjs-theme', 'default');
 
 // Methods
+function panelAttributes(value: string) {
+    return {
+        id: `${tabsId}-panel-${value}`,
+        role: 'tabpanel',
+        'aria-labelledby': `${tabsId}-tab-${value}`,
+        tabindex: 0,
+    };
+}
+
 async function loadDefault() {
     const config = YAML.parse(await files.read('.mory/default_config.yaml'));
     currentUseSimpleEditor.value = config.useSimpleEditor;
