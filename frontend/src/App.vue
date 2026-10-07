@@ -239,7 +239,11 @@
                         <v-card>
                             <v-list>
                                 <v-list-item to="/tasks" v-bind:prepend-icon="mdiCheckboxMultipleMarkedOutline" title="Tasks (deprecated)"></v-list-item>
-                                <v-list-item to="/config" v-bind:prepend-icon="mdiCogOutline" title="Config"></v-list-item>
+                                <v-list-item
+                                    v-bind:prepend-icon="mdiCogOutline"
+                                    title="Config"
+                                    v-on:click="openConfigDialog"
+                                />
                                 <v-list-item to="/about" v-bind:prepend-icon="mdiInformationOutline" title="About"></v-list-item>
                                 <v-divider></v-divider>
                                 <v-list-item v-bind:prepend-icon="mdiLogout" title="Logout" v-on:click="appStore.signOut()"></v-list-item>
@@ -446,7 +450,11 @@
                         <v-card>
                             <v-list>
                                 <v-list-item to="/tasks" v-bind:prepend-icon="mdiCheckboxMultipleMarkedOutline" title="Tasks (deprecated)"></v-list-item>
-                                <v-list-item to="/config" v-bind:prepend-icon="mdiCogOutline" title="Config"></v-list-item>
+                                <v-list-item
+                                    v-bind:prepend-icon="mdiCogOutline"
+                                    title="Config"
+                                    v-on:click="openConfigDialog"
+                                />
                                 <v-list-item to="/about" v-bind:prepend-icon="mdiInformationOutline" title="About"></v-list-item>
                                 <v-divider></v-divider>
                                 <v-list-item v-bind:prepend-icon="mdiLogout" title="Logout" v-on:click="appStore.signOut()"></v-list-item>
@@ -493,6 +501,11 @@
         <input type="file" multiple class="d-none" ref="fileInputEl">
 
         <NewTaskDialog v-model="newTaskDialogIsVisible" />
+        <ConfigDialog
+            v-if="appStore.hasToken"
+            v-model="configDialogIsVisible"
+            v-on:after-leave="focusConfigActivator"
+        />
 
         <div v-if="!appStore.hasToken" class="login-overlay">
             <div class="form">
@@ -570,6 +583,7 @@ import { useAppStore } from '@/stores/app';
 
 import { loadConfigValue, saveConfigValue } from '@/config';
 import type { Claim, IndexingStop, ListEntry2, UploadEntry } from '@/api';
+import ConfigDialog from '@/components/ConfigDialog.vue';
 import IndexingStopsItem from '@/components/IndexingStopsItem.vue';
 import NewTaskDialog from '@/components/NewTaskDialog.vue';
 import TemplateMenuItem from '@/components/TemplateMenuItem.vue';
@@ -594,6 +608,7 @@ const templates = ref([] as string[]);
 const uploadList = ref([] as UploadEntry[]);
 const uploadMenuIsVisible = ref(false);
 const newTaskDialogIsVisible = ref(false);
+const configDialogIsVisible = ref(false);
 const errors = ref([]);
 const indexingStops = ref<IndexingStop[]>([]);
 
@@ -963,6 +978,18 @@ function openNewTaskDialog() {
     newTaskDialogIsVisible.value = true;
 }
 
+function openConfigDialog(): void {
+    mobileDrawer.value = false;
+    configDialogIsVisible.value = true;
+}
+
+function focusConfigActivator(): void {
+    // On a phone the drawer is closed, so return to the button that opens it.
+    const activator = document.querySelector<HTMLElement>('.v-app-bar-nav-icon')
+        ?? document.querySelector<HTMLElement>('.account-item');
+    activator?.focus({ preventScroll: true });
+}
+
 function chooseFile() {
     (fileInputEl.value as HTMLInputElement).click();
     uploadMenuIsVisible.value = false;
@@ -1009,6 +1036,17 @@ function copyToClipboard(text: string) {
 }
 
 // Watchers
+// Bookmarks to the former Config page open the dialog over Home. Consume the flag so closing it
+// leaves an ordinary view address, and reopening the same bookmark opens it again.
+watch(() => route.query.config, (requested) => {
+    if (requested === '1') {
+        openConfigDialog();
+        const query = { ...route.query };
+        delete query.config;
+        void router.replace({ path: route.path, query, hash: route.hash });
+    }
+}, { immediate: true });
+
 watch(miniMainSidebar, (newMiniMainSidebar: boolean) => {
   saveConfigValue("mini-main-sidebar", newMiniMainSidebar);
 });

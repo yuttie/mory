@@ -244,6 +244,25 @@ describe('subscriptions', () => {
 });
 
 describe('loading events', () => {
+    it('refetches after a subscription save even when the previous response arrives late', async () => {
+        let release!: (value: ImportedEventsResponse) => void;
+        apiMocks.getImportedEvents
+            .mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }))
+            .mockResolvedValueOnce(response({ events: [] }));
+        const store = await freshStore();
+        const oldLoad = store.load('2024-05-01', '2024-05-31');
+
+        await store.saveSubscriptions([]);
+        const refreshed = store.load('2024-05-01', '2024-05-31');
+        release(response());
+        await oldLoad;
+        expect(store.events).toEqual([]);
+        await refreshed;
+
+        expect(apiMocks.getImportedEvents).toHaveBeenCalledTimes(2);
+        expect(store.events).toEqual([]);
+    });
+
     it('fetches a window once and serves the same one from memory', async () => {
         apiMocks.getImportedEvents.mockResolvedValue(response());
         const store = await freshStore();

@@ -392,9 +392,9 @@ import Ajv from 'ajv';
 import type { DefinedError } from 'ajv';
 import AppBarContent from '@/components/AppBarContent.vue';
 import EditableViewer from '@/components/EditableViewer.vue';
-import { isInOverlay } from '@/keyboard';
+import { hasActiveDialog, isInOverlay } from '@/keyboard';
 import { LAGGING_RETRY_MS, useFilesStore } from '@/stores/files';
-import { loadConfigValue } from '@/config';
+import { useConfigValue } from '@/config';
 import { noteBreadcrumbs } from '@/note-forest';
 
 const ajv = new Ajv();
@@ -422,7 +422,11 @@ const initialText = ref('');
 const upstreamState = ref('same');
 const showUpstreamState = ref(false);
 const rendered = ref({ metadata: null as null | any, content: '' });
-const lockScroll = ref(loadConfigValue('lock-scroll', false));
+const defaultLockScroll = useConfigValue('lock-scroll', false);
+const lockScroll = ref(defaultLockScroll.value);
+watch(defaultLockScroll, (value) => {
+    lockScroll.value = value;
+});
 const noteHasUpstream = ref(false);
 const editorIsVisible = ref(false);
 const viewerIsVisible = ref(true);
@@ -972,6 +976,9 @@ function toggleViewer() {
 
 function focusOrBlurEditor() {
     nextTick(() => {
+        if (hasActiveDialog()) {
+            return;
+        }
         if (editorIsVisible.value) {
             editableViewer.value?.focus();
         }

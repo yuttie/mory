@@ -10,7 +10,12 @@ export function isTyping(event: KeyboardEvent): boolean {
 
 // A key pressed in a dialog or a menu drawn over the view. What is in it is not the view's, so none
 // of the view's shortcuts apply, whatever the key.
-export function isInOverlay(event: KeyboardEvent): boolean {
+export function isInOverlay(event: Event): boolean {
     const target = event.target;
     return target instanceof Element && target.closest('.v-overlay__content') !== null;
+}
+
+// Window focus events have no element target, but a modal still owns the next keystroke.
+export function hasActiveDialog(): boolean {
+    return document.querySelector('.v-overlay--active[role="dialog"]') !== null;
 }

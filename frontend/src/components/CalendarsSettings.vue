@@ -1,167 +1,163 @@
 <template>
-    <v-card class="mt-6">
-        <v-card-text>
-            <v-card-title>Calendars</v-card-title>
-            <v-alert
-                class="mb-4"
-                type="info"
-                variant="tonal"
+    <section>
+        <h2 class="text-title-medium mb-4">
+            Calendars
+        </h2>
+        <StoredInRepository v-bind:path="CALENDARS_PATH" />
+
+        <v-card-subtitle class="px-0">Subscriptions</v-card-subtitle>
+        <p class="text-medium-emphasis mb-4">
+            Only the subscription is stored: a subscribed calendar's events are fetched live, and
+            are read-only until converted to a note.
+        </p>
+
+        <v-list
+            v-if="calendars.subscriptions.length > 0"
+        >
+            <v-list-item
+                v-for="(subscription, index) of calendars.subscriptions"
+                v-bind:key="subscription.id"
+                v-bind:subtitle="subscription.url"
+                v-bind:title="subscription.name || subscription.id"
             >
-                Subscribed calendars are stored in the repository
-                as <code>{{ CALENDARS_PATH }}</code> and are shared across browsers.
-                Their events are read-only until converted to a note.
-            </v-alert>
+                <template v-slot:prepend>
+                    <v-avatar
+                        v-bind:color="subscription.color || DEFAULT_IMPORTED_COLOR"
+                        size="16"
+                    ></v-avatar>
+                </template>
+                <template v-slot:append>
+                    <v-switch
+                        v-bind:model-value="subscription.enabled"
+                        class="mr-2"
+                        hide-details
+                        v-on:update:model-value="setEnabled(index, $event)"
+                    ></v-switch>
+                    <v-icon-btn
+                        v-bind:icon="mdiPencil"
+                        variant="text"
+                        v-on:click="openEditDialog(index)"
+                    ></v-icon-btn>
+                    <v-icon-btn
+                        v-bind:icon="mdiDelete"
+                        variant="text"
+                        v-on:click="remove(index)"
+                    ></v-icon-btn>
+                </template>
+            </v-list-item>
+        </v-list>
+        <p
+            v-else
+            class="text-medium-emphasis"
+        >
+            No calendars subscribed yet.
+        </p>
 
-            <v-list
-                v-if="calendars.subscriptions.length > 0"
+        <v-btn
+            v-bind:prepend-icon="mdiPlus"
+            class="mt-4"
+            v-on:click="openEditDialog(null)"
+        >
+            Add calendar
+        </v-btn>
+
+        <v-divider class="mt-6 mb-4"></v-divider>
+
+        <v-card-subtitle class="px-0">Task dates</v-card-subtitle>
+        <p class="text-medium-emphasis mb-4">
+            The colours a task's due date and deadline are drawn in, on the calendar and on the
+            home page. Leave one empty for its default.
+        </p>
+        <div class="task-date-colors">
+            <ColorField
+                v-for="field of TASK_DATE_FIELDS"
+                v-bind:key="field.name"
+                v-model="taskDateDraft[field.name]"
+                v-bind:fallback="field.fallback"
+                v-bind:label="field.label"
+            ></ColorField>
+        </div>
+        <v-btn
+            v-bind:disabled="!taskDateColorsChanged"
+            v-bind:loading="isSavingColors"
+            variant="tonal"
+            v-on:click="saveTaskDateColors"
+        >
+            Save colours
+        </v-btn>
+        <v-alert
+            v-if="colorError"
+            class="mt-4"
+            type="error"
+            variant="tonal"
+        >{{ colorError }}</v-alert>
+
+        <v-divider class="mt-6 mb-4"></v-divider>
+
+        <AlarmDefaultsSettings></AlarmDefaultsSettings>
+
+        <v-divider class="mt-6 mb-4"></v-divider>
+
+        <v-card-subtitle class="px-0">Event categories</v-card-subtitle>
+        <p class="text-medium-emphasis mb-4">
+            An event joins one by naming it, as in <code>category: meeting</code>, and is drawn
+            in its colour and with its name template unless it sets its own colour.
+        </p>
+        <v-list
+            v-if="categoryList.length > 0"
+        >
+            <v-list-item
+                v-for="(category, index) of categoryList"
+                v-bind:key="category.id"
+                v-bind:subtitle="previewOf(category.id)"
+                v-bind:title="category.id"
             >
-                <v-list-item
-                    v-for="(subscription, index) of calendars.subscriptions"
-                    v-bind:key="subscription.id"
-                    v-bind:subtitle="subscription.url"
-                    v-bind:title="subscription.name || subscription.id"
-                >
-                    <template v-slot:prepend>
-                        <v-avatar
-                            v-bind:color="subscription.color || DEFAULT_IMPORTED_COLOR"
-                            size="16"
-                        ></v-avatar>
-                    </template>
-                    <template v-slot:append>
-                        <v-switch
-                            v-bind:model-value="subscription.enabled"
-                            class="mr-2"
-                            hide-details
-                            v-on:update:model-value="setEnabled(index, $event)"
-                        ></v-switch>
-                        <v-icon-btn
-                            v-bind:icon="mdiPencil"
-                            variant="text"
-                            v-on:click="openEditDialog(index)"
-                        ></v-icon-btn>
-                        <v-icon-btn
-                            v-bind:icon="mdiDelete"
-                            variant="text"
-                            v-on:click="remove(index)"
-                        ></v-icon-btn>
-                    </template>
-                </v-list-item>
-            </v-list>
-            <p
-                v-else
-                class="text-medium-emphasis"
-            >
-                No calendars subscribed yet.
-            </p>
+                <template v-slot:prepend>
+                    <v-avatar
+                        v-bind:color="resolvedOf(category.id).color || DEFAULT_EVENT_COLOR"
+                        size="16"
+                    ></v-avatar>
+                </template>
+                <template v-slot:append>
+                    <v-icon-btn
+                        v-bind:icon="mdiPencil"
+                        variant="text"
+                        v-on:click="openCategoryDialog(index)"
+                    ></v-icon-btn>
+                    <v-icon-btn
+                        v-bind:icon="mdiDelete"
+                        variant="text"
+                        v-on:click="removeCategory(index)"
+                    ></v-icon-btn>
+                </template>
+            </v-list-item>
+        </v-list>
+        <p
+            v-else
+            class="text-medium-emphasis"
+        >
+            No categories yet.
+        </p>
+        <v-btn
+            v-bind:prepend-icon="mdiPlus"
+            class="mt-4"
+            v-on:click="openCategoryDialog(null)"
+        >
+            Add category
+        </v-btn>
+        <v-alert
+            v-if="categoryError"
+            class="mt-4"
+            type="error"
+            variant="tonal"
+        >{{ categoryError }}</v-alert>
 
-            <v-btn
-                v-bind:prepend-icon="mdiPlus"
-                class="mt-4"
-                v-on:click="openEditDialog(null)"
-            >
-                Add calendar
-            </v-btn>
-
-            <v-divider class="mt-6 mb-4"></v-divider>
-
-            <v-card-subtitle class="px-0">Task dates</v-card-subtitle>
-            <p class="text-medium-emphasis mb-4">
-                The colours a task's due date and deadline are drawn in, on the calendar and on the
-                home page. Stored in the same file, so they follow the notes rather than the
-                browser. Leave one empty for its default.
-            </p>
-            <div class="task-date-colors">
-                <ColorField
-                    v-for="field of TASK_DATE_FIELDS"
-                    v-bind:key="field.name"
-                    v-model="taskDateDraft[field.name]"
-                    v-bind:fallback="field.fallback"
-                    v-bind:label="field.label"
-                ></ColorField>
-            </div>
-            <v-btn
-                v-bind:disabled="!taskDateColorsChanged"
-                v-bind:loading="isSavingColors"
-                variant="tonal"
-                v-on:click="saveTaskDateColors"
-            >
-                Save colours
-            </v-btn>
-            <v-alert
-                v-if="colorError"
-                class="mt-4"
-                type="error"
-                variant="tonal"
-            >{{ colorError }}</v-alert>
-
-            <v-divider class="mt-6 mb-4"></v-divider>
-
-            <AlarmDefaultsSettings></AlarmDefaultsSettings>
-
-            <v-divider class="mt-6 mb-4"></v-divider>
-
-            <v-card-subtitle class="px-0">Event categories</v-card-subtitle>
-            <p class="text-medium-emphasis mb-4">
-                An event joins one by naming it, as in <code>category: meeting</code>, and is drawn
-                in its colour and with its name template unless it sets its own colour. Stored in the
-                same file.
-            </p>
-            <v-list
-                v-if="categoryList.length > 0"
-            >
-                <v-list-item
-                    v-for="(category, index) of categoryList"
-                    v-bind:key="category.id"
-                    v-bind:subtitle="previewOf(category.id)"
-                    v-bind:title="category.id"
-                >
-                    <template v-slot:prepend>
-                        <v-avatar
-                            v-bind:color="resolvedOf(category.id).color || DEFAULT_EVENT_COLOR"
-                            size="16"
-                        ></v-avatar>
-                    </template>
-                    <template v-slot:append>
-                        <v-icon-btn
-                            v-bind:icon="mdiPencil"
-                            variant="text"
-                            v-on:click="openCategoryDialog(index)"
-                        ></v-icon-btn>
-                        <v-icon-btn
-                            v-bind:icon="mdiDelete"
-                            variant="text"
-                            v-on:click="removeCategory(index)"
-                        ></v-icon-btn>
-                    </template>
-                </v-list-item>
-            </v-list>
-            <p
-                v-else
-                class="text-medium-emphasis"
-            >
-                No categories yet.
-            </p>
-            <v-btn
-                v-bind:prepend-icon="mdiPlus"
-                class="mt-4"
-                v-on:click="openCategoryDialog(null)"
-            >
-                Add category
-            </v-btn>
-            <v-alert
-                v-if="categoryError"
-                class="mt-4"
-                type="error"
-                variant="tonal"
-            >{{ categoryError }}</v-alert>
-
-            <v-alert
-                v-if="error"
-                class="mt-4"
-                type="error"
-                variant="tonal"
-            >{{ error }}</v-alert>
-        </v-card-text>
+        <v-alert
+            v-if="error"
+            class="mt-4"
+            type="error"
+            variant="tonal"
+        >{{ error }}</v-alert>
 
         <v-dialog
             v-model="dialogOpen"
@@ -263,7 +259,7 @@
                 </v-card-actions>
             </v-card>
         </v-dialog>
-    </v-card>
+    </section>
 </template>
 
 <script lang="ts" setup>
@@ -275,6 +271,7 @@ import { alarmProblems, describeAlarmText } from '@/alarms';
 import AlarmDefaultsSettings from '@/components/AlarmDefaultsSettings.vue';
 import InheritableAlarms from '@/components/InheritableAlarms.vue';
 import ColorField from '@/components/ColorField.vue';
+import StoredInRepository from '@/components/StoredInRepository.vue';
 import { parseEventColor } from '@/event-color';
 import {
     DEFAULT_DEADLINE_COLOR,
@@ -584,7 +581,7 @@ async function persist(next: CalendarSubscription[], onSaved?: () => void) {
 // Side by side where there is room, so the two colours are compared rather than read in turn.
 .task-date-colors {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(14em, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(14em, 100%), 1fr));
     gap: 0 1rem;
 }
 </style>

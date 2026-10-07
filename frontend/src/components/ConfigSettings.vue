@@ -1,181 +1,297 @@
 <template>
-    <div id="config">
-        <v-sheet class="d-flex flex-column pa-6" style="max-width: 600px; min-width: 0;">
-            <h1>Config</h1>
-            <v-btn
-                v-on:click="loadDefault"
-                class="mt-4 mb-2"
-            >Load default</v-btn>
-            <v-btn
-                v-on:click="saveAsDefault"
-                class="mt-2 mb-4"
-            >Save as default</v-btn>
-            <v-alert variant="tonal" type="info">
-                The following settings are only applied to the current browser and never be saved in the repository unless saved as default.
-            </v-alert>
-            <v-checkbox
-                v-model="currentLockScroll"
-                label="Lock Scroll by Default"
-            ></v-checkbox>
-            <v-card>
-                <v-card-text>
-                    <v-card-title>Editor</v-card-title>
-                    <v-checkbox
-                        v-model="currentUseSimpleEditor"
-                        label="Use Simple Editor"
-                    ></v-checkbox>
-                    <v-text-field
-                        v-model="currentEditorFontFamily"
-                        label="Font Family"
-                    >
-                    </v-text-field>
-                    <v-slider
-                        v-model="currentEditorFontSize"
-                        label="Font Size"
-                        min="1"
-                        max="64"
-                        step="0.5"
-                        thumb-label
-                    >
-                        <template v-slot:append>
-                            <v-text-field
-                                v-model="currentEditorFontSize"
-                                type="text"
-                                style="width: 6em"
-                                suffix="pt"
-                                readonly
-                            ></v-text-field>
-                        </template>
-                    </v-slider>
-                    <v-slider
-                        v-model="editorIndentSize"
-                        label="Indent Size"
-                        min="1"
-                        max="16"
-                        step="1"
-                        thumb-label
-                    >
-                        <template v-slot:append>
-                            <v-text-field
-                                v-model="editorIndentSize"
-                                type="text"
-                                suffix="spaces"
-                                readonly
-                            ></v-text-field>
-                        </template>
-                    </v-slider>
-                    <v-select
-                        v-bind:items="editorThemes"
-                        v-model="currentEditorTheme"
-                        label="Theme"
-                        item-title="name"
-                        item-value="value"
-                    >
-                    </v-select>
-                    <v-select
-                        v-bind:items="editorKeybindings"
-                        v-model="currentEditorKeybinding"
-                        label="Keybinding"
-                        item-title="name"
-                        item-value="value"
-                    >
-                    </v-select>
-                    <v-checkbox
-                        v-model="editorEnableEmacsStyleBindings"
-                        label="Enable Emacs-style bindings for non-Emacs key maps"
-                        hide-details="auto"
-                    />
-                    <v-checkbox
-                        v-model="editorVimInsertUnmapCtCd"
-                        label="Unmap <C-t>/<C-d> in Vim insert mode"
-                        hide-details="auto"
-                    />
-                </v-card-text>
-            </v-card>
-            <v-card class="mt-6">
-                <v-card-text>
-                    <v-card-title>Markdown Rendering</v-card-title>
-                    <v-select
-                        v-bind:items="highlightjsThemes"
-                        v-model="currentHighlightjsTheme"
-                        label="Code Block Syntax Highlight Theme"
-                        item-title="name"
-                        item-value="value"
-                    >
-                    </v-select>
-                </v-card-text>
-            </v-card>
-            <v-card class="mt-6">
-                <v-card-text>
-                    <v-card-title>Navigation Drawer</v-card-title>
-                    <p class="text-body-2 text-medium-emphasis mb-4">
-                        The note tree shows the most recently changed notes and directories.
-                        Pressing &ldquo;Show older&rdquo; reveals the next batch.
-                    </p>
-                    <v-slider
-                        v-model="noteTreeInitialRows"
-                        label="Initial Rows"
-                        min="10"
-                        max="100"
-                        step="10"
-                        thumb-label
-                    >
-                        <template v-slot:append>
-                            <v-text-field
-                                v-model="noteTreeInitialRows"
-                                type="text"
-                                style="width: 7em"
-                                suffix="rows"
-                                readonly
-                            ></v-text-field>
-                        </template>
-                    </v-slider>
-                    <v-slider
-                        v-model="noteTreeRowIncrement"
-                        label="Rows per Press"
-                        min="10"
-                        max="100"
-                        step="10"
-                        thumb-label
-                    >
-                        <template v-slot:append>
-                            <v-text-field
-                                v-model="noteTreeRowIncrement"
-                                type="text"
-                                style="width: 7em"
-                                suffix="rows"
-                                readonly
-                            ></v-text-field>
-                        </template>
-                    </v-slider>
-                </v-card-text>
-            </v-card>
-            <TasksSettings />
-            <CalendarsSettings></CalendarsSettings>
-            <AiActionsSettings></AiActionsSettings>
-        </v-sheet>
+    <div class="config-settings">
+        <v-tabs
+            v-model="selectedTab"
+            direction="vertical"
+            color="primary"
+            class="config-tabs"
+            aria-label="Settings groups"
+            aria-orientation="vertical"
+        >
+            <template
+                v-for="group of SETTINGS_GROUPS"
+                v-bind:key="group.value"
+            >
+                <!-- The heading is drawn above the group's first tab but lives inside it, because
+                     the slide group finds the selected tab to scroll into view by its index among
+                     the tabs, and walks siblings for the arrow keys: an element of its own between
+                     the tabs would put both off by one. A tablist may own only tabs anyway, so the
+                     heading is hidden and describes each tab of its group instead. -->
+                <v-tab
+                    v-for="(tab, index) of group.tabs"
+                    v-bind:id="`${tabsId}-tab-${tab.value}`"
+                    v-bind:key="tab.value"
+                    v-bind:value="tab.value"
+                    v-bind:class="{ 'config-tab-first': index === 0 }"
+                    v-bind:aria-controls="`${tabsId}-panel-${tab.value}`"
+                    v-bind:aria-describedby="`${tabsId}-group-${group.value}`"
+                >
+                    <span
+                        v-if="index === 0"
+                        v-bind:id="`${tabsId}-group-${group.value}`"
+                        class="config-tab-group text-label-small text-medium-emphasis"
+                        aria-hidden="true"
+                    >{{ group.label }}</span>
+                    {{ tab.label }}
+                </v-tab>
+            </template>
+        </v-tabs>
+        <!-- Firefox puts a scrolling element in the tab order, so a panel taller than the
+             dialog made Tab from its tab stop on this scroller first. The panel itself is
+             focusable, and the keys that scroll it reach this element from there. -->
+        <v-tabs-window
+            v-model="selectedTab"
+            v-bind:touch="false"
+            class="config-panels"
+            tabindex="-1"
+        >
+            <v-tabs-window-item
+                value="general"
+                v-bind="panelAttributes('general')"
+            >
+                <h2 class="text-title-medium mb-4">
+                    General
+                </h2>
+                <StoredInBrowser
+                    v-bind:busy="defaultConfigBusy"
+                    v-bind:error="defaultConfigError"
+                    v-on:load="loadDefault"
+                    v-on:save="saveAsDefault"
+                />
+                <v-checkbox
+                    v-model="currentLockScroll"
+                    label="Lock Scroll by Default"
+                />
+            </v-tabs-window-item>
+            <v-tabs-window-item
+                value="editor"
+                v-bind="panelAttributes('editor')"
+            >
+                <h2 class="text-title-medium mb-4">
+                    Editor
+                </h2>
+                <StoredInBrowser
+                    v-bind:busy="defaultConfigBusy"
+                    v-bind:error="defaultConfigError"
+                    v-on:load="loadDefault"
+                    v-on:save="saveAsDefault"
+                />
+                <v-checkbox
+                    v-model="currentUseSimpleEditor"
+                    label="Use Simple Editor"
+                />
+                <v-text-field
+                    v-model="currentEditorFontFamily"
+                    label="Font Family"
+                />
+                <v-slider
+                    v-model="currentEditorFontSize"
+                    label="Font Size"
+                    min="1"
+                    max="64"
+                    step="0.5"
+                    thumb-label
+                >
+                    <template #append>
+                        <v-text-field
+                            v-model="currentEditorFontSize"
+                            type="text"
+                            style="width: 6em"
+                            suffix="pt"
+                            readonly
+                        />
+                    </template>
+                </v-slider>
+                <v-slider
+                    v-model="editorIndentSize"
+                    label="Indent Size"
+                    min="1"
+                    max="16"
+                    step="1"
+                    thumb-label
+                >
+                    <template #append>
+                        <v-text-field
+                            v-model="editorIndentSize"
+                            type="text"
+                            suffix="spaces"
+                            readonly
+                        />
+                    </template>
+                </v-slider>
+                <v-select
+                    v-model="currentEditorTheme"
+                    v-bind:items="editorThemes"
+                    label="Theme"
+                    item-title="name"
+                    item-value="value"
+                />
+                <v-select
+                    v-model="currentEditorKeybinding"
+                    v-bind:items="editorKeybindings"
+                    label="Keybinding"
+                    item-title="name"
+                    item-value="value"
+                />
+                <v-checkbox
+                    v-model="editorEnableEmacsStyleBindings"
+                    label="Enable Emacs-style bindings for non-Emacs key maps"
+                    hide-details="auto"
+                />
+                <v-checkbox
+                    v-model="editorVimInsertUnmapCtCd"
+                    label="Unmap <C-t>/<C-d> in Vim insert mode"
+                    hide-details="auto"
+                />
+            </v-tabs-window-item>
+            <v-tabs-window-item
+                value="markdown"
+                v-bind="panelAttributes('markdown')"
+            >
+                <h2 class="text-title-medium mb-4">
+                    Markdown Rendering
+                </h2>
+                <StoredInBrowser
+                    v-bind:busy="defaultConfigBusy"
+                    v-bind:error="defaultConfigError"
+                    v-on:load="loadDefault"
+                    v-on:save="saveAsDefault"
+                />
+                <v-select
+                    v-model="currentHighlightjsTheme"
+                    v-bind:items="highlightjsThemes"
+                    label="Code Block Syntax Highlight Theme"
+                    item-title="name"
+                    item-value="value"
+                />
+            </v-tabs-window-item>
+            <v-tabs-window-item
+                value="navigation"
+                v-bind="panelAttributes('navigation')"
+            >
+                <h2 class="text-title-medium mb-4">
+                    Navigation Drawer
+                </h2>
+                <StoredInBrowser
+                    v-bind:busy="defaultConfigBusy"
+                    v-bind:error="defaultConfigError"
+                    v-on:load="loadDefault"
+                    v-on:save="saveAsDefault"
+                />
+                <p class="text-body-2 text-medium-emphasis mb-4">
+                    The note tree shows the most recently changed notes and directories.
+                    Pressing &ldquo;Show older&rdquo; reveals the next batch.
+                </p>
+                <v-slider
+                    v-model="noteTreeInitialRows"
+                    label="Initial Rows"
+                    min="10"
+                    max="100"
+                    step="10"
+                    thumb-label
+                >
+                    <template #append>
+                        <v-text-field
+                            v-model="noteTreeInitialRows"
+                            type="text"
+                            style="width: 7em"
+                            suffix="rows"
+                            readonly
+                        />
+                    </template>
+                </v-slider>
+                <v-slider
+                    v-model="noteTreeRowIncrement"
+                    label="Rows per Press"
+                    min="10"
+                    max="100"
+                    step="10"
+                    thumb-label
+                >
+                    <template #append>
+                        <v-text-field
+                            v-model="noteTreeRowIncrement"
+                            type="text"
+                            style="width: 7em"
+                            suffix="rows"
+                            readonly
+                        />
+                    </template>
+                </v-slider>
+            </v-tabs-window-item>
+            <v-tabs-window-item
+                value="tasks"
+                v-bind="panelAttributes('tasks')"
+            >
+                <TasksSettings />
+            </v-tabs-window-item>
+            <v-tabs-window-item
+                value="calendars"
+                v-bind="panelAttributes('calendars')"
+            >
+                <CalendarsSettings />
+            </v-tabs-window-item>
+            <v-tabs-window-item
+                value="ai-actions"
+                v-bind="panelAttributes('ai-actions')"
+            >
+                <AiActionsSettings />
+            </v-tabs-window-item>
+        </v-tabs-window>
     </div>
 </template>
 
 <script lang="ts" setup>
-import { ref, watch, onMounted } from 'vue';
+import axios from 'axios';
+import { ref, useId } from 'vue';
 
 import AiActionsSettings from '@/components/AiActionsSettings.vue';
 import CalendarsSettings from '@/components/CalendarsSettings.vue';
+import StoredInBrowser from '@/components/StoredInBrowser.vue';
 import TasksSettings from '@/components/TasksSettings.vue';
 import { useFilesStore } from '@/stores/files';
 import {
+    DEFAULT_CONFIG_PATH,
     NOTE_TREE_INITIAL_ROWS,
     NOTE_TREE_ROW_INCREMENT,
-    loadConfigValue,
-    saveConfigValue,
+    EDITOR_FONT_SIZE,
+    useConfigValue,
 } from '@/config';
 import YAML from 'yaml';
 
 // Composables
 const files = useFilesStore();
 
+// Grouped by where the settings are kept, which decides which browsers see them.
+const SETTINGS_GROUPS = [
+    {
+        value: 'browser',
+        label: 'This browser',
+        tabs: [
+            { value: 'general', label: 'General' },
+            { value: 'editor', label: 'Editor' },
+            { value: 'markdown', label: 'Markdown Rendering' },
+            { value: 'navigation', label: 'Navigation Drawer' },
+        ],
+    },
+    {
+        value: 'repository',
+        label: 'Repository',
+        tabs: [
+            { value: 'tasks', label: 'Tasks' },
+            { value: 'calendars', label: 'Calendars' },
+            { value: 'ai-actions', label: 'AI Actions' },
+        ],
+    },
+];
+const tabsId = useId();
+
 // Reactive states
+const selectedTab = ref('general');
+// Shared by the four panels that offer Load and Save, so a press on one shows on all of them and
+// none can start a second commit while the first is under way.
+const defaultConfigBusy = ref<'load' | 'save' | null>(null);
+const defaultConfigError = ref('');
 const editorThemes = ref([
     { name: 'Default (Light)',         value: 'default'                 },
     { name: 'One Dark',                value: 'one-dark'                },
@@ -435,118 +551,170 @@ const highlightjsThemes = ref([
     { name: 'Xcode',                                value: 'xcode'                               },
     { name: 'Xt256',                                value: 'xt256'                               },
 ]);
-const currentUseSimpleEditor = ref(loadConfigValue('use-simple-editor', false));
-const currentLockScroll = ref(loadConfigValue('lock-scroll', false));
-const currentEditorFontFamily = ref(loadConfigValue('editor-font-family', 'Menlo, monospace'));
-const currentEditorFontSize = ref(loadConfigValue('editor-font-size', 10));
-const editorIndentSize = ref(loadConfigValue('editor-indent-size', 2));
-const noteTreeInitialRows = ref(loadConfigValue('note-tree-initial-rows', NOTE_TREE_INITIAL_ROWS));
-const noteTreeRowIncrement = ref(loadConfigValue('note-tree-row-increment', NOTE_TREE_ROW_INCREMENT));
-const currentEditorTheme = ref(loadConfigValue('editor-theme', 'default'));
-const currentEditorKeybinding = ref(loadConfigValue('editor-keybinding', 'default'));
-const editorEnableEmacsStyleBindings = ref(loadConfigValue('editor-enable-emacs-style-bindings', false));
-const editorVimInsertUnmapCtCd = ref(loadConfigValue('editor-vim-insert-unmap-ct-cd', false));
-const currentHighlightjsTheme = ref(loadConfigValue('highlightjs-theme', 'default'));
+const currentUseSimpleEditor = useConfigValue('use-simple-editor', false);
+const currentLockScroll = useConfigValue('lock-scroll', false);
+const currentEditorFontFamily = useConfigValue('editor-font-family', 'Menlo, monospace');
+const currentEditorFontSize = useConfigValue('editor-font-size', EDITOR_FONT_SIZE);
+const editorIndentSize = useConfigValue('editor-indent-size', 2);
+const noteTreeInitialRows = useConfigValue('note-tree-initial-rows', NOTE_TREE_INITIAL_ROWS);
+const noteTreeRowIncrement = useConfigValue('note-tree-row-increment', NOTE_TREE_ROW_INCREMENT);
+const currentEditorTheme = useConfigValue('editor-theme', 'default');
+const currentEditorKeybinding = useConfigValue('editor-keybinding', 'default');
+const editorEnableEmacsStyleBindings = useConfigValue('editor-enable-emacs-style-bindings', false);
+const editorVimInsertUnmapCtCd = useConfigValue('editor-vim-insert-unmap-ct-cd', false);
+const currentHighlightjsTheme = useConfigValue('highlightjs-theme', 'default');
 
-// Lifecycle hooks
-onMounted(() => {
-    document.title = `Config | ${import.meta.env.VITE_APP_NAME}`;
-});
+// Every browser setting under its name in DEFAULT_CONFIG_PATH. Saving and loading both walk this
+// one list, so a setting added here is in both, and one left out is in neither.
+const DEFAULT_CONFIG_FIELDS: Record<string, { value: unknown }> = {
+    useSimpleEditor: currentUseSimpleEditor,
+    lockScroll: currentLockScroll,
+    editorFontFamily: currentEditorFontFamily,
+    editorFontSize: currentEditorFontSize,
+    editorIndentSize,
+    editorTheme: currentEditorTheme,
+    editorKeybinding: currentEditorKeybinding,
+    editorEnableEmacsStyleBindings,
+    editorVimInsertUnmapCtCd,
+    highlightjsTheme: currentHighlightjsTheme,
+    noteTreeInitialRows,
+    noteTreeRowIncrement,
+};
 
 // Methods
-async function loadDefault() {
-    const config = YAML.parse(await files.read('.mory/default_config.yaml'));
-    currentUseSimpleEditor.value = config.useSimpleEditor;
-    currentLockScroll.value = config.lockScroll;
-    currentEditorFontFamily.value = config.editorFontFamily;
-    currentEditorFontSize.value = config.editorFontSize;
-    editorIndentSize.value = config.editorIndentSize;
-    currentEditorTheme.value = config.editorTheme;
-    currentEditorKeybinding.value = config.editorKeybinding;
-    editorEnableEmacsStyleBindings.value = config.editorEnableEmacsStyleBindings;
-    editorVimInsertUnmapCtCd.value = config.editorVimInsertUnmapCtCd;
-    currentHighlightjsTheme.value = config.highlightjsTheme;
-    // Guarded: a default_config.yaml written before these keys existed would set undefined,
-    // which saveConfigValue stores as the string "undefined" and loadConfigValue then throws on.
-    noteTreeInitialRows.value = config.noteTreeInitialRows ?? NOTE_TREE_INITIAL_ROWS;
-    noteTreeRowIncrement.value = config.noteTreeRowIncrement ?? NOTE_TREE_ROW_INCREMENT;
-}
-
-function saveAsDefault() {
-    const config = {
-        useSimpleEditor: currentUseSimpleEditor.value,
-        lockScroll: currentLockScroll.value,
-        editorFontFamily: currentEditorFontFamily.value,
-        editorFontSize: currentEditorFontSize.value,
-        editorIndentSize: editorIndentSize.value,
-        editorTheme: currentEditorTheme.value,
-        editorKeybinding: currentEditorKeybinding.value,
-        editorEnableEmacsStyleBindings: editorEnableEmacsStyleBindings.value,
-        editorVimInsertUnmapCtCd: editorVimInsertUnmapCtCd.value,
-        highlightjsTheme: currentHighlightjsTheme.value,
-        noteTreeInitialRows: noteTreeInitialRows.value,
-        noteTreeRowIncrement: noteTreeRowIncrement.value,
+function panelAttributes(value: string) {
+    return {
+        id: `${tabsId}-panel-${value}`,
+        role: 'tabpanel',
+        'aria-labelledby': `${tabsId}-tab-${value}`,
+        tabindex: 0,
     };
-    files.write('.mory/default_config.yaml', YAML.stringify(config));
 }
 
-// Watchers
-watch(currentUseSimpleEditor, (newUseSimpleEditor: boolean) => {
-    saveConfigValue('use-simple-editor', newUseSimpleEditor);
-});
+async function loadDefault() {
+    defaultConfigBusy.value = 'load';
+    defaultConfigError.value = '';
+    try {
+        const config = YAML.parse(await files.read(DEFAULT_CONFIG_PATH));
+        for (const [name, setting] of Object.entries(DEFAULT_CONFIG_FIELDS)) {
+            const value = config?.[name];
+            // A file saved before a setting existed lacks it, and that setting keeps the value it
+            // has here: assigning undefined would store the string "undefined", which
+            // loadConfigValue throws on at the next start.
+            if (value !== undefined) {
+                setting.value = value;
+            }
+        }
+    }
+    catch (err) {
+        defaultConfigError.value = axios.isAxiosError(err) && err.response?.status === 404
+            ? `The repository has no ${DEFAULT_CONFIG_PATH} yet. Save to repository writes one.`
+            : `Could not load ${DEFAULT_CONFIG_PATH}: ${err}`;
+    }
+    finally {
+        defaultConfigBusy.value = null;
+    }
+}
 
-watch(currentLockScroll, (newLockScroll: boolean) => {
-    saveConfigValue('lock-scroll', newLockScroll);
-});
+async function saveAsDefault() {
+    const config = Object.fromEntries(
+        Object.entries(DEFAULT_CONFIG_FIELDS).map(([name, setting]) => [name, setting.value]),
+    );
+    defaultConfigBusy.value = 'save';
+    defaultConfigError.value = '';
+    try {
+        await files.write(DEFAULT_CONFIG_PATH, YAML.stringify(config));
+    }
+    catch (err) {
+        defaultConfigError.value = `Could not save ${DEFAULT_CONFIG_PATH}: ${err}`;
+    }
+    finally {
+        defaultConfigBusy.value = null;
+    }
+}
 
-watch(currentEditorFontFamily, (newEditorFontFamily: string) => {
-    saveConfigValue('editor-font-family', newEditorFontFamily);
-});
-
-watch(currentEditorFontSize, (newEditorFontSize: number) => {
-    saveConfigValue('editor-font-size', newEditorFontSize);
-});
-
-watch(editorIndentSize, (newEditorIndentSize: number) => {
-    saveConfigValue('editor-indent-size', newEditorIndentSize);
-});
-
-watch(currentEditorTheme, (newEditorTheme: string) => {
-    saveConfigValue('editor-theme', newEditorTheme);
-});
-
-watch(currentEditorKeybinding, (newEditorKeybinding: string) => {
-    saveConfigValue('editor-keybinding', newEditorKeybinding);
-});
-
-watch(editorEnableEmacsStyleBindings, (newEditorEnableEmacsStyleBindings: string) => {
-    saveConfigValue('editor-enable-emacs-style-bindings', newEditorEnableEmacsStyleBindings);
-});
-
-watch(editorVimInsertUnmapCtCd, (newEditorVimInsertUnmapCtCd: string) => {
-    saveConfigValue('editor-vim-insert-unmap-ct-cd', newEditorVimInsertUnmapCtCd);
-});
-
-watch(currentHighlightjsTheme, (newHighlightjsTheme: string) => {
-    saveConfigValue('highlightjs-theme', newHighlightjsTheme);
-});
-
-watch(noteTreeInitialRows, (newNoteTreeInitialRows: number) => {
-    saveConfigValue('note-tree-initial-rows', newNoteTreeInitialRows);
-});
-
-watch(noteTreeRowIncrement, (newNoteTreeRowIncrement: number) => {
-    saveConfigValue('note-tree-row-increment', newNoteTreeRowIncrement);
-});
 </script>
 
 <style scoped lang="scss">
-#config {
-    height: 100%;
-
+.config-settings {
     display: flex;
-    flex-direction: row;
-    justify-content: center;
-    align-items: center;
+    gap: 24px;
+    padding: 16px 24px 24px;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.config-tabs {
+    flex: 0 0 200px;
+
+    :deep(.v-tab) {
+        justify-content: flex-start;
+    }
+
+    :deep(.v-btn__content) {
+        white-space: normal;
+        text-align: left;
+    }
+}
+
+// The heading is drawn in the margin above its tab, outside the tab's box, so that hovering or
+// selecting the tab does not shade it; the button clips its content unless told otherwise.
+.config-tab-first {
+    overflow: visible;
+    margin-top: 32px;
+
+    &:not(:first-child) {
+        margin-top: 48px;
+    }
+}
+
+.config-tab-group {
+    position: absolute;
+    right: 0;
+    bottom: 100%;
+    left: 0;
+    padding: 8px 16px;
+    // A press on the heading is not a press on the tab it belongs to.
+    pointer-events: none;
+}
+
+.config-panels {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+@media (max-width: 599px) {
+    .config-settings {
+        gap: 12px;
+        padding: 12px;
+    }
+
+    .config-panels {
+        :deep(.v-slider.v-input--horizontal) {
+            grid-template-areas: "prepend prepend" "control append" "messages messages";
+            grid-template-columns: minmax(0, 1fr) max-content;
+            grid-template-rows: auto auto auto;
+        }
+
+        :deep(.v-slider > .v-input__prepend) {
+            margin-inline-end: 0;
+        }
+    }
+
+    .config-tabs {
+        flex-basis: 112px;
+
+        :deep(.v-tab) {
+            min-width: 0;
+            padding-inline: 8px;
+        }
+    }
+
+    .config-tab-group {
+        padding-inline: 8px;
+    }
 }
 </style>

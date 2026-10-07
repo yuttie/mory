@@ -551,6 +551,15 @@ watch(successMessage, (newValue) => {
     }
 });
 
+watch([eventWindow, () => calendars.subscriptionRevision], ([window]) => {
+    calendars.load(window.from, window.to).catch((err) => {
+        // A calendar that fails is already reported per calendar in the response; this is the
+        // request itself failing, which must not take the note events down with it.
+        errorText.value = `Could not load imported events: ${err}`;
+        error.value = true;
+    });
+}, { immediate: true });
+
 // Lifecycle hooks
 onMounted(() => {
     document.title = `Home | ${import.meta.env.VITE_APP_NAME}`;
@@ -560,12 +569,6 @@ onMounted(() => {
     calendars.loadConfiguration().catch(() => {
         // Only names and colours are wanted from it, and there are defaults for those; the
         // imported events themselves come back from the backend, which reads the same file.
-    });
-    calendars.load(eventWindow.value.from, eventWindow.value.to).catch((err) => {
-        // A calendar that fails is already reported per calendar in the response; this is the
-        // request itself failing, which must not take the note events down with it.
-        errorText.value = `Could not load imported events: ${err}`;
-        error.value = true;
     });
 });
 

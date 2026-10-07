@@ -90,6 +90,8 @@ export const useCalendarsStore = defineStore('calendars', () => {
     const hasLoadedConfiguration = ref(false);
 
     const loaded = shallowRef<Loaded>(EMPTY);
+    // Mounted views refetch their own window when subscriptions change under Config.
+    const subscriptionRevision = ref(0);
     const isLoading = ref(false);
     // The window the current `loaded` describes, so a repeat request for it costs nothing.
     const loadedWindow = ref<string | null>(null);
@@ -290,6 +292,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
     function invalidate(): void {
         loadedWindow.value = null;
         loaded.value = EMPTY;
+        subscriptionRevision.value += 1;
     }
 
     /// Fetch the occurrences in `[from, to]`, unless that window is already loaded.
@@ -318,9 +321,14 @@ export const useCalendarsStore = defineStore('calendars', () => {
         // A generation, so the `finally` only clears the slot if it still owns it -- a later
         // request for another window must not have its bookkeeping torn down by an earlier one.
         const generation = ++latestRequest;
+        const revision = subscriptionRevision.value;
         const request = (async () => {
             try {
                 const response = await getImportedEvents(from, to);
+                // A save may have invalidated the subscriptions while this request ran.
+                if (revision !== subscriptionRevision.value) {
+                    return;
+                }
                 loaded.value = {
                     events: response.events ?? [],
                     series: response.series ?? {},
@@ -330,6 +338,9 @@ export const useCalendarsStore = defineStore('calendars', () => {
                 loadedWindow.value = key;
             }
             catch (error) {
+                if (revision !== subscriptionRevision.value) {
+                    return;
+                }
                 // Showing another window's events under this one's dates would be worse than
                 // showing none, so what was loaded is dropped rather than left to mislead.
                 loaded.value = EMPTY;
@@ -350,6 +361,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
 
     return {
         subscriptions,
+        subscriptionRevision,
         taskDateColors,
         alarmDefaults,
         effectiveAlarmDefaults,

@@ -42,20 +42,20 @@
                         v-bind:readonly="aiActionRunning"
                         v-on:input="onEditorChange($event.target.value)"
                         class="editor simple-editor"
-                        ref="editor"
+                        ref="simpleEditor"
                     ></textarea>
                 </template>
-                <template v-else>
-                    <Editor
-                        v-bind:value="modelValue"
-                        v-bind:mode="language"
-                        v-bind:readonly="aiActionRunning"
-                        v-bind:line-wrapping="lineWrapping"
-                        v-on:change="onEditorChange"
-                        v-on:scroll="onEditorScroll"
-                        ref="editor"
-                    ></Editor>
-                </template>
+                <Editor
+                    v-if="richEditorStarted"
+                    v-show="!useSimpleEditor"
+                    v-bind:value="modelValue"
+                    v-bind:mode="language"
+                    v-bind:readonly="aiActionRunning"
+                    v-bind:line-wrapping="lineWrapping"
+                    v-on:change="onEditorChange"
+                    v-on:scroll="onEditorScroll"
+                    ref="richEditor"
+                ></Editor>
             </div>
             <div class="viewer-pane"
                 ref="viewer"
@@ -111,7 +111,7 @@ import { runAiAction as runAiActionRequest } from '@/api';
 import { useFilesStore } from '@/stores/files';
 import { fillPrompt, hasInputPlaceholder, loadAiActions, saveAiActions } from '@/ai-actions';
 import type { AiAction } from '@/ai-actions';
-import { loadConfigValue } from '@/config';
+import { useConfigValue } from '@/config';
 import { CliPrettify } from 'markdown-table-prettify';
 import { chunkMarkdownByHeadings } from '@/markdown-utils';
 import { buildScrollMap, lineAtOffset, offsetAtLine, type ScrollAnchor } from '@/scroll-map';
@@ -143,7 +143,10 @@ const appStore = useAppStore();
 const files = useFilesStore();
 
 // Reactive states
-const useSimpleEditor = ref(loadConfigValue('use-simple-editor', false));
+const useSimpleEditor = useConfigValue('use-simple-editor', false);
+// Keep a rich editor once started, so a temporary switch to the textarea retains its undo history.
+const richEditorStarted = ref(!useSimpleEditor.value);
+const highlightjsTheme = useConfigValue('highlightjs-theme', 'default');
 // Switched from the toolbar rather than the config page, so it is saved the moment it changes, as
 // one setting for every note and the task editor alike.
 const lineWrapping = useLocalStorage('editor-line-wrapping', true);
@@ -165,6 +168,8 @@ let markdownChunks: Array<{ content: string; startLine: number }> = [];
 let renderedChunks: string[] = [];
 let chunkElements: HTMLElement[] = [];
 let pendingProgrammaticViewerScrollPosition: { top: number; left: number } | null = null;
+let highlightStyle: HTMLStyleElement | null = null;
+let highlightRevision = 0;
 
 // The render last started, so a jump can wait for the headings it looks for.
 let latestRender: Promise<void> = Promise.resolve();
@@ -179,7 +184,9 @@ let lastEmittedValue: string | null = null;
 let pendingInputResolve: ((input: string | null) => void) | null = null;
 
 // Template Refs
-const editor = ref<InstanceType<typeof Editor> | HTMLTextAreaElement | null>(null);
+const richEditor = ref<InstanceType<typeof Editor> | null>(null);
+const simpleEditor = ref<HTMLTextAreaElement | null>(null);
+const editor = computed(() => useSimpleEditor.value ? simpleEditor.value : richEditor.value);
 const viewer = ref(null);
 const shadowDomRootElement = ref(null);
 const shadowRoot = ref(null);
@@ -213,16 +220,10 @@ onMounted(async () => {
     reloadAiActions();
 
     // Load CSSs that are used within the shadow DOM
-    const highlightjsTheme = loadConfigValue('highlightjs-theme', 'default');
-    await loadHighlightjsTheme(highlightjsTheme)
-    .then((themeCss) => {
-        const styleElement = document.createElement('style');
-        styleElement.textContent = themeCss;
-        shadowRoot.value.insertBefore(styleElement, renderedContentDiv.value);
-    })
-    .catch((err) => {
-        console.error(err);
-    });
+    // Update this node in place so custom note styles keep their later position in the cascade.
+    highlightStyle = document.createElement('style');
+    shadowRoot.value.insertBefore(highlightStyle, renderedContentDiv.value);
+    await applyHighlightjsTheme();
     await loadCustomNoteCss()
     .then((customNoteCss) => {
         const styleElement = document.createElement('style');
@@ -240,6 +241,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+    highlightStyle = null;
     if (renderTimeoutId.value) {
         window.clearTimeout(renderTimeoutId.value);
         renderTimeoutId.value = null;
@@ -288,6 +290,22 @@ async function loadHighlightjsTheme(themeName: string): Promise<string> {
     }
     catch (err) {
         throw new Error(`Failed to load Highlight.js theme CSS: ${err}`, { cause: err });
+    }
+}
+
+async function applyHighlightjsTheme() {
+    if (!highlightStyle) {
+        return;
+    }
+    const revision = ++highlightRevision;
+    try {
+        const css = await loadHighlightjsTheme(highlightjsTheme.value);
+        if (highlightStyle && revision === highlightRevision) {
+            highlightStyle.textContent = css;
+        }
+    }
+    catch (err) {
+        console.error(err);
     }
 }
 
@@ -872,7 +890,7 @@ function onEditorScroll(lineNumber: number) {
 }
 
 function onEditorPaneResize() {
-    (editor.value as InstanceType<typeof Editor>).resize();
+    richEditor.value?.resize();
 }
 
 function onViewerPaneResize() {
@@ -888,6 +906,15 @@ function blur() {
 }
 
 // Watchers
+watch(highlightjsTheme, applyHighlightjsTheme);
+watch(useSimpleEditor, async (simple) => {
+    if (!simple) {
+        richEditorStarted.value = true;
+        await nextTick();
+        richEditor.value?.resize();
+    }
+});
+
 watch(() => props.modelValue, (value: string) => {
     if (value === lastEmittedValue) {
         return;
