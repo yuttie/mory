@@ -1,15 +1,13 @@
 <template>
     <div class="eisenhower-matrix">
-        <v-card
+        <TaskGroup
             v-for="quadrant of QUADRANTS"
             v-bind:key="quadrant.key"
             class="quadrant"
             v-bind:class="quadrant.class"
+            v-bind:title="quadrant.title"
+            v-bind:subtitle="quadrant.subtitle"
         >
-            <v-card-title class="quadrant-header">
-                <span class="quadrant-title">{{ quadrant.title }}</span>
-                <span class="quadrant-subtitle">{{ quadrant.subtitle }}</span>
-            </v-card-title>
             <div class="task-list">
                 <TaskListItemNext
                     v-for="task of eisenhowerQuadrants[quadrant.key]"
@@ -19,7 +17,7 @@
                     v-bind:list-root="listRoot"
                 />
             </div>
-        </v-card>
+        </TaskGroup>
     </div>
 </template>
 
@@ -53,7 +51,7 @@ const QUADRANTS = [
 </script>
 
 <style scoped lang="scss">
-$space: 12px;
+$space: 8px;
 
 /* Eisenhower Matrix styles */
 .eisenhower-matrix {
@@ -61,7 +59,7 @@ $space: 12px;
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     grid-template-rows: minmax(48px, 1fr) repeat(2, minmax(0, 2fr));
-    gap: $space;
+    gap: 16px;
     padding: $space;
     height: 100%;
     min-height: 0;
@@ -75,42 +73,18 @@ $space: 12px;
         padding: $space / 2;
         gap: $space / 2;
     }
-}
 
-.quadrant {
-    display: flex;
-    flex-direction: column;
-    max-height: 100%;
-    overflow: auto;
-    min-height: 0;
-}
-
-/* Mobile responsive adjustments for quadrants */
-@media (max-width: 959px) { /* md breakpoint in Vuetify 2 */
-    .quadrant-subtitle {
+    .quadrant :deep(.task-group-subtitle) {
         display: none;
     }
 }
 
-.quadrant-header {
-    flex-direction: column;
-    align-items: flex-start !important;
-    padding-bottom: 8px;
-}
-
-.quadrant-title {
-    font-weight: 600;
-    font-size: 1.1em;
-}
-
-.quadrant-subtitle {
-    font-size: 0.85em;
-    color: rgba(0, 0, 0, 0.6);
-    font-weight: 400;
-}
-
+/* A quadrant is far wider than a column of the Status view, so its cards are laid out in as many
+   columns as fit, each about as wide as a Status column. */
 .task-list {
-    overflow-y: auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr));
+    gap: 16px;
 }
 
 /* Color coding for quadrants */
