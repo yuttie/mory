@@ -307,6 +307,39 @@ test('links vertical settings tabs to their named panels for keyboard navigation
     await expect(editorPanel).toBeFocused();
 });
 
+test('groups settings tabs by where they are stored without trapping the arrow keys', async ({ context, page }) => {
+    await mockBackend(context, {});
+    await page.goto('/files');
+    await openConfig(page);
+    const groups = {
+        'This browser': ['General', 'Editor', 'Markdown Rendering', 'Navigation Drawer'],
+        'Repository': ['Tasks', 'Calendars', 'AI Actions'],
+    };
+    for (const [group, names] of Object.entries(groups)) {
+        for (const name of names) {
+            await expect(configDialog(page).getByRole('tab', { name, exact: true })).toHaveAccessibleDescription(group);
+        }
+    }
+    await expect(configDialog(page).getByRole('tab')).toHaveCount(7);
+
+    // The headings sit between the tabs, so each key below would stop on one if it could.
+    const general = configDialog(page).getByRole('tab', { name: 'General', exact: true });
+    const navigation = configDialog(page).getByRole('tab', { name: 'Navigation Drawer', exact: true });
+    const tasks = configDialog(page).getByRole('tab', { name: 'Tasks', exact: true });
+    const aiActions = configDialog(page).getByRole('tab', { name: 'AI Actions', exact: true });
+    await navigation.focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(tasks).toBeFocused();
+    await page.keyboard.press('ArrowUp');
+    await expect(navigation).toBeFocused();
+    await page.keyboard.press('Home');
+    await expect(general).toBeFocused();
+    await page.keyboard.press('ArrowUp');
+    await expect(aiActions).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(general).toBeFocused();
+});
+
 for (const width of [320, 340, 360, 390]) {
     test(`fits task colours and calendar fields within Config at ${width}px`, async ({ context, page }) => {
         await page.setViewportSize({ width, height: 844 });

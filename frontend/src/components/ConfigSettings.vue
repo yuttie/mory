@@ -8,15 +8,32 @@
             aria-label="Settings groups"
             aria-orientation="vertical"
         >
-            <v-tab
-                v-for="tab of SETTINGS_TABS"
-                v-bind:id="`${tabsId}-tab-${tab.value}`"
-                v-bind:key="tab.value"
-                v-bind:value="tab.value"
-                v-bind:aria-controls="`${tabsId}-panel-${tab.value}`"
+            <template
+                v-for="group of SETTINGS_GROUPS"
+                v-bind:key="group.value"
             >
-                {{ tab.label }}
-            </v-tab>
+                <!-- A tablist may own only tabs, so the heading is hidden and each tab is described
+                     by it instead. `disabled` is what makes the arrow keys step over it: the slide
+                     group moves focus to the next sibling without that attribute. -->
+                <div
+                    v-bind:id="`${tabsId}-group-${group.value}`"
+                    class="config-tab-group text-label-small text-medium-emphasis"
+                    aria-hidden="true"
+                    disabled
+                >
+                    {{ group.label }}
+                </div>
+                <v-tab
+                    v-for="tab of group.tabs"
+                    v-bind:id="`${tabsId}-tab-${tab.value}`"
+                    v-bind:key="tab.value"
+                    v-bind:value="tab.value"
+                    v-bind:aria-controls="`${tabsId}-panel-${tab.value}`"
+                    v-bind:aria-describedby="`${tabsId}-group-${group.value}`"
+                >
+                    {{ tab.label }}
+                </v-tab>
+            </template>
         </v-tabs>
         <v-tabs-window
             v-model="selectedTab"
@@ -230,14 +247,27 @@ import YAML from 'yaml';
 // Composables
 const files = useFilesStore();
 
-const SETTINGS_TABS = [
-    { value: 'general', label: 'General' },
-    { value: 'editor', label: 'Editor' },
-    { value: 'markdown', label: 'Markdown Rendering' },
-    { value: 'navigation', label: 'Navigation Drawer' },
-    { value: 'tasks', label: 'Tasks' },
-    { value: 'calendars', label: 'Calendars' },
-    { value: 'ai-actions', label: 'AI Actions' },
+// Grouped by where the settings are kept, which decides who else sees them.
+const SETTINGS_GROUPS = [
+    {
+        value: 'browser',
+        label: 'This browser',
+        tabs: [
+            { value: 'general', label: 'General' },
+            { value: 'editor', label: 'Editor' },
+            { value: 'markdown', label: 'Markdown Rendering' },
+            { value: 'navigation', label: 'Navigation Drawer' },
+        ],
+    },
+    {
+        value: 'repository',
+        label: 'Repository',
+        tabs: [
+            { value: 'tasks', label: 'Tasks' },
+            { value: 'calendars', label: 'Calendars' },
+            { value: 'ai-actions', label: 'AI Actions' },
+        ],
+    },
 ];
 const tabsId = useId();
 
@@ -586,6 +616,14 @@ function saveAsDefault() {
     }
 }
 
+.config-tab-group {
+    padding: 8px 16px;
+
+    &:not(:first-child) {
+        margin-top: 16px;
+    }
+}
+
 .config-panels {
     flex: 1;
     min-width: 0;
@@ -618,6 +656,10 @@ function saveAsDefault() {
             min-width: 0;
             padding-inline: 8px;
         }
+    }
+
+    .config-tab-group {
+        padding-inline: 8px;
     }
 }
 </style>
