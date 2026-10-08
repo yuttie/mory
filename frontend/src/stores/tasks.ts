@@ -17,7 +17,7 @@ import {
 import { buildPathForest, stripExtension } from '@/path-forest';
 import { render, replaceStatus } from '@/task';
 import type { Status, Task } from '@/task';
-import { TASKS_DIR, buildTaskPath, taskPolicy } from '@/task-forest';
+import { TASKS_DIR, buildTaskPath, childTaskPath, taskPolicy } from '@/task-forest';
 import type { TaskMetadata, TaskNode, TaskTreeItem } from '@/task-forest';
 import { useEntrySubset } from '@/composables/entrySubset';
 import { useFilesStore } from '@/stores/files';
@@ -270,7 +270,7 @@ export const useTasksStore = defineStore('tasks', () => {
         if (node === undefined) {
             throw new Error(`Cannot place a task under an unknown task: ${parent}`);
         }
-        return `${node.path.slice(0, node.path.lastIndexOf('/'))}/${node.uuid}/${id}.md`;
+        return childTaskPath(node.path, node.uuid, id);
     }
 
     // --- Mutations. Server first, then wait for the listing to show the result. ---
@@ -278,6 +278,22 @@ export const useTasksStore = defineStore('tasks', () => {
     async function save(task: Task, path: string): Promise<void> {
         await files.write(path, render(task));
         await subset.settle(path, true);
+    }
+
+    // Write new tasks in the order given, which must put each after the one it sits under, and
+    // wait for the listing to hold them all. Each write is a commit of its own, so a failure part
+    // way leaves the ones before it written: `written` hears of each as it lands, for a caller to
+    // carry on from the next one rather than write any twice.
+    async function saveAll(writes: readonly { path: string; markdown: string }[], written?: () => void): Promise<void> {
+        for (const { path, markdown } of writes) {
+            await files.write(path, markdown);
+            written?.();
+        }
+        // The listing is of a commit, so the one holding the last write holds the rest.
+        const last = writes.at(-1);
+        if (last !== undefined) {
+            await subset.settle(last.path, true);
+        }
     }
 
     // Change the status alone. `save` regenerates the whole note from a `Task`, which only the
@@ -412,6 +428,7 @@ export const useTasksStore = defineStore('tasks', () => {
         init: subset.init,
         refresh: subset.refresh,
         save,
+        saveAll,
         setStatus,
         remove,
         move,

@@ -173,8 +173,24 @@
                                 <v-icon>{{ mdiPlus }}</v-icon>
                                 <span v-if="$vuetify.display.mdAndUp">Add</span>
                             </v-btn>
+                            <!-- Under the selected task, or with the selected group's tag, as Add
+                                 puts one. A phone has no room for it beside the view modes, so
+                                 there it is in the menu. -->
+                            <v-btn
+                                v-if="!$vuetify.display.xs"
+                                title="Quick add"
+                                color="primary"
+                                variant="outlined"
+                                class="ml-2"
+                                v-bind:class="{ 'pa-0': !$vuetify.display.mdAndUp }"
+                                v-on:click="openQuickAdd"
+                            >
+                                <v-icon>{{ mdiFormatListChecks }}</v-icon>
+                                <span v-if="$vuetify.display.mdAndUp">Quick add</span>
+                            </v-btn>
                             <v-spacer />
                             <v-menu
+                                v-model="itemViewMenuIsVisible"
                                 v-bind:close-on-content-click="false"
                             >
                                 <template v-slot:activator="{ props: menuProps }">
@@ -185,6 +201,12 @@
                                     ></v-icon-btn>
                                 </template>
                                 <v-list>
+                                    <v-list-item
+                                        v-if="$vuetify.display.xs"
+                                        v-bind:prepend-icon="mdiFormatListChecks"
+                                        title="Quick add"
+                                        v-on:click="openQuickAdd"
+                                    ></v-list-item>
                                     <v-list-subheader>Config</v-list-subheader>
                                     <v-list-item title="Hide completed tasks in item view">
                                         <template v-slot:prepend>
@@ -234,6 +256,12 @@
         </v-overlay>
         <v-snackbar v-model="error" color="error" location="top" timeout="5000">{{ error }}</v-snackbar>
         
+        <QuickAddTasksDialog
+            v-model="quickAddDialogIsVisible"
+            v-bind:initial-parent="newTaskParent"
+            v-bind:tag="newTaskTag"
+        />
+
         <!-- Parent Selection Dialog -->
         <ParentSelectionDialog
             v-model="showParentDialog"
@@ -260,6 +288,7 @@ import AppBarContent from '@/components/AppBarContent.vue';
 import {
     mdiCalendarMultiselectOutline,
     mdiDotsVertical,
+    mdiFormatListChecks,
     mdiGridLarge,
     mdiPlus,
     mdiTrafficLightOutline,
@@ -299,6 +328,8 @@ const error = ref<string | null>(null);
 const hideCompletedInTreeView = useLocalStorage('hide-completed-in-tree-view', false);
 const hideCompletedInItemView = useLocalStorage('hide-completed-in-item-view', false);
 const showParentDialog = ref<boolean>(false);
+const quickAddDialogIsVisible = ref(false);
+const itemViewMenuIsVisible = ref(false);
 // Statuses dropped in the status view and still being written, by task. The task is drawn where it
 // was dropped until the listing shows the write, rather than jumping back to its old column.
 const droppedStatuses = reactive(new Map<UUID, StatusKind>());
@@ -689,6 +720,12 @@ function onAddChildTask(parentUuid: UUID) {
     // A tag group is not a directory. Its task is a root task, and selecting the group is what
     // gives it the tag.
     newTaskPath.value = store.pathUnder(isTagGroupId(parentUuid) ? null : parentUuid, taskUuid);
+}
+
+// The menu stays open for its switch, so it is closed here rather than left over the dialog.
+function openQuickAdd() {
+    itemViewMenuIsVisible.value = false;
+    quickAddDialogIsVisible.value = true;
 }
 
 function getNewTaskPath(taskUuid: string): string {

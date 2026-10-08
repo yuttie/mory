@@ -442,6 +442,38 @@ describe('save', () => {
     });
 });
 
+describe('saveAll', () => {
+    const write = (path: string) => ({ path, markdown: `---\ntask:\n    status:\n        kind: todo\n---\n\n# ${path}\n` });
+
+    it('writes every task in order and does not return before the listing nests them', async () => {
+        const { store, repo } = await storeWith([]);
+        const parent = `.tasks/${uuid(1)}.md`;
+        const child = `.tasks/${uuid(1)}/${uuid(2)}.md`;
+        repo.lag(2);
+
+        await store.saveAll([write(parent), write(child)]);
+
+        expect(apiMocks.addNote.mock.calls.map(([path]) => path)).toEqual([parent, child]);
+        expect(store.childrenOf(uuid(1)).map((t) => t.uuid)).toEqual([uuid(2)]);
+    });
+
+    it('reports each write as it lands, and stops at the first that fails', async () => {
+        const { store, repo } = await storeWith([]);
+        apiMocks.addNote.mockImplementationOnce(apiMocks.addNote.getMockImplementation()!);
+        apiMocks.addNote.mockRejectedValueOnce(new Error('offline'));
+        const written = vi.fn();
+
+        await expect(store.saveAll([
+            write(`.tasks/${uuid(1)}.md`),
+            write(`.tasks/${uuid(2)}.md`),
+            write(`.tasks/${uuid(3)}.md`),
+        ], written)).rejects.toThrow('offline');
+
+        expect(written).toHaveBeenCalledTimes(1);
+        expect(repo.paths()).toEqual([`.tasks/${uuid(1)}.md`]);
+    });
+});
+
 describe('setStatus', () => {
     it('rewrites the status alone and waits for the listing', async () => {
         const { store } = await storeWith(sample);
