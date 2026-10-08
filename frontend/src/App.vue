@@ -117,6 +117,11 @@
                                 title="New task"
                                 v-on:click="openNewTaskDialog"
                             ></v-list-item>
+                            <v-list-item
+                                v-bind:prepend-icon="mdiFormatListChecks"
+                                title="Quick add tasks"
+                                v-on:click="openQuickAddDialog"
+                            ></v-list-item>
                             <v-list-subheader>Templates</v-list-subheader>
                             <TemplateMenuItem
                                 v-for="path in templates"
@@ -330,6 +335,11 @@
                                 title="New task"
                                 v-on:click="openNewTaskDialog"
                             ></v-list-item>
+                            <v-list-item
+                                v-bind:prepend-icon="mdiFormatListChecks"
+                                title="Quick add tasks"
+                                v-on:click="openQuickAddDialog"
+                            ></v-list-item>
                             <v-list-subheader>Templates</v-list-subheader>
                             <TemplateMenuItem
                                 v-for="path in templates"
@@ -501,6 +511,7 @@
         <input type="file" multiple class="d-none" ref="fileInputEl">
 
         <NewTaskDialog v-model="newTaskDialogIsVisible" />
+        <QuickAddTasksDialog v-model="quickAddDialogIsVisible" />
         <ConfigDialog
             v-if="appStore.hasToken"
             v-model="configDialogIsVisible"
@@ -567,6 +578,7 @@ import {
     mdiFileMultipleOutline,
     mdiFileOutline,
     mdiFolderOutline,
+    mdiFormatListChecks,
     mdiForwardburger,
     mdiHelp,
     mdiHomeOutline,
@@ -586,6 +598,7 @@ import type { Claim, IndexingStop, ListEntry2, UploadEntry } from '@/api';
 import ConfigDialog from '@/components/ConfigDialog.vue';
 import IndexingStopsItem from '@/components/IndexingStopsItem.vue';
 import NewTaskDialog from '@/components/NewTaskDialog.vue';
+import QuickAddTasksDialog from '@/components/QuickAddTasksDialog.vue';
 import TemplateMenuItem from '@/components/TemplateMenuItem.vue';
 import { requestEventAlarms } from '@/event-alarms';
 import { canHaveChildNote } from '@/note-forest';
@@ -608,6 +621,7 @@ const templates = ref([] as string[]);
 const uploadList = ref([] as UploadEntry[]);
 const uploadMenuIsVisible = ref(false);
 const newTaskDialogIsVisible = ref(false);
+const quickAddDialogIsVisible = ref(false);
 const configDialogIsVisible = ref(false);
 const errors = ref([]);
 const indexingStops = ref<IndexingStop[]>([]);
@@ -976,6 +990,11 @@ function uploadStatusIcon(status: string) {
 function openNewTaskDialog() {
     mobileDrawer.value = false;
     newTaskDialogIsVisible.value = true;
+}
+
+function openQuickAddDialog() {
+    mobileDrawer.value = false;
+    quickAddDialogIsVisible.value = true;
 }
 
 function openConfigDialog(): void {

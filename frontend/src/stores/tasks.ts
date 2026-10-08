@@ -280,6 +280,22 @@ export const useTasksStore = defineStore('tasks', () => {
         await subset.settle(path, true);
     }
 
+    // Write new tasks in the order given, which must put each after the one it sits under, and
+    // wait for the listing to hold them all. Each write is a commit of its own, so a failure part
+    // way leaves the ones before it written: `written` hears of each as it lands, for a caller to
+    // carry on from the next one rather than write any twice.
+    async function saveAll(writes: readonly { path: string; markdown: string }[], written?: () => void): Promise<void> {
+        for (const { path, markdown } of writes) {
+            await files.write(path, markdown);
+            written?.();
+        }
+        // The listing is of a commit, so the one holding the last write holds the rest.
+        const last = writes.at(-1);
+        if (last !== undefined) {
+            await subset.settle(last.path, true);
+        }
+    }
+
     // Change the status alone. `save` regenerates the whole note from a `Task`, which only the
     // editor holds; this reads the note as it stands and rewrites nothing but the status.
     async function setStatus(path: string, status: Status): Promise<void> {
@@ -412,6 +428,7 @@ export const useTasksStore = defineStore('tasks', () => {
         init: subset.init,
         refresh: subset.refresh,
         save,
+        saveAll,
         setStatus,
         remove,
         move,
