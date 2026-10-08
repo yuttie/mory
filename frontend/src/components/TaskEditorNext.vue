@@ -68,8 +68,11 @@
                             <v-icon>{{ mdiDelete }}</v-icon>
                             <span v-if="$vuetify.display.mdAndUp">Delete</span>
                         </v-btn>
+                        <!-- With nothing changed there is nothing to save. A new task is unchanged
+                             only while its title is empty, which the title's rule refuses already,
+                             so this never holds back a Create. -->
                         <v-btn
-                            v-bind:disabled="!!statusGateError || alarmsInvalid || !uiValid"
+                            v-bind:disabled="!isModified || !!statusGateError || alarmsInvalid || !uiValid"
                             type="submit"
                             color="primary"
                             v-bind:aria-label="isEdit ? 'Save' : 'Create'"
@@ -846,7 +849,7 @@ function onBeforeunload(e: any) {
 async function onSave(): Promise<void> {
     // Check validation results (async and returns { valid } in Vuetify 3)
     const result = await formRef.value?.validate?.();  // Runs Vuetify rules
-    if (!result?.valid || statusGateError.value || alarmsInvalid.value) {
+    if (!isModified.value || !result?.valid || statusGateError.value || alarmsInvalid.value) {
         return;
     }
     const alarms = taskAlarmsToWrite(form);
