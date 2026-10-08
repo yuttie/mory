@@ -145,3 +145,10 @@ export const taskPolicy: PathForestPolicy<TaskNode> = {
 export function buildTaskPath(ancestorsRootFirst: readonly UUID[], uuid: UUID): string {
     return TASKS_DIR + [...ancestorsRootFirst, uuid].join('/') + '.md';
 }
+
+// Where the task `id` belongs under the task at `parentPath`: in a directory named after the
+// parent, beside the parent's own file. Worked out from the path alone, so a parent written a
+// moment ago and not listed yet can take children too.
+export function childTaskPath(parentPath: string, parentUuid: UUID, id: UUID): string {
+    return `${parentPath.slice(0, parentPath.lastIndexOf('/'))}/${parentUuid}/${id}.md`;
+}

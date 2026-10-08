@@ -17,7 +17,7 @@ import {
 import { buildPathForest, stripExtension } from '@/path-forest';
 import { render, replaceStatus } from '@/task';
 import type { Status, Task } from '@/task';
-import { TASKS_DIR, buildTaskPath, taskPolicy } from '@/task-forest';
+import { TASKS_DIR, buildTaskPath, childTaskPath, taskPolicy } from '@/task-forest';
 import type { TaskMetadata, TaskNode, TaskTreeItem } from '@/task-forest';
 import { useEntrySubset } from '@/composables/entrySubset';
 import { useFilesStore } from '@/stores/files';
@@ -270,7 +270,7 @@ export const useTasksStore = defineStore('tasks', () => {
         if (node === undefined) {
             throw new Error(`Cannot place a task under an unknown task: ${parent}`);
         }
-        return `${node.path.slice(0, node.path.lastIndexOf('/'))}/${node.uuid}/${id}.md`;
+        return childTaskPath(node.path, node.uuid, id);
     }
 
     // --- Mutations. Server first, then wait for the listing to show the result. ---
