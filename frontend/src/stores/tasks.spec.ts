@@ -579,6 +579,28 @@ describe('move', () => {
         expect(order).toEqual([`.tasks/${uuid(1)}.md`, `.tasks/${uuid(1)}/${uuid(2)}.md`]);
     });
 
+    it('moves a task from where the move before it put it, asked for while that one ran', async () => {
+        const { store, repo } = await storeWith(sample);
+        await Promise.all([store.move(uuid(1), uuid(4)), store.move(uuid(2), uuid(6))]);
+
+        expect(apiMocks.renameNote.mock.calls).toEqual([
+            [`.tasks/${uuid(1)}.md`, `.tasks/${uuid(4)}/${uuid(1)}.md`],
+            [`.tasks/${uuid(1)}/${uuid(2)}.md`, `.tasks/${uuid(4)}/${uuid(1)}/${uuid(2)}.md`],
+            [`.tasks/${uuid(4)}/${uuid(1)}/${uuid(2)}.md`, `.tasks/${uuid(6)}/${uuid(2)}.md`],
+        ]);
+        expect(repo.paths()).toContain(`.tasks/${uuid(6)}/${uuid(2)}.md`);
+    });
+
+    it('still runs a move asked for after one that failed', async () => {
+        const { store } = await storeWith(sample);
+        const refused = store.move(uuid(1), uuid(2));
+        const moved = store.move(uuid(3), uuid(4));
+
+        await expect(refused).rejects.toThrow(/descendant/);
+        await moved;
+        expect(store.parentOf(uuid(3))).toBe(uuid(4));
+    });
+
     it('does nothing when the parent is already the one asked for', async () => {
         const { store } = await storeWith(sample);
         await store.move(uuid(2), uuid(1));

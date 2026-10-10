@@ -328,7 +328,19 @@ export const useTasksStore = defineStore('tasks', () => {
     // The hierarchy is the directory layout, so a move is a rename per file. Between those renames
     // the listing describes a subtree whose parent has already moved; the forest builder re-roots
     // the stragglers for that window rather than failing, and the final sync settles it.
-    async function move(id: UUID, newParent: UUID | null): Promise<void> {
+    //
+    // Moves run one at a time, each once the one before has settled. A move reads from the forest
+    // which files to rename and where to, and one still renaming leaves it half moved: a task
+    // under it, moved meanwhile, would be renamed by both.
+    function move(id: UUID, newParent: UUID | null): Promise<void> {
+        const moved = lastMove.then(() => moveNow(id, newParent));
+        lastMove = moved.catch(() => undefined);
+        return moved;
+    }
+
+    let lastMove: Promise<void> = Promise.resolve();
+
+    async function moveNow(id: UUID, newParent: UUID | null): Promise<void> {
         const current = forest.value.byId.get(id);
         if (current === undefined) {
             throw new Error(`Cannot move an unknown task: ${id}`);
