@@ -31,6 +31,12 @@ const MOUSE_SLOP = 4;
 // that moves first is scrolling, and the browser ends the press itself with a `pointercancel`.
 const TOUCH_DELAY = 500;
 
+// How near the top or bottom of the tree a held row scrolls it, and how fast at the very edge, in
+// pixels a frame. A tree can be short -- the task tree is 200px tall on a phone -- and a drop has to
+// reach the rows it hides.
+const SCROLL_EDGE = 40;
+const SCROLL_SPEED = 12;
+
 interface Press {
     id: string;
     pointerId: number;
@@ -50,6 +56,9 @@ export function useTreeDrag(options: TreeDragOptions) {
     let press: Press | null = null;
     // The row the pointer is over, if it takes the dragged one.
     let target: HTMLElement | null = null;
+    // What scrolls the tree's rows, and the frame that next scrolls it.
+    let scroller: HTMLElement | null = null;
+    let frame = 0;
 
     function rowAt(root: HTMLElement, x: number, y: number): HTMLElement | null {
         const row = document.elementFromPoint(x, y)?.closest<HTMLElement>(ROW) ?? null;
@@ -155,6 +164,34 @@ export function useTreeDrag(options: TreeDragOptions) {
         }
         window.addEventListener('keydown', onKeyDown);
         window.addEventListener('blur', cancel);
+        scroller = scrollerOf(from.root);
+        frame = requestAnimationFrame(scroll);
+    }
+
+    // Scrolls the tree while the pointer is near its top or bottom, faster the nearer, and aims
+    // again at whatever row that brings under the pointer.
+    function scroll() {
+        frame = requestAnimationFrame(scroll);
+        if (scroller === null) {
+            return;
+        }
+        const { x, y } = pointer.value;
+        const area = scroller.getBoundingClientRect();
+        if (x < area.left || x > area.right) {
+            return;
+        }
+        // How far into the band along the top the pointer is, or, below zero, along the bottom.
+        const depth = Math.max(0, area.top + SCROLL_EDGE - y) - Math.max(0, y - (area.bottom - SCROLL_EDGE));
+        if (depth === 0) {
+            return;
+        }
+        // At least a pixel, which is as fine as some browsers scroll.
+        const step = Math.max(1, Math.round(Math.min(1, Math.abs(depth) / SCROLL_EDGE) * SCROLL_SPEED));
+        const before = scroller.scrollTop;
+        scroller.scrollTop -= Math.sign(depth) * step;
+        if (scroller.scrollTop !== before) {
+            aim();
+        }
     }
 
     // Marks the row under the pointer as the target, if it takes the dragged row.
@@ -185,6 +222,7 @@ export function useTreeDrag(options: TreeDragOptions) {
         if (dragged.value !== null) {
             window.removeEventListener('keydown', onKeyDown);
             window.removeEventListener('blur', cancel);
+            cancelAnimationFrame(frame);
             press.root.classList.remove('tree-dragging');
             for (const row of press.root.querySelectorAll('.tree-drop-refused, .tree-drop-target')) {
                 row.classList.remove('tree-drop-refused', 'tree-drop-target');
@@ -193,12 +231,24 @@ export function useTreeDrag(options: TreeDragOptions) {
         }
         press = null;
         target = null;
+        scroller = null;
         dragged.value = null;
     }
 
     onScopeDispose(cancel);
 
     return { dragged, pointer, onPointerDown };
+}
+
+// The nearest element that scrolls `element`, itself included.
+function scrollerOf(element: HTMLElement): HTMLElement | null {
+    for (let current: HTMLElement | null = element; current !== null; current = current.parentElement) {
+        const { overflowY } = getComputedStyle(current);
+        if ((overflowY === 'auto' || overflowY === 'scroll') && current.scrollHeight > current.clientHeight) {
+            return current;
+        }
+    }
+    return null;
 }
 
 // Releasing a drag clicks where it was pressed, if it is let go there, and a row is a link: the

@@ -213,6 +213,49 @@ test('leaves the task being edited where it is while it has unsaved changes', as
     await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue('Phase one');
 });
 
+test('scrolls the tree while the task is held near its edge, to a task out of sight', async ({ context, page }) => {
+    // Enough tasks under Project for Other to be out of sight below them, and no tag group below
+    // Other, so it is the last row.
+    const items = Object.fromEntries(Array.from({ length: 40 }, (_, n) => [`.tasks/${PROJECT}/${uuid(100 + n)}.md`, note(`Item ${n}`)]));
+    const notes: Record<string, string> = { ...NOTES, ...items };
+    delete notes[`.tasks/${ERRAND}.md`];
+    const repository = await mockBackend(context, notes);
+    await openTree(page);
+    const scroller = tree(page).locator('.entry-tree');
+    const scrolled = () => scroller.evaluate((element) => element.scrollTop);
+    await expect(row(page, 'Other')).not.toBeInViewport();
+
+    await pickUp(page, row(page, 'Phase'));
+    const area = await box(scroller);
+    // Held in the middle, the tree stays put.
+    await page.mouse.move(area.x + area.width / 2, area.y + area.height / 2, { steps: 3 });
+    await page.waitForTimeout(300);
+    expect(await scrolled()).toBe(0);
+
+    // Near the bottom, it scrolls down to its end, which brings Other under the pointer.
+    const bottom = () => page.mouse.move(area.x + area.width / 2, area.y + area.height - 12, { steps: 3 });
+    const atEnd = () => scroller.evaluate((element) => element.scrollTop + element.clientHeight >= element.scrollHeight - 1);
+    await bottom();
+    await expect.poll(atEnd).toBe(true);
+    const end = await scrolled();
+
+    // Near the top, it scrolls back up.
+    await page.mouse.move(area.x + area.width / 2, area.y + 12, { steps: 3 });
+    await expect.poll(scrolled).toBeLessThan(end - 100);
+
+    await bottom();
+    await expect.poll(atEnd).toBe(true);
+    await expect(row(page, 'Other')).toHaveCSS('outline-style', 'solid');
+
+    // Let go without moving: the row the tree scrolled under the pointer is where it goes.
+    await page.mouse.up();
+    await expect.poll(() => repository.renames.map(({ from }) => from)).toEqual([
+        `.tasks/${PROJECT}/${PHASE}.md`,
+        `.tasks/${PROJECT}/${PHASE}/${STEP}.md`,
+    ]);
+    expect(repository.renames[0].to).toBe(`.tasks/${OTHER}/${PHASE}.md`);
+});
+
 test.describe('on a touch screen', () => {
     test.use({ hasTouch: true });
 
