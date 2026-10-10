@@ -556,9 +556,31 @@ describe('parentForDrop', () => {
         expect(store.parentForDrop(uuid(2), uuid(1))).toBeUndefined();
     });
 
-    it('refuses a tag group, which is no task', async () => {
+    it('moves a task to the top when dropped on the group of its first tag', async () => {
+        const { store, tagGroupId } = await storeWith([
+            ...sample,
+            { path: `.tasks/${uuid(1)}/${uuid(7)}.md`, title: 'Untagged child', day: 7 },
+        ]);
+        expect(store.parentForDrop(uuid(2), tagGroupId('work'))).toBeNull();
+        expect(store.parentForDrop(uuid(7), tagGroupId('Untagged'))).toBeNull();
+    });
+
+    it('refuses the group of another tag, which the task would not land in', async () => {
+        const { store, tagGroupId } = await storeWith([
+            ...sample,
+            { path: `.tasks/${uuid(1)}/${uuid(7)}.md`, title: 'Tagged twice', tags: ['home', 'work'], day: 7 },
+        ]);
+        expect(store.parentForDrop(uuid(2), tagGroupId('home'))).toBeUndefined();
+        expect(store.parentForDrop(uuid(2), tagGroupId('Untagged'))).toBeUndefined();
+        // Filed by its first tag only.
+        expect(store.parentForDrop(uuid(7), tagGroupId('work'))).toBeUndefined();
+        expect(store.parentForDrop(uuid(7), tagGroupId('home'))).toBeNull();
+    });
+
+    it('refuses its group to a task already at the top, with tasks under it or not', async () => {
         const { store, tagGroupId } = await storeWith(sample);
-        expect(store.parentForDrop(uuid(2), tagGroupId('work'))).toBeUndefined();
+        expect(store.parentForDrop(uuid(3), tagGroupId('work'))).toBeUndefined();
+        expect(store.parentForDrop(uuid(1), tagGroupId('work'))).toBeUndefined();
     });
 
     it('refuses a task it does not hold, dragged or dropped on', async () => {

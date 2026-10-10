@@ -130,6 +130,41 @@ test('dims the tasks the dragged one cannot go under, and refuses a drop on them
     expect(repository.renames).toEqual([]);
 });
 
+test('moves a task to the top when dropped on the group of its tag', async ({ context, page }) => {
+    const repository = await mockBackend(context, {
+        ...NOTES,
+        [`.tasks/${PROJECT}/${PHASE}.md`]: note('Phase', { tags: ['work'] }),
+        // Gives the tree a group of another tag.
+        [`.tasks/${uuid(7)}.md`]: note('Laundry', { tags: ['home'] }),
+    });
+    await openTree(page);
+
+    await pickUp(page, row(page, 'Phase'));
+    // Moved to the top, Phase would be filed under its own tag, not under whichever was chosen.
+    await expect(row(page, 'home')).toHaveClass(/tree-drop-refused/);
+    await expect(row(page, 'work')).not.toHaveClass(/tree-drop-refused/);
+    await moveOver(page, row(page, 'work'));
+    await expect(row(page, 'work')).toHaveCSS('outline-style', 'solid');
+    await page.mouse.up();
+
+    await expect.poll(() => repository.renames).toEqual([
+        { from: `.tasks/${PROJECT}/${PHASE}.md`, to: `.tasks/${PHASE}.md` },
+        { from: `.tasks/${PROJECT}/${PHASE}/${STEP}.md`, to: `.tasks/${PHASE}/${STEP}.md` },
+    ]);
+    // With Step under it, Phase is drawn at the top rather than in the group.
+    await expect(row(page, 'Phase')).toHaveAttribute('aria-level', '1');
+});
+
+test('refuses its own group to a task already at the top', async ({ context, page }) => {
+    await mockBackend(context, NOTES);
+    await openTree(page);
+    await row(page, 'work').locator('.v-list-item__prepend button').click();
+
+    await pickUp(page, row(page, 'Errand'));
+    await expect(row(page, 'work')).toHaveClass(/tree-drop-refused/);
+    await page.mouse.up();
+});
+
 test('opens nothing when the task is let go where it was picked up', async ({ context, page }) => {
     const repository = await mockBackend(context, NOTES);
     await openTree(page);

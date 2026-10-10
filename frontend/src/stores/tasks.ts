@@ -274,11 +274,20 @@ export const useTasksStore = defineStore('tasks', () => {
     }
 
     // The parent the task `id` moves to when dropped on the task tree's row `target`: the task
-    // dropped on. `undefined` where the drop would change nothing or cannot be made: on the task
-    // itself or one under it, on the parent it has, or on a tag group, which is no task.
+    // dropped on, or none for the tag group the task is filed under once at the top. `undefined`
+    // where the drop would change nothing or cannot be made: on the task itself or one under it, on
+    // the parent it has, or on another tag's group, since a move gives a task no tag and it would
+    // land in its own. A task with tasks of its own under it is drawn at the top rather than in its
+    // group, but its group is still where the top is for it.
     function parentForDrop(id: UUID, target: string): UUID | null | undefined {
         const current = forest.value.byId.get(id);
-        if (current === undefined || !forest.value.byId.has(target)) {
+        if (current === undefined) {
+            return undefined;
+        }
+        if (isTagGroupId(target)) {
+            return current.parent !== null && target === tagGroupId(firstTagOf(current)) ? null : undefined;
+        }
+        if (!forest.value.byId.has(target)) {
             return undefined;
         }
         if (target === id || target === current.parent || descendants(forest.value, id).includes(target)) {
