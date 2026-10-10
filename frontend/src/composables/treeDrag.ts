@@ -27,19 +27,25 @@ const ROW = '[data-tree-id]';
 // How far a mouse moves, pressed, before the press is a drag rather than a click.
 const MOUSE_SLOP = 4;
 
+// A finger picks a row up by resting on it, as long as it rests on a task in the Status view. One
+// that moves first is scrolling, and the browser ends the press itself with a `pointercancel`.
+const TOUCH_DELAY = 500;
+
 interface Press {
     id: string;
     pointerId: number;
     x: number;
     y: number;
     root: HTMLElement;
+    touch: boolean;
+    timer?: number;
 }
 
 export function useTreeDrag(options: TreeDragOptions) {
     // The row being dragged, and where the pointer holds it: what the copy following the pointer is
     // drawn from.
     const dragged = shallowRef<string | null>(null);
-    const pointer = shallowRef({ x: 0, y: 0 });
+    const pointer = shallowRef({ x: 0, y: 0, touch: false });
 
     let press: Press | null = null;
     // The row the pointer is over, if it takes the dragged one.
@@ -51,23 +57,44 @@ export function useTreeDrag(options: TreeDragOptions) {
     }
 
     function onPointerDown(event: PointerEvent) {
-        if (press !== null || !event.isPrimary || event.button !== 0 || event.pointerType === 'touch') {
+        if (press !== null || !event.isPrimary || event.button !== 0) {
             return;
         }
         const root = event.currentTarget as HTMLElement;
-        const pressed = event.target as Element;
+        const element = event.target as Element;
         // A row's buttons -- its chevron, its add button -- are pressed, not picked up with it.
-        if (pressed.closest('button') !== null) {
+        if (element.closest('button') !== null) {
             return;
         }
-        const row = pressed.closest<HTMLElement>(ROW);
+        const row = element.closest<HTMLElement>(ROW);
         if (row === null || !root.contains(row) || !options.canDrag(row.dataset.treeId!)) {
             return;
         }
-        press = { id: row.dataset.treeId!, pointerId: event.pointerId, x: event.clientX, y: event.clientY, root };
+        const pressed: Press = {
+            id: row.dataset.treeId!,
+            pointerId: event.pointerId,
+            x: event.clientX,
+            y: event.clientY,
+            root,
+            touch: event.pointerType === 'touch',
+        };
+        press = pressed;
         window.addEventListener('pointermove', onPointerMove);
         window.addEventListener('pointerup', onPointerUp);
         window.addEventListener('pointercancel', cancel);
+        if (pressed.touch) {
+            pressed.timer = window.setTimeout(() => lift(pressed), TOUCH_DELAY);
+            // Not passive, so that it can keep the page from scrolling once the row is picked up.
+            window.addEventListener('touchmove', onTouchMove, { passive: false });
+            window.addEventListener('contextmenu', onContextMenu, true);
+        }
+    }
+
+    // Picks the row up where the finger rests on it.
+    function lift(from: Press) {
+        start(from);
+        pointer.value = { x: from.x, y: from.y, touch: true };
+        aim();
     }
 
     function onPointerMove(event: PointerEvent) {
@@ -75,13 +102,27 @@ export function useTreeDrag(options: TreeDragOptions) {
             return;
         }
         if (dragged.value === null) {
-            if (Math.hypot(event.clientX - press.x, event.clientY - press.y) < MOUSE_SLOP) {
+            if (press.touch || Math.hypot(event.clientX - press.x, event.clientY - press.y) < MOUSE_SLOP) {
                 return;
             }
             start(press);
         }
-        pointer.value = { x: event.clientX, y: event.clientY };
+        pointer.value = { x: event.clientX, y: event.clientY, touch: press.touch };
         aim();
+    }
+
+    // A finger moving a row it holds would otherwise scroll what is under it. Before the row is
+    // picked up, that scroll is what the finger is for.
+    function onTouchMove(event: TouchEvent) {
+        if (dragged.value !== null && event.cancelable) {
+            event.preventDefault();
+        }
+    }
+
+    // A long press is what picks a row up, and on a link it also opens the browser's menu for the
+    // link, which takes over the touch and ends the drag.
+    function onContextMenu(event: Event) {
+        event.preventDefault();
     }
 
     function onPointerUp(event: PointerEvent) {
@@ -138,6 +179,9 @@ export function useTreeDrag(options: TreeDragOptions) {
         window.removeEventListener('pointermove', onPointerMove);
         window.removeEventListener('pointerup', onPointerUp);
         window.removeEventListener('pointercancel', cancel);
+        window.removeEventListener('touchmove', onTouchMove);
+        window.removeEventListener('contextmenu', onContextMenu, true);
+        window.clearTimeout(press.timer);
         if (dragged.value !== null) {
             window.removeEventListener('keydown', onKeyDown);
             window.removeEventListener('blur', cancel);

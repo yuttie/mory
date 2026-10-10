@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import type { Locator, Page } from '@playwright/test';
+import type { BrowserContext, Locator, Page } from '@playwright/test';
 import { mockBackend, uuid } from './backend';
 
 function note(title: string, { tags = [] }: { tags?: string[] } = {}): string {
@@ -82,6 +82,9 @@ async function openTree(page: Page): Promise<void> {
         await row(page, name).locator('.v-list-item__prepend button').click();
     }
     await expect(row(page, 'Step')).toBeVisible();
+    // Until the branches have grown to their height, Playwright finds the rows in them clipped and
+    // scrolls the tree to show them.
+    await expect.poll(() => tree(page).evaluate((element) => element.getAnimations({ subtree: true }).length)).toBe(0);
 }
 
 test('moves a task, and everything under it, under the task it is dropped on', async ({ context, page }) => {
@@ -208,4 +211,110 @@ test('leaves the task being edited where it is while it has unsaved changes', as
         `.tasks/${OTHER}/${CHORE}.md`,
     ]);
     await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue('Phase one');
+});
+
+test.describe('on a touch screen', () => {
+    test.use({ hasTouch: true });
+
+    // A finger on the page, moved by CDP: Playwright's own touch input only taps.
+    async function finger(context: BrowserContext, page: Page, at: Locator) {
+        const client = await context.newCDPSession(page);
+        const start = await box(at);
+        let x = start.x + start.width / 2;
+        let y = start.y + start.height / 2;
+        await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+        return {
+            async moveTo(point: { x: number; y: number }) {
+                for (let step = 1; step <= 5; step++) {
+                    await client.send('Input.dispatchTouchEvent', {
+                        type: 'touchMove',
+                        touchPoints: [{ x: x + (point.x - x) * step / 5, y: y + (point.y - y) * step / 5 }],
+                    });
+                }
+                ({ x, y } = point);
+            },
+            async moveOver(target: Locator) {
+                const found = await box(target);
+                await this.moveTo({ x: found.x + found.width / 2, y: found.y + found.height / 2 });
+            },
+            async lift() {
+                await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+            },
+        };
+    }
+
+    test('picks a task up with a long press, and moves it where it is let go', async ({ browserName, context, page }) => {
+        test.skip(browserName !== 'chromium', 'CDP supplies real touch movement in Chromium.');
+        const repository = await mockBackend(context, NOTES);
+        await openTree(page);
+        const phase = row(page, 'Phase');
+        await phase.click({ trial: true });
+
+        const held = await finger(context, page, phase);
+        // A short press is still a tap.
+        await page.waitForTimeout(200);
+        await expect(copy(page)).toHaveCount(0);
+        // A long press is not the link's menu, which would take the touch over.
+        const prevented = await phase.evaluate((element) => !element.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })));
+        expect(prevented).toBe(true);
+        await page.waitForTimeout(400);
+        // Picked up where the finger rests, before it moves.
+        await expect(copy(page)).toBeVisible();
+        await expect(copy(page)).toBeInViewport();
+
+        await held.moveOver(row(page, 'Other'));
+        await expect(row(page, 'Other')).toHaveCSS('outline-style', 'solid');
+        await held.lift();
+
+        await expect.poll(() => repository.renames.map(({ from }) => from)).toEqual([
+            `.tasks/${PROJECT}/${PHASE}.md`,
+            `.tasks/${PROJECT}/${PHASE}/${STEP}.md`,
+        ]);
+    });
+
+    test('picks nothing up with a finger that moves at once, which is scrolling', async ({ browserName, context, page }) => {
+        test.skip(browserName !== 'chromium', 'CDP supplies real touch movement in Chromium.');
+        const repository = await mockBackend(context, NOTES);
+        await openTree(page);
+        const phase = row(page, 'Phase');
+        await phase.click({ trial: true });
+        const url = page.url();
+
+        const swiping = await finger(context, page, phase);
+        const { x, y } = await box(phase);
+        await swiping.moveTo({ x: x + 40, y: y + 40 });
+        await page.waitForTimeout(700);
+        await expect(copy(page)).toHaveCount(0);
+        await swiping.moveOver(row(page, 'Other'));
+        await swiping.lift();
+
+        await expect(row(page, 'Other')).toHaveCSS('outline-style', 'none');
+        await page.waitForTimeout(300);
+        expect(repository.renames).toEqual([]);
+        expect(page.url()).toBe(url);
+    });
+
+    test('keeps the tree from scrolling under a task being dragged', async ({ browserName, context, page }) => {
+        test.skip(browserName !== 'chromium', 'CDP supplies real touch movement in Chromium.');
+        // Enough tasks under Project for the tree to scroll.
+        const items = Object.fromEntries(Array.from({ length: 40 }, (_, n) => [`.tasks/${PROJECT}/${uuid(100 + n)}.md`, note(`Item ${n}`)]));
+        await mockBackend(context, { ...NOTES, ...items });
+        await openTree(page);
+        const scroller = tree(page).locator('.entry-tree');
+        expect(await scroller.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+        const item = tree(page).getByRole('treeitem', { name: 'Item 10', exact: true });
+        await item.click({ trial: true });
+        expect(await scroller.evaluate((element) => element.scrollTop)).toBe(0);
+
+        const held = await finger(context, page, item);
+        await page.waitForTimeout(600);
+        await expect(copy(page)).toBeVisible();
+        // Up the middle of the tree, away from either edge: a finger moving up scrolls what is
+        // under it down.
+        const { x, y } = await box(item);
+        await held.moveTo({ x: x + 40, y: y - 150 });
+        await expect(copy(page)).toBeVisible();
+        expect(await scroller.evaluate((element) => element.scrollTop)).toBe(0);
+        await held.lift();
+    });
 });

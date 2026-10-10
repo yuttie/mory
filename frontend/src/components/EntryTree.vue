@@ -33,7 +33,8 @@
         <div
             v-if="draggedItem !== undefined"
             class="entry-tree-drag-copy"
-            v-bind:style="{ transform: `translate(${pointer.x}px, ${pointer.y}px)` }"
+            v-bind:class="{ touch: pointer.touch }"
+            v-bind:style="{ transform: `translate(${pointer.x}px, ${pointer.y}px)${pointer.touch ? ' translateY(-100%)' : ''}` }"
         >
             <slot
                 name="prepend"
@@ -244,5 +245,16 @@ function findItem(items: Item[], id: unknown): Item | undefined {
         overflow: hidden;
         text-overflow: ellipsis;
     }
+
+    /* Above a finger, which would hide it below. */
+    &.touch {
+        top: -24px;
+    }
+}
+
+/* iOS answers a long press on a link with its preview of the link, and fires no event that could
+   be canceled first, as `useTreeDrag` cancels the menu other browsers open. */
+.entry-tree :deep([draggable='false']) {
+    -webkit-touch-callout: none;
 }
 </style>
