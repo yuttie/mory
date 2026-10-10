@@ -14,7 +14,7 @@ base64 = "0.22"
 base16ct = "0.2.0"
 chrono = { version = "0.4.38", features = ["serde"] }
 dotenv = "0.15.0"
-git2 = { version = "0.19", default-features = false }
+git2 = { version = "0.20", default-features = false }
 httpdate = "1"
 hkdf = "0.12"
 icalendar = { version = "0.17.13", features = ["recurrence"] }
