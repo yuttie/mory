@@ -24,13 +24,14 @@ export function uuid(n: number): string {
 
 export interface Repository {
     writes: { path: string; content: string }[];
+    renames: { from: string; to: string }[];
 }
 
 // A repository of notes, listed with the metadata their frontmatter holds, so a write shows up in
 // the listing the way the backend would show it.
 export async function mockBackend(context: BrowserContext, notes: Record<string, string>): Promise<Repository> {
     const files = new Map(Object.entries(notes));
-    const repository: Repository = { writes: [] };
+    const repository: Repository = { writes: [], renames: [] };
     let commit = 1;
     const commitId = () => String(commit).padStart(40, '0');
     const etagOf = (content: string) => `"${createHash('sha1').update(content).digest('hex')}"`;
@@ -95,6 +96,7 @@ export async function mockBackend(context: BrowserContext, notes: Record<string,
                 const from = request.postDataJSON().Rename.from as string;
                 files.set(notePath, files.get(from) ?? '');
                 files.delete(from);
+                repository.renames.push({ from, to: notePath });
                 commit += 1;
                 await route.fulfill({ json: null });
                 return;

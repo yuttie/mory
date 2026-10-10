@@ -542,6 +542,32 @@ describe('remove', () => {
     });
 });
 
+describe('parentForDrop', () => {
+    it('moves a task under the task it is dropped on', async () => {
+        const { store } = await storeWith(sample);
+        expect(store.parentForDrop(uuid(2), uuid(3))).toBe(uuid(3));
+        expect(store.parentForDrop(uuid(3), uuid(1))).toBe(uuid(1));
+    });
+
+    it('refuses the task itself, a task under it, and the parent it has', async () => {
+        const { store } = await storeWith(sample);
+        expect(store.parentForDrop(uuid(1), uuid(1))).toBeUndefined();
+        expect(store.parentForDrop(uuid(1), uuid(2))).toBeUndefined();
+        expect(store.parentForDrop(uuid(2), uuid(1))).toBeUndefined();
+    });
+
+    it('refuses a tag group, which is no task', async () => {
+        const { store, tagGroupId } = await storeWith(sample);
+        expect(store.parentForDrop(uuid(2), tagGroupId('work'))).toBeUndefined();
+    });
+
+    it('refuses a task it does not hold, dragged or dropped on', async () => {
+        const { store } = await storeWith(sample);
+        expect(store.parentForDrop('unknown', uuid(1))).toBeUndefined();
+        expect(store.parentForDrop(uuid(3), 'unknown')).toBeUndefined();
+    });
+});
+
 describe('move', () => {
     it('moves a task under a parent re-rooted by a missing file, where the forest finds it', async () => {
         const { store, repo } = await storeWith([

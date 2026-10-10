@@ -273,6 +273,20 @@ export const useTasksStore = defineStore('tasks', () => {
         return childTaskPath(node.path, node.uuid, id);
     }
 
+    // The parent the task `id` moves to when dropped on the task tree's row `target`: the task
+    // dropped on. `undefined` where the drop would change nothing or cannot be made: on the task
+    // itself or one under it, on the parent it has, or on a tag group, which is no task.
+    function parentForDrop(id: UUID, target: string): UUID | null | undefined {
+        const current = forest.value.byId.get(id);
+        if (current === undefined || !forest.value.byId.has(target)) {
+            return undefined;
+        }
+        if (target === id || target === current.parent || descendants(forest.value, id).includes(target)) {
+            return undefined;
+        }
+        return target;
+    }
+
     // --- Mutations. Server first, then wait for the listing to show the result. ---
 
     async function save(task: Task, path: string): Promise<void> {
@@ -435,6 +449,7 @@ export const useTasksStore = defineStore('tasks', () => {
         idByPath,
         parentAt,
         pathUnder,
+        parentForDrop,
         flattenDescendants,
 
         init: subset.init,

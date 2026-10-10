@@ -5,8 +5,11 @@
         v-bind:active="active"
         item-value="uuid"
         v-bind:route-for="routeFor"
+        v-bind:can-drag="movable ? canDrag : undefined"
+        v-bind:can-drop="canDrop"
         v-on:update:open="$emit('update:open', $event)"
         v-on:update:active="$emit('update:active', $event)"
+        v-on:drop="onDrop"
     >
         <template v-slot:prepend="{ item }">
             <v-icon v-if="item.metadata?.tag_group">
@@ -50,7 +53,7 @@ import {
 import type { RouteLocationRaw } from 'vue-router';
 
 import EntryTree from '@/components/EntryTree.vue';
-import { useTasksStore } from '@/stores/tasks';
+import { isTagGroupId, useTasksStore } from '@/stores/tasks';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
 const tasks = useTasksStore();
 const taskSettings = useTaskSettingsStore();
@@ -70,14 +73,36 @@ defineProps<{
     // Where each row goes, making it a link; see EntryTree. Absent in a tree used to pick a task,
     // whose rows only report being chosen.
     routeFor?: (item: TaskTreeItem) => RouteLocationRaw;
+    // Whether a task can be dragged onto another to move it there. Off unless the parent handles
+    // `move`, as `showAddChild` is.
+    movable?: boolean;
 }>();
 
 // Emits
-defineEmits<{
+const emit = defineEmits<{
     (e: 'update:open', value: UUID[]): void;
     (e: 'update:active', value: UUID | undefined): void;
     // For a tag group, the group's id: the new task is a root task carrying that tag, since a
     // group is not a task to nest it under.
     (e: 'add-child-task', value: UUID): void;
+    // The task `id` was dropped where it belongs under `parent`.
+    (e: 'move', id: UUID, parent: UUID | null): void;
 }>();
+
+// Methods
+// A tag group only arranges the tree: it is no task, and there is nothing to move.
+function canDrag(id: UUID): boolean {
+    return !isTagGroupId(id);
+}
+
+function canDrop(id: UUID, target: string): boolean {
+    return tasks.parentForDrop(id, target) !== undefined;
+}
+
+function onDrop(id: UUID, target: string) {
+    const parent = tasks.parentForDrop(id, target);
+    if (parent !== undefined) {
+        emit('move', id, parent);
+    }
+}
 </script>
