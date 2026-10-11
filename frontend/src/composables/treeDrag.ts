@@ -175,7 +175,12 @@ export function useTreeDrag(options: TreeDragOptions) {
         }
     }
 
+    // The keys are the drag's while a row is held. Escape puts the row back, and the rest do
+    // nothing: the press focused the row, a link, which Enter would open, and the arrows would move
+    // the focus about the tree.
     function onKeyDown(event: KeyboardEvent) {
+        event.preventDefault();
+        event.stopPropagation();
         if (event.key === 'Escape') {
             cancel();
         }
@@ -191,7 +196,7 @@ export function useTreeDrag(options: TreeDragOptions) {
                 row.classList.add('tree-drop-refused');
             }
         }
-        window.addEventListener('keydown', onKeyDown);
+        window.addEventListener('keydown', onKeyDown, true);
         window.addEventListener('blur', cancel);
         scroller = scrollerOf(from.root);
         frame = requestAnimationFrame(tick);
@@ -255,7 +260,7 @@ export function useTreeDrag(options: TreeDragOptions) {
         window.removeEventListener('contextmenu', onContextMenu, true);
         window.clearTimeout(press.timer);
         if (dragged.value !== null) {
-            window.removeEventListener('keydown', onKeyDown);
+            window.removeEventListener('keydown', onKeyDown, true);
             window.removeEventListener('blur', cancel);
             cancelAnimationFrame(frame);
             press.root.classList.remove('tree-dragging');

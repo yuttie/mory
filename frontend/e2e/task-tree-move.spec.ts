@@ -229,6 +229,23 @@ test('puts the task back when Escape is pressed during the drag', async ({ conte
     expect(repository.renames).toEqual([]);
 });
 
+test('keeps the keys from acting during the drag, Escape aside', async ({ context, page }) => {
+    const repository = await mockBackend(context, NOTES);
+    await openTree(page);
+    const url = page.url();
+
+    await pickUp(page, row(page, 'Phase'));
+    await moveOver(page, row(page, 'Other'));
+    // The press focused Phase's row, a link, which Enter would open.
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(300);
+    expect(page.url()).toBe(url);
+    await expect(copy(page)).toBeVisible();
+    await page.mouse.up();
+
+    await expect.poll(() => repository.renames[0]?.to).toBe(`.tasks/${OTHER}/${PHASE}.md`);
+});
+
 test('keeps the tasks a dragged one passes over from answering the pointer', async ({ context, page }) => {
     await mockBackend(context, NOTES);
     await openTree(page);
