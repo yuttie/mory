@@ -583,6 +583,22 @@ describe('parentForDrop', () => {
         expect(store.parentForDrop(uuid(1), tagGroupId('work'))).toBeUndefined();
     });
 
+    it('refuses a task the dropped one would not be drawn under, named with a readable prefix', async () => {
+        const { store } = await storeWith([
+            ...sample,
+            { path: `.tasks/plan-${uuid(8)}.md`, title: 'Prefixed', day: 8 },
+        ]);
+        expect(store.parentForDrop(uuid(3), uuid(8))).toBeUndefined();
+    });
+
+    it('takes a parent re-rooted by a missing file, where the forest still finds its children', async () => {
+        const { store } = await storeWith([
+            { path: `.tasks/${uuid(1)}/${uuid(2)}.md`, title: 'Orphan' },
+            { path: `.tasks/${uuid(3)}.md`, title: 'Moved' },
+        ]);
+        expect(store.parentForDrop(uuid(3), uuid(2))).toBe(uuid(2));
+    });
+
     it('refuses a task it does not hold, dragged or dropped on', async () => {
         const { store } = await storeWith(sample);
         expect(store.parentForDrop('unknown', uuid(1))).toBeUndefined();

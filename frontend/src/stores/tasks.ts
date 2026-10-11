@@ -293,6 +293,12 @@ export const useTasksStore = defineStore('tasks', () => {
         if (target === id || target === current.parent || descendants(forest.value, id).includes(target)) {
             return undefined;
         }
+        // A task moved under another goes in the directory named by that one's UUID, while the
+        // forest looks for a task's children in the directory its file covers. The two differ for a
+        // file named with a readable prefix, and a task moved under one is drawn at the top.
+        if (parentAt(pathUnder(target, id))?.id !== target) {
+            return undefined;
+        }
         return target;
     }
 
