@@ -54,7 +54,8 @@ export function useTreeDrag(options: TreeDragOptions) {
     const pointer = shallowRef({ x: 0, y: 0, touch: false });
 
     let press: Press | null = null;
-    // The row the pointer is over, if it takes the dragged one.
+    // The row the pointer was last over, and the same row if it takes the dragged one.
+    let over: HTMLElement | null = null;
     let target: HTMLElement | null = null;
     // What scrolls the tree's rows, and the frame that next scrolls it.
     let scroller: HTMLElement | null = null;
@@ -179,13 +180,20 @@ export function useTreeDrag(options: TreeDragOptions) {
         window.addEventListener('keydown', onKeyDown);
         window.addEventListener('blur', cancel);
         scroller = scrollerOf(from.root);
-        frame = requestAnimationFrame(scroll);
+        frame = requestAnimationFrame(tick);
     }
 
-    // Scrolls the tree while the pointer is near its top or bottom, faster the nearer, and aims
-    // again at whatever row that brings under the pointer.
+    // Aims again each frame, not only when the pointer moves: a wheel, the scrolling here, or a sync
+    // redrawing the tree each bring another row under a pointer that stays put, and letting go there
+    // drops the task on that row.
+    function tick() {
+        frame = requestAnimationFrame(tick);
+        scroll();
+        aim();
+    }
+
+    // Scrolls the tree while the pointer is near its top or bottom, faster the nearer.
     function scroll() {
-        frame = requestAnimationFrame(scroll);
         if (scroller === null) {
             return;
         }
@@ -201,11 +209,7 @@ export function useTreeDrag(options: TreeDragOptions) {
         }
         // At least a pixel, which is as fine as some browsers scroll.
         const step = Math.max(1, Math.round(Math.min(1, Math.abs(depth) / SCROLL_EDGE) * SCROLL_SPEED));
-        const before = scroller.scrollTop;
         scroller.scrollTop -= Math.sign(depth) * step;
-        if (scroller.scrollTop !== before) {
-            aim();
-        }
     }
 
     // Marks the row under the pointer as the target, if it takes the dragged row.
@@ -214,6 +218,10 @@ export function useTreeDrag(options: TreeDragOptions) {
             return;
         }
         const row = rowAt(press.root, pointer.value.x, pointer.value.y);
+        if (row === over) {
+            return;
+        }
+        over = row;
         const next = row !== null && options.canDrop(dragged.value, row.dataset.treeId!) ? row : null;
         if (next !== target) {
             target?.classList.remove('tree-drop-target');
@@ -244,6 +252,7 @@ export function useTreeDrag(options: TreeDragOptions) {
             swallowClick();
         }
         press = null;
+        over = null;
         target = null;
         scroller = null;
         dragged.value = null;

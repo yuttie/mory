@@ -316,6 +316,27 @@ test('scrolls the tree while the task is held near its edge, to a task out of si
     expect(repository.renames[0].to).toBe(`.tasks/${OTHER}/${PHASE}.md`);
 });
 
+test('drops the task on the row a wheel brings under the pointer', async ({ context, page }) => {
+    const items = Object.fromEntries(Array.from({ length: 40 }, (_, n) => [`.tasks/${PROJECT}/${uuid(100 + n)}.md`, note(`Item ${n}`)]));
+    const repository = await mockBackend(context, { ...NOTES, ...items });
+    await openTree(page);
+
+    await pickUp(page, row(page, 'Phase'));
+    const item = tree(page).getByRole('treeitem', { name: 'Item 10', exact: true });
+    await moveOver(page, item);
+    await expect(item).toHaveCSS('outline-style', 'solid');
+    const { x, y, width, height } = await box(item);
+    await page.mouse.wheel(0, 200);
+    await expect.poll(() => tree(page).locator('.entry-tree').evaluate((element) => element.scrollTop)).toBe(200);
+
+    // The row now under the pointer, which has not moved.
+    const under = await page.evaluate(({ px, py }) => document.elementFromPoint(px, py)?.closest<HTMLElement>('[data-tree-id]')?.dataset.treeId, { px: x + width / 2, py: y + height / 2 });
+    expect(under).not.toBe(uuid(110));
+    await expect(item).toHaveCSS('outline-style', 'none');
+    await page.mouse.up();
+    await expect.poll(() => repository.renames[0]?.to).toBe(`.tasks/${PROJECT}/${under}/${PHASE}.md`);
+});
+
 test.describe('on a touch screen', () => {
     test.use({ hasTouch: true });
 
