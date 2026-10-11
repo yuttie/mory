@@ -711,12 +711,10 @@ const viewModeOptions = computed(() => [
 
 // URL management functions
 
-// Where choosing a row in the tree goes: its task, selected and in its editor, keeping the view. A
-// tag group is no task to edit, so it lists the tasks it holds instead.
+// Where choosing a row in the tree goes: what is under it, listed in the view it is in. The editor
+// would cover that list, so a task's row opens it from its own button instead.
 function treeRouteFor(node: TaskNode): RouteLocationRaw {
-    return isTagGroupId(node.uuid)
-        ? tasksRoute(node.uuid, descendantsViewMode.value)
-        : taskRoute(node.uuid, descendantsViewMode.value);
+    return tasksRoute(node.uuid, descendantsViewMode.value);
 }
 
 // Where choosing a task in the list goes: its editor, over the list as it is.

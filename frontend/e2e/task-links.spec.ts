@@ -49,13 +49,17 @@ function url(selectedNodeId: string, viewMode: string, task?: string): RegExp {
 }
 
 test.describe('the tree', () => {
-    test('links each row to its task, keeping the view', async ({ context, page }) => {
+    // The tasks under it, rather than its editor, which would cover them: its row's own button opens
+    // that.
+    test('links each row to the tasks under its task, keeping the view', async ({ context, page }) => {
         await mockBackend(context, NOTES);
         await page.goto('/tasks-next/_/descendants/schedule');
-        await expect(row(page, 'Project')).toHaveAttribute('href', `/tasks-next/${PROJECT}/descendants/schedule?task=${PROJECT}`);
+        await expect(row(page, 'Project')).toHaveAttribute('href', `/tasks-next/${PROJECT}/descendants/schedule`);
 
         await row(page, 'Project').click();
-        await expect(page).toHaveURL(url(PROJECT, 'schedule', PROJECT));
+        await expect(page).toHaveURL(url(PROJECT, 'schedule'));
+        await expect(page.locator('.app-bar-current')).toHaveText('Project');
+        await expect(page.getByRole('dialog')).toHaveCount(0);
     });
 
     // The tree stays while the view changes beside it, so its links have to follow.
@@ -65,24 +69,26 @@ test.describe('the tree', () => {
 
         await page.getByRole('button', { name: 'Schedule' }).click();
         await expect(page).toHaveURL(url('_', 'schedule'));
-        await expect(row(page, 'Project')).toHaveAttribute('href', `/tasks-next/${PROJECT}/descendants/schedule?task=${PROJECT}`);
+        await expect(row(page, 'Project')).toHaveAttribute('href', `/tasks-next/${PROJECT}/descendants/schedule`);
     });
 
-    // A tag group is no task to edit.
     test('links a tag group to the tasks filed under it', async ({ context, page }) => {
         await mockBackend(context, NOTES);
         await page.goto('/tasks-next/_/descendants/schedule');
         await expect(row(page, 'work')).toHaveAttribute('href', '/tasks-next/tag-group-work/descendants/schedule');
     });
 
-    // The root of the path is what clears the selection. Started from the Descendants tab, so the
-    // click has somewhere to go that clearing it would not.
-    test('opens the selected task when its row is clicked again, rather than clearing the selection', async ({ context, page }) => {
+    // The root of the path is what clears the selection.
+    test('keeps the selection when the selected row is clicked again', async ({ context, page }) => {
         await mockBackend(context, NOTES);
         await page.goto(`/tasks-next/${PROJECT}/descendants/schedule`);
+        await expect(page.locator('.app-bar-current')).toHaveText('Project');
 
         await row(page, 'Project').click();
-        await expect(page).toHaveURL(url(PROJECT, 'schedule', PROJECT));
+        // Long enough for a navigation the click set off to have landed.
+        await page.waitForTimeout(500);
+        await expect(page).toHaveURL(url(PROJECT, 'schedule'));
+        await expect(page.locator('.app-bar-current')).toHaveText('Project');
     });
 
     test('opens a task in a new tab on a Ctrl-click, leaving this one where it was', async ({ context, page }) => {
@@ -91,7 +97,7 @@ test.describe('the tree', () => {
 
         const opened = context.waitForEvent('page');
         await row(page, 'Project').click({ modifiers: ['ControlOrMeta'] });
-        await expect(await opened).toHaveURL(url(PROJECT, 'status', PROJECT));
+        await expect(await opened).toHaveURL(url(PROJECT, 'status'));
         await expect(page).toHaveURL(url('_', 'status'));
     });
 
@@ -100,7 +106,7 @@ test.describe('the tree', () => {
         await page.goto('/tasks-next/_/descendants/status');
 
         await row(page, 'Project').press('Enter');
-        await expect(page).toHaveURL(url(PROJECT, 'status', PROJECT));
+        await expect(page).toHaveURL(url(PROJECT, 'status'));
     });
 
     test('adds a child task from a row without following the row\'s link', async ({ context, page }) => {

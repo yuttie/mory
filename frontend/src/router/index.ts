@@ -67,7 +67,7 @@ const routes: Array<RouteRecordRaw> = [
                 component: TasksNext,
             },
             // The editor was a tab beside the list, and its addresses are in bookmarks and history.
-            // They open the task's editor over its list, as a click on its row in the tree does.
+            // They open the task's editor, over the list of what is under it.
             {
                 path: ':selectedNodeId/selected/:viewMode',
                 redirect: to => {
