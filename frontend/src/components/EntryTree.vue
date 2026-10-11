@@ -28,8 +28,9 @@
             <slot name="append" v-bind:item="item" />
         </template>
     </v-treeview>
-    <!-- Into the app rather than the body, for the theme's colours and type. -->
-    <Teleport to="#app">
+    <!-- On the body, above whatever holds the tree, which may clip it. It takes the theme's colours
+         there too: Vuetify sets them on the root element. -->
+    <Teleport to="body">
         <div
             v-if="draggedItem !== undefined"
             class="entry-tree-drag-copy"
