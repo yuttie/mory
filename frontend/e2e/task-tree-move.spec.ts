@@ -476,6 +476,22 @@ test.describe('on a touch screen', () => {
         ]);
     });
 
+    test('still opens a task with a tap', async ({ browserName, context, page }) => {
+        test.skip(browserName !== 'chromium', 'CDP supplies real touch movement in Chromium.');
+        const repository = await mockBackend(context, NOTES);
+        await openTree(page);
+        const phase = row(page, 'Phase');
+        await phase.click({ trial: true });
+
+        const tapping = await finger(context, page, phase);
+        await page.waitForTimeout(100);
+        await tapping.lift();
+
+        await expect(page).toHaveURL(new RegExp(`/tasks-next/${PHASE}/selected/status$`));
+        await expect(copy(page)).toHaveCount(0);
+        expect(repository.renames).toEqual([]);
+    });
+
     test('picks nothing up with a finger that moves at once, which is scrolling', async ({ browserName, context, page }) => {
         test.skip(browserName !== 'chromium', 'CDP supplies real touch movement in Chromium.');
         const repository = await mockBackend(context, NOTES);
