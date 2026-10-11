@@ -655,6 +655,25 @@ describe('move', () => {
         expect(repo.paths()).toContain(`.tasks/${uuid(6)}/${uuid(2)}.md`);
     });
 
+    it('starts a move once the renames before it are done, without waiting for a sync', async () => {
+        const { store } = await storeWith(sample);
+        // The listing held back, as a slow sync holds it.
+        let release!: () => void;
+        const held = new Promise<void>((resolve) => { release = resolve; });
+        const listing = apiMocks.getEntries.getMockImplementation()!;
+        apiMocks.getEntries.mockImplementation(async (since) => {
+            await held;
+            return await listing(since);
+        });
+
+        const first = store.move(uuid(3), uuid(4));
+        const second = store.move(uuid(5), uuid(4));
+        await vi.waitFor(() => expect(apiMocks.renameNote).toHaveBeenCalledTimes(2));
+        release();
+        await Promise.all([first, second]);
+        expect(store.parentOf(uuid(5))).toBe(uuid(4));
+    });
+
     it('still runs a move asked for after one that failed', async () => {
         const { store } = await storeWith(sample);
         const refused = store.move(uuid(1), uuid(2));

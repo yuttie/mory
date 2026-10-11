@@ -358,24 +358,27 @@ export const useTasksStore = defineStore('tasks', () => {
     // the listing describes a subtree whose parent has already moved; the forest builder re-roots
     // the stragglers for that window rather than failing, and the final sync settles it.
     //
-    // Moves run one at a time, each once the one before has settled. A move reads from the forest
-    // which files to rename and where to, and one still renaming leaves it half moved: a task
-    // under it, moved meanwhile, would be renamed by both.
+    // Moves run one at a time, each once the renames of the one before are done. A move reads from
+    // the forest which files to rename and where to, and one still renaming leaves it half moved: a
+    // task under it, moved meanwhile, would be renamed by both. Each rename is in the listing this
+    // store reads as soon as it is done, so the next move need not wait for a sync to show it too.
+    let renaming: Promise<unknown> = Promise.resolve();
+
     function move(id: UUID, newParent: UUID | null): Promise<void> {
-        const moved = lastMove.then(() => moveNow(id, newParent));
-        lastMove = moved.catch(() => undefined);
-        return moved;
+        const renamed = renaming.then(() => renameSubtree(id, newParent));
+        renaming = renamed.catch(() => undefined);
+        return renamed.then((path) => path === null ? undefined : subset.settle(path, true));
     }
 
-    let lastMove: Promise<void> = Promise.resolve();
-
-    async function moveNow(id: UUID, newParent: UUID | null): Promise<void> {
+    // Renames the files of a move, and gives the task's new path, or null for a move that changes
+    // nothing.
+    async function renameSubtree(id: UUID, newParent: UUID | null): Promise<string | null> {
         const current = forest.value.byId.get(id);
         if (current === undefined) {
             throw new Error(`Cannot move an unknown task: ${id}`);
         }
         if (current.parent === newParent) {
-            return;
+            return null;
         }
         if (newParent !== null && descendants(forest.value, id).includes(newParent)) {
             throw new Error('A task cannot be moved under one of its own descendants.');
@@ -384,7 +387,7 @@ export const useTasksStore = defineStore('tasks', () => {
         const oldPath = current.path;
         const newPath = pathUnder(newParent, id);
         if (oldPath === newPath) {
-            return;
+            return null;
         }
 
         // Deepest last, so a descendant is only moved once its new home exists.
@@ -401,7 +404,7 @@ export const useTasksStore = defineStore('tasks', () => {
         for (const [from, to] of moves) {
             await files.rename(from, to);
         }
-        await subset.settle(newPath, true);
+        return newPath;
     }
 
     const allTasks = computed<TaskNode[]>(() => flatten(forest.value));
