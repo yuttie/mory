@@ -5,6 +5,7 @@
     <v-card
         class="task-list-item"
         v-bind:to="to"
+        exact
         v-bind:class="{ 'text-disabled': !urgency.actionable }"
         v-bind:style="{ backgroundColor: ground }"
     >
@@ -78,7 +79,8 @@ import TaskDateCues from '@/components/TaskDateCues.vue';
 const props = defineProps<{
     value: TaskNode;
     // Where choosing the task goes. The item is a link to it, so a task can be opened in a new tab
-    // or its address copied, as from the tree.
+    // or its address copied, as from the tree. Matched with its query, `exact`: every task in a
+    // list opens over the list's own address, and only the one open is current.
     to: RouteLocationRaw;
     // The task whose descendants the list holds, if it holds only those.
     listRoot?: UUID;

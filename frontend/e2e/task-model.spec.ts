@@ -47,7 +47,7 @@ test('opens and saves a task carrying all revised date fields', async ({ context
     });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
-    await page.goto(`/tasks-next/${id}/selected/status`);
+    await page.goto(`/tasks-next/${id}/descendants/status?task=${id}`);
     await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue('Dated task');
     await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect.poll(() => repository.writes.length).toBe(1);
@@ -61,7 +61,7 @@ test('clears task dates together with their explicit alarms', async ({ context, 
     const repository = await mockBackend(context, {
         [`.tasks/${id}.md`]: '---\ntask:\n    status: {kind: todo}\n    available_from: 2026-10-01\n    due_by: 2026-10-15\n    deadline: 2026-10-20\n    alarms:\n        due_by: [-1d]\n        deadline: [-2d]\n---\n\n# Clear dates\n',
     });
-    await page.goto(`/tasks-next/${id}/selected/status`);
+    await page.goto(`/tasks-next/${id}/descendants/status?task=${id}`);
     for (const name of ['Available from', 'Due date (soft target)', 'Deadline (hard cutoff)']) {
         const field = page.locator('.v-input').filter({ has: page.getByRole('textbox', { name, exact: true }) });
         await field.hover();

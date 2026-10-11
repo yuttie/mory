@@ -57,7 +57,7 @@ test('creates a task from the drawer without leaving the view', async ({ context
     await expect(snackbar).toBeVisible();
     await snackbar.getByRole('button', { name: 'Open' }).click();
     const uuid = created.path.slice('.tasks/'.length, -'.md'.length);
-    await expect(page).toHaveURL(new RegExp(`/tasks-next/${uuid}/selected/status$`));
+    await expect(page).toHaveURL(new RegExp(`/tasks-next/${uuid}/descendants/status\\?task=${uuid}$`));
 });
 
 test('closes on Escape until something is typed, and then only on Cancel', async ({ context, page }) => {

@@ -28,8 +28,9 @@
                         </v-btn>
                     </div>
                     <div class="editor-actions">
+                        <!-- Every host draws the editor in a dialog, which a phone shows full
+                             screen, with no scrim to click and no Escape to press. -->
                         <v-btn
-                            v-if="!isEdit"
                             variant="text"
                             aria-label="Cancel"
                             title="Cancel"
@@ -120,7 +121,7 @@
                     <!-- The assessment is advice, read now and then rather than while writing, so it
                          waits behind its score instead of taking a pane beside the note. Its note
                          suggestions are added from inside it, so a click there leaves it open. It
-                         keeps Tab to itself: drawn outside the new-task dialog, it would otherwise
+                         keeps Tab to itself: drawn outside the editor's dialog, it would otherwise
                          lose Tab to the dialog's trap, which sent it back to the dialog's first
                          button before it reached a suggestion. -->
                     <v-menu
@@ -529,7 +530,7 @@ const props = defineProps<{
 const pathRef = toRef(props, 'taskPath');
 
 // Composables
-const { task, loading, error, refresh } = useFetchTask(pathRef);
+const { task, loading, error } = useFetchTask(pathRef);
 const calendars = useCalendarsStore();
 const tasks = useTasksStore();
 const settings = useTaskSettingsStore();
@@ -1018,10 +1019,8 @@ function addNoteContent(suggestion: string) {
 }
 
 // Expose
-// `isModified` too, for a host that may close the editor: a draft with something typed in it is
-// worth keeping open.
+// For a host that may close the editor: a draft with something typed in it is worth keeping open.
 defineExpose({
-    refresh,
     isModified,
 });
 </script>

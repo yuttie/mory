@@ -17,6 +17,12 @@ async function besideChip(page: Page, chip: Locator, menu: Locator): Promise<boo
     return m.y >= c.y + c.height - 1 || m.y + m.height <= c.y + 1;
 }
 
+// The editor's dialog grows into place as it opens, and a box measured meanwhile is scaled with it.
+async function editorSettled(page: Page): Promise<void> {
+    const dialog = page.locator('.v-overlay__content').filter({ has: page.locator('.task-editor-next') });
+    await expect.poll(() => dialog.evaluate((element) => element.getAnimations().length)).toBe(0);
+}
+
 // The assessment waits behind its score in the editor's header, and a note suggestion added from
 // it leaves it open for the next.
 test('shows the assessment from its score, open while suggestions go into the note', async ({ context, page }) => {
@@ -29,7 +35,7 @@ test('shows the assessment from its score, open while suggestions go into the no
             note_suggestions: ['## Scope'],
         },
     }));
-    await page.goto(`/tasks-next/${TASK}/selected/status`);
+    await page.goto(`/tasks-next/${TASK}/descendants/status?task=${TASK}`);
     const chip = page.getByRole('button', { name: 'Task assessment: 6.0 out of 10' });
     await expect(chip).toBeVisible();
     await expect(page.getByText('Say which report.')).toHaveCount(0);
@@ -64,7 +70,7 @@ test('keeps a long assessment beside its chip as the window shrinks', async ({ c
             note_suggestions: [],
         },
     }));
-    await page.goto(`/tasks-next/${TASK}/selected/status`);
+    await page.goto(`/tasks-next/${TASK}/descendants/status?task=${TASK}`);
     const chip = page.getByRole('button', { name: 'Task assessment: 6.0 out of 10' });
     await chip.click();
     const card = page.locator('.assessment');
@@ -88,9 +94,10 @@ test('keeps the chip its width while the assessment loads', async ({ context, pa
         });
         await route.fulfill({ json: { quality_score: 6, feedback: '', suggestions: [], note_suggestions: [] } });
     });
-    await page.goto(`/tasks-next/${TASK}/selected/status`);
+    await page.goto(`/tasks-next/${TASK}/descendants/status?task=${TASK}`);
     const chip = page.locator('.editor-overview').getByRole('button');
     await expect(chip).toBeVisible();
+    await editorSettled(page);
     const width = (await chip.boundingBox())!.width;
 
     answer();
@@ -115,7 +122,7 @@ test('fits the chip beside the progress bar on a phone', async ({ context, page 
         [`.tasks/${TASK}.md`]: task('Write the report', ['  available_from: 2099-01-01']),
         [`.tasks/${TASK}/${uuid(2)}.md`]: task('Outline it'),
     });
-    await page.goto(`/tasks-next/${TASK}/selected/status`);
+    await page.goto(`/tasks-next/${TASK}/descendants/status?task=${TASK}`);
     const chip = page.getByRole('button', { name: 'Task assessment: 8.0 out of 10' });
     await expect(chip).toBeVisible();
     const c = (await chip.boundingBox())!;
