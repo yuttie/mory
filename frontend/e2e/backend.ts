@@ -94,7 +94,14 @@ export async function mockBackend(context: BrowserContext, notes: Record<string,
             const notePath = path.slice('/api/notes/'.length);
             if (request.method() === 'PUT' && 'Rename' in request.postDataJSON()) {
                 const from = request.postDataJSON().Rename.from as string;
-                files.set(notePath, files.get(from) ?? '');
+                const moved = files.get(from);
+                // As moried answers a rename of a path HEAD does not hold, rather than create the
+                // file empty: a rename from where a file no longer is would pass unnoticed.
+                if (moved === undefined) {
+                    await route.fulfill({ status: 404, json: {} });
+                    return;
+                }
+                files.set(notePath, moved);
                 files.delete(from);
                 repository.renames.push({ from, to: notePath });
                 commit += 1;
