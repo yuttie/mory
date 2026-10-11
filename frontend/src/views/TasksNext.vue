@@ -110,7 +110,7 @@
                 />
             </v-sheet>
             <div class="item-view d-flex flex-column">
-                <v-toolbar flat border color="transparent" class="flex-grow-0">
+                <v-toolbar flat border color="transparent" class="item-toolbar flex-grow-0">
                     <!-- View mode selector -->
                     <v-btn-toggle
                         v-bind:model-value="descendantsViewMode"
@@ -122,9 +122,11 @@
                             v-for="{ text, icon, value } of viewModeOptions"
                             v-bind:key="value"
                             v-bind:value="value"
+                            v-bind:title="text"
+                            class="toolbar-button"
                         >
                             <v-icon>{{ icon }}</v-icon>
-                            <span v-if="$vuetify.display.mdAndUp">{{ text }}</span>
+                            <span class="toolbar-label">{{ text }}</span>
                         </v-btn>
                     </v-btn-toggle>
                     <!-- New task button -->
@@ -132,12 +134,11 @@
                         title="Add"
                         color="primary"
                         variant="outlined"
-                        class="ml-3"
-                        v-bind:class="{ 'pa-0': !$vuetify.display.mdAndUp }"
+                        class="toolbar-button ml-3"
                         v-on:click="newTask"
                     >
                         <v-icon>{{ mdiPlus }}</v-icon>
-                        <span v-if="$vuetify.display.mdAndUp">Add</span>
+                        <span class="toolbar-label">Add</span>
                     </v-btn>
                     <!-- Under the selected task, or with the selected group's tag, as Add
                          puts one. A phone has no room for it beside the view modes, so
@@ -147,12 +148,11 @@
                         title="Quick add"
                         color="primary"
                         variant="outlined"
-                        class="ml-2"
-                        v-bind:class="{ 'pa-0': !$vuetify.display.mdAndUp }"
+                        class="toolbar-button ml-2"
                         v-on:click="openQuickAdd"
                     >
                         <v-icon>{{ mdiFormatListChecks }}</v-icon>
-                        <span v-if="$vuetify.display.mdAndUp">Quick add</span>
+                        <span class="toolbar-label">Quick add</span>
                     </v-btn>
                     <v-spacer />
                     <v-menu
@@ -969,6 +969,26 @@ async function load(primed = false) {
 @media (max-width: 959px) { /* md breakpoint in Vuetify 2 */
     #tasks-next {
         padding: 4px;
+    }
+}
+
+/* The buttons' labels go by the toolbar's own width, not the window's: the list shares the window
+   with the drawer and the tree, and labels too wide for the toolbar push the view modes out of it.
+   Without them a button is square, as a minimum width kept for a label is room the toolbar runs
+   out of on a phone. Labelled, the buttons take 602px. */
+.item-toolbar {
+    container-type: inline-size;
+}
+
+@container (width < 620px) {
+    .toolbar-label {
+        display: none;
+    }
+
+    .toolbar-button {
+        min-width: 0;
+        padding: 0;
+        aspect-ratio: 1;
     }
 }
 
