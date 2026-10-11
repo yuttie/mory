@@ -568,6 +568,9 @@ const form = reactive<EditableTask>({
     note: '',
 });
 const uiValid = ref(true);
+// The path of the task the form was last filled from, which tells a move of that task from a
+// switch to another.
+let filledFrom: string | null = null;
 const statusOptionRestricted = ref(true);
 // Kept across tasks and visits, as one way of working with notes rather than a property of a task.
 const notePanes = useLocalStorage<'viewer' | 'both' | 'editor'>('task-editor-note-panes', 'both');
@@ -726,6 +729,15 @@ watch(
             (oldTask === null || oldTask === undefined)) {
             return; // Don't reset the form
         }
+        // A task moved under another parent is read again from its new path, but it is the same
+        // note, so the form keeps what has been typed into it. Change Parent and a drop in the tree
+        // both move the task being edited, or one above it.
+        if (filledFrom !== null && filledFrom !== props.taskPath && extractFileUuid(filledFrom) === uuid.value) {
+            if (newTask) {
+                filledFrom = props.taskPath;
+            }
+            return;
+        }
 
         resetFromTask(newTask);
     },
@@ -799,6 +811,7 @@ function resetFromTask(t?: Task | undefined | null): void {
     // Unlocking is an exception for one edit. The editor is reused for the next task and reloads
     // the saved one, both through here, so neither may inherit it.
     statusOptionRestricted.value = true;
+    filledFrom = t ? props.taskPath : null;
 
     if (!t) {
         const defaultTags = props.selectedTag ? [props.selectedTag] : [];

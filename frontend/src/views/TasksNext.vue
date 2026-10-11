@@ -103,7 +103,9 @@
                     v-bind:route-for="taskRouteFor"
                     v-model:open="openNodes"
                     show-add-child
+                    movable
                     v-on:add-child-task="onAddChildTask"
+                    v-on:move="onTaskMove"
                     style="flex: 1 1 0"
                 />
             </v-sheet>
@@ -655,17 +657,21 @@ function navigateToState(selectedNodeId?: string, tab?: string, viewMode?: strin
     router.push(tasksRoute(selectedNodeId, tab, viewMode));
 }
 
+// Opens the tree down to the task `id`, so that its row is drawn.
+function openUpTo(id: UUID) {
+    const next = new Set(openNodes.value);
+    let parent = store.parentOf(id);
+    while (parent) {
+        next.add(parent);
+        parent = store.parentOf(parent);
+    }
+    openNodes.value = [...next];
+}
+
 // Watchers for opening tree nodes when selected node changes
 watch(selectedNode, (node) => {
     if (node) {
-        // Open tree up to the corresponding item
-        const next = new Set(openNodes.value);
-        let parent = store.parentOf(node.uuid);
-        while (parent) {
-            next.add(parent);
-            parent = store.parentOf(parent);
-        }
-        openNodes.value = [...next];
+        openUpTo(node.uuid);
     }
 });
 
@@ -824,6 +830,19 @@ async function onParentChosen(newParentUuid: UUID | null) {
     } catch (e) {
         console.error('Failed to move task:', e);
         error.value = e instanceof Error ? e.message : 'Failed to move task';
+    }
+}
+
+// A task dropped on another in the tree.
+async function onTaskMove(id: UUID, parent: UUID | null) {
+    const title = store.node(id)?.title || 'Untitled';
+    try {
+        await store.move(id, parent);
+        // Where it went, rather than leave it to vanish into a closed task.
+        openUpTo(id);
+    }
+    catch (e) {
+        error.value = `Could not move "${title}": ${e instanceof Error ? e.message : String(e)}`;
     }
 }
 

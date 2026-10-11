@@ -273,6 +273,35 @@ export const useTasksStore = defineStore('tasks', () => {
         return childTaskPath(node.path, node.uuid, id);
     }
 
+    // The parent the task `id` moves to when dropped on the task tree's row `target`: the task
+    // dropped on, or none for the tag group the task is filed under once at the top. `undefined`
+    // where the drop would change nothing or cannot be made: on the task itself or one under it, on
+    // the parent it has, or on another tag's group, since a move gives a task no tag and it would
+    // land in its own. A task with tasks of its own under it is drawn at the top rather than in its
+    // group, but its group is still where the top is for it.
+    function parentForDrop(id: UUID, target: string): UUID | null | undefined {
+        const current = forest.value.byId.get(id);
+        if (current === undefined) {
+            return undefined;
+        }
+        if (isTagGroupId(target)) {
+            return current.parent !== null && target === tagGroupId(firstTagOf(current)) ? null : undefined;
+        }
+        if (!forest.value.byId.has(target)) {
+            return undefined;
+        }
+        if (target === id || target === current.parent || descendants(forest.value, id).includes(target)) {
+            return undefined;
+        }
+        // A task moved under another goes in the directory named by that one's UUID, while the
+        // forest looks for a task's children in the directory its file covers. The two differ for a
+        // file named with a readable prefix, and a task moved under one is drawn at the top.
+        if (parentAt(pathUnder(target, id))?.id !== target) {
+            return undefined;
+        }
+        return target;
+    }
+
     // --- Mutations. Server first, then wait for the listing to show the result. ---
 
     async function save(task: Task, path: string): Promise<void> {
@@ -328,13 +357,28 @@ export const useTasksStore = defineStore('tasks', () => {
     // The hierarchy is the directory layout, so a move is a rename per file. Between those renames
     // the listing describes a subtree whose parent has already moved; the forest builder re-roots
     // the stragglers for that window rather than failing, and the final sync settles it.
-    async function move(id: UUID, newParent: UUID | null): Promise<void> {
+    //
+    // Moves run one at a time, each once the renames of the one before are done. A move reads from
+    // the forest which files to rename and where to, and one still renaming leaves it half moved: a
+    // task under it, moved meanwhile, would be renamed by both. Each rename is in the listing this
+    // store reads as soon as it is done, so the next move need not wait for a sync to show it too.
+    let renaming: Promise<unknown> = Promise.resolve();
+
+    function move(id: UUID, newParent: UUID | null): Promise<void> {
+        const renamed = renaming.then(() => renameSubtree(id, newParent));
+        renaming = renamed.catch(() => undefined);
+        return renamed.then((path) => path === null ? undefined : subset.settle(path, true));
+    }
+
+    // Renames the files of a move, and gives the task's new path, or null for a move that changes
+    // nothing.
+    async function renameSubtree(id: UUID, newParent: UUID | null): Promise<string | null> {
         const current = forest.value.byId.get(id);
         if (current === undefined) {
             throw new Error(`Cannot move an unknown task: ${id}`);
         }
         if (current.parent === newParent) {
-            return;
+            return null;
         }
         if (newParent !== null && descendants(forest.value, id).includes(newParent)) {
             throw new Error('A task cannot be moved under one of its own descendants.');
@@ -343,7 +387,7 @@ export const useTasksStore = defineStore('tasks', () => {
         const oldPath = current.path;
         const newPath = pathUnder(newParent, id);
         if (oldPath === newPath) {
-            return;
+            return null;
         }
 
         // Deepest last, so a descendant is only moved once its new home exists.
@@ -360,7 +404,7 @@ export const useTasksStore = defineStore('tasks', () => {
         for (const [from, to] of moves) {
             await files.rename(from, to);
         }
-        await subset.settle(newPath, true);
+        return newPath;
     }
 
     const allTasks = computed<TaskNode[]>(() => flatten(forest.value));
@@ -423,6 +467,7 @@ export const useTasksStore = defineStore('tasks', () => {
         idByPath,
         parentAt,
         pathUnder,
+        parentForDrop,
         flattenDescendants,
 
         init: subset.init,

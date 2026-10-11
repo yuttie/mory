@@ -95,6 +95,25 @@ test('moves a task to the parent chosen for it, starting from the one it has', a
     await expect(path(page).locator('.app-bar-current')).toHaveText('Phase');
 });
 
+test('keeps what has been typed into a task when it is moved', async ({ context, page }) => {
+    const repository = await mockBackend(context, NOTES);
+    await page.goto(`/tasks-next/${PHASE}/selected/status`);
+    const title = page.getByRole('textbox', { name: 'Title', exact: true });
+    await title.fill('Phase one');
+
+    await page.getByRole('button', { name: 'Change Parent' }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByText('Root (No Parent)').click();
+    await dialog.getByRole('button', { name: 'Move Here' }).click();
+    await expect(path(page).getByRole('link')).toHaveText(['All tasks']);
+
+    await expect(title).toHaveValue('Phase one');
+    // Still unsaved, and saved where the task now is.
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect.poll(() => repository.writes.map(({ path: written }) => written)).toEqual([`.tasks/${PHASE}.md`]);
+    expect(repository.writes[0].content).toContain('# Phase one');
+});
+
 // A browser that has never synced has nothing cached to paint the tree from. Drawn before the
 // listing lands, the view had no selected task, and its tabs fell back to Descendants, dropping
 // the task from the address.

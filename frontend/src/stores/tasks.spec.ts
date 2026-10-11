@@ -542,6 +542,70 @@ describe('remove', () => {
     });
 });
 
+describe('parentForDrop', () => {
+    it('moves a task under the task it is dropped on', async () => {
+        const { store } = await storeWith(sample);
+        expect(store.parentForDrop(uuid(2), uuid(3))).toBe(uuid(3));
+        expect(store.parentForDrop(uuid(3), uuid(1))).toBe(uuid(1));
+    });
+
+    it('refuses the task itself, a task under it, and the parent it has', async () => {
+        const { store } = await storeWith(sample);
+        expect(store.parentForDrop(uuid(1), uuid(1))).toBeUndefined();
+        expect(store.parentForDrop(uuid(1), uuid(2))).toBeUndefined();
+        expect(store.parentForDrop(uuid(2), uuid(1))).toBeUndefined();
+    });
+
+    it('moves a task to the top when dropped on the group of its first tag', async () => {
+        const { store, tagGroupId } = await storeWith([
+            ...sample,
+            { path: `.tasks/${uuid(1)}/${uuid(7)}.md`, title: 'Untagged child', day: 7 },
+        ]);
+        expect(store.parentForDrop(uuid(2), tagGroupId('work'))).toBeNull();
+        expect(store.parentForDrop(uuid(7), tagGroupId('Untagged'))).toBeNull();
+    });
+
+    it('refuses the group of another tag, which the task would not land in', async () => {
+        const { store, tagGroupId } = await storeWith([
+            ...sample,
+            { path: `.tasks/${uuid(1)}/${uuid(7)}.md`, title: 'Tagged twice', tags: ['home', 'work'], day: 7 },
+        ]);
+        expect(store.parentForDrop(uuid(2), tagGroupId('home'))).toBeUndefined();
+        expect(store.parentForDrop(uuid(2), tagGroupId('Untagged'))).toBeUndefined();
+        // Filed by its first tag only.
+        expect(store.parentForDrop(uuid(7), tagGroupId('work'))).toBeUndefined();
+        expect(store.parentForDrop(uuid(7), tagGroupId('home'))).toBeNull();
+    });
+
+    it('refuses its group to a task already at the top, with tasks under it or not', async () => {
+        const { store, tagGroupId } = await storeWith(sample);
+        expect(store.parentForDrop(uuid(3), tagGroupId('work'))).toBeUndefined();
+        expect(store.parentForDrop(uuid(1), tagGroupId('work'))).toBeUndefined();
+    });
+
+    it('refuses a task the dropped one would not be drawn under, named with a readable prefix', async () => {
+        const { store } = await storeWith([
+            ...sample,
+            { path: `.tasks/plan-${uuid(8)}.md`, title: 'Prefixed', day: 8 },
+        ]);
+        expect(store.parentForDrop(uuid(3), uuid(8))).toBeUndefined();
+    });
+
+    it('takes a parent re-rooted by a missing file, where the forest still finds its children', async () => {
+        const { store } = await storeWith([
+            { path: `.tasks/${uuid(1)}/${uuid(2)}.md`, title: 'Orphan' },
+            { path: `.tasks/${uuid(3)}.md`, title: 'Moved' },
+        ]);
+        expect(store.parentForDrop(uuid(3), uuid(2))).toBe(uuid(2));
+    });
+
+    it('refuses a task it does not hold, dragged or dropped on', async () => {
+        const { store } = await storeWith(sample);
+        expect(store.parentForDrop('unknown', uuid(1))).toBeUndefined();
+        expect(store.parentForDrop(uuid(3), 'unknown')).toBeUndefined();
+    });
+});
+
 describe('move', () => {
     it('moves a task under a parent re-rooted by a missing file, where the forest finds it', async () => {
         const { store, repo } = await storeWith([
@@ -577,6 +641,47 @@ describe('move', () => {
         await store.move(uuid(1), uuid(4));
         const order = apiMocks.renameNote.mock.calls.map(([from]) => from);
         expect(order).toEqual([`.tasks/${uuid(1)}.md`, `.tasks/${uuid(1)}/${uuid(2)}.md`]);
+    });
+
+    it('moves a task from where the move before it put it, asked for while that one ran', async () => {
+        const { store, repo } = await storeWith(sample);
+        await Promise.all([store.move(uuid(1), uuid(4)), store.move(uuid(2), uuid(6))]);
+
+        expect(apiMocks.renameNote.mock.calls).toEqual([
+            [`.tasks/${uuid(1)}.md`, `.tasks/${uuid(4)}/${uuid(1)}.md`],
+            [`.tasks/${uuid(1)}/${uuid(2)}.md`, `.tasks/${uuid(4)}/${uuid(1)}/${uuid(2)}.md`],
+            [`.tasks/${uuid(4)}/${uuid(1)}/${uuid(2)}.md`, `.tasks/${uuid(6)}/${uuid(2)}.md`],
+        ]);
+        expect(repo.paths()).toContain(`.tasks/${uuid(6)}/${uuid(2)}.md`);
+    });
+
+    it('starts a move once the renames before it are done, without waiting for a sync', async () => {
+        const { store } = await storeWith(sample);
+        // The listing held back, as a slow sync holds it.
+        let release!: () => void;
+        const held = new Promise<void>((resolve) => { release = resolve; });
+        const listing = apiMocks.getEntries.getMockImplementation()!;
+        apiMocks.getEntries.mockImplementation(async (since) => {
+            await held;
+            return await listing(since);
+        });
+
+        const first = store.move(uuid(3), uuid(4));
+        const second = store.move(uuid(5), uuid(4));
+        await vi.waitFor(() => expect(apiMocks.renameNote).toHaveBeenCalledTimes(2));
+        release();
+        await Promise.all([first, second]);
+        expect(store.parentOf(uuid(5))).toBe(uuid(4));
+    });
+
+    it('still runs a move asked for after one that failed', async () => {
+        const { store } = await storeWith(sample);
+        const refused = store.move(uuid(1), uuid(2));
+        const moved = store.move(uuid(3), uuid(4));
+
+        await expect(refused).rejects.toThrow(/descendant/);
+        await moved;
+        expect(store.parentOf(uuid(3))).toBe(uuid(4));
     });
 
     it('does nothing when the parent is already the one asked for', async () => {

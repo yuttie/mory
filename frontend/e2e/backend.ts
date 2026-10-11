@@ -24,13 +24,14 @@ export function uuid(n: number): string {
 
 export interface Repository {
     writes: { path: string; content: string }[];
+    renames: { from: string; to: string }[];
 }
 
 // A repository of notes, listed with the metadata their frontmatter holds, so a write shows up in
 // the listing the way the backend would show it.
 export async function mockBackend(context: BrowserContext, notes: Record<string, string>): Promise<Repository> {
     const files = new Map(Object.entries(notes));
-    const repository: Repository = { writes: [] };
+    const repository: Repository = { writes: [], renames: [] };
     let commit = 1;
     const commitId = () => String(commit).padStart(40, '0');
     const etagOf = (content: string) => `"${createHash('sha1').update(content).digest('hex')}"`;
@@ -93,8 +94,16 @@ export async function mockBackend(context: BrowserContext, notes: Record<string,
             const notePath = path.slice('/api/notes/'.length);
             if (request.method() === 'PUT' && 'Rename' in request.postDataJSON()) {
                 const from = request.postDataJSON().Rename.from as string;
-                files.set(notePath, files.get(from) ?? '');
+                const moved = files.get(from);
+                // As moried answers a rename of a path HEAD does not hold, rather than create the
+                // file empty: a rename from where a file no longer is would pass unnoticed.
+                if (moved === undefined) {
+                    await route.fulfill({ status: 404, json: {} });
+                    return;
+                }
+                files.set(notePath, moved);
                 files.delete(from);
+                repository.renames.push({ from, to: notePath });
                 commit += 1;
                 await route.fulfill({ json: null });
                 return;
