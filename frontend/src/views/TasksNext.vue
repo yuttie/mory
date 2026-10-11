@@ -251,9 +251,17 @@
                 </v-window>
             </div>
         </template>
-        <v-overlay v-bind:model-value="store.isLoading" z-index="20" class="align-center justify-center">
-            <v-progress-circular indeterminate size="64" />
-        </v-overlay>
+        <!-- Drawn by the view rather than as a v-overlay: Vuetify puts an overlay opened over another
+             just above it, so a dialog or a menu opened while the tasks loaded came out under the
+             app bar and the drawer, which this stays beneath to leave them usable. -->
+        <v-fade-transition>
+            <div
+                v-if="store.isLoading"
+                class="loading d-flex align-center justify-center"
+            >
+                <v-progress-circular indeterminate size="64" />
+            </div>
+        </v-fade-transition>
         <v-snackbar v-model="error" color="error" location="top" timeout="5000">{{ error }}</v-snackbar>
         
         <NewTaskDialog
@@ -882,6 +890,14 @@ async function load(primed = false) {
 .app-bar-current {
     flex: 0 1 auto;
     min-width: 0;
+}
+
+// Shaded as a v-overlay shades what lies under it.
+.loading {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    background: rgba(0, 0, 0, 0.32);
 }
 
 .task-tree {

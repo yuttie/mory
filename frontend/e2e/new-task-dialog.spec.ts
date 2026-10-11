@@ -75,6 +75,27 @@ test('closes on Escape until something is typed, and then only on Cancel', async
     await expect(dialog(page)).toBeHidden();
 });
 
+// The task view shades itself while its tasks load. Vuetify drew a dialog or a menu opened over a
+// v-overlay just above it, which put them under the app bar and the drawer.
+test('opens above the app bar and the drawer while the task view loads', async ({ context, page }) => {
+    await mockBackend(context, NOTES);
+    let open = () => {};
+    const loaded = new Promise<void>((resolve) => {
+        open = resolve;
+    });
+    await page.route(`${API_URL}v2/entries**`, async (route) => {
+        await loaded;
+        await route.fallback();
+    });
+    await page.goto('/tasks-next/_/descendants/status');
+    // Shaded, with the tasks still on their way.
+    await expect(page.getByRole('progressbar')).toBeVisible();
+    await openNewTask(page);
+    open();
+    await dialog(page).getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(dialog(page)).toBeHidden();
+});
+
 // A save takes a moment, and a draft opened while it runs is not the one it was for.
 test('leaves a draft opened during an earlier save open when that save ends', async ({ context, page }) => {
     await mockBackend(context, NOTES);
