@@ -4,6 +4,7 @@
          tall as the screen allows, like the editor in the task view, whose panes fill the height
          they are given rather than sizing to their content. -->
     <v-dialog
+        ref="dialogRef"
         v-model="isOpen"
         v-bind:fullscreen="$vuetify.display.smAndDown"
         v-bind:persistent="editorRef?.isModified ?? false"
@@ -71,6 +72,8 @@ import { useRouter } from 'vue-router';
 
 import ParentSelectionDialog from '@/components/ParentSelectionDialog.vue';
 import TaskEditorNext from '@/components/TaskEditorNext.vue';
+import type { VDialog } from 'vuetify/components';
+
 import type { Task, UUID } from '@/task';
 import { taskRoute } from '@/task-route';
 import { useTasksStore } from '@/stores/tasks';
@@ -107,6 +110,7 @@ const successText = ref('');
 const createdTaskUuid = ref<UUID | null>(null);
 
 // Template refs
+const dialogRef = ref<InstanceType<typeof VDialog> | null>(null);
 const editorRef = ref<InstanceType<typeof TaskEditorNext> | null>(null);
 
 // Computed properties
@@ -172,4 +176,14 @@ function openCreatedTask(): void {
     }
     successMessage.value = false;
 }
+
+// Expose
+// For a host that a navigation may take the dialog away with: Vuetify keeps a draft from Back by
+// itself, but not from a Back to an entry a replace made, such as the first one in a tab.
+defineExpose({
+    isModified: computed<boolean>(() => isOpen.value && (editorRef.value?.isModified ?? false)),
+    bounce: (): void => {
+        dialogRef.value?.animateClick();
+    },
+});
 </script>

@@ -229,10 +229,12 @@
         <v-snackbar v-model="error" color="error" location="top" timeout="5000">{{ error }}</v-snackbar>
 
         <!-- The task the address names, in its editor over the list, which stays as it was. Closes
-             like any dialog while nothing is changed; from then on only its Cancel does, so a stray
-             click or Escape cannot throw an edit away. Back changes the address, which closes it by
-             itself: Vuetify's own handling of Back would cancel that and close it a second time. -->
+             like any dialog while nothing is changed; from then on only its own buttons do, and
+             `keepUnsavedEdit` refuses Back, so a stray click, Escape or Back cannot throw an edit
+             away. Back changes the address, which closes it by itself: Vuetify's own handling of
+             Back would cancel that and close it a second time. -->
         <v-dialog
+            ref="editorDialogRef"
             v-bind:model-value="editedNode !== undefined"
             v-bind:fullscreen="$vuetify.display.smAndDown"
             v-bind:persistent="taskEditorRef?.isModified ?? false"
@@ -261,6 +263,7 @@
             />
         </v-dialog>
         <NewTaskDialog
+            ref="newTaskDialogRef"
             v-model="newTaskDialogIsVisible"
             v-bind:initial-parent="newTaskStart.parent"
             v-bind:tag="newTaskStart.tag"
@@ -289,10 +292,19 @@ import { readImportance, isUrgent, compareUrgency } from '@/urgency';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue';
 import { usePlansStore } from '@/stores/plans';
-import { type RouteLocationRaw, useRoute, useRouter } from 'vue-router';
+import {
+    type RouteLocationNormalized,
+    type RouteLocationRaw,
+    onBeforeRouteLeave,
+    onBeforeRouteUpdate,
+    useRoute,
+    useRouter,
+} from 'vue-router';
+import type { VDialog } from 'vuetify/components';
 import { useDisplay } from 'vuetify';
 import { useLocalStorage } from '@/composables/localStorage';
 import AppBarContent from '@/components/AppBarContent.vue';
+import type NewTaskDialog from '@/components/NewTaskDialog.vue';
 
 import {
     mdiCalendarMultiselectOutline,
@@ -330,6 +342,8 @@ const emit = defineEmits<{
 
 // Reactive states
 const taskEditorRef = ref<any>(null);
+const editorDialogRef = ref<InstanceType<typeof VDialog> | null>(null);
+const newTaskDialogRef = ref<InstanceType<typeof NewTaskDialog> | null>(null);
 const openNodes = ref<UUID[]>([]);
 const newTaskDialogIsVisible = ref(false);
 // Where the next new task starts: from Add, under the selected task or with the selected group's
@@ -693,6 +707,10 @@ function navigateToState(selectedNodeId?: string, viewMode?: string) {
     router.push(tasksRoute(selectedNodeId, viewMode));
 }
 
+// Set while the view closes the editor itself, as Cancel, Save and Delete do, for the navigation
+// that closes it to pass `keepUnsavedEdit`.
+let closingEditor = false;
+
 // Closing the editor goes back to the list it was opened over: back through history when it was
 // opened from that list, so Forward opens it again, and in place otherwise, as when a link in
 // another view opened it, so that Back still leaves for that view.
@@ -703,6 +721,7 @@ function closeEditor(): void {
     const query = { ...route.query };
     delete query.task;
     const list = router.resolve({ path: route.path, query, hash: route.hash });
+    closingEditor = true;
     if (router.options.history.state.back === list.fullPath) {
         router.back();
     }
@@ -725,6 +744,34 @@ function returnFocus(): void {
         element.parentElement?.closest<HTMLElement>('a[href], [tabindex]')?.focus();
     }
 }
+
+// Back and Forward change the address, which closes the editor or puts another task in it. With an
+// edit unsaved, that is refused as Escape and a click outside are, unless the view is closing the
+// editor itself. A new task's draft goes with the view, and is kept from leaving it too.
+function keepUnsavedEdit(to: RouteLocationNormalized): boolean {
+    const closing = closingEditor;
+    closingEditor = false;
+    if (newTaskDialogRef.value?.isModified) {
+        newTaskDialogRef.value.bounce();
+        return false;
+    }
+    if (closing || editedNode.value === undefined || !taskEditorRef.value?.isModified) {
+        return true;
+    }
+    if (to.name === 'TasksNextWithParams' && to.query.task === route.query.task) {
+        return true;
+    }
+    editorDialogRef.value?.animateClick();
+    return false;
+}
+
+onBeforeRouteUpdate(keepUnsavedEdit);
+onBeforeRouteLeave(keepUnsavedEdit);
+// A navigation another guard refuses never reaches `keepUnsavedEdit`, as when a dialog over the
+// editor takes Back for itself, and the flag would let the next one through.
+onUnmounted(router.afterEach(() => {
+    closingEditor = false;
+}));
 
 // Opens the tree down to the task `id`, so that its row is drawn.
 function openUpTo(id: UUID) {
@@ -847,6 +894,7 @@ async function onEditedTaskDelete(path: string) {
     // The list of what was under it went with it. Read from the address, as the listing no longer
     // holds the task to select.
     if (route.params.selectedNodeId === uuid) {
+        closingEditor = true;
         router.replace(tasksRoute(undefined, descendantsViewMode.value));
     }
     else {

@@ -148,6 +148,54 @@ test('opens the tree down to a task moved from its editor', async ({ context, pa
     await expect(row(page, 'Step')).toBeVisible();
 });
 
+// Back changes the address, which would close the editor and throw away what was typed, where
+// Escape and a click outside cannot.
+test('keeps an unsaved edit open on Back', async ({ context, page }) => {
+    await mockBackend(context, NOTES);
+    await page.goto('/tasks-next/_/descendants/status');
+    await listed(page, 'Step').click();
+    await title(page).fill('First step');
+
+    await page.evaluate(() => history.back());
+    // Past the closing transition, which would keep the field in the page for a moment.
+    await page.waitForTimeout(1000);
+    await expect(page).toHaveURL(url('_', 'status', STEP));
+    await expect(title(page)).toHaveValue('First step');
+
+    await dialog(page).getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(dialog(page)).toBeHidden();
+    await expect(page).toHaveURL(url('_', 'status'));
+});
+
+test('keeps an unsaved edit open on Back to another view', async ({ context, page }) => {
+    await mockBackend(context, NOTES);
+    await page.goto('/');
+    await page.locator('.tasks-section .task-item', { hasText: 'Errand' }).click();
+    await title(page).fill('Errand run');
+
+    await page.evaluate(() => history.back());
+    await page.waitForTimeout(1000);
+    await expect(page).toHaveURL(url(ERRAND, 'status', ERRAND));
+    await expect(title(page)).toHaveValue('Errand run');
+});
+
+// Vuetify keeps a new task's draft from Back by itself, but not from a Back to an entry a replace
+// made: here, the one a closing editor left in place of its own, leading back to Home.
+test('keeps an unsaved new task open on Back to another view', async ({ context, page }) => {
+    await mockBackend(context, NOTES);
+    await page.goto('/');
+    await page.locator('.tasks-section .task-item', { hasText: 'Errand' }).click();
+    await dialog(page).getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(dialog(page)).toBeHidden();
+    await page.locator('.item-view .v-toolbar').getByRole('button', { name: 'Add', exact: true }).click();
+    await title(page).fill('Draft');
+
+    await page.evaluate(() => history.back());
+    await page.waitForTimeout(1000);
+    await expect(page).toHaveURL(url(ERRAND, 'status'));
+    await expect(title(page)).toHaveValue('Draft');
+});
+
 // A link from another view opens the task in its own list. Closing it then stays in the task view
 // rather than going back through history, which would leave it.
 test('opens a task from another view, and closes it in place', async ({ context, page }) => {
