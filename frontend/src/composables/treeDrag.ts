@@ -94,8 +94,6 @@ export function useTreeDrag(options: TreeDragOptions) {
         window.addEventListener('pointercancel', onPointerCancel);
         if (pressed.touch) {
             pressed.timer = window.setTimeout(() => lift(pressed), TOUCH_DELAY);
-            // Not passive, so that it can keep the page from scrolling once the row is picked up.
-            window.addEventListener('touchmove', onTouchMove, { passive: false });
             window.addEventListener('contextmenu', onContextMenu, true);
         }
     }
@@ -130,6 +128,11 @@ export function useTreeDrag(options: TreeDragOptions) {
 
     // A finger moving a row it holds would otherwise scroll what is under it. Before the row is
     // picked up, that scroll is what the finger is for.
+    //
+    // For the tree to listen to all along, not passively: Safari settles as a touch begins whether
+    // its moves can be canceled, by the listeners there then, so one added on the press would let
+    // the tree scroll away under the held row. A touch's moves all go to where it began, so the tree
+    // hears every one of a touch begun on a row.
     function onTouchMove(event: TouchEvent) {
         if (dragged.value !== null && event.cancelable) {
             event.preventDefault();
@@ -238,7 +241,6 @@ export function useTreeDrag(options: TreeDragOptions) {
         window.removeEventListener('pointermove', onPointerMove);
         window.removeEventListener('pointerup', onPointerUp);
         window.removeEventListener('pointercancel', onPointerCancel);
-        window.removeEventListener('touchmove', onTouchMove);
         window.removeEventListener('contextmenu', onContextMenu, true);
         window.clearTimeout(press.timer);
         if (dragged.value !== null) {
@@ -260,7 +262,7 @@ export function useTreeDrag(options: TreeDragOptions) {
 
     onScopeDispose(cancel);
 
-    return { dragged, pointer, onPointerDown };
+    return { dragged, pointer, onPointerDown, onTouchMove };
 }
 
 // The nearest element that scrolls `element`, itself included.

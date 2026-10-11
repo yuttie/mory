@@ -7,7 +7,7 @@
         v-on:update:opened="$emit('update:open', $event)"
         v-on:update:activated="onActivated($event[0])"
         v-on:click:activate="onClickActivate"
-        v-on:pointerdown="onPointerDown"
+        v-on="dragListeners"
         v-bind:opened="open"
         v-bind:activated="activated"
         v-bind:item-value="itemValue"
@@ -99,13 +99,17 @@ const emit = defineEmits<{
 
 // Composables
 const router = useRouter();
-const { dragged, pointer, onPointerDown } = useTreeDrag({
+const { dragged, pointer, onPointerDown, onTouchMove } = useTreeDrag({
     canDrag: (id) => props.canDrag?.(id) ?? false,
     canDrop: (id, target) => props.canDrop?.(id, target) ?? false,
     drop: (id, target) => emit('drop', id, target),
 });
 
 // Computed properties
+// Only on a tree whose rows can be dragged: a touch listener that may cancel makes the browser wait
+// for it before it scrolls the tree.
+const dragListeners = computed(() => props.canDrag === undefined ? {} : { pointerdown: onPointerDown, touchmove: onTouchMove });
+
 // Made once rather than in the template, where every render of this component would hand the tree
 // a new array and re-render every row. The copy dragged beside the tree re-renders this component
 // each time the pointer moves.
