@@ -184,6 +184,36 @@ test('opens nothing when the task is let go where it was picked up', async ({ co
     await expect(page).toHaveURL(new RegExp(`/tasks-next/${PHASE}/selected/status$`));
 });
 
+test('picks nothing up with a press whose release went unseen', async ({ browserName, context, page }) => {
+    test.skip(browserName !== 'chromium', 'CDP moves the mouse with no button held after a press.');
+    const repository = await mockBackend(context, NOTES);
+    await openTree(page);
+    const phase = row(page, 'Phase');
+    await phase.click({ trial: true });
+    const client = await context.newCDPSession(page);
+    const mouse = (type: string, at: { x: number; y: number }, buttons: number) => client.send('Input.dispatchMouseEvent', {
+        type, ...at, buttons, button: type === 'mouseMoved' ? 'none' : 'left', clickCount: type === 'mouseMoved' ? 0 : 1,
+    });
+    const middle = async (target: Locator) => {
+        const { x, y, width, height } = await box(target);
+        return { x: x + width / 2, y: y + height / 2 };
+    };
+
+    // Pressed, and its release taken by something else, as a menu the browser opens takes it.
+    await mouse('mousePressed', await middle(phase), 1);
+    const over = await middle(row(page, 'Other'));
+    for (let step = 1; step <= 5; step++) {
+        await mouse('mouseMoved', { x: over.x, y: over.y - 40 + step * 8 }, 0);
+    }
+    await expect(copy(page)).toHaveCount(0);
+
+    // The next click is an ordinary click, which opens the task.
+    await mouse('mousePressed', over, 1);
+    await mouse('mouseReleased', over, 0);
+    await expect(page).toHaveURL(new RegExp(`/tasks-next/${OTHER}/selected/status$`));
+    expect(repository.renames).toEqual([]);
+});
+
 test('puts the task back when Escape is pressed during the drag', async ({ context, page }) => {
     const repository = await mockBackend(context, NOTES);
     await openTree(page);

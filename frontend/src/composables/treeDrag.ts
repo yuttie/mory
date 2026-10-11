@@ -90,7 +90,7 @@ export function useTreeDrag(options: TreeDragOptions) {
         press = pressed;
         window.addEventListener('pointermove', onPointerMove);
         window.addEventListener('pointerup', onPointerUp);
-        window.addEventListener('pointercancel', cancel);
+        window.addEventListener('pointercancel', onPointerCancel);
         if (pressed.touch) {
             pressed.timer = window.setTimeout(() => lift(pressed), TOUCH_DELAY);
             // Not passive, so that it can keep the page from scrolling once the row is picked up.
@@ -108,6 +108,13 @@ export function useTreeDrag(options: TreeDragOptions) {
 
     function onPointerMove(event: PointerEvent) {
         if (press === null || event.pointerId !== press.pointerId) {
+            return;
+        }
+        // Released without a word: a menu the browser opened over the press, for one, takes the
+        // release for itself. The pointer moves on holding nothing, and the next click would drop
+        // the row wherever it was.
+        if ((event.buttons & 1) === 0) {
+            cancel();
             return;
         }
         if (dragged.value === null) {
@@ -143,6 +150,13 @@ export function useTreeDrag(options: TreeDragOptions) {
         cancel();
         if (id !== null && dropped !== undefined) {
             options.drop(id, dropped);
+        }
+    }
+
+    // Another pointer's cancel, such as a second finger's, is no end of this press.
+    function onPointerCancel(event: PointerEvent) {
+        if (event.pointerId === press?.pointerId) {
+            cancel();
         }
     }
 
@@ -215,7 +229,7 @@ export function useTreeDrag(options: TreeDragOptions) {
         }
         window.removeEventListener('pointermove', onPointerMove);
         window.removeEventListener('pointerup', onPointerUp);
-        window.removeEventListener('pointercancel', cancel);
+        window.removeEventListener('pointercancel', onPointerCancel);
         window.removeEventListener('touchmove', onTouchMove);
         window.removeEventListener('contextmenu', onContextMenu, true);
         window.clearTimeout(press.timer);
