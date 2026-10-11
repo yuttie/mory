@@ -116,15 +116,15 @@ test('dims the tasks the dragged one cannot go under, and refuses a drop on them
     await pickUp(page, row(page, 'Phase'));
     // Itself, the task under it, and the parent it already has.
     for (const name of ['Phase', 'Step', 'Project']) {
-        await expect(row(page, name)).toHaveClass(/tree-drop-refused/);
+        await expect(row(page, name)).toHaveCSS('opacity', '0.4');
     }
-    await expect(row(page, 'Other')).not.toHaveClass(/tree-drop-refused/);
+    await expect(row(page, 'Other')).toHaveCSS('opacity', '1');
 
     await moveOver(page, row(page, 'Step'));
     await expect(row(page, 'Step')).toHaveCSS('outline-style', 'none');
     await page.mouse.up();
 
-    await expect(row(page, 'Step')).not.toHaveClass(/tree-drop-refused/);
+    await expect(row(page, 'Step')).toHaveCSS('opacity', '1');
     // Long enough for a move to have been asked for, were one going to be.
     await page.waitForTimeout(300);
     expect(repository.renames).toEqual([]);
@@ -141,8 +141,8 @@ test('moves a task to the top when dropped on the group of its tag', async ({ co
 
     await pickUp(page, row(page, 'Phase'));
     // Moved to the top, Phase would be filed under its own tag, not under whichever was chosen.
-    await expect(row(page, 'home')).toHaveClass(/tree-drop-refused/);
-    await expect(row(page, 'work')).not.toHaveClass(/tree-drop-refused/);
+    await expect(row(page, 'home')).toHaveCSS('opacity', '0.4');
+    await expect(row(page, 'work')).toHaveCSS('opacity', '1');
     await moveOver(page, row(page, 'work'));
     await expect(row(page, 'work')).toHaveCSS('outline-style', 'solid');
     await page.mouse.up();
@@ -161,7 +161,7 @@ test('refuses its own group to a task already at the top', async ({ context, pag
     await row(page, 'work').locator('.v-list-item__prepend button').click();
 
     await pickUp(page, row(page, 'Errand'));
-    await expect(row(page, 'work')).toHaveClass(/tree-drop-refused/);
+    await expect(row(page, 'work')).toHaveCSS('opacity', '0.4');
     await page.mouse.up();
 });
 
@@ -462,9 +462,13 @@ test.describe('on a touch screen', () => {
         const prevented = await phase.evaluate((element) => !element.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })));
         expect(prevented).toBe(true);
         await page.waitForTimeout(400);
-        // Picked up where the finger rests, before it moves.
+        // Picked up where the finger rests, before it moves, and drawn above the finger, which would
+        // hide it below.
         await expect(copy(page)).toBeVisible();
         await expect(copy(page)).toBeInViewport();
+        const pressed = await box(phase);
+        const drawn = await box(copy(page));
+        expect(drawn.y + drawn.height).toBeLessThan(pressed.y + pressed.height / 2);
 
         await held.moveOver(row(page, 'Other'));
         await expect(row(page, 'Other')).toHaveCSS('outline-style', 'solid');
