@@ -27,9 +27,12 @@ const ROW = '[data-tree-id]';
 // How far a mouse moves, pressed, before the press is a drag rather than a click.
 const MOUSE_SLOP = 4;
 
-// A finger picks a row up by resting on it, as long as it rests on a task in the Status view. One
-// that moves first is scrolling, and the browser ends the press itself with a `pointercancel`.
-const TOUCH_DELAY = 500;
+// A finger or a pen picks a row up by resting on it, as long as a finger rests on a task in the
+// Status view: either scrolls the tree when it moves straight away. One that moves this far first
+// is not picking anything up. The browser most often ends such a press itself, with a
+// `pointercancel` as it scrolls, but nothing ends a pen's where the pen does not scroll.
+const HOLD_DELAY = 500;
+const HOLD_SLOP = 10;
 
 // How near the top or bottom of the tree a held row scrolls it, and how fast at the very edge, in
 // pixels a frame. A tree can be short -- the task tree is 200px tall on a phone -- and a drop has to
@@ -43,7 +46,8 @@ interface Press {
     x: number;
     y: number;
     root: HTMLElement;
-    touch: boolean;
+    // On the screen itself, by a finger or a pen rather than a mouse.
+    direct: boolean;
     timer?: number;
 }
 
@@ -51,7 +55,7 @@ export function useTreeDrag(options: TreeDragOptions) {
     // The row being dragged, and where the pointer holds it: what the copy following the pointer is
     // drawn from.
     const dragged = shallowRef<string | null>(null);
-    const pointer = shallowRef({ x: 0, y: 0, touch: false });
+    const pointer = shallowRef({ x: 0, y: 0, direct: false });
 
     let press: Press | null = null;
     // The row the pointer was last over, and the same row if it takes the dragged one.
@@ -86,22 +90,22 @@ export function useTreeDrag(options: TreeDragOptions) {
             x: event.clientX,
             y: event.clientY,
             root,
-            touch: event.pointerType === 'touch',
+            direct: event.pointerType !== 'mouse',
         };
         press = pressed;
         window.addEventListener('pointermove', onPointerMove);
         window.addEventListener('pointerup', onPointerUp);
         window.addEventListener('pointercancel', onPointerCancel);
-        if (pressed.touch) {
-            pressed.timer = window.setTimeout(() => lift(pressed), TOUCH_DELAY);
+        if (pressed.direct) {
+            pressed.timer = window.setTimeout(() => lift(pressed), HOLD_DELAY);
             window.addEventListener('contextmenu', onContextMenu, true);
         }
     }
 
-    // Picks the row up where the finger rests on it.
+    // Picks the row up where the finger or pen rests on it.
     function lift(from: Press) {
         start(from);
-        pointer.value = { x: from.x, y: from.y, touch: true };
+        pointer.value = { x: from.x, y: from.y, direct: true };
         aim();
     }
 
@@ -117,12 +121,19 @@ export function useTreeDrag(options: TreeDragOptions) {
             return;
         }
         if (dragged.value === null) {
-            if (press.touch || Math.hypot(event.clientX - press.x, event.clientY - press.y) < MOUSE_SLOP) {
+            const distance = Math.hypot(event.clientX - press.x, event.clientY - press.y);
+            if (press.direct) {
+                if (distance > HOLD_SLOP) {
+                    cancel();
+                }
+                return;
+            }
+            if (distance < MOUSE_SLOP) {
                 return;
             }
             start(press);
         }
-        pointer.value = { x: event.clientX, y: event.clientY, touch: press.touch };
+        pointer.value = { x: event.clientX, y: event.clientY, direct: press.direct };
         aim();
     }
 

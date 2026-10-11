@@ -33,8 +33,8 @@
         <div
             v-if="draggedItem !== undefined"
             class="entry-tree-drag-copy"
-            v-bind:class="{ touch: pointer.touch }"
-            v-bind:style="{ transform: `translate(${pointer.x}px, ${pointer.y}px)${pointer.touch ? ' translateY(-100%)' : ''}` }"
+            v-bind:class="{ direct: pointer.direct }"
+            v-bind:style="{ transform: `translate(${pointer.x}px, ${pointer.y}px)${pointer.direct ? ' translateY(-100%)' : ''}` }"
         >
             <slot
                 name="prepend"
@@ -250,8 +250,8 @@ function findItem(items: Item[], id: unknown): Item | undefined {
         text-overflow: ellipsis;
     }
 
-    /* Above a finger, which would hide it below. */
-    &.touch {
+    /* Above a finger or a pen, whose hand would hide it below. */
+    &.direct {
         top: -24px;
     }
 }

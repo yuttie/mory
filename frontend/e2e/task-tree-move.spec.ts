@@ -337,6 +337,69 @@ test('drops the task on the row a wheel brings under the pointer', async ({ cont
     await expect.poll(() => repository.renames[0]?.to).toBe(`.tasks/${PROJECT}/${under}/${PHASE}.md`);
 });
 
+test.describe('with a pen', () => {
+    // A pen pressed and moved by CDP, which can say the mouse it moves is a pen.
+    async function pen(context: BrowserContext, page: Page, at: Locator) {
+        const client = await context.newCDPSession(page);
+        const send = (type: string, point: { x: number; y: number }) => client.send('Input.dispatchMouseEvent', {
+            type,
+            ...point,
+            pointerType: 'pen',
+            button: type === 'mouseMoved' ? 'none' : 'left',
+            buttons: type === 'mouseReleased' ? 0 : 1,
+            clickCount: type === 'mouseMoved' ? 0 : 1,
+        });
+        const start = await box(at);
+        let point = { x: start.x + start.width / 2, y: start.y + start.height / 2 };
+        await send('mousePressed', point);
+        return {
+            async moveOver(target: Locator) {
+                const found = await box(target);
+                const to = { x: found.x + found.width / 2, y: found.y + found.height / 2 };
+                for (let step = 1; step <= 5; step++) {
+                    await send('mouseMoved', { x: point.x + (to.x - point.x) * step / 5, y: point.y + (to.y - point.y) * step / 5 });
+                }
+                point = to;
+            },
+            async lift() {
+                await send('mouseReleased', point);
+            },
+        };
+    }
+
+    test('picks a task up with a long press, as a finger does', async ({ browserName, context, page }) => {
+        test.skip(browserName !== 'chromium', 'CDP supplies pen input in Chromium.');
+        const repository = await mockBackend(context, NOTES);
+        await openTree(page);
+        await row(page, 'Phase').click({ trial: true });
+
+        const held = await pen(context, page, row(page, 'Phase'));
+        await page.waitForTimeout(600);
+        await expect(copy(page)).toBeVisible();
+        await held.moveOver(row(page, 'Other'));
+        await held.lift();
+
+        await expect.poll(() => repository.renames[0]?.to).toBe(`.tasks/${OTHER}/${PHASE}.md`);
+    });
+
+    // A pen on a touch screen scrolls what it moves over, as a finger does.
+    test('picks nothing up with a pen that moves at once', async ({ browserName, context, page }) => {
+        test.skip(browserName !== 'chromium', 'CDP supplies pen input in Chromium.');
+        const repository = await mockBackend(context, NOTES);
+        await openTree(page);
+        await row(page, 'Phase').click({ trial: true });
+
+        const swiping = await pen(context, page, row(page, 'Phase'));
+        await swiping.moveOver(row(page, 'Other'));
+        await page.waitForTimeout(700);
+        await expect(copy(page)).toHaveCount(0);
+        await swiping.lift();
+
+        await page.waitForTimeout(300);
+        expect(repository.renames).toEqual([]);
+    });
+});
+
 test.describe('on a touch screen', () => {
     test.use({ hasTouch: true });
 
