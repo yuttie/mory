@@ -214,6 +214,36 @@ test('opens a task from another view, and closes it in place', async ({ context,
     await expect(page).toHaveURL(/\/$/);
 });
 
+// The task whose descendants are listed, edited over that list.
+test('edits the selected task from the toolbar, and closes back to its list', async ({ context, page }) => {
+    await mockBackend(context, NOTES);
+    await page.goto(`/tasks-next/${PROJECT}/descendants/schedule`);
+    const edit = page.locator('.item-view .v-toolbar').getByRole('link', { name: 'Edit', exact: true });
+    // Its address is the list's own but for the query, which Vuetify ignores in marking a link
+    // current unless told otherwise.
+    await expect(edit).not.toHaveAttribute('aria-current', 'page');
+    await edit.click();
+    await expect(page).toHaveURL(url(PROJECT, 'schedule', PROJECT));
+    await expect(title(page)).toHaveValue('Project');
+    // Nor drawn as current under the editor, which would show as the editor fades.
+    await expect(edit).not.toHaveClass(/v-btn--active/);
+
+    await opened(page);
+    await page.keyboard.press('Escape');
+    await expect(dialog(page)).toBeHidden();
+    await expect(page).toHaveURL(url(PROJECT, 'schedule'));
+});
+
+// All tasks is no task, and neither is a tag group.
+for (const selection of ['_', 'tag-group-Untagged']) {
+    test(`has no task to edit from the toolbar with ${selection} selected`, async ({ context, page }) => {
+        await mockBackend(context, NOTES);
+        await page.goto(`/tasks-next/${selection}/descendants/status`);
+        await expect(listed(page, 'Errand')).toBeVisible();
+        await expect(page.locator('.item-view .v-toolbar').getByRole('button', { name: 'Edit', exact: true })).toBeDisabled();
+    });
+}
+
 // The editor was a tab beside the list, and its addresses are in bookmarks and history.
 test('opens a task from the address of its former editor tab', async ({ context, page }) => {
     await mockBackend(context, NOTES);

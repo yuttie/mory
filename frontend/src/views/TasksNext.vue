@@ -129,12 +129,30 @@
                             <span class="toolbar-label">{{ text }}</span>
                         </v-btn>
                     </v-btn-toggle>
+                    <!-- The selected task, in its editor over its list. A link, matched with its
+                         query as a task in the list is, or it would be the current page on the
+                         list itself; never drawn as current even so, as the dialog it opens covers
+                         it. All tasks and a tag group are no task to edit, and it stays in its
+                         place for them, so the buttons after it do not move with the selection. -->
+                    <v-btn
+                        title="Edit"
+                        color="primary"
+                        variant="outlined"
+                        class="toolbar-button ml-3"
+                        v-bind:to="listRoot === undefined ? undefined : taskRoute(listRoot, descendantsViewMode)"
+                        exact
+                        v-bind:disabled="listRoot === undefined"
+                        v-bind:active="false"
+                    >
+                        <v-icon>{{ mdiPencil }}</v-icon>
+                        <span class="toolbar-label">Edit</span>
+                    </v-btn>
                     <!-- New task button -->
                     <v-btn
                         title="Add"
                         color="primary"
                         variant="outlined"
-                        class="toolbar-button ml-3"
+                        class="toolbar-button ml-2"
                         v-on:click="newTask"
                     >
                         <v-icon>{{ mdiPlus }}</v-icon>
@@ -311,6 +329,7 @@ import {
     mdiDotsVertical,
     mdiFormatListChecks,
     mdiGridLarge,
+    mdiPencil,
     mdiPlus,
     mdiTrafficLightOutline,
 } from '@mdi/js';
@@ -975,12 +994,12 @@ async function load(primed = false) {
 /* The buttons' labels go by the toolbar's own width, not the window's: the list shares the window
    with the drawer and the tree, and labels too wide for the toolbar push the view modes out of it.
    Without them a button is square, as a minimum width kept for a label is room the toolbar runs
-   out of on a phone. Labelled, the buttons take 602px. */
+   out of on a phone. Labelled, the buttons take 686px. */
 .item-toolbar {
     container-type: inline-size;
 }
 
-@container (width < 620px) {
+@container (width < 700px) {
     .toolbar-label {
         display: none;
     }

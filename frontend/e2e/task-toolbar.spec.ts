@@ -27,8 +27,8 @@ for (const width of [360, 840, 1200, 1400]) {
         for (const name of ['Status', 'Schedule', 'Eisenhower Matrix']) {
             expect(await within(views.getByRole('button', { name, exact: true }), views), name).toBe(true);
         }
-        for (const name of ['Add', ...(width < 600 ? [] : ['Quick add'])]) {
-            const button = toolbar.getByRole('button', { name, exact: true });
+        for (const name of ['Add', 'Edit', ...(width < 600 ? [] : ['Quick add'])]) {
+            const button = toolbar.getByTitle(name, { exact: true });
             expect(await within(button, toolbar), name).toBe(true);
         }
     });
@@ -39,8 +39,8 @@ test('draws a button square on a phone', async ({ context, page }) => {
     await page.setViewportSize({ width: 360, height: 680 });
     await mockBackend(context, NOTES);
     await page.goto(`/tasks-next/${PROJECT}/descendants/status`);
-    for (const name of ['Add', 'Status']) {
-        const box = (await page.locator('.item-view .v-toolbar').getByRole('button', { name, exact: true }).boundingBox())!;
+    for (const name of ['Add', 'Edit', 'Status']) {
+        const box = (await page.locator('.item-view .v-toolbar').getByTitle(name, { exact: true }).boundingBox())!;
         expect(box.width, name).toBe(box.height);
     }
 });
