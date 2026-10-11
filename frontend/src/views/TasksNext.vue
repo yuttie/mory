@@ -103,8 +103,10 @@
                     v-bind:route-for="treeRouteFor"
                     v-model:open="openNodes"
                     show-add-child
+                    show-edit
                     movable
                     v-on:add-child-task="onAddChildTask"
+                    v-on:edit-task="onEditTask"
                     v-on:move="onTaskMove"
                     style="flex: 1 1 0"
                 />
@@ -848,6 +850,11 @@ function onAddChildTask(id: UUID) {
         ? { parent: null, tag: isUntaggedGroupId(id) ? null : tagNameOf(id) }
         : { parent: id };
     newTaskDialogIsVisible.value = true;
+}
+
+// From a row's own button: the task's editor over the list as it is, as from the list.
+function onEditTask(id: UUID) {
+    router.push(tasksRoute(activeNodeId.value, descendantsViewMode.value, id));
 }
 
 // The menu stays open for its switch, so it is closed here rather than left over the dialog.

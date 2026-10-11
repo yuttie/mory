@@ -32,6 +32,14 @@
             <span v-if="tasks.progress(item.uuid) !== undefined" class="task-progress mr-2">{{ Math.round(tasks.progress(item.uuid) ?? 0) }}%</span>
             <!-- Inside the row, which may be a link. Stopping the click keeps the row from routing,
                  but the browser would still follow the link, reloading the app, unless prevented. -->
+            <!-- A tag group is no task to edit. -->
+            <v-icon-btn
+                v-if="showEdit && !item.metadata?.tag_group"
+                v-bind:icon="mdiPencil"
+                variant="text"
+                title="Edit task"
+                v-on:click.stop.prevent="$emit('edit-task', item.uuid)"
+            />
             <v-icon-btn
                 v-bind:icon="mdiPlus"
                 v-if="showAddChild"
@@ -46,6 +54,7 @@
 
 <script lang="ts" setup>
 import {
+    mdiPencil,
     mdiPlus,
     mdiTag,
 } from '@mdi/js';
@@ -70,6 +79,8 @@ defineProps<{
     // Off unless the parent handles `add-child-task`: a tree used only to pick a task, such as
     // the parent selection dialog's, would otherwise show a button that does nothing.
     showAddChild?: boolean;
+    // Off unless the parent handles `edit-task`, as `showAddChild` is.
+    showEdit?: boolean;
     // Where each row goes, making it a link; see EntryTree. Absent in a tree used to pick a task,
     // whose rows only report being chosen.
     routeFor?: (item: TaskTreeItem) => RouteLocationRaw;
@@ -85,6 +96,8 @@ const emit = defineEmits<{
     // For a tag group, the group's id: the new task is a root task carrying that tag, since a
     // group is not a task to nest it under.
     (e: 'add-child-task', value: UUID): void;
+    // The task the row is, to open in its editor, where choosing the row may go elsewhere.
+    (e: 'edit-task', value: UUID): void;
     // The task `id` was dropped where it belongs under `parent`.
     (e: 'move', id: UUID, parent: UUID | null): void;
 }>();

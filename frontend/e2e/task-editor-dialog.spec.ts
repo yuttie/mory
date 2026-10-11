@@ -244,6 +244,46 @@ for (const selection of ['_', 'tag-group-Untagged']) {
     });
 }
 
+// A row's own button edits its task where the list is, as its "+" adds one under it there.
+test('edits a task from its row in the tree, over the list as it is', async ({ context, page }) => {
+    await mockBackend(context, NOTES);
+    await page.goto('/tasks-next/_/descendants/status');
+    const project = row(page, 'Project');
+    await project.hover();
+    await project.getByRole('button', { name: 'Edit task', exact: true }).click();
+    await expect(page).toHaveURL(url('_', 'status', PROJECT));
+    await expect(title(page)).toHaveValue('Project');
+    await expect(page.locator('.app-bar-current')).toHaveText('All tasks');
+
+    await opened(page);
+    await page.keyboard.press('Escape');
+    await expect(dialog(page)).toBeHidden();
+    await expect(page).toHaveURL(url('_', 'status'));
+});
+
+// The button is hidden once the pointer has left its row, and a hidden button takes no focus.
+test('gives focus back to the row a task was edited from', async ({ context, page }) => {
+    await mockBackend(context, NOTES);
+    await page.goto('/tasks-next/_/descendants/status');
+    const project = row(page, 'Project');
+    await project.hover();
+    await project.getByRole('button', { name: 'Edit task', exact: true }).click();
+    await opened(page);
+    await page.mouse.move(0, 0);
+    await page.keyboard.press('Escape');
+    await expect(dialog(page)).toBeHidden();
+    await expect(project).toBeFocused();
+});
+
+// A tag group is no task to edit.
+test('offers no editor on a tag group row', async ({ context, page }) => {
+    await mockBackend(context, NOTES);
+    await page.goto('/tasks-next/_/descendants/status');
+    await expect(row(page, 'Untagged')).toBeVisible();
+    await expect(row(page, 'Project').getByRole('button', { name: 'Edit task', includeHidden: true })).toHaveCount(1);
+    await expect(row(page, 'Untagged').getByRole('button', { name: 'Edit task', includeHidden: true })).toHaveCount(0);
+});
+
 // The editor was a tab beside the list, and its addresses are in bookmarks and history.
 test('opens a task from the address of its former editor tab', async ({ context, page }) => {
     await mockBackend(context, NOTES);
