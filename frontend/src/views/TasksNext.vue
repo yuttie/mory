@@ -836,13 +836,6 @@ async function onParentChosen(newParentUuid: UUID | null) {
 // A task dropped on another in the tree.
 async function onTaskMove(id: UUID, parent: UUID | null) {
     const title = store.node(id)?.title || 'Untitled';
-    // The editor reloads a task whose path changes, and what has been typed into it goes with the
-    // old version: moving the task it edits, or one above it, would throw away an unsaved edit.
-    const edited = newTaskPath.value === null && taskEditorRef.value?.isModified ? selectedNode.value : undefined;
-    if (edited !== undefined && (edited.uuid === id || store.ancestorsOf(edited.uuid).some((node) => node.uuid === id))) {
-        error.value = `Save or discard the changes to "${edited.title || 'Untitled'}" before moving "${title}".`;
-        return;
-    }
     try {
         await store.move(id, parent);
         // Where it went, rather than leave it to vanish into a closed task.

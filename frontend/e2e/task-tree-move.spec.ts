@@ -223,29 +223,24 @@ test('keeps the tasks a dragged one passes over from answering the pointer', asy
     await page.mouse.up();
 });
 
-test('leaves the task being edited where it is while it has unsaved changes', async ({ context, page }) => {
+test('keeps what has been typed into the task being edited when it moves', async ({ context, page }) => {
     const repository = await mockBackend(context, NOTES);
     await page.goto(`/tasks-next/${PHASE}/selected/status`);
-    await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Phase one');
+    const title = page.getByRole('textbox', { name: 'Title', exact: true });
+    await title.fill('Phase one');
 
-    // Moving the task above it would move it too.
+    // Moving the task above it moves it too.
     await pickUp(page, row(page, 'Project'));
     await moveOver(page, row(page, 'Other'));
     await page.mouse.up();
 
-    await expect(page.locator('.v-snackbar')).toContainText('Save or discard the changes to "Phase" before moving "Project".');
-    expect(repository.renames).toEqual([]);
-    await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue('Phase one');
-
-    // A task the edited one is not under still moves, under the edited one too.
-    await pickUp(page, row(page, 'Other'));
-    await moveOver(page, row(page, 'Phase'));
-    await page.mouse.up();
     await expect.poll(() => repository.renames.map(({ from }) => from)).toEqual([
-        `.tasks/${OTHER}.md`,
-        `.tasks/${OTHER}/${CHORE}.md`,
+        `.tasks/${PROJECT}.md`,
+        `.tasks/${PROJECT}/${PHASE}.md`,
+        `.tasks/${PROJECT}/${PHASE}/${STEP}.md`,
     ]);
-    await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue('Phase one');
+    await expect(row(page, 'Phase')).toHaveAttribute('aria-level', '3');
+    await expect(title).toHaveValue('Phase one');
 });
 
 test('scrolls the tree while the task is held near its edge, to a task out of sight', async ({ context, page }) => {
