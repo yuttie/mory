@@ -522,8 +522,8 @@ const props = defineProps<{
     taskPath: string;
     knownTags: [string, number][];
     knownContacts: [string, number][];
-    // The tag group a new task is created from: its tag, `null` for the Untagged group, which has
-    // none to give, and absent when no group is selected.
+    // The tag group a new task is started from: its tag, `null` for the Untagged group, which has
+    // none to give, and absent when the draft is not from a group or sits under a task.
     selectedTag?: string | null;
 }>();
 const pathRef = toRef(props, 'taskPath');
@@ -756,14 +756,13 @@ watch(uuid, () => {
 watch(
     () => props.selectedTag,
     (newTag, oldTag) => {
-        // Leaving the groups, for a task or for no selection, keeps the tag: nothing replaces it,
-        // and a tag is not taken away unasked.
+        // Put under a task, the draft keeps the group's tag: a tag is not taken away unasked.
         if (task.value || newTag === oldTag || newTag === undefined) {
             return;
         }
-        // From one group to another, the old group's tag goes even when there is a new one to put
-        // first: the task would otherwise be filed under both.
-        const rest = form.tags.filter((tag) => tag !== oldTag && tag !== newTag);
+        // Back at the top, the group's tag heads the draft again. A draft is started from one
+        // group and stays with it, so there is no other group's tag to take away.
+        const rest = form.tags.filter((tag) => tag !== newTag);
         form.tags = newTag ? [newTag, ...rest] : rest;
     }
 );

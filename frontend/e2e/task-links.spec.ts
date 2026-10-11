@@ -111,8 +111,8 @@ test.describe('the tree', () => {
 
         await row(page, 'Project').hover();
         await row(page, 'Project').getByRole('button', { name: 'Add child task' }).click();
-        await expect(page.getByRole('tab', { name: 'New' })).toHaveAttribute('aria-selected', 'true');
-        await expect(page).toHaveURL(url(PROJECT, 'selected', 'status'));
+        await expect(page.getByRole('dialog').locator('.editor-title')).toHaveText('New subtask of "Project"');
+        await expect(page).toHaveURL(url('_', 'descendants', 'status'));
         expect(await page.evaluate(() => (window as unknown as { loaded?: boolean }).loaded)).toBe(true);
     });
 });

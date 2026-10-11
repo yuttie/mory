@@ -22,6 +22,7 @@
             v-bind:task-path="taskPath"
             v-bind:known-tags="tasks.knownTags"
             v-bind:known-contacts="tasks.knownContacts"
+            v-bind:selected-tag="placedUnder === null ? tag : undefined"
             v-on:save="onSave"
             v-on:cancel="isOpen = false"
             v-on:change-parent="onChooseParent"
@@ -74,6 +75,16 @@ import type { Task, UUID } from '@/task';
 import { taskRoute } from '@/task-route';
 import { useTasksStore } from '@/stores/tasks';
 
+// Props
+const props = defineProps<{
+    // The task a draft starts under when the dialog opens, or `null` for the top.
+    initialParent?: UUID | null;
+    // The tag a draft at the top starts with, as the task view gives one started from a tag group:
+    // `null` for the Untagged group, which has none to give. Under a task it is no group's
+    // heading, so the editor is told of it only at the top.
+    tag?: string | null;
+}>();
+
 // Composables
 const router = useRouter();
 const tasks = useTasksStore();
@@ -82,8 +93,8 @@ const isOpen = defineModel<boolean>({ required: true });
 
 // Reactive states
 const taskUuid = ref<UUID>(crypto.randomUUID());
-// The task to create the new one under, or `null` for a root task. The drawer has none selected to
-// start from, so each draft starts at the root until one is chosen.
+// The task to create the new one under, or `null` for a root task. Each draft starts where the host
+// says, which from the drawer is the root, until another is chosen.
 const parent = ref<UUID | null>(null);
 const parentDialogIsVisible = ref(false);
 // The drafts being written, by UUID. A save can outlast its draft: Cancel and Add again during
@@ -115,7 +126,7 @@ const taskPath = computed<string>(() => tasks.pathUnder(placedUnder.value, taskU
 watch(isOpen, (open) => {
     if (open) {
         taskUuid.value = crypto.randomUUID();
-        parent.value = null;
+        parent.value = props.initialParent ?? null;
     }
 });
 

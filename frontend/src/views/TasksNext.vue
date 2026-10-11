@@ -116,10 +116,10 @@
                         v-on:update:model-value="onTabChange"
                     >
                         <v-tab
-                            v-if="newTaskPath || selectedNode && !isTagGroupSelected"
+                            v-if="selectedNode && !isTagGroupSelected"
                             value="selected"
                         >
-                            {{ newTaskPath ? 'New' : 'Selected' }}
+                            Selected
                         </v-tab>
                         <v-tab value="descendants">
                             {{ isTagGroupSelected ? 'Tagged Tasks' : selectedNode ? 'Descendants' : 'All tasks' }}
@@ -131,17 +131,15 @@
                     class="d-flex flex-column"
                     style="flex: 1 1 0; background: transparent;"
                 >
-                    <v-window-item v-if="newTaskPath || selectedNode && !isTagGroupSelected" value="selected">
+                    <v-window-item v-if="selectedNode && !isTagGroupSelected" value="selected">
                         <TaskEditorNext
                             ref="taskEditorRef"
-                            v-bind:task-path="newTaskPath ?? selectedNode.path"
+                            v-bind:task-path="selectedNode.path"
                             v-bind:known-tags="store.knownTags"
                             v-bind:known-contacts="store.knownContacts"
-                            v-bind:selected-tag="newTaskPath ? newTaskTag : undefined"
                             class="ma-4"
                             v-on:save="onSelectedTaskSave"
                             v-on:delete="onSelectedTaskDelete"
-                            v-on:cancel="onNewTaskCancel"
                             v-on:change-parent="showChangeParentDialog"
                         />
                     </v-window-item>
@@ -258,6 +256,11 @@
         </v-overlay>
         <v-snackbar v-model="error" color="error" location="top" timeout="5000">{{ error }}</v-snackbar>
         
+        <NewTaskDialog
+            v-model="newTaskDialogIsVisible"
+            v-bind:initial-parent="newTaskStart.parent"
+            v-bind:tag="newTaskStart.tag"
+        />
         <QuickAddTasksDialog
             v-model="quickAddDialogIsVisible"
             v-bind:initial-parent="newTaskParent"
@@ -267,9 +270,9 @@
         <!-- Parent Selection Dialog -->
         <ParentSelectionDialog
             v-model="showParentDialog"
-            v-bind:mode="newTaskPath ? 'choose' : 'move'"
-            v-bind:parent="newTaskPath ? newTaskParent : selectedNode?.parent ?? null"
-            v-bind:exclude="newTaskPath ? extractFileUuid(newTaskPath) : selectedNode?.uuid"
+            mode="move"
+            v-bind:parent="selectedNode?.parent ?? null"
+            v-bind:exclude="selectedNode?.uuid"
             v-bind:task-title="selectedNode?.title || 'Untitled'"
             v-bind:items="store.tree"
             v-on:choose="onParentChosen"
@@ -301,7 +304,6 @@ import { tasksRoute } from '@/task-route';
 import { isTagGroupId, isUntaggedGroupId, tagGroupId, tagNameOf, useTasksStore } from '@/stores/tasks';
 
 import { type UUID, type Status, type StatusKind, type Task, STATUS_KINDS, STATUS_LABEL } from '@/task';
-import { extractFileUuid } from '@/api/task';
 import axios from 'axios';
 import dayjs from 'dayjs';
 
@@ -325,7 +327,10 @@ const emit = defineEmits<{
 // Reactive states
 const taskEditorRef = ref<any>(null);
 const openNodes = ref<UUID[]>([]);
-const newTaskPath = ref<string | null>(null);
+const newTaskDialogIsVisible = ref(false);
+// Where the next new task starts: from Add, under the selected task or with the selected group's
+// tag; from a row's own button, under that row's task or with its group's tag.
+const newTaskStart = ref<{ parent: UUID | null; tag?: string | null }>({ parent: null });
 const error = ref<string | null>(null);
 const hideCompletedInTreeView = useLocalStorage('hide-completed-in-tree-view', false);
 const hideCompletedInItemView = useLocalStorage('hide-completed-in-item-view', false);
@@ -707,25 +712,16 @@ function onViewModeChange(newViewMode: string) {
 
 // Methods
 function newTask() {
-    // Navigate to selected tab first
-    navigateToState(selectedNode.value?.uuid, 'selected', descendantsViewMode.value);
-    // Then generate new UUID and set path for the task
-    const taskUuid = crypto.randomUUID();
-    newTaskPath.value = getNewTaskPath(taskUuid);
+    newTaskStart.value = { parent: newTaskParent.value, tag: newTaskTag.value };
+    newTaskDialogIsVisible.value = true;
 }
 
-function onAddChildTask(parentUuid: UUID) {
-    // Find the parent node
-    const parentNode = store.node(parentUuid);
-    if (!parentNode) return;
-    
-    // Navigate to the parent node first
-    navigateToState(parentUuid, 'selected', descendantsViewMode.value);
-    // Then generate new UUID and set path for the task under this parent
-    const taskUuid = crypto.randomUUID();
-    // A tag group is not a directory. Its task is a root task, and selecting the group is what
-    // gives it the tag.
-    newTaskPath.value = store.pathUnder(isTagGroupId(parentUuid) ? null : parentUuid, taskUuid);
+function onAddChildTask(id: UUID) {
+    // A tag group is not a directory. Its task is a root task, which the group's tag files under it.
+    newTaskStart.value = isTagGroupId(id)
+        ? { parent: null, tag: isUntaggedGroupId(id) ? null : tagNameOf(id) }
+        : { parent: id };
+    newTaskDialogIsVisible.value = true;
 }
 
 // The menu stays open for its switch, so it is closed here rather than left over the dialog.
@@ -734,42 +730,14 @@ function openQuickAdd() {
     quickAddDialogIsVisible.value = true;
 }
 
-function getNewTaskPath(taskUuid: string): string {
-    return store.pathUnder(newTaskParent.value, taskUuid);
-}
-
-function updateNewTaskParent() {
-    if (!newTaskPath.value) return;
-
-    // Extract the UUID from the current newTaskPath
-    const pathParts = newTaskPath.value.split('/');
-    const filename = pathParts[pathParts.length - 1];
-    const taskUuid = filename.replace('.md', '');
-
-    // Update the path with the new parent but same UUID
-    newTaskPath.value = getNewTaskPath(taskUuid);
-}
-
-// Watch for new task creation to update parent when selectedNode changes
-watch(selectedNode, () => {
-    if (newTaskPath.value) {
-        updateNewTaskParent();
-    }
-});
-
 async function onSelectedTaskSave(task: Task) {
-    const isNew = newTaskPath.value !== null;
-    const path = newTaskPath.value ?? selectedNode.value?.path;
+    const path = selectedNode.value?.path;
     if (!path) {
         return;
     }
     // The forest is derived from the file listing, so there is nothing to update by hand: saving
     // waits until the write is visible in the listing, and the tree follows from that.
     await store.save(task, path);
-    if (isNew) {
-        newTaskPath.value = null;
-        navigateToState(task.uuid, 'selected', descendantsViewMode.value);
-    }
     // Refresh task editor manually because its task-path prop retains the same value
     // (the ref may be momentarily null while the window transition remounts the editor)
     taskEditorRef.value?.refresh();
@@ -805,19 +773,7 @@ async function onSelectedTaskDelete(path: string) {
     }
 }
 
-function onNewTaskCancel() {
-    // Clear the new task path and return to descendants view
-    newTaskPath.value = null;
-    navigateToState(selectedNode.value?.uuid, 'descendants', descendantsViewMode.value);
-}
-
 async function onParentChosen(newParentUuid: UUID | null) {
-    // A new task has no file to move. It goes under whatever is selected, so choosing a parent is
-    // selecting it, as a click in the tree would; the editor keeps what has been typed.
-    if (newTaskPath.value) {
-        navigateToState(newParentUuid ?? undefined, 'selected', descendantsViewMode.value);
-        return;
-    }
     if (!selectedNode.value) {
         return;
     }
@@ -847,7 +803,7 @@ async function onTaskMove(id: UUID, parent: UUID | null) {
 }
 
 function showChangeParentDialog() {
-    if (newTaskPath.value || selectedNode.value && !isTagGroupSelected.value) {
+    if (selectedNode.value && !isTagGroupSelected.value) {
         showParentDialog.value = true;
     }
 }
