@@ -43,7 +43,7 @@ describe('sidebar links to a redirecting route', () => {
         expect(isLinkActive('/tasks-next')).toBe(true);
         expect(isLinkActive('/calendar')).toBe(false);
 
-        await router.push('/tasks-next/_/children/list');
+        await router.push('/tasks-next/_/descendants/schedule');
         expect(isLinkActive('/tasks-next')).toBe(true);
     });
 });
@@ -99,12 +99,33 @@ describe('creating a note', () => {
 });
 
 describe('the task view\'s addresses', () => {
+    const id = '00000001-0000-4000-8000-000000000000';
+
     it('opens a task selected, in its editor, over the status view', () => {
-        const id = '00000001-0000-4000-8000-000000000000';
-        expect(router.resolve(taskRoute(id)).path).toBe(`/tasks-next/${id}/selected/status`);
+        expect(router.resolve(taskRoute(id)).fullPath).toBe(`/tasks-next/${id}/descendants/status?task=${id}`);
     });
 
-    it('stands for no selection with `_`, on the Descendants tab', () => {
-        expect(router.resolve(tasksRoute()).path).toBe('/tasks-next/_/descendants/status');
+    it('stands for no selection with `_`', () => {
+        expect(router.resolve(tasksRoute()).fullPath).toBe('/tasks-next/_/descendants/status');
+    });
+
+    it('opens a task in its editor over another\'s list', () => {
+        expect(router.resolve(tasksRoute('_', 'schedule', id)).fullPath).toBe(`/tasks-next/_/descendants/schedule?task=${id}`);
+    });
+
+    // Where the editor was a tab beside the list.
+    it('takes the editor\'s old address to the task\'s list with its editor open', async () => {
+        await router.push(`/tasks-next/${id}/selected/schedule`);
+        expect(router.currentRoute.value.fullPath).toBe(`/tasks-next/${id}/descendants/schedule?task=${id}`);
+    });
+
+    it('takes the old address of an empty editor to the list alone', async () => {
+        await router.push('/tasks-next/_/selected/status');
+        expect(router.currentRoute.value.fullPath).toBe('/tasks-next/_/descendants/status');
+    });
+
+    it('takes the old address of a tag group\'s empty editor to the group\'s list alone', async () => {
+        await router.push('/tasks-next/tag-group-errands/selected/schedule');
+        expect(router.currentRoute.value.fullPath).toBe('/tasks-next/tag-group-errands/descendants/schedule');
     });
 });

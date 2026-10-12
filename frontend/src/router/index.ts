@@ -56,15 +56,33 @@ const routes: Array<RouteRecordRaw> = [
         redirect: to => {
             return {
                 name: 'TasksNextWithParams',
-                params: { selectedNodeId: '_', tab: 'descendants', viewMode: 'status' },
+                params: { selectedNodeId: '_', viewMode: 'status' },
             };
         },
         // Nested for the same reason as the calendar's routes.
         children: [
             {
-                path: ':selectedNodeId/:tab/:viewMode',
+                path: ':selectedNodeId/descendants/:viewMode',
                 name: 'TasksNextWithParams',
                 component: TasksNext,
+            },
+            // The editor was a tab beside the list, and its addresses are in bookmarks and history.
+            // They open the task's editor, over the list of what is under it.
+            {
+                path: ':selectedNodeId/selected/:viewMode',
+                redirect: to => {
+                    const { selectedNodeId, viewMode } = to.params;
+                    // All tasks and a tag group had an empty editor there, for a new task, and have
+                    // none to open. The prefix is `isTagGroupId`'s, which would bring the task store
+                    // into the router with it.
+                    const empty = selectedNodeId === '_' || String(selectedNodeId).startsWith('tag-group-');
+                    return {
+                        name: 'TasksNextWithParams',
+                        params: { selectedNodeId, viewMode },
+                        query: empty ? to.query : { ...to.query, task: selectedNodeId },
+                        hash: to.hash,
+                    };
+                },
             },
         ],
     },

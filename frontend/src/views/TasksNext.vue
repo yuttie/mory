@@ -44,7 +44,7 @@
                              link to its task, so clicking the selected one again keeps it. -->
                         <span class="app-bar-ancestors text-medium-emphasis">
                             <router-link
-                                v-bind:to="tasksRoute(undefined, 'descendants', descendantsViewMode)"
+                                v-bind:to="tasksRoute(undefined, descendantsViewMode)"
                                 class="app-bar-link"
                             >All tasks</router-link>
                             <template
@@ -52,10 +52,10 @@
                                 v-bind:key="node.uuid"
                             >
                                 <span class="app-bar-separator">›</span>
-                                <!-- The tab stays: going up from a list lists the ancestor's
-                                     descendants, and from the editor edits the ancestor. -->
+                                <!-- The view stays: going up lists the ancestor's descendants in
+                                     the view they were listed in. -->
                                 <router-link
-                                    v-bind:to="tasksRoute(node.uuid, itemViewTab, descendantsViewMode)"
+                                    v-bind:to="tasksRoute(node.uuid, descendantsViewMode)"
                                     class="app-bar-link"
                                 >{{ node.title || 'Untitled' }}</router-link>
                             </template>
@@ -100,164 +100,194 @@
                 <TaskTree
                     v-bind:items="filteredForestWithTags"
                     v-bind:active="activeNodeId"
-                    v-bind:route-for="taskRouteFor"
+                    v-bind:route-for="treeRouteFor"
                     v-model:open="openNodes"
                     show-add-child
+                    show-edit
                     movable
                     v-on:add-child-task="onAddChildTask"
+                    v-on:edit-task="onEditTask"
                     v-on:move="onTaskMove"
                     style="flex: 1 1 0"
                 />
             </v-sheet>
             <div class="item-view d-flex flex-column">
-                <div class="d-flex flex-row">
-                    <v-tabs
-                        v-bind:model-value="itemViewTab"
-                        v-on:update:model-value="onTabChange"
+                <v-toolbar flat border color="transparent" class="item-toolbar flex-grow-0">
+                    <!-- View mode selector -->
+                    <v-btn-toggle
+                        v-bind:model-value="descendantsViewMode"
+                        v-on:update:model-value="onViewModeChange"
+                        mandatory
+                        class="ml-2"
                     >
-                        <v-tab
-                            v-if="newTaskPath || selectedNode && !isTagGroupSelected"
-                            value="selected"
+                        <v-btn
+                            v-for="{ text, icon, value } of viewModeOptions"
+                            v-bind:key="value"
+                            v-bind:value="value"
+                            v-bind:title="text"
+                            class="toolbar-button"
                         >
-                            {{ newTaskPath ? 'New' : 'Selected' }}
-                        </v-tab>
-                        <v-tab value="descendants">
-                            {{ isTagGroupSelected ? 'Tagged Tasks' : selectedNode ? 'Descendants' : 'All tasks' }}
-                        </v-tab>
-                    </v-tabs>
-                </div>
-                <v-window
-                    v-bind:model-value="itemViewTab"
-                    class="d-flex flex-column"
-                    style="flex: 1 1 0; background: transparent;"
-                >
-                    <v-window-item v-if="newTaskPath || selectedNode && !isTagGroupSelected" value="selected">
-                        <TaskEditorNext
-                            ref="taskEditorRef"
-                            v-bind:task-path="newTaskPath ?? selectedNode.path"
-                            v-bind:known-tags="store.knownTags"
-                            v-bind:known-contacts="store.knownContacts"
-                            v-bind:selected-tag="newTaskPath ? newTaskTag : undefined"
-                            class="ma-4"
-                            v-on:save="onSelectedTaskSave"
-                            v-on:delete="onSelectedTaskDelete"
-                            v-on:cancel="onNewTaskCancel"
-                            v-on:change-parent="showChangeParentDialog"
-                        />
-                    </v-window-item>
-                    <v-window-item value="descendants">
-                        <v-toolbar flat border color="transparent" class="flex-grow-0">
-                            <!-- View mode selector -->
-                            <v-btn-toggle
-                                v-bind:model-value="descendantsViewMode"
-                                v-on:update:model-value="onViewModeChange"
-                                mandatory
-                                class="ml-2"
-                            >
-                                <v-btn
-                                    v-for="{ text, icon, value } of viewModeOptions"
-                                    v-bind:key="value"
-                                    v-bind:value="value"
-                                >
-                                    <v-icon>{{ icon }}</v-icon>
-                                    <span v-if="$vuetify.display.mdAndUp">{{ text }}</span>
-                                </v-btn>
-                            </v-btn-toggle>
-                            <!-- New task button -->
-                            <v-btn
-                                title="Add"
-                                color="primary"
-                                variant="outlined"
-                                class="ml-3"
-                                v-bind:class="{ 'pa-0': !$vuetify.display.mdAndUp }"
-                                v-on:click="newTask"
-                            >
-                                <v-icon>{{ mdiPlus }}</v-icon>
-                                <span v-if="$vuetify.display.mdAndUp">Add</span>
-                            </v-btn>
-                            <!-- Under the selected task, or with the selected group's tag, as Add
-                                 puts one. A phone has no room for it beside the view modes, so
-                                 there it is in the menu. -->
-                            <v-btn
-                                v-if="!$vuetify.display.xs"
+                            <v-icon>{{ icon }}</v-icon>
+                            <span class="toolbar-label">{{ text }}</span>
+                        </v-btn>
+                    </v-btn-toggle>
+                    <!-- The selected task, in its editor over its list. A link, matched with its
+                         query as a task in the list is, or it would be the current page on the
+                         list itself; never drawn as current even so, as the dialog it opens covers
+                         it. All tasks and a tag group are no task to edit, and it stays in its
+                         place for them, so the buttons after it do not move with the selection. -->
+                    <v-btn
+                        title="Edit"
+                        color="primary"
+                        variant="outlined"
+                        class="toolbar-button ml-3"
+                        v-bind:to="listRoot === undefined ? undefined : taskRoute(listRoot, descendantsViewMode)"
+                        exact
+                        v-bind:disabled="listRoot === undefined"
+                        v-bind:active="false"
+                    >
+                        <v-icon>{{ mdiPencil }}</v-icon>
+                        <span class="toolbar-label">Edit</span>
+                    </v-btn>
+                    <!-- New task button -->
+                    <v-btn
+                        title="Add"
+                        color="primary"
+                        variant="outlined"
+                        class="toolbar-button ml-2"
+                        v-on:click="newTask"
+                    >
+                        <v-icon>{{ mdiPlus }}</v-icon>
+                        <span class="toolbar-label">Add</span>
+                    </v-btn>
+                    <!-- Under the selected task, or with the selected group's tag, as Add
+                         puts one. A phone has no room for it beside the view modes, so
+                         there it is in the menu. -->
+                    <v-btn
+                        v-if="!$vuetify.display.xs"
+                        title="Quick add"
+                        color="primary"
+                        variant="outlined"
+                        class="toolbar-button ml-2"
+                        v-on:click="openQuickAdd"
+                    >
+                        <v-icon>{{ mdiFormatListChecks }}</v-icon>
+                        <span class="toolbar-label">Quick add</span>
+                    </v-btn>
+                    <v-spacer />
+                    <v-menu
+                        v-model="itemViewMenuIsVisible"
+                        v-bind:close-on-content-click="false"
+                    >
+                        <template v-slot:activator="{ props: menuProps }">
+                            <v-icon-btn
+                                v-bind:icon="mdiDotsVertical"
+                                v-bind="menuProps"
+                                class="mr-2"
+                            ></v-icon-btn>
+                        </template>
+                        <v-list>
+                            <v-list-item
+                                v-if="$vuetify.display.xs"
+                                v-bind:prepend-icon="mdiFormatListChecks"
                                 title="Quick add"
-                                color="primary"
-                                variant="outlined"
-                                class="ml-2"
-                                v-bind:class="{ 'pa-0': !$vuetify.display.mdAndUp }"
                                 v-on:click="openQuickAdd"
-                            >
-                                <v-icon>{{ mdiFormatListChecks }}</v-icon>
-                                <span v-if="$vuetify.display.mdAndUp">Quick add</span>
-                            </v-btn>
-                            <v-spacer />
-                            <v-menu
-                                v-model="itemViewMenuIsVisible"
-                                v-bind:close-on-content-click="false"
-                            >
-                                <template v-slot:activator="{ props: menuProps }">
-                                    <v-icon-btn
-                                        v-bind:icon="mdiDotsVertical"
-                                        v-bind="menuProps"
-                                        class="mr-2"
-                                    ></v-icon-btn>
+                            ></v-list-item>
+                            <v-list-subheader>Config</v-list-subheader>
+                            <v-list-item title="Hide completed tasks in item view">
+                                <template v-slot:prepend>
+                                    <v-switch
+                                        v-model="hideCompletedInItemView"
+                                        hide-details
+                                        class="mt-0 mr-2"
+                                    ></v-switch>
                                 </template>
-                                <v-list>
-                                    <v-list-item
-                                        v-if="$vuetify.display.xs"
-                                        v-bind:prepend-icon="mdiFormatListChecks"
-                                        title="Quick add"
-                                        v-on:click="openQuickAdd"
-                                    ></v-list-item>
-                                    <v-list-subheader>Config</v-list-subheader>
-                                    <v-list-item title="Hide completed tasks in item view">
-                                        <template v-slot:prepend>
-                                            <v-switch
-                                                v-model="hideCompletedInItemView"
-                                                hide-details
-                                                class="mt-0 mr-2"
-                                            ></v-switch>
-                                        </template>
-                                    </v-list-item>
-                                </v-list>
-                            </v-menu>
-                        </v-toolbar>
-                        <v-alert v-if="planHistoryError" type="warning">{{ planHistoryError }}</v-alert>
-                        <v-alert v-for="problem of taskSettings.problems" v-bind:key="problem" type="warning">{{ problem }}</v-alert>
-                        <div class="view-container flex-grow-1">
-                            <!-- Status view -->
-                            <TaskStatusView
-                                v-if="descendantsViewMode === 'status'"
-                                v-bind:task-statuses="taskStatuses"
-                                v-bind:known-contacts="store.knownContacts"
-                                v-bind:route-for="taskRouteFor"
-                                v-bind:list-root="listRoot"
-                                v-on:status-change="onTaskStatusChange"
-                            />
-                            <!-- Schedule view -->
-                            <TaskScheduleView
-                                v-else-if="descendantsViewMode === 'schedule'"
-                                v-bind:candidates="filteredSelectedNodeDescendants"
-                                v-bind:route-for="taskRouteFor"
-                                v-bind:list-root="listRoot"
-                            />
-                            <!-- Eisenhower Matrix view -->
-                            <TaskEisenhowerView
-                                v-else-if="descendantsViewMode === 'eisenhower'"
-                                v-bind:eisenhower-quadrants="eisenhowerQuadrants"
-                                v-bind:route-for="taskRouteFor"
-                                v-bind:list-root="listRoot"
-                            />
-                        </div>
-                    </v-window-item>
-                </v-window>
+                            </v-list-item>
+                        </v-list>
+                    </v-menu>
+                </v-toolbar>
+                <v-alert v-if="planHistoryError" type="warning">{{ planHistoryError }}</v-alert>
+                <v-alert v-for="problem of taskSettings.problems" v-bind:key="problem" type="warning">{{ problem }}</v-alert>
+                <div class="view-container flex-grow-1">
+                    <!-- Status view -->
+                    <TaskStatusView
+                        v-if="descendantsViewMode === 'status'"
+                        v-bind:task-statuses="taskStatuses"
+                        v-bind:known-contacts="store.knownContacts"
+                        v-bind:route-for="listRouteFor"
+                        v-bind:list-root="listRoot"
+                        v-on:status-change="onTaskStatusChange"
+                    />
+                    <!-- Schedule view -->
+                    <TaskScheduleView
+                        v-else-if="descendantsViewMode === 'schedule'"
+                        v-bind:candidates="filteredSelectedNodeDescendants"
+                        v-bind:route-for="listRouteFor"
+                        v-bind:list-root="listRoot"
+                    />
+                    <!-- Eisenhower Matrix view -->
+                    <TaskEisenhowerView
+                        v-else-if="descendantsViewMode === 'eisenhower'"
+                        v-bind:eisenhower-quadrants="eisenhowerQuadrants"
+                        v-bind:route-for="listRouteFor"
+                        v-bind:list-root="listRoot"
+                    />
+                </div>
             </div>
         </template>
-        <v-overlay v-bind:model-value="store.isLoading" z-index="20" class="align-center justify-center">
-            <v-progress-circular indeterminate size="64" />
-        </v-overlay>
+        <!-- Drawn by the view rather than as a v-overlay: Vuetify puts an overlay opened over another
+             just above it, so a dialog or a menu opened while the tasks loaded came out under the
+             app bar and the drawer, which this stays beneath to leave them usable. -->
+        <v-fade-transition>
+            <div
+                v-if="store.isLoading"
+                class="loading d-flex align-center justify-center"
+            >
+                <v-progress-circular indeterminate size="64" />
+            </div>
+        </v-fade-transition>
         <v-snackbar v-model="error" color="error" location="top" timeout="5000">{{ error }}</v-snackbar>
-        
+
+        <!-- The task the address names, in its editor over the list, which stays as it was. Closes
+             like any dialog while nothing is changed; from then on only its own buttons do, and
+             `keepUnsavedEdit` refuses Back, so a stray click, Escape or Back cannot throw an edit
+             away. Back changes the address, which closes it by itself: Vuetify's own handling of
+             Back would cancel that and close it a second time. -->
+        <v-dialog
+            ref="editorDialogRef"
+            v-bind:model-value="editedNode !== undefined"
+            v-bind:fullscreen="$vuetify.display.smAndDown"
+            v-bind:persistent="taskEditorRef?.isModified ?? false"
+            v-bind:close-on-back="false"
+            max-width="1400"
+            height="100%"
+            v-on:update:model-value="closeEditor"
+            v-on:after-leave="returnFocus"
+        >
+            <v-progress-linear
+                v-bind:active="saving"
+                indeterminate
+                absolute
+                color="primary"
+                style="z-index: 1;"
+            />
+            <TaskEditorNext
+                ref="taskEditorRef"
+                v-bind:task-path="editedPath"
+                v-bind:known-tags="store.knownTags"
+                v-bind:known-contacts="store.knownContacts"
+                v-on:save="onEditedTaskSave"
+                v-on:delete="onEditedTaskDelete"
+                v-on:cancel="closeEditor"
+                v-on:change-parent="showChangeParentDialog"
+            />
+        </v-dialog>
+        <NewTaskDialog
+            ref="newTaskDialogRef"
+            v-model="newTaskDialogIsVisible"
+            v-bind:initial-parent="newTaskStart.parent"
+            v-bind:tag="newTaskStart.tag"
+        />
         <QuickAddTasksDialog
             v-model="quickAddDialogIsVisible"
             v-bind:initial-parent="newTaskParent"
@@ -267,10 +297,10 @@
         <!-- Parent Selection Dialog -->
         <ParentSelectionDialog
             v-model="showParentDialog"
-            v-bind:mode="newTaskPath ? 'choose' : 'move'"
-            v-bind:parent="newTaskPath ? newTaskParent : selectedNode?.parent ?? null"
-            v-bind:exclude="newTaskPath ? extractFileUuid(newTaskPath) : selectedNode?.uuid"
-            v-bind:task-title="selectedNode?.title || 'Untitled'"
+            mode="move"
+            v-bind:parent="editedNode?.parent ?? null"
+            v-bind:exclude="editedNode?.uuid"
+            v-bind:task-title="editedNode?.title || 'Untitled'"
             v-bind:items="store.tree"
             v-on:choose="onParentChosen"
         />
@@ -282,26 +312,35 @@ import { readImportance, isUrgent, compareUrgency } from '@/urgency';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue';
 import { usePlansStore } from '@/stores/plans';
-import { type RouteLocationRaw, useRoute, useRouter } from 'vue-router';
+import {
+    type RouteLocationNormalized,
+    type RouteLocationRaw,
+    onBeforeRouteLeave,
+    onBeforeRouteUpdate,
+    useRoute,
+    useRouter,
+} from 'vue-router';
+import type { VDialog } from 'vuetify/components';
 import { useDisplay } from 'vuetify';
 import { useLocalStorage } from '@/composables/localStorage';
 import AppBarContent from '@/components/AppBarContent.vue';
+import type NewTaskDialog from '@/components/NewTaskDialog.vue';
 
 import {
     mdiCalendarMultiselectOutline,
     mdiDotsVertical,
     mdiFormatListChecks,
     mdiGridLarge,
+    mdiPencil,
     mdiPlus,
     mdiTrafficLightOutline,
 } from '@mdi/js';
 
 import { type TaskNode, type TaskTreeItem } from '@/task-forest';
-import { tasksRoute } from '@/task-route';
+import { taskRoute, tasksRoute } from '@/task-route';
 import { isTagGroupId, isUntaggedGroupId, tagGroupId, tagNameOf, useTasksStore } from '@/stores/tasks';
 
 import { type UUID, type Status, type StatusKind, type Task, STATUS_KINDS, STATUS_LABEL } from '@/task';
-import { extractFileUuid } from '@/api/task';
 import axios from 'axios';
 import dayjs from 'dayjs';
 
@@ -324,12 +363,19 @@ const emit = defineEmits<{
 
 // Reactive states
 const taskEditorRef = ref<any>(null);
+const editorDialogRef = ref<InstanceType<typeof VDialog> | null>(null);
+const newTaskDialogRef = ref<InstanceType<typeof NewTaskDialog> | null>(null);
 const openNodes = ref<UUID[]>([]);
-const newTaskPath = ref<string | null>(null);
+const newTaskDialogIsVisible = ref(false);
+// Where the next new task starts: from Add, under the selected task or with the selected group's
+// tag; from a row's own button, under that row's task or with its group's tag.
+const newTaskStart = ref<{ parent: UUID | null; tag?: string | null }>({ parent: null });
 const error = ref<string | null>(null);
 const hideCompletedInTreeView = useLocalStorage('hide-completed-in-tree-view', false);
 const hideCompletedInItemView = useLocalStorage('hide-completed-in-item-view', false);
 const showParentDialog = ref<boolean>(false);
+// A save waits for the listing to show it, and a second press meanwhile would write the task again.
+const saving = ref(false);
 const quickAddDialogIsVisible = ref(false);
 const itemViewMenuIsVisible = ref(false);
 // Statuses dropped in the status view and still being written, by task. The task is drawn where it
@@ -345,18 +391,37 @@ const selectedNode = computed<TaskNode | undefined>(() => {
     return undefined;
 });
 
-const itemViewTab = computed<string>(() => {
-    if (route.name === 'TasksNextWithParams' && route.params.tab) {
-        return route.params.tab as string;
-    }
-    return 'descendants';
-});
-
 const descendantsViewMode = computed<'status' | 'schedule' | 'eisenhower'>(() => {
     if (route.name === 'TasksNextWithParams' && route.params.viewMode) {
         return route.params.viewMode as 'status' | 'schedule' | 'eisenhower';
     }
     return 'status';
+});
+
+// The task open in the editor over the list, which the address names. A tag group is no task to
+// edit, and a task the listing does not hold has no path to read it from: not yet, while the first
+// listing is on its way, and the editor opens once it lands.
+const editedNode = computed<TaskNode | undefined>(() => {
+    const id = route.query.task;
+    return typeof id === 'string' && !isTagGroupId(id) ? store.node(id) : undefined;
+});
+
+// The edited task's path, kept after the editor closes: the dialog still draws it while it fades.
+const editedPath = ref('');
+watch(editedNode, (node) => {
+    if (node) {
+        editedPath.value = node.path;
+    }
+}, { immediate: true });
+
+// What had focus when the editor opened, to have it again once the editor has closed: Vuetify gives
+// it back only to a dialog's own activator, and the address opens this one.
+let focusBeforeEditor: HTMLElement | null = null;
+watch(() => editedNode.value !== undefined, (open) => {
+    const element = document.activeElement;
+    if (open && element instanceof HTMLElement && element !== document.body) {
+        focusBeforeEditor = element;
+    }
 });
 
 // Computed properties
@@ -567,7 +632,7 @@ function filterTasksByStatus(tasks: TaskNode[], hideCompleted: boolean): TaskNod
     });
 }
 
-// What the Descendants tab lists: the list root's descendants, a tag group's members, or every task.
+// What the list beside the tree holds: the list root's descendants, a tag group's members, or every task.
 // Taken from `listRoot`, so the items' paths start below the task the list is really under.
 const selectedNodeDescendants = computed<TaskNode[]>(() => {
     if (listRoot.value !== undefined) {
@@ -583,10 +648,10 @@ const filteredSelectedNodeDescendants = computed<TaskNode[]>(() => {
     return filterTasksByStatus(selectedNodeDescendants.value, hideCompletedInItemView.value);
 });
 
-// Among the tasks the Descendants tab lists, so the count follows the selection. A task in the
-// backlog is not taken on yet and a done or canceled one is over, so neither is left, whatever the
-// hide-completed switches say. Counted from the Status view's columns, as the popover is, so the
-// two agree on where a task naming no status belongs.
+// Among the tasks the list holds, so the count follows the selection. A task in the backlog is not
+// taken on yet and a done or canceled one is over, so neither is left, whatever the hide-completed
+// switches say. Counted from the Status view's columns, as the popover is, so the two agree on
+// where a task naming no status belongs.
 const tasksLeftCount = computed<number>(() => {
     return STATUS_KINDS
         .filter((kind) => kind !== 'backlog' && kind !== 'done' && kind !== 'canceled')
@@ -646,16 +711,86 @@ const viewModeOptions = computed(() => [
 
 // URL management functions
 
-// Where choosing a task goes: its editor, keeping the view. A tag group is no task to edit, so it
-// lists the tasks it holds instead.
-function taskRouteFor(node: TaskNode): RouteLocationRaw {
-    const tab = isTagGroupId(node.uuid) ? 'descendants' : 'selected';
-    return tasksRoute(node.uuid, tab, descendantsViewMode.value);
+// Where choosing a row in the tree goes: what is under it, listed in the view it is in. The editor
+// would cover that list, so a task's row opens it from its own button instead.
+function treeRouteFor(node: TaskNode): RouteLocationRaw {
+    return tasksRoute(node.uuid, descendantsViewMode.value);
 }
 
-function navigateToState(selectedNodeId?: string, tab?: string, viewMode?: string) {
-    router.push(tasksRoute(selectedNodeId, tab, viewMode));
+// Where choosing a task in the list goes: its editor, over the list as it is.
+function listRouteFor(node: TaskNode): RouteLocationRaw {
+    return tasksRoute(activeNodeId.value, descendantsViewMode.value, node.uuid);
 }
+
+function navigateToState(selectedNodeId?: string, viewMode?: string) {
+    router.push(tasksRoute(selectedNodeId, viewMode));
+}
+
+// Set while the view closes the editor itself, as Cancel, Save and Delete do, for the navigation
+// that closes it to pass `keepUnsavedEdit`.
+let closingEditor = false;
+
+// Closing the editor goes back to the list it was opened over: back through history when it was
+// opened from that list, so Forward opens it again, and in place otherwise, as when a link in
+// another view opened it, so that Back still leaves for that view.
+function closeEditor(): void {
+    if (route.query.task === undefined) {
+        return;
+    }
+    const query = { ...route.query };
+    delete query.task;
+    const list = router.resolve({ path: route.path, query, hash: route.hash });
+    closingEditor = true;
+    if (router.options.history.state.back === list.fullPath) {
+        router.back();
+    }
+    else {
+        router.replace(list);
+    }
+}
+
+// Focus back where it was before the editor opened, unless it has gone elsewhere meanwhile. A row's
+// buttons in the tree are hidden until the row is hovered or holds focus, and a hidden button takes
+// none, so its row takes it instead.
+function returnFocus(): void {
+    const element = focusBeforeEditor;
+    focusBeforeEditor = null;
+    if (element === null || !element.isConnected || (document.activeElement !== null && document.activeElement !== document.body)) {
+        return;
+    }
+    element.focus();
+    if (document.activeElement !== element) {
+        element.parentElement?.closest<HTMLElement>('a[href], [tabindex]')?.focus();
+    }
+}
+
+// Back and Forward change the address, which closes the editor or puts another task in it. With an
+// edit unsaved, that is refused as Escape and a click outside are, unless the view is closing the
+// editor itself. A new task's draft goes with the view, and is kept from leaving it too.
+function keepUnsavedEdit(to: RouteLocationNormalized): boolean {
+    const closing = closingEditor;
+    closingEditor = false;
+    if (newTaskDialogRef.value?.isModified) {
+        newTaskDialogRef.value.bounce();
+        return false;
+    }
+    if (closing || editedNode.value === undefined || !taskEditorRef.value?.isModified) {
+        return true;
+    }
+    if (to.name === 'TasksNextWithParams' && to.query.task === route.query.task) {
+        return true;
+    }
+    editorDialogRef.value?.animateClick();
+    return false;
+}
+
+onBeforeRouteUpdate(keepUnsavedEdit);
+onBeforeRouteLeave(keepUnsavedEdit);
+// A navigation another guard refuses never reaches `keepUnsavedEdit`, as when a dialog over the
+// editor takes Back for itself, and the flag would let the next one through.
+onUnmounted(router.afterEach(() => {
+    closingEditor = false;
+}));
 
 // Opens the tree down to the task `id`, so that its row is drawn.
 function openUpTo(id: UUID) {
@@ -697,35 +832,27 @@ function onWindowFocus() {
 }
 
 // Event handlers for UI interactions
-function onTabChange(newTab: string) {
-    navigateToState(selectedNode.value?.uuid, newTab, descendantsViewMode.value);
-}
-
 function onViewModeChange(newViewMode: string) {
-    navigateToState(selectedNode.value?.uuid, itemViewTab.value, newViewMode);
+    navigateToState(selectedNode.value?.uuid, newViewMode);
 }
 
 // Methods
 function newTask() {
-    // Navigate to selected tab first
-    navigateToState(selectedNode.value?.uuid, 'selected', descendantsViewMode.value);
-    // Then generate new UUID and set path for the task
-    const taskUuid = crypto.randomUUID();
-    newTaskPath.value = getNewTaskPath(taskUuid);
+    newTaskStart.value = { parent: newTaskParent.value, tag: newTaskTag.value };
+    newTaskDialogIsVisible.value = true;
 }
 
-function onAddChildTask(parentUuid: UUID) {
-    // Find the parent node
-    const parentNode = store.node(parentUuid);
-    if (!parentNode) return;
-    
-    // Navigate to the parent node first
-    navigateToState(parentUuid, 'selected', descendantsViewMode.value);
-    // Then generate new UUID and set path for the task under this parent
-    const taskUuid = crypto.randomUUID();
-    // A tag group is not a directory. Its task is a root task, and selecting the group is what
-    // gives it the tag.
-    newTaskPath.value = store.pathUnder(isTagGroupId(parentUuid) ? null : parentUuid, taskUuid);
+function onAddChildTask(id: UUID) {
+    // A tag group is not a directory. Its task is a root task, which the group's tag files under it.
+    newTaskStart.value = isTagGroupId(id)
+        ? { parent: null, tag: isUntaggedGroupId(id) ? null : tagNameOf(id) }
+        : { parent: id };
+    newTaskDialogIsVisible.value = true;
+}
+
+// From a row's own button: the task's editor over the list as it is, as from the list.
+function onEditTask(id: UUID) {
+    router.push(tasksRoute(activeNodeId.value, descendantsViewMode.value, id));
 }
 
 // The menu stays open for its switch, so it is closed here rather than left over the dialog.
@@ -734,45 +861,29 @@ function openQuickAdd() {
     quickAddDialogIsVisible.value = true;
 }
 
-function getNewTaskPath(taskUuid: string): string {
-    return store.pathUnder(newTaskParent.value, taskUuid);
-}
-
-function updateNewTaskParent() {
-    if (!newTaskPath.value) return;
-
-    // Extract the UUID from the current newTaskPath
-    const pathParts = newTaskPath.value.split('/');
-    const filename = pathParts[pathParts.length - 1];
-    const taskUuid = filename.replace('.md', '');
-
-    // Update the path with the new parent but same UUID
-    newTaskPath.value = getNewTaskPath(taskUuid);
-}
-
-// Watch for new task creation to update parent when selectedNode changes
-watch(selectedNode, () => {
-    if (newTaskPath.value) {
-        updateNewTaskParent();
-    }
-});
-
-async function onSelectedTaskSave(task: Task) {
-    const isNew = newTaskPath.value !== null;
-    const path = newTaskPath.value ?? selectedNode.value?.path;
-    if (!path) {
+async function onEditedTaskSave(task: Task) {
+    const node = editedNode.value;
+    if (node === undefined || saving.value) {
         return;
     }
-    // The forest is derived from the file listing, so there is nothing to update by hand: saving
-    // waits until the write is visible in the listing, and the tree follows from that.
-    await store.save(task, path);
-    if (isNew) {
-        newTaskPath.value = null;
-        navigateToState(task.uuid, 'selected', descendantsViewMode.value);
+    saving.value = true;
+    try {
+        // The forest is derived from the file listing, so there is nothing to update by hand:
+        // saving waits until the write is visible in the listing, and the tree follows from that.
+        await store.save(task, node.path);
     }
-    // Refresh task editor manually because its task-path prop retains the same value
-    // (the ref may be momentarily null while the window transition remounts the editor)
-    taskEditorRef.value?.refresh();
+    catch (e) {
+        // The editor stays open with what was typed, so it can be tried again.
+        error.value = `Could not save "${task.title}": ${e instanceof Error ? e.message : String(e)}`;
+        return;
+    }
+    finally {
+        saving.value = false;
+    }
+    // Closed, unless Cancel closed it meanwhile and the address is the list's already.
+    if (editedNode.value?.uuid === task.uuid) {
+        closeEditor();
+    }
 }
 
 async function onTaskStatusChange(task: TaskNode, status: Status) {
@@ -792,41 +903,40 @@ async function onTaskStatusChange(task: TaskNode, status: Status) {
     }
 }
 
-async function onSelectedTaskDelete(path: string) {
-    // Look up UUID by path
+async function onEditedTaskDelete(path: string) {
     const uuid = store.idByPath(path);
     if (!uuid) {
         return;
     }
-    await store.remove(path);
-    // Unselect by navigating to no selection
-    if (activeNodeId.value === uuid) {
-        navigateToState(undefined, 'descendants', descendantsViewMode.value);
+    try {
+        await store.remove(path);
     }
-}
-
-function onNewTaskCancel() {
-    // Clear the new task path and return to descendants view
-    newTaskPath.value = null;
-    navigateToState(selectedNode.value?.uuid, 'descendants', descendantsViewMode.value);
+    catch (e) {
+        error.value = `Could not delete "${editedNode.value?.title || 'Untitled'}": ${e instanceof Error ? e.message : String(e)}`;
+        return;
+    }
+    // The list of what was under it went with it. Read from the address, as the listing no longer
+    // holds the task to select.
+    if (route.params.selectedNodeId === uuid) {
+        closingEditor = true;
+        router.replace(tasksRoute(undefined, descendantsViewMode.value));
+    }
+    else {
+        closeEditor();
+    }
 }
 
 async function onParentChosen(newParentUuid: UUID | null) {
-    // A new task has no file to move. It goes under whatever is selected, so choosing a parent is
-    // selecting it, as a click in the tree would; the editor keeps what has been typed.
-    if (newTaskPath.value) {
-        navigateToState(newParentUuid ?? undefined, 'selected', descendantsViewMode.value);
-        return;
-    }
-    if (!selectedNode.value) {
+    if (!editedNode.value) {
         return;
     }
 
+    // The address names the task by its UUID, which a move keeps, so it needs no new one.
+    const id = editedNode.value.uuid;
     try {
-        await store.move(selectedNode.value.uuid, newParentUuid);
-        
-        // Navigate to the moved task to keep it selected
-        navigateToState(selectedNode.value.uuid, 'selected', descendantsViewMode.value);
+        await store.move(id, newParentUuid);
+        // Where it went, as for a task dropped in the tree, to be seen once the editor closes.
+        openUpTo(id);
     } catch (e) {
         console.error('Failed to move task:', e);
         error.value = e instanceof Error ? e.message : 'Failed to move task';
@@ -846,8 +956,10 @@ async function onTaskMove(id: UUID, parent: UUID | null) {
     }
 }
 
+// Not while a save runs, as in the new-task dialog: it writes to the path it started with, which a
+// move meanwhile would leave behind.
 function showChangeParentDialog() {
-    if (newTaskPath.value || selectedNode.value && !isTagGroupSelected.value) {
+    if (editedNode.value && !saving.value) {
         showParentDialog.value = true;
     }
 }
@@ -881,6 +993,26 @@ async function load(primed = false) {
 @media (max-width: 959px) { /* md breakpoint in Vuetify 2 */
     #tasks-next {
         padding: 4px;
+    }
+}
+
+/* The buttons' labels go by the toolbar's own width, not the window's: the list shares the window
+   with the drawer and the tree, and labels too wide for the toolbar push the view modes out of it.
+   Without them a button is square, as a minimum width kept for a label is room the toolbar runs
+   out of on a phone. Labelled, the buttons take 686px. */
+.item-toolbar {
+    container-type: inline-size;
+}
+
+@container (width < 700px) {
+    .toolbar-label {
+        display: none;
+    }
+
+    .toolbar-button {
+        min-width: 0;
+        padding: 0;
+        aspect-ratio: 1;
     }
 }
 
@@ -928,6 +1060,14 @@ async function load(primed = false) {
     min-width: 0;
 }
 
+// Shaded as a v-overlay shades what lies under it.
+.loading {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    background: rgba(0, 0, 0, 0.32);
+}
+
 .task-tree {
     width: 300px;
     overflow: hidden auto;
@@ -967,15 +1107,5 @@ async function load(primed = false) {
     display: flex;
     flex-direction: row;
     overflow: hidden;
-}
-
-:deep(.item-view .v-window__container) {
-    flex: 1 1 0;
-}
-
-:deep(.item-view .v-window-item) {
-    display: flex;
-    flex-direction: column;
-    flex: 1 1 0;
 }
 </style>

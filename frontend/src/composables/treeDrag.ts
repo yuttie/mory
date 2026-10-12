@@ -76,7 +76,8 @@ export function useTreeDrag(options: TreeDragOptions) {
         }
         const root = event.currentTarget as HTMLElement;
         const element = event.target as Element;
-        // A row's buttons -- its chevron, its add button -- are pressed, not picked up with it.
+        // A row's buttons -- its chevron, its edit and add buttons -- are pressed, not picked up
+        // with it.
         if (element.closest('button') !== null) {
             return;
         }

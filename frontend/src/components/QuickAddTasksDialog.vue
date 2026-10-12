@@ -360,7 +360,7 @@ async function add(): Promise<void> {
     const viewMode = route.name === 'TasksNextWithParams' ? String(route.params.viewMode) : undefined;
     createdRoute.value = placedUnder.value === null
         ? taskRoute(writes[0].uuid)
-        : tasksRoute(placedUnder.value, 'descendants', viewMode);
+        : tasksRoute(placedUnder.value, viewMode);
     successText.value = writes.length === 1 ? `Added "${writes[0].title}".` : `Added ${writes.length} tasks.`;
     successMessage.value = true;
     pending.value = null;

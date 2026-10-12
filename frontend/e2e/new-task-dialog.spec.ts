@@ -57,7 +57,7 @@ test('creates a task from the drawer without leaving the view', async ({ context
     await expect(snackbar).toBeVisible();
     await snackbar.getByRole('button', { name: 'Open' }).click();
     const uuid = created.path.slice('.tasks/'.length, -'.md'.length);
-    await expect(page).toHaveURL(new RegExp(`/tasks-next/${uuid}/selected/status$`));
+    await expect(page).toHaveURL(new RegExp(`/tasks-next/${uuid}/descendants/status\\?task=${uuid}$`));
 });
 
 test('closes on Escape until something is typed, and then only on Cancel', async ({ context, page }) => {
@@ -71,6 +71,27 @@ test('closes on Escape until something is typed, and then only on Cancel', async
     await title(page).fill('Draft');
     await page.keyboard.press('Escape');
     await expect(title(page)).toHaveValue('Draft');
+    await dialog(page).getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(dialog(page)).toBeHidden();
+});
+
+// The task view shades itself while its tasks load. Vuetify drew a dialog or a menu opened over a
+// v-overlay just above it, which put them under the app bar and the drawer.
+test('opens above the app bar and the drawer while the task view loads', async ({ context, page }) => {
+    await mockBackend(context, NOTES);
+    let open = () => {};
+    const loaded = new Promise<void>((resolve) => {
+        open = resolve;
+    });
+    await page.route(`${API_URL}v2/entries**`, async (route) => {
+        await loaded;
+        await route.fallback();
+    });
+    await page.goto('/tasks-next/_/descendants/status');
+    // Shaded, with the tasks still on their way.
+    await expect(page.getByRole('progressbar')).toBeVisible();
+    await openNewTask(page);
+    open();
     await dialog(page).getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(dialog(page)).toBeHidden();
 });

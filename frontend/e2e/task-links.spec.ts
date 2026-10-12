@@ -37,23 +37,29 @@ function row(page: Page, name: string): Locator {
     return tree(page).getByRole('treeitem', { name });
 }
 
-// The task in one of the Descendants tab's views, found by the class of the view's root.
+// The task in one of the list's views, found by the class of the view's root.
 function listed(page: Page, view: string, title: string): Locator {
     return page.locator(`${view} .task-list-item`, { hasText: title });
 }
 
-function url(selectedNodeId: string, tab: string, viewMode: string): RegExp {
-    return new RegExp(`/tasks-next/${selectedNodeId}/${tab}/${viewMode}$`);
+// The list of the selected node's descendants, with the task open in its editor over it, if any.
+function url(selectedNodeId: string, viewMode: string, task?: string): RegExp {
+    const query = task === undefined ? '' : `\\?task=${task}`;
+    return new RegExp(`/tasks-next/${selectedNodeId}/descendants/${viewMode}${query}$`);
 }
 
 test.describe('the tree', () => {
-    test('links each row to its task, keeping the view', async ({ context, page }) => {
+    // The tasks under it, rather than its editor, which would cover them: its row's own button opens
+    // that.
+    test('links each row to the tasks under its task, keeping the view', async ({ context, page }) => {
         await mockBackend(context, NOTES);
         await page.goto('/tasks-next/_/descendants/schedule');
-        await expect(row(page, 'Project')).toHaveAttribute('href', `/tasks-next/${PROJECT}/selected/schedule`);
+        await expect(row(page, 'Project')).toHaveAttribute('href', `/tasks-next/${PROJECT}/descendants/schedule`);
 
         await row(page, 'Project').click();
-        await expect(page).toHaveURL(url(PROJECT, 'selected', 'schedule'));
+        await expect(page).toHaveURL(url(PROJECT, 'schedule'));
+        await expect(page.locator('.app-bar-current')).toHaveText('Project');
+        await expect(page.getByRole('dialog')).toHaveCount(0);
     });
 
     // The tree stays while the view changes beside it, so its links have to follow.
@@ -62,25 +68,27 @@ test.describe('the tree', () => {
         await page.goto('/tasks-next/_/descendants/status');
 
         await page.getByRole('button', { name: 'Schedule' }).click();
-        await expect(page).toHaveURL(url('_', 'descendants', 'schedule'));
-        await expect(row(page, 'Project')).toHaveAttribute('href', `/tasks-next/${PROJECT}/selected/schedule`);
+        await expect(page).toHaveURL(url('_', 'schedule'));
+        await expect(row(page, 'Project')).toHaveAttribute('href', `/tasks-next/${PROJECT}/descendants/schedule`);
     });
 
-    // A tag group is no task to edit.
     test('links a tag group to the tasks filed under it', async ({ context, page }) => {
         await mockBackend(context, NOTES);
         await page.goto('/tasks-next/_/descendants/schedule');
         await expect(row(page, 'work')).toHaveAttribute('href', '/tasks-next/tag-group-work/descendants/schedule');
     });
 
-    // The root of the path is what clears the selection. Started from the Descendants tab, so the
-    // click has somewhere to go that clearing it would not.
-    test('opens the selected task when its row is clicked again, rather than clearing the selection', async ({ context, page }) => {
+    // The root of the path is what clears the selection.
+    test('keeps the selection when the selected row is clicked again', async ({ context, page }) => {
         await mockBackend(context, NOTES);
         await page.goto(`/tasks-next/${PROJECT}/descendants/schedule`);
+        await expect(page.locator('.app-bar-current')).toHaveText('Project');
 
         await row(page, 'Project').click();
-        await expect(page).toHaveURL(url(PROJECT, 'selected', 'schedule'));
+        // Long enough for a navigation the click set off to have landed.
+        await page.waitForTimeout(500);
+        await expect(page).toHaveURL(url(PROJECT, 'schedule'));
+        await expect(page.locator('.app-bar-current')).toHaveText('Project');
     });
 
     test('opens a task in a new tab on a Ctrl-click, leaving this one where it was', async ({ context, page }) => {
@@ -89,8 +97,8 @@ test.describe('the tree', () => {
 
         const opened = context.waitForEvent('page');
         await row(page, 'Project').click({ modifiers: ['ControlOrMeta'] });
-        await expect(await opened).toHaveURL(url(PROJECT, 'selected', 'status'));
-        await expect(page).toHaveURL(url('_', 'descendants', 'status'));
+        await expect(await opened).toHaveURL(url(PROJECT, 'status'));
+        await expect(page).toHaveURL(url('_', 'status'));
     });
 
     test('goes to a task from the keyboard', async ({ context, page }) => {
@@ -98,7 +106,7 @@ test.describe('the tree', () => {
         await page.goto('/tasks-next/_/descendants/status');
 
         await row(page, 'Project').press('Enter');
-        await expect(page).toHaveURL(url(PROJECT, 'selected', 'status'));
+        await expect(page).toHaveURL(url(PROJECT, 'status'));
     });
 
     test('adds a child task from a row without following the row\'s link', async ({ context, page }) => {
@@ -111,18 +119,19 @@ test.describe('the tree', () => {
 
         await row(page, 'Project').hover();
         await row(page, 'Project').getByRole('button', { name: 'Add child task' }).click();
-        await expect(page.getByRole('tab', { name: 'New' })).toHaveAttribute('aria-selected', 'true');
-        await expect(page).toHaveURL(url(PROJECT, 'selected', 'status'));
+        await expect(page.getByRole('dialog').locator('.editor-title')).toHaveText('New subtask of "Project"');
+        await expect(page).toHaveURL(url('_', 'status'));
         expect(await page.evaluate(() => (window as unknown as { loaded?: boolean }).loaded)).toBe(true);
     });
 });
 
+// A task opened from a list opens over that list, which stays as it was.
 test.describe('the lists', () => {
-    test('link each task to its editor, keeping the view', async ({ context, page }) => {
+    test('link each task to its editor, keeping the list and its view', async ({ context, page }) => {
         await mockBackend(context, NOTES);
         for (const [viewMode, view] of [['status', '.status-view'], ['schedule', '.planning-view .candidates'], ['eisenhower', '.eisenhower-matrix']]) {
             await page.goto(`/tasks-next/_/descendants/${viewMode}`);
-            await expect(listed(page, view, 'Errand')).toHaveAttribute('href', `/tasks-next/${ERRAND}/selected/${viewMode}`);
+            await expect(listed(page, view, 'Errand')).toHaveAttribute('href', `/tasks-next/_/descendants/${viewMode}?task=${ERRAND}`);
         }
     });
 
@@ -132,7 +141,7 @@ test.describe('the lists', () => {
         await page.goto('/tasks-next/_/descendants/status');
 
         await listed(page, '.status-view', 'Errand').click();
-        await expect(page).toHaveURL(url(ERRAND, 'selected', 'status'));
+        await expect(page).toHaveURL(url('_', 'status', ERRAND));
     });
 
     test('open a task in a new tab on a Ctrl-click, leaving this one where it was', async ({ context, page }) => {
@@ -141,7 +150,7 @@ test.describe('the lists', () => {
 
         const opened = context.waitForEvent('page');
         await listed(page, '.status-view', 'Errand').click({ modifiers: ['ControlOrMeta'] });
-        await expect(await opened).toHaveURL(url(ERRAND, 'selected', 'status'));
-        await expect(page).toHaveURL(url('_', 'descendants', 'status'));
+        await expect(await opened).toHaveURL(url('_', 'status', ERRAND));
+        await expect(page).toHaveURL(url('_', 'status'));
     });
 });

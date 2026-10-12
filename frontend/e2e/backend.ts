@@ -25,13 +25,14 @@ export function uuid(n: number): string {
 export interface Repository {
     writes: { path: string; content: string }[];
     renames: { from: string; to: string }[];
+    deletes: string[];
 }
 
 // A repository of notes, listed with the metadata their frontmatter holds, so a write shows up in
 // the listing the way the backend would show it.
 export async function mockBackend(context: BrowserContext, notes: Record<string, string>): Promise<Repository> {
     const files = new Map(Object.entries(notes));
-    const repository: Repository = { writes: [], renames: [] };
+    const repository: Repository = { writes: [], renames: [], deletes: [] };
     let commit = 1;
     const commitId = () => String(commit).padStart(40, '0');
     const etagOf = (content: string) => `"${createHash('sha1').update(content).digest('hex')}"`;
@@ -106,6 +107,17 @@ export async function mockBackend(context: BrowserContext, notes: Record<string,
                 repository.renames.push({ from, to: notePath });
                 commit += 1;
                 await route.fulfill({ json: null });
+                return;
+            }
+            // As moried answers: `true` once deleted, and 404 for a path HEAD does not hold.
+            if (request.method() === 'DELETE') {
+                if (!files.delete(notePath)) {
+                    await route.fulfill({ status: 404, json: {} });
+                    return;
+                }
+                repository.deletes.push(notePath);
+                commit += 1;
+                await route.fulfill({ json: true });
                 return;
             }
             if (request.method() === 'PUT') {

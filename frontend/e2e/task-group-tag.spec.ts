@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import type { Locator, Page } from '@playwright/test';
+import YAML from 'yaml';
 import { mockBackend, uuid } from './backend';
 
 function note(title: string, { tags = [], status = 'todo' }: { tags?: string[]; status?: string } = {}): string {
@@ -36,6 +37,10 @@ function tags(page: Page): Locator {
     return page.locator('.task-editor-next .v-combobox .v-chip');
 }
 
+function heading(page: Page): Locator {
+    return page.locator('.task-editor-next .editor-title');
+}
+
 // A new task, started from the group of `tag` as the Add button starts one.
 async function startInGroup(page: Page, tag: string) {
     await page.goto(`/tasks-next/tag-group-${tag}/descendants/status`);
@@ -44,28 +49,40 @@ async function startInGroup(page: Page, tag: string) {
 }
 
 test('keeps a group\'s tag on a new task put under a task', async ({ context, page }) => {
-    await mockBackend(context, NOTES);
+    const repository = await mockBackend(context, NOTES);
     await startInGroup(page, 'work');
+    await expect(heading(page)).toHaveText('New task with tag "work"');
     await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Draft');
 
-    await row(page, 'Project').click();
-    await expect(page).toHaveURL(new RegExp(`/tasks-next/${PROJECT}/selected/status$`));
-    await expect(page.locator('.editor-title')).toHaveText('New subtask of "Project"');
+    await page.getByRole('button', { name: 'Choose Parent' }).click();
+    const picker = page.getByRole('dialog').filter({ hasText: 'Select a parent for the new task' });
+    await picker.getByRole('treeitem', { name: 'Project' }).click();
+    await picker.getByRole('button', { name: 'Choose', exact: true }).click();
+    await expect(heading(page)).toHaveText('New subtask of "Project"');
     await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue('Draft');
     await expect(tags(page)).toHaveText(['work']);
+
+    await page.getByRole('button', { name: 'Create', exact: true }).click();
+    await expect.poll(() => repository.writes.map((write) => write.path))
+        .toEqual([expect.stringMatching(new RegExp(`^\\.tasks/${PROJECT}/[0-9a-f-]{36}\\.md$`))]);
+    expect(YAML.parse(repository.writes[0].content.split('---')[1]).tags).toEqual(['work']);
 });
 
-// A group's tag is what files the task under it, so another group's replaces it.
-test('swaps a group\'s tag for another group\'s, and drops it for Untagged', async ({ context, page }) => {
+// A group's own button starts a task in that group, whatever is selected.
+test('gives a task added from a group\'s row that group\'s tag, and none from Untagged', async ({ context, page }) => {
     await mockBackend(context, NOTES);
-    await startInGroup(page, 'work');
+    await page.goto(`/tasks-next/${PROJECT}/descendants/status`);
 
-    await row(page, 'home').click();
-    await page.getByRole('tab', { name: 'New' }).click();
+    await row(page, 'home').hover();
+    await row(page, 'home').getByRole('button', { name: 'Add task' }).click();
+    await expect(heading(page)).toHaveText('New task with tag "home"');
     await expect(tags(page)).toHaveText(['home']);
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(heading(page)).toBeHidden();
 
-    await row(page, 'Untagged').click();
-    await page.getByRole('tab', { name: 'New' }).click();
+    await row(page, 'Untagged').hover();
+    await row(page, 'Untagged').getByRole('button', { name: 'Add task' }).click();
+    await expect(heading(page)).toHaveText('New task');
     await expect(tags(page)).toHaveCount(0);
 });
 

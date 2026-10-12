@@ -28,8 +28,9 @@
                         </v-btn>
                     </div>
                     <div class="editor-actions">
+                        <!-- Every host draws the editor in a dialog, which a phone shows full
+                             screen, with no scrim to click and no Escape to press. -->
                         <v-btn
-                            v-if="!isEdit"
                             variant="text"
                             aria-label="Cancel"
                             title="Cancel"
@@ -120,7 +121,7 @@
                     <!-- The assessment is advice, read now and then rather than while writing, so it
                          waits behind its score instead of taking a pane beside the note. Its note
                          suggestions are added from inside it, so a click there leaves it open. It
-                         keeps Tab to itself: drawn outside the new-task dialog, it would otherwise
+                         keeps Tab to itself: drawn outside the editor's dialog, it would otherwise
                          lose Tab to the dialog's trap, which sent it back to the dialog's first
                          button before it reached a suggestion. -->
                     <v-menu
@@ -522,14 +523,14 @@ const props = defineProps<{
     taskPath: string;
     knownTags: [string, number][];
     knownContacts: [string, number][];
-    // The tag group a new task is created from: its tag, `null` for the Untagged group, which has
-    // none to give, and absent when no group is selected.
+    // The tag group a new task is started from: its tag, `null` for the Untagged group, which has
+    // none to give, and absent when the draft is not from a group or sits under a task.
     selectedTag?: string | null;
 }>();
 const pathRef = toRef(props, 'taskPath');
 
 // Composables
-const { task, loading, error, refresh } = useFetchTask(pathRef);
+const { task, loading, error } = useFetchTask(pathRef);
 const calendars = useCalendarsStore();
 const tasks = useTasksStore();
 const settings = useTaskSettingsStore();
@@ -756,14 +757,13 @@ watch(uuid, () => {
 watch(
     () => props.selectedTag,
     (newTag, oldTag) => {
-        // Leaving the groups, for a task or for no selection, keeps the tag: nothing replaces it,
-        // and a tag is not taken away unasked.
+        // Put under a task, the draft keeps the group's tag: a tag is not taken away unasked.
         if (task.value || newTag === oldTag || newTag === undefined) {
             return;
         }
-        // From one group to another, the old group's tag goes even when there is a new one to put
-        // first: the task would otherwise be filed under both.
-        const rest = form.tags.filter((tag) => tag !== oldTag && tag !== newTag);
+        // Back at the top, the group's tag heads the draft again. A draft is started from one
+        // group and stays with it, so there is no other group's tag to take away.
+        const rest = form.tags.filter((tag) => tag !== newTag);
         form.tags = newTag ? [newTag, ...rest] : rest;
     }
 );
@@ -1019,10 +1019,8 @@ function addNoteContent(suggestion: string) {
 }
 
 // Expose
-// `isModified` too, for a host that may close the editor: a draft with something typed in it is
-// worth keeping open.
+// For a host that may close the editor: a draft with something typed in it is worth keeping open.
 defineExpose({
-    refresh,
     isModified,
 });
 </script>

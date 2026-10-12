@@ -165,7 +165,7 @@ test('refuses its own group to a task already at the top', async ({ context, pag
     await page.mouse.up();
 });
 
-test('opens nothing when the task is let go where it was picked up', async ({ context, page }) => {
+test('selects nothing when the task is let go where it was picked up', async ({ context, page }) => {
     const repository = await mockBackend(context, NOTES);
     await openTree(page);
     const url = page.url();
@@ -181,7 +181,7 @@ test('opens nothing when the task is let go where it was picked up', async ({ co
 
     // The click after it is the user's own again.
     await row(page, 'Phase').click();
-    await expect(page).toHaveURL(new RegExp(`/tasks-next/${PHASE}/selected/status$`));
+    await expect(page).toHaveURL(new RegExp(`/tasks-next/${PHASE}/descendants/status$`));
 });
 
 test('picks nothing up with a press whose release went unseen', async ({ browserName, context, page }) => {
@@ -207,10 +207,10 @@ test('picks nothing up with a press whose release went unseen', async ({ browser
     }
     await expect(copy(page)).toHaveCount(0);
 
-    // The next click is an ordinary click, which opens the task.
+    // The next click is an ordinary click, which selects the task.
     await mouse('mousePressed', over, 1);
     await mouse('mouseReleased', over, 0);
-    await expect(page).toHaveURL(new RegExp(`/tasks-next/${OTHER}/selected/status$`));
+    await expect(page).toHaveURL(new RegExp(`/tasks-next/${OTHER}/descendants/status$`));
     expect(repository.renames).toEqual([]);
 });
 
@@ -268,26 +268,6 @@ test('keeps the tasks a dragged one passes over from answering the pointer', asy
     await expect.poll(shade).toBe(resting);
     expect(await add.evaluate((element) => getComputedStyle(element).visibility)).toBe('hidden');
     await page.mouse.up();
-});
-
-test('keeps what has been typed into the task being edited when it moves', async ({ context, page }) => {
-    const repository = await mockBackend(context, NOTES);
-    await page.goto(`/tasks-next/${PHASE}/selected/status`);
-    const title = page.getByRole('textbox', { name: 'Title', exact: true });
-    await title.fill('Phase one');
-
-    // Moving the task above it moves it too.
-    await pickUp(page, row(page, 'Project'));
-    await moveOver(page, row(page, 'Other'));
-    await page.mouse.up();
-
-    await expect.poll(() => repository.renames.map(({ from }) => from)).toEqual([
-        `.tasks/${PROJECT}.md`,
-        `.tasks/${PROJECT}/${PHASE}.md`,
-        `.tasks/${PROJECT}/${PHASE}/${STEP}.md`,
-    ]);
-    await expect(row(page, 'Phase')).toHaveAttribute('aria-level', '3');
-    await expect(title).toHaveValue('Phase one');
 });
 
 test('scrolls the tree while the task is held near its edge, to a task out of sight', async ({ context, page }) => {
@@ -480,7 +460,7 @@ test.describe('on a touch screen', () => {
         ]);
     });
 
-    test('still opens a task with a tap', async ({ browserName, context, page }) => {
+    test('still selects a task with a tap', async ({ browserName, context, page }) => {
         test.skip(browserName !== 'chromium', 'CDP supplies real touch movement in Chromium.');
         const repository = await mockBackend(context, NOTES);
         await openTree(page);
@@ -491,7 +471,7 @@ test.describe('on a touch screen', () => {
         await page.waitForTimeout(100);
         await tapping.lift();
 
-        await expect(page).toHaveURL(new RegExp(`/tasks-next/${PHASE}/selected/status$`));
+        await expect(page).toHaveURL(new RegExp(`/tasks-next/${PHASE}/descendants/status$`));
         await expect(copy(page)).toHaveCount(0);
         expect(repository.renames).toEqual([]);
     });
