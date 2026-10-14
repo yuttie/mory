@@ -387,7 +387,11 @@ fn key_of(line: &str) -> Option<String> {
     None
 }
 
-/// The half-open range of lines belonging to the mapping nested under `lines[at]`.
+/// The half-open range of lines belonging to the value nested under `lines[at]`.
+///
+/// That is every line indented past the key, and the dashes of a list written at the key's own
+/// indentation, which YAML allows and older notes do (`times:` over `- start: …`). Nothing else
+/// at that indentation can belong to the key, so a mapping's range is what it always was.
 ///
 /// Trailing filler is left outside the range, so a comment that separates two blocks stays where
 /// the author put it rather than being swept into the one above.
@@ -400,7 +404,10 @@ fn child_range(lines: &[String], at: usize) -> (usize, usize) {
             end += 1;
             continue;
         }
-        if indent_of(&lines[end]) <= parent {
+        let indent = indent_of(&lines[end]);
+        let trimmed = lines[end].trim();
+        let dash = trimmed == "-" || trimmed.starts_with("- ");
+        if indent < parent || (indent == parent && !dash) {
             break;
         }
         end += 1;
@@ -853,6 +860,24 @@ mod tests {
         let after = set(before, &["task", "progress"], 50);
         assert!(after.ends_with("\n# T\n\n---\n\nA horizontal rule above.\n"));
         assert!(after.contains("progress: 50"));
+    }
+
+    /// Older notes write a list's dashes at its key's own indentation, which YAML allows. Those
+    /// dashes are the key's, to remove with it and to replace with it.
+    #[test]
+    fn a_list_at_its_keys_indentation_is_the_keys() {
+        let before = "---\nevents:\n  Meeting:\n    color: light-green\n    times:\n    - start: 2021-01-20 11:00\n    - { start: 2021-01-13 10:00, end: +1h }\n---\n";
+        let after = apply(before, &[Change::remove(&["events", "Meeting", "times"])])
+            .expect("the whole list");
+        assert_eq!(after, "---\nevents:\n  Meeting:\n    color: light-green\n---\n");
+
+        let tags = "---\ntags:\n- 研究室\n- 学生\n---\n\n# Meeting\n";
+        let after = set(tags, &["tags"], Value::Sequence(vec!["研究室".into()]));
+        assert_eq!(after, "---\ntags:\n    - 研究室\n---\n\n# Meeting\n");
+
+        // A key added after such a list goes after its dashes, not among them.
+        let after = set(before, &["events", "Meeting", "location"], "Room 4");
+        assert!(after.ends_with("    - { start: 2021-01-13 10:00, end: +1h }\n    location: Room 4\n---\n"), "{after}");
     }
 }
 
