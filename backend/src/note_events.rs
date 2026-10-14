@@ -346,8 +346,9 @@ fn dayjs_parse(text: &str, zone: Zone) -> Option<DateTime<Utc>> {
     Some((wall - Duration::seconds(offset)).and_utc())
 }
 
-/// `instantOf`: the moment a value names, for comparing two spellings of it.
-fn instant_of(value: Option<&Value>, zone: Zone) -> Option<i64> {
+/// `instantOf`: the moment a value names, for comparing two spellings of it. The MCP event tools
+/// match an occurrence to remove by it too, as the calendar matches an exclusion.
+pub(crate) fn instant_of(value: Option<&Value>, zone: Zone) -> Option<i64> {
     match value {
         Some(Value::String(text)) => dayjs_parse(text, zone).map(|at| at.timestamp_millis()),
         _ => None,

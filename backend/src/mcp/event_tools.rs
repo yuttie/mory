@@ -7,6 +7,7 @@
 
 use std::sync::LazyLock;
 
+use chrono_tz::Tz;
 use regex::Regex;
 use rmcp::{model::CallToolResult, ErrorData};
 use schemars::JsonSchema;
@@ -17,6 +18,7 @@ use super::frontmatter::{self, Change};
 use super::tools::{alarm_list, edited_note, note_to_edit, safe_path, write_note};
 use super::tool_error;
 use crate::models::AppState;
+use crate::note_events;
 
 /// Three letters, not iCal's two, optionally after an ordinal: `3wed` is the third Wednesday,
 /// `-1fri` the last Friday. This is what separates "the third Wednesday of each month" from
@@ -288,8 +290,10 @@ pub struct EventArgs {
     /// The commit message.
     pub message: String,
 
-    /// When it starts. A bare date for a whole day (`2026-03-12`), or a datetime carrying its
-    /// offset (`2026-03-12 19:00:00+09:00`). The shape is what makes it an all-day event.
+    /// The event's own occurrence, apart from any it lists under `instances`. A bare date for a
+    /// whole day (`2026-03-12`), or a datetime carrying its offset (`2026-03-12 19:00:00+09:00`).
+    /// The shape is what makes it an all-day event. An event that lists its occurrences needs
+    /// none.
     #[serde(default)]
     pub start: Option<String>,
     /// When it ends: a datetime, a bare time of day, or a duration such as `+1.5h`.
@@ -325,15 +329,84 @@ pub struct EventArgs {
     /// same occurrence.
     #[serde(default)]
     pub exclusions: Option<Vec<String>>,
+    /// Occurrences to add to the event's list of them, each with its own `start`: for an event
+    /// that happens on dates no rule describes, such as the next meeting of a committee. They
+    /// join the list the event keeps, `instances` or the older `times`, in date order when the
+    /// list is in date order. Taking one out with `remove_instances` and adding it here moves it.
+    #[serde(default)]
+    pub add_instances: Option<Vec<Instance>>,
+    /// Occurrences to take off the event's list, named by their `start`. Matched by instant, so
+    /// the note's own spelling (`2025-03-14 16:00`) and the same moment with its offset both
+    /// name it.
+    #[serde(default)]
+    pub remove_instances: Option<Vec<String>>,
     /// Keys to remove from the event entirely.
     #[serde(default)]
     pub clear: Option<Vec<String>>,
 }
 
-const EVENT_KEYS: [&str; 11] = [
+const EVENT_KEYS: [&str; 14] = [
     "start", "end", "finished", "color", "note", "location", "url", "category", "alarms", "repeat",
-    "exclusions",
+    "exclusions", "overrides", "instances", "times",
 ];
+
+/// One occurrence in an event's list of them.
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Instance {
+    /// When it starts: a bare date for a whole day, or a datetime carrying its offset.
+    pub start: String,
+    /// When it ends: a datetime, a bare time of day, or a duration such as `+1.5h`.
+    #[serde(default)]
+    pub end: Option<String>,
+    #[serde(default)]
+    pub finished: Option<bool>,
+    #[serde(default)]
+    pub color: Option<String>,
+    #[serde(default)]
+    pub note: Option<String>,
+    /// What this occurrence is called, in place of the event's name.
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub location: Option<String>,
+    #[serde(default)]
+    pub url: Option<String>,
+    /// When this occurrence rings, in place of the event's `alarms`, and spelt as they are.
+    #[serde(default)]
+    pub alarms: Option<Vec<String>>,
+}
+
+impl Instance {
+    /// The entry as the list holds it, its keys in the order the schema lists them.
+    fn to_value(&self) -> Result<Value, String> {
+        check_when("An instance's `start`", &self.start)?;
+        let mut entry = Mapping::new();
+        entry.insert("start".into(), self.start.as_str().into());
+        if let Some(end) = &self.end {
+            check_end(end)?;
+            entry.insert("end".into(), end.as_str().into());
+        }
+        if let Some(finished) = self.finished {
+            entry.insert("finished".into(), finished.into());
+        }
+        for (key, value) in [
+            ("color", &self.color),
+            ("note", &self.note),
+            ("name", &self.name),
+            ("location", &self.location),
+            ("url", &self.url),
+        ] {
+            if let Some(value) = value {
+                entry.insert(key.into(), value.as_str().into());
+            }
+        }
+        if let Some(alarms) = &self.alarms {
+            entry.insert("alarms".into(), alarm_list(alarms)?);
+        }
+        Ok(Value::Mapping(entry))
+    }
+}
 
 /// The changes an `EventArgs` asks for, under `events.<name>`.
 fn event_changes(args: &EventArgs) -> Result<Vec<Change>, String> {
@@ -389,6 +462,131 @@ fn event_changes(args: &EventArgs) -> Result<Vec<Change>, String> {
         );
     }
     Ok(changes)
+}
+
+/// The list edits `add_instances` and `remove_instances` ask for.
+///
+/// Worked out against the event as the note declares it, since which list an occurrence joins,
+/// and where in it, depends on what is listed already. Each list edit is an item inserted or
+/// removed in place, so the items around it keep their lines, flow style and comments included.
+///
+/// A start the note writes without an offset is read in `zone`, which is moried's own: the one
+/// reader the server has, and the zone `list_tasks` reads a task's dates in.
+fn instance_changes(args: &EventArgs, event: Option<&Value>, zone: Tz) -> Result<Vec<Change>, String> {
+    let adds = args.add_instances.as_deref().unwrap_or_default();
+    let removes = args.remove_instances.as_deref().unwrap_or_default();
+    if adds.is_empty() && removes.is_empty() {
+        return Ok(Vec::new());
+    }
+    if let Some(key) = args.clear.iter().flatten().find(|key| matches!(key.as_str(), "instances" | "times")) {
+        return Err(format!("Clear `{key}` or change its occurrences, not both at once."));
+    }
+    let starts_at = |item: &Value| note_events::instant_of(item.get("start"), zone);
+
+    // The lists as they stand, edited here as the note will be, so that each index is the one the
+    // change before it left. Each one's order is read before any of that: a newest-first list
+    // that a removal leaves holding one item no longer shows it.
+    let mut lists: Vec<(&str, Vec<Value>, Order)> = ["instances", "times"]
+        .into_iter()
+        .filter_map(|key| {
+            let list = event?.get(key)?.as_sequence()?.clone();
+            let order = order_of(&list, starts_at);
+            Some((key, list, order))
+        })
+        .collect();
+    let mut changes = Vec::new();
+
+    for start in removes {
+        let Some(at) = note_events::instant_of(Some(&Value::String(start.clone())), zone) else {
+            return Err(format!(
+                "{start:?} is not a moment. Name an occurrence by its `start`, as the note writes \
+                 it or with its offset.",
+            ));
+        };
+        let mut found = false;
+        for (key, list, _) in &mut lists {
+            while let Some(index) = list.iter().position(|item| starts_at(item) == Some(at)) {
+                list.remove(index);
+                changes.push(Change::remove_item(&["events", &args.name, key], index));
+                found = true;
+            }
+        }
+        if !found {
+            let listed: Vec<&str> = lists
+                .iter()
+                .flat_map(|(_, list, _)| list.iter().filter_map(|item| item.get("start")?.as_str()))
+                .collect();
+            if listed.is_empty() {
+                return Err(format!("{:?} lists no occurrences to remove.", args.name));
+            }
+            return Err(format!(
+                "{:?} lists no occurrence starting at {start:?}. Those it lists start at: {}.",
+                args.name,
+                listed.join(", "),
+            ));
+        }
+    }
+
+    // New occurrences join the list the event keeps, `instances` before the older `times`, so an
+    // event is never given a second list by being added to.
+    if !adds.is_empty() && lists.is_empty() {
+        lists.push(("instances", Vec::new(), Order::Ascending));
+    }
+    for instance in adds {
+        let value = instance.to_value()?;
+        let Some(at) = starts_at(&value) else {
+            return Err(format!("An instance's `start` {:?} could not be read.", instance.start));
+        };
+        if lists.iter().any(|(_, list, _)| list.iter().any(|item| starts_at(item) == Some(at))) {
+            return Err(format!(
+                "{:?} already lists an occurrence starting at {:?}. To change it, name it in \
+                 `remove_instances` as well.",
+                args.name, instance.start,
+            ));
+        }
+        let (key, list, order) = &mut lists[0];
+        let index = place_for(list, at, *order, starts_at);
+        list.insert(index, value.clone());
+        changes.push(Change::insert(&["events", &args.name, key], index, value));
+    }
+    Ok(changes)
+}
+
+/// The order a list keeps its occurrences in. The notes keep both.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Order {
+    Ascending,
+    Descending,
+    /// Neither, or a start that cannot be read.
+    None,
+}
+
+/// A list of one, or of none, is taken to be in date order.
+fn order_of(list: &[Value], starts_at: impl Fn(&Value) -> Option<i64>) -> Order {
+    let Some(starts) = list.iter().map(starts_at).collect::<Option<Vec<_>>>() else {
+        return Order::None;
+    };
+    if starts.is_sorted() {
+        Order::Ascending
+    }
+    else if starts.is_sorted_by(|a, b| a >= b) {
+        Order::Descending
+    }
+    else {
+        Order::None
+    }
+}
+
+/// Where an occurrence starting at `at` goes in `list`: where its date puts it in the list's
+/// order, or at the end of a list that keeps none.
+fn place_for(list: &[Value], at: i64, order: Order, starts_at: impl Fn(&Value) -> Option<i64>) -> usize {
+    let mut starts = list.iter().map(starts_at);
+    let next = match order {
+        Order::Ascending => starts.position(|start| start.is_some_and(|start| start > at)),
+        Order::Descending => starts.position(|start| start.is_some_and(|start| start < at)),
+        Order::None => None,
+    };
+    next.unwrap_or(list.len())
 }
 
 /// Refuses a category `.mory/calendars.yaml` does not configure.
@@ -487,10 +685,10 @@ pub async fn add_event(state: &AppState, args: EventArgs) -> Result<CallToolResu
         )));
     }
     // An event with no time is not an event; a rule alone has nothing to recur from.
-    if args.start.is_none() {
+    if args.start.is_none() && args.add_instances.as_ref().is_none_or(Vec::is_empty) {
         return Ok(tool_error(
-            "A new event needs a `start`: a bare date for a whole day, or a datetime carrying \
-             its offset.",
+            "A new event needs a `start`, or occurrences in `add_instances`: a bare date for a \
+             whole day, or a datetime carrying its offset.",
         ));
     }
     apply_event(state, &path, &text, &expected, &args).await
@@ -521,13 +719,6 @@ async fn apply_event(
     expected: &str,
     args: &EventArgs,
 ) -> Result<CallToolResult, ErrorData> {
-    let changes = match event_changes(args) {
-        Ok(changes) => changes,
-        Err(message) => return Ok(tool_error(message)),
-    };
-    if changes.is_empty() {
-        return Ok(tool_error("Nothing to change. Pass a field to set, or name one in `clear`."));
-    }
     if let Some(category) = &args.category {
         let config = match crate::v2::read_calendar_config(state).await {
             Ok(config) => config,
@@ -541,13 +732,27 @@ async fn apply_event(
             return Ok(tool_error(message));
         }
     }
-    let edited = match edited_note(text, &changes, path)
-        .and_then(|edited| check_shape(text, &edited, &args.name).map(|()| edited))
-    {
-        Ok(edited) => edited,
-        Err(reason) => return Ok(tool_error(reason)),
-    };
-    write_note(state, path, &edited, &args.message, expected).await
+    match edited_event(text, path, args, crate::urgency::local_zone()) {
+        Ok(edited) => write_note(state, path, &edited, &args.message, expected).await,
+        Err(reason) => Ok(tool_error(reason)),
+    }
+}
+
+/// The note `text` becomes under `args`, or why it cannot. All of an event edit but the checks
+/// that need the repository.
+fn edited_event(text: &str, path: &str, args: &EventArgs, zone: Tz) -> Result<String, String> {
+    let mut changes = event_changes(args)?;
+    changes.extend(instance_changes(args, event_in(text, &args.name).as_ref(), zone)?);
+    if changes.is_empty() {
+        return Err(
+            "Nothing to change. Pass a field to set, an occurrence to add or remove, or a key to \
+             `clear`."
+                .to_owned(),
+        );
+    }
+    let edited = edited_note(text, &changes, path)?;
+    check_shape(text, &edited, &args.name)?;
+    Ok(edited)
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -870,9 +1075,7 @@ mod tests {
     }
 
     fn edit_and_check(note: &str, fields: serde_json::Value) -> Result<String, String> {
-        let changes = event_changes(&event(fields))?;
-        let edited = frontmatter::apply(note, &changes).map_err(|e| e.to_string())?;
-        check_shape(note, &edited, "Standup").map(|()| edited)
+        edited_event(note, "a.md", &event(fields), chrono_tz::Asia::Tokyo)
     }
 
     /// Clearing what an event occurs at leaves nothing to draw, and clearing a rule strands what
@@ -905,6 +1108,7 @@ mod tests {
         for (key, value) in [
             ("instances", serde_json::json!([{ "start": "2026-09-30" }])),
             ("tz", serde_json::json!("Asia/Tokyo")),
+            ("add_instances", serde_json::json!([{ "start": "2026-09-30", "category": "meeting" }])),
             ("repeat", serde_json::json!({ "freq": "weekly", "byweekday": ["wed"] })),
         ] {
             let mut args = base.clone();
@@ -915,6 +1119,113 @@ mod tests {
         let mut args = base;
         args.as_object_mut().unwrap().insert("recursive".into(), true.into());
         assert!(serde_json::from_value::<RemoveEventArgs>(args).is_err());
+    }
+
+    /// Shaped as real notes keep a series: newest first, under the older `times`, its starts
+    /// written without an offset.
+    const LISTED: &str = "---\nevents:\n    Standup:\n        times:\n            - start: 2025-09-09 10:00\n              end: 11:30\n            - { start: 2024-09-30 13:00, end: +1h }\n---\n";
+
+    fn starts(note: &str) -> Vec<String> {
+        let event = event_in(note, "Standup").expect("the event");
+        ["instances", "times"]
+            .into_iter()
+            .flat_map(|key| {
+                let list = event.get(key).and_then(Value::as_sequence).cloned().unwrap_or_default();
+                list.into_iter().map(move |item| format!("{key} {}", item["start"].as_str().unwrap()))
+            })
+            .collect()
+    }
+
+    /// An occurrence joins the list the event keeps, where its date puts it in whichever order
+    /// the list is in.
+    #[test]
+    fn an_occurrence_joins_the_list_in_its_order() {
+        let newer = edit_and_check(LISTED, serde_json::json!({
+            "add_instances": [{ "start": "2026-01-15 10:00:00+09:00", "end": "+1h" }],
+        }))
+        .expect("an addition");
+        assert_eq!(starts(&newer), ["times 2026-01-15 10:00:00+09:00", "times 2025-09-09 10:00", "times 2024-09-30 13:00"]);
+        assert!(newer.contains("            - { start: 2024-09-30 13:00, end: +1h }\n"), "{newer}");
+
+        let between = edit_and_check(LISTED, serde_json::json!({ "add_instances": [{ "start": "2025-01-10" }] }))
+            .expect("an addition");
+        assert_eq!(starts(&between), ["times 2025-09-09 10:00", "times 2025-01-10", "times 2024-09-30 13:00"]);
+
+        let oldest_first = "---\nevents:\n    Standup:\n        instances:\n            - start: 2026-01-08\n            - start: 2026-01-15\n---\n";
+        let both = edit_and_check(oldest_first, serde_json::json!({
+            "add_instances": [{ "start": "2026-01-22" }, { "start": "2026-01-01" }],
+        }))
+        .expect("two additions");
+        assert_eq!(
+            starts(&both),
+            ["instances 2026-01-01", "instances 2026-01-08", "instances 2026-01-15", "instances 2026-01-22"],
+        );
+    }
+
+    /// An event without a list is given one under the current spelling, entry keys in the
+    /// schema's order and every value checked as the event's own would be.
+    #[test]
+    fn an_occurrence_is_written_and_checked_like_the_event() {
+        let lone = "---\nevents:\n    Standup:\n        start: 2026-09-23\n---\n";
+        let after = edit_and_check(lone, serde_json::json!({
+            "add_instances": [{ "start": "2026-09-30 09:00:00+09:00", "location": "Room 4", "end": "+30m", "alarms": ["-10m"] }],
+        }))
+        .expect("a first occurrence");
+        assert!(
+            after.ends_with("        instances:\n            - start: 2026-09-30 09:00:00+09:00\n              end: +30m\n              location: Room 4\n              alarms:\n                  - -10m\n---\n"),
+            "{after}",
+        );
+
+        for (bad, says) in [
+            (serde_json::json!({ "start": "2026-09-30 09:00" }), "+09:00"),
+            (serde_json::json!({ "start": "2026-09-30", "end": "later" }), "duration"),
+            (serde_json::json!({ "start": "2026-09-30", "alarms": ["10m"] }), "needs a sign"),
+        ] {
+            let error = edit_and_check(lone, serde_json::json!({ "add_instances": [bad] })).expect_err("refused");
+            assert!(error.contains(says), "{error}");
+        }
+    }
+
+    /// The note's own spelling and the moment with its offset name the same occurrence, and
+    /// taking one out while adding another is a move, in one commit.
+    #[test]
+    fn an_occurrence_is_removed_by_its_moment() {
+        for spelling in ["2024-09-30 13:00", "2024-09-30 13:00:00+09:00", "2024-09-30T04:00:00Z"] {
+            let after = edit_and_check(LISTED, serde_json::json!({ "remove_instances": [spelling] }))
+                .expect("a removal");
+            assert_eq!(after, LISTED.replace("            - { start: 2024-09-30 13:00, end: +1h }\n", ""), "{spelling}");
+        }
+
+        let moved = edit_and_check(LISTED, serde_json::json!({
+            "remove_instances": ["2025-09-09 10:00"],
+            "add_instances": [{ "start": "2025-09-10 10:00:00+09:00", "end": "11:30" }],
+        }))
+        .expect("a move");
+        assert_eq!(starts(&moved), ["times 2025-09-10 10:00:00+09:00", "times 2024-09-30 13:00"]);
+    }
+
+    #[test]
+    fn a_list_edit_that_cannot_be_made_says_why() {
+        let error = edit_and_check(LISTED, serde_json::json!({ "remove_instances": ["2025-09-10 10:00"] }))
+            .expect_err("not listed");
+        assert!(error.contains("2025-09-09 10:00, 2024-09-30 13:00"), "{error}");
+
+        let error = edit_and_check(LISTED, serde_json::json!({ "add_instances": [{ "start": "2025-09-09 10:00:00+09:00" }] }))
+            .expect_err("listed already");
+        assert!(error.contains("remove_instances"), "{error}");
+
+        let error = edit_and_check(LISTED, serde_json::json!({
+            "clear": ["times"], "add_instances": [{ "start": "2026-01-15" }],
+        }))
+        .expect_err("both at once");
+        assert!(error.contains("not both"), "{error}");
+
+        // Taking every occurrence from an event that has nothing else leaves it nothing to draw.
+        let error = edit_and_check(LISTED, serde_json::json!({
+            "remove_instances": ["2025-09-09 10:00", "2024-09-30 13:00"],
+        }))
+        .expect_err("nothing left");
+        assert!(error.contains("remove_event"), "{error}");
     }
 
     /// A note already out of shape is not the edit's doing, and refusing every later edit to it

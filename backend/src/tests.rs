@@ -2590,7 +2590,7 @@ fn corpus_notes(dir: &Path) -> Vec<std::path::PathBuf> {
 /// MORY_CORPUS=/path/to/notes cargo test frontmatter_edits_a_real_corpus -- --ignored --nocapture
 /// ```
 ///
-/// Two passes, asserting the two things the module claims.
+/// Three passes, asserting the things the module claims.
 ///
 /// **Adding a key and removing it again is byte-identical.** This is the ordinary shape of an
 /// edit and the whole reason the editor is textual: on a clone of the notes from 2026-10-05 this
@@ -2603,6 +2603,10 @@ fn corpus_notes(dir: &Path) -> Vec<std::path::PathBuf> {
 /// chose and the white space on lines that held only indentation, and no amount of care can put
 /// those back once they are gone. A single real edit keeps them, because the lines are still
 /// there to read the indentation from.
+///
+/// **An occurrence added to a list and removed again is byte-identical, and so is the meaning of
+/// a list with each item taken out and put back.** The meaning only, for the same reason as
+/// above: an item put back is written in block style, whatever style it was taken out in.
 #[test]
 #[ignore]
 fn frontmatter_edits_a_real_corpus() {
@@ -2618,6 +2622,8 @@ fn frontmatter_edits_a_real_corpus() {
 
     let (mut with_frontmatter, mut exact, mut declined) = (0, 0, 0);
     let (mut touched, mut same_meaning, mut declined_deep) = (0, 0, 0);
+    let (mut lists, mut lists_exact, mut lists_declined) = (0, 0, 0);
+    let (mut items_restored, mut items_declined) = (0, 0);
 
     for path in &notes {
         let Ok(text) = std::fs::read_to_string(path) else {
@@ -2651,6 +2657,58 @@ fn frontmatter_edits_a_real_corpus() {
         else {
             continue;
         };
+
+        // Pass three: every list of occurrences, added to and taken from.
+        if let Some(Value::Mapping(events)) = root.get(Value::String("events".into())) {
+            for (name, event) in events {
+                let (Value::String(name), Value::Mapping(fields)) = (name, event) else {
+                    continue;
+                };
+                for key in ["instances", "times"] {
+                    let Some(Value::Sequence(items)) = fields.get(Value::String(key.into())) else {
+                        continue;
+                    };
+                    let list = ["events", name.as_str(), key];
+                    lists += 1;
+                    let probe = serde_yaml::Mapping::from_iter([("start".into(), "2099-01-01".into())]);
+                    match apply(&text, &[Change::insert(&list, items.len(), Value::Mapping(probe))])
+                        .and_then(|edited| apply(&edited, &[Change::remove_item(&list, items.len())]))
+                    {
+                        Ok(restored) => {
+                            assert_eq!(
+                                restored,
+                                text,
+                                "{}: adding and removing an occurrence of {name:?} changed the note",
+                                path.display(),
+                            );
+                            lists_exact += 1;
+                        },
+                        Err(_) => lists_declined += 1,
+                    }
+                    for (index, item) in items.iter().enumerate() {
+                        let put_back = [Change::remove_item(&list, index), Change::insert(&list, index, item.clone())];
+                        match apply(&text, &put_back) {
+                            Ok(restored) => {
+                                let after = Note::parse(&restored);
+                                let parsed: Value = serde_yaml::from_str(&after.block).unwrap_or_else(|e| {
+                                    panic!("{}: the edit produced invalid YAML: {e}", path.display())
+                                });
+                                assert_eq!(
+                                    parsed,
+                                    Value::Mapping(root.clone()),
+                                    "{}: putting back item {index} of {name:?} did not restore it",
+                                    path.display(),
+                                );
+                                assert_eq!(after.body, Note::parse(&text).body, "{}", path.display());
+                                items_restored += 1;
+                            },
+                            Err(_) => items_declined += 1,
+                        }
+                    }
+                }
+            }
+        }
+
         let mut restore = Vec::new();
         if let Some(Value::Mapping(task)) = root.get(Value::String("task".into())) {
             for (key, value) in task {
@@ -2721,6 +2779,11 @@ fn frontmatter_edits_a_real_corpus() {
     println!("notes carrying a task or an event:  {touched}");
     println!("  meaning and body preserved:       {same_meaning}");
     println!("  declined with an explanation:     {declined_deep}");
+    println!("lists of occurrences:               {lists}");
+    println!("  add and remove is byte-identical: {lists_exact}");
+    println!("  declined with an explanation:     {lists_declined}");
+    println!("  items taken out and put back:     {items_restored}");
+    println!("  declined with an explanation:     {items_declined}");
     assert!(with_frontmatter > 0, "the corpus held no frontmatter");
 }
 
@@ -2936,6 +2999,22 @@ fn the_event_tools_emit_frontmatter_the_frontend_would_accept() {
             serde_yaml::Value::Sequence(vec!["2026-01-07 09:30:00+09:00".into()]),
         ),
         Change::set(&["events", "Standup", "category"], "meeting/1on1"),
+        // An event that lists its occurrences rather than having a start of its own, as
+        // `add_instances` writes one.
+        Change::insert(
+            &["events", "Committee", "instances"],
+            0,
+            serde_yaml::from_str::<serde_yaml::Value>(
+                "{ start: '2026-11-05 10:00:00+09:00', end: '+1h', location: Room 4, alarms: [-10m] }",
+            )
+            .expect("an occurrence"),
+        ),
+        Change::insert(
+            &["events", "Committee", "instances"],
+            1,
+            serde_yaml::from_str::<serde_yaml::Value>("{ start: '2026-12-03', name: Year-end }")
+                .expect("an occurrence"),
+        ),
     ];
 
     let note = apply("# Some events\n", &changes).expect("the frontmatter should be written");
