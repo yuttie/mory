@@ -276,7 +276,7 @@ test('quick adds subtasks from the editor', async ({ context, page }) => {
 // The toolbar's still goes under the selected task, whatever the editor's went under.
 test('quick adds from the toolbar under the selected task after the editor', async ({ context, page }) => {
     await mockBackend(context, NOTES);
-    await page.goto(`/tasks-next/_/descendants/status?task=${STEP}`);
+    await page.goto(`/tasks-next/${PROJECT}/descendants/status?task=${STEP}`);
     await dialog(page).getByRole('button', { name: 'Quick Add' }).click();
     const outline = page.getByRole('dialog').filter({ hasText: 'Quick add tasks' });
     await expect(outline.getByRole('button', { name: 'Under: Step' })).toBeVisible();
@@ -287,7 +287,7 @@ test('quick adds from the toolbar under the selected task after the editor', asy
     await expect(dialog(page)).toBeHidden();
 
     await page.locator('.item-view .v-toolbar').getByTitle('Quick add', { exact: true }).click();
-    await expect(outline.getByRole('button', { name: 'Under: Top level' })).toBeVisible();
+    await expect(outline.getByRole('button', { name: 'Under: Project' })).toBeVisible();
 });
 
 // What was typed is still there to save again.

@@ -105,3 +105,25 @@ test('hides a group whose tasks are all hidden as completed', async ({ context, 
     await expect(row(page, 'Untagged')).toBeVisible();
     await expect(row(page, 'home')).toHaveCount(0);
 });
+
+// The toolbar's outline starts in the selected group, whichever task the editor's went under.
+test('quick adds from the toolbar in the selected group after the editor', async ({ context, page }) => {
+    const repository = await mockBackend(context, NOTES);
+    await page.goto(`/tasks-next/tag-group-work/descendants/status?task=${uuid(3)}`);
+    const outline = page.getByRole('dialog').filter({ hasText: 'Quick add tasks' });
+    await page.locator('.task-editor-next').getByRole('button', { name: 'Quick Add' }).click();
+    await expect(outline.getByRole('button', { name: 'Under: Errand' })).toBeVisible();
+    await outline.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(outline).toBeHidden();
+    await page.locator('.task-editor-next').getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(heading(page)).toBeHidden();
+
+    await page.locator('.item-view .v-toolbar').getByTitle('Quick add', { exact: true }).click();
+    await expect(outline.getByRole('button', { name: 'Under: #work' })).toBeVisible();
+    await outline.locator('.cm-content').click();
+    await page.keyboard.insertText('Report');
+    await outline.getByRole('button', { name: 'Add 1 task' }).click();
+    await expect.poll(() => repository.writes.map((write) => write.path))
+        .toEqual([expect.stringMatching(/^\.tasks\/[0-9a-f-]{36}\.md$/)]);
+    expect(YAML.parse(repository.writes[0].content.split('---')[1]).tags).toEqual(['work']);
+});
