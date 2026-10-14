@@ -218,7 +218,10 @@ test('adds a subtask from the editor', async ({ context, page }) => {
     await dialog(page).getByRole('button', { name: 'Add Subtask' }).click();
 
     const draft = page.getByRole('dialog').filter({ hasText: 'New subtask of "Project"' });
-    await expect(draft.getByRole('button', { name: 'Add Subtask' })).toHaveCount(0);
+    await expect(draft).toBeVisible();
+    for (const name of ['Add Subtask', 'Quick Add', 'More']) {
+        await expect(draft.getByRole('button', { name, exact: true })).toHaveCount(0);
+    }
     await draft.getByRole('textbox', { name: 'Title', exact: true }).fill('Second step');
     await draft.getByRole('button', { name: 'Create', exact: true }).click();
     await expect.poll(() => repository.writes.map(({ path }) => path)).toEqual([expect.stringMatching(new RegExp(`^\\.tasks/${PROJECT}/[0-9a-f-]{36}\\.md$`))]);
@@ -552,6 +555,37 @@ test('deletes the selected task, and lists every task', async ({ context, page }
     await expect(page).toHaveURL(url('_', 'status'));
     await expect(listed(page, 'Project')).toBeVisible();
     await expect(listed(page, 'Errand')).toHaveCount(0);
+});
+
+// Beside the rest, both would wrap the header onto a second row at a phone's width.
+test('keeps adding subtasks in a menu on a phone', async ({ context, page }) => {
+    await page.setViewportSize({ width: 360, height: 680 });
+    const repository = await mockBackend(context, NOTES);
+    await page.goto(`/tasks-next/_/descendants/status?task=${PROJECT}`);
+    await expect(title(page)).toHaveValue('Project');
+    const heading = dialog(page).locator('.editor-heading');
+    // On one row when every button reaches below where every other starts.
+    const boxes = await heading.locator('.v-btn').evaluateAll((buttons) => buttons.map((button) => {
+        const { top, bottom } = button.getBoundingClientRect();
+        return { top, bottom };
+    }));
+    expect(boxes).toHaveLength(6);
+    expect(Math.max(...boxes.map(({ top }) => top))).toBeLessThan(Math.min(...boxes.map(({ bottom }) => bottom)));
+    await expect(dialog(page).getByRole('button', { name: 'Add Subtask' })).toHaveCount(0);
+
+    await dialog(page).getByRole('button', { name: 'More', exact: true }).click();
+    await page.locator('.v-menu .v-list-item').filter({ hasText: 'Quick Add' }).click();
+    const outline = page.getByRole('dialog').filter({ hasText: 'Quick add tasks' });
+    await expect(outline.getByRole('button', { name: 'Under: Project' })).toBeVisible();
+    await outline.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(outline).toBeHidden();
+
+    await dialog(page).getByRole('button', { name: 'More', exact: true }).click();
+    await page.locator('.v-menu .v-list-item').filter({ hasText: 'Add Subtask' }).click();
+    const draft = page.getByRole('dialog').filter({ hasText: 'New subtask of "Project"' });
+    await draft.getByRole('textbox', { name: 'Title', exact: true }).fill('Second step');
+    await draft.getByRole('button', { name: 'Create', exact: true }).click();
+    await expect.poll(() => repository.writes.map(({ path }) => path)).toEqual([expect.stringMatching(new RegExp(`^\\.tasks/${PROJECT}/[0-9a-f-]{36}\\.md$`))]);
 });
 
 // Full screen, with no scrim to click or Escape to press, so Cancel is the way out.

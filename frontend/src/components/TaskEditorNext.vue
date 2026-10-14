@@ -60,35 +60,65 @@
                         </v-btn>
                         <!-- As from the task's row in the tree, and the view's Quick add: the host
                              starts the subtasks in a dialog of its own, and what is typed here
-                             stays as it is. -->
-                        <v-btn
-                            v-if="isEdit"
-                            variant="text"
-                            color="primary"
-                            aria-label="Add Subtask"
-                            title="Add Subtask"
-                            v-bind:icon="$vuetify.display.smAndDown"
-                            v-on:click="onAddSubtask"
+                             stays as it is. A phone has no room for both beside the rest, and
+                             neither is used while writing, so there they wait in a menu. -->
+                        <template v-if="isEdit && !$vuetify.display.xs">
+                            <v-btn
+                                variant="text"
+                                color="primary"
+                                aria-label="Add Subtask"
+                                title="Add Subtask"
+                                v-bind:icon="$vuetify.display.smAndDown"
+                                v-on:click="onAddSubtask"
+                            >
+                                <v-icon v-bind:class="{ 'mr-1': $vuetify.display.mdAndUp }">
+                                    {{ mdiPlus }}
+                                </v-icon>
+                                <span v-if="$vuetify.display.mdAndUp">Add Subtask</span>
+                            </v-btn>
+                            <v-btn
+                                variant="text"
+                                color="primary"
+                                aria-label="Quick Add"
+                                title="Quick Add"
+                                v-bind:icon="$vuetify.display.smAndDown"
+                                v-on:click="onQuickAdd"
+                            >
+                                <v-icon v-bind:class="{ 'mr-1': $vuetify.display.mdAndUp }">
+                                    {{ mdiFormatListChecks }}
+                                </v-icon>
+                                <span v-if="$vuetify.display.mdAndUp">Quick Add</span>
+                            </v-btn>
+                        </template>
+                        <v-menu
+                            v-else-if="isEdit"
+                            location="bottom end"
                         >
-                            <v-icon v-bind:class="{ 'mr-1': $vuetify.display.mdAndUp }">
-                                {{ mdiPlus }}
-                            </v-icon>
-                            <span v-if="$vuetify.display.mdAndUp">Add Subtask</span>
-                        </v-btn>
-                        <v-btn
-                            v-if="isEdit"
-                            variant="text"
-                            color="primary"
-                            aria-label="Quick Add"
-                            title="Quick Add"
-                            v-bind:icon="$vuetify.display.smAndDown"
-                            v-on:click="onQuickAdd"
-                        >
-                            <v-icon v-bind:class="{ 'mr-1': $vuetify.display.mdAndUp }">
-                                {{ mdiFormatListChecks }}
-                            </v-icon>
-                            <span v-if="$vuetify.display.mdAndUp">Quick Add</span>
-                        </v-btn>
+                            <template v-slot:activator="{ props: menuProps }">
+                                <v-btn
+                                    v-bind="menuProps"
+                                    variant="text"
+                                    color="primary"
+                                    aria-label="More"
+                                    title="More"
+                                    icon
+                                >
+                                    <v-icon>{{ mdiDotsVertical }}</v-icon>
+                                </v-btn>
+                            </template>
+                            <v-list>
+                                <v-list-item
+                                    title="Add Subtask"
+                                    v-bind:prepend-icon="mdiPlus"
+                                    v-on:click="onAddSubtask"
+                                />
+                                <v-list-item
+                                    title="Quick Add"
+                                    v-bind:prepend-icon="mdiFormatListChecks"
+                                    v-on:click="onQuickAdd"
+                                />
+                            </v-list>
+                        </v-menu>
                         <v-btn
                             v-if="isEdit"
                             color="error"
@@ -492,6 +522,7 @@ import {
     mdiClose,
     mdiContentSave,
     mdiDelete,
+    mdiDotsVertical,
     mdiFileDocument,
     mdiFileDocumentEdit,
     mdiFileTreeOutline,
