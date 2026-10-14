@@ -124,6 +124,22 @@ test('saves a task and stays open on it', async ({ context, page }) => {
     await expect(page).toHaveURL(url(PROJECT, 'status'));
 });
 
+// Written back as it was read, and on one line, where a second would be read back as the note.
+test('keeps a title\'s Markdown, on one line', async ({ context, page }) => {
+    const repository = await mockBackend(context, { ...NOTES, [`.tasks/${ERRAND}.md`]: note('Buy *the* `milk`') });
+    await page.goto(`/tasks-next/_/descendants/status?task=${ERRAND}`);
+    await expect(title(page)).toHaveValue('Buy *the* `milk`');
+    await title(page).fill('Buy *the* `milk`\nand eggs');
+    const save = dialog(page).getByRole('button', { name: 'Save', exact: true });
+    await save.click();
+
+    await expect.poll(() => repository.writes.length).toBe(1);
+    expect(repository.writes[0].content).toContain('\n# Buy *the* `milk` and eggs\n\n');
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
+    await expect(title(page)).toHaveValue('Buy *the* `milk` and eggs');
+    await expect(save).toBeDisabled();
+});
+
 // What was typed after Save was pressed is not in the note, and is still there to save.
 test('keeps what is typed while a save runs', async ({ context, page }) => {
     const repository = await mockBackend(context, NOTES);

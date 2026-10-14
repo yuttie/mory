@@ -939,7 +939,9 @@ function taskOf(base: Task | null | undefined): Task {
         source: base?.source,
         created_at: base?.created_at,
         uuid: uuid.value,
-        title: form.title.trim(),
+        // One line: the title is written as the note's `# ` heading, and a line after that would
+        // be read back as the start of the note.
+        title: form.title.replace(/\s*\n\s*/g, ' ').trim(),
         tags: [...form.tags],
         status: withoutBlanks(form.status),
         importance: form.importance ?? undefined,

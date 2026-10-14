@@ -3,7 +3,6 @@ import remarkParse from 'remark-parse';
 import remarkFrontmatter from 'remark-frontmatter';
 import { visit } from 'unist-util-visit';
 import type { Root, Heading, Yaml } from 'mdast';
-import { toString } from 'mdast-util-to-string';
 
 /**
  * Lightweight markdown parsing helpers.
@@ -91,7 +90,8 @@ export function chunkMarkdownByHeadings(markdown: string): { frontmatter: string
  *
  * Behavior:
  * - frontmatter: content of the initial YAML block (without the --- fences), or "" if none.
- * - heading: first level-1 heading text (ATX or Setext), or "" if none.
+ * - heading: first level-1 heading's text (ATX or Setext) as written, inline Markdown and all, or
+ *   "" if none.
  * - rest: markdown after that H1 block (or after frontmatter if no H1), with leading blank lines trimmed.
  */
 export function extractFrontmatterH1AndRest(markdown: string): {
@@ -114,8 +114,9 @@ export function extractFrontmatterH1AndRest(markdown: string): {
         afterFrontmatterOffset = first.position?.end.offset ?? 0;
     }
 
-    // 2) Find the first depth-1 heading anywhere in document order
-    let h1Node: Heading | null = null;
+    // 2) Find the first depth-1 heading anywhere in document order. Set in a callback, which
+    // TypeScript does not follow, so a plain `null` would leave it typed as never set.
+    let h1Node = null as Heading | null;
     visit(tree, 'heading', (node: Heading) => {
         if (!h1Node && node.depth === 1) {
             h1Node = node;
@@ -127,7 +128,11 @@ export function extractFrontmatterH1AndRest(markdown: string): {
     let sliceFrom = afterFrontmatterOffset; // default: after frontmatter (or 0 if none)
 
     if (h1Node?.position?.end?.offset != null) {
-        headingText = toString(h1Node).trim();
+        // As written rather than as plain text: a task's title is written back after `# ` as the
+        // editor holds it, and plain text would drop its emphasis, code and links at the next save.
+        const start = h1Node.children[0]?.position?.start.offset;
+        const end = h1Node.children.at(-1)?.position?.end.offset;
+        headingText = start != null && end != null ? markdown.slice(start, end).trim() : '';
         sliceFrom = h1Node.position.end.offset;
     }
 

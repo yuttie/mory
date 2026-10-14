@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { chunkMarkdownByHeadings } from '@/markdown-utils';
+import { chunkMarkdownByHeadings, extractFrontmatterH1AndRest } from '@/markdown-utils';
+import { render } from '@/task';
 
 // The source line each chunk claims to start on, which must hold the chunk's first line.
 function claimedFirstLines(markdown: string): [string, string][] {
@@ -31,5 +32,32 @@ describe('chunkMarkdownByHeadings', () => {
             ['# One', '# One'],
             ['## Two', '## Two'],
         ]);
+    });
+});
+
+describe('extractFrontmatterH1AndRest', () => {
+    // A task's title is written back after `# ` as it was read, so plain text would lose these.
+    it('reads the heading as written, inline Markdown and all', () => {
+        const read = extractFrontmatterH1AndRest('---\ntask: {}\n---\n\n# Read *the* `spec` [here](https://example.com) \\# #\n\nBody\n');
+        expect(read).toEqual({
+            frontmatter: 'task: {}',
+            heading: 'Read *the* `spec` [here](https://example.com) \\#',
+            rest: 'Body\n',
+        });
+    });
+
+    it('reads a Setext heading without its underline', () => {
+        expect(extractFrontmatterH1AndRest('Title **bold**\n===\n\nBody').heading).toBe('Title **bold**');
+    });
+
+    it('reads an empty heading, or none, as no title', () => {
+        expect(extractFrontmatterH1AndRest('#\n\nBody')).toMatchObject({ heading: '', rest: 'Body' });
+        expect(extractFrontmatterH1AndRest('Body')).toMatchObject({ heading: '', rest: 'Body' });
+    });
+
+    it('gives back the title a task was written with', () => {
+        const title = 'Fix _the_ `parser`, see [#12](https://example.com/12)';
+        const written = render({ uuid: '00000000-0000-4000-8000-000000000001', title, tags: [], status: { kind: 'todo' }, note: 'Body\n' });
+        expect(extractFrontmatterH1AndRest(written)).toMatchObject({ heading: title, rest: 'Body\n' });
     });
 });
