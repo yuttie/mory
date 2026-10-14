@@ -276,11 +276,16 @@ impl Mory {
     #[tool(
         name = "create_task",
         description = "Create a task and commit it. Requires the notes:write scope.\n\nA task \
-                       is an ordinary note under `.tasks/` carrying a `task:` block. The schema \
-                       requires only status, defaulting to backlog. Importance is optional low, medium or high. \
-                       Urgency and parent progress are derived and cannot be set. available_from replaces start_at; \
-                       lead_time is whole calendar days or weeks. Use plan_task to schedule work. The result echoes the whole file back \
-                       so those defaults are visible.",
+                       is an ordinary note under `.tasks/` carrying a `task:` block. Only its \
+                       status is required, and it defaults to backlog. importance is low, \
+                       medium or high, or left out for an unrated task. lead_time is how long \
+                       the work needs before its date, in whole days or weeks (`14d`, `2w`); \
+                       left out, it is the longest `.mory/tasks.yaml` sets for one of its tags, \
+                       else that file's default, else 7d. available_from is \
+                       when it can be started, due_by the soft target and deadline the hard \
+                       cutoff.\n\nUrgency and progress are worked out from these and cannot be \
+                       set. To put it on a day's plan, use plan_task. The result echoes the \
+                       whole file back so the defaults are visible.",
         annotations(title = "Create a task", read_only_hint = false, destructive_hint = false,
                     idempotent_hint = false, open_world_hint = false)
     )]
@@ -322,7 +327,7 @@ impl Mory {
         name = "complete_task",
         description = "Mark a task done and commit it. Requires the notes:write scope.\n\nSets \
                        the status to done with a completed_at of now unless one is given, and \
-                       only the status; parent progress is derived from done leaves.",
+                       changes nothing else. A parent's progress follows from it.",
         annotations(title = "Complete a task", read_only_hint = false, destructive_hint = false,
                     idempotent_hint = true, open_world_hint = false)
     )]
@@ -358,8 +363,10 @@ impl Mory {
 
     #[tool(
         name = "set_task_dates",
-        description = "Set or clear a task's available_from, due_by and deadline. Use plan_task for scheduling; urgency and progress are derived. \
-                       Requires the notes:write scope.\n\nThese are bare dates (`2026-03-15`) \
+        description = "Set or clear a task's available_from, due_by and deadline, and when the \
+                       last two ring. Requires the notes:write scope.\n\nThe dates say when the \
+                       task can start and when it is due; which day it is worked on is a day \
+                       plan's, set with plan_task. They are bare dates (`2026-03-15`) \
                        or datetimes carrying their offset (`2026-03-15 09:00:00+09:00`). due_by \
                        and deadline are drawn on the calendar in their own colours, so they are \
                        events as well as fields, and list_events returns them. \

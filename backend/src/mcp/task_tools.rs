@@ -489,13 +489,17 @@ pub struct CreateTaskArgs {
     /// low, medium or high. Omit to leave unrated.
     #[serde(default)]
     pub importance: Option<Importance>,
-    /// Whole calendar days or weeks, otherwise tag/global defaults apply.
+    /// How long the work needs before its date, in whole days or weeks: `14d`, `2w`. Omit for
+    /// the longest `.mory/tasks.yaml` sets for one of its tags, else that file's default, else 7d.
     #[serde(default)]
     pub lead_time: Option<String>,
+    /// When it can be started. A bare date, or a datetime carrying its offset.
     #[serde(default)]
     pub available_from: Option<String>,
+    /// The soft target, written as `available_from` is.
     #[serde(default)]
     pub due_by: Option<String>,
+    /// The hard cutoff, written as `available_from` is.
     #[serde(default)]
     pub deadline: Option<String>,
     /// Required when `status` is `waiting`.
