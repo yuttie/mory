@@ -229,6 +229,25 @@ test('adds a subtask from the editor', async ({ context, page }) => {
     await expect(listed(page, 'Second step')).toBeVisible();
 });
 
+// Back where it was in the editor, which Escape closes while the draft's snackbar still shows.
+test('closes the editor with Escape after adding a subtask', async ({ context, page }) => {
+    await mockBackend(context, NOTES);
+    await page.goto(`/tasks-next/_/descendants/status?task=${PROJECT}`);
+    const add = dialog(page).getByRole('button', { name: 'Add Subtask' });
+    await add.click();
+    const draft = page.getByRole('dialog').filter({ hasText: 'New subtask of "Project"' });
+    await draft.getByRole('textbox', { name: 'Title', exact: true }).fill('Second step');
+    await draft.getByRole('button', { name: 'Create', exact: true }).click();
+    await expect(draft).toBeHidden();
+
+    const created = page.getByText('Task "Second step" created successfully!');
+    await expect(created).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog(page)).toBeHidden();
+    await expect(created).toBeVisible();
+    await expect(page).toHaveURL(url('_', 'status'));
+});
+
 // An outline of them, under the task the editor holds, as from the toolbar under the selected one.
 test('quick adds subtasks from the editor', async ({ context, page }) => {
     const repository = await mockBackend(context, NOTES);
