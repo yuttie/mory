@@ -29,6 +29,15 @@ export default createVuetify({
     VBtnToggle: {
         variant: "outlined",
     },
+    // A snackbar never closes on Escape, yet Vuetify counts it in the stack of overlays, where it
+    // is the top one while it shows, and a dialog beneath ignores Escape until it has gone: one
+    // shown over the task editor, as for a subtask just added, held Escape for five seconds.
+    // Vuetify keeps its own tooltips out of the stack the same way.
+    VSnackbar: {
+        VOverlay: {
+            _disableGlobalStack: true,
+        },
+    },
   },
   icons: {
     defaultSet: 'mdi',

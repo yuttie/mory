@@ -248,11 +248,12 @@
         </v-fade-transition>
         <v-snackbar v-model="error" color="error" location="top" timeout="5000">{{ error }}</v-snackbar>
 
-        <!-- The task the address names, in its editor over the list, which stays as it was. Closes
-             like any dialog while nothing is changed; from then on only its own buttons do, and
-             `keepUnsavedEdit` refuses Back, so a stray click, Escape or Back cannot throw an edit
-             away. Back changes the address, which closes it by itself: Vuetify's own handling of
-             Back would cancel that and close it a second time. -->
+        <!-- The task the address names, in its editor over the list, which stays as it was. A save
+             leaves it open for the next change. Closes like any dialog while nothing is unsaved;
+             from then on only its own buttons do, and `keepUnsavedEdit` refuses Back, so a stray
+             click, Escape or Back cannot throw an edit away. Back changes the address, which
+             closes it by itself: Vuetify's own handling of Back would cancel that and close it a
+             second time. -->
         <v-dialog
             ref="editorDialogRef"
             v-bind:model-value="editedNode !== undefined"
@@ -276,10 +277,13 @@
                 v-bind:task-path="editedPath"
                 v-bind:known-tags="store.knownTags"
                 v-bind:known-contacts="store.knownContacts"
+                v-bind:saving="saving"
                 v-on:save="onEditedTaskSave"
                 v-on:delete="onEditedTaskDelete"
                 v-on:cancel="closeEditor"
                 v-on:change-parent="showChangeParentDialog"
+                v-on:add-subtask="onAddSubtask"
+                v-on:quick-add="onQuickAddSubtasks"
             />
         </v-dialog>
         <NewTaskDialog
@@ -290,8 +294,8 @@
         />
         <QuickAddTasksDialog
             v-model="quickAddDialogIsVisible"
-            v-bind:initial-parent="newTaskParent"
-            v-bind:tag="newTaskTag"
+            v-bind:initial-parent="quickAddStart.parent"
+            v-bind:tag="quickAddStart.tag"
         />
 
         <!-- Parent Selection Dialog -->
@@ -310,7 +314,7 @@
 <script lang="ts" setup>
 import { readImportance, isUrgent, compareUrgency } from '@/urgency';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
-import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { usePlansStore } from '@/stores/plans';
 import {
     type RouteLocationNormalized,
@@ -374,9 +378,13 @@ const error = ref<string | null>(null);
 const hideCompletedInTreeView = useLocalStorage('hide-completed-in-tree-view', false);
 const hideCompletedInItemView = useLocalStorage('hide-completed-in-item-view', false);
 const showParentDialog = ref<boolean>(false);
-// A save waits for the listing to show it, and a second press meanwhile would write the task again.
+// A save waits for the listing to show it and the editor to read it again, and a second press
+// meanwhile would write the task again.
 const saving = ref(false);
 const quickAddDialogIsVisible = ref(false);
+// Where the next outline starts, as `newTaskStart` for a single task: from Quick add, under the
+// selected task or with the selected group's tag; from the editor, under the task it holds.
+const quickAddStart = ref<{ parent: UUID | null; tag?: string | null }>({ parent: null });
 const itemViewMenuIsVisible = ref(false);
 // Statuses dropped in the status view and still being written, by task. The task is drawn where it
 // was dropped until the listing shows the write, rather than jumping back to its old column.
@@ -726,7 +734,7 @@ function navigateToState(selectedNodeId?: string, viewMode?: string) {
     router.push(tasksRoute(selectedNodeId, viewMode));
 }
 
-// Set while the view closes the editor itself, as Cancel, Save and Delete do, for the navigation
+// Set while the view closes the editor itself, as Cancel and Delete do, for the navigation
 // that closes it to pass `keepUnsavedEdit`.
 let closingEditor = false;
 
@@ -762,6 +770,27 @@ function returnFocus(): void {
     if (document.activeElement !== element) {
         element.parentElement?.closest<HTMLElement>('a[href], [tabindex]')?.focus();
     }
+}
+
+// The editor's button a dialog over it was opened from, to have focus again once that closes:
+// Vuetify gives it back only to a dialog's own activator, and these open from the editor's events.
+let focusInEditor: HTMLElement | null = null;
+watch(() => newTaskDialogIsVisible.value || quickAddDialogIsVisible.value, async (open) => {
+    const element = focusInEditor;
+    if (open || element === null) {
+        return;
+    }
+    focusInEditor = null;
+    // A tick after the dialog closes, as Vuetify gives an activator its focus back.
+    await nextTick();
+    if (element.isConnected) {
+        element.focus();
+    }
+});
+
+function rememberFocusInEditor(): void {
+    const element = document.activeElement;
+    focusInEditor = element instanceof HTMLElement ? element : null;
 }
 
 // Back and Forward change the address, which closes the editor or puts another task in it. With an
@@ -850,6 +879,15 @@ function onAddChildTask(id: UUID) {
     newTaskDialogIsVisible.value = true;
 }
 
+// From the editor: a task under the one it holds, in the new-task dialog over it.
+function onAddSubtask() {
+    if (editedNode.value) {
+        rememberFocusInEditor();
+        newTaskStart.value = { parent: editedNode.value.uuid };
+        newTaskDialogIsVisible.value = true;
+    }
+}
+
 // From a row's own button: the task's editor over the list as it is, as from the list.
 function onEditTask(id: UUID) {
     router.push(tasksRoute(activeNodeId.value, descendantsViewMode.value, id));
@@ -858,7 +896,17 @@ function onEditTask(id: UUID) {
 // The menu stays open for its switch, so it is closed here rather than left over the dialog.
 function openQuickAdd() {
     itemViewMenuIsVisible.value = false;
+    quickAddStart.value = { parent: newTaskParent.value, tag: newTaskTag.value };
     quickAddDialogIsVisible.value = true;
+}
+
+// From the editor: tasks under the one it holds, in the quick-add dialog over it.
+function onQuickAddSubtasks() {
+    if (editedNode.value) {
+        rememberFocusInEditor();
+        quickAddStart.value = { parent: editedNode.value.uuid };
+        quickAddDialogIsVisible.value = true;
+    }
 }
 
 async function onEditedTaskSave(task: Task) {
@@ -875,14 +923,21 @@ async function onEditedTaskSave(task: Task) {
     catch (e) {
         // The editor stays open with what was typed, so it can be tried again.
         error.value = `Could not save "${task.title}": ${e instanceof Error ? e.message : String(e)}`;
+        saving.value = false;
         return;
+    }
+    // The editor stays open for the next change, unless Cancel closed it meanwhile, and reads the
+    // note again to count that change from. Until then it still holds this one as unsaved.
+    try {
+        if (editedNode.value?.uuid === task.uuid) {
+            await taskEditorRef.value?.saved(task);
+        }
+    }
+    catch (e) {
+        error.value = `Saved "${task.title}", but could not read it again: ${e instanceof Error ? e.message : String(e)}`;
     }
     finally {
         saving.value = false;
-    }
-    // Closed, unless Cancel closed it meanwhile and the address is the list's already.
-    if (editedNode.value?.uuid === task.uuid) {
-        closeEditor();
     }
 }
 

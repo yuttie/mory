@@ -49,6 +49,7 @@
                             color="primary"
                             v-bind:aria-label="parentActionLabel"
                             v-bind:title="parentActionLabel"
+                            v-bind:disabled="saving"
                             v-bind:icon="$vuetify.display.smAndDown"
                             v-on:click="onChangeParent"
                         >
@@ -57,6 +58,67 @@
                             </v-icon>
                             <span v-if="$vuetify.display.mdAndUp">{{ parentActionLabel }}</span>
                         </v-btn>
+                        <!-- As from the task's row in the tree, and the view's Quick add: the host
+                             starts the subtasks in a dialog of its own, and what is typed here
+                             stays as it is. A phone has no room for both beside the rest, and
+                             neither is used while writing, so there they wait in a menu. -->
+                        <template v-if="isEdit && !$vuetify.display.xs">
+                            <v-btn
+                                variant="text"
+                                color="primary"
+                                aria-label="Add Subtask"
+                                title="Add Subtask"
+                                v-bind:icon="$vuetify.display.smAndDown"
+                                v-on:click="onAddSubtask"
+                            >
+                                <v-icon v-bind:class="{ 'mr-1': $vuetify.display.mdAndUp }">
+                                    {{ mdiPlus }}
+                                </v-icon>
+                                <span v-if="$vuetify.display.mdAndUp">Add Subtask</span>
+                            </v-btn>
+                            <v-btn
+                                variant="text"
+                                color="primary"
+                                aria-label="Quick Add"
+                                title="Quick Add"
+                                v-bind:icon="$vuetify.display.smAndDown"
+                                v-on:click="onQuickAdd"
+                            >
+                                <v-icon v-bind:class="{ 'mr-1': $vuetify.display.mdAndUp }">
+                                    {{ mdiFormatListChecks }}
+                                </v-icon>
+                                <span v-if="$vuetify.display.mdAndUp">Quick Add</span>
+                            </v-btn>
+                        </template>
+                        <v-menu
+                            v-else-if="isEdit"
+                            location="bottom end"
+                        >
+                            <template v-slot:activator="{ props: menuProps }">
+                                <v-btn
+                                    v-bind="menuProps"
+                                    variant="text"
+                                    color="primary"
+                                    aria-label="More"
+                                    title="More"
+                                    icon
+                                >
+                                    <v-icon>{{ mdiDotsVertical }}</v-icon>
+                                </v-btn>
+                            </template>
+                            <v-list>
+                                <v-list-item
+                                    title="Add Subtask"
+                                    v-bind:prepend-icon="mdiPlus"
+                                    v-on:click="onAddSubtask"
+                                />
+                                <v-list-item
+                                    title="Quick Add"
+                                    v-bind:prepend-icon="mdiFormatListChecks"
+                                    v-on:click="onQuickAdd"
+                                />
+                            </v-list>
+                        </v-menu>
                         <v-btn
                             v-if="isEdit"
                             color="error"
@@ -73,7 +135,7 @@
                              only while its title is empty, which the title's rule refuses already,
                              so this never holds back a Create. -->
                         <v-btn
-                            v-bind:disabled="!isModified || !!statusGateError || alarmsInvalid || !uiValid"
+                            v-bind:disabled="saving || !isModified || !!statusGateError || alarmsInvalid || !uiValid"
                             type="submit"
                             color="primary"
                             v-bind:aria-label="isEdit ? 'Save' : 'Create'"
@@ -460,11 +522,13 @@ import {
     mdiClose,
     mdiContentSave,
     mdiDelete,
+    mdiDotsVertical,
     mdiFileDocument,
     mdiFileDocumentEdit,
     mdiFileTreeOutline,
     mdiFlagOutline,
     mdiFormatHeader1,
+    mdiFormatListChecks,
     mdiLightbulbOnOutline,
     mdiLoading,
     mdiMenuDown,
@@ -526,11 +590,14 @@ const props = defineProps<{
     // The tag group a new task is started from: its tag, `null` for the Untagged group, which has
     // none to give, and absent when the draft is not from a group or sits under a task.
     selectedTag?: string | null;
+    // Set while the host writes the task the editor last emitted. It refuses another save, and a
+    // move, until then, which the buttons show rather than take a press and drop it.
+    saving?: boolean;
 }>();
 const pathRef = toRef(props, 'taskPath');
 
 // Composables
-const { task, loading, error } = useFetchTask(pathRef);
+const { task, loading, error, reread } = useFetchTask(pathRef);
 const calendars = useCalendarsStore();
 const tasks = useTasksStore();
 const settings = useTaskSettingsStore();
@@ -549,6 +616,8 @@ const emit = defineEmits<{
     (e: 'delete', path: string): void;
     (e: 'cancel'): void;
     (e: 'change-parent'): void;
+    (e: 'add-subtask'): void;
+    (e: 'quick-add'): void;
 }>();
 
 // Reactive states
@@ -573,6 +642,9 @@ const uiValid = ref(true);
 // switch to another.
 let filledFrom: string | null = null;
 const statusOptionRestricted = ref(true);
+// What the editor last gave its host to save, and whether the status was unlocked for it, for
+// `saved` to tell its own save from one an earlier editor gave.
+let emitted: { task: Task; unlocked: boolean } | null = null;
 // Kept across tasks and visits, as one way of working with notes rather than a property of a task.
 const notePanes = useLocalStorage<'viewer' | 'both' | 'editor'>('task-editor-note-panes', 'both');
 const lockScroll = useConfigValue('lock-scroll', false);
@@ -627,8 +699,8 @@ const ancestorTitles = computed<string[]>(() => {
         .filter((title): title is string => Boolean(title));
 });
 
-const initialForm = computed<EditableTask>(() => {
-    const t = task.value;
+// The form as the task `t` fills it, or as a new task starts it.
+function formOf(t: Task | null | undefined): EditableTask {
     if (!t) {
         const defaultTags = props.selectedTag ? [props.selectedTag] : [];
         return {
@@ -658,7 +730,9 @@ const initialForm = computed<EditableTask>(() => {
         deadline_alarms: t.alarms?.deadline ? [...t.alarms.deadline] : null,
         note: t.note ?? '',
     };
-});
+}
+
+const initialForm = computed<EditableTask>(() => formOf(task.value));
 
 const statusOptions = computed<{ kind: StatusKind, label: string }[]>(() => {
     const allowed = statusOptionRestricted.value ? nextOptions(initialForm.value.status.kind) : [...Object.keys(STATUS_LABEL)];
@@ -705,20 +779,7 @@ const tagItems = computed<{ title: string; value: string; }[]>(() =>
     })
 );
 
-const isModified = computed<boolean>(() => {
-    return (
-        form.title !== initialForm.value.title ||
-        !arraysEqual(form.tags, initialForm.value.tags) ||
-        !statusEqual(form.status, initialForm.value.status) ||
-        form.importance !== initialForm.value.importance ||
-        form.lead_time !== initialForm.value.lead_time ||
-        form.available_from !== initialForm.value.available_from ||
-        form.due_by !== initialForm.value.due_by ||
-        form.deadline !== initialForm.value.deadline ||
-        !sameTaskAlarms(taskAlarmsToWrite(form), taskAlarmsToWrite(initialForm.value)) ||
-        form.note !== initialForm.value.note
-    );
-});
+const isModified = computed<boolean>(() => differs(form, initialForm.value));
 
 // Watchers
 watch(
@@ -729,6 +790,10 @@ watch(
         if ((newTask === null || newTask === undefined) &&
             (oldTask === null || oldTask === undefined)) {
             return; // Don't reset the form
+        }
+        // The same note read again after a save, which `saved` settles.
+        if (newTask && oldTask && filledFrom === props.taskPath) {
+            return;
         }
         // A task moved under another parent is read again from its new path, but it is the same
         // note, so the form keeps what has been typed into it. Change Parent and a drop in the tree
@@ -808,43 +873,41 @@ function resetFromTask(t?: Task | undefined | null): void {
         clearTimeout(assessmentTimeout);
         assessmentTimeout = null;
     }
-    // Unlocking is an exception for one edit. The editor is reused for the next task and reloads
-    // the saved one, both through here, so neither may inherit it.
+    // Unlocking is an exception for one edit, which the next task the editor is reused for may not
+    // inherit. A saved edit is locked again by `saved`.
     statusOptionRestricted.value = true;
     filledFrom = t ? props.taskPath : null;
+    emitted = null;
+    Object.assign(form, formOf(t));
 
-    if (!t) {
-        const defaultTags = props.selectedTag ? [props.selectedTag] : [];
-        form.title = '';
-        form.tags = defaultTags;
-        form.status = { kind: 'backlog' };
-        form.importance = null;
-        form.lead_time = '';
-        form.available_from = '';
-        form.due_by = '';
-        form.deadline = '';
-        form.due_by_alarms = null;
-        form.deadline_alarms = null;
-        form.note = '';
+    // Automatically assess the task for existing tasks
+    if (t && form.title && form.title.length >= 3) {
+        performTaskAssessment(form.title);
     }
-    else {
-        form.title = t.title ?? '';
-        form.tags = Array.isArray(t.tags) ? [...t.tags] : [];
-        form.status = (t.status === undefined || t.status === null) ? { kind: 'backlog' } : { ...t.status };
-        form.importance = t.importance ?? null;
-        form.lead_time = t.lead_time ?? '';
-        form.available_from = t.available_from ?? '';
-        form.due_by = t.due_by ?? '';
-        form.deadline = t.deadline ?? '';
-        form.due_by_alarms = t.alarms?.due_by ? [...t.alarms.due_by] : null;
-        form.deadline_alarms = t.alarms?.deadline ? [...t.alarms.deadline] : null;
-        form.note = t.note ?? '';
+}
 
-        // Automatically assess the task for existing tasks
-        if (form.title && form.title.length >= 3) {
-            performTaskAssessment(form.title);
-        }
+// The host has saved `written` and the editor stays open on it: the note is read again, for the
+// next change to count from. The form takes the note as read, with the title trimmed as the save
+// trimmed it, unless something was typed while the save ran, which it keeps. The assessment stays:
+// it was of what the form holds. A `written` this editor did not give came from one closed while
+// it saved; this one opened since, on the note as it was before the save landed, and its form
+// takes the saved note too, unless something has been typed into it.
+async function saved(written: Task): Promise<void> {
+    const own = emitted?.task === written ? emitted : null;
+    emitted = null;
+    const base = initialForm.value;
+    if (!(await reread())) {
+        return;
     }
+    // As the save would read the form: a blank it trims away is no change.
+    if (own ? differs(formOf(taskOf(written)), formOf(written)) : differs(form, base)) {
+        return;
+    }
+    // Locked again only for the edit it was unlocked for, not by an unlock while the save ran.
+    if (own?.unlocked) {
+        statusOptionRestricted.value = true;
+    }
+    Object.assign(form, formOf(task.value));
 }
 
 function onBeforeunload(e: any) {
@@ -862,14 +925,19 @@ function onBeforeunload(e: any) {
 async function onSave(): Promise<void> {
     // Check validation results (async and returns { valid } in Vuetify 3)
     const result = await formRef.value?.validate?.();  // Runs Vuetify rules
-    if (!isModified.value || !result?.valid || statusGateError.value || alarmsInvalid.value) {
+    if (props.saving || !isModified.value || !result?.valid || statusGateError.value || alarmsInvalid.value) {
         return;
     }
+    emitted = { task: taskOf(task.value), unlocked: !statusOptionRestricted.value };
+    emit('save', emitted.task);
+}
+
+// The task the form holds, written over the note `base` was read from.
+function taskOf(base: Task | null | undefined): Task {
     const alarms = taskAlarmsToWrite(form);
-    // Create a Task value
-    const savedTask: Task = {
-        source: task.value?.source,
-        created_at: task.value?.created_at,
+    return {
+        source: base?.source,
+        created_at: base?.created_at,
         uuid: uuid.value,
         title: form.title.trim(),
         tags: [...form.tags],
@@ -882,7 +950,6 @@ async function onSave(): Promise<void> {
         ...(Object.keys(alarms).length > 0 ? { alarms } : {}),
         note: form.note,
     };
-    emit('save', savedTask);
 }
 
 function onDelete(): void {
@@ -900,7 +967,30 @@ function onChangeParent(): void {
     emit('change-parent');
 }
 
+function onAddSubtask(): void {
+    emit('add-subtask');
+}
+
+function onQuickAdd(): void {
+    emit('quick-add');
+}
+
 // Helper functions for comparison
+function differs(a: EditableTask, b: EditableTask): boolean {
+    return (
+        a.title !== b.title ||
+        !arraysEqual(a.tags, b.tags) ||
+        !statusEqual(a.status, b.status) ||
+        a.importance !== b.importance ||
+        a.lead_time !== b.lead_time ||
+        a.available_from !== b.available_from ||
+        a.due_by !== b.due_by ||
+        a.deadline !== b.deadline ||
+        !sameTaskAlarms(taskAlarmsToWrite(a), taskAlarmsToWrite(b)) ||
+        a.note !== b.note
+    );
+}
+
 function arraysEqual<T>(a: T[], b: T[]): boolean {
     if (a.length !== b.length) { return false; }
     return a.every((val, index) => val === b[index]);
@@ -1020,8 +1110,10 @@ function addNoteContent(suggestion: string) {
 
 // Expose
 // For a host that may close the editor: a draft with something typed in it is worth keeping open.
+// And for one that keeps it open on a task it has saved.
 defineExpose({
     isModified,
+    saved,
 });
 </script>
 

@@ -28,6 +28,11 @@ function title(page: Page): Locator {
     return dialog(page).getByRole('textbox', { name: 'Title', exact: true });
 }
 
+// The bar the dialog shows while a save runs, until the editor has read the saved note again.
+function saving(page: Page): Locator {
+    return dialog(page).locator('.v-overlay__content > .v-progress-linear');
+}
+
 // Open. Vuetify takes a dialog for the one on top, which Escape closes, a moment after it opens,
 // and an Escape pressed before then does nothing; its opening transition outlasts that moment.
 async function opened(page: Page): Promise<void> {
@@ -81,11 +86,12 @@ test('opens a task over the list it is in, and closes back to that list', async 
     await expect(page).toHaveURL(url('_', 'status'));
 });
 
-test('saves a task and goes back to its list', async ({ context, page }) => {
+// Open still, for the next change, and as a dialog with nothing unsaved in it again.
+test('saves a task and stays open on it', async ({ context, page }) => {
     const repository = await mockBackend(context, NOTES);
     await page.goto(`/tasks-next/${PROJECT}/descendants/status`);
     await listed(page, 'Step').click();
-    await title(page).fill('First step');
+    await title(page).fill('  First step ');
 
     // Changed, it stays open unless told otherwise.
     await opened(page);
@@ -93,27 +99,217 @@ test('saves a task and goes back to its list', async ({ context, page }) => {
     await page.waitForTimeout(500);
     // The address first, which a close changes at once, where the field stays while the dialog fades.
     await expect(page).toHaveURL(url(PROJECT, 'status', STEP));
-    await expect(title(page)).toHaveValue('First step');
+    await expect(title(page)).toHaveValue('  First step ');
 
-    await dialog(page).getByRole('button', { name: 'Save', exact: true }).click();
+    const save = dialog(page).getByRole('button', { name: 'Save', exact: true });
+    await save.click();
     await expect.poll(() => repository.writes.map(({ path }) => path)).toEqual([`.tasks/${PROJECT}/${STEP}.md`]);
-    expect(repository.writes[0].content).toContain('# First step');
+    expect(repository.writes[0].content).toContain('# First step\n');
+    await expect(listed(page, 'First step')).toBeVisible();
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
+    // As the note now reads, trimmed as it was saved.
+    await expect(title(page)).toHaveValue('First step');
+    await expect(save).toBeDisabled();
+    await expect(page).toHaveURL(url(PROJECT, 'status', STEP));
+
+    await title(page).fill('First step, revised');
+    await save.click();
+    await expect.poll(() => repository.writes.length).toBe(2);
+    expect(repository.writes[1].content).toContain('# First step, revised\n');
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
+    await expect(save).toBeDisabled();
+
+    await page.keyboard.press('Escape');
     await expect(dialog(page)).toBeHidden();
     await expect(page).toHaveURL(url(PROJECT, 'status'));
-    await expect(listed(page, 'First step')).toBeVisible();
 });
 
-// What was typed is still there to save again.
-test('keeps the editor open when a save fails', async ({ context, page }) => {
-    await mockBackend(context, NOTES);
-    await page.route(`${API_URL}notes/**`, (route) => route.request().method() === 'PUT' ? route.fulfill({ status: 500, json: {} }) : route.fallback());
+// What was typed after Save was pressed is not in the note, and is still there to save.
+test('keeps what is typed while a save runs', async ({ context, page }) => {
+    const repository = await mockBackend(context, NOTES);
+    await page.route(`${API_URL}notes/**`, async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await route.fallback();
+    });
+    await page.goto(`/tasks-next/${PROJECT}/descendants/status`);
+    await listed(page, 'Step').click();
+    await title(page).fill('First step');
+    const save = dialog(page).getByRole('button', { name: 'Save', exact: true });
+    await save.click();
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'false');
+    // The view writes one save at a time, and would drop a second press.
+    await expect(save).toBeDisabled();
+    await title(page).fill('First step, revised');
+    await expect(save).toBeDisabled();
+
+    await expect.poll(() => repository.writes.length).toBe(1);
+    expect(repository.writes[0].content).toContain('# First step\n');
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
+    await expect(title(page)).toHaveValue('First step, revised');
+    await expect(save).toBeEnabled();
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(500);
+    await expect(page).toHaveURL(url(PROJECT, 'status', STEP));
+    await expect(title(page)).toHaveValue('First step, revised');
+    // Counted from the note as saved, not as it was opened.
+    await title(page).fill('First step');
+    await expect(save).toBeDisabled();
+});
+
+// Closed while its save ran and opened again before it landed, the editor read the note as it
+// was: the save is no edit of its own to keep unsaved, and its form takes the note as saved.
+test('settles a save in the editor opened again while it ran', async ({ context, page }) => {
+    const repository = await mockBackend(context, NOTES);
+    await page.route(`${API_URL}notes/**`, async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await route.fallback();
+    });
     await page.goto(`/tasks-next/${PROJECT}/descendants/status`);
     await listed(page, 'Step').click();
     await title(page).fill('First step');
     await dialog(page).getByRole('button', { name: 'Save', exact: true }).click();
-    await expect(page.getByText('Could not save "First step"')).toBeVisible();
+    await dialog(page).getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(dialog(page)).toBeHidden();
+    await listed(page, 'Step').click();
+    await expect(title(page)).toHaveValue('Step');
+    expect(repository.writes).toEqual([]);
+
+    await expect.poll(() => repository.writes.length).toBe(1);
+    await expect(title(page)).toHaveValue('First step');
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
+    await expect(dialog(page).getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
+    await page.keyboard.press('Escape');
+    await expect(dialog(page)).toBeHidden();
+});
+
+// Saved, but not read again, the editor has no note to count the next change from: it says so,
+// and keeps the edit as unsaved rather than claim it matches a note it has not seen.
+test('says so when a saved task cannot be read again', async ({ context, page }) => {
+    const repository = await mockBackend(context, NOTES);
+    let written = false;
+    await page.route(`${API_URL}notes/**`, async (route) => {
+        written ||= route.request().method() === 'PUT';
+        await route.fallback();
+    });
+    await page.route(`${API_URL}v2/files/**`, (route) => written && route.request().method() === 'GET' ? route.fulfill({ status: 500, json: {} }) : route.fallback());
+    await page.goto(`/tasks-next/${PROJECT}/descendants/status`);
+    await listed(page, 'Step').click();
+    await title(page).fill('First step');
+    const save = dialog(page).getByRole('button', { name: 'Save', exact: true });
+    await save.click();
+
+    await expect(page.getByText('Saved "First step", but could not read it again')).toBeVisible();
+    expect(repository.writes.map(({ path }) => path)).toEqual([`.tasks/${PROJECT}/${STEP}.md`]);
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
+    await expect(title(page)).toHaveValue('First step');
+    await expect(save).toBeEnabled();
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(500);
     await expect(page).toHaveURL(url(PROJECT, 'status', STEP));
     await expect(title(page)).toHaveValue('First step');
+});
+
+// Under the task the editor holds, in a dialog of its own over the editor, which keeps what was
+// typed into it. A draft has no task to add one under yet.
+test('adds a subtask from the editor', async ({ context, page }) => {
+    const repository = await mockBackend(context, NOTES);
+    await page.goto(`/tasks-next/_/descendants/status?task=${PROJECT}`);
+    await title(page).fill('Project, renamed');
+    await dialog(page).getByRole('button', { name: 'Add Subtask' }).click();
+
+    const draft = page.getByRole('dialog').filter({ hasText: 'New subtask of "Project"' });
+    await expect(draft).toBeVisible();
+    for (const name of ['Add Subtask', 'Quick Add', 'More']) {
+        await expect(draft.getByRole('button', { name, exact: true })).toHaveCount(0);
+    }
+    await draft.getByRole('textbox', { name: 'Title', exact: true }).fill('Second step');
+    await draft.getByRole('button', { name: 'Create', exact: true }).click();
+    await expect.poll(() => repository.writes.map(({ path }) => path)).toEqual([expect.stringMatching(new RegExp(`^\\.tasks/${PROJECT}/[0-9a-f-]{36}\\.md$`))]);
+    expect(repository.writes[0].content).toContain('# Second step\n');
+    await expect(draft).toBeHidden();
+    await expect(page).toHaveURL(url('_', 'status', PROJECT));
+    await expect(title(page)).toHaveValue('Project, renamed');
+    await expect(listed(page, 'Second step')).toBeVisible();
+});
+
+// Back where it was in the editor, which Escape closes while the draft's snackbar still shows.
+test('closes the editor with Escape after adding a subtask', async ({ context, page }) => {
+    await mockBackend(context, NOTES);
+    await page.goto(`/tasks-next/_/descendants/status?task=${PROJECT}`);
+    const add = dialog(page).getByRole('button', { name: 'Add Subtask' });
+    await add.click();
+    const draft = page.getByRole('dialog').filter({ hasText: 'New subtask of "Project"' });
+    await draft.getByRole('textbox', { name: 'Title', exact: true }).fill('Second step');
+    await draft.getByRole('button', { name: 'Create', exact: true }).click();
+    await expect(draft).toBeHidden();
+    await expect(add).toBeFocused();
+
+    const created = page.getByText('Task "Second step" created successfully!');
+    await expect(created).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog(page)).toBeHidden();
+    await expect(created).toBeVisible();
+    await expect(page).toHaveURL(url('_', 'status'));
+});
+
+// An outline of them, under the task the editor holds, as from the toolbar under the selected one.
+test('quick adds subtasks from the editor', async ({ context, page }) => {
+    const repository = await mockBackend(context, NOTES);
+    await page.goto(`/tasks-next/_/descendants/status?task=${PROJECT}`);
+    await title(page).fill('Project, renamed');
+    await dialog(page).getByRole('button', { name: 'Quick Add' }).click();
+
+    const outline = page.getByRole('dialog').filter({ hasText: 'Quick add tasks' });
+    await expect(outline.getByRole('button', { name: 'Under: Project' })).toBeVisible();
+    await outline.locator('.cm-content').click();
+    await page.keyboard.insertText('Second step\nThird step');
+    await outline.getByRole('button', { name: 'Add 2 tasks' }).click();
+    const under = expect.stringMatching(new RegExp(`^\\.tasks/${PROJECT}/[0-9a-f-]{36}\\.md$`));
+    await expect.poll(() => repository.writes.map(({ path }) => path)).toEqual([under, under]);
+    await expect(outline).toBeHidden();
+    await expect(dialog(page).getByRole('button', { name: 'Quick Add' })).toBeFocused();
+    await expect(page).toHaveURL(url('_', 'status', PROJECT));
+    await expect(title(page)).toHaveValue('Project, renamed');
+    await expect(listed(page, 'Third step')).toBeVisible();
+});
+
+// The toolbar's still goes under the selected task, whatever the editor's went under.
+test('quick adds from the toolbar under the selected task after the editor', async ({ context, page }) => {
+    await mockBackend(context, NOTES);
+    await page.goto(`/tasks-next/${PROJECT}/descendants/status?task=${STEP}`);
+    await dialog(page).getByRole('button', { name: 'Quick Add' }).click();
+    const outline = page.getByRole('dialog').filter({ hasText: 'Quick add tasks' });
+    await expect(outline.getByRole('button', { name: 'Under: Step' })).toBeVisible();
+    await outline.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(outline).toBeHidden();
+    await opened(page);
+    await page.keyboard.press('Escape');
+    await expect(dialog(page)).toBeHidden();
+
+    await page.locator('.item-view .v-toolbar').getByTitle('Quick add', { exact: true }).click();
+    await expect(outline.getByRole('button', { name: 'Under: Project' })).toBeVisible();
+});
+
+// What was typed is still there to save again.
+test('keeps the editor open when a save fails', async ({ context, page }) => {
+    const repository = await mockBackend(context, NOTES);
+    let failing = true;
+    await page.route(`${API_URL}notes/**`, (route) => failing && route.request().method() === 'PUT' ? route.fulfill({ status: 500, json: {} }) : route.fallback());
+    await page.goto(`/tasks-next/${PROJECT}/descendants/status`);
+    await listed(page, 'Step').click();
+    await title(page).fill('First step');
+    const save = dialog(page).getByRole('button', { name: 'Save', exact: true });
+    await save.click();
+    await expect(page.getByText('Could not save "First step"')).toBeVisible();
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
+    await expect(page).toHaveURL(url(PROJECT, 'status', STEP));
+    await expect(title(page)).toHaveValue('First step');
+
+    failing = false;
+    await save.click();
+    await expect.poll(() => repository.writes.map(({ path }) => path)).toEqual([`.tasks/${PROJECT}/${STEP}.md`]);
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
+    await expect(save).toBeDisabled();
 });
 
 // Opened by its address, the dialog has no button of its own for Vuetify to give focus back to.
@@ -303,22 +499,39 @@ test('deletes a task opened from a list, and goes back to the list', async ({ co
     await expect(listed(page, 'Step')).toHaveCount(0);
 });
 
-// A save writes to the path it started with, which a move meanwhile would leave behind.
+// A save writes to the path it started with, which a move meanwhile would leave behind, and the
+// editor then reads the note again from that path.
 test('moves no task while its save runs', async ({ context, page }) => {
     const repository = await mockBackend(context, NOTES);
     await page.route(`${API_URL}notes/**`, async (route) => {
         await new Promise((resolve) => setTimeout(resolve, 1000));
         await route.fallback();
     });
+    let reading!: () => void;
+    const reread = new Promise<void>((resolve) => {
+        reading = resolve;
+    });
+    await page.route(`${API_URL}v2/files/**`, async (route) => {
+        if (repository.writes.length > 0 && route.request().method() === 'GET') {
+            reading();
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+        await route.fallback();
+    });
     await page.goto(`/tasks-next/${PROJECT}/descendants/status`);
     await listed(page, 'Step').click();
     await title(page).fill('First step');
     await dialog(page).getByRole('button', { name: 'Save', exact: true }).click();
-    await dialog(page).getByRole('button', { name: 'Change Parent' }).click();
+    const changeParent = dialog(page).getByRole('button', { name: 'Change Parent' });
+    await expect(changeParent).toBeDisabled();
+    await changeParent.click({ force: true });
 
-    await expect(dialog(page)).toBeHidden();
+    await reread;
+    await expect(changeParent).toBeDisabled();
+    await changeParent.click({ force: true });
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
     await expect(page.getByRole('dialog').filter({ has: page.getByRole('button', { name: 'Move Here' }) })).toHaveCount(0);
-    expect(repository.renames).toEqual([]);
+    await expect(changeParent).toBeEnabled();
 });
 
 test('keeps the editor open when a delete fails', async ({ context, page }) => {
@@ -342,6 +555,37 @@ test('deletes the selected task, and lists every task', async ({ context, page }
     await expect(page).toHaveURL(url('_', 'status'));
     await expect(listed(page, 'Project')).toBeVisible();
     await expect(listed(page, 'Errand')).toHaveCount(0);
+});
+
+// Beside the rest, both would wrap the header onto a second row at a phone's width.
+test('keeps adding subtasks in a menu on a phone', async ({ context, page }) => {
+    await page.setViewportSize({ width: 360, height: 680 });
+    const repository = await mockBackend(context, NOTES);
+    await page.goto(`/tasks-next/_/descendants/status?task=${PROJECT}`);
+    await expect(title(page)).toHaveValue('Project');
+    const heading = dialog(page).locator('.editor-heading');
+    // On one row when every button reaches below where every other starts.
+    const boxes = await heading.locator('.v-btn').evaluateAll((buttons) => buttons.map((button) => {
+        const { top, bottom } = button.getBoundingClientRect();
+        return { top, bottom };
+    }));
+    expect(boxes).toHaveLength(6);
+    expect(Math.max(...boxes.map(({ top }) => top))).toBeLessThan(Math.min(...boxes.map(({ bottom }) => bottom)));
+    await expect(dialog(page).getByRole('button', { name: 'Add Subtask' })).toHaveCount(0);
+
+    await dialog(page).getByRole('button', { name: 'More', exact: true }).click();
+    await page.locator('.v-menu .v-list-item').filter({ hasText: 'Quick Add' }).click();
+    const outline = page.getByRole('dialog').filter({ hasText: 'Quick add tasks' });
+    await expect(outline.getByRole('button', { name: 'Under: Project' })).toBeVisible();
+    await outline.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(outline).toBeHidden();
+
+    await dialog(page).getByRole('button', { name: 'More', exact: true }).click();
+    await page.locator('.v-menu .v-list-item').filter({ hasText: 'Add Subtask' }).click();
+    const draft = page.getByRole('dialog').filter({ hasText: 'New subtask of "Project"' });
+    await draft.getByRole('textbox', { name: 'Title', exact: true }).fill('Second step');
+    await draft.getByRole('button', { name: 'Create', exact: true }).click();
+    await expect.poll(() => repository.writes.map(({ path }) => path)).toEqual([expect.stringMatching(new RegExp(`^\\.tasks/${PROJECT}/[0-9a-f-]{36}\\.md$`))]);
 });
 
 // Full screen, with no scrim to click or Escape to press, so Cancel is the way out.
