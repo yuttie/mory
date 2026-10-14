@@ -169,6 +169,43 @@ test('adds a subtask from the editor', async ({ context, page }) => {
     await expect(listed(page, 'Second step')).toBeVisible();
 });
 
+// An outline of them, under the task the editor holds, as from the toolbar under the selected one.
+test('quick adds subtasks from the editor', async ({ context, page }) => {
+    const repository = await mockBackend(context, NOTES);
+    await page.goto(`/tasks-next/_/descendants/status?task=${PROJECT}`);
+    await title(page).fill('Project, renamed');
+    await dialog(page).getByRole('button', { name: 'Quick Add' }).click();
+
+    const outline = page.getByRole('dialog').filter({ hasText: 'Quick add tasks' });
+    await expect(outline.getByRole('button', { name: 'Under: Project' })).toBeVisible();
+    await outline.locator('.cm-content').click();
+    await page.keyboard.insertText('Second step\nThird step');
+    await outline.getByRole('button', { name: 'Add 2 tasks' }).click();
+    const under = expect.stringMatching(new RegExp(`^\\.tasks/${PROJECT}/[0-9a-f-]{36}\\.md$`));
+    await expect.poll(() => repository.writes.map(({ path }) => path)).toEqual([under, under]);
+    await expect(outline).toBeHidden();
+    await expect(page).toHaveURL(url('_', 'status', PROJECT));
+    await expect(title(page)).toHaveValue('Project, renamed');
+    await expect(listed(page, 'Third step')).toBeVisible();
+});
+
+// The toolbar's still goes under the selected task, whatever the editor's went under.
+test('quick adds from the toolbar under the selected task after the editor', async ({ context, page }) => {
+    await mockBackend(context, NOTES);
+    await page.goto(`/tasks-next/_/descendants/status?task=${STEP}`);
+    await dialog(page).getByRole('button', { name: 'Quick Add' }).click();
+    const outline = page.getByRole('dialog').filter({ hasText: 'Quick add tasks' });
+    await expect(outline.getByRole('button', { name: 'Under: Step' })).toBeVisible();
+    await outline.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(outline).toBeHidden();
+    await opened(page);
+    await page.keyboard.press('Escape');
+    await expect(dialog(page)).toBeHidden();
+
+    await page.locator('.item-view .v-toolbar').getByTitle('Quick add', { exact: true }).click();
+    await expect(outline.getByRole('button', { name: 'Under: Top level' })).toBeVisible();
+});
+
 // What was typed is still there to save again.
 test('keeps the editor open when a save fails', async ({ context, page }) => {
     await mockBackend(context, NOTES);

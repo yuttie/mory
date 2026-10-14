@@ -57,8 +57,9 @@
                             </v-icon>
                             <span v-if="$vuetify.display.mdAndUp">{{ parentActionLabel }}</span>
                         </v-btn>
-                        <!-- As from the task's row in the tree: the host starts the subtask in a
-                             dialog of its own, and what is typed here stays as it is. -->
+                        <!-- As from the task's row in the tree, and the view's Quick add: the host
+                             starts the subtasks in a dialog of its own, and what is typed here
+                             stays as it is. -->
                         <v-btn
                             v-if="isEdit"
                             variant="text"
@@ -72,6 +73,20 @@
                                 {{ mdiPlus }}
                             </v-icon>
                             <span v-if="$vuetify.display.mdAndUp">Add Subtask</span>
+                        </v-btn>
+                        <v-btn
+                            v-if="isEdit"
+                            variant="text"
+                            color="primary"
+                            aria-label="Quick Add"
+                            title="Quick Add"
+                            v-bind:icon="$vuetify.display.smAndDown"
+                            v-on:click="onQuickAdd"
+                        >
+                            <v-icon v-bind:class="{ 'mr-1': $vuetify.display.mdAndUp }">
+                                {{ mdiFormatListChecks }}
+                            </v-icon>
+                            <span v-if="$vuetify.display.mdAndUp">Quick Add</span>
                         </v-btn>
                         <v-btn
                             v-if="isEdit"
@@ -481,6 +496,7 @@ import {
     mdiFileTreeOutline,
     mdiFlagOutline,
     mdiFormatHeader1,
+    mdiFormatListChecks,
     mdiLightbulbOnOutline,
     mdiLoading,
     mdiMenuDown,
@@ -566,6 +582,7 @@ const emit = defineEmits<{
     (e: 'cancel'): void;
     (e: 'change-parent'): void;
     (e: 'add-subtask'): void;
+    (e: 'quick-add'): void;
 }>();
 
 // Reactive states
@@ -903,6 +920,10 @@ function onChangeParent(): void {
 
 function onAddSubtask(): void {
     emit('add-subtask');
+}
+
+function onQuickAdd(): void {
+    emit('quick-add');
 }
 
 // Helper functions for comparison

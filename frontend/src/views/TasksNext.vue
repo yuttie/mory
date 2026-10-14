@@ -282,6 +282,7 @@
                 v-on:cancel="closeEditor"
                 v-on:change-parent="showChangeParentDialog"
                 v-on:add-subtask="onAddSubtask"
+                v-on:quick-add="onQuickAddSubtasks"
             />
         </v-dialog>
         <NewTaskDialog
@@ -292,8 +293,8 @@
         />
         <QuickAddTasksDialog
             v-model="quickAddDialogIsVisible"
-            v-bind:initial-parent="newTaskParent"
-            v-bind:tag="newTaskTag"
+            v-bind:initial-parent="quickAddStart.parent"
+            v-bind:tag="quickAddStart.tag"
         />
 
         <!-- Parent Selection Dialog -->
@@ -380,6 +381,9 @@ const showParentDialog = ref<boolean>(false);
 // meanwhile would write the task again.
 const saving = ref(false);
 const quickAddDialogIsVisible = ref(false);
+// Where the next outline starts, as `newTaskStart` for a single task: from Quick add, under the
+// selected task or with the selected group's tag; from the editor, under the task it holds.
+const quickAddStart = ref<{ parent: UUID | null; tag?: string | null }>({ parent: null });
 const itemViewMenuIsVisible = ref(false);
 // Statuses dropped in the status view and still being written, by task. The task is drawn where it
 // was dropped until the listing shows the write, rather than jumping back to its old column.
@@ -869,7 +873,16 @@ function onEditTask(id: UUID) {
 // The menu stays open for its switch, so it is closed here rather than left over the dialog.
 function openQuickAdd() {
     itemViewMenuIsVisible.value = false;
+    quickAddStart.value = { parent: newTaskParent.value, tag: newTaskTag.value };
     quickAddDialogIsVisible.value = true;
+}
+
+// From the editor: tasks under the one it holds, in the quick-add dialog over it.
+function onQuickAddSubtasks() {
+    if (editedNode.value) {
+        quickAddStart.value = { parent: editedNode.value.uuid };
+        quickAddDialogIsVisible.value = true;
+    }
 }
 
 async function onEditedTaskSave(task: Task) {
