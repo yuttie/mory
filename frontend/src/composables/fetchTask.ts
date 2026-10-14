@@ -10,6 +10,16 @@ export function useFetchTask(taskPath: Ref<string>) {
 
     let current = 0;  // Prevents race conditions
 
+    // No note at the path is no error: it is a task still to be written there.
+    const fail = (e: unknown) => {
+        if ((e as { response?: { status?: number } } | null)?.response?.status === 404) {
+            task.value = undefined;
+        }
+        else {
+            error.value = e;
+        }
+    };
+
     const load = async () => {
         const req = ++current;
         task.value = null;
@@ -24,12 +34,7 @@ export function useFetchTask(taskPath: Ref<string>) {
         }
         catch (e) {
             if (req === current) {
-                if (e?.response?.status === 404) {
-                    task.value = undefined;
-                }
-                else {
-                    error.value = e;
-                }
+                fail(e);
             }
         }
         finally {
@@ -56,6 +61,11 @@ export function useFetchTask(taskPath: Ref<string>) {
         catch (e) {
             if (req !== current) {
                 return false;
+            }
+            // In place of a read that had blanked the task already, it fails as that one would,
+            // or a note there would be offered as a new task to write over it.
+            if (task.value === null) {
+                fail(e);
             }
             throw e;
         }
