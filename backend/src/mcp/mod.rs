@@ -223,8 +223,10 @@ impl Mory {
         description = "Replace a note's entire content and commit it. Requires the notes:write \
                        scope.\n\nThis is not a patch: read_note first and send the whole file \
                        back, frontmatter included, or everything you did not send is lost. \
-                       Editing a task or an event means editing the YAML frontmatter of its \
-                       note.",
+                       It also writes over anything changed in the note since you read it.\
+                       \n\nTo change a task or an event, use the task and event tools instead: \
+                       they edit its frontmatter in place, in one step, and check what they \
+                       write, where this writes whatever it is sent.",
         annotations(title = "Update a note", read_only_hint = false, destructive_hint = true,
                     idempotent_hint = true, open_world_hint = false)
     )]
@@ -612,9 +614,13 @@ in a directory named by its parent's bare UUID (`.tasks/<uuid>/`). A task named 
 not in the task tree.
 
 Tasks and calendar entries are YAML frontmatter on an ordinary note -- a `task:` block or an \
-`events:` map -- never separate records. Editing that frontmatter is how you change them. Day \
-plans are the one exception: which tasks are worked on which day is kept apart from the tasks, \
-in one file a month, and changed with the plan tools rather than update_note.
+`events:` map -- never separate records. Change them with the task tools (create_task, \
+update_task, complete_task, cancel_task, set_task_dates) and the event tools (add_event, \
+update_event, remove_event): they check what they write and change only the keys they are \
+given, leaving the rest of the note as it was. update_note rewrites the whole file without \
+those checks, so keep it for what those tools cannot do. Day plans are the one exception: \
+which tasks are worked on which day is kept apart from the tasks, in one file a month, and \
+changed with the plan tools rather than update_note.
 
 Two things are easy to get wrong and expensive to fix:
 - Datetimes carry their UTC offset (2025-10-06 13:00:00+09:00); plain dates are bare \
