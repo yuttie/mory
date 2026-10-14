@@ -232,6 +232,20 @@ test('adds a subtask from the editor', async ({ context, page }) => {
     await expect(listed(page, 'Second step')).toBeVisible();
 });
 
+// In the directory named by its UUID alone, where the task view looks for the tasks under it.
+test('adds a subtask under a task named with a readable prefix', async ({ context, page }) => {
+    const PLAN = uuid(4);
+    const repository = await mockBackend(context, { ...NOTES, [`.tasks/plan-${PLAN}.md`]: note('Plan') });
+    await page.goto(`/tasks-next/${PLAN}/descendants/status?task=${PLAN}`);
+    await dialog(page).getByRole('button', { name: 'Add Subtask' }).click();
+    const draft = page.getByRole('dialog').filter({ hasText: 'New subtask of "Plan"' });
+    await draft.getByRole('textbox', { name: 'Title', exact: true }).fill('First step');
+    await draft.getByRole('button', { name: 'Create', exact: true }).click();
+    await expect.poll(() => repository.writes.map(({ path }) => path)).toEqual([expect.stringMatching(new RegExp(`^\\.tasks/${PLAN}/[0-9a-f-]{36}\\.md$`))]);
+    await expect(draft).toBeHidden();
+    await expect(listed(page, 'First step')).toBeVisible();
+});
+
 // Back where it was in the editor, which Escape closes while the draft's snackbar still shows.
 test('closes the editor with Escape after adding a subtask', async ({ context, page }) => {
     await mockBackend(context, NOTES);

@@ -178,5 +178,38 @@
                 "progress": 0
             }
         ]
+    },
+    {
+        "name": "parent named with a readable prefix keeps its children",
+        "entries": [
+            {
+                "path": ".tasks/plan-00000001-0000-4000-8000-000000000000.md",
+                "metadata": {
+                    "task": {
+                        "status": {
+                            "kind": "todo"
+                        }
+                    }
+                }
+            },
+            {
+                "path": ".tasks/00000001-0000-4000-8000-000000000000/00000002-0000-4000-8000-000000000000.md",
+                "metadata": {
+                    "task": {
+                        "status": {
+                            "kind": "todo"
+                        },
+                        "deadline": "2026-10-01"
+                    }
+                }
+            }
+        ],
+        "expected": [
+            {
+                "path": ".tasks/plan-00000001-0000-4000-8000-000000000000.md",
+                "level": "overdue",
+                "progress": 0
+            }
+        ]
     }
 ]
