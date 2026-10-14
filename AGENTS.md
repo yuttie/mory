@@ -10,13 +10,18 @@ Layout of the tracked sources:
 - `backend/src/ical.rs` — parsing subscribed iCal feeds and expanding their recurrences.
 - `backend/src/note_events.rs` — expanding the events a note declares, the Rust twin of `eventsFromEntries`, for event alarms.
 - `backend/src/alarms.rs` — when each alarm rings: the `alarms:` grammar, the defaults `.mory/calendars.yaml` sets, and a task's dates.
-- `backend/src/tasks.rs` — which notes are in the task tree, and a task's status: the checks the MCP tools and the alarm scheduler share.
+- `backend/src/tasks.rs` — which notes are in the task tree, how they nest, and a task's status: the checks the MCP tools and the alarm scheduler share.
+- `backend/src/urgency.rs` — a task's derived urgency, its lead time, and the defaults `.mory/tasks.yaml` sets: the Rust twin of `frontend/src/urgency.ts`, for `list_tasks`.
+- `backend/src/plans.rs` — reading and writing the day plans in `.mory/plans/`: the Rust twin of `frontend/src/plans.ts`, for the plan tools.
+- `backend/src/note_time.rs` — the local wall clock carrying its offset, as a note spells a timestamp.
 - `backend/src/schedule.rs` — which alarms ring in a span of time, from the listing and the calendar configuration.
 - `backend/src/push.rs` — event alarms sent as Web Push: the VAPID key, the subscription endpoints, and the loop that asks the schedule once a minute and sends what is due.
 - `backend/src/oauth.rs` — the OAuth 2.1 authorization server the MCP endpoint needs.
 - `backend/src/mcp/` — the MCP server: `mod.rs` holds the tool router, `frontmatter.rs` the
   in-place frontmatter editor, and the rest the tools grouped by area.
 - `fixtures/calendar/` — iCal feeds and notes both components expand, and the goldens the differential tests compare them against.
+- `fixtures/urgency/` — tasks, task settings and task trees, with the urgency and progress both components must derive from them.
+- `fixtures/plans/` — month plans both components must accept or refuse, and must write alike.
 - `backend/src/tests.rs` — in-crate tests, with Git repository fixtures.
 - `frontend/src/` — `views/` (routed screens), `components/`, `stores/` (Pinia), `api.ts` (backend client), `idb.ts` (IndexedDB cache), `*.spec.ts` (tests next to their subject).
 
