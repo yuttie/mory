@@ -57,6 +57,22 @@
                             </v-icon>
                             <span v-if="$vuetify.display.mdAndUp">{{ parentActionLabel }}</span>
                         </v-btn>
+                        <!-- As from the task's row in the tree: the host starts the subtask in a
+                             dialog of its own, and what is typed here stays as it is. -->
+                        <v-btn
+                            v-if="isEdit"
+                            variant="text"
+                            color="primary"
+                            aria-label="Add Subtask"
+                            title="Add Subtask"
+                            v-bind:icon="$vuetify.display.smAndDown"
+                            v-on:click="onAddSubtask"
+                        >
+                            <v-icon v-bind:class="{ 'mr-1': $vuetify.display.mdAndUp }">
+                                {{ mdiPlus }}
+                            </v-icon>
+                            <span v-if="$vuetify.display.mdAndUp">Add Subtask</span>
+                        </v-btn>
                         <v-btn
                             v-if="isEdit"
                             color="error"
@@ -549,6 +565,7 @@ const emit = defineEmits<{
     (e: 'delete', path: string): void;
     (e: 'cancel'): void;
     (e: 'change-parent'): void;
+    (e: 'add-subtask'): void;
 }>();
 
 // Reactive states
@@ -882,6 +899,10 @@ function onCancel(): void {
 
 function onChangeParent(): void {
     emit('change-parent');
+}
+
+function onAddSubtask(): void {
+    emit('add-subtask');
 }
 
 // Helper functions for comparison

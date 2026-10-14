@@ -281,6 +281,7 @@
                 v-on:delete="onEditedTaskDelete"
                 v-on:cancel="closeEditor"
                 v-on:change-parent="showChangeParentDialog"
+                v-on:add-subtask="onAddSubtask"
             />
         </v-dialog>
         <NewTaskDialog
@@ -850,6 +851,14 @@ function onAddChildTask(id: UUID) {
         ? { parent: null, tag: isUntaggedGroupId(id) ? null : tagNameOf(id) }
         : { parent: id };
     newTaskDialogIsVisible.value = true;
+}
+
+// From the editor: a task under the one it holds, in the new-task dialog over it.
+function onAddSubtask() {
+    if (editedNode.value) {
+        newTaskStart.value = { parent: editedNode.value.uuid };
+        newTaskDialogIsVisible.value = true;
+    }
 }
 
 // From a row's own button: the task's editor over the list as it is, as from the list.

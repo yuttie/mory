@@ -149,6 +149,26 @@ test('keeps what is typed while a save runs', async ({ context, page }) => {
     await expect(title(page)).toHaveValue('First step, revised');
 });
 
+// Under the task the editor holds, in a dialog of its own over the editor, which keeps what was
+// typed into it. A draft has no task to add one under yet.
+test('adds a subtask from the editor', async ({ context, page }) => {
+    const repository = await mockBackend(context, NOTES);
+    await page.goto(`/tasks-next/_/descendants/status?task=${PROJECT}`);
+    await title(page).fill('Project, renamed');
+    await dialog(page).getByRole('button', { name: 'Add Subtask' }).click();
+
+    const draft = page.getByRole('dialog').filter({ hasText: 'New subtask of "Project"' });
+    await expect(draft.getByRole('button', { name: 'Add Subtask' })).toHaveCount(0);
+    await draft.getByRole('textbox', { name: 'Title', exact: true }).fill('Second step');
+    await draft.getByRole('button', { name: 'Create', exact: true }).click();
+    await expect.poll(() => repository.writes.map(({ path }) => path)).toEqual([expect.stringMatching(new RegExp(`^\\.tasks/${PROJECT}/[0-9a-f-]{36}\\.md$`))]);
+    expect(repository.writes[0].content).toContain('# Second step\n');
+    await expect(draft).toBeHidden();
+    await expect(page).toHaveURL(url('_', 'status', PROJECT));
+    await expect(title(page)).toHaveValue('Project, renamed');
+    await expect(listed(page, 'Second step')).toBeVisible();
+});
+
 // What was typed is still there to save again.
 test('keeps the editor open when a save fails', async ({ context, page }) => {
     await mockBackend(context, NOTES);
