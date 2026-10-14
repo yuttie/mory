@@ -48,9 +48,14 @@ test('opens and saves a task carrying all revised date fields', async ({ context
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto(`/tasks-next/${id}/descendants/status?task=${id}`);
-    await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue('Dated task');
+    const title = page.getByRole('textbox', { name: 'Title', exact: true });
+    await expect(title).toHaveValue('Dated task');
+    // Opened as it is, the task has nothing to save: Save waits for a change.
+    await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
+    await title.fill('Dated task, revised');
     await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect.poll(() => repository.writes.length).toBe(1);
+    expect(repository.writes[0].content).toContain('# Dated task, revised\n');
     expect(repository.writes[0].content).toContain('due_by: 2026-10-15 12:00:00+09:00');
     expect(repository.writes[0].content).toContain('available_from: 2026-10-01');
     expect(errors).toEqual([]);
