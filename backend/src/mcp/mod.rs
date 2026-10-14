@@ -473,43 +473,89 @@ impl Mory {
     ) -> Result<CallToolResult, ErrorData> {
         tools::read_note(&self.state, args).await
     }
-    #[tool(name = "list_plan", description = "Read ordered plan entries between inclusive start/end dates. Unknown task UUIDs and invalid files are reported in warnings. Results describe work on a day, not completion status.",
-        annotations(title = "List day plans", read_only_hint = true, destructive_hint = false,
-                    idempotent_hint = true, open_world_hint = false))]
-    pub async fn list_plan(&self, Parameters(args): Parameters<plan_tools::ListArgs>) -> Result<CallToolResult, ErrorData> {
+
+    #[tool(
+        name = "list_plan",
+        description = "Read the day plans between two dates, both included.\n\nA day plan is \
+                       the ordered list of tasks to work on that day. Each entry names its task \
+                       by the UUIDv4 its file name ends with, says whether it was `planned` or \
+                       an `interruption`, and carries its `result` once one is recorded: \
+                       `worked`, meaning effort went into it that day rather than that it is \
+                       done, or `missed`. The web app's Collect undone marks each open task's \
+                       unrecorded entry on a past day missed and plans it again for today.\n\n\
+                       A UUID that names no task, or a month's file that cannot be read, is \
+                       reported in `warnings` rather than failing the call.",
+        annotations(title = "List day plans", read_only_hint = true, open_world_hint = false)
+    )]
+    pub async fn list_plan(
+        &self,
+        Parameters(args): Parameters<plan_tools::ListArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
         plan_tools::list_plan(&self.state, args).await
     }
 
-    #[tool(name = "plan_task", description = "Append a task UUID once to a day. origin planned adds an unrecorded entry; interruption records worked. Requires notes:write.",
+    #[tool(
+        name = "plan_task",
+        description = "Add a task to a day's plan and commit it. Requires the notes:write \
+                       scope.\n\nThe task goes to the end of the day's list, and a task \
+                       already on it stays where it is: a day lists a task once. `planned` \
+                       leaves its result unrecorded; `interruption` is for work that came up \
+                       unplanned, and records it as worked -- on an entry already there too, \
+                       whose origin and place are kept.",
         annotations(title = "Plan a task", read_only_hint = false, destructive_hint = false,
-                    idempotent_hint = true, open_world_hint = false))]
-    pub async fn plan_task(&self, Parameters(args): Parameters<plan_tools::PlanArgs>, context: RequestContext<RoleServer>) -> Result<CallToolResult, ErrorData> {
+                    idempotent_hint = true, open_world_hint = false)
+    )]
+    pub async fn plan_task(
+        &self,
+        Parameters(args): Parameters<plan_tools::PlanArgs>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
         if !granted(&context, SCOPE_WRITE) {
             return Ok(needs_write_scope());
         }
         plan_tools::plan_task(&self.state, args).await
     }
 
-    #[tool(name = "record_plan_result", description = "Record worked or missed for a task on a day; omit result to clear it. worked records effort, not task completion. Requires notes:write.",
-        annotations(title = "Record plan result", read_only_hint = false, destructive_hint = false,
-                    idempotent_hint = true, open_world_hint = false))]
-    pub async fn record_plan_result(&self, Parameters(args): Parameters<plan_tools::ResultArgs>, context: RequestContext<RoleServer>) -> Result<CallToolResult, ErrorData> {
+    #[tool(
+        name = "record_plan_result",
+        description = "Record how a task on a day's plan went, and commit it. Requires the \
+                       notes:write scope.\n\n`worked` says effort went into it that day, not \
+                       that it is done: complete_task says that. `missed` says it was planned \
+                       and not worked on. Omit `result` to make the entry unrecorded again. \
+                       The task must already be on that day's plan.",
+        annotations(title = "Record a plan result", read_only_hint = false,
+                    destructive_hint = false, idempotent_hint = true, open_world_hint = false)
+    )]
+    pub async fn record_plan_result(
+        &self,
+        Parameters(args): Parameters<plan_tools::ResultArgs>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
         if !granted(&context, SCOPE_WRITE) {
             return Ok(needs_write_scope());
         }
         plan_tools::record_result(&self.state, args).await
     }
 
-    #[tool(name = "unplan_task", description = "Remove a task UUID from one day, preserving other entries and the task note. Also works for unknown UUIDs. Requires notes:write.",
-        annotations(title = "Remove plan entry", read_only_hint = false, destructive_hint = false,
-                    idempotent_hint = true, open_world_hint = false))]
-    pub async fn unplan_task(&self, Parameters(args): Parameters<plan_tools::UnplanArgs>, context: RequestContext<RoleServer>) -> Result<CallToolResult, ErrorData> {
+    #[tool(
+        name = "unplan_task",
+        description = "Take a task off one day's plan and commit it. Requires the notes:write \
+                       scope.\n\nThe entry goes with its result, so a record of work done is \
+                       lost from the plan; the task itself, and the rest of the day, are \
+                       untouched. A UUID that names no task can be taken off too.",
+        annotations(title = "Remove a plan entry", read_only_hint = false,
+                    destructive_hint = true, idempotent_hint = true, open_world_hint = false)
+    )]
+    pub async fn unplan_task(
+        &self,
+        Parameters(args): Parameters<plan_tools::UnplanArgs>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
         if !granted(&context, SCOPE_WRITE) {
             return Ok(needs_write_scope());
         }
         plan_tools::unplan_task(&self.state, args).await
     }
-
 }
 
 // Naming the field is not cosmetic: left to its default the handler calls `Self::tool_router()`
@@ -550,7 +596,8 @@ mory is one person's notes, stored as Markdown files in a Git repository. Every 
 commit, so say what you changed in the message.
 
 Structure comes from the paths, not from a database:
-- `.tasks/` holds tasks, `.events/` holds calendar entries, `.mory/` holds configuration.
+- `.tasks/` holds tasks, `.events/` holds calendar entries, `.mory/` holds configuration and, \
+under `.mory/plans/`, the day plans.
 - Anything else is an ordinary note, named freely. Its children are the notes in the directory \
 named as it is without `.md`: `ideas.md` is the parent of `ideas/draft.md`.
 - Under `.tasks/` the naming is strict, because the task tree is derived from it: a file name \
@@ -559,7 +606,9 @@ in a directory named by its parent's bare UUID (`.tasks/<uuid>/`). A task named 
 not in the task tree.
 
 Tasks and calendar entries are YAML frontmatter on an ordinary note -- a `task:` block or an \
-`events:` map -- never separate records. Editing that frontmatter is how you change them.
+`events:` map -- never separate records. Editing that frontmatter is how you change them. Day \
+plans are the one exception: which tasks are worked on which day is kept apart from the tasks, \
+in one file a month, and changed with the plan tools rather than update_note.
 
 Two things are easy to get wrong and expensive to fix:
 - Datetimes carry their UTC offset (2025-10-06 13:00:00+09:00); plain dates are bare \

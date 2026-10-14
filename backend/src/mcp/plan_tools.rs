@@ -17,7 +17,12 @@ fn known_tasks(entries: &[ListEntry]) -> BTreeSet<String> {
 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct ListArgs { pub start: String, pub end: String }
+pub struct ListArgs {
+    /// The first day, `YYYY-MM-DD`.
+    pub start: String,
+    /// The last day, `YYYY-MM-DD`, included.
+    pub end: String,
+}
 
 pub async fn list_plan(state: &AppState, args: ListArgs) -> Result<CallToolResult, ErrorData> {
     let (from, to) = match (plans::date(&args.start), plans::date(&args.end)) {
@@ -58,23 +63,33 @@ pub async fn list_plan(state: &AppState, args: ListArgs) -> Result<CallToolResul
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PlanArgs {
+    /// The day, `YYYY-MM-DD`.
     pub date: String,
-    /// The UUID at the end of the task filename, stable across moves.
+    /// The UUIDv4 the task's file name ends with, which stays the same when the task is moved
+    /// or renamed: `.tasks/report-<uuid>.md` is `<uuid>`.
     pub task: String,
+    /// `planned`, or `interruption` for work that came up unplanned, which is recorded as worked.
     pub origin: Origin,
 }
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ResultArgs {
+    /// The day, `YYYY-MM-DD`.
     pub date: String,
+    /// The task's UUIDv4, as `plan_task` takes it.
     pub task: String,
-    /// worked or missed; omit or null to clear to unrecorded.
+    /// `worked` or `missed`. Omit, or pass null, to make the entry unrecorded again.
     #[serde(default)]
     pub result: Option<Outcome>,
 }
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct UnplanArgs { pub date: String, pub task: String }
+pub struct UnplanArgs {
+    /// The day, `YYYY-MM-DD`.
+    pub date: String,
+    /// The task's UUIDv4, as `plan_task` takes it.
+    pub task: String,
+}
 
 async fn edit(state: &AppState, day: &str, task: &str, mutation: impl FnOnce(&mut Month, &str) -> Result<(), String>) -> Result<CallToolResult, ErrorData> {
     if let Err(error) = plans::date(day) { return Ok(tool_error(error)); }
