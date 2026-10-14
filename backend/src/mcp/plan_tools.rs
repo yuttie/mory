@@ -6,15 +6,32 @@ use crate::models::{AppState, ListEntry};
 use crate::plans::{self, Month, Origin, Outcome};
 use super::{json_result, tool_error};
 
-/// The UUIDs of the tasks in the tree, each the one its file name ends with. The web app finds a
-/// task by its path alone, so a note there without a `task:` block is still one a plan can name.
-fn known_tasks(entries: &[ListEntry]) -> BTreeSet<String> {
+/// A task a plan names, as `list_plan` reports it: enough to read it or act on it without first
+/// paging through `list_tasks` for the UUID.
+#[derive(Debug, PartialEq, Serialize)]
+struct PlannedTask {
+    path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    status: Option<String>,
+}
+
+/// Every task in the tree, keyed by the UUID its file name ends with. The web app finds a task by
+/// its path alone, so a note there without a `task:` block is still one a plan can name.
+fn known_tasks(entries: &[ListEntry]) -> BTreeMap<String, PlannedTask> {
     entries.iter().filter_map(|entry| {
         let path = entry.path.to_string_lossy();
         if !crate::tasks::in_task_tree(&path) { return None; }
         let stem = path.strip_suffix(".md")?;
         let tail = stem.get(stem.len().checked_sub(36)?..)?;
-        plans::task_uuid(tail).ok()
+        let uuid = plans::task_uuid(tail).ok()?;
+        let task = PlannedTask {
+            path: path.into_owned(),
+            title: entry.title.clone(),
+            status: crate::tasks::task_status_of(entry.metadata.as_ref()),
+        };
+        Some((uuid, task))
     }).collect()
 }
 
@@ -33,7 +50,7 @@ pub async fn list_plan(state: &AppState, args: ListArgs) -> Result<CallToolResul
         _ => return Ok(tool_error("Use valid YYYY-MM-DD start and end, with start <= end.")),
     };
     let (commit, entries) = state.get_entries(None).await.map_err(|error| ErrorData::internal_error(error.to_string(), None))?;
-    let known = known_tasks(&entries);
+    let mut known = known_tasks(&entries);
     let mut days = BTreeMap::new();
     let mut warnings = Vec::new();
     for entry in &entries {
@@ -48,7 +65,7 @@ pub async fn list_plan(state: &AppState, args: ListArgs) -> Result<CallToolResul
                     let date = plans::date(&day).unwrap();
                     if date < from || date > to { continue; }
                     for item in &list {
-                        if !known.contains(&item.task) {
+                        if !known.contains_key(&item.task) {
                             warnings.push(format!("Unknown task {} on {day}.", item.task));
                         }
                     }
@@ -58,9 +75,11 @@ pub async fn list_plan(state: &AppState, args: ListArgs) -> Result<CallToolResul
             Err(error) => warnings.push(format!("{path}: {error}")),
         }
     }
+    let planned = days.values().flatten().map(|item| item.task.as_str()).collect::<BTreeSet<_>>();
+    known.retain(|uuid, _| planned.contains(uuid.as_str()));
     #[derive(Serialize)]
-    struct Output { commit: String, days: Month, warnings: Vec<String> }
-    json_result(&Output { commit: commit.to_string(), days, warnings })
+    struct Output { commit: String, days: Month, tasks: BTreeMap<String, PlannedTask>, warnings: Vec<String> }
+    json_result(&Output { commit: commit.to_string(), days, tasks: known, warnings })
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -111,7 +130,7 @@ async fn edit(state: &AppState, day: &str, task: &str, mutation: impl FnOnce(&mu
     let plan = match edited(plan, day, &uuid, mutation) { Ok(plan) => plan, Err(error) => return Ok(tool_error(error)) };
     let content = plans::write(&plan);
     let (_, entries) = state.get_entries(Some(".tasks/*")).await.map_err(|error| ErrorData::internal_error(error.to_string(), None))?;
-    let unknown = !known_tasks(&entries).contains(&uuid);
+    let unknown = !known_tasks(&entries).contains_key(&uuid);
     match state.save_note_checked(&path, content.as_bytes(), &format!("Update plan for {day}"), &expected).await {
         Ok(Some(commit)) => json_result(&serde_json::json!({ "path": path, "commit": commit.to_string(), "entries": plan.get(day), "unknown_task": unknown })),
         Ok(None) => Ok(tool_error("The plan changed during this edit; read it again and retry.")),
@@ -179,15 +198,24 @@ mod tests {
     fn a_planned_task_is_named_by_the_uuid_its_file_name_ends_with() {
         let uuid = "4955857d-3267-4b94-83f2-538a428970d7";
         let other = "2a997a71-0d2b-4938-b8ff-5178c28a5ad9";
-        let outside = "c1d6a3a8-5b2e-4f7a-9c3d-2e8f1b4a6d90";
         let entries = [
-            ListEntry::note(&format!(".tasks/report-{uuid}.md"), "task: {status: {kind: todo}}"),
+            ListEntry {
+                title: Some("Report".to_owned()),
+                ..ListEntry::note(&format!(".tasks/report-{uuid}.md"), "task: {status: {kind: todo}}")
+            },
             // Not in the task tree, so not a task a plan can name.
-            ListEntry::note(&format!("notes/{outside}.md"), "task: {status: {kind: todo}}"),
-            // In the tree without a block, where the web app still finds a task.
+            ListEntry::note(&format!("notes/{uuid}.md"), "task: {status: {kind: todo}}"),
+            // In the tree without a block: the web app lists it, untitled and with no status.
             ListEntry::note(&format!(".tasks/{uuid}/draft-{other}.md"), "created_at: 2026-10-01"),
         ];
-        assert_eq!(known_tasks(&entries), BTreeSet::from([uuid.to_owned(), other.to_owned()]));
+        let known = known_tasks(&entries);
+        assert_eq!(known.len(), 2);
+        assert_eq!(known[other], PlannedTask { path: format!(".tasks/{uuid}/draft-{other}.md"), title: None, status: None });
+        assert_eq!(known[uuid], PlannedTask {
+            path: format!(".tasks/report-{uuid}.md"),
+            title: Some("Report".to_owned()),
+            status: Some("todo".to_owned()),
+        });
     }
 
     #[test]

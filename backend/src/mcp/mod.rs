@@ -518,8 +518,11 @@ impl Mory {
                        `worked`, meaning effort went into it that day rather than that it is \
                        done, or `missed`. The web app's Collect undone marks each open task's \
                        unrecorded entry on a past day missed and plans it again for today.\n\n\
-                       A UUID that names no task, or a month's file that cannot be read, is \
-                       reported in `warnings` rather than failing the call.",
+                       `tasks` gives the path, title and status of each task the window's \
+                       plans name, keyed by its UUID; a note without a title, or a task that \
+                       names no status, leaves that field out. A UUID that names no task, or a \
+                       month's file that cannot be read, is reported in `warnings` rather than \
+                       failing the call.",
         annotations(title = "List day plans", read_only_hint = true, open_world_hint = false)
     )]
     pub async fn list_plan(

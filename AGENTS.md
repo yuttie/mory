@@ -200,7 +200,8 @@ bare date, since the calendar draws a whole day and midnight on it as two occurr
 The plan tools read and write `.mory/plans/` through `backend/src/plans.rs`, which refuses a
 month as `readPlan` does and writes one as `writePlan` does, and each write is checked against
 the blob it replaces (`AppState::save_note_checked`), as the web app's are. Collect undone is the
-web app's alone.
+web app's alone. `list_plan` names the tasks its plans list, since a model holding only UUIDs
+would have to page through `list_tasks` to say what was planned.
 
 ## The `events:` frontmatter
 
