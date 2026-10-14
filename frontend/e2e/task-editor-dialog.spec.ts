@@ -239,6 +239,7 @@ test('closes the editor with Escape after adding a subtask', async ({ context, p
     await draft.getByRole('textbox', { name: 'Title', exact: true }).fill('Second step');
     await draft.getByRole('button', { name: 'Create', exact: true }).click();
     await expect(draft).toBeHidden();
+    await expect(add).toBeFocused();
 
     const created = page.getByText('Task "Second step" created successfully!');
     await expect(created).toBeVisible();
@@ -263,6 +264,7 @@ test('quick adds subtasks from the editor', async ({ context, page }) => {
     const under = expect.stringMatching(new RegExp(`^\\.tasks/${PROJECT}/[0-9a-f-]{36}\\.md$`));
     await expect.poll(() => repository.writes.map(({ path }) => path)).toEqual([under, under]);
     await expect(outline).toBeHidden();
+    await expect(dialog(page).getByRole('button', { name: 'Quick Add' })).toBeFocused();
     await expect(page).toHaveURL(url('_', 'status', PROJECT));
     await expect(title(page)).toHaveValue('Project, renamed');
     await expect(listed(page, 'Third step')).toBeVisible();

@@ -314,7 +314,7 @@
 <script lang="ts" setup>
 import { readImportance, isUrgent, compareUrgency } from '@/urgency';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
-import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { usePlansStore } from '@/stores/plans';
 import {
     type RouteLocationNormalized,
@@ -772,6 +772,27 @@ function returnFocus(): void {
     }
 }
 
+// The editor's button a dialog over it was opened from, to have focus again once that closes:
+// Vuetify gives it back only to a dialog's own activator, and these open from the editor's events.
+let focusInEditor: HTMLElement | null = null;
+watch(() => newTaskDialogIsVisible.value || quickAddDialogIsVisible.value, async (open) => {
+    const element = focusInEditor;
+    if (open || element === null) {
+        return;
+    }
+    focusInEditor = null;
+    // A tick after the dialog closes, as Vuetify gives an activator its focus back.
+    await nextTick();
+    if (element.isConnected) {
+        element.focus();
+    }
+});
+
+function rememberFocusInEditor(): void {
+    const element = document.activeElement;
+    focusInEditor = element instanceof HTMLElement ? element : null;
+}
+
 // Back and Forward change the address, which closes the editor or puts another task in it. With an
 // edit unsaved, that is refused as Escape and a click outside are, unless the view is closing the
 // editor itself. A new task's draft goes with the view, and is kept from leaving it too.
@@ -861,6 +882,7 @@ function onAddChildTask(id: UUID) {
 // From the editor: a task under the one it holds, in the new-task dialog over it.
 function onAddSubtask() {
     if (editedNode.value) {
+        rememberFocusInEditor();
         newTaskStart.value = { parent: editedNode.value.uuid };
         newTaskDialogIsVisible.value = true;
     }
@@ -881,6 +903,7 @@ function openQuickAdd() {
 // From the editor: tasks under the one it holds, in the quick-add dialog over it.
 function onQuickAddSubtasks() {
     if (editedNode.value) {
+        rememberFocusInEditor();
         quickAddStart.value = { parent: editedNode.value.uuid };
         quickAddDialogIsVisible.value = true;
     }
