@@ -315,7 +315,8 @@ struct TaskSummary {
     path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     title: Option<String>,
-    /// The `task:` block exactly as the file declares it, not a re-derived view of it.
+    /// The `task:` block as `canonical_task` reads it: as declared, but for the keys an older
+    /// task model wrote.
     task: serde_json::Value,
     urgency: crate::urgency::Urgency,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -334,6 +335,10 @@ pub async fn task_settings(state: &AppState) -> Result<(crate::urgency::Settings
     }
 }
 
+/// A `task:` block as the web app reads it, so a model is not shown measures the task model no
+/// longer has: `urgency`, `progress` and `scheduled_dates` dropped, `start_at` read as
+/// `available_from` where that is unset, and a numeric importance read by its name or, where it
+/// has none, dropped. Everything else is as declared.
 fn canonical_task(block: &serde_yaml::Mapping) -> serde_json::Value {
     let mut task = serde_json::to_value(block).unwrap_or(serde_json::json!({}));
     if let Some(map) = task.as_object_mut() {

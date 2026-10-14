@@ -126,13 +126,21 @@ impl Mory {
 
     #[tool(
         name = "list_tasks",
-        description = "List the tasks under `.tasks/`, optionally filtered by status or tag. \
-                       Each result carries the note's `task:` block exactly as the file \
-                       declares it: status kind, optional low/medium/high importance, lead_time and whichever \
-                       of available_from, due_by and deadline it sets. Urgency is derived from dates \
-                       and lead time; parent progress is derived from done leaves. Use day plans to schedule work.\n\nStatuses \
-                       are backlog, todo, in_progress, waiting, blocked, on_hold, done and \
-                       canceled.",
+        description = "List the tasks under `.tasks/`, optionally filtered by status or tag.\n\n\
+                       Each result carries the note's `task:` block as the web app reads it: \
+                       its status, and whichever of importance (low, medium or high), \
+                       lead_time, available_from, due_by, deadline and alarms it sets. Keys \
+                       an older task model wrote are read as the web app reads them: a numeric \
+                       importance by its name, start_at as available_from, and urgency, \
+                       progress and scheduled_dates not at all.\n\nBeside it are two values \
+                       derived from the tree, which no tool sets. `urgency.level` is overdue \
+                       (the deadline has passed), target_missed (due_by has), urgent, notice \
+                       or calm (within one lead time of the nearer date, within two, or \
+                       further), or none (no date, or the task is done or canceled); an open \
+                       task is at least as urgent as its most urgent open subtask. `progress`, on a task with \
+                       subtasks, is the percentage of its leaf subtasks that are done, \
+                       canceled ones left out.\n\nStatuses are backlog, todo, in_progress, \
+                       waiting, blocked, on_hold, done and canceled.",
         annotations(title = "List tasks", read_only_hint = true, open_world_hint = false)
     )]
     pub async fn list_tasks(
