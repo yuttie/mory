@@ -96,8 +96,14 @@ impl Mory {
                        syntax such as (a OR b) is not accepted.\n\nModes: `text` is the local \
                        index and is always available; `semantic` and `hybrid` need embeddings \
                        enabled on this server and fall back to text with a warning when they \
-                       are not; `grep` is a literal regular-expression scan. Start with \
-                       `hybrid`, or `text` for an exact term.",
+                       are not; `grep` runs `git grep` over every text file, frontmatter and \
+                       `.mory/` included. Start with `hybrid`, or `text` for an exact term.\
+                       \n\nIn `grep` mode the query language above does not apply: the whole \
+                       query is one case-sensitive POSIX basic regular expression. `.`, `*`, \
+                       `[0-9]`, `^` and `$` work as usual, but alternation, `+`, `?` and \
+                       groups need a backslash (`due_by\\|deadline`, `[0-9]\\+d`, \
+                       `\\(high\\|low\\)$`); written bare they match themselves, so a pattern \
+                       in another dialect finds nothing rather than failing.",
         annotations(title = "Search notes", read_only_hint = true, open_world_hint = false)
     )]
     pub async fn search_notes(
