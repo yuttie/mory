@@ -176,6 +176,21 @@ both read. The two Rust sides at least agree with each other about which notes a
 value, the leading `YYYY-MM-DD` for the window and the stricter reading `dayjs` gives for the
 scheduler, which also skips a finished task.
 
+`list_tasks` returns each task's urgency and progress as the web app derives them, because a
+model asked what to do next needs them and could not work them out from one task's block. That
+makes `backend/src/urgency.rs` a second copy of `frontend/src/urgency.ts`, and `derived_task` in
+`mcp/tools.rs` a second copy of `urgency` and `progress` in `frontend/src/stores/tasks.ts`:
+`fixtures/urgency/cases.json` holds the first pair to each other and `hierarchy.json` the second,
+so change one, change the other and run both halves. A task's dates, and an event's `start`,
+`until` and `exclusions`, are refused unless `urgency::instant` reads them: a bare date or a
+datetime carrying its offset, the convention below. An event's `end` may also be a time of day
+or a duration, as `normalizeEndTime` reads one.
+
+The plan tools read and write `.mory/plans/` through `backend/src/plans.rs`, which refuses a
+month as `readPlan` does and writes one as `writePlan` does, and each write is checked against
+the blob it replaces (`AppState::save_note_checked`), as the web app's are. Collect undone is the
+web app's alone.
+
 ## The `events:` frontmatter
 
 An event is a base occurrence (`start`), a list of occurrences (`instances`, or its older spelling `times`), or a rule (`repeat`) with adjustments to what it generates — and may be more than one of those at once. Alongside `end`, `finished`, `color` and `note`:
