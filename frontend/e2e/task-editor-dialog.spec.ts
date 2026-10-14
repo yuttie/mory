@@ -149,6 +149,32 @@ test('keeps what is typed while a save runs', async ({ context, page }) => {
     await expect(title(page)).toHaveValue('First step, revised');
 });
 
+// Closed while its save ran and opened again before it landed, the editor read the note as it
+// was: the save is no edit of its own to keep unsaved, and its form takes the note as saved.
+test('settles a save in the editor opened again while it ran', async ({ context, page }) => {
+    const repository = await mockBackend(context, NOTES);
+    await page.route(`${API_URL}notes/**`, async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await route.fallback();
+    });
+    await page.goto(`/tasks-next/${PROJECT}/descendants/status`);
+    await listed(page, 'Step').click();
+    await title(page).fill('First step');
+    await dialog(page).getByRole('button', { name: 'Save', exact: true }).click();
+    await dialog(page).getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(dialog(page)).toBeHidden();
+    await listed(page, 'Step').click();
+    await expect(title(page)).toHaveValue('Step');
+    expect(repository.writes).toEqual([]);
+
+    await expect.poll(() => repository.writes.length).toBe(1);
+    await expect(title(page)).toHaveValue('First step');
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
+    await expect(dialog(page).getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
+    await page.keyboard.press('Escape');
+    await expect(dialog(page)).toBeHidden();
+});
+
 // Under the task the editor holds, in a dialog of its own over the editor, which keeps what was
 // typed into it. A draft has no task to add one under yet.
 test('adds a subtask from the editor', async ({ context, page }) => {

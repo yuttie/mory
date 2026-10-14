@@ -607,6 +607,9 @@ const uiValid = ref(true);
 // switch to another.
 let filledFrom: string | null = null;
 const statusOptionRestricted = ref(true);
+// What the editor last gave its host to save, and whether the status was unlocked for it, for
+// `saved` to tell its own save from one an earlier editor gave.
+let emitted: { task: Task; unlocked: boolean } | null = null;
 // Kept across tasks and visits, as one way of working with notes rather than a property of a task.
 const notePanes = useLocalStorage<'viewer' | 'both' | 'editor'>('task-editor-note-panes', 'both');
 const lockScroll = useConfigValue('lock-scroll', false);
@@ -835,10 +838,11 @@ function resetFromTask(t?: Task | undefined | null): void {
         clearTimeout(assessmentTimeout);
         assessmentTimeout = null;
     }
-    // Unlocking is an exception for one edit. The editor is reused for the next task, and stays
-    // open on a saved one, so neither may inherit it.
+    // Unlocking is an exception for one edit, which the next task the editor is reused for may not
+    // inherit. A saved edit is locked again by `saved`.
     statusOptionRestricted.value = true;
     filledFrom = t ? props.taskPath : null;
+    emitted = null;
     Object.assign(form, formOf(t));
 
     // Automatically assess the task for existing tasks
@@ -847,19 +851,28 @@ function resetFromTask(t?: Task | undefined | null): void {
     }
 }
 
-// The host has saved `written`, which the form held, and the editor stays open on it: the note is
-// read again, for the next change to count from. The form takes the note as read, with the title
-// trimmed as the save trimmed it, unless something was typed while the save ran, which it keeps.
-// The assessment stays: it was of what the form holds.
+// The host has saved `written` and the editor stays open on it: the note is read again, for the
+// next change to count from. The form takes the note as read, with the title trimmed as the save
+// trimmed it, unless something was typed while the save ran, which it keeps. The assessment stays:
+// it was of what the form holds. A `written` this editor did not give came from one closed while
+// it saved; this one opened since, on the note as it was before the save landed, and its form
+// takes the saved note too, unless something has been typed into it.
 async function saved(written: Task): Promise<void> {
+    const own = emitted?.task === written ? emitted : null;
+    emitted = null;
+    const base = initialForm.value;
     if (!(await reread())) {
         return;
     }
     // As the save would read the form: a blank it trims away is no change.
-    if (!differs(formOf(taskOf(written)), formOf(written))) {
-        statusOptionRestricted.value = true;
-        Object.assign(form, formOf(task.value));
+    if (own ? differs(formOf(taskOf(written)), formOf(written)) : differs(form, base)) {
+        return;
     }
+    // Locked again only for the edit it was unlocked for, not by an unlock while the save ran.
+    if (own?.unlocked) {
+        statusOptionRestricted.value = true;
+    }
+    Object.assign(form, formOf(task.value));
 }
 
 function onBeforeunload(e: any) {
@@ -880,7 +893,8 @@ async function onSave(): Promise<void> {
     if (!isModified.value || !result?.valid || statusGateError.value || alarmsInvalid.value) {
         return;
     }
-    emit('save', taskOf(task.value));
+    emitted = { task: taskOf(task.value), unlocked: !statusOptionRestricted.value };
+    emit('save', emitted.task);
 }
 
 // The task the form holds, written over the note `base` was read from.
