@@ -151,6 +151,9 @@ test('keeps what is typed while a save runs', async ({ context, page }) => {
     await page.waitForTimeout(500);
     await expect(page).toHaveURL(url(PROJECT, 'status', STEP));
     await expect(title(page)).toHaveValue('First step, revised');
+    // Counted from the note as saved, not as it was opened.
+    await title(page).fill('First step');
+    await expect(save).toBeDisabled();
 });
 
 // Closed while its save ran and opened again before it landed, the editor read the note as it
@@ -177,6 +180,33 @@ test('settles a save in the editor opened again while it ran', async ({ context,
     await expect(dialog(page).getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
     await page.keyboard.press('Escape');
     await expect(dialog(page)).toBeHidden();
+});
+
+// Saved, but not read again, the editor has no note to count the next change from: it says so,
+// and keeps the edit as unsaved rather than claim it matches a note it has not seen.
+test('says so when a saved task cannot be read again', async ({ context, page }) => {
+    const repository = await mockBackend(context, NOTES);
+    let written = false;
+    await page.route(`${API_URL}notes/**`, async (route) => {
+        written ||= route.request().method() === 'PUT';
+        await route.fallback();
+    });
+    await page.route(`${API_URL}v2/files/**`, (route) => written && route.request().method() === 'GET' ? route.fulfill({ status: 500, json: {} }) : route.fallback());
+    await page.goto(`/tasks-next/${PROJECT}/descendants/status`);
+    await listed(page, 'Step').click();
+    await title(page).fill('First step');
+    const save = dialog(page).getByRole('button', { name: 'Save', exact: true });
+    await save.click();
+
+    await expect(page.getByText('Saved "First step", but could not read it again')).toBeVisible();
+    expect(repository.writes.map(({ path }) => path)).toEqual([`.tasks/${PROJECT}/${STEP}.md`]);
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
+    await expect(title(page)).toHaveValue('First step');
+    await expect(save).toBeEnabled();
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(500);
+    await expect(page).toHaveURL(url(PROJECT, 'status', STEP));
+    await expect(title(page)).toHaveValue('First step');
 });
 
 // Under the task the editor holds, in a dialog of its own over the editor, which keeps what was
@@ -238,15 +268,24 @@ test('quick adds from the toolbar under the selected task after the editor', asy
 
 // What was typed is still there to save again.
 test('keeps the editor open when a save fails', async ({ context, page }) => {
-    await mockBackend(context, NOTES);
-    await page.route(`${API_URL}notes/**`, (route) => route.request().method() === 'PUT' ? route.fulfill({ status: 500, json: {} }) : route.fallback());
+    const repository = await mockBackend(context, NOTES);
+    let failing = true;
+    await page.route(`${API_URL}notes/**`, (route) => failing && route.request().method() === 'PUT' ? route.fulfill({ status: 500, json: {} }) : route.fallback());
     await page.goto(`/tasks-next/${PROJECT}/descendants/status`);
     await listed(page, 'Step').click();
     await title(page).fill('First step');
-    await dialog(page).getByRole('button', { name: 'Save', exact: true }).click();
+    const save = dialog(page).getByRole('button', { name: 'Save', exact: true });
+    await save.click();
     await expect(page.getByText('Could not save "First step"')).toBeVisible();
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
     await expect(page).toHaveURL(url(PROJECT, 'status', STEP));
     await expect(title(page)).toHaveValue('First step');
+
+    failing = false;
+    await save.click();
+    await expect.poll(() => repository.writes.map(({ path }) => path)).toEqual([`.tasks/${PROJECT}/${STEP}.md`]);
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
+    await expect(save).toBeDisabled();
 });
 
 // Opened by its address, the dialog has no button of its own for Vuetify to give focus back to.
