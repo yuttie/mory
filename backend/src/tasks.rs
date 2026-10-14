@@ -119,7 +119,8 @@ pub(crate) fn task_status_of(metadata: Option<&serde_yaml::Value>) -> Option<Str
         .map(str::to_owned)
 }
 
-/// The frontend attaches only to a file covering the immediate directory. Missing
+/// The frontend attaches only to a file covering the immediate directory: the one beside it
+/// named by its UUID alone, whatever readable name comes before the UUID in its own. Missing
 /// parents re-root children; metadata is not required to occupy a place in the tree.
 pub(crate) struct TaskHierarchy {
     pub valid: Vec<bool>,
@@ -138,7 +139,8 @@ impl TaskHierarchy {
             let Ok(uuid) = uuid::Uuid::parse_str(id) else { continue; };
             if uuid.get_variant() != uuid::Variant::RFC4122 { continue; }
             ids.entry(id.to_owned()).or_insert(index);
-            covers.entry(entry.path.with_extension("")).or_insert(id.to_owned());
+            let Some(directory) = entry.path.parent() else { continue; };
+            covers.entry(directory.join(id)).or_insert(id.to_owned());
         }
         let mut parents = vec![None; entries.len()];
         let mut valid = vec![false; entries.len()];

@@ -34,10 +34,12 @@ function saving(page: Page): Locator {
 }
 
 // Open. Vuetify takes a dialog for the one on top, which Escape closes, a moment after it opens,
-// and an Escape pressed before then does nothing; its opening transition outlasts that moment.
+// and an Escape pressed before then does nothing; its opening transition outlasts that moment. The
+// transition starts only a frame or two after the dialog does, so no animation running is no sign
+// it has ended: the focus Vuetify moves into the dialog once it has is.
 async function opened(page: Page): Promise<void> {
     const content = page.locator('.v-overlay__content').filter({ has: page.locator('.task-editor-next') });
-    await expect.poll(() => content.evaluate((element) => element.getAnimations().length)).toBe(0);
+    await expect.poll(() => content.evaluate((element) => element.contains(document.activeElement) && element.getAnimations().length === 0)).toBe(true);
 }
 
 function row(page: Page, name: string): Locator {
@@ -122,6 +124,22 @@ test('saves a task and stays open on it', async ({ context, page }) => {
     await page.keyboard.press('Escape');
     await expect(dialog(page)).toBeHidden();
     await expect(page).toHaveURL(url(PROJECT, 'status'));
+});
+
+// Written back as it was read, and on one line, where a second would be read back as the note.
+test('keeps a title\'s Markdown, on one line', async ({ context, page }) => {
+    const repository = await mockBackend(context, { ...NOTES, [`.tasks/${ERRAND}.md`]: note('Buy *the* `milk`') });
+    await page.goto(`/tasks-next/_/descendants/status?task=${ERRAND}`);
+    await expect(title(page)).toHaveValue('Buy *the* `milk`');
+    await title(page).fill('Buy *the* `milk`\nand eggs');
+    const save = dialog(page).getByRole('button', { name: 'Save', exact: true });
+    await save.click();
+
+    await expect.poll(() => repository.writes.length).toBe(1);
+    expect(repository.writes[0].content).toContain('\n# Buy *the* `milk` and eggs\n\n');
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
+    await expect(title(page)).toHaveValue('Buy *the* `milk` and eggs');
+    await expect(save).toBeDisabled();
 });
 
 // What was typed after Save was pressed is not in the note, and is still there to save.
@@ -230,6 +248,20 @@ test('adds a subtask from the editor', async ({ context, page }) => {
     await expect(page).toHaveURL(url('_', 'status', PROJECT));
     await expect(title(page)).toHaveValue('Project, renamed');
     await expect(listed(page, 'Second step')).toBeVisible();
+});
+
+// In the directory named by its UUID alone, where the task view looks for the tasks under it.
+test('adds a subtask under a task named with a readable prefix', async ({ context, page }) => {
+    const PLAN = uuid(4);
+    const repository = await mockBackend(context, { ...NOTES, [`.tasks/plan-${PLAN}.md`]: note('Plan') });
+    await page.goto(`/tasks-next/${PLAN}/descendants/status?task=${PLAN}`);
+    await dialog(page).getByRole('button', { name: 'Add Subtask' }).click();
+    const draft = page.getByRole('dialog').filter({ hasText: 'New subtask of "Plan"' });
+    await draft.getByRole('textbox', { name: 'Title', exact: true }).fill('First step');
+    await draft.getByRole('button', { name: 'Create', exact: true }).click();
+    await expect.poll(() => repository.writes.map(({ path }) => path)).toEqual([expect.stringMatching(new RegExp(`^\\.tasks/${PLAN}/[0-9a-f-]{36}\\.md$`))]);
+    await expect(draft).toBeHidden();
+    await expect(listed(page, 'First step')).toBeVisible();
 });
 
 // Back where it was in the editor, which Escape closes while the draft's snackbar still shows.
@@ -532,6 +564,55 @@ test('moves no task while its save runs', async ({ context, page }) => {
     await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
     await expect(page.getByRole('dialog').filter({ has: page.getByRole('button', { name: 'Move Here' }) })).toHaveCount(0);
     await expect(changeParent).toBeEnabled();
+});
+
+// A save writes to the path the task is at, and one during a move would write the moved task
+// back where it was. The move ends once the editor has read the task from where it went.
+test('saves no task while it moves', async ({ context, page }) => {
+    const repository = await mockBackend(context, NOTES);
+    let moving!: () => void;
+    const renamed = new Promise<void>((resolve) => {
+        moving = resolve;
+    });
+    await page.route(`${API_URL}notes/**`, async (route) => {
+        if (route.request().method() === 'PUT' && 'Rename' in route.request().postDataJSON()) {
+            moving();
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+        await route.fallback();
+    });
+    let reading!: () => void;
+    const reread = new Promise<void>((resolve) => {
+        reading = resolve;
+    });
+    await page.route(`${API_URL}v2/files/.tasks/${PROJECT}/${ERRAND}.md`, async (route) => {
+        reading();
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await route.fallback();
+    });
+    await page.goto(`/tasks-next/_/descendants/status?task=${ERRAND}`);
+    await title(page).fill('Errand, revised');
+    await dialog(page).getByRole('button', { name: 'Change Parent' }).click();
+    const picker = page.getByRole('dialog').filter({ has: page.getByRole('button', { name: 'Move Here' }) });
+    await picker.getByRole('treeitem', { name: 'Project' }).click();
+    await picker.getByRole('button', { name: 'Move Here' }).click();
+
+    const save = dialog(page).getByRole('button', { name: /^(Save|Create)$/ });
+    await renamed;
+    await expect(save).toBeDisabled();
+    await save.click({ force: true });
+    // Moved, and read again from where it went, the form counted against no task meanwhile.
+    await reread;
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
+    await expect(save).toBeDisabled();
+    await save.click({ force: true });
+
+    await expect(save).toHaveText('Save');
+    await expect(title(page)).toHaveValue('Errand, revised');
+    expect(repository.writes).toEqual([]);
+    await save.click();
+    await expect.poll(() => repository.writes.map(({ path }) => path)).toEqual([`.tasks/${PROJECT}/${ERRAND}.md`]);
+    expect(repository.writes[0].content).toContain('deadline: 2026-10-04');
 });
 
 test('keeps the editor open when a delete fails', async ({ context, page }) => {

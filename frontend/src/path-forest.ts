@@ -8,9 +8,10 @@
 //     becomes a node.
 //
 // That single rule is what the task tree's UUID convention amounts to. `.tasks/A/B.md` sits in
-// `.tasks/A`, which `.tasks/A.md` covers, so B's parent is the file A -- no UUID involved. The
-// same rule nests `notes/proj/x.md` under `notes/proj.md` when that file exists, and under a
-// synthesized `notes/proj` directory when it does not.
+// `.tasks/A`, which `.tasks/A.md` covers, so B's parent is the file A; the task policy has a file
+// named with a readable prefix, `.tasks/name-A.md`, cover `.tasks/A` too. The same rule nests
+// `notes/proj/x.md` under `notes/proj.md` when that file exists, and under a synthesized
+// `notes/proj` directory when it does not.
 //
 // What actually differs between the two trees is narrow enough to be a policy: what identifies a
 // node, which entries may cover a directory, whether an uncovered directory becomes a node or

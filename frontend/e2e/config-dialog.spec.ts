@@ -428,14 +428,14 @@ test('groups settings tabs by where they are stored without trapping the arrow k
     await openConfig(page);
     const groups = {
         'This browser': ['General', 'Editor', 'Markdown Rendering', 'Navigation Drawer'],
-        'Repository': ['Tasks', 'Calendars', 'AI Actions'],
+        'Repository': ['Tasks', 'Task Assessment', 'Calendars', 'AI Actions'],
     };
     for (const [group, names] of Object.entries(groups)) {
         for (const name of names) {
             await expect(configDialog(page).getByRole('tab', { name, exact: true })).toHaveAccessibleDescription(group);
         }
     }
-    await expect(configDialog(page).getByRole('tab')).toHaveCount(7);
+    await expect(configDialog(page).getByRole('tab')).toHaveCount(Object.values(groups).flat().length);
 
     // Each key below would stop at a heading drawn as an element of its own between the tabs.
     const general = configDialog(page).getByRole('tab', { name: 'General', exact: true });

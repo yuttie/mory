@@ -223,7 +223,7 @@ function referenceTree(entries: ListEntry2[]): Shape[] {
 }
 
 // A listing with the shapes that matter: several roots, a deep chain, a node with several
-// children, named stems, and mtimes that put sorting to work. Tie-free, because the backend
+// children, named stems, one with a child of its own, and mtimes that put sorting to work. Tie-free, because the backend
 // leaves equal mtimes in hash order and so has no order to be compared against there.
 function fixture(): ListEntry2[] {
     const at = (day: number) => `2024-05-${String(day).padStart(2, '0')}T12:00:00+00:00`;
@@ -234,6 +234,7 @@ function fixture(): ListEntry2[] {
         entry(`.tasks/${uuid(1)}/${uuid(2)}/${uuid(4)}.md`, at(4)),
         entry(`.tasks/${uuid(1)}/${uuid(2)}/${uuid(4)}/${uuid(5)}.md`, at(5)),
         entry(`.tasks/deep-name-${uuid(6)}.md`, at(6)),
+        entry(`.tasks/${uuid(6)}/${uuid(10)}.md`, at(10)),
         entry(`.tasks/${uuid(7)}.md`, at(7)),
         entry(`.tasks/${uuid(7)}/renamed-${uuid(8)}.md`, at(8)),
         entry(`.tasks/${uuid(9)}.md`, at(9)),

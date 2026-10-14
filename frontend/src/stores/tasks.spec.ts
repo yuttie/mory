@@ -368,9 +368,16 @@ describe('parentAt', () => {
     });
 
     it('finds none at the top, or where no file covers the directory', async () => {
-        const { store } = await storeWith([...sample, { path: `.tasks/named-${uuid(7)}.md`, title: 'Named' }]);
+        const { store } = await storeWith(sample);
         expect(store.parentAt(`.tasks/${uuid(9)}.md`)).toBeUndefined();
         expect(store.parentAt(`.tasks/${uuid(7)}/${uuid(9)}.md`)).toBeUndefined();
+    });
+
+    // As the backend parents a task: by the UUID its directory is named after.
+    it('finds a task named with a readable prefix over the directory named by its UUID', async () => {
+        const { store } = await storeWith([...sample, { path: `.tasks/named-${uuid(7)}.md`, title: 'Named' }]);
+        expect(store.parentAt(`.tasks/${uuid(7)}/${uuid(9)}.md`)?.uuid).toBe(uuid(7));
+        expect(store.parentAt(`.tasks/named-${uuid(7)}/${uuid(9)}.md`)).toBeUndefined();
     });
 
     it('agrees with the forest about every listed task', async () => {
@@ -401,10 +408,11 @@ describe('pathUnder', () => {
         expect(store.pathUnder(uuid(2), uuid(9))).toBe(`.tasks/${uuid(1)}/${uuid(2)}/${uuid(9)}.md`);
     });
 
-    // A directory must be a bare UUIDv4, so the one `named-<uuid>.md` covers can hold no task.
-    it('keeps a task a task under a parent named with a readable prefix', async () => {
+    // A directory must be a bare UUIDv4, and `named-<uuid>.md` covers the one named by its UUID.
+    it('places a task under a parent named with a readable prefix where the forest finds it', async () => {
         const { store } = await storeWith([{ path: `.tasks/named-${uuid(2)}.md`, title: 'Named' }]);
         expect(store.pathUnder(uuid(2), uuid(9))).toBe(`.tasks/${uuid(2)}/${uuid(9)}.md`);
+        expect(store.parentAt(store.pathUnder(uuid(2), uuid(9)))?.uuid).toBe(uuid(2));
     });
 
     it('refuses a parent the forest does not hold', async () => {
@@ -583,12 +591,12 @@ describe('parentForDrop', () => {
         expect(store.parentForDrop(uuid(1), tagGroupId('work'))).toBeUndefined();
     });
 
-    it('refuses a task the dropped one would not be drawn under, named with a readable prefix', async () => {
+    it('takes a task named with a readable prefix', async () => {
         const { store } = await storeWith([
             ...sample,
             { path: `.tasks/plan-${uuid(8)}.md`, title: 'Prefixed', day: 8 },
         ]);
-        expect(store.parentForDrop(uuid(3), uuid(8))).toBeUndefined();
+        expect(store.parentForDrop(uuid(3), uuid(8))).toBe(uuid(8));
     });
 
     it('takes a parent re-rooted by a missing file, where the forest still finds its children', async () => {
@@ -626,6 +634,25 @@ describe('move', () => {
         expect(repo.paths()).toContain(`.tasks/${uuid(4)}/${uuid(1)}/${uuid(2)}.md`);
         expect(store.parentOf(uuid(1))).toBe(uuid(4));
         expect(store.parentOf(uuid(2))).toBe(uuid(1));
+    });
+
+    // A readable name is the author's, and the tasks under it are in the directory named by its UUID.
+    it('moves a task named with a readable prefix with its name, and the tasks under it', async () => {
+        const { store, repo } = await storeWith([
+            ...sample,
+            { path: `.tasks/plan-${uuid(8)}.md`, title: 'Prefixed', day: 8 },
+            { path: `.tasks/${uuid(8)}/${uuid(9)}.md`, title: 'Step', day: 9 },
+        ]);
+        expect(store.parentOf(uuid(9))).toBe(uuid(8));
+        await store.move(uuid(8), uuid(4));
+
+        expect(apiMocks.renameNote.mock.calls).toEqual([
+            [`.tasks/plan-${uuid(8)}.md`, `.tasks/${uuid(4)}/plan-${uuid(8)}.md`],
+            [`.tasks/${uuid(8)}/${uuid(9)}.md`, `.tasks/${uuid(4)}/${uuid(8)}/${uuid(9)}.md`],
+        ]);
+        expect(repo.paths()).toContain(`.tasks/${uuid(4)}/plan-${uuid(8)}.md`);
+        expect(store.parentOf(uuid(8))).toBe(uuid(4));
+        expect(store.parentOf(uuid(9))).toBe(uuid(8));
     });
 
     it('moves a task back out to the root, into the tag group it then belongs to', async () => {

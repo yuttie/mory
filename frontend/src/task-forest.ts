@@ -4,7 +4,7 @@
 // `.tasks/<a>/<b>.md` is the task `b` under the task `a`. The parenting rule itself lives in
 // `path-forest.ts` -- `.tasks/<a>.md` covers the directory `.tasks/<a>`, so `b`'s parent is the
 // file `a` -- and this module supplies only what is task-specific: identity by UUID, the
-// validation the backend applied, and the sibling order it produced.
+// directory a file covers, the validation the backend applied, and the sibling order it produced.
 
 import type { UUID } from '@/api';
 import type { Status } from '@/task';
@@ -114,10 +114,18 @@ export function compareByMtimeDesc(a: TaskNode, b: TaskNode): number {
     return compareInstantsDesc(a.mtime, b.mtime) || a.uuid.localeCompare(b.uuid);
 }
 
+// The directory a task's file covers: the one beside it named by its UUID alone. A readable name
+// before the UUID changes nothing, as the backend parents a task by its directory's UUID, and a
+// directory below `.tasks/` must be a bare UUIDv4 to hold tasks at all. `null` for no task's path.
+export function taskDirectoryOf(path: string): string | null {
+    const id = taskUuidOf(path);
+    return id === null ? null : `${path.slice(0, path.lastIndexOf('/'))}/${id}`;
+}
+
 export const taskPolicy: PathForestPolicy<TaskNode> = {
     idOf: (entry) => taskUuidOf(entry.path),
 
-    coverOf: (entry) => stripExtension(entry.path),
+    coverOf: (entry) => taskDirectoryOf(entry.path),
 
     node: (entry, id, parent) => ({
         id,
@@ -146,9 +154,9 @@ export function buildTaskPath(ancestorsRootFirst: readonly UUID[], uuid: UUID): 
     return TASKS_DIR + [...ancestorsRootFirst, uuid].join('/') + '.md';
 }
 
-// Where the task `id` belongs under the task at `parentPath`: in a directory named after the
-// parent, beside the parent's own file. Worked out from the path alone, so a parent written a
-// moment ago and not listed yet can take children too.
+// Where the task `id` belongs under the task at `parentPath`: in the directory the parent's file
+// covers. Worked out from the path alone, so a parent written a moment ago and not listed yet can
+// take children too.
 export function childTaskPath(parentPath: string, parentUuid: UUID, id: UUID): string {
     return `${parentPath.slice(0, parentPath.lastIndexOf('/'))}/${parentUuid}/${id}.md`;
 }

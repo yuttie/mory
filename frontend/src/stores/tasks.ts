@@ -14,10 +14,10 @@ import {
     nodesOf,
     toNestedForest,
 } from '@/forest';
-import { buildPathForest, stripExtension } from '@/path-forest';
+import { buildPathForest } from '@/path-forest';
 import { render, replaceStatus } from '@/task';
 import type { Status, Task } from '@/task';
-import { TASKS_DIR, buildTaskPath, childTaskPath, taskPolicy } from '@/task-forest';
+import { TASKS_DIR, buildTaskPath, childTaskPath, taskDirectoryOf, taskPolicy } from '@/task-forest';
 import type { TaskMetadata, TaskNode, TaskTreeItem } from '@/task-forest';
 import { useEntrySubset } from '@/composables/entrySubset';
 import { useFilesStore } from '@/stores/files';
@@ -239,8 +239,8 @@ export const useTasksStore = defineStore('tasks', () => {
     const byCover = computed(() => {
         const index = new Map<string, TaskNode>();
         for (const node of forest.value.byId.values()) {
-            const cover = stripExtension(node.path);
-            if (!index.has(cover)) {
+            const cover = taskDirectoryOf(node.path);
+            if (cover !== null && !index.has(cover)) {
                 index.set(cover, node);
             }
         }
@@ -253,15 +253,12 @@ export const useTasksStore = defineStore('tasks', () => {
         return byCover.value.get(path.slice(0, path.lastIndexOf('/')));
     }
 
-    // Where the task `id` belongs under `parent`, or at the top for `null`: in a directory named
-    // after the parent, beside the parent's own file. For a file named by its UUID alone, as tasks
-    // are written, that is the directory the file covers, where the forest looks for its children.
-    // A task created there and one moved there land at the same path.
+    // Where the task `id` belongs under `parent`, or at the top for `null`: in the directory the
+    // parent's file covers, where the forest looks for its children. A task created there and one
+    // moved there land in the same directory.
     //
     // Not a directory per ancestor the forest gives the parent: a parent whose own parent's file is
-    // gone is re-rooted and has none, though its file still sits in that parent's directory. And
-    // not the cover itself: a file with a readable prefix covers a directory no task may be in, and
-    // a task beside it is at least still a task.
+    // gone is re-rooted and has none, though its file still sits in that parent's directory.
     function pathUnder(parent: UUID | null, id: UUID): string {
         if (parent === null) {
             return buildTaskPath([], id);
@@ -291,12 +288,6 @@ export const useTasksStore = defineStore('tasks', () => {
             return undefined;
         }
         if (target === id || target === current.parent || descendants(forest.value, id).includes(target)) {
-            return undefined;
-        }
-        // A task moved under another goes in the directory named by that one's UUID, while the
-        // forest looks for a task's children in the directory its file covers. The two differ for a
-        // file named with a readable prefix, and a task moved under one is drawn at the top.
-        if (parentAt(pathUnder(target, id))?.id !== target) {
             return undefined;
         }
         return target;
@@ -384,15 +375,20 @@ export const useTasksStore = defineStore('tasks', () => {
             throw new Error('A task cannot be moved under one of its own descendants.');
         }
 
+        // The file keeps its name, and a readable one with it, in the directory it moves to. Its
+        // own tasks are in the directory named by its UUID beside it, whatever its name.
         const oldPath = current.path;
-        const newPath = pathUnder(newParent, id);
+        const oldParentDirectory = oldPath.slice(0, oldPath.lastIndexOf('/'));
+        const placed = pathUnder(newParent, id);
+        const newParentDirectory = placed.slice(0, placed.lastIndexOf('/'));
+        const newPath = newParentDirectory + oldPath.slice(oldParentDirectory.length);
         if (oldPath === newPath) {
             return null;
         }
 
         // Deepest last, so a descendant is only moved once its new home exists.
-        const oldDirectory = stripExtension(oldPath);
-        const newDirectory = stripExtension(newPath);
+        const oldDirectory = `${oldParentDirectory}/${id}`;
+        const newDirectory = `${newParentDirectory}/${id}`;
         const moves: [string, string][] = [[oldPath, newPath]];
         for (const descendant of nodesOf(forest.value, descendants(forest.value, id))) {
             moves.push([

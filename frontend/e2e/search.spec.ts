@@ -533,7 +533,14 @@ test('does not retry an authenticated search after leaving the view', async ({ c
     await expect(page.getByRole('heading', { name: 'Login' })).toBeVisible();
     expect(searchAttempts).toBe(1);
 
-    await page.getByRole('link', { name: 'About' }).click({ force: true });
+    // Away to About, as its link in the drawer's account menu goes: by the router, which leaves the
+    // page and its state in place where a reload would not.
+    await page.evaluate(async () => {
+        const app = (document.querySelector('#app') as HTMLElement & {
+            __vue_app__: { config: { globalProperties: { $router: { push: (path: string) => Promise<unknown> } } } },
+        }).__vue_app__;
+        await app.config.globalProperties.$router.push('/about');
+    });
     await expect.poll(() => new URL(page.url()).pathname).toBe('/about');
     await page.getByRole('textbox', { name: 'Username' }).fill('test');
     await page.getByLabel('Password').fill('password');
