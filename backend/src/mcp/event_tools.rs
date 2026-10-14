@@ -5,6 +5,9 @@
 //! weekdays are three letters and may carry an ordinal, `repeat.tz` is an IANA zone name and
 //! never an offset, and a datetime carries its offset while a date is bare.
 
+use std::sync::LazyLock;
+
+use regex::Regex;
 use rmcp::{model::CallToolResult, ErrorData};
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -20,6 +23,48 @@ use crate::models::AppState;
 /// "every three weeks on Wednesday".
 const WEEKDAYS: [&str; 7] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 const FREQUENCIES: [&str; 4] = ["daily", "weekly", "monthly", "yearly"];
+
+/// A moment as the notes spell one: a bare date, or a datetime carrying its offset.
+///
+/// The calendar reads a datetime without an offset too, as the reader's wall clock, which is why
+/// such a value has to be refused here rather than left for the calendar to catch: it would be
+/// drawn, at an hour that moves with whoever reads it. Read with the reader the task dates are
+/// checked with, so the two kinds of date follow one rule.
+fn check_when(key: &str, value: &str) -> Result<(), String> {
+    let text = Value::String(value.to_owned());
+    if crate::urgency::instant(Some(&text), crate::urgency::local_zone(), false).is_none() {
+        return Err(format!(
+            "{key} {value:?} is neither a bare date (`2026-03-12`) nor a datetime carrying its \
+             offset (`2026-03-12 19:00:00+09:00`).",
+        ));
+    }
+    Ok(())
+}
+
+/// A duration, as `normalizeEndTime` in `frontend/src/events.ts` reads one: `+90m`, `+1.5h`,
+/// `+2 days`.
+static DURATION: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"^\+[\d.]+ *(y|M|w|d|h|m|s|ms|(?i:years?|months?|weeks?|days?|hours?|minutes?|seconds?|milliseconds?))$",
+    )
+    .unwrap()
+});
+
+/// A time of day, which belongs to the start's date, or the next one when it would precede it.
+static TIME_OF_DAY: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^([01]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$").unwrap());
+
+/// An `end`: a moment as `check_when` takes one, a time of day, or a duration from the start.
+fn check_end(value: &str) -> Result<(), String> {
+    let trimmed = value.trim();
+    if DURATION.is_match(trimmed) || TIME_OF_DAY.is_match(trimmed) || check_when("`end`", value).is_ok() {
+        return Ok(());
+    }
+    Err(format!(
+        "end {value:?} is none of a duration (`+90m`, `+1.5h`), a time of day (`18:30`), a bare \
+         date, or a datetime carrying its offset.",
+    ))
+}
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct Repeat {
@@ -113,6 +158,7 @@ impl Repeat {
             repeat.insert("tz".into(), tz.as_str().into());
         }
         if let Some(until) = &self.until {
+            check_when("`until`", until)?;
             repeat.insert("until".into(), until.as_str().into());
         }
         if let Some(count) = self.count {
@@ -249,9 +295,11 @@ fn event_changes(args: &EventArgs) -> Result<Vec<Change>, String> {
         changes.push(Change::set(&["events", &args.name, key], value));
     };
     if let Some(start) = &args.start {
+        check_when("`start`", start)?;
         set("start", start.as_str().into());
     }
     if let Some(end) = &args.end {
+        check_end(end)?;
         set("end", end.as_str().into());
     }
     if let Some(finished) = args.finished {
@@ -275,6 +323,9 @@ fn event_changes(args: &EventArgs) -> Result<Vec<Change>, String> {
         set("repeat", repeat.to_value()?);
     }
     if let Some(exclusions) = &args.exclusions {
+        for at in exclusions {
+            check_when("An exclusion", at)?;
+        }
         set(
             "exclusions",
             Value::Sequence(exclusions.iter().map(|at| Value::String(at.clone())).collect()),
@@ -631,5 +682,49 @@ mod tests {
         }))
         .expect("valid arguments");
         assert!(event_changes(&args).is_ok());
+    }
+
+    fn event(fields: serde_json::Value) -> EventArgs {
+        let mut args = serde_json::json!({ "path": "a.md", "name": "Standup", "message": "m" });
+        args.as_object_mut().unwrap().extend(fields.as_object().unwrap().clone());
+        serde_json::from_value(args).expect("valid arguments")
+    }
+
+    /// A datetime with no offset would be drawn at an hour that moves with whoever reads it, so
+    /// it is refused with both spellings that are right.
+    #[test]
+    fn a_moment_is_a_bare_date_or_a_datetime_carrying_its_offset() {
+        for start in ["2026-03-12", "2026-03-12 19:00:00+09:00", "2026-03-12 19:00+09:00", "2026-03-12T10:00:00Z"] {
+            assert!(event_changes(&event(serde_json::json!({ "start": start }))).is_ok(), "{start}");
+        }
+        for start in ["2026-03-12 19:00", "2026-03-12 19:00:00", "2026-02-30", "tomorrow", "19:00"] {
+            let error = event_changes(&event(serde_json::json!({ "start": start })))
+                .expect_err("not a moment as the notes spell one");
+            assert!(error.contains("+09:00"), "{start}: {error}");
+        }
+
+        let rule = |until: &str| serde_json::json!({ "repeat": { "freq": "weekly", "until": until } });
+        assert!(event_changes(&event(rule("2026-12-31"))).is_ok());
+        assert!(event_changes(&event(rule("2026-12-31 23:59"))).is_err());
+
+        let exclusions = |at: &str| serde_json::json!({ "exclusions": ["2026-03-19 19:00:00+09:00", at] });
+        assert!(event_changes(&event(exclusions("2026-03-26"))).is_ok());
+        assert!(event_changes(&event(exclusions("2026-03-26 19:00"))).is_err());
+    }
+
+    /// `end` takes the three spellings `normalizeEndTime` reads, as well as a moment.
+    #[test]
+    fn an_end_is_a_moment_a_time_of_day_or_a_duration() {
+        for end in [
+            "2026-03-12 20:30:00+09:00", "2026-03-14", "20:30", "9:05", "20:30:15",
+            "+90m", "+1.5h", "+2 days", "+1 Week", "+1M",
+        ] {
+            assert!(event_changes(&event(serde_json::json!({ "end": end }))).is_ok(), "{end}");
+        }
+        for end in ["2026-03-12 20:30", "24:00", "90m", "+1 fortnight", "later"] {
+            let error = event_changes(&event(serde_json::json!({ "end": end })))
+                .expect_err("not an end");
+            assert!(error.contains("duration"), "{end}: {error}");
+        }
     }
 }
