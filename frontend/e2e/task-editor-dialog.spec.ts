@@ -34,10 +34,12 @@ function saving(page: Page): Locator {
 }
 
 // Open. Vuetify takes a dialog for the one on top, which Escape closes, a moment after it opens,
-// and an Escape pressed before then does nothing; its opening transition outlasts that moment.
+// and an Escape pressed before then does nothing; its opening transition outlasts that moment. The
+// transition starts only a frame or two after the dialog does, so no animation running is no sign
+// it has ended: the focus Vuetify moves into the dialog once it has is.
 async function opened(page: Page): Promise<void> {
     const content = page.locator('.v-overlay__content').filter({ has: page.locator('.task-editor-next') });
-    await expect.poll(() => content.evaluate((element) => element.getAnimations().length)).toBe(0);
+    await expect.poll(() => content.evaluate((element) => element.contains(document.activeElement) && element.getAnimations().length === 0)).toBe(true);
 }
 
 function row(page: Page, name: string): Locator {
