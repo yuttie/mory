@@ -158,9 +158,7 @@ pub async fn read_note(state: &AppState, args: ReadArgs) -> Result<CallToolResul
     let truncated = bytes.len() > MAX_NOTE_BYTES;
     let content = match std::str::from_utf8(&bytes) {
         Ok(text) if !truncated => text.to_owned(),
-        // Truncating mid-character is what `from_utf8_lossy` is for; the boundary is arbitrary
-        // anyway and one replacement character at the very end costs nothing.
-        Ok(text) => text.chars().take(MAX_NOTE_BYTES).collect(),
+        Ok(text) => within_limit(text).to_owned(),
         Err(_) => {
             return Ok(tool_error(format!(
                 "{path:?} is not UTF-8 text, so it cannot be read as a note.",
@@ -173,6 +171,14 @@ pub async fn read_note(state: &AppState, args: ReadArgs) -> Result<CallToolResul
         content,
         truncated_at_bytes: truncated.then_some(MAX_NOTE_BYTES),
     })
+}
+
+/// As much of `text` as `MAX_NOTE_BYTES` holds, cut at the last character boundary within it.
+///
+/// Counted in bytes, not characters: a note in Japanese, at three bytes a character, would
+/// otherwise run to three times the limit.
+fn within_limit(text: &str) -> &str {
+    &text[..text.floor_char_boundary(MAX_NOTE_BYTES)]
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1329,6 +1335,18 @@ mod tests {
         assert!(message.starts_with("Not an alarm:"), "{message}");
         // A `\` continuation inside the literal once went missing and left a run of spaces.
         assert!(!message.contains("  "), "{message:?}");
+    }
+
+    #[test]
+    fn a_long_note_is_cut_within_the_limit_in_bytes() {
+        let ascii = "a".repeat(MAX_NOTE_BYTES + 10);
+        assert_eq!(within_limit(&ascii).len(), MAX_NOTE_BYTES);
+        // 2^18 is not a multiple of three, so the limit falls inside a character, which goes.
+        let japanese = "日".repeat(MAX_NOTE_BYTES);
+        let cut = within_limit(&japanese);
+        assert_eq!(cut.len(), MAX_NOTE_BYTES - MAX_NOTE_BYTES % 3);
+        assert!(cut.chars().all(|c| c == '日'));
+        assert_eq!(within_limit("short"), "short");
     }
 
     #[test]
