@@ -14,7 +14,7 @@ use serde::Deserialize;
 use serde_yaml::{Mapping, Value};
 
 use super::frontmatter::{self, Change};
-use super::tools::{alarm_list, commit_edit, note_text, safe_path, write_note};
+use super::tools::{alarm_list, edited_note, note_text, safe_path, write_note};
 use super::tool_error;
 use crate::models::AppState;
 
@@ -358,9 +358,61 @@ fn check_category(id: &str, configured: &[String]) -> Result<(), String> {
 
 /// Whether the note already declares an event by this name.
 fn has_event(text: &str, name: &str) -> bool {
-    frontmatter::value(text)
-        .and_then(|root| root.get("events")?.as_mapping()?.get(name).cloned())
-        .is_some()
+    event_in(text, name).is_some()
+}
+
+fn event_in(text: &str, name: &str) -> Option<Value> {
+    frontmatter::value(text).and_then(|root| root.get("events")?.as_mapping()?.get(name).cloned())
+}
+
+/// What is wrong with an event's shape, in the terms `frontend/src/metadata-schema.json` sets
+/// with its `anyOf` and `dependencies`: something to draw, and a rule under what adjusts it.
+///
+/// Stricter than the schema in one place: an empty list of instances satisfies it, but draws
+/// nothing, so it does not count as an occurrence here.
+fn shape_faults(event: Option<&Value>) -> Vec<&'static str> {
+    let Some(event) = event else {
+        return Vec::new();
+    };
+    // An event whose last key went is `null` rather than an empty mapping, and has as little.
+    let empty = Mapping::new();
+    let event = event.as_mapping().unwrap_or(&empty);
+    let has = |key: &str| event.get(key).is_some_and(|value| !value.is_null());
+    let listed = |key: &str| {
+        event.get(key).and_then(Value::as_sequence).is_some_and(|list| !list.is_empty())
+    };
+    let mut faults = Vec::new();
+    if !has("start") && !listed("instances") && !listed("times") {
+        faults.push(
+            "It would have nothing to draw: no `start` and no listed occurrence. Use \
+             remove_event to remove an event.",
+        );
+    }
+    if has("repeat") && !has("start") {
+        faults.push("A `repeat` rule recurs from the event's `start`, so it needs one.");
+    }
+    if has("exclusions") && !has("repeat") {
+        faults.push("`exclusions` take occurrences out of a `repeat` rule, so they need one.");
+    }
+    if has("overrides") && !has("repeat") {
+        faults.push("`overrides` change occurrences of a `repeat` rule, so they need one.");
+    }
+    faults
+}
+
+/// Refuses an edit that leaves the event in a shape the schema forbids.
+///
+/// Only a fault the edit brings is refused. A note already in such a shape was written by hand
+/// or by an older app, and refusing every later edit to it would leave a model only update_note,
+/// which checks nothing.
+fn check_shape(text: &str, edited: &str, name: &str) -> Result<(), String> {
+    let before = shape_faults(event_in(text, name).as_ref());
+    let after = shape_faults(event_in(edited, name).as_ref());
+    let brought: Vec<_> = after.into_iter().filter(|fault| !before.contains(fault)).collect();
+    if brought.is_empty() {
+        return Ok(());
+    }
+    Err(format!("{name:?} was not changed. {}", brought.join(" ")))
 }
 
 pub async fn add_event(state: &AppState, args: EventArgs) -> Result<CallToolResult, ErrorData> {
@@ -431,7 +483,13 @@ async fn apply_event(
             return Ok(tool_error(message));
         }
     }
-    commit_edit(state, path, text, &changes, &args.message).await
+    let edited = match edited_note(text, &changes, path)
+        .and_then(|edited| check_shape(text, &edited, &args.name).map(|()| edited))
+    {
+        Ok(edited) => edited,
+        Err(reason) => return Ok(tool_error(reason)),
+    };
+    write_note(state, path, &edited, &args.message).await
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -726,5 +784,43 @@ mod tests {
                 .expect_err("not an end");
             assert!(error.contains("duration"), "{end}: {error}");
         }
+    }
+
+    fn edit_and_check(note: &str, fields: serde_json::Value) -> Result<String, String> {
+        let changes = event_changes(&event(fields))?;
+        let edited = frontmatter::apply(note, &changes).map_err(|e| e.to_string())?;
+        check_shape(note, &edited, "Standup").map(|()| edited)
+    }
+
+    /// Clearing what an event occurs at leaves nothing to draw, and clearing a rule strands what
+    /// adjusts it. Both are what the schema forbids, so neither is written.
+    #[test]
+    fn an_edit_that_breaks_the_event_shape_is_refused() {
+        let lone = "---\nevents:\n    Standup:\n        start: 2026-09-23\n---\n";
+        let error = edit_and_check(lone, serde_json::json!({ "clear": ["start"] }))
+            .expect_err("nothing left to draw");
+        assert!(error.contains("remove_event"), "{error}");
+
+        let listed = "---\nevents:\n    Standup:\n        start: 2026-09-23\n        times:\n            - start: 2026-09-30\n---\n";
+        assert!(edit_and_check(listed, serde_json::json!({ "clear": ["start"] })).is_ok());
+
+        let ruled = "---\nevents:\n    Standup:\n        start: 2026-09-23\n        repeat:\n            freq: weekly\n        exclusions:\n            - 2026-09-30\n---\n";
+        let error = edit_and_check(ruled, serde_json::json!({ "clear": ["repeat"] }))
+            .expect_err("exclusions without a rule");
+        assert!(error.contains("`exclusions`"), "{error}");
+        let error = edit_and_check(ruled, serde_json::json!({ "clear": ["start"] }))
+            .expect_err("a rule without a start");
+        assert!(error.contains("`repeat`"), "{error}");
+        assert!(edit_and_check(ruled, serde_json::json!({ "clear": ["repeat", "exclusions"] })).is_ok());
+    }
+
+    /// A note already out of shape is not the edit's doing, and refusing every later edit to it
+    /// would leave only update_note.
+    #[test]
+    fn a_fault_the_note_already_had_does_not_block_an_edit() {
+        let stranded = "---\nevents:\n    Standup:\n        start: 2026-09-23\n        exclusions:\n            - 2026-09-30\n---\n";
+        let edited = edit_and_check(stranded, serde_json::json!({ "location": "Room 4" }))
+            .expect("the stray exclusions were there before");
+        assert!(edited.contains("location: Room 4"), "{edited}");
     }
 }
