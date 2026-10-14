@@ -6,9 +6,19 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Origin { Planned, Interruption }
+impl Origin {
+    fn text(&self) -> &'static str {
+        match self { Self::Planned => "planned", Self::Interruption => "interruption" }
+    }
+}
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Outcome { Worked, Missed }
+impl Outcome {
+    fn text(&self) -> &'static str {
+        match self { Self::Worked => "worked", Self::Missed => "missed" }
+    }
+}
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Entry {
@@ -63,6 +73,35 @@ pub fn read(text: &str, month: &str) -> Result<Month, String> {
     Ok(plan)
 }
 
+/// A month as the web app writes it: days in date order, entries in theirs, under the four-space
+/// indent `YAML.stringify` gives a sequence. `serde_yaml` puts a sequence's items at its key's
+/// column instead, so each side rewrote the whole file after the other had touched it.
+/// `fixtures/plans/written.json` holds this to `writePlan` in `frontend/src/plans.ts`.
+///
+/// Written by hand because every value is one `read` accepts -- a date, a UUID, or one of the two
+/// enums -- and each of those is a plain scalar that needs no quoting.
+pub fn write(plan: &Month) -> String {
+    if plan.is_empty() {
+        return "{}\n".to_owned();
+    }
+    let mut text = String::new();
+    for (day, entries) in plan {
+        if entries.is_empty() {
+            text.push_str(&format!("{day}: []\n"));
+            continue;
+        }
+        text.push_str(&format!("{day}:\n"));
+        for entry in entries {
+            text.push_str(&format!("    - task: {}\n", entry.task));
+            text.push_str(&format!("      origin: {}\n", entry.origin.text()));
+            if let Some(result) = &entry.result {
+                text.push_str(&format!("      result: {}\n", result.text()));
+            }
+        }
+    }
+    text
+}
+
 pub fn put(plan: &mut Month, day: &str, task: &str, origin: Origin) {
     let entries = plan.entry(day.into()).or_default();
     if !entries.iter().any(|entry| entry.task == task) {
@@ -83,6 +122,16 @@ mod tests {
         }
     }
     #[test]
+    fn shared_writing_fixtures() {
+        let cases: serde_json::Value = serde_json::from_str(include_str!("../../fixtures/plans/written.json")).unwrap();
+        for case in cases.as_array().unwrap() {
+            let plan: Month = serde_json::from_value(case["plan"].clone()).unwrap();
+            let yaml = case["yaml"].as_str().unwrap();
+            assert_eq!(write(&plan), yaml, "{}", case["name"]);
+            assert_eq!(read(yaml, "2026-10").unwrap(), plan, "{}", case["name"]);
+        }
+    }
+    #[test]
     fn plans_preserve_order_history_and_unknown_references() {
         let mut plan = Month::new();
         put(&mut plan, "2026-10-05", UUID, Origin::Planned);
@@ -91,7 +140,7 @@ mod tests {
         assert_eq!(plan["2026-10-05"][0].result, None);
         put(&mut plan, "2026-10-06", UUID, Origin::Interruption);
         assert_eq!(plan["2026-10-06"][0].result, Some(Outcome::Worked));
-        let text = serde_yaml::to_string(&plan).unwrap();
+        let text = write(&plan);
         assert_eq!(read(&text, "2026-10").unwrap(), plan);
         assert!(read(&text, "2026-11").is_err());
     }

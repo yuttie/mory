@@ -1,9 +1,8 @@
 import { computed, ref, watch } from 'vue';
 import { defineStore } from 'pinia';
 import axios from 'axios';
-import YAML from 'yaml';
 import { useFilesStore } from '@/stores/files';
-import { collectUndone, isPlanDate, PLAN_UUID, putPlanEntry, readPlan, type MonthPlan, type PlanOrigin, type PlanResult } from '@/plans';
+import { collectUndone, isPlanDate, PLAN_UUID, putPlanEntry, readPlan, writePlan, type MonthPlan, type PlanOrigin, type PlanResult } from '@/plans';
 
 const planPath = (month: string) => `.mory/plans/${month}.yaml`;
 export const usePlansStore = defineStore('plans', () => {
@@ -62,7 +61,7 @@ export const usePlansStore = defineStore('plans', () => {
         if (errors.value[month]) {
             throw new Error(`Fix the invalid ${month} plan before writing it: ${errors.value[month]}`);
         }
-        const content = YAML.stringify(plan, { indent: 4 });
+        const content = writePlan(plan);
         readPlan(content, month);
         try {
             await files.writeChecked(planPath(month), content, etags.get(month) ?? 'absent');

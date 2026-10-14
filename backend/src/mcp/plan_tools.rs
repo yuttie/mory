@@ -91,7 +91,7 @@ async fn edit(state: &AppState, day: &str, task: &str, mutation: impl FnOnce(&mu
         None => Month::new(),
     };
     if let Err(error) = mutation(&mut plan, &uuid) { return Ok(tool_error(error)); }
-    let content = serde_yaml::to_string(&plan).map_err(|error| ErrorData::internal_error(error.to_string(), None))?;
+    let content = plans::write(&plan);
     let (_, entries) = state.get_entries(Some(".tasks/*")).await.map_err(|error| ErrorData::internal_error(error.to_string(), None))?;
     let unknown = !known_tasks(&entries).contains(&uuid);
     match state.save_note_checked(&path, content.as_bytes(), &format!("Update plan for {day}"), &expected).await {

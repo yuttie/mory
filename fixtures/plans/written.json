@@ -1,0 +1,30 @@
+[
+    {
+        "name": "nothing planned",
+        "plan": {},
+        "yaml": "{}\n"
+    },
+    {
+        "name": "days in date order, entries in theirs",
+        "plan": {
+            "2026-10-07": [
+                { "task": "4955857d-3267-4b94-83f2-538a428970d7", "origin": "planned" }
+            ],
+            "2026-10-05": [
+                { "task": "2a997a71-0d2b-4938-b8ff-5178c28a5ad9", "origin": "interruption", "result": "worked" },
+                { "task": "4955857d-3267-4b94-83f2-538a428970d7", "origin": "planned", "result": "missed" }
+            ]
+        },
+        "yaml": "2026-10-05:\n    - task: 2a997a71-0d2b-4938-b8ff-5178c28a5ad9\n      origin: interruption\n      result: worked\n    - task: 4955857d-3267-4b94-83f2-538a428970d7\n      origin: planned\n      result: missed\n2026-10-07:\n    - task: 4955857d-3267-4b94-83f2-538a428970d7\n      origin: planned\n"
+    },
+    {
+        "name": "a day emptied by unplanning",
+        "plan": {
+            "2026-10-05": [],
+            "2026-10-06": [
+                { "task": "4955857d-3267-4b94-83f2-538a428970d7", "origin": "planned" }
+            ]
+        },
+        "yaml": "2026-10-05: []\n2026-10-06:\n    - task: 4955857d-3267-4b94-83f2-538a428970d7\n      origin: planned\n"
+    }
+]

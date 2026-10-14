@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { collectUndone, putPlanEntry, readPlan, type MonthPlan } from '@/plans';
+import { collectUndone, putPlanEntry, readPlan, writePlan, type MonthPlan } from '@/plans';
 import fixtures from '../../fixtures/plans/cases.json';
+import written from '../../fixtures/plans/written.json';
 const A = '4955857d-3267-4b94-83f2-538a428970d7';
 const B = '2a997a71-0d2b-4938-b8ff-5178c28a5ad9';
 const C = '53b2a26e-a2c8-4e3c-a11b-a0d532237fe1';
@@ -14,6 +15,13 @@ describe('day plans', () => {
             else {
                 expect(() => readPlan(fixture.yaml, '2026-10')).toThrow();
             }
+        });
+    }
+    for (const fixture of written) {
+        it(`shared writing: ${fixture.name}`, () => {
+            const plan = fixture.plan as MonthPlan;
+            expect(writePlan(plan)).toBe(fixture.yaml);
+            expect(readPlan(fixture.yaml, '2026-10')).toEqual(plan);
         });
     }
     it('keeps order, deduplicates daily tasks, records interruptions and permits unknown UUIDs', () => {
