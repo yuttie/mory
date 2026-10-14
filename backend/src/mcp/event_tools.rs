@@ -128,7 +128,12 @@ impl Repeat {
 /// A weekday, with its ordinal if it has one.
 fn check_weekday(day: &str, freq: &str) -> Result<String, String> {
     let lowered = day.trim().to_ascii_lowercase();
-    let (ordinal, name) = lowered.split_at(lowered.len().saturating_sub(3));
+    // Checked, because three bytes back can land inside a multibyte character, and `day` is
+    // whatever the model sent. A split there cannot end in a weekday anyway, so the whole of it
+    // goes to the name and is refused as one.
+    let (ordinal, name) = lowered
+        .split_at_checked(lowered.len().saturating_sub(3))
+        .unwrap_or(("", &lowered));
     if !WEEKDAYS.contains(&name) {
         return Err(format!(
             "{day:?} is not a weekday. These are three letters, not iCal's two: {}. An ordinal \
@@ -441,6 +446,15 @@ mod tests {
 
         assert!(repeat("weekly", &["wed"]).to_value().is_ok());
         assert!(repeat("weekly", &["WED"]).to_value().is_ok(), "case is forgiven");
+    }
+
+    /// Three bytes from the end of `月1` is inside `月`, where a plain split panics.
+    #[test]
+    fn a_weekday_in_another_script_is_refused_rather_than_split() {
+        for day in ["月1", "水曜日", "1水"] {
+            let error = repeat("monthly", &[day]).to_value().expect_err("not a weekday");
+            assert!(error.contains("three letters"), "{day}: {error}");
+        }
     }
 
     /// What separates "the third Wednesday of each month" from "every three weeks on Wednesday".
