@@ -266,7 +266,7 @@
             v-on:after-leave="returnFocus"
         >
             <v-progress-linear
-                v-bind:active="saving"
+                v-bind:active="saving || moving"
                 indeterminate
                 absolute
                 color="primary"
@@ -277,7 +277,7 @@
                 v-bind:task-path="editedPath"
                 v-bind:known-tags="store.knownTags"
                 v-bind:known-contacts="store.knownContacts"
-                v-bind:saving="saving"
+                v-bind:writing="saving || moving"
                 v-on:save="onEditedTaskSave"
                 v-on:delete="onEditedTaskDelete"
                 v-on:cancel="closeEditor"
@@ -381,6 +381,9 @@ const showParentDialog = ref<boolean>(false);
 // A save waits for the listing to show it and the editor to read it again, and a second press
 // meanwhile would write the task again.
 const saving = ref(false);
+// A move of the task in the editor, until the listing shows it where it went. A save meanwhile
+// would write it back to the path it left.
+const moving = ref(false);
 const quickAddDialogIsVisible = ref(false);
 // Where the next outline starts, as `newTaskStart` for a single task: from Quick add, under the
 // selected task or with the selected group's tag; from the editor, under the task it holds.
@@ -911,7 +914,7 @@ function onQuickAddSubtasks() {
 
 async function onEditedTaskSave(task: Task) {
     const node = editedNode.value;
-    if (node === undefined || saving.value) {
+    if (node === undefined || saving.value || moving.value) {
         return;
     }
     saving.value = true;
@@ -988,6 +991,7 @@ async function onParentChosen(newParentUuid: UUID | null) {
 
     // The address names the task by its UUID, which a move keeps, so it needs no new one.
     const id = editedNode.value.uuid;
+    moving.value = true;
     try {
         await store.move(id, newParentUuid);
         // Where it went, as for a task dropped in the tree, to be seen once the editor closes.
@@ -995,6 +999,8 @@ async function onParentChosen(newParentUuid: UUID | null) {
     } catch (e) {
         console.error('Failed to move task:', e);
         error.value = e instanceof Error ? e.message : 'Failed to move task';
+    } finally {
+        moving.value = false;
     }
 }
 
@@ -1012,9 +1018,9 @@ async function onTaskMove(id: UUID, parent: UUID | null) {
 }
 
 // Not while a save runs, as in the new-task dialog: it writes to the path it started with, which a
-// move meanwhile would leave behind.
+// move meanwhile would leave behind. Nor while a move runs, as the editor's button says.
 function showChangeParentDialog() {
-    if (editedNode.value && !saving.value) {
+    if (editedNode.value && !saving.value && !moving.value) {
         showParentDialog.value = true;
     }
 }

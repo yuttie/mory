@@ -49,7 +49,7 @@
                             color="primary"
                             v-bind:aria-label="parentActionLabel"
                             v-bind:title="parentActionLabel"
-                            v-bind:disabled="saving"
+                            v-bind:disabled="writing"
                             v-bind:icon="$vuetify.display.smAndDown"
                             v-on:click="onChangeParent"
                         >
@@ -133,9 +133,11 @@
                         </v-btn>
                         <!-- With nothing changed there is nothing to save. A new task is unchanged
                              only while its title is empty, which the title's rule refuses already,
-                             so this never holds back a Create. -->
+                             so this never holds back a Create. Nor while the task is read, as from
+                             where a move put it: the form is counted against no task meanwhile, and
+                             a save would write it as a new one, over whatever else the note holds. -->
                         <v-btn
-                            v-bind:disabled="saving || !isModified || !!statusGateError || alarmsInvalid || !uiValid"
+                            v-bind:disabled="writing || loading || !isModified || !!statusGateError || alarmsInvalid || !uiValid"
                             type="submit"
                             color="primary"
                             v-bind:aria-label="isEdit ? 'Save' : 'Create'"
@@ -590,9 +592,9 @@ const props = defineProps<{
     // The tag group a new task is started from: its tag, `null` for the Untagged group, which has
     // none to give, and absent when the draft is not from a group or sits under a task.
     selectedTag?: string | null;
-    // Set while the host writes the task the editor last emitted. It refuses another save, and a
-    // move, until then, which the buttons show rather than take a press and drop it.
-    saving?: boolean;
+    // Set while the host writes the task: a save the editor emitted, or a move. It refuses a save,
+    // and another move, until then, which the buttons show rather than take a press and drop it.
+    writing?: boolean;
 }>();
 const pathRef = toRef(props, 'taskPath');
 
@@ -925,7 +927,7 @@ function onBeforeunload(e: any) {
 async function onSave(): Promise<void> {
     // Check validation results (async and returns { valid } in Vuetify 3)
     const result = await formRef.value?.validate?.();  // Runs Vuetify rules
-    if (props.saving || !isModified.value || !result?.valid || statusGateError.value || alarmsInvalid.value) {
+    if (props.writing || loading.value || !isModified.value || !result?.valid || statusGateError.value || alarmsInvalid.value) {
         return;
     }
     emitted = { task: taskOf(task.value), unlocked: !statusOptionRestricted.value };

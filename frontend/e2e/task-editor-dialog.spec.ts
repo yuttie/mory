@@ -564,6 +564,55 @@ test('moves no task while its save runs', async ({ context, page }) => {
     await expect(changeParent).toBeEnabled();
 });
 
+// A save writes to the path the task is at, and one during a move would write the moved task
+// back where it was. The move ends once the editor has read the task from where it went.
+test('saves no task while it moves', async ({ context, page }) => {
+    const repository = await mockBackend(context, NOTES);
+    let moving!: () => void;
+    const renamed = new Promise<void>((resolve) => {
+        moving = resolve;
+    });
+    await page.route(`${API_URL}notes/**`, async (route) => {
+        if (route.request().method() === 'PUT' && 'Rename' in route.request().postDataJSON()) {
+            moving();
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+        await route.fallback();
+    });
+    let reading!: () => void;
+    const reread = new Promise<void>((resolve) => {
+        reading = resolve;
+    });
+    await page.route(`${API_URL}v2/files/.tasks/${PROJECT}/${ERRAND}.md`, async (route) => {
+        reading();
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await route.fallback();
+    });
+    await page.goto(`/tasks-next/_/descendants/status?task=${ERRAND}`);
+    await title(page).fill('Errand, revised');
+    await dialog(page).getByRole('button', { name: 'Change Parent' }).click();
+    const picker = page.getByRole('dialog').filter({ has: page.getByRole('button', { name: 'Move Here' }) });
+    await picker.getByRole('treeitem', { name: 'Project' }).click();
+    await picker.getByRole('button', { name: 'Move Here' }).click();
+
+    const save = dialog(page).getByRole('button', { name: /^(Save|Create)$/ });
+    await renamed;
+    await expect(save).toBeDisabled();
+    await save.click({ force: true });
+    // Moved, and read again from where it went, the form counted against no task meanwhile.
+    await reread;
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
+    await expect(save).toBeDisabled();
+    await save.click({ force: true });
+
+    await expect(save).toHaveText('Save');
+    await expect(title(page)).toHaveValue('Errand, revised');
+    expect(repository.writes).toEqual([]);
+    await save.click();
+    await expect.poll(() => repository.writes.map(({ path }) => path)).toEqual([`.tasks/${PROJECT}/${ERRAND}.md`]);
+    expect(repository.writes[0].content).toContain('deadline: 2026-10-04');
+});
+
 test('keeps the editor open when a delete fails', async ({ context, page }) => {
     await mockBackend(context, NOTES);
     await page.route(`${API_URL}notes/**`, (route) => route.request().method() === 'DELETE' ? route.fulfill({ status: 500, json: {} }) : route.fallback());
