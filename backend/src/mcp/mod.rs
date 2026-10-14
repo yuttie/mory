@@ -536,10 +536,12 @@ commit, so say what you changed in the message.
 
 Structure comes from the paths, not from a database:
 - `.tasks/` holds tasks, `.events/` holds calendar entries, `.mory/` holds configuration.
-- Anything else is an ordinary note.
-- A file name ends with a UUIDv4, optionally after a readable prefix: `my-note-<uuid>.md`. A \
-directory name is a bare UUIDv4, and a note under one is a child of the note with that UUID. \
-Keep that shape when creating files or they will not appear in the note tree.
+- Anything else is an ordinary note, named freely. Its children are the notes in the directory \
+named as it is without `.md`: `ideas.md` is the parent of `ideas/draft.md`.
+- Under `.tasks/` the naming is strict, because the task tree is derived from it: a file name \
+ends with a UUIDv4, optionally after a readable prefix (`report-<uuid>.md`), and a subtask lives \
+in a directory named by its parent's bare UUID (`.tasks/<uuid>/`). A task named any other way is \
+not in the task tree.
 
 Tasks and calendar entries are YAML frontmatter on an ordinary note -- a `task:` block or an \
 `events:` map -- never separate records. Editing that frontmatter is how you change them.
