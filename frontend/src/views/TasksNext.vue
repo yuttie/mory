@@ -248,11 +248,12 @@
         </v-fade-transition>
         <v-snackbar v-model="error" color="error" location="top" timeout="5000">{{ error }}</v-snackbar>
 
-        <!-- The task the address names, in its editor over the list, which stays as it was. Closes
-             like any dialog while nothing is changed; from then on only its own buttons do, and
-             `keepUnsavedEdit` refuses Back, so a stray click, Escape or Back cannot throw an edit
-             away. Back changes the address, which closes it by itself: Vuetify's own handling of
-             Back would cancel that and close it a second time. -->
+        <!-- The task the address names, in its editor over the list, which stays as it was. A save
+             leaves it open for the next change. Closes like any dialog while nothing is unsaved;
+             from then on only its own buttons do, and `keepUnsavedEdit` refuses Back, so a stray
+             click, Escape or Back cannot throw an edit away. Back changes the address, which
+             closes it by itself: Vuetify's own handling of Back would cancel that and close it a
+             second time. -->
         <v-dialog
             ref="editorDialogRef"
             v-bind:model-value="editedNode !== undefined"
@@ -374,7 +375,8 @@ const error = ref<string | null>(null);
 const hideCompletedInTreeView = useLocalStorage('hide-completed-in-tree-view', false);
 const hideCompletedInItemView = useLocalStorage('hide-completed-in-item-view', false);
 const showParentDialog = ref<boolean>(false);
-// A save waits for the listing to show it, and a second press meanwhile would write the task again.
+// A save waits for the listing to show it and the editor to read it again, and a second press
+// meanwhile would write the task again.
 const saving = ref(false);
 const quickAddDialogIsVisible = ref(false);
 const itemViewMenuIsVisible = ref(false);
@@ -726,7 +728,7 @@ function navigateToState(selectedNodeId?: string, viewMode?: string) {
     router.push(tasksRoute(selectedNodeId, viewMode));
 }
 
-// Set while the view closes the editor itself, as Cancel, Save and Delete do, for the navigation
+// Set while the view closes the editor itself, as Cancel and Delete do, for the navigation
 // that closes it to pass `keepUnsavedEdit`.
 let closingEditor = false;
 
@@ -875,14 +877,21 @@ async function onEditedTaskSave(task: Task) {
     catch (e) {
         // The editor stays open with what was typed, so it can be tried again.
         error.value = `Could not save "${task.title}": ${e instanceof Error ? e.message : String(e)}`;
+        saving.value = false;
         return;
+    }
+    // The editor stays open for the next change, unless Cancel closed it meanwhile, and reads the
+    // note again to count that change from. Until then it still holds this one as unsaved.
+    try {
+        if (editedNode.value?.uuid === task.uuid) {
+            await taskEditorRef.value?.saved(task);
+        }
+    }
+    catch (e) {
+        error.value = `Saved "${task.title}", but could not read it again: ${e instanceof Error ? e.message : String(e)}`;
     }
     finally {
         saving.value = false;
-    }
-    // Closed, unless Cancel closed it meanwhile and the address is the list's already.
-    if (editedNode.value?.uuid === task.uuid) {
-        closeEditor();
     }
 }
 

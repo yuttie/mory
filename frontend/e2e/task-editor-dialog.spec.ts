@@ -28,6 +28,11 @@ function title(page: Page): Locator {
     return dialog(page).getByRole('textbox', { name: 'Title', exact: true });
 }
 
+// The bar the dialog shows while a save runs, until the editor has read the saved note again.
+function saving(page: Page): Locator {
+    return dialog(page).locator('.v-overlay__content > .v-progress-linear');
+}
+
 // Open. Vuetify takes a dialog for the one on top, which Escape closes, a moment after it opens,
 // and an Escape pressed before then does nothing; its opening transition outlasts that moment.
 async function opened(page: Page): Promise<void> {
@@ -81,11 +86,12 @@ test('opens a task over the list it is in, and closes back to that list', async 
     await expect(page).toHaveURL(url('_', 'status'));
 });
 
-test('saves a task and goes back to its list', async ({ context, page }) => {
+// Open still, for the next change, and as a dialog with nothing unsaved in it again.
+test('saves a task and stays open on it', async ({ context, page }) => {
     const repository = await mockBackend(context, NOTES);
     await page.goto(`/tasks-next/${PROJECT}/descendants/status`);
     await listed(page, 'Step').click();
-    await title(page).fill('First step');
+    await title(page).fill('  First step ');
 
     // Changed, it stays open unless told otherwise.
     await opened(page);
@@ -93,14 +99,54 @@ test('saves a task and goes back to its list', async ({ context, page }) => {
     await page.waitForTimeout(500);
     // The address first, which a close changes at once, where the field stays while the dialog fades.
     await expect(page).toHaveURL(url(PROJECT, 'status', STEP));
-    await expect(title(page)).toHaveValue('First step');
+    await expect(title(page)).toHaveValue('  First step ');
 
-    await dialog(page).getByRole('button', { name: 'Save', exact: true }).click();
+    const save = dialog(page).getByRole('button', { name: 'Save', exact: true });
+    await save.click();
     await expect.poll(() => repository.writes.map(({ path }) => path)).toEqual([`.tasks/${PROJECT}/${STEP}.md`]);
-    expect(repository.writes[0].content).toContain('# First step');
+    expect(repository.writes[0].content).toContain('# First step\n');
+    await expect(listed(page, 'First step')).toBeVisible();
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
+    // As the note now reads, trimmed as it was saved.
+    await expect(title(page)).toHaveValue('First step');
+    await expect(save).toBeDisabled();
+    await expect(page).toHaveURL(url(PROJECT, 'status', STEP));
+
+    await title(page).fill('First step, revised');
+    await save.click();
+    await expect.poll(() => repository.writes.length).toBe(2);
+    expect(repository.writes[1].content).toContain('# First step, revised\n');
+    await expect(save).toBeDisabled();
+
+    await page.keyboard.press('Escape');
     await expect(dialog(page)).toBeHidden();
     await expect(page).toHaveURL(url(PROJECT, 'status'));
-    await expect(listed(page, 'First step')).toBeVisible();
+});
+
+// What was typed after Save was pressed is not in the note, and is still there to save.
+test('keeps what is typed while a save runs', async ({ context, page }) => {
+    const repository = await mockBackend(context, NOTES);
+    await page.route(`${API_URL}notes/**`, async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await route.fallback();
+    });
+    await page.goto(`/tasks-next/${PROJECT}/descendants/status`);
+    await listed(page, 'Step').click();
+    await title(page).fill('First step');
+    const save = dialog(page).getByRole('button', { name: 'Save', exact: true });
+    await save.click();
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'false');
+    await title(page).fill('First step, revised');
+
+    await expect.poll(() => repository.writes.length).toBe(1);
+    expect(repository.writes[0].content).toContain('# First step\n');
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
+    await expect(title(page)).toHaveValue('First step, revised');
+    await expect(save).toBeEnabled();
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(500);
+    await expect(page).toHaveURL(url(PROJECT, 'status', STEP));
+    await expect(title(page)).toHaveValue('First step, revised');
 });
 
 // What was typed is still there to save again.
@@ -316,7 +362,8 @@ test('moves no task while its save runs', async ({ context, page }) => {
     await dialog(page).getByRole('button', { name: 'Save', exact: true }).click();
     await dialog(page).getByRole('button', { name: 'Change Parent' }).click();
 
-    await expect(dialog(page)).toBeHidden();
+    await expect.poll(() => repository.writes.length).toBe(1);
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
     await expect(page.getByRole('dialog').filter({ has: page.getByRole('button', { name: 'Move Here' }) })).toHaveCount(0);
     expect(repository.renames).toEqual([]);
 });

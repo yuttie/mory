@@ -39,10 +39,38 @@ export function useFetchTask(taskPath: Ref<string>) {
         }
     };
 
+    // Reads the note again keeping the task read before until it lands, for a reader still showing
+    // it: after a save it is the same note, and none meanwhile would blank the form. Resolves to
+    // whether it landed, which another path meanwhile prevents, and throws as the read does.
+    const reread = async (): Promise<boolean> => {
+        const req = ++current;
+        try {
+            const [_etag, data] = await getTask(taskPath.value);
+            if (req !== current) {
+                return false;
+            }
+            task.value = data;
+            error.value = null;
+            return true;
+        }
+        catch (e) {
+            if (req !== current) {
+                return false;
+            }
+            throw e;
+        }
+        finally {
+            // In place of a read still running, it ends that one's loading too.
+            if (req === current) {
+                loading.value = false;
+            }
+        }
+    };
+
     onMounted(load);
     watch(taskPath, load, { immediate: true });
 
     const refresh = () => load();
 
-    return { task, loading, error, refresh };
+    return { task, loading, error, refresh, reread };
 }

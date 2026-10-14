@@ -530,7 +530,7 @@ const props = defineProps<{
 const pathRef = toRef(props, 'taskPath');
 
 // Composables
-const { task, loading, error } = useFetchTask(pathRef);
+const { task, loading, error, reread } = useFetchTask(pathRef);
 const calendars = useCalendarsStore();
 const tasks = useTasksStore();
 const settings = useTaskSettingsStore();
@@ -627,8 +627,8 @@ const ancestorTitles = computed<string[]>(() => {
         .filter((title): title is string => Boolean(title));
 });
 
-const initialForm = computed<EditableTask>(() => {
-    const t = task.value;
+// The form as the task `t` fills it, or as a new task starts it.
+function formOf(t: Task | null | undefined): EditableTask {
     if (!t) {
         const defaultTags = props.selectedTag ? [props.selectedTag] : [];
         return {
@@ -658,7 +658,9 @@ const initialForm = computed<EditableTask>(() => {
         deadline_alarms: t.alarms?.deadline ? [...t.alarms.deadline] : null,
         note: t.note ?? '',
     };
-});
+}
+
+const initialForm = computed<EditableTask>(() => formOf(task.value));
 
 const statusOptions = computed<{ kind: StatusKind, label: string }[]>(() => {
     const allowed = statusOptionRestricted.value ? nextOptions(initialForm.value.status.kind) : [...Object.keys(STATUS_LABEL)];
@@ -705,20 +707,7 @@ const tagItems = computed<{ title: string; value: string; }[]>(() =>
     })
 );
 
-const isModified = computed<boolean>(() => {
-    return (
-        form.title !== initialForm.value.title ||
-        !arraysEqual(form.tags, initialForm.value.tags) ||
-        !statusEqual(form.status, initialForm.value.status) ||
-        form.importance !== initialForm.value.importance ||
-        form.lead_time !== initialForm.value.lead_time ||
-        form.available_from !== initialForm.value.available_from ||
-        form.due_by !== initialForm.value.due_by ||
-        form.deadline !== initialForm.value.deadline ||
-        !sameTaskAlarms(taskAlarmsToWrite(form), taskAlarmsToWrite(initialForm.value)) ||
-        form.note !== initialForm.value.note
-    );
-});
+const isModified = computed<boolean>(() => differs(form, initialForm.value));
 
 // Watchers
 watch(
@@ -729,6 +718,10 @@ watch(
         if ((newTask === null || newTask === undefined) &&
             (oldTask === null || oldTask === undefined)) {
             return; // Don't reset the form
+        }
+        // The same note read again after a save, which `saved` settles.
+        if (newTask && oldTask && filledFrom === props.taskPath) {
+            return;
         }
         // A task moved under another parent is read again from its new path, but it is the same
         // note, so the form keeps what has been typed into it. Change Parent and a drop in the tree
@@ -808,42 +801,30 @@ function resetFromTask(t?: Task | undefined | null): void {
         clearTimeout(assessmentTimeout);
         assessmentTimeout = null;
     }
-    // Unlocking is an exception for one edit. The editor is reused for the next task and reloads
-    // the saved one, both through here, so neither may inherit it.
+    // Unlocking is an exception for one edit. The editor is reused for the next task, and stays
+    // open on a saved one, so neither may inherit it.
     statusOptionRestricted.value = true;
     filledFrom = t ? props.taskPath : null;
+    Object.assign(form, formOf(t));
 
-    if (!t) {
-        const defaultTags = props.selectedTag ? [props.selectedTag] : [];
-        form.title = '';
-        form.tags = defaultTags;
-        form.status = { kind: 'backlog' };
-        form.importance = null;
-        form.lead_time = '';
-        form.available_from = '';
-        form.due_by = '';
-        form.deadline = '';
-        form.due_by_alarms = null;
-        form.deadline_alarms = null;
-        form.note = '';
+    // Automatically assess the task for existing tasks
+    if (t && form.title && form.title.length >= 3) {
+        performTaskAssessment(form.title);
     }
-    else {
-        form.title = t.title ?? '';
-        form.tags = Array.isArray(t.tags) ? [...t.tags] : [];
-        form.status = (t.status === undefined || t.status === null) ? { kind: 'backlog' } : { ...t.status };
-        form.importance = t.importance ?? null;
-        form.lead_time = t.lead_time ?? '';
-        form.available_from = t.available_from ?? '';
-        form.due_by = t.due_by ?? '';
-        form.deadline = t.deadline ?? '';
-        form.due_by_alarms = t.alarms?.due_by ? [...t.alarms.due_by] : null;
-        form.deadline_alarms = t.alarms?.deadline ? [...t.alarms.deadline] : null;
-        form.note = t.note ?? '';
+}
 
-        // Automatically assess the task for existing tasks
-        if (form.title && form.title.length >= 3) {
-            performTaskAssessment(form.title);
-        }
+// The host has saved `written`, which the form held, and the editor stays open on it: the note is
+// read again, for the next change to count from. The form takes the note as read, with the title
+// trimmed as the save trimmed it, unless something was typed while the save ran, which it keeps.
+// The assessment stays: it was of what the form holds.
+async function saved(written: Task): Promise<void> {
+    if (!(await reread())) {
+        return;
+    }
+    // As the save would read the form: a blank it trims away is no change.
+    if (!differs(formOf(taskOf(written)), formOf(written))) {
+        statusOptionRestricted.value = true;
+        Object.assign(form, formOf(task.value));
     }
 }
 
@@ -865,11 +846,15 @@ async function onSave(): Promise<void> {
     if (!isModified.value || !result?.valid || statusGateError.value || alarmsInvalid.value) {
         return;
     }
+    emit('save', taskOf(task.value));
+}
+
+// The task the form holds, written over the note `base` was read from.
+function taskOf(base: Task | null | undefined): Task {
     const alarms = taskAlarmsToWrite(form);
-    // Create a Task value
-    const savedTask: Task = {
-        source: task.value?.source,
-        created_at: task.value?.created_at,
+    return {
+        source: base?.source,
+        created_at: base?.created_at,
         uuid: uuid.value,
         title: form.title.trim(),
         tags: [...form.tags],
@@ -882,7 +867,6 @@ async function onSave(): Promise<void> {
         ...(Object.keys(alarms).length > 0 ? { alarms } : {}),
         note: form.note,
     };
-    emit('save', savedTask);
 }
 
 function onDelete(): void {
@@ -901,6 +885,21 @@ function onChangeParent(): void {
 }
 
 // Helper functions for comparison
+function differs(a: EditableTask, b: EditableTask): boolean {
+    return (
+        a.title !== b.title ||
+        !arraysEqual(a.tags, b.tags) ||
+        !statusEqual(a.status, b.status) ||
+        a.importance !== b.importance ||
+        a.lead_time !== b.lead_time ||
+        a.available_from !== b.available_from ||
+        a.due_by !== b.due_by ||
+        a.deadline !== b.deadline ||
+        !sameTaskAlarms(taskAlarmsToWrite(a), taskAlarmsToWrite(b)) ||
+        a.note !== b.note
+    );
+}
+
 function arraysEqual<T>(a: T[], b: T[]): boolean {
     if (a.length !== b.length) { return false; }
     return a.every((val, index) => val === b[index]);
@@ -1020,8 +1019,10 @@ function addNoteContent(suggestion: string) {
 
 // Expose
 // For a host that may close the editor: a draft with something typed in it is worth keeping open.
+// And for one that keeps it open on a task it has saved.
 defineExpose({
     isModified,
+    saved,
 });
 </script>
 
