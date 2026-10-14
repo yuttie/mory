@@ -49,6 +49,7 @@
                             color="primary"
                             v-bind:aria-label="parentActionLabel"
                             v-bind:title="parentActionLabel"
+                            v-bind:disabled="saving"
                             v-bind:icon="$vuetify.display.smAndDown"
                             v-on:click="onChangeParent"
                         >
@@ -104,7 +105,7 @@
                              only while its title is empty, which the title's rule refuses already,
                              so this never holds back a Create. -->
                         <v-btn
-                            v-bind:disabled="!isModified || !!statusGateError || alarmsInvalid || !uiValid"
+                            v-bind:disabled="saving || !isModified || !!statusGateError || alarmsInvalid || !uiValid"
                             type="submit"
                             color="primary"
                             v-bind:aria-label="isEdit ? 'Save' : 'Create'"
@@ -558,6 +559,9 @@ const props = defineProps<{
     // The tag group a new task is started from: its tag, `null` for the Untagged group, which has
     // none to give, and absent when the draft is not from a group or sits under a task.
     selectedTag?: string | null;
+    // Set while the host writes the task the editor last emitted. It refuses another save, and a
+    // move, until then, which the buttons show rather than take a press and drop it.
+    saving?: boolean;
 }>();
 const pathRef = toRef(props, 'taskPath');
 
@@ -890,7 +894,7 @@ function onBeforeunload(e: any) {
 async function onSave(): Promise<void> {
     // Check validation results (async and returns { valid } in Vuetify 3)
     const result = await formRef.value?.validate?.();  // Runs Vuetify rules
-    if (!isModified.value || !result?.valid || statusGateError.value || alarmsInvalid.value) {
+    if (props.saving || !isModified.value || !result?.valid || statusGateError.value || alarmsInvalid.value) {
         return;
     }
     emitted = { task: taskOf(task.value), unlocked: !statusOptionRestricted.value };

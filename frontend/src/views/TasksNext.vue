@@ -277,6 +277,7 @@
                 v-bind:task-path="editedPath"
                 v-bind:known-tags="store.knownTags"
                 v-bind:known-contacts="store.knownContacts"
+                v-bind:saving="saving"
                 v-on:save="onEditedTaskSave"
                 v-on:delete="onEditedTaskDelete"
                 v-on:cancel="closeEditor"

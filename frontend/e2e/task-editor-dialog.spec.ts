@@ -116,6 +116,7 @@ test('saves a task and stays open on it', async ({ context, page }) => {
     await save.click();
     await expect.poll(() => repository.writes.length).toBe(2);
     expect(repository.writes[1].content).toContain('# First step, revised\n');
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
     await expect(save).toBeDisabled();
 
     await page.keyboard.press('Escape');
@@ -136,7 +137,10 @@ test('keeps what is typed while a save runs', async ({ context, page }) => {
     const save = dialog(page).getByRole('button', { name: 'Save', exact: true });
     await save.click();
     await expect(saving(page)).toHaveAttribute('aria-hidden', 'false');
+    // The view writes one save at a time, and would drop a second press.
+    await expect(save).toBeDisabled();
     await title(page).fill('First step, revised');
+    await expect(save).toBeDisabled();
 
     await expect.poll(() => repository.writes.length).toBe(1);
     expect(repository.writes[0].content).toContain('# First step\n');
@@ -432,23 +436,39 @@ test('deletes a task opened from a list, and goes back to the list', async ({ co
     await expect(listed(page, 'Step')).toHaveCount(0);
 });
 
-// A save writes to the path it started with, which a move meanwhile would leave behind.
+// A save writes to the path it started with, which a move meanwhile would leave behind, and the
+// editor then reads the note again from that path.
 test('moves no task while its save runs', async ({ context, page }) => {
     const repository = await mockBackend(context, NOTES);
     await page.route(`${API_URL}notes/**`, async (route) => {
         await new Promise((resolve) => setTimeout(resolve, 1000));
         await route.fallback();
     });
+    let reading!: () => void;
+    const reread = new Promise<void>((resolve) => {
+        reading = resolve;
+    });
+    await page.route(`${API_URL}v2/files/**`, async (route) => {
+        if (repository.writes.length > 0 && route.request().method() === 'GET') {
+            reading();
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+        await route.fallback();
+    });
     await page.goto(`/tasks-next/${PROJECT}/descendants/status`);
     await listed(page, 'Step').click();
     await title(page).fill('First step');
     await dialog(page).getByRole('button', { name: 'Save', exact: true }).click();
-    await dialog(page).getByRole('button', { name: 'Change Parent' }).click();
+    const changeParent = dialog(page).getByRole('button', { name: 'Change Parent' });
+    await expect(changeParent).toBeDisabled();
+    await changeParent.click({ force: true });
 
-    await expect.poll(() => repository.writes.length).toBe(1);
+    await reread;
+    await expect(changeParent).toBeDisabled();
+    await changeParent.click({ force: true });
     await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
     await expect(page.getByRole('dialog').filter({ has: page.getByRole('button', { name: 'Move Here' }) })).toHaveCount(0);
-    expect(repository.renames).toEqual([]);
+    await expect(changeParent).toBeEnabled();
 });
 
 test('keeps the editor open when a delete fails', async ({ context, page }) => {
