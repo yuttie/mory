@@ -1661,6 +1661,50 @@ fn a_public_address_literal_is_still_fetchable() {
     assert!(fetchable("https://[2606:2800:220:1:248:1893:25c8:1946]/x.ics"));
 }
 
+/// A redirect is checked as the first URL was: the shared client follows any, so a URL that passed
+/// the check could hand the fetch on into this host's network. An OAuth `client_id` is such a
+/// URL, chosen by whoever opens the authorization page.
+#[tokio::test]
+async fn the_guarded_client_follows_no_redirect_to_a_private_address() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    async fn answer(listener: TcpListener, response: String, reached: Arc<AtomicUsize>) {
+        loop {
+            let Ok((mut stream, _)) = listener.accept().await else { return };
+            reached.fetch_add(1, Ordering::SeqCst);
+            let mut request = [0; 4096];
+            let _ = stream.read(&mut request).await;
+            let _ = stream.write_all(response.as_bytes()).await;
+        }
+    }
+
+    // https, so that only the address can be what refuses it. A connection is counted when it is
+    // accepted, before the handshake that no certificate here would survive.
+    let private = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let private_address = private.local_addr().unwrap();
+    let reached = Arc::new(AtomicUsize::new(0));
+    tokio::spawn(answer(private, String::new(), reached.clone()));
+    let redirector = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/client.json", redirector.local_addr().unwrap());
+    tokio::spawn(answer(
+        redirector,
+        format!("HTTP/1.1 302 Found\r\nlocation: https://{private_address}/secret\r\ncontent-length: 0\r\n\r\n"),
+        Arc::new(AtomicUsize::new(0)),
+    ));
+
+    let refused = crate::v2::feed_client().get(&url).send().await.expect_err("the redirect must be refused");
+    assert!(refused.is_redirect(), "refused for the redirect, not for {refused:?}");
+    assert_eq!(reached.load(Ordering::SeqCst), 0, "the redirect must not have been followed");
+
+    // reqwest's default policy, the shared client's, follows it.
+    let unguarded = reqwest::Client::builder().no_proxy().build().unwrap();
+    let _ = unguarded.get(&url).send().await;
+    assert_eq!(reached.load(Ordering::SeqCst), 1);
+}
+
 /// Every occurrence of a series lasts as long as the event does, not until the first one's end.
 ///
 /// Regression: the length was measured from the occurrence being emitted rather than from DTSTART,

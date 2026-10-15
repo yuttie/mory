@@ -514,14 +514,13 @@ async fn fetch_client_id_metadata(state: &OauthState, url: &str) -> Result<Regis
 
     let parsed = reqwest::Url::parse(url).context("the client_id is not a URL")?;
     // The same guard the calendar feeds go through: a client_id is a URL a stranger chose, and
-    // fetching it must not become a way to probe this host's private network.
+    // fetching it must not become a way to probe this host's private network. It is fetched with
+    // the feeds' client too, which checks each redirect the same way; the shared one follows any.
     if !crate::v2::is_fetchable_feed_url(&parsed) {
         bail!("a client_id URL must be https:// on a public host");
     }
 
-    let response = state
-        .app
-        .http_client
+    let response = crate::v2::feed_client()
         .get(parsed)
         .header(header::ACCEPT, "application/json")
         .timeout(CIMD_TIMEOUT)
