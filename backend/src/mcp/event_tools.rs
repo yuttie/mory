@@ -331,8 +331,10 @@ pub struct EventArgs {
     pub exclusions: Option<Vec<String>>,
     /// Occurrences to add to the event's list of them, each with its own `start`: for an event
     /// that happens on dates no rule describes, such as the next meeting of a committee. They
-    /// join the list the event keeps, `instances` or the older `times`, in date order when the
-    /// list is in date order. Taking one out with `remove_instances` and adding it here moves it.
+    /// join the list the event keeps, `instances` or the older `times`, where their date puts
+    /// them: newest or oldest first as the list runs, as the note's other lists run when it is too
+    /// short to show, else newest first; at the end of a list in no order. Taking one out with
+    /// `remove_instances` and adding it here moves it.
     #[serde(default)]
     pub add_instances: Option<Vec<Instance>>,
     /// Occurrences to take off the event's list, named by their `start`. Matched by instant, so
@@ -472,7 +474,7 @@ fn event_changes(args: &EventArgs) -> Result<Vec<Change>, String> {
 ///
 /// A start the note writes without an offset is read in `zone`, which is moried's own: the one
 /// reader the server has, and the zone `list_tasks` reads a task's dates in.
-fn instance_changes(args: &EventArgs, event: Option<&Value>, zone: Tz) -> Result<Vec<Change>, String> {
+fn instance_changes(args: &EventArgs, event: Option<&Value>, usual: Order, zone: Tz) -> Result<Vec<Change>, String> {
     let adds = args.add_instances.as_deref().unwrap_or_default();
     let removes = args.remove_instances.as_deref().unwrap_or_default();
     if adds.is_empty() && removes.is_empty() {
@@ -508,7 +510,8 @@ fn instance_changes(args: &EventArgs, event: Option<&Value>, zone: Tz) -> Result
                 args.name,
             ));
         };
-        lists.push((key, list.clone(), order_of(list, starts_at)));
+        let order = if list.len() < 2 { usual } else { order_of(list, starts_at) };
+        lists.push((key, list.clone(), order));
     }
     let mut changes = Vec::new();
 
@@ -550,7 +553,7 @@ fn instance_changes(args: &EventArgs, event: Option<&Value>, zone: Tz) -> Result
     // New occurrences join the list the calendar draws, so an event is never given a second list
     // by being added to.
     if !adds.is_empty() && lists.is_empty() {
-        lists.push(("instances", Vec::new(), Order::Ascending));
+        lists.push(("instances", Vec::new(), usual));
     }
     for instance in adds {
         let value = instance.to_value()?;
@@ -611,7 +614,6 @@ enum Order {
     None,
 }
 
-/// A list of one, or of none, is taken to be in date order.
 fn order_of(list: &[Value], starts_at: impl Fn(&Value) -> Option<i64>) -> Order {
     let Some(starts) = list.iter().map(starts_at).collect::<Option<Vec<_>>>() else {
         return Order::None;
@@ -625,6 +627,25 @@ fn order_of(list: &[Value], starts_at: impl Fn(&Value) -> Option<i64>) -> Order 
     else {
         Order::None
     }
+}
+
+/// The order taken for a list too short to show one: the order most of the note's other lists
+/// keep, else newest first, as 113 of the 152 ordered lists in the real notes do.
+fn usual_order(events: Option<&Value>, name: &str, zone: Tz) -> Order {
+    let starts_at = |item: &Value| note_events::instant_of(item.get("start"), zone);
+    let (mut ascending, mut descending) = (0, 0);
+    for (key, event) in events.and_then(Value::as_mapping).into_iter().flatten() {
+        let list = drawn_list(Some(event)).and_then(|drawn| event.get(drawn)?.as_sequence());
+        let Some(list) = list.filter(|list| list.len() > 1 && key.as_str() != Some(name)) else {
+            continue;
+        };
+        match order_of(list, starts_at) {
+            Order::Ascending => ascending += 1,
+            Order::Descending => descending += 1,
+            Order::None => {},
+        }
+    }
+    if ascending > descending { Order::Ascending } else { Order::Descending }
 }
 
 /// Where an occurrence starting at `at` goes in `list`: where its date puts it in the list's
@@ -794,7 +815,9 @@ async fn apply_event(
 /// that need the repository.
 fn edited_event(text: &str, path: &str, args: &EventArgs, zone: Tz) -> Result<String, String> {
     let mut changes = event_changes(args)?;
-    changes.extend(instance_changes(args, event_in(text, &args.name).as_ref(), zone)?);
+    let events = frontmatter::value(text).and_then(|root| root.get("events").cloned());
+    let usual = usual_order(events.as_ref(), &args.name, zone);
+    changes.extend(instance_changes(args, event_in(text, &args.name).as_ref(), usual, zone)?);
     if changes.is_empty() {
         return Err(
             "Nothing to change. Pass a field to set, an occurrence to add or remove, or a key to \
@@ -1293,7 +1316,7 @@ mod tests {
         assert!(error.contains("Those it lists start at: 2026-01-08."), "{error}");
         let added = edit_and_check(both, serde_json::json!({ "add_instances": [{ "start": "2025-01-08" }] }))
             .expect("not a duplicate of what is not drawn");
-        assert_eq!(starts(&added), ["instances 2025-01-08", "instances 2026-01-08", "times 2025-01-08"]);
+        assert_eq!(starts(&added), ["instances 2026-01-08", "instances 2025-01-08", "times 2025-01-08"]);
 
         // An empty `instances` hides `times`, so it is the one added to.
         let hidden = both.replace("        instances:\n            - start: 2026-01-08\n", "        instances: []\n");
@@ -1316,6 +1339,22 @@ mod tests {
         let added = edit_and_check(lone, serde_json::json!({ "add_instances": [{ "start": "2024-05-01 00:00:00+09:00" }] }))
             .expect("not a duplicate");
         assert_eq!(starts(&added), ["instances 2024-05-01", "instances 2024-05-01 00:00:00+09:00"]);
+    }
+
+    /// A list of one shows no order, so it takes the note's, or the notes'.
+    #[test]
+    fn a_list_too_short_to_show_an_order_takes_the_notes() {
+        let one = "    Retro:\n        times:\n            - start: 2026-01-08\n";
+        let add = serde_json::json!({ "add_instances": [{ "start": "2026-01-15" }, { "start": "2026-01-01" }] });
+        let alone = format!("---\nevents:\n{one}---\n");
+        let newest_first = edited_event(&alone, "a.md", &EventArgs { name: "Retro".into(), ..event(add.clone()) }, chrono_tz::Asia::Tokyo)
+            .expect("additions");
+        assert!(newest_first.contains("- start: 2026-01-15\n            - start: 2026-01-08\n            - start: 2026-01-01\n"), "{newest_first}");
+
+        let beside = format!("---\nevents:\n    Standup:\n        times:\n            - start: 2025-01-01\n            - start: 2025-01-08\n{one}---\n");
+        let oldest_first = edited_event(&beside, "a.md", &EventArgs { name: "Retro".into(), ..event(add) }, chrono_tz::Asia::Tokyo)
+            .expect("additions");
+        assert!(oldest_first.contains("- start: 2026-01-01\n            - start: 2026-01-08\n            - start: 2026-01-15\n"), "{oldest_first}");
     }
 
     #[test]
