@@ -139,7 +139,14 @@ pub async fn unplan_task(state: &AppState, args: UnplanArgs) -> Result<CallToolR
 
 fn record_entry(plan: &mut Month, day: &str, uuid: &str, result: Option<Outcome>) -> Result<(), String> {
     let entry = plan.get_mut(day).and_then(|entries| entries.iter_mut().find(|entry| entry.task == uuid));
-    match entry { Some(entry) => { entry.result = result; Ok(()) }, None => Err("This task is not planned on that date.".into()) }
+    let Some(entry) = entry else { return Err("This task is not planned on that date.".into()); };
+    // An interruption is work that came up and was done, so the web app offers Missed only for a
+    // planned entry.
+    if entry.origin == Origin::Interruption && result == Some(Outcome::Missed) {
+        return Err("An interruption was worked on by definition; `missed` is for a planned entry. Use unplan_task if it did not happen.".into());
+    }
+    entry.result = result;
+    Ok(())
 }
 
 fn unplan_entry(plan: &mut Month, day: &str, uuid: &str) -> Result<(), String> {
@@ -182,6 +189,18 @@ mod tests {
         let recorded = edited(plan.clone(), day, uuid, |plan, uuid| record_entry(plan, day, uuid, Some(Outcome::Worked))).unwrap();
         assert_eq!(recorded[day][0].result, Some(Outcome::Worked));
         assert_eq!(edited(plan, day, uuid, |plan, uuid| unplan_entry(plan, day, uuid)).unwrap()[day], vec![]);
+    }
+
+    #[test]
+    fn an_interruption_is_not_missed() {
+        let uuid = "4955857d-3267-4b94-83f2-538a428970d7";
+        let day = "2026-10-05";
+        let mut plan = Month::new();
+        plans::put(&mut plan, day, uuid, Origin::Interruption);
+        assert!(record_entry(&mut plan, day, uuid, Some(Outcome::Missed)).unwrap_err().contains("planned entry"));
+        assert_eq!(plan[day][0].result, Some(Outcome::Worked));
+        record_entry(&mut plan, day, uuid, None).unwrap();
+        assert_eq!(plan[day][0].result, None);
     }
 
     #[test]

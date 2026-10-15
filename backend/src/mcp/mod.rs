@@ -530,9 +530,10 @@ impl Mory {
         description = "Record how a task on a day's plan went, and commit it. Requires the \
                        notes:write scope.\n\n`worked` says effort went into it that day, not \
                        that it is done: complete_task says that. `missed` says it was planned \
-                       and not worked on. Omit `result` to make the entry unrecorded again. \
-                       The task must already be on that day's plan, and a result it already \
-                       has is refused rather than committed again.",
+                       and not worked on, so an `interruption` cannot be missed. Omit `result` \
+                       to make the entry unrecorded again. The task must already be on that \
+                       day's plan, and a result it already has is refused rather than \
+                       committed again.",
         annotations(title = "Record a plan result", read_only_hint = false,
                     destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
