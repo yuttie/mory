@@ -2408,7 +2408,13 @@ async fn grep_at(
     }
     if !status.success() {
         let stderr = String::from_utf8_lossy(&stderr);
-        if stderr.contains("Invalid regular expression") || stderr.contains("invalid regex") {
+        // Git reports every pattern it cannot compile as `fatal: -e option, '<pattern>': <why>`,
+        // and the why is "Unmatched [", "Trailing backslash" and others as often as "Invalid
+        // regular expression".
+        let invalid = stderr.starts_with("fatal: -e option")
+            || stderr.contains("Invalid regular expression")
+            || stderr.contains("invalid regex");
+        if invalid {
             return Err(GrepError::Invalid);
         }
         return Err(GrepError::Internal(anyhow::anyhow!(
@@ -2613,10 +2619,12 @@ mod tests {
             .await
             .unwrap()
             .is_empty());
-        assert!(matches!(
-            grep_at(directory.path().to_str().unwrap(), "[", first, 10).await,
-            Err(GrepError::Invalid)
-        ));
+        for malformed in ["[", "[abc", "\\(abc", "a\\{1", "a**", "\\"] {
+            assert!(
+                matches!(grep_at(directory.path().to_str().unwrap(), malformed, first, 10).await, Err(GrepError::Invalid)),
+                "{malformed}",
+            );
+        }
         drop(first_commit);
         drop(repo);
         let repo = Arc::new(std::sync::Mutex::new(
