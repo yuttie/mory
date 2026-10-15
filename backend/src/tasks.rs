@@ -14,8 +14,8 @@ use crate::models::ListEntry;
 
 /// Where the task tree's naming rules apply.
 ///
-/// `entries_to_tree` derives the forest from the paths, so a file here named outside the
-/// convention makes the whole task tree unbuildable for the web app.
+/// The web app derives the forest from the paths (`taskUuidOf` in `frontend/src/task-forest.ts`),
+/// and leaves a file here named outside the convention out of it.
 pub(crate) const TASKS_DIR: &str = ".tasks/";
 
 /// Whether a note at `path` is in the task tree, as the calendar and the task views count it.
@@ -23,8 +23,8 @@ pub(crate) fn in_task_tree(path: &str) -> bool {
     path.strip_prefix(TASKS_DIR).is_some_and(|rest| check_tree_naming(rest).is_ok())
 }
 
-/// The naming `entries_to_tree` needs: every directory component a bare UUIDv4, and the file
-/// stem ending in one, optionally after a readable prefix.
+/// The naming the task tree is derived from: every directory component a bare UUIDv4, and the
+/// file stem ending in one, optionally after a readable prefix.
 pub(crate) fn check_tree_naming(rest: &str) -> Result<(), String> {
     let advice = "A task's file name must end with a UUIDv4 -- `<uuid>.md` or \
                   `readable-name-<uuid>.md` -- and every directory under `.tasks/` must be a bare \

@@ -5,13 +5,16 @@
 //! weekdays are three letters and may carry an ordinal, `repeat.tz` is an IANA zone name and
 //! never an offset, and a datetime carries its offset while a date is bare.
 
+use std::sync::LazyLock;
+
+use regex::Regex;
 use rmcp::{model::CallToolResult, ErrorData};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_yaml::{Mapping, Value};
 
 use super::frontmatter::{self, Change};
-use super::tools::{alarm_list, commit_edit, note_text, safe_path, write_note};
+use super::tools::{alarm_list, edited_note, note_to_edit, safe_path, write_note};
 use super::tool_error;
 use crate::models::AppState;
 
@@ -21,7 +24,98 @@ use crate::models::AppState;
 const WEEKDAYS: [&str; 7] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 const FREQUENCIES: [&str; 4] = ["daily", "weekly", "monthly", "yearly"];
 
+/// A moment as the notes spell one: a bare date, or a datetime carrying its offset.
+///
+/// The calendar reads a datetime without an offset too, as the reader's wall clock, which is why
+/// such a value has to be refused here rather than left for the calendar to catch: it would be
+/// drawn, at an hour that moves with whoever reads it. Read with the reader the task dates are
+/// checked with, so the two kinds of date follow one rule.
+fn check_when(key: &str, value: &str) -> Result<(), String> {
+    check_unpadded(key, value)?;
+    let text = Value::String(value.to_owned());
+    if crate::urgency::instant(Some(&text), crate::urgency::local_zone(), false).is_none() {
+        return Err(format!(
+            "{key} {value:?} is neither a bare date (`2026-03-12`) nor a datetime carrying its \
+             offset (`2026-03-12 19:00:00+09:00`).",
+        ));
+    }
+    Ok(())
+}
+
+/// Refuses white space around a value. The readers trim it, but the calendar does not: an `end`
+/// of `"+90m "` is dropped with its occurrence.
+fn check_unpadded(key: &str, value: &str) -> Result<(), String> {
+    if value.trim() != value {
+        return Err(format!("{key} {value:?} has white space around it; leave it out."));
+    }
+    Ok(())
+}
+
+/// A duration, as `normalizeEndTime` in `frontend/src/events.ts` reads one: `+90m`, `+1.5h`,
+/// `+2 days`. Its own pattern takes `[\d.]+`, so `+.h` too, which `parseFloat` makes `NaN`, and
+/// the calendar an end of "Invalid Date"; this one needs a digit.
+static DURATION: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"^\+([0-9]+(?:\.[0-9]*)?|\.[0-9]+) *(y|M|w|d|h|m|s|ms|(?i:years?|months?|weeks?|days?|hours?|minutes?|seconds?|milliseconds?))$",
+    )
+    .unwrap()
+});
+
+/// The longest duration an `end` may give, in days. An end past the year 9999 is one the calendar
+/// cannot draw, and no event lasts a thousand years.
+const LONGEST_DAYS: f64 = 1000.0 * 366.0;
+
+/// How many days a duration `DURATION` matches is, roughly: enough to tell one that is absurd.
+fn duration_days(value: &str) -> Option<f64> {
+    let captures = DURATION.captures(value)?;
+    let amount: f64 = captures[1].parse().ok()?;
+    let per = match &captures[2] {
+        "y" => 366.0,
+        "M" => 31.0,
+        "w" => 7.0,
+        "d" => 1.0,
+        "h" => 1.0 / 24.0,
+        "m" => 1.0 / 1440.0,
+        "s" => 1.0 / 86_400.0,
+        "ms" => 1.0 / 86_400_000.0,
+        long => match long.to_ascii_lowercase().trim_end_matches('s') {
+            "year" => 366.0,
+            "month" => 31.0,
+            "week" => 7.0,
+            "day" => 1.0,
+            "hour" => 1.0 / 24.0,
+            "minute" => 1.0 / 1440.0,
+            "second" => 1.0 / 86_400.0,
+            _ => 1.0 / 86_400_000.0,
+        },
+    };
+    Some(amount * per)
+}
+
+/// A time of day, which belongs to the start's date, or the next one when it would precede it.
+static TIME_OF_DAY: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^([01]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$").unwrap());
+
+/// An `end`: a moment as `check_when` takes one, a time of day, or a duration from the start.
+fn check_end(value: &str) -> Result<(), String> {
+    check_unpadded("end", value)?;
+    if let Some(days) = duration_days(value) {
+        if days > LONGEST_DAYS {
+            return Err(format!("end {value:?} is more than a thousand years after the start."));
+        }
+        return Ok(());
+    }
+    if TIME_OF_DAY.is_match(value) || check_when("`end`", value).is_ok() {
+        return Ok(());
+    }
+    Err(format!(
+        "end {value:?} is none of a duration (`+90m`, `+1.5h`), a time of day (`18:30`), a bare \
+         date, or a datetime carrying its offset.",
+    ))
+}
+
 #[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct Repeat {
     /// `daily`, `weekly`, `monthly` or `yearly`.
     pub freq: String,
@@ -64,8 +158,9 @@ impl Repeat {
         if self.until.is_some() && self.count.is_some() {
             return Err("A rule has `until` or `count`, never both.".to_owned());
         }
-        if self.interval.is_some_and(|interval| interval < 1) {
-            return Err("`interval` must be at least 1.".to_owned());
+        // `note_events` holds an interval in a `u16`, and the web app refuses a rule past it.
+        if self.interval.is_some_and(|interval| !(1..=65_535).contains(&interval)) {
+            return Err("`interval` must be a whole number from 1 to 65535.".to_owned());
         }
 
         let mut repeat = Mapping::new();
@@ -113,6 +208,7 @@ impl Repeat {
             repeat.insert("tz".into(), tz.as_str().into());
         }
         if let Some(until) = &self.until {
+            check_when("`until`", until)?;
             repeat.insert("until".into(), until.as_str().into());
         }
         if let Some(count) = self.count {
@@ -128,7 +224,12 @@ impl Repeat {
 /// A weekday, with its ordinal if it has one.
 fn check_weekday(day: &str, freq: &str) -> Result<String, String> {
     let lowered = day.trim().to_ascii_lowercase();
-    let (ordinal, name) = lowered.split_at(lowered.len().saturating_sub(3));
+    // Checked, because three bytes back can land inside a multibyte character, and `day` is
+    // whatever the model sent. A split there cannot end in a weekday anyway, so the whole of it
+    // goes to the name and is refused as one.
+    let (ordinal, name) = lowered
+        .split_at_checked(lowered.len().saturating_sub(3))
+        .unwrap_or(("", &lowered));
     if !WEEKDAYS.contains(&name) {
         return Err(format!(
             "{day:?} is not a weekday. These are three letters, not iCal's two: {}. An ordinal \
@@ -137,8 +238,14 @@ fn check_weekday(day: &str, freq: &str) -> Result<String, String> {
         ));
     }
     if !ordinal.is_empty() {
-        if ordinal.parse::<i32>().is_err() {
-            return Err(format!("{day:?} has an ordinal that is not a number."));
+        // As `toWeekday` in `frontend/src/recurrence.ts` reads one: digits after an optional
+        // minus, never a plus, and never zero, which rrule throws on.
+        let digits = ordinal.strip_prefix('-').unwrap_or(ordinal);
+        if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+            return Err(format!("{day:?} has an ordinal that is not a number, such as `3` or `-1`."));
+        }
+        if digits.bytes().all(|byte| byte == b'0') {
+            return Err(format!("{day:?} has an ordinal of zero; the first is `1`, the last `-1`."));
         }
         // An ordinal picks a weekday within a period, so there has to be a period to pick within.
         if freq != "monthly" && freq != "yearly" {
@@ -172,6 +279,7 @@ fn check_timezone(tz: &str) -> Result<(), String> {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct EventArgs {
     /// The note's exact repository path.
     pub path: String,
@@ -244,9 +352,11 @@ fn event_changes(args: &EventArgs) -> Result<Vec<Change>, String> {
         changes.push(Change::set(&["events", &args.name, key], value));
     };
     if let Some(start) = &args.start {
+        check_when("`start`", start)?;
         set("start", start.as_str().into());
     }
     if let Some(end) = &args.end {
+        check_end(end)?;
         set("end", end.as_str().into());
     }
     if let Some(finished) = args.finished {
@@ -270,6 +380,9 @@ fn event_changes(args: &EventArgs) -> Result<Vec<Change>, String> {
         set("repeat", repeat.to_value()?);
     }
     if let Some(exclusions) = &args.exclusions {
+        for at in exclusions {
+            check_when("An exclusion", at)?;
+        }
         set(
             "exclusions",
             Value::Sequence(exclusions.iter().map(|at| Value::String(at.clone())).collect()),
@@ -302,9 +415,61 @@ fn check_category(id: &str, configured: &[String]) -> Result<(), String> {
 
 /// Whether the note already declares an event by this name.
 fn has_event(text: &str, name: &str) -> bool {
-    frontmatter::value(text)
-        .and_then(|root| root.get("events")?.as_mapping()?.get(name).cloned())
-        .is_some()
+    event_in(text, name).is_some()
+}
+
+fn event_in(text: &str, name: &str) -> Option<Value> {
+    frontmatter::value(text).and_then(|root| root.get("events")?.as_mapping()?.get(name).cloned())
+}
+
+/// What is wrong with an event's shape, in the terms `frontend/src/metadata-schema.json` sets
+/// with its `anyOf` and `dependencies`: something to draw, and a rule under what adjusts it.
+///
+/// Stricter than the schema in one place: an empty list of instances satisfies it, but draws
+/// nothing, so it does not count as an occurrence here.
+fn shape_faults(event: Option<&Value>) -> Vec<&'static str> {
+    let Some(event) = event else {
+        return Vec::new();
+    };
+    // An event whose last key went is `null` rather than an empty mapping, and has as little.
+    let empty = Mapping::new();
+    let event = event.as_mapping().unwrap_or(&empty);
+    let has = |key: &str| event.get(key).is_some_and(|value| !value.is_null());
+    let listed = |key: &str| {
+        event.get(key).and_then(Value::as_sequence).is_some_and(|list| !list.is_empty())
+    };
+    let mut faults = Vec::new();
+    if !has("start") && !listed("instances") && !listed("times") {
+        faults.push(
+            "It would have nothing to draw: no `start` and no listed occurrence. Use \
+             remove_event to remove an event.",
+        );
+    }
+    if has("repeat") && !has("start") {
+        faults.push("A `repeat` rule recurs from the event's `start`, so it needs one.");
+    }
+    if has("exclusions") && !has("repeat") {
+        faults.push("`exclusions` take occurrences out of a `repeat` rule, so they need one.");
+    }
+    if has("overrides") && !has("repeat") {
+        faults.push("`overrides` change occurrences of a `repeat` rule, so they need one.");
+    }
+    faults
+}
+
+/// Refuses an edit that leaves the event in a shape the schema forbids.
+///
+/// Only a fault the edit brings is refused. A note already in such a shape was written by hand
+/// or by an older app, and refusing every later edit to it would leave a model only update_note,
+/// which checks nothing.
+fn check_shape(text: &str, edited: &str, name: &str) -> Result<(), String> {
+    let before = shape_faults(event_in(text, name).as_ref());
+    let after = shape_faults(event_in(edited, name).as_ref());
+    let brought: Vec<_> = after.into_iter().filter(|fault| !before.contains(fault)).collect();
+    if brought.is_empty() {
+        return Ok(());
+    }
+    Err(format!("{name:?} was not changed. {}", brought.join(" ")))
 }
 
 pub async fn add_event(state: &AppState, args: EventArgs) -> Result<CallToolResult, ErrorData> {
@@ -312,7 +477,7 @@ pub async fn add_event(state: &AppState, args: EventArgs) -> Result<CallToolResu
         Ok(path) => path,
         Err(message) => return Ok(tool_error(message)),
     };
-    let Some(text) = note_text(state, &path).await? else {
+    let Some((text, expected)) = note_to_edit(state, &path).await? else {
         return Ok(tool_error(format!("No note at {path:?}.")));
     };
     if has_event(&text, &args.name) {
@@ -328,7 +493,7 @@ pub async fn add_event(state: &AppState, args: EventArgs) -> Result<CallToolResu
              its offset.",
         ));
     }
-    apply_event(state, &path, &text, &args).await
+    apply_event(state, &path, &text, &expected, &args).await
 }
 
 pub async fn update_event(state: &AppState, args: EventArgs) -> Result<CallToolResult, ErrorData> {
@@ -336,7 +501,7 @@ pub async fn update_event(state: &AppState, args: EventArgs) -> Result<CallToolR
         Ok(path) => path,
         Err(message) => return Ok(tool_error(message)),
     };
-    let Some(text) = note_text(state, &path).await? else {
+    let Some((text, expected)) = note_to_edit(state, &path).await? else {
         return Ok(tool_error(format!("No note at {path:?}.")));
     };
     if !has_event(&text, &args.name) {
@@ -346,13 +511,14 @@ pub async fn update_event(state: &AppState, args: EventArgs) -> Result<CallToolR
             path, args.name,
         )));
     }
-    apply_event(state, &path, &text, &args).await
+    apply_event(state, &path, &text, &expected, &args).await
 }
 
 async fn apply_event(
     state: &AppState,
     path: &str,
     text: &str,
+    expected: &str,
     args: &EventArgs,
 ) -> Result<CallToolResult, ErrorData> {
     let changes = match event_changes(args) {
@@ -375,10 +541,17 @@ async fn apply_event(
             return Ok(tool_error(message));
         }
     }
-    commit_edit(state, path, text, &changes, &args.message).await
+    let edited = match edited_note(text, &changes, path)
+        .and_then(|edited| check_shape(text, &edited, &args.name).map(|()| edited))
+    {
+        Ok(edited) => edited,
+        Err(reason) => return Ok(tool_error(reason)),
+    };
+    write_note(state, path, &edited, &args.message, expected).await
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct RemoveEventArgs {
     /// The note's exact repository path.
     pub path: String,
@@ -396,7 +569,7 @@ pub async fn remove_event(
         Ok(path) => path,
         Err(message) => return Ok(tool_error(message)),
     };
-    let Some(text) = note_text(state, &path).await? else {
+    let Some((text, expected)) = note_to_edit(state, &path).await? else {
         return Ok(tool_error(format!("No note at {path:?}.")));
     };
     if !has_event(&text, &args.name) {
@@ -410,7 +583,7 @@ pub async fn remove_event(
         Ok(edited) => edited,
         Err(e) => return Ok(tool_error(e.to_string())),
     };
-    write_note(state, &path, &edited, &args.message).await
+    write_note(state, &path, &edited, &args.message, &expected).await
 }
 
 #[cfg(test)]
@@ -441,6 +614,15 @@ mod tests {
 
         assert!(repeat("weekly", &["wed"]).to_value().is_ok());
         assert!(repeat("weekly", &["WED"]).to_value().is_ok(), "case is forgiven");
+    }
+
+    /// Three bytes from the end of `月1` is inside `月`, where a plain split panics.
+    #[test]
+    fn a_weekday_in_another_script_is_refused_rather_than_split() {
+        for day in ["月1", "水曜日", "1水"] {
+            let error = repeat("monthly", &[day]).to_value().expect_err("not a weekday");
+            assert!(error.contains("three letters"), "{day}: {error}");
+        }
     }
 
     /// What separates "the third Wednesday of each month" from "every three weeks on Wednesday".
@@ -617,5 +799,131 @@ mod tests {
         }))
         .expect("valid arguments");
         assert!(event_changes(&args).is_ok());
+    }
+
+    fn event(fields: serde_json::Value) -> EventArgs {
+        let mut args = serde_json::json!({ "path": "a.md", "name": "Standup", "message": "m" });
+        args.as_object_mut().unwrap().extend(fields.as_object().unwrap().clone());
+        serde_json::from_value(args).expect("valid arguments")
+    }
+
+    /// A datetime with no offset would be drawn at an hour that moves with whoever reads it, so
+    /// it is refused with both spellings that are right.
+    #[test]
+    fn a_moment_is_a_bare_date_or_a_datetime_carrying_its_offset() {
+        for start in ["2026-03-12", "2026-03-12 19:00:00+09:00", "2026-03-12 19:00+09:00", "2026-03-12T10:00:00Z"] {
+            assert!(event_changes(&event(serde_json::json!({ "start": start }))).is_ok(), "{start}");
+        }
+        for start in ["2026-03-12 19:00", "2026-03-12 19:00:00", "2026-02-30", "tomorrow", "19:00"] {
+            let error = event_changes(&event(serde_json::json!({ "start": start })))
+                .expect_err("not a moment as the notes spell one");
+            assert!(error.contains("+09:00"), "{start}: {error}");
+        }
+
+        let rule = |until: &str| serde_json::json!({ "repeat": { "freq": "weekly", "until": until } });
+        assert!(event_changes(&event(rule("2026-12-31"))).is_ok());
+        assert!(event_changes(&event(rule("2026-12-31 23:59"))).is_err());
+
+        let exclusions = |at: &str| serde_json::json!({ "exclusions": ["2026-03-19 19:00:00+09:00", at] });
+        assert!(event_changes(&event(exclusions("2026-03-26"))).is_ok());
+        assert!(event_changes(&event(exclusions("2026-03-26 19:00"))).is_err());
+    }
+
+    /// `end` takes the three spellings `normalizeEndTime` reads, as well as a moment.
+    #[test]
+    fn an_end_is_a_moment_a_time_of_day_or_a_duration() {
+        for end in [
+            "2026-03-12 20:30:00+09:00", "2026-03-14", "20:30", "9:05", "20:30:15",
+            "+90m", "+1.5h", "+2 days", "+1 Week", "+1M",
+        ] {
+            assert!(event_changes(&event(serde_json::json!({ "end": end }))).is_ok(), "{end}");
+        }
+        for end in ["2026-03-12 20:30", "24:00", "90m", "+1 fortnight", "later"] {
+            let error = event_changes(&event(serde_json::json!({ "end": end })))
+                .expect_err("not an end");
+            assert!(error.contains("duration"), "{end}: {error}");
+        }
+    }
+
+    /// The web app drops each of these with its occurrence, refuses the rule, or draws the end
+    /// as "Invalid Date", which the calendar throws on, so none is written.
+    #[test]
+    fn a_value_the_calendar_cannot_read_is_refused() {
+        for end in ["+.h", "+..m", "+.d", "+99999999999999999999y", "+1001y", "+90m ", " 18:30", "+١h"] {
+            assert!(check_end(end).is_err(), "{end:?}");
+        }
+        for end in ["+1.h", "+.5h", "+1000y", "+500 years", "+90 Minutes"] {
+            assert!(check_end(end).is_ok(), "{end:?}");
+        }
+        for start in [" 2026-09-24", "2026-09-24 "] {
+            assert!(event_changes(&event(serde_json::json!({ "start": start }))).is_err(), "{start:?}");
+        }
+        for day in ["+1wed", "0wed", "-0fri", "-wed"] {
+            assert!(repeat("monthly", &[day]).to_value().is_err(), "{day}");
+        }
+        assert!(repeat("monthly", &["01wed"]).to_value().is_ok(), "as toWeekday reads it");
+        let mut rule = repeat("daily", &[]);
+        rule.interval = Some(65_536);
+        assert!(rule.to_value().is_err());
+        rule.interval = Some(65_535);
+        assert!(rule.to_value().is_ok());
+    }
+
+    fn edit_and_check(note: &str, fields: serde_json::Value) -> Result<String, String> {
+        let changes = event_changes(&event(fields))?;
+        let edited = frontmatter::apply(note, &changes).map_err(|e| e.to_string())?;
+        check_shape(note, &edited, "Standup").map(|()| edited)
+    }
+
+    /// Clearing what an event occurs at leaves nothing to draw, and clearing a rule strands what
+    /// adjusts it. Both are what the schema forbids, so neither is written.
+    #[test]
+    fn an_edit_that_breaks_the_event_shape_is_refused() {
+        let lone = "---\nevents:\n    Standup:\n        start: 2026-09-23\n---\n";
+        let error = edit_and_check(lone, serde_json::json!({ "clear": ["start"] }))
+            .expect_err("nothing left to draw");
+        assert!(error.contains("remove_event"), "{error}");
+
+        let listed = "---\nevents:\n    Standup:\n        start: 2026-09-23\n        times:\n            - start: 2026-09-30\n---\n";
+        assert!(edit_and_check(listed, serde_json::json!({ "clear": ["start"] })).is_ok());
+
+        let ruled = "---\nevents:\n    Standup:\n        start: 2026-09-23\n        repeat:\n            freq: weekly\n        exclusions:\n            - 2026-09-30\n---\n";
+        let error = edit_and_check(ruled, serde_json::json!({ "clear": ["repeat"] }))
+            .expect_err("exclusions without a rule");
+        assert!(error.contains("`exclusions`"), "{error}");
+        let error = edit_and_check(ruled, serde_json::json!({ "clear": ["start"] }))
+            .expect_err("a rule without a start");
+        assert!(error.contains("`repeat`"), "{error}");
+        assert!(edit_and_check(ruled, serde_json::json!({ "clear": ["repeat", "exclusions"] })).is_ok());
+    }
+
+    /// An argument the tools do not know would be dropped, and the rest committed as if it had
+    /// been written.
+    #[test]
+    fn an_argument_the_tools_do_not_know_is_refused() {
+        let base = serde_json::json!({ "path": "a.md", "name": "Standup", "message": "m" });
+        for (key, value) in [
+            ("instances", serde_json::json!([{ "start": "2026-09-30" }])),
+            ("tz", serde_json::json!("Asia/Tokyo")),
+            ("repeat", serde_json::json!({ "freq": "weekly", "byweekday": ["wed"] })),
+        ] {
+            let mut args = base.clone();
+            args.as_object_mut().unwrap().insert(key.into(), value);
+            let error = serde_json::from_value::<EventArgs>(args).expect_err(key).to_string();
+            assert!(error.contains("unknown field"), "{key}: {error}");
+        }
+        let mut args = base;
+        args.as_object_mut().unwrap().insert("recursive".into(), true.into());
+        assert!(serde_json::from_value::<RemoveEventArgs>(args).is_err());
+    }
+
+    /// A note already out of shape is not the edit's doing, and refusing every later edit to it
+    /// would leave only update_note.
+    #[test]
+    fn a_fault_the_note_already_had_does_not_block_an_edit() {
+        let stranded = "---\nevents:\n    Standup:\n        start: 2026-09-23\n        exclusions:\n            - 2026-09-30\n---\n";
+        let edited = edit_and_check(stranded, serde_json::json!({ "location": "Room 4" }))
+            .expect("the stray exclusions were there before");
+        assert!(edited.contains("location: Room 4"), "{edited}");
     }
 }

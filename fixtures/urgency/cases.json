@@ -374,6 +374,25 @@
             }
         },
         {
+            "name": "legacy availability behind an empty available_from",
+            "task": {
+                "deadline": "2026-10-15",
+                "available_from": null,
+                "start_at": "2026-10-12"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "notice",
+                "slack_ratio": 1.6607142840608464,
+                "reference": "2026-10-15T14:59:59.999Z",
+                "actionable": false,
+                "short_window": true
+            }
+        },
+        {
             "name": "invalid dates ignored",
             "task": {
                 "deadline": "2026-02-30",

@@ -94,10 +94,17 @@ impl Mory {
                        `title:` and `body:` restrict a term to one field, `+` requires a term \
                        and `-` excludes it, and \"a phrase\" matches words in order. Boolean \
                        syntax such as (a OR b) is not accepted.\n\nModes: `text` is the local \
-                       index and is always available; `semantic` and `hybrid` need embeddings \
-                       enabled on this server and fall back to text with a warning when they \
-                       are not; `grep` is a literal regular-expression scan. Start with \
-                       `hybrid`, or `text` for an exact term.",
+                       index and is always available; `hybrid` needs embeddings enabled on \
+                       this server and falls back to text with a warning when they are off or \
+                       unavailable, where `semantic` fails instead; `grep` runs `git grep` over \
+                       every text file, frontmatter and \
+                       `.mory/` included. Start with `hybrid`, or `text` for an exact term.\
+                       \n\nIn `grep` mode the query language above does not apply: the whole \
+                       query is one case-sensitive POSIX basic regular expression. `.`, `*`, \
+                       `[0-9]`, `^` and `$` work as usual, but alternation, `+`, `?` and \
+                       groups need a backslash (`due_by\\|deadline`, `[0-9]\\+d`, \
+                       `\\(high\\|low\\)$`); written bare they match themselves, so a pattern \
+                       in another dialect finds nothing rather than failing.",
         annotations(title = "Search notes", read_only_hint = true, open_world_hint = false)
     )]
     pub async fn search_notes(
@@ -111,8 +118,8 @@ impl Mory {
         name = "list_notes",
         description = "List the notes in the repository, newest first, with their titles, tags \
                        and task status. Optionally restricted to a path prefix such as \
-                       `.tasks/` or `projects/`.\n\nThe repository holds on the order of a \
-                       thousand entries, so this is always a page: pass the `next_offset` a \
+                       `.tasks/` or `projects/`.\n\nThe repository holds a few thousand \
+                       files, so this is always a page: pass the `next_offset` a \
                        result reports to continue. To find something specific, search_notes is \
                        the better tool.",
         annotations(title = "List notes", read_only_hint = true, open_world_hint = false)
@@ -126,13 +133,26 @@ impl Mory {
 
     #[tool(
         name = "list_tasks",
-        description = "List the tasks under `.tasks/`, optionally filtered by status or tag. \
-                       Each result carries the note's `task:` block exactly as the file \
-                       declares it: status kind, optional low/medium/high importance, lead_time and whichever \
-                       of available_from, due_by and deadline it sets. Urgency is derived from dates \
-                       and lead time; parent progress is derived from done leaves. Use day plans to schedule work.\n\nStatuses \
-                       are backlog, todo, in_progress, waiting, blocked, on_hold, done and \
-                       canceled.",
+        description = "List the tasks under `.tasks/`, optionally filtered by status or tag.\n\n\
+                       Each result carries the note's `task:` block as the web app reads it: \
+                       its status, and whichever of importance (low, medium or high), \
+                       lead_time, available_from, due_by, deadline and alarms it sets. Keys \
+                       an older task model wrote are read as the web app reads them: a numeric \
+                       importance as low (1 or 2), medium (4) or high (5) and 3 as unrated, \
+                       start_at as available_from, and urgency, progress and scheduled_dates \
+                       not at all.\n\nBeside it are two values \
+                       derived from the tree, which no tool sets. `urgency.level` is overdue \
+                       (the deadline has passed), target_missed (due_by has), urgent, notice \
+                       or calm (within one lead time of the nearer date, within two, or \
+                       further), or none (no date, or the task is done or canceled); an open \
+                       task is at least as urgent as its most urgent open subtask. With the \
+                       level come `reference`, the date it is measured against, `slack_ratio`, \
+                       the time left until then in lead times, `actionable`, whether \
+                       available_from has come, and `short_window`, whether available_from \
+                       leaves less than one lead time before the date. `progress`, on a task \
+                       with subtasks, is the percentage of its leaf subtasks that are done, \
+                       canceled ones left out.\n\nStatuses are backlog, todo, in_progress, \
+                       waiting, blocked, on_hold, done and canceled.",
         annotations(title = "List tasks", read_only_hint = true, open_world_hint = false)
     )]
     pub async fn list_tasks(
@@ -173,7 +193,11 @@ impl Mory {
                        are a live view of someone else's calendar: they are read-only, they are \
                        not stored in the repository, and they must never be written into it. A \
                        calendar that could not be read is reported in `calendars` with its \
-                       error rather than failing the call.",
+                       error rather than failing the call.\n\nAn event the user has converted \
+                       into a note under `.events/` is still listed here. The note, which \
+                       list_events returns, names the original in its `ical` (`uid`, and \
+                       `recurrence_id` for one occurrence), and the calendar draws only the \
+                       note, so count such an event once.",
         annotations(title = "List imported events", read_only_hint = true, open_world_hint = true)
     )]
     pub async fn list_imported_events(
@@ -209,8 +233,10 @@ impl Mory {
         description = "Replace a note's entire content and commit it. Requires the notes:write \
                        scope.\n\nThis is not a patch: read_note first and send the whole file \
                        back, frontmatter included, or everything you did not send is lost. \
-                       Editing a task or an event means editing the YAML frontmatter of its \
-                       note.",
+                       It also writes over anything changed in the note since you read it.\
+                       \n\nTo change a task or an event, use the task and event tools instead: \
+                       they edit its frontmatter in place, in one step, and check what they \
+                       write, where this writes whatever it is sent.",
         annotations(title = "Update a note", read_only_hint = false, destructive_hint = true,
                     idempotent_hint = true, open_world_hint = false)
     )]
@@ -228,9 +254,10 @@ impl Mory {
     #[tool(
         name = "rename_note",
         description = "Move a note to another path and commit it. Requires the notes:write \
-                       scope.\n\nA note under `.tasks/` must keep a UUIDv4 at the end of its \
-                       file name, so renaming a task usually means changing only the readable \
-                       prefix in front of it. Fails rather than overwriting an existing file.",
+                       scope.\n\nA task keeps the UUIDv4 its file name ends with, since the \
+                       day plans name it by that UUID and its subtasks live in the directory it \
+                       names: renaming one means changing only the readable prefix in front of \
+                       it. Fails rather than overwriting an existing file.",
         annotations(title = "Rename a note", read_only_hint = false, destructive_hint = false,
                     idempotent_hint = false, open_world_hint = false)
     )]
@@ -268,11 +295,16 @@ impl Mory {
     #[tool(
         name = "create_task",
         description = "Create a task and commit it. Requires the notes:write scope.\n\nA task \
-                       is an ordinary note under `.tasks/` carrying a `task:` block. The schema \
-                       requires only status, defaulting to backlog. Importance is optional low, medium or high. \
-                       Urgency and parent progress are derived and cannot be set. available_from replaces start_at; \
-                       lead_time is whole calendar days or weeks. Use plan_task to schedule work. The result echoes the whole file back \
-                       so those defaults are visible.",
+                       is an ordinary note under `.tasks/` carrying a `task:` block. Only its \
+                       status is required, and it defaults to backlog. importance is low, \
+                       medium or high, or left out for an unrated task. lead_time is how long \
+                       the work needs before its date, in whole days or weeks (`14d`, `2w`); \
+                       left out, it is the longest `.mory/tasks.yaml` sets for one of its tags, \
+                       else that file's default, else 7d. available_from is \
+                       when it can be started, due_by the soft target and deadline the hard \
+                       cutoff.\n\nUrgency and progress are worked out from these and cannot be \
+                       set. To put it on a day's plan, use plan_task. The result echoes the \
+                       whole file back so the defaults are visible.",
         annotations(title = "Create a task", read_only_hint = false, destructive_hint = false,
                     idempotent_hint = false, open_world_hint = false)
     )]
@@ -295,8 +327,9 @@ impl Mory {
                        status replaces the whole status block, so the keys the new one requires \
                        must come with it: `waiting` needs waiting_for, `blocked` needs \
                        blocked_by, `on_hold` needs hold_reason, `canceled` needs cancel_reason. \
-                       `done` and `canceled` default their timestamp to now.",
-        annotations(title = "Update a task", read_only_hint = false, destructive_hint = false,
+                       `done` and `canceled` default their timestamp to now. Setting the status \
+                       a task already has changes only the keys given and keeps the rest.",
+        annotations(title = "Update a task", read_only_hint = false, destructive_hint = true,
                     idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn update_task(
@@ -313,8 +346,10 @@ impl Mory {
     #[tool(
         name = "complete_task",
         description = "Mark a task done and commit it. Requires the notes:write scope.\n\nSets \
-                       the status to done with a completed_at of now unless one is given, and \
-                       only the status; parent progress is derived from done leaves.",
+                       the status to done with a completed_at of now unless one is given. A \
+                       task already done keeps its completed_at and completion_note unless new \
+                       ones are given, so completing it again changes nothing. A parent's \
+                       progress follows from it.",
         annotations(title = "Complete a task", read_only_hint = false, destructive_hint = false,
                     idempotent_hint = true, open_world_hint = false)
     )]
@@ -350,15 +385,17 @@ impl Mory {
 
     #[tool(
         name = "set_task_dates",
-        description = "Set or clear a task's available_from, due_by and deadline. Use plan_task for scheduling; urgency and progress are derived. \
-                       Requires the notes:write scope.\n\nThese are bare dates (`2026-03-15`) \
+        description = "Set or clear a task's available_from, due_by and deadline, and when the \
+                       last two ring. Requires the notes:write scope.\n\nThe dates say when the \
+                       task can start and when it is due; which day it is worked on is a day \
+                       plan's, set with plan_task. They are bare dates (`2026-03-15`) \
                        or datetimes carrying their offset (`2026-03-15 09:00:00+09:00`). due_by \
                        and deadline are drawn on the calendar in their own colours, so they are \
                        events as well as fields, and list_events returns them. \
                        `due_by_alarms` and `deadline_alarms` say when each rings, as offsets \
                        (`-1h`) or times on its day (`09:00`, `-1d 18:00`).",
         annotations(title = "Set a task's dates", read_only_hint = false,
-                    destructive_hint = false, idempotent_hint = true, open_world_hint = false)
+                    destructive_hint = true, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn set_task_dates(
         &self,
@@ -412,7 +449,7 @@ impl Mory {
                        dates, a `category` that is already configured, and `alarms` as offsets \
                        or times on the day, with `clear: [\"alarms\"]` to go back to the \
                        category's and the config's.",
-        annotations(title = "Update an event", read_only_hint = false, destructive_hint = false,
+        annotations(title = "Update an event", read_only_hint = false, destructive_hint = true,
                     idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn update_event(
@@ -448,8 +485,11 @@ impl Mory {
 
     #[tool(
         name = "read_note",
-        description = "Read one note's full Markdown source, YAML frontmatter included, by the \
-                       exact repository path a search result reported.",
+        description = "Read one note's Markdown source, YAML frontmatter included, by the \
+                       exact repository path a search result reported.\n\nA file over 256 KiB \
+                       is cut there, at a character boundary, and `truncated_at_bytes` says how \
+                       much was returned; search_notes in `grep` mode still finds text in the \
+                       rest.",
         annotations(title = "Read a note", read_only_hint = true, open_world_hint = false)
     )]
     pub async fn read_note(
@@ -458,43 +498,93 @@ impl Mory {
     ) -> Result<CallToolResult, ErrorData> {
         tools::read_note(&self.state, args).await
     }
-    #[tool(name = "list_plan", description = "Read ordered plan entries between inclusive start/end dates. Unknown task UUIDs and invalid files are reported in warnings. Results describe work on a day, not completion status.",
-        annotations(title = "List day plans", read_only_hint = true, destructive_hint = false,
-                    idempotent_hint = true, open_world_hint = false))]
-    pub async fn list_plan(&self, Parameters(args): Parameters<plan_tools::ListArgs>) -> Result<CallToolResult, ErrorData> {
+
+    #[tool(
+        name = "list_plan",
+        description = "Read the day plans between two dates, both included.\n\nA day plan is \
+                       the ordered list of tasks to work on that day. Each entry names its task \
+                       by the UUIDv4 its file name ends with, says whether it was `planned` or \
+                       an `interruption`, and carries its `result` once one is recorded: \
+                       `worked`, meaning effort went into it that day rather than that it is \
+                       done, or `missed`. The web app's Collect undone marks each open task's \
+                       unrecorded entry on a past day missed and plans it again for today.\n\n\
+                       A UUID that names no task, or a month's file that cannot be read, is \
+                       reported in `warnings` rather than failing the call.",
+        annotations(title = "List day plans", read_only_hint = true, open_world_hint = false)
+    )]
+    pub async fn list_plan(
+        &self,
+        Parameters(args): Parameters<plan_tools::ListArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
         plan_tools::list_plan(&self.state, args).await
     }
 
-    #[tool(name = "plan_task", description = "Append a task UUID once to a day. origin planned adds an unrecorded entry; interruption records worked. Requires notes:write.",
+    #[tool(
+        name = "plan_task",
+        description = "Add a task to a day's plan and commit it. Requires the notes:write \
+                       scope.\n\nThe task goes to the end of the day's list, and a task \
+                       already on it stays where it is: a day lists a task once. `planned` \
+                       leaves its result unrecorded; `interruption` is for work that came up \
+                       unplanned, and records it as worked -- on an entry already there too, \
+                       whose origin and place are kept. A call that would leave the plan as it \
+                       was is refused, and nothing is committed.",
         annotations(title = "Plan a task", read_only_hint = false, destructive_hint = false,
-                    idempotent_hint = true, open_world_hint = false))]
-    pub async fn plan_task(&self, Parameters(args): Parameters<plan_tools::PlanArgs>, context: RequestContext<RoleServer>) -> Result<CallToolResult, ErrorData> {
+                    idempotent_hint = true, open_world_hint = false)
+    )]
+    pub async fn plan_task(
+        &self,
+        Parameters(args): Parameters<plan_tools::PlanArgs>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
         if !granted(&context, SCOPE_WRITE) {
             return Ok(needs_write_scope());
         }
         plan_tools::plan_task(&self.state, args).await
     }
 
-    #[tool(name = "record_plan_result", description = "Record worked or missed for a task on a day; omit result to clear it. worked records effort, not task completion. Requires notes:write.",
-        annotations(title = "Record plan result", read_only_hint = false, destructive_hint = false,
-                    idempotent_hint = true, open_world_hint = false))]
-    pub async fn record_plan_result(&self, Parameters(args): Parameters<plan_tools::ResultArgs>, context: RequestContext<RoleServer>) -> Result<CallToolResult, ErrorData> {
+    #[tool(
+        name = "record_plan_result",
+        description = "Record how a task on a day's plan went, and commit it. Requires the \
+                       notes:write scope.\n\n`worked` says effort went into it that day, not \
+                       that it is done: complete_task says that. `missed` says it was planned \
+                       and not worked on, so an `interruption` cannot be missed. Omit `result` \
+                       to make the entry unrecorded again. The task must already be on that \
+                       day's plan, and a result it already has is refused rather than \
+                       committed again.",
+        annotations(title = "Record a plan result", read_only_hint = false,
+                    destructive_hint = true, idempotent_hint = true, open_world_hint = false)
+    )]
+    pub async fn record_plan_result(
+        &self,
+        Parameters(args): Parameters<plan_tools::ResultArgs>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
         if !granted(&context, SCOPE_WRITE) {
             return Ok(needs_write_scope());
         }
         plan_tools::record_result(&self.state, args).await
     }
 
-    #[tool(name = "unplan_task", description = "Remove a task UUID from one day, preserving other entries and the task note. Also works for unknown UUIDs. Requires notes:write.",
-        annotations(title = "Remove plan entry", read_only_hint = false, destructive_hint = false,
-                    idempotent_hint = true, open_world_hint = false))]
-    pub async fn unplan_task(&self, Parameters(args): Parameters<plan_tools::UnplanArgs>, context: RequestContext<RoleServer>) -> Result<CallToolResult, ErrorData> {
+    #[tool(
+        name = "unplan_task",
+        description = "Take a task off one day's plan and commit it. Requires the notes:write \
+                       scope.\n\nThe entry goes with its result, so a record of work done is \
+                       lost from the plan; the task itself, and the rest of the day, are \
+                       untouched. A UUID that names no task can be taken off too; one the day \
+                       does not list is refused.",
+        annotations(title = "Remove a plan entry", read_only_hint = false,
+                    destructive_hint = true, idempotent_hint = true, open_world_hint = false)
+    )]
+    pub async fn unplan_task(
+        &self,
+        Parameters(args): Parameters<plan_tools::UnplanArgs>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, ErrorData> {
         if !granted(&context, SCOPE_WRITE) {
             return Ok(needs_write_scope());
         }
         plan_tools::unplan_task(&self.state, args).await
     }
-
 }
 
 // Naming the field is not cosmetic: left to its default the handler calls `Self::tool_router()`
@@ -532,17 +622,27 @@ impl ServerHandler for Mory {
 /// trial and error, and the places where guessing produces a file the user has to repair by hand.
 const INSTRUCTIONS: &str = "\
 mory is one person's notes, stored as Markdown files in a Git repository. Every write is a \
-commit, so say what you changed in the message.
+commit. Most write tools take its message, so say in it what you changed; the plan tools write \
+their own.
 
 Structure comes from the paths, not from a database:
-- `.tasks/` holds tasks, `.events/` holds calendar entries, `.mory/` holds configuration.
-- Anything else is an ordinary note.
-- A file name ends with a UUIDv4, optionally after a readable prefix: `my-note-<uuid>.md`. A \
-directory name is a bare UUIDv4, and a note under one is a child of the note with that UUID. \
-Keep that shape when creating files or they will not appear in the note tree.
+- `.tasks/` holds tasks, `.events/` holds calendar entries, `.mory/` holds configuration and, \
+under `.mory/plans/`, the day plans.
+- Anything else is an ordinary note, named freely. Its children are the notes in the directory \
+named as it is without `.md`: `ideas.md` is the parent of `ideas/draft.md`.
+- Under `.tasks/` the naming is strict, because the task tree is derived from it: a file name \
+ends with a UUIDv4, optionally after a readable prefix (`report-<uuid>.md`), and a subtask lives \
+in a directory named by its parent's bare UUID (`.tasks/<uuid>/`). A task named any other way is \
+not in the task tree.
 
 Tasks and calendar entries are YAML frontmatter on an ordinary note -- a `task:` block or an \
-`events:` map -- never separate records. Editing that frontmatter is how you change them.
+`events:` map -- never separate records. Change them with the task tools (create_task, \
+update_task, complete_task, cancel_task, set_task_dates) and the event tools (add_event, \
+update_event, remove_event): they check what they write and change only the keys they are \
+given, leaving the rest of the note as it was. update_note rewrites the whole file without \
+those checks, so keep it for what those tools cannot do. Day plans are the one exception: \
+which tasks are worked on which day is kept apart from the tasks, in one file a month, and \
+changed with the plan tools rather than update_note.
 
 Two things are easy to get wrong and expensive to fix:
 - Datetimes carry their UTC offset (2025-10-06 13:00:00+09:00); plain dates are bare \

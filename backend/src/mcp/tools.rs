@@ -120,7 +120,7 @@ pub async fn search_notes(
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ReadArgs {
-    /// The exact repository path, as a search result reported it: `notes/thing-<uuid>.md`.
+    /// The exact repository path, as a search result reported it: `ideas/draft.md`.
     pub path: String,
 }
 
@@ -128,7 +128,9 @@ pub struct ReadArgs {
 struct ReadOutput {
     path: String,
     content: String,
-    /// Present only when the note was longer than this tool will return in one call.
+    /// Present only when the note was longer than this tool will return in one call: how many
+    /// of its bytes `content` holds, which a cut at a character boundary can leave short of the
+    /// limit.
     #[serde(skip_serializing_if = "Option::is_none")]
     truncated_at_bytes: Option<usize>,
 }
@@ -158,9 +160,7 @@ pub async fn read_note(state: &AppState, args: ReadArgs) -> Result<CallToolResul
     let truncated = bytes.len() > MAX_NOTE_BYTES;
     let content = match std::str::from_utf8(&bytes) {
         Ok(text) if !truncated => text.to_owned(),
-        // Truncating mid-character is what `from_utf8_lossy` is for; the boundary is arbitrary
-        // anyway and one replacement character at the very end costs nothing.
-        Ok(text) => text.chars().take(MAX_NOTE_BYTES).collect(),
+        Ok(text) => within_limit(text).to_owned(),
         Err(_) => {
             return Ok(tool_error(format!(
                 "{path:?} is not UTF-8 text, so it cannot be read as a note.",
@@ -168,11 +168,20 @@ pub async fn read_note(state: &AppState, args: ReadArgs) -> Result<CallToolResul
         },
     };
 
+    let truncated_at_bytes = truncated.then_some(content.len());
     json_result(&ReadOutput {
         path: path.to_owned(),
         content,
-        truncated_at_bytes: truncated.then_some(MAX_NOTE_BYTES),
+        truncated_at_bytes,
     })
+}
+
+/// As much of `text` as `MAX_NOTE_BYTES` holds, cut at the last character boundary within it.
+///
+/// Counted in bytes, not characters: a note in Japanese, at three bytes a character, would
+/// otherwise run to three times the limit.
+fn within_limit(text: &str) -> &str {
+    &text[..text.floor_char_boundary(MAX_NOTE_BYTES)]
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -181,8 +190,9 @@ pub async fn read_note(state: &AppState, args: ReadArgs) -> Result<CallToolResul
 
 /// The default and maximum page for every listing tool.
 ///
-/// The repository holds roughly 1,600 entries. Handing a model all of them costs a large part of
-/// a context window and tells it almost nothing, so a page is the only shape offered.
+/// The repository holds a few thousand files, 2,661 in a clone of 2026-10-05, 1,610 of them
+/// notes. Handing a model all of them costs a large part of a context window and tells it almost
+/// nothing, so a page is the only shape offered.
 const DEFAULT_PAGE: usize = 50;
 const MAX_PAGE: usize = 500;
 
@@ -233,7 +243,7 @@ struct ListOutput<T> {
 /// The `tags:` list, ignoring anything that is not a list of strings.
 ///
 /// Frontmatter is whatever the file said, so a malformed value means "no tags here" rather than
-/// an error that would lose the other 1,599 entries.
+/// an error that would lose the rest of the listing.
 fn tags_of(metadata: Option<&serde_yaml::Value>) -> Vec<String> {
     metadata
         .and_then(|value| value.get("tags"))
@@ -309,7 +319,8 @@ struct TaskSummary {
     path: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     title: Option<String>,
-    /// The `task:` block exactly as the file declares it, not a re-derived view of it.
+    /// The `task:` block as `canonical_task` reads it: as declared, but for the keys an older
+    /// task model wrote.
     task: serde_json::Value,
     urgency: crate::urgency::Urgency,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -328,6 +339,10 @@ pub async fn task_settings(state: &AppState) -> Result<(crate::urgency::Settings
     }
 }
 
+/// A `task:` block as the web app reads it, so a model is not shown measures the task model no
+/// longer has: `urgency`, `progress` and `scheduled_dates` dropped, `start_at` read as
+/// `available_from` where that is unset, and a numeric importance read by its name or, where it
+/// has none, dropped. Everything else is as declared.
 fn canonical_task(block: &serde_yaml::Mapping) -> serde_json::Value {
     let mut task = serde_json::to_value(block).unwrap_or(serde_json::json!({}));
     if let Some(map) = task.as_object_mut() {
@@ -335,7 +350,10 @@ fn canonical_task(block: &serde_yaml::Mapping) -> serde_json::Value {
             map.remove(key);
         }
         if let Some(start) = map.remove("start_at") {
-            map.entry("available_from").or_insert(start);
+            let available = map.entry("available_from").or_insert(serde_json::Value::Null);
+            if available.is_null() {
+                *available = start;
+            }
         }
         match block.get("importance").and_then(crate::urgency::importance) {
             Some(level) => { map.insert("importance".into(), level.into()); },
@@ -833,11 +851,17 @@ pub struct WriteOutput {
 /// Non-UTF-8 is an `Err`, not a `None`: it is a real failure of an operation that named an
 /// existing path, and the difference matters to the caller.
 pub async fn note_text(state: &AppState, path: &str) -> Result<Option<String>, ErrorData> {
-    let Some((_, bytes)) = crate::find_entry_blob(state, path).await else {
+    Ok(note_to_edit(state, path).await?.map(|(text, _)| text))
+}
+
+/// A note's text, with the blob it was read from in the form `AppState::save_note_checked` takes,
+/// so that a write made from it is refused if the note changed in between.
+pub async fn note_to_edit(state: &AppState, path: &str) -> Result<Option<(String, String)>, ErrorData> {
+    let Some((oid, bytes)) = crate::find_entry_blob(state, path).await else {
         return Ok(None);
     };
     String::from_utf8(bytes)
-        .map(Some)
+        .map(|text| Some((text, format!("\"{oid}\""))))
         .map_err(|_| ErrorData::invalid_params(format!("{path} is not UTF-8 text"), None))
 }
 
@@ -854,33 +878,41 @@ pub fn edited_note(text: &str, changes: &[Change], path: &str) -> Result<String,
     Ok(edited)
 }
 
-/// Apply `changes` to the note at `path`, whose text is `text`, and commit what comes of it.
+/// Apply `changes` to the note at `path`, whose text is `text` as read from the blob `expected`
+/// names, and commit what comes of it.
 pub async fn commit_edit(
     state: &AppState,
     path: &str,
-    text: &str,
+    (text, expected): &(String, String),
     changes: &[Change],
     message: &str,
 ) -> Result<CallToolResult, ErrorData> {
     match edited_note(text, changes, path) {
-        Ok(edited) => write_note(state, path, &edited, message).await,
+        Ok(edited) => write_note(state, path, &edited, message, expected).await,
         Err(reason) => Ok(tool_error(reason)),
     }
 }
 
-/// Commit an edited note and report where it landed.
+/// Commit an edited note and report where it landed: only if the note is still the blob
+/// `expected` names (or still `absent`), so that a save the web app made after the tool read the
+/// note is not overwritten by an edit of the version before it.
 pub async fn write_note(
     state: &AppState,
     path: &str,
     content: &str,
     message: &str,
+    expected: &str,
 ) -> Result<CallToolResult, ErrorData> {
-    match state.save_note(path, content.as_bytes(), message).await {
-        Ok(commit) => json_result(&WriteOutput {
+    match state.save_note_checked(path, content.as_bytes(), message, expected).await {
+        Ok(Some(commit)) => json_result(&WriteOutput {
             path: path.to_owned(),
             commit: commit.to_string(),
             message: message.to_owned(),
         }),
+        Ok(None) => Ok(tool_error(format!(
+            "{path:?} changed while this edit was being made, so nothing was committed. Make the \
+             call again to apply it to the note as it is now.",
+        ))),
         Err(e) => {
             tracing::error!("MCP could not write {}: {:?}", path, e);
             Ok(tool_error(format!("{path:?} could not be written: {e:#}")))
@@ -904,8 +936,8 @@ pub async fn create_note(
     state: &AppState,
     mut args: CreateNoteArgs,
 ) -> Result<CallToolResult, ErrorData> {
-    // UUIDv4 rather than v7, matching the frontend's `crypto.randomUUID()`: `entries_to_tree`
-    // rejects every other version, so a v7 name would break the tree it appears in.
+    // UUIDv4, as the web app's `crypto.randomUUID()` names a new note, and as the task tree
+    // requires of a task.
     let path = match args.path {
         Some(path) => match writable_path(&path) {
             Ok(path) => path,
@@ -929,12 +961,16 @@ pub async fn create_note(
         };
     }
 
-    match state.save_note(&path, args.content.as_bytes(), &args.message).await {
-        Ok(commit) => json_result(&WriteOutput {
+    match state.save_note_checked(&path, args.content.as_bytes(), &args.message, "absent").await {
+        Ok(Some(commit)) => json_result(&WriteOutput {
             path,
             commit: commit.to_string(),
             message: args.message,
         }),
+        Ok(None) => Ok(tool_error(format!(
+            "{path:?} was created while this call was being made. Use update_note to replace its \
+             content.",
+        ))),
         Err(e) => {
             tracing::error!("MCP create_note failed for {}: {:?}", path, e);
             Ok(tool_error(format!("{path:?} could not be written: {e:#}")))
@@ -1027,12 +1063,30 @@ pub async fn delete_note(
 pub struct RenameNoteArgs {
     /// The note's current repository path.
     pub from: String,
-    /// Where it should be. A path under `.tasks/` must keep the UUID naming the task tree is
-    /// built from, so renaming a task usually means changing only the readable prefix.
+    /// Where it should be. A task keeps the UUID its file name ends with, so renaming one means
+    /// changing only the readable prefix before it.
     pub to: String,
     /// The commit message. Omit for "Rename <from> to <to>", which is what the web app writes.
     #[serde(default)]
     pub message: Option<String>,
+}
+
+/// Refuses a rename that gives a task another UUID within the task tree. The day plans name a task
+/// by its UUID, and its subtasks live in the directory named by it, so the renamed task would lose
+/// both; the web app never changes it.
+fn check_task_uuid_kept(from: &str, to: &str) -> Result<(), String> {
+    let uuid = |path: &str| {
+        let stem = path.strip_suffix(".md")?;
+        Some(stem.get(stem.len().checked_sub(36)?..)?.to_ascii_lowercase())
+    };
+    if crate::tasks::in_task_tree(from) && to.starts_with(crate::tasks::TASKS_DIR) && uuid(from) != uuid(to) {
+        return Err(format!(
+            "{from:?} is a task, and its UUID must stay the same: day plans name it by that UUID, \
+             and its subtasks live in the directory it names. Change only the readable prefix \
+             before it.",
+        ));
+    }
+    Ok(())
 }
 
 pub async fn rename_note(
@@ -1049,6 +1103,9 @@ pub async fn rename_note(
     };
     if from == to {
         return Ok(tool_error("The source and destination are the same path."));
+    }
+    if let Err(message) = check_task_uuid_kept(&from, &to) {
+        return Ok(tool_error(message));
     }
     if crate::find_entry_blob(state, &to).await.is_some() {
         return Ok(tool_error(format!("{to:?} already exists.")));
@@ -1122,7 +1179,7 @@ mod tests {
     }
 
     /// Frontmatter is whatever the file said, so every one of these has to be a shrug rather than
-    /// an error that would lose the other 1,599 entries.
+    /// an error that would lose the rest of the listing.
     #[test]
     fn a_malformed_tags_value_reads_as_no_tags() {
         assert_eq!(tags_of(Some(&yaml("tags: [a, b]"))), vec!["a", "b"]);
@@ -1290,8 +1347,8 @@ mod tests {
         assert!(safe_path(".mory/calendars.yaml").is_ok());
     }
 
-    /// The task tree is derived from the paths, so a name outside the convention makes the whole
-    /// forest unbuildable for the web app.
+    /// The task tree is derived from the paths, so a task named outside the convention is left
+    /// out of it.
     #[test]
     fn a_task_path_must_carry_the_uuid_the_tree_is_built_from() {
         assert!(writable_path(".tasks/1f8c4a2e-3d5b-4e7a-9c1d-2b6f8a0e4d33.md").is_ok());
@@ -1329,6 +1386,42 @@ mod tests {
         assert!(message.starts_with("Not an alarm:"), "{message}");
         // A `\` continuation inside the literal once went missing and left a run of spaces.
         assert!(!message.contains("  "), "{message:?}");
+    }
+
+    /// `available_from ?? start_at`, as the web app reads a task: an empty `available_from:` is
+    /// null, and gives way.
+    #[test]
+    fn a_legacy_start_at_fills_an_empty_available_from() {
+        let block = |text: &str| serde_yaml::from_str::<serde_yaml::Mapping>(text).unwrap();
+        let read = canonical_task(&block("available_from:\nstart_at: 2026-10-12\n"));
+        assert_eq!(read, serde_json::json!({ "available_from": "2026-10-12" }));
+        let read = canonical_task(&block("available_from: 2026-10-10\nstart_at: 2026-10-12\n"));
+        assert_eq!(read, serde_json::json!({ "available_from": "2026-10-10" }));
+    }
+
+    #[test]
+    fn a_task_keeps_its_uuid_through_a_rename() {
+        let uuid = "4955857d-3267-4b94-83f2-538a428970d7";
+        let other = "2a997a71-0d2b-4938-b8ff-5178c28a5ad9";
+        let from = format!(".tasks/report-{uuid}.md");
+        assert!(check_task_uuid_kept(&from, &format!(".tasks/final-report-{uuid}.md")).is_ok());
+        assert!(check_task_uuid_kept(&from, &format!(".tasks/{other}/report-{}.md", uuid.to_uppercase())).is_ok());
+        assert!(check_task_uuid_kept(&from, &format!(".tasks/report-{other}.md")).unwrap_err().contains("UUID must stay"));
+        // Out of the tree is out of the plans' reach anyway, and a note entering it has no UUID to keep.
+        assert!(check_task_uuid_kept(&from, "archive/report.md").is_ok());
+        assert!(check_task_uuid_kept("ideas.md", &format!(".tasks/ideas-{other}.md")).is_ok());
+    }
+
+    #[test]
+    fn a_long_note_is_cut_within_the_limit_in_bytes() {
+        let ascii = "a".repeat(MAX_NOTE_BYTES + 10);
+        assert_eq!(within_limit(&ascii).len(), MAX_NOTE_BYTES);
+        // 2^18 is not a multiple of three, so the limit falls inside a character, which goes.
+        let japanese = "日".repeat(MAX_NOTE_BYTES);
+        let cut = within_limit(&japanese);
+        assert_eq!(cut.len(), MAX_NOTE_BYTES - MAX_NOTE_BYTES % 3);
+        assert!(cut.chars().all(|c| c == '日'));
+        assert_eq!(within_limit("short"), "short");
     }
 
     #[test]

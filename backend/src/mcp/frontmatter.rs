@@ -1,15 +1,15 @@
 //! Editing a note's YAML frontmatter in place, one key at a time.
 //!
 //! The obvious implementation -- parse the block, change the value, serialize it back -- was
-//! measured against the real repository and rejected. Of the 952 notes carrying frontmatter, a
-//! `serde_yaml` round-trip reproduces 61 byte for byte. A post-processor tuned to the house style
-//! (four-space nesting, sequences indented under their key, an empty value left empty rather than
-//! spelled `null`) reaches 494. The remaining 458 cannot be reached at all, because what they
+//! measured against the real repository and rejected. Of the 952 notes that carried frontmatter
+//! then, a `serde_yaml` round-trip reproduced 61 byte for byte. A post-processor tuned to the house
+//! style (four-space nesting, sequences indented under their key, an empty value left empty rather
+//! than spelled `null`) reached 494. The remaining 458 cannot be reached at all, because what they
 //! lose is not formatting: comments are dropped, block scalars are reflowed, and flow-style
 //! entries such as `{ start: 2025-10-06 13:00, end: +1.5h }` are expanded. One real note keeps a
 //! commented-out list of candidate interview dates directly under its `events:` block; a
 //! round-trip deletes it. "The notes must outlive the app" is not compatible with rewriting nine
-//! notes in ten every time a task's progress changes.
+//! notes in ten every time a task's status changes.
 //!
 //! So the edit is textual: find the key's line, change that line, leave every other byte alone.
 //! Text manipulation being what it is, the result is then checked against an oracle --
@@ -153,6 +153,15 @@ pub fn apply(text: &str, changes: &[Change]) -> Result<String, EditError> {
         return Err(refuse("CRLF frontmatter cannot be edited safely here; use read_note and update_note."));
     }
     let mut note = Note::parse(text);
+    // `parse` reads a fence it sees no close to as body, and the edit would then put a second
+    // block above it, turning the note's own frontmatter into text. A closing `---\r` is one
+    // such close, in a note whose lines end in CRLF after its opening fence.
+    if !note.had_frontmatter && text.starts_with("---\n") {
+        return Err(refuse(
+            "this note opens its frontmatter with `---` but has no closing `---` line the editor \
+             can find, so nothing was written. Use read_note and update_note instead.",
+        ));
+    }
 
     let before: Value = if note.block.trim().is_empty() {
         Value::Mapping(Mapping::new())
@@ -351,47 +360,76 @@ fn detect_indent(lines: &[String]) -> usize {
     DEFAULT_INDENT
 }
 
+/// Whether a line, leading white space removed, is a list item's dash. `-1on1:` is a key.
+fn is_dash(trimmed: &str) -> bool {
+    trimmed.strip_prefix('-').is_some_and(|rest| rest.is_empty() || rest.starts_with(char::is_whitespace))
+}
+
+/// Where the `:` that ends a line's key is, the line's leading white space removed: the first one
+/// at the end of the line or followed by white space, past the closing quote of a quoted key.
+///
+/// A quote opens a quoted key only at its start. `Mom's birthday:` is a plain key with an
+/// apostrophe in it, and `'Talk: intro':` a quoted one with a colon in it.
+fn key_end(trimmed: &str) -> Option<usize> {
+    let bytes = trimmed.as_bytes();
+    let mut from = 0;
+    if let Some(&quote @ (b'"' | b'\'')) = bytes.first() {
+        let mut i = 1;
+        loop {
+            let &byte = bytes.get(i)?;
+            if quote == b'"' && byte == b'\\' {
+                i += 2;
+                continue;
+            }
+            // `''` is a quote inside a single-quoted key.
+            if quote == b'\'' && byte == b'\'' && bytes.get(i + 1) == Some(&b'\'') {
+                i += 2;
+                continue;
+            }
+            if byte == quote {
+                break;
+            }
+            i += 1;
+        }
+        from = i + 1;
+    }
+    (from..bytes.len()).find(|&i| {
+        bytes[i] == b':' && bytes.get(i + 1).is_none_or(|next| next.is_ascii_whitespace())
+    })
+}
+
 /// The key a line declares, or `None` when it declares none.
 ///
 /// The key is parsed rather than compared as text, so a quoted key matches the name it spells.
 fn key_of(line: &str) -> Option<String> {
     let trimmed = line.trim_start();
-    if is_filler(line) || trimmed.starts_with('-') {
+    if is_filler(line) || is_dash(trimmed) {
         return None;
     }
-    // Find the `:` that ends the key: either at the end of the line or followed by whitespace.
-    let bytes = trimmed.as_bytes();
-    let mut quote: Option<u8> = None;
-    for (i, &byte) in bytes.iter().enumerate() {
-        match quote {
-            Some(open) if byte == open => quote = None,
-            Some(_) => {},
-            None if byte == b'"' || byte == b'\'' => quote = Some(byte),
-            None if byte == b':' => {
-                let ends_key = bytes.get(i + 1).is_none_or(|next| next.is_ascii_whitespace());
-                if ends_key {
-                    let raw = &trimmed[..i];
-                    return serde_yaml::from_str::<Value>(raw)
-                        .ok()
-                        .and_then(|value| match value {
-                            Value::String(key) => Some(key),
-                            other => serde_yaml::to_string(&other)
-                                .ok()
-                                .map(|text| text.trim().to_owned()),
-                        });
-                }
-            },
-            None => {},
-        }
-    }
-    None
+    let raw = &trimmed[..key_end(trimmed)?];
+    serde_yaml::from_str::<Value>(raw)
+        .ok()
+        .and_then(|value| match value {
+            Value::String(key) => Some(key),
+            other => serde_yaml::to_string(&other)
+                .ok()
+                .map(|text| text.trim().to_owned()),
+        })
 }
 
-/// The half-open range of lines belonging to the mapping nested under `lines[at]`.
+/// The half-open range of lines belonging to the value nested under `lines[at]`.
+///
+/// That is every line indented past the key, and the dashes of a list written at the key's own
+/// indentation, which YAML allows and older notes do (`times:` over `- start: …`). Nothing else
+/// at that indentation can belong to the key, so a mapping's range is what it always was.
 ///
 /// Trailing filler is left outside the range, so a comment that separates two blocks stays where
-/// the author put it rather than being swept into the one above.
+/// the author put it rather than being swept into the one above. A block scalar's lines are never
+/// filler, however they read.
 fn child_range(lines: &[String], at: usize) -> (usize, usize) {
+    if let Some(end) = block_scalar_end(lines, at) {
+        return (at + 1, end);
+    }
     let parent = indent_of(&lines[at]);
     let mut end = at + 1;
     let mut last_real = at + 1;
@@ -400,13 +438,65 @@ fn child_range(lines: &[String], at: usize) -> (usize, usize) {
             end += 1;
             continue;
         }
-        if indent_of(&lines[end]) <= parent {
+        let indent = indent_of(&lines[end]);
+        let trimmed = lines[end].trim();
+        let dash = trimmed == "-" || trimmed.starts_with("- ");
+        if indent < parent || (indent == parent && !dash) {
             break;
         }
-        end += 1;
+        end = block_scalar_end(lines, end).unwrap_or(end + 1);
         last_real = end;
     }
     (at + 1, last_real)
+}
+
+/// Where the block scalar `lines[at]` opens ends (`note: |`, `- >-`, `- note: |+`), or `None`
+/// when it opens none.
+///
+/// Every line indented past what owns the scalar -- the key, or the dash of an item that is the
+/// scalar -- is its content however it reads: an event's `note` is Markdown, and a heading in it
+/// starts with `#`. So is a blank line between two of them, and the blank lines after them when
+/// the scalar keeps its trailing newlines (`|+`).
+fn block_scalar_end(lines: &[String], at: usize) -> Option<usize> {
+    let line = &lines[at];
+    let mut column = indent_of(line);
+    let mut rest = line[column..].trim_end_matches('\n');
+    let mut owner = column;
+    while is_dash(rest) {
+        owner = column;
+        let after = rest[1..].trim_start();
+        column += rest.len() - after.len();
+        rest = after;
+    }
+    let header = if rest.starts_with(['|', '>']) {
+        rest.split(" #").next().unwrap_or(rest).trim_end()
+    }
+    else {
+        owner = column;
+        inline_value(rest)?
+    };
+    let mut indicators = header.chars();
+    let opens = matches!(indicators.next(), Some('|' | '>'))
+        && header.len() <= 3
+        && indicators.all(|c| matches!(c, '+' | '-' | '1'..='9'));
+    if !opens {
+        return None;
+    }
+    let keep = header.contains('+');
+    let mut end = at + 1;
+    for (i, content) in lines.iter().enumerate().skip(at + 1) {
+        if content.trim().is_empty() {
+            if keep {
+                end = i + 1;
+            }
+            continue;
+        }
+        if indent_of(content) <= owner {
+            break;
+        }
+        end = i + 1;
+    }
+    Some(end)
 }
 
 /// Where `key` is declared within `[from, to)` at exactly `indent`.
@@ -418,13 +508,39 @@ fn find_key(lines: &[String], from: usize, to: usize, indent: usize, key: &str) 
     })
 }
 
-/// Whether a key line's value continues onto following lines rather than sitting on the line.
+/// Whether a key line's value continues onto following lines rather than sitting on the line:
+/// what follows the key's colon, its comment left out.
 fn inline_value(line: &str) -> Option<&str> {
+    let (value, _) = value_and_comment(line)?;
+    Some(value)
+}
+
+/// What follows a key line's colon, apart from the comment that ends the line, which keeps the
+/// white space in front of it so that a line rewritten around it keeps its spacing.
+///
+/// A `#` starts a comment only after white space. One inside a quoted or flow value may be taken
+/// for a comment, but what is left of the value is then still one that every caller refuses.
+fn value_and_comment(line: &str) -> Option<(&str, &str)> {
     let trimmed = line.trim_start().trim_end_matches('\n').trim_end();
-    let colon = trimmed.find(": ").map(|i| i + 1).or_else(|| {
-        trimmed.ends_with(':').then_some(trimmed.len() - 1)
-    })?;
-    Some(trimmed[colon + 1..].trim_start())
+    let rest = &trimmed[key_end(trimmed)? + 1..];
+    let hash = rest
+        .char_indices()
+        .find(|&(i, c)| c == '#' && rest[..i].ends_with(char::is_whitespace))
+        .map(|(i, _)| i);
+    Some(match hash {
+        Some(i) => (rest[..i].trim(), &rest[rest[..i].trim_end().len()..]),
+        None => (rest.trim(), ""),
+    })
+}
+
+/// A key line with its value replaced, keeping the key as the note spells it and its comment.
+fn with_value(line: &str, value: &str) -> String {
+    let indent = indent_of(line);
+    let trimmed = line[indent..].trim_end_matches('\n').trim_end();
+    let colon = key_end(trimmed).unwrap_or(trimmed.len().saturating_sub(1));
+    let comment = value_and_comment(line).map_or("", |(_, comment)| comment);
+    let space = if value.is_empty() { "" } else { " " };
+    format!("{}{}{space}{value}{comment}\n", &line[..indent], &trimmed[..=colon])
 }
 
 fn apply_one(
@@ -466,7 +582,7 @@ fn apply_one(
                 // `part: null` is the same emptiness as `part:`, spelled out; make it the shape
                 // a child can go under.
                 if value == "null" || value == "~" {
-                    lines[at] = format!("{}{}:\n", " ".repeat(level), spell_key(part));
+                    lines[at] = with_value(&lines[at], "");
                 }
                 let (child_from, child_to) = child_range(lines, at);
                 let child_level = (child_from..child_to)
@@ -541,8 +657,18 @@ fn insertion_point(lines: &[String], from: usize, to: usize) -> usize {
     at
 }
 
-/// A key, quoted only when it needs to be.
+/// A key, quoted only when it needs to be, and always as `key_of` reads it back: a key the
+/// editor writes and then cannot find is an event no tool can change or remove.
 fn spell_key(key: &str) -> String {
+    let spelled = spell_key_plainly(key);
+    if key_of(&format!("{spelled}:\n")).as_deref() == Some(key) {
+        return spelled;
+    }
+    // YAML's double-quoted style takes JSON's escapes.
+    serde_json::to_string(key).unwrap_or(spelled)
+}
+
+fn spell_key_plainly(key: &str) -> String {
     let simple = !key.is_empty()
         && !key.starts_with(['#', '-', '?', '&', '*', '!', '|', '>', '%', '@', '`', '"', '\''])
         && !key.contains(':')
@@ -622,7 +748,8 @@ fn render_entry(key: &str, value: &Value, level: usize, indent: usize) -> Vec<St
 ///
 /// YAML takes a literal block's indentation from its first non-empty line, so a value whose
 /// first line is empty or starts with white space would need an explicit indentation indicator
-/// (`|2`). Those are spelled as a quoted string instead: uglier, but never wrong.
+/// (`|2`), and one ending in more than one newline would need `|+`. Those are spelled as a quoted
+/// string instead, by `spell_scalar`: uglier, but never wrong.
 ///
 /// A line that is only white space is fine, and worth allowing: the notes use two trailing
 /// spaces as a Markdown hard line break, and a "blank" line in such a value is really two
@@ -632,14 +759,21 @@ fn is_block_scalar_safe(text: &str) -> bool {
     let Some(first) = text.split('\n').next() else {
         return false;
     };
-    text.contains('\n') && !first.is_empty() && !first.starts_with([' ', '\t'])
+    text.contains('\n') && !first.is_empty() && !first.starts_with([' ', '\t']) && !text.ends_with("\n\n")
 }
 
 /// A scalar on one line, quoted only when it needs to be.
 ///
 /// Sequences and mappings never reach this: `render_entry` handles them as blocks, so nothing
-/// here has to fit a collection onto a line.
+/// here has to fit a collection onto a line. A string of several lines is double-quoted with its
+/// escapes, since `serde_yaml` would write it as a block scalar, which needs lines of its own.
 fn spell_scalar(value: &Value) -> String {
+    if let Value::String(text) = value {
+        if text.contains('\n') {
+            // YAML's double-quoted style takes JSON's escapes.
+            return serde_json::to_string(text).unwrap_or_default();
+        }
+    }
     serde_yaml::to_string(value)
         .map(|text| text.trim_end().trim_end_matches("\n...").trim().to_owned())
         .unwrap_or_default()
@@ -813,6 +947,15 @@ mod tests {
         );
     }
 
+    #[test]
+    fn a_string_no_plain_block_can_hold_is_quoted() {
+        let lone = "---\nevents:\n    A:\n        start: 2025-01-01\n---\n";
+        for note in ["\nafter a blank line", " indented\nsecond", "two trailing\n\n"] {
+            let edited = apply(lone, &[Change::set(&["events", "A", "note"], note)]).unwrap_or_else(|e| panic!("{note:?}: {e}"));
+            assert_eq!(value(&edited).unwrap()["events"]["A"]["note"], note);
+        }
+    }
+
     /// A key whose name YAML would read as something else has to be quoted, or the note would
     /// come back meaning something different.
     #[test]
@@ -822,6 +965,22 @@ mod tests {
         // Whatever spelling was chosen, it must read back as the name that was asked for.
         let parsed: Value = serde_yaml::from_str(&Note::parse(&after).block).expect("valid YAML");
         assert!(parsed["events"].as_mapping().unwrap().contains_key("2026-01-01"));
+    }
+
+    #[test]
+    fn a_key_the_editor_writes_is_one_it_finds_again() {
+        // An apostrophe is not a quote after the key's start, a dash not followed by a space is
+        // not an item, and a colon inside a quoted key does not end it.
+        for name in ["Mom's birthday", "-1on1", "Talk: intro", "'quoted'", "say \"hi\"", "a\\b"] {
+            let created = apply("---\nevents:\n---\n", &[Change::set(&["events", name, "start"], "2026-01-01")])
+                .unwrap_or_else(|e| panic!("{name:?}: {e}"));
+            for change in [
+                Change::set(&["events", name, "color"], "red"),
+                Change::remove(&["events", name]),
+            ] {
+                apply(&created, &[change]).unwrap_or_else(|e| panic!("{name:?}: {e}\n{created}"));
+            }
+        }
     }
 
     /// Flow style is the shape the editor cannot reach into, and it says so instead of guessing.
@@ -848,11 +1007,61 @@ mod tests {
     }
 
     #[test]
+    fn a_fence_that_does_not_close_is_refused_rather_than_doubled() {
+        // A note whose lines end in CRLF past its opening fence closes with `---\r`.
+        let mixed = "---\nevents:\r\n    A:\r\n        start: 2026-09-23\r\n---\r\n\r\n# Body\r\n";
+        let error = apply(mixed, &[Change::set(&["events", "A", "start"], "2026-09-24")]).expect_err("no close seen");
+        assert!(error.0.contains("no closing"), "{error}");
+        let unterminated = "---\ntags: [a]\n\n# Body\n";
+        assert!(apply(unterminated, &[Change::set(&["tags"], Value::Sequence(vec!["b".into()]))]).is_err());
+        // A note with no fence at all still gains a block.
+        assert!(apply("# Body\n", &[Change::set(&["tags"], Value::Sequence(vec!["b".into()]))]).is_ok());
+    }
+
+    #[test]
+    fn a_comment_on_a_keys_line_stays_and_is_not_its_value() {
+        let before = "---\nevents:  # the calendar\n    A:\n        start: 2025-01-02\n---\n";
+        let added = apply(before, &[Change::set(&["events", "A", "color"], "red")]).expect("a set under it");
+        assert_eq!(added, before.replace("2025-01-02\n", "2025-01-02\n        color: red\n"));
+        let empty = "---\nevents: ~   # none yet\n---\n";
+        let filled = apply(empty, &[Change::set(&["events", "A", "start"], "2025-01-02")]).expect("a set under it");
+        assert_eq!(filled, "---\nevents:   # none yet\n    A:\n        start: 2025-01-02\n---\n");
+    }
+
+    #[test]
+    fn a_block_scalars_lines_go_with_it_however_they_read() {
+        // A Markdown heading in an event's note, and a blank line inside it.
+        let lone = "---\nevents:\n    A:\n        note: |\n            Agenda\n\n            # Minutes\n        start: 2025-01-01\n---\n";
+        let replaced = apply(lone, &[Change::set(&["events", "A", "note"], "short")]).expect("a set");
+        assert_eq!(replaced, "---\nevents:\n    A:\n        note: short\n        start: 2025-01-01\n---\n");
+        let removed = apply(lone, &[Change::remove(&["events", "A", "note"])]).expect("a removal");
+        assert_eq!(removed, "---\nevents:\n    A:\n        start: 2025-01-01\n---\n");
+    }
+
+    #[test]
     fn the_body_is_never_touched() {
         let before = "---\ntask:\n    progress: 0\n---\n\n# T\n\n---\n\nA horizontal rule above.\n";
         let after = set(before, &["task", "progress"], 50);
         assert!(after.ends_with("\n# T\n\n---\n\nA horizontal rule above.\n"));
         assert!(after.contains("progress: 50"));
+    }
+
+    /// Older notes write a list's dashes at its key's own indentation, which YAML allows. Those
+    /// dashes are the key's, to remove with it and to replace with it.
+    #[test]
+    fn a_list_at_its_keys_indentation_is_the_keys() {
+        let before = "---\nevents:\n  Meeting:\n    color: light-green\n    times:\n    - start: 2021-01-20 11:00\n    - { start: 2021-01-13 10:00, end: +1h }\n---\n";
+        let after = apply(before, &[Change::remove(&["events", "Meeting", "times"])])
+            .expect("the whole list");
+        assert_eq!(after, "---\nevents:\n  Meeting:\n    color: light-green\n---\n");
+
+        let tags = "---\ntags:\n- 研究室\n- 学生\n---\n\n# Meeting\n";
+        let after = set(tags, &["tags"], Value::Sequence(vec!["研究室".into()]));
+        assert_eq!(after, "---\ntags:\n    - 研究室\n---\n\n# Meeting\n");
+
+        // A key added after such a list goes after its dashes, not among them.
+        let after = set(before, &["events", "Meeting", "location"], "Room 4");
+        assert!(after.ends_with("    - { start: 2021-01-13 10:00, end: +1h }\n    location: Room 4\n---\n"), "{after}");
     }
 }
 

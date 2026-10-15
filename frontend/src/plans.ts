@@ -48,6 +48,17 @@ export function readPlan(text: string, month: string): MonthPlan {
     return result;
 }
 
+// Days in date order and each entry's keys in one order, so that the web app and moried write a
+// month the same way and neither rewrites the whole file after the other has touched it.
+// `fixtures/plans/written.json` holds this to `plans::write` in moried.
+export function writePlan(plan: MonthPlan): string {
+    const ordered: MonthPlan = {};
+    for (const date of Object.keys(plan).sort()) {
+        ordered[date] = plan[date].map(({ task, origin, result }) => ({ task, origin, ...(result !== undefined ? { result } : {}) }));
+    }
+    return YAML.stringify(ordered, { indent: 4 });
+}
+
 export function putPlanEntry(plan: MonthPlan, date: string, task: string, origin: PlanOrigin): void {
     const entries = plan[date] ??= [];
     if (!entries.some((entry) => entry.task === task)) {

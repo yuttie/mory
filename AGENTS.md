@@ -128,7 +128,10 @@ Tools call the same internal functions the HTTP handlers call — `search::run_s
 `find_entry_blob`, `AppState::save_note` and the rest — so an MCP read sees the listing the web
 app sees and an MCP write is an ordinary Git commit. When a handler holds logic a tool needs,
 extract it rather than writing a second copy; that is why `run_search` and `v2::imported_events`
-exist as separate functions from the handlers that call them.
+exist as separate functions from the handlers that call them. A tool that edits what it has read
+-- the task, event and plan tools -- commits only if the file is still the blob it read
+(`AppState::save_note_checked`), so a save the web app made in between is never overwritten;
+`update_note` replaces the file whatever it holds, and says so.
 
 **OAuth artefacts are stateless JWTs** signed with `MORIED_SECRET` and told apart by a `typ`
 claim (`mcp_client`, `mcp_code`, `mcp_access`, `mcp_refresh`). A registered `client_id` is itself
@@ -140,14 +143,16 @@ web session too.
 **Frontmatter is edited in place, never regenerated.** `mcp::frontmatter` finds a key's line,
 changes that line, and leaves every other byte alone; `serde_yaml` then parses both the intended
 result and the edited text, and the edit is refused unless they are the same value. Re-serializing
-was measured against the real 952-note corpus and rejected: a `serde_yaml` round-trip reproduces
-61 notes byte for byte and a post-processor tuned to the house style reaches 494, because what
-the rest lose is comments, block scalars and flow-style entries rather than formatting. The
-in-place editor reproduces 951. `tests::frontmatter_edits_a_real_corpus` is that measurement,
-ignored by default; point `MORY_CORPUS` at a real repository and run it whenever that module
-changes.
+was measured against the real notes, when 952 of them carried frontmatter, and rejected: a
+`serde_yaml` round-trip reproduced 61 of them byte for byte and a post-processor tuned to the house
+style reached 494, because what the rest lose is comments, block scalars and flow-style entries
+rather than formatting. The in-place editor reproduced 951 then, and reproduces all 1,608 a clone
+of 2026-10-05 holds. `tests::frontmatter_edits_a_real_corpus` measures the in-place editor, the
+one-off figures for re-serializing aside, and is ignored by default; point `MORY_CORPUS` at a real
+repository and run it whenever that module changes.
 
-A path under `.tasks/` must keep the UUIDv4 naming `entries_to_tree` derives the task tree from,
+A path under `.tasks/` must keep the UUIDv4 naming the web app derives the task tree from
+(`taskUuidOf` in `frontend/src/task-forest.ts`), which leaves a task named otherwise out of it,
 and `.mory/tasks-v1.yaml` is read-only through MCP — 600 KB of legacy YAML using anchors and aliases
 that a rewrite would silently expand into independent copies.
 
@@ -175,6 +180,21 @@ both read. The two Rust sides at least agree with each other about which notes a
 `tasks::task_of` and `tasks::date_texts` decide that, and what is left to each is the test of a
 value, the leading `YYYY-MM-DD` for the window and the stricter reading `dayjs` gives for the
 scheduler, which also skips a finished task.
+
+`list_tasks` returns each task's urgency and progress as the web app derives them, because a
+model asked what to do next needs them and could not work them out from one task's block. That
+makes `backend/src/urgency.rs` a second copy of `frontend/src/urgency.ts`, and `derived_task` in
+`mcp/tools.rs` a second copy of `urgency` and `progress` in `frontend/src/stores/tasks.ts`:
+`fixtures/urgency/cases.json` holds the first pair to each other and `hierarchy.json` the second,
+so change one, change the other and run both halves. A task's dates, and an event's `start`,
+`until` and `exclusions`, are refused unless `urgency::instant` reads them: a bare date or a
+datetime carrying its offset, the convention below. An event's `end` may also be a time of day
+or a duration, as `normalizeEndTime` reads one.
+
+The plan tools read and write `.mory/plans/` through `backend/src/plans.rs`, which refuses a
+month as `readPlan` does and writes one as `writePlan` does, and each write is checked against
+the blob it replaces (`AppState::save_note_checked`), as the web app's are. Collect undone is the
+web app's alone.
 
 ## The `events:` frontmatter
 
