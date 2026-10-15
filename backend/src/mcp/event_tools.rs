@@ -337,7 +337,7 @@ pub struct EventArgs {
     pub add_instances: Option<Vec<Instance>>,
     /// Occurrences to take off the event's list, named by their `start`. Matched by instant, so
     /// the note's own spelling (`2025-03-14 16:00`) and the same moment with its offset both
-    /// name it.
+    /// name it; a bare date names a whole-day occurrence, never one at midnight.
     #[serde(default)]
     pub remove_instances: Option<Vec<String>>,
     /// Keys to remove from the event entirely.
@@ -483,6 +483,11 @@ fn instance_changes(args: &EventArgs, event: Option<&Value>, zone: Tz) -> Result
         return Err(format!("Clear `{key}` or change its occurrences, not both at once."));
     }
     let starts_at = |item: &Value| note_events::instant_of(item.get("start"), zone);
+    // The calendar draws `2024-05-01` all day and `2024-05-01 00:00:00+09:00` at midnight: the
+    // same instant, two occurrences.
+    let is = |item: &Value, at: i64, whole_day: bool| {
+        starts_at(item) == Some(at) && is_date_only(item.get("start")) == whole_day
+    };
 
     // The list as it stands, edited here as the note will be, so that each index is the one the
     // change before it left. Its order is read before any of that: a newest-first list that a
@@ -507,9 +512,10 @@ fn instance_changes(args: &EventArgs, event: Option<&Value>, zone: Tz) -> Result
                  it or with its offset.",
             ));
         };
+        let whole_day = is_date_only(Some(&Value::String(start.clone())));
         let mut found = false;
         for (key, list, _) in &mut lists {
-            while let Some(index) = list.iter().position(|item| starts_at(item) == Some(at)) {
+            while let Some(index) = list.iter().position(|item| is(item, at, whole_day)) {
                 list.remove(index);
                 changes.push(Change::remove_item(&["events", &args.name, key], index));
                 found = true;
@@ -541,7 +547,8 @@ fn instance_changes(args: &EventArgs, event: Option<&Value>, zone: Tz) -> Result
         let Some(at) = starts_at(&value) else {
             return Err(format!("An instance's `start` {:?} could not be read.", instance.start));
         };
-        if lists.iter().any(|(_, list, _)| list.iter().any(|item| starts_at(item) == Some(at))) {
+        let whole_day = is_date_only(value.get("start"));
+        if lists.iter().any(|(_, list, _)| list.iter().any(|item| is(item, at, whole_day))) {
             return Err(format!(
                 "{:?} already lists an occurrence starting at {:?}. To change it, name it in \
                  `remove_instances` as well.",
@@ -554,6 +561,17 @@ fn instance_changes(args: &EventArgs, event: Option<&Value>, zone: Tz) -> Result
         changes.push(Change::insert(&["events", &args.name, key], index, value));
     }
     Ok(changes)
+}
+
+/// Whether a start is a bare date, as `isDateOnly` in `frontend/src/events.ts` tells one.
+fn is_date_only(start: Option<&Value>) -> bool {
+    start.and_then(Value::as_str).is_some_and(|text| {
+        let text = text.trim();
+        text.len() == 10
+            && text.bytes().enumerate().all(|(index, byte)| {
+                if index == 4 || index == 7 { byte == b'-' } else { byte.is_ascii_digit() }
+            })
+    })
 }
 
 /// Which of an event's lists the calendar draws, as `occurrencesOf` in `frontend/src/api.ts` picks
@@ -1264,6 +1282,20 @@ mod tests {
         assert_eq!(starts(&added), ["instances 2026-01-15", "times 2025-01-08"]);
         // Clearing the list the calendar does not draw is no conflict.
         assert!(edit_and_check(both, serde_json::json!({ "clear": ["times"], "add_instances": [{ "start": "2026-01-15" }] })).is_ok());
+    }
+
+    /// A whole day and midnight on it are the same instant, and two occurrences on the calendar.
+    #[test]
+    fn a_whole_day_is_not_midnight() {
+        let mixed = "---\nevents:\n    Standup:\n        instances:\n            - start: 2024-05-01\n            - start: 2024-05-01 00:00:00+09:00\n              location: Room 4\n            - start: 2024-05-08\n---\n";
+        let removed = edit_and_check(mixed, serde_json::json!({ "remove_instances": ["2024-05-01"] })).expect("a removal");
+        assert_eq!(starts(&removed), ["instances 2024-05-01 00:00:00+09:00", "instances 2024-05-08"]);
+        let removed = edit_and_check(mixed, serde_json::json!({ "remove_instances": ["2024-04-30T15:00:00Z"] })).expect("a removal");
+        assert_eq!(starts(&removed), ["instances 2024-05-01", "instances 2024-05-08"]);
+        let lone = "---\nevents:\n    Standup:\n        instances:\n            - start: 2024-05-01\n---\n";
+        let added = edit_and_check(lone, serde_json::json!({ "add_instances": [{ "start": "2024-05-01 00:00:00+09:00" }] }))
+            .expect("not a duplicate");
+        assert_eq!(starts(&added), ["instances 2024-05-01", "instances 2024-05-01 00:00:00+09:00"]);
     }
 
     /// A note already out of shape is not the edit's doing, and refusing every later edit to it

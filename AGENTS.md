@@ -194,7 +194,8 @@ so change one, change the other and run both halves. A task's dates, and an even
 `urgency::instant` reads them: a bare date or a datetime carrying its offset, the convention below.
 An event's `end` may also be a time of day or a duration, as `normalizeEndTime` reads one. An
 occurrence to remove is matched by instant (`note_events::instant_of`, the twin of `instantOf`), so
-the many older starts written without an offset are read in moried's zone.
+the many older starts written without an offset are read in moried's zone, and by whether it is a
+bare date, since the calendar draws a whole day and midnight on it as two occurrences.
 
 The plan tools read and write `.mory/plans/` through `backend/src/plans.rs`, which refuses a
 month as `readPlan` does and writes one as `writePlan` does, and each write is checked against
