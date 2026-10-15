@@ -412,10 +412,12 @@ impl Mory {
         name = "add_event",
         description = "Add a calendar event to a note's `events:` frontmatter and commit it. \
                        Requires the notes:write scope.\n\nAn event is keyed by its name in that \
-                       map, so the name must not already be taken. `start` is required: a bare \
-                       date makes it an all-day event, a datetime carrying its offset makes it \
-                       a timed one, and the shape is the only thing that says which. `end` may \
-                       be a datetime, a bare time of day, or a duration such as `+1.5h`.\n\nIn \
+                       map, so the name must not already be taken. It needs a `start`, or a \
+                       list of occurrences in `add_instances`, each with its own `start`, for \
+                       one that happens on dates no rule describes. A bare date makes an \
+                       all-day occurrence, a datetime carrying its offset a timed one, and the \
+                       shape is the only thing that says which. `end` may be a datetime, a bare \
+                       time of day, or a duration such as `+1.5h`.\n\nIn \
                        a `repeat` rule, weekdays are three letters (`wed`), not iCal's two, and \
                        may carry an ordinal: `3wed` is the third Wednesday, which needs `freq: \
                        monthly` or `yearly`. `tz` is an IANA zone name such as `Asia/Tokyo`, \
@@ -448,7 +450,15 @@ impl Mory {
                        ordinal, an IANA zone name for `tz`, offsets on datetimes and none on \
                        dates, a `category` that is already configured, and `alarms` as offsets \
                        or times on the day, with `clear: [\"alarms\"]` to go back to the \
-                       category's and the config's.",
+                       category's and the config's.\n\nMany events list their occurrences one \
+                       by one, under `instances` or the older `times`, rather than by a rule. \
+                       To add one or take one out, use `add_instances` and `remove_instances`, \
+                       not `start`, which is the event's own occurrence apart from that list. \
+                       An occurrence to remove is named by its `start`, matched by instant, \
+                       and every occurrence listed at that moment goes. Removing one and adding \
+                       another in the same call replaces it in one commit; the new one has only \
+                       the fields `add_instances` gives it, so repeat any of the old one's to \
+                       keep them. The other occurrences are left as the note wrote them.",
         annotations(title = "Update an event", read_only_hint = false, destructive_hint = true,
                     idempotent_hint = true, open_world_hint = false)
     )]

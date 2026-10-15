@@ -98,6 +98,12 @@ pub enum Change {
     Set { path: Vec<String>, value: Value },
     /// Remove the key at `path`. Removing something absent is not an error.
     Remove { path: Vec<String> },
+    /// Insert `value` into the list at `path` so that it becomes item `index`, creating the list
+    /// if it is missing. The items around it keep their lines, comments and flow style included,
+    /// which setting the whole list would not.
+    Insert { path: Vec<String>, index: usize, value: Value },
+    /// Remove item `index` from the list at `path`.
+    RemoveItem { path: Vec<String>, index: usize },
 }
 
 impl Change {
@@ -114,9 +120,27 @@ impl Change {
         }
     }
 
+    pub fn insert(path: &[&str], index: usize, value: impl Into<Value>) -> Self {
+        Self::Insert {
+            path: path.iter().map(|part| (*part).to_owned()).collect(),
+            index,
+            value: value.into(),
+        }
+    }
+
+    pub fn remove_item(path: &[&str], index: usize) -> Self {
+        Self::RemoveItem {
+            path: path.iter().map(|part| (*part).to_owned()).collect(),
+            index,
+        }
+    }
+
     fn path(&self) -> &[String] {
         match self {
-            Change::Set { path, .. } | Change::Remove { path } => path,
+            Change::Set { path, .. }
+            | Change::Remove { path }
+            | Change::Insert { path, .. }
+            | Change::RemoveItem { path, .. } => path,
         }
     }
 }
@@ -249,6 +273,8 @@ fn already_satisfied(before: &Mapping, change: &Change) -> bool {
     match change {
         Change::Set { value, .. } => existing == Some(value),
         Change::Remove { .. } => existing.is_none(),
+        // A list edit always changes the list.
+        Change::Insert { .. } | Change::RemoveItem { .. } => false,
     }
 }
 
@@ -265,6 +291,16 @@ fn expected_value(before: &Mapping, changes: &[Change]) -> Result<Mapping, EditE
         // create the parent on its way to discovering that.
         if matches!(change, Change::Remove { .. }) {
             remove_under(&mut result, parents, last);
+            continue;
+        }
+        if let Change::RemoveItem { index, .. } = change {
+            let Some(list) = list_under(&mut result, parents, last) else {
+                return Err(refuse(format!("there is no list at `{}`", path.join("."))));
+            };
+            if *index >= list.len() {
+                return Err(refuse(format!("`{}` has no item {index}", path.join("."))));
+            }
+            list.remove(*index);
             continue;
         }
 
@@ -287,11 +323,40 @@ fn expected_value(before: &Mapping, changes: &[Change]) -> Result<Mapping, EditE
             cursor = next;
         }
 
-        if let Change::Set { value, .. } = change {
-            cursor.insert(Value::String(last.clone()), value.clone());
+        match change {
+            Change::Set { value, .. } => {
+                cursor.insert(Value::String(last.clone()), value.clone());
+            },
+            Change::Insert { index, value, .. } => {
+                let entry = cursor.entry(Value::String(last.clone())).or_insert(Value::Null);
+                // `key:` with nothing after it is how a note spells an empty list too.
+                if entry.is_null() {
+                    *entry = Value::Sequence(Vec::new());
+                }
+                let Value::Sequence(list) = entry else {
+                    return Err(refuse(format!(
+                        "`{}` in this note's frontmatter is not a list",
+                        path.join("."),
+                    )));
+                };
+                if *index > list.len() {
+                    return Err(refuse(format!("`{}` has no place {index}", path.join("."))));
+                }
+                list.insert(*index, value.clone());
+            },
+            Change::Remove { .. } | Change::RemoveItem { .. } => {},
         }
     }
     Ok(result)
+}
+
+/// The list at `last` under the mapping `parents` leads to, if there is one.
+fn list_under<'a>(mapping: &'a mut Mapping, parents: &[String], last: &str) -> Option<&'a mut Vec<Value>> {
+    let mut cursor = mapping;
+    for part in parents {
+        cursor = cursor.get_mut(Value::String(part.clone()))?.as_mapping_mut()?;
+    }
+    cursor.get_mut(Value::String(last.to_owned()))?.as_sequence_mut()
 }
 
 /// Removes `last` from the mapping `parents` leads to, if it is there, and says whether it was.
@@ -543,6 +608,19 @@ fn with_value(line: &str, value: &str) -> String {
     format!("{}{}{space}{value}{comment}\n", &line[..indent], &trimmed[..=colon])
 }
 
+/// Refuses a list written other than as a block list, which the item edits do not read: flow
+/// style, an anchor or a tag on the key's line.
+fn check_block_list(line: &str, path: &[String]) -> Result<(), EditError> {
+    if ["", "[]", "null", "~"].contains(&inline_value(line).unwrap_or("")) {
+        return Ok(());
+    }
+    Err(refuse(format!(
+        "`{}` is written in flow style in this note, which the in-place editor will not edit \
+         an item at a time. Use read_note and update_note instead.",
+        path.join("."),
+    )))
+}
+
 fn apply_one(
     lines: &mut Vec<String>,
     default_step: usize,
@@ -601,9 +679,13 @@ fn apply_one(
                 level = child_level;
             },
             None => {
-                // Removing something whose parent does not exist is already done.
-                if matches!(change, Change::Remove { .. }) {
-                    return Ok(());
+                match change {
+                    // Removing something whose parent does not exist is already done.
+                    Change::Remove { .. } => return Ok(()),
+                    Change::RemoveItem { .. } => {
+                        return Err(refuse(format!("there is no list at `{}`", path.join("."))));
+                    },
+                    Change::Set { .. } | Change::Insert { .. } => {},
                 }
                 let at = insertion_point(lines, from, to);
                 lines.insert(at, format!("{}{}:\n", " ".repeat(level), spell_key(part)));
@@ -643,8 +725,98 @@ fn apply_one(
                 },
             }
         },
+        Change::Insert { index, value, .. } => {
+            let whole = || Value::Sequence(vec![value.clone()]);
+            let Some(at) = existing else {
+                let at = insertion_point(lines, from, to);
+                lines.splice(at..at, render_entry(last, &whole(), level, step));
+                return Ok(());
+            };
+            check_block_list(&lines[at], path)?;
+            let items = list_items(lines, at, last)?;
+            let Some(&(first, _)) = items.first() else {
+                // An empty list becomes a block list of one, under the key line as it was.
+                let mut list = vec![with_value(&lines[at], "")];
+                list.extend(render_item(value, level + step, step));
+                lines.splice(at..at + 1, list);
+                return Ok(());
+            };
+            let before = match items.get(*index) {
+                Some(&(start, _)) => start,
+                None => items[items.len() - 1].1,
+            };
+            lines.splice(before..before, render_item(value, indent_of(&lines[first]), step));
+        },
+        Change::RemoveItem { index, .. } => {
+            let Some(at) = existing else {
+                return Err(refuse(format!("there is no list at `{}`", path.join("."))));
+            };
+            check_block_list(&lines[at], path)?;
+            let items = list_items(lines, at, last)?;
+            let Some(&(start, end)) = items.get(*index) else {
+                return Err(refuse(format!("`{}` has no item {index}", path.join("."))));
+            };
+            lines.drain(start..end);
+            // `key:` with nothing under it would read as null; the list is empty, and says so.
+            if items.len() == 1 {
+                lines[at] = with_value(&lines[at], "[]");
+            }
+        },
     }
     Ok(())
+}
+
+/// The half-open range of lines each item of the block list under `lines[at]` occupies.
+///
+/// An item runs from its dash to its last real line, so a comment between two items stays
+/// where it is when either goes. Anything at the items' indentation that is not an item means
+/// the list is not shaped as this expects, and is refused rather than guessed at.
+fn list_items(lines: &[String], at: usize, key: &str) -> Result<Vec<(usize, usize)>, EditError> {
+    let (from, to) = child_range(lines, at);
+    let mut items: Vec<(usize, usize)> = Vec::new();
+    let mut item_indent = None;
+    let mut i = from;
+    while i < to {
+        let line = &lines[i];
+        if is_filler(line) {
+            if is_items_comment(line, item_indent) {
+                if let Some(item) = items.last_mut() {
+                    item.1 = i + 1;
+                }
+            }
+            i += 1;
+            continue;
+        }
+        let indent = indent_of(line);
+        let expected = *item_indent.get_or_insert(indent);
+        let trimmed = line.trim();
+        if indent < expected || (indent == expected && trimmed != "-" && !trimmed.starts_with("- ")) {
+            return Err(refuse(format!(
+                "`{key}` in this note is not a list the in-place editor can change. Use \
+                 read_note and update_note instead.",
+            )));
+        }
+        let next = block_scalar_end(lines, i).unwrap_or(i + 1);
+        match items.last_mut() {
+            Some(item) if indent > expected => item.1 = next,
+            _ => items.push((i, next)),
+        }
+        i = next;
+    }
+    // `child_range` leaves trailing comments out of the list, and the last item's are its own.
+    if let Some(item) = items.last_mut() {
+        while item.1 < lines.len() && is_items_comment(&lines[item.1], item_indent) {
+            item.1 += 1;
+        }
+    }
+    Ok(items)
+}
+
+/// Whether a line is a comment indented past the items' dashes, such as a field written out of
+/// use (`# end: 12:00` under `- start: …`), which goes with the item above it rather than staying
+/// behind when it is removed or ending up under the next one added.
+fn is_items_comment(line: &str, item_indent: Option<usize>) -> bool {
+    line.trim_start().starts_with('#') && item_indent.is_some_and(|dash| indent_of(line) > dash)
 }
 
 /// Where a new key at `level` goes: after the last real line of the range, before its trailing
@@ -696,9 +868,8 @@ fn render_entry(key: &str, value: &Value, level: usize, indent: usize) -> Vec<St
         Value::Sequence(items) if items.is_empty() => vec![format!("{pad}{key}: []\n")],
         Value::Sequence(items) => {
             let mut lines = vec![format!("{pad}{key}:\n")];
-            let item_pad = " ".repeat(level + indent);
             for item in items {
-                lines.push(format!("{item_pad}- {}\n", spell_scalar(item)));
+                lines.extend(render_item(item, level + indent, indent));
             }
             lines
         },
@@ -706,13 +877,7 @@ fn render_entry(key: &str, value: &Value, level: usize, indent: usize) -> Vec<St
         Value::Mapping(entries) => {
             let mut lines = vec![format!("{pad}{key}:\n")];
             for (child_key, child_value) in entries {
-                let child_key = match child_key {
-                    Value::String(text) => text.clone(),
-                    other => serde_yaml::to_string(other)
-                        .map(|text| text.trim().to_owned())
-                        .unwrap_or_default(),
-                };
-                lines.extend(render_entry(&child_key, child_value, level + indent, indent));
+                lines.extend(render_entry(&key_text(child_key), child_value, level + indent, indent));
             }
             lines
         },
@@ -744,6 +909,35 @@ fn render_entry(key: &str, value: &Value, level: usize, indent: usize) -> Vec<St
     }
 }
 
+/// A mapping key as text, for `render_entry` to spell.
+fn key_text(key: &Value) -> String {
+    match key {
+        Value::String(text) => text.clone(),
+        other => serde_yaml::to_string(other).map(|text| text.trim().to_owned()).unwrap_or_default(),
+    }
+}
+
+/// One list item, as the lines it occupies, its dash at `level`.
+///
+/// A mapping or a list is written at the level its contents sit at, two past the dash, and the
+/// dash then takes the place of its first line's indentation: `- start: …` with `end: …` lined
+/// up under `start`, as the notes write their `times:`.
+fn render_item(value: &Value, level: usize, indent: usize) -> Vec<String> {
+    let pad = " ".repeat(level);
+    let mut lines: Vec<String> = match value {
+        Value::Mapping(entries) if !entries.is_empty() => entries
+            .iter()
+            .flat_map(|(key, child)| render_entry(&key_text(key), child, level + 2, indent))
+            .collect(),
+        Value::Sequence(items) if !items.is_empty() => {
+            items.iter().flat_map(|item| render_item(item, level + 2, indent)).collect()
+        },
+        scalar => return vec![format!("{pad}- {}\n", spell_scalar(scalar))],
+    };
+    lines[0] = format!("{pad}- {}", &lines[0][level + 2..]);
+    lines
+}
+
 /// Whether a string can be written as a plain block scalar and read back unchanged.
 ///
 /// YAML takes a literal block's indentation from its first non-empty line, so a value whose
@@ -764,9 +958,10 @@ fn is_block_scalar_safe(text: &str) -> bool {
 
 /// A scalar on one line, quoted only when it needs to be.
 ///
-/// Sequences and mappings never reach this: `render_entry` handles them as blocks, so nothing
-/// here has to fit a collection onto a line. A string of several lines is double-quoted with its
-/// escapes, since `serde_yaml` would write it as a block scalar, which needs lines of its own.
+/// Only empty sequences and mappings reach this, as `[]` and `{}`: `render_entry` and
+/// `render_item` write the rest as blocks, so nothing here has to fit a collection onto a line.
+/// A string of several lines is double-quoted with its escapes, since `serde_yaml` would write it
+/// as a block scalar, which needs lines of its own.
 fn spell_scalar(value: &Value) -> String {
     if let Value::String(text) = value {
         if text.contains('\n') {
@@ -953,6 +1148,9 @@ mod tests {
         for note in ["\nafter a blank line", " indented\nsecond", "two trailing\n\n"] {
             let edited = apply(lone, &[Change::set(&["events", "A", "note"], note)]).unwrap_or_else(|e| panic!("{note:?}: {e}"));
             assert_eq!(value(&edited).unwrap()["events"]["A"]["note"], note);
+            let item = Value::Mapping(Mapping::from_iter([("start".into(), "2025-01-02".into()), ("note".into(), note.into())]));
+            apply(lone, &[Change::insert(&["events", "A", "times"], 0, item)]).unwrap_or_else(|e| panic!("{note:?} in an item: {e}"));
+            apply(lone, &[Change::insert(&["events", "A", "times"], 0, note)]).unwrap_or_else(|e| panic!("{note:?} as an item: {e}"));
         }
     }
 
@@ -976,6 +1174,7 @@ mod tests {
                 .unwrap_or_else(|e| panic!("{name:?}: {e}"));
             for change in [
                 Change::set(&["events", name, "color"], "red"),
+                Change::insert(&["events", name, "instances"], 0, Value::Mapping(Mapping::from_iter([("start".into(), "2026-01-08".into())]))),
                 Change::remove(&["events", name]),
             ] {
                 apply(&created, &[change]).unwrap_or_else(|e| panic!("{name:?}: {e}\n{created}"));
@@ -1062,6 +1261,198 @@ mod tests {
         // A key added after such a list goes after its dashes, not among them.
         let after = set(before, &["events", "Meeting", "location"], "Room 4");
         assert!(after.ends_with("    - { start: 2021-01-13 10:00, end: +1h }\n    location: Room 4\n---\n"), "{after}");
+    }
+
+    fn occurrence(fields: &[(&str, &str)]) -> Value {
+        let mut mapping = Mapping::new();
+        for (key, value) in fields {
+            mapping.insert((*key).into(), (*value).into());
+        }
+        Value::Mapping(mapping)
+    }
+
+    /// Shaped as real notes write their `times:`: block items and flow items in one list, a
+    /// multi-line note, and a commented-out candidate between two items.
+    const LISTED: &str = "---\n\
+                          events:\n\
+                          \x20   Committee:\n\
+                          \x20       times:\n\
+                          \x20           - { start: 2024-12-02 13:00, end: +1.5h }\n\
+                          \x20           - start: 2025-03-14 16:00\n\
+                          \x20             note: |\n\
+                          \x20               Room 826\n\
+                          \x20               bring the minutes\n\
+                          \x20           # - start: 2025-04-01 10:00\n\
+                          \x20           - start: 2025-05-20 14:50\n\
+                          \x20             end: 16:20\n\
+                          ---\n\n# Committee\n";
+    const TIMES: &[&str] = &["events", "Committee", "times"];
+
+    /// One item goes in among the others, which keep their lines: a flow item stays a flow item
+    /// and the comment stays where it was.
+    #[test]
+    fn an_item_is_inserted_without_touching_the_others() {
+        let item = occurrence(&[("start", "2025-04-08 10:00:00+09:00"), ("end", "+1h")]);
+        let after = apply(LISTED, &[Change::insert(TIMES, 2, item)]).expect("an insert");
+        assert_eq!(
+            after,
+            LISTED.replace(
+                "            - start: 2025-05-20 14:50\n",
+                "            - start: 2025-04-08 10:00:00+09:00\n              end: +1h\n            - start: 2025-05-20 14:50\n",
+            ),
+        );
+
+        let last = occurrence(&[("start", "2025-06-01")]);
+        let after = apply(LISTED, &[Change::insert(TIMES, 3, last)]).expect("an append");
+        assert_eq!(
+            after,
+            LISTED.replace("              end: 16:20\n", "              end: 16:20\n            - start: 2025-06-01\n"),
+        );
+    }
+
+    /// An item takes the list's own indentation, here two past its key rather than four.
+    #[test]
+    fn an_item_is_written_at_the_lists_own_indentation() {
+        let before = "---\nevents:\n    Lab:\n        times:\n          - start: 2021-02-10 15:00\n---\n";
+        let item = occurrence(&[("start", "2021-02-17"), ("note", "E-B-340")]);
+        let after = apply(before, &[Change::insert(&["events", "Lab", "times"], 1, item)]).expect("an insert");
+        assert!(
+            after.ends_with("          - start: 2021-02-10 15:00\n          - start: 2021-02-17\n            note: E-B-340\n---\n"),
+            "{after}",
+        );
+    }
+
+    /// A list that is not there, or is empty, becomes a block list of one, with a multi-line
+    /// value kept as a block scalar inside the item.
+    #[test]
+    fn a_missing_or_empty_list_is_started() {
+        let before = "---\nevents:\n    Talk:\n        color: teal\n---\n";
+        let item = occurrence(&[("start", "2026-11-05 10:00:00+09:00"), ("note", "Room 4\nbring slides\n")]);
+        let after = apply(before, &[Change::insert(&["events", "Talk", "instances"], 0, item.clone())])
+            .expect("a new list");
+        assert!(
+            after.contains(
+                "        instances:\n            - start: 2026-11-05 10:00:00+09:00\n              note: |\n                  Room 4\n                  bring slides\n",
+            ),
+            "{after}",
+        );
+
+        let empty = "---\nevents:\n    Talk:\n        instances: []\n---\n";
+        let after = apply(empty, &[Change::insert(&["events", "Talk", "instances"], 0, item)])
+            .expect("the first item");
+        assert!(after.contains("        instances:\n            - start: 2026-11-05"), "{after}");
+    }
+
+    /// An item goes with every line it spans, block scalar included, and the comment above the
+    /// next one stays. The last one going leaves `[]` rather than a key that reads as null.
+    #[test]
+    fn an_item_is_removed_with_its_lines_and_nothing_else() {
+        let after = apply(LISTED, &[Change::remove_item(TIMES, 1)]).expect("a removal");
+        assert_eq!(
+            after,
+            LISTED.replace(
+                "            - start: 2025-03-14 16:00\n              note: |\n                Room 826\n                bring the minutes\n",
+                "",
+            ),
+        );
+
+        let lone = "---\nevents:\n    Lab:\n        times:\n            - start: 2021-02-10 15:00\n        color: teal\n---\n";
+        let after = apply(lone, &[Change::remove_item(&["events", "Lab", "times"], 0)]).expect("a removal");
+        assert_eq!(after, "---\nevents:\n    Lab:\n        times: []\n        color: teal\n---\n");
+    }
+
+    /// Older notes write a list's dashes at its key's own indentation, and an item goes in or
+    /// comes out at the same indentation.
+    #[test]
+    fn a_list_at_its_keys_indentation_takes_items_at_it() {
+        let before = "---\nevents:\n  Meeting:\n    color: light-green\n    times:\n    - start: 2021-01-20 11:00\n    - { start: 2021-01-13 10:00, end: +1h }\n---\n";
+        let list = &["events", "Meeting", "times"];
+
+        let after = apply(before, &[Change::insert(list, 0, occurrence(&[("start", "2021-01-27"), ("end", "+1h")]))])
+            .expect("an insert");
+        assert_eq!(
+            after,
+            before.replace("    times:\n", "    times:\n    - start: 2021-01-27\n      end: +1h\n"),
+        );
+
+        let after = apply(before, &[Change::remove_item(list, 1)]).expect("a removal");
+        assert_eq!(after, before.replace("    - { start: 2021-01-13 10:00, end: +1h }\n", ""));
+    }
+
+    #[test]
+    fn a_comment_on_a_list_keys_line_stays_through_its_item_edits() {
+        let times = ["events", "A", "times"];
+        let before = "---\nevents:  # the calendar\n    A:\n        times:   # newest first\n            - start: 2025-01-02\n        color: red\n---\n";
+        let added = apply(before, &[Change::insert(&times, 0, occurrence(&[("start", "2025-01-03")]))]).expect("an insert");
+        assert_eq!(added, before.replace("            - start: 2025-01-02\n", "            - start: 2025-01-03\n            - start: 2025-01-02\n"));
+        let emptied = apply(before, &[Change::remove_item(&times, 0)]).expect("a removal");
+        assert_eq!(emptied, "---\nevents:  # the calendar\n    A:\n        times: []   # newest first\n        color: red\n---\n");
+        let refilled = apply(&emptied, &[Change::insert(&times, 0, occurrence(&[("start", "2025-01-04")]))]).expect("an insert");
+        assert_eq!(refilled, before.replace("2025-01-02", "2025-01-04"));
+    }
+
+    #[test]
+    fn removing_from_a_flow_list_says_it_is_flow_style() {
+        let flow = "---\nevents:\n    A:\n        times: [{ start: 2025-01-02 }, { start: 2025-01-01 }]\n---\n";
+        let error = apply(flow, &[Change::remove_item(&["events", "A", "times"], 0)]).expect_err("flow style");
+        assert!(error.0.contains("flow style"), "{error}");
+    }
+
+    #[test]
+    fn an_items_block_scalar_goes_with_it_however_it_reads() {
+        let times = ["events", "A", "times"];
+        // A Markdown heading in an occurrence's note, and a blank line inside it.
+        let before = "---\nevents:\n    A:\n        times:\n            - start: 2025-01-01\n              note: |\n                  Agenda\n\n                  # Minutes\n---\n";
+        let appended = apply(before, &[Change::insert(&times, 1, occurrence(&[("start", "2025-01-02")]))]).expect("an append");
+        assert_eq!(appended, before.replace("# Minutes\n---", "# Minutes\n            - start: 2025-01-02\n---"));
+        let removed = apply(before, &[Change::remove_item(&times, 0)]).expect("a removal");
+        assert_eq!(removed, "---\nevents:\n    A:\n        times: []\n---\n");
+        // A scalar that keeps its trailing newlines keeps the blank lines after it.
+        let kept = "---\nevents:\n    A:\n        times:\n            - start: 2025-01-01\n              note: |+\n                  Agenda\n\n---\n";
+        let appended = apply(kept, &[Change::insert(&times, 1, occurrence(&[("start", "2025-01-02")]))]).expect("an append");
+        assert!(appended.ends_with("Agenda\n\n            - start: 2025-01-02\n---\n"), "{appended}");
+    }
+
+    #[test]
+    fn a_comment_under_an_item_goes_with_it() {
+        let times = ["events", "A", "times"];
+        let before = "---\nevents:\n    A:\n        times:\n            - start: 2025-01-01\n              # end: 2025-01-01 12:00\n            - start: 2025-01-08\n              # end: 2025-01-08 12:00\n        color: red\n---\n";
+        let appended = apply(before, &[Change::insert(&times, 2, occurrence(&[("start", "2025-01-15")]))]).expect("an append");
+        assert_eq!(appended, before.replace("        color", "            - start: 2025-01-15\n        color"));
+        let first = apply(before, &[Change::remove_item(&times, 0)]).expect("a removal");
+        assert_eq!(first, before.replace("            - start: 2025-01-01\n              # end: 2025-01-01 12:00\n", ""));
+        let last = apply(before, &[Change::remove_item(&times, 1)]).expect("a removal");
+        assert_eq!(last, before.replace("            - start: 2025-01-08\n              # end: 2025-01-08 12:00\n", ""));
+        // One at the dashes' own indentation is the list's, and stays.
+        let between = "---\nevents:\n    A:\n        times:\n            - start: 2025-01-01\n            # - start: 2025-01-04\n            - start: 2025-01-08\n---\n";
+        let removed = apply(between, &[Change::remove_item(&times, 0)]).expect("a removal");
+        assert_eq!(removed, between.replace("            - start: 2025-01-01\n", ""));
+    }
+
+    /// Several list edits apply in order, each to the list the one before left.
+    #[test]
+    fn list_edits_apply_in_order() {
+        let moved = occurrence(&[("start", "2025-03-21 16:00:00+09:00")]);
+        let after = apply(LISTED, &[Change::remove_item(TIMES, 1), Change::insert(TIMES, 1, moved)])
+            .expect("a move");
+        let times = value(&after).unwrap()["events"]["Committee"]["times"].clone();
+        let starts: Vec<_> = times.as_sequence().unwrap().iter().map(|item| item["start"].as_str().unwrap()).collect();
+        assert_eq!(starts, ["2024-12-02 13:00", "2025-03-21 16:00:00+09:00", "2025-05-20 14:50"]);
+    }
+
+    /// A flow list would have to be rewritten whole, and a missing item is a mistake to report.
+    #[test]
+    fn a_list_the_editor_cannot_change_is_refused() {
+        let flow = "---\nevents:\n    Lab:\n        times: [{ start: 2021-02-10 15:00 }]\n---\n";
+        let error = apply(flow, &[Change::insert(&["events", "Lab", "times"], 1, occurrence(&[("start", "2021-02-17")]))])
+            .expect_err("flow style");
+        assert!(error.0.contains("flow style"), "{error}");
+
+        let error = apply(LISTED, &[Change::remove_item(TIMES, 3)]).expect_err("there are three");
+        assert!(error.0.contains("no item 3"), "{error}");
+        let error = apply(LISTED, &[Change::remove_item(&["events", "Committee", "instances"], 0)])
+            .expect_err("no such list");
+        assert!(error.0.contains("no list"), "{error}");
     }
 }
 

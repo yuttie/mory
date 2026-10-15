@@ -147,7 +147,10 @@ was measured against the real notes, when 952 of them carried frontmatter, and r
 `serde_yaml` round-trip reproduced 61 of them byte for byte and a post-processor tuned to the house
 style reached 494, because what the rest lose is comments, block scalars and flow-style entries
 rather than formatting. The in-place editor reproduced 951 then, and reproduces all 1,608 a clone
-of 2026-10-05 holds. `tests::frontmatter_edits_a_real_corpus` measures the in-place editor, the
+of 2026-10-05 holds. A list of occurrences is edited an item at a time for the same
+reason, so the items around one keep their lines, flow style and comments included: an event's
+`instances` or `times` is where most of the notes keep a series, and setting the list whole would
+rewrite all of it. `tests::frontmatter_edits_a_real_corpus` measures the in-place editor, the
 one-off figures for re-serializing aside, and is ignored by default; point `MORY_CORPUS` at a real
 repository and run it whenever that module changes.
 
@@ -187,9 +190,12 @@ makes `backend/src/urgency.rs` a second copy of `frontend/src/urgency.ts`, and `
 `mcp/tools.rs` a second copy of `urgency` and `progress` in `frontend/src/stores/tasks.ts`:
 `fixtures/urgency/cases.json` holds the first pair to each other and `hierarchy.json` the second,
 so change one, change the other and run both halves. A task's dates, and an event's `start`,
-`until` and `exclusions`, are refused unless `urgency::instant` reads them: a bare date or a
-datetime carrying its offset, the convention below. An event's `end` may also be a time of day
-or a duration, as `normalizeEndTime` reads one.
+`until`, `exclusions` and the `start` of an occurrence it lists, are refused unless
+`urgency::instant` reads them: a bare date or a datetime carrying its offset, the convention below.
+An event's `end` may also be a time of day or a duration, as `normalizeEndTime` reads one. An
+occurrence to remove is matched by instant (`note_events::instant_of`, the twin of `instantOf`), so
+the many older starts written without an offset are read in moried's zone, and by whether it is a
+bare date, since the calendar draws a whole day and midnight on it as two occurrences.
 
 The plan tools read and write `.mory/plans/` through `backend/src/plans.rs`, which refuses a
 month as `readPlan` does and writes one as `writePlan` does, and each write is checked against
