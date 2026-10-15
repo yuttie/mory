@@ -18,6 +18,7 @@ import {
     isAllDay,
     isFromFeed,
     isInHiddenCategory,
+    linkableUrl,
     taskDatesFromEntries,
     mergeImported,
     normalizeEndTime,
@@ -1585,5 +1586,23 @@ describe('isFromFeed', () => {
     it('does not hold for an event the user wrote', () => {
         const [own] = derive([entry('notes/sync.md', { Sync: { start: '2024-05-02 10:00', note: 'Agenda' } })]).events;
         expect(isFromFeed(own)).toBe(false);
+    });
+});
+
+describe('linkableUrl', () => {
+    it('links the web and mail', () => {
+        expect(linkableUrl('https://meet.example/x')).toBe('https://meet.example/x');
+        expect(linkableUrl('http://example.com')).toBe('http://example.com');
+        expect(linkableUrl('mailto:someone@example.com')).toBe('mailto:someone@example.com');
+    });
+
+    // `<a href>` runs a `javascript:` URL as the page that holds it, and a feed chooses its own.
+    it('links nothing that would run', () => {
+        expect(linkableUrl('javascript:alert(1)')).toBeUndefined();
+        expect(linkableUrl(' JaVaScRiPt:alert(1)')).toBeUndefined();
+        expect(linkableUrl('java\tscript:alert(1)')).toBeUndefined();
+        expect(linkableUrl('data:text/html,<script>alert(1)</script>')).toBeUndefined();
+        expect(linkableUrl('not a url')).toBeUndefined();
+        expect(linkableUrl(undefined)).toBeUndefined();
     });
 });

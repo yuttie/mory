@@ -220,10 +220,14 @@
                         </v-list-item>
                         <v-list-item v-if="selectedEvent.url" v-bind:prepend-icon="mdiLinkVariant">
                             <a
-                                v-bind:href="selectedEvent.url"
+                                v-if="selectedEventHref"
+                                v-bind:href="selectedEventHref"
                                 rel="noopener"
                                 target="_blank"
                             >{{ selectedEvent.url }}</a>
+                            <template v-else>
+                                {{ selectedEvent.url }}
+                            </template>
                         </v-list-item>
                         <v-list-item v-if="selectedEvent.taskId" v-bind:prepend-icon="mdiCheckboxMarkedOutline">
                             <router-link v-bind:to="taskRoute(selectedEvent.taskId)">{{ selectedEvent.name }}</router-link>
@@ -303,6 +307,7 @@ import {
     eventsFromEntries,
     isFromFeed,
     isInHiddenCategory,
+    linkableUrl,
     mergeImported,
     resolveCategory,
     taskDatesFromEntries,
@@ -391,6 +396,7 @@ const taskDates = computed(() => taskDatesFromEntries(
     eventWindow.value,
     { colorOf: calendars.taskDateColors, alarmDefaults: calendars.alarmDefaults },
 ));
+const selectedEventHref = computed(() => linkableUrl(selectedEvent.value?.url));
 // What the selected event rings at, in words. Nothing for one that is over, which never rings, nor
 // for one with no alarms, which would only say so on every all-day event; and not an imported one,
 // whose calendar is someone else's.
