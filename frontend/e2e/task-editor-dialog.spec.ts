@@ -715,6 +715,17 @@ test('keeps the editor open when a delete fails', async ({ context, page }) => {
     await expect(title(page)).toHaveValue('Step');
 });
 
+// Deleting its file would leave Step at the top of the tree, with nothing to say what it was part of.
+test('deletes no task that has subtasks', async ({ context, page }) => {
+    const repository = await mockBackend(context, NOTES);
+    await page.goto(`/tasks-next/_/descendants/status?task=${PROJECT}`);
+    await expect(title(page)).toHaveValue('Project');
+    await dialog(page).getByRole('button', { name: 'Delete', exact: true }).click();
+    await expect(page.getByText('Could not delete "Project": It has subtasks.')).toBeVisible();
+    expect(repository.deletes).toEqual([]);
+    await expect(title(page)).toHaveValue('Project');
+});
+
 // Its list was of what lay under it, which went with it.
 test('deletes the selected task, and lists every task', async ({ context, page }) => {
     const repository = await mockBackend(context, NOTES);
