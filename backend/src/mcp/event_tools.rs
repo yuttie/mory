@@ -478,22 +478,26 @@ fn instance_changes(args: &EventArgs, event: Option<&Value>, zone: Tz) -> Result
     if adds.is_empty() && removes.is_empty() {
         return Ok(Vec::new());
     }
-    if let Some(key) = args.clear.iter().flatten().find(|key| matches!(key.as_str(), "instances" | "times")) {
+    let drawn = drawn_list(event);
+    if let Some(key) = args.clear.iter().flatten().find(|key| Some(key.as_str()) == drawn) {
         return Err(format!("Clear `{key}` or change its occurrences, not both at once."));
     }
     let starts_at = |item: &Value| note_events::instant_of(item.get("start"), zone);
 
-    // The lists as they stand, edited here as the note will be, so that each index is the one the
-    // change before it left. Each one's order is read before any of that: a newest-first list
-    // that a removal leaves holding one item no longer shows it.
-    let mut lists: Vec<(&str, Vec<Value>, Order)> = ["instances", "times"]
-        .into_iter()
-        .filter_map(|key| {
-            let list = event?.get(key)?.as_sequence()?.clone();
-            let order = order_of(&list, starts_at);
-            Some((key, list, order))
-        })
-        .collect();
+    // The list as it stands, edited here as the note will be, so that each index is the one the
+    // change before it left. Its order is read before any of that: a newest-first list that a
+    // removal leaves holding one item no longer shows it.
+    let mut lists: Vec<(&str, Vec<Value>, Order)> = Vec::new();
+    if let Some(key) = drawn {
+        let Some(list) = event.and_then(|event| event.get(key)?.as_sequence()) else {
+            return Err(format!(
+                "`{key}` in {:?} is not a list of occurrences. Use read_note and update_note to \
+                 repair it.",
+                args.name,
+            ));
+        };
+        lists.push((key, list.clone(), order_of(list, starts_at)));
+    }
     let mut changes = Vec::new();
 
     for start in removes {
@@ -527,8 +531,8 @@ fn instance_changes(args: &EventArgs, event: Option<&Value>, zone: Tz) -> Result
         }
     }
 
-    // New occurrences join the list the event keeps, `instances` before the older `times`, so an
-    // event is never given a second list by being added to.
+    // New occurrences join the list the calendar draws, so an event is never given a second list
+    // by being added to.
     if !adds.is_empty() && lists.is_empty() {
         lists.push(("instances", Vec::new(), Order::Ascending));
     }
@@ -550,6 +554,14 @@ fn instance_changes(args: &EventArgs, event: Option<&Value>, zone: Tz) -> Result
         changes.push(Change::insert(&["events", &args.name, key], index, value));
     }
     Ok(changes)
+}
+
+/// Which of an event's lists the calendar draws, as `occurrencesOf` in `frontend/src/api.ts` picks
+/// it: `instances` unless it is missing or null, else the older `times`. The other is never drawn,
+/// so the tools neither search it nor add to it, and an occurrence there does not count as one.
+fn drawn_list(event: Option<&Value>) -> Option<&'static str> {
+    let event = event?;
+    ["instances", "times"].into_iter().find(|key| event.get(*key).is_some_and(|value| !value.is_null()))
 }
 
 /// The order a list keeps its occurrences in. The notes keep both.
@@ -624,7 +636,8 @@ fn event_in(text: &str, name: &str) -> Option<Value> {
 /// with its `anyOf` and `dependencies`: something to draw, and a rule under what adjusts it.
 ///
 /// Stricter than the schema in one place: an empty list of instances satisfies it, but draws
-/// nothing, so it does not count as an occurrence here.
+/// nothing, so it does not count as an occurrence here, and nor does a list the calendar does not
+/// draw.
 fn shape_faults(event: Option<&Value>) -> Vec<&'static str> {
     let Some(event) = event else {
         return Vec::new();
@@ -633,11 +646,12 @@ fn shape_faults(event: Option<&Value>) -> Vec<&'static str> {
     let empty = Mapping::new();
     let event = event.as_mapping().unwrap_or(&empty);
     let has = |key: &str| event.get(key).is_some_and(|value| !value.is_null());
-    let listed = |key: &str| {
+    let wrapped = Value::Mapping(event.clone());
+    let listed = drawn_list(Some(&wrapped)).is_some_and(|key| {
         event.get(key).and_then(Value::as_sequence).is_some_and(|list| !list.is_empty())
-    };
+    });
     let mut faults = Vec::new();
-    if !has("start") && !listed("instances") && !listed("times") {
+    if !has("start") && !listed {
         faults.push(
             "It would have nothing to draw: no `start` and no listed occurrence. Use \
              remove_event to remove an event.",
@@ -1226,6 +1240,30 @@ mod tests {
         }))
         .expect_err("nothing left");
         assert!(error.contains("remove_event"), "{error}");
+    }
+
+    /// The calendar draws `instances` when an event has both lists, so that is the list edited,
+    /// and the one that has to keep an occurrence.
+    #[test]
+    fn the_list_edited_is_the_one_the_calendar_draws() {
+        let both = "---\nevents:\n    Standup:\n        instances:\n            - start: 2026-01-08\n        times:\n            - start: 2025-01-08\n---\n";
+        let error = edit_and_check(both, serde_json::json!({ "remove_instances": ["2026-01-08"] }))
+            .expect_err("times is not drawn");
+        assert!(error.contains("remove_event"), "{error}");
+        let error = edit_and_check(both, serde_json::json!({ "remove_instances": ["2025-01-08"] }))
+            .expect_err("not in the drawn list");
+        assert!(error.contains("Those it lists start at: 2026-01-08."), "{error}");
+        let added = edit_and_check(both, serde_json::json!({ "add_instances": [{ "start": "2025-01-08" }] }))
+            .expect("not a duplicate of what is not drawn");
+        assert_eq!(starts(&added), ["instances 2025-01-08", "instances 2026-01-08", "times 2025-01-08"]);
+
+        // An empty `instances` hides `times`, so it is the one added to.
+        let hidden = both.replace("        instances:\n            - start: 2026-01-08\n", "        instances: []\n");
+        let added = edit_and_check(&hidden, serde_json::json!({ "add_instances": [{ "start": "2026-01-15" }] }))
+            .expect("an addition");
+        assert_eq!(starts(&added), ["instances 2026-01-15", "times 2025-01-08"]);
+        // Clearing the list the calendar does not draw is no conflict.
+        assert!(edit_and_check(both, serde_json::json!({ "clear": ["times"], "add_instances": [{ "start": "2026-01-15" }] })).is_ok());
     }
 
     /// A note already out of shape is not the edit's doing, and refusing every later edit to it
