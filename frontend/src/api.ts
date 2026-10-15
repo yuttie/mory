@@ -267,7 +267,8 @@ export async function saveFileChecked(path: string, content: string, expectedETa
 }
 
 export function getNote(path: string) {
-  return getAxios().get(`/notes/${encodePath(path)}`);
+  // As `getFile`: a note is text, and axios would parse one that happens to be JSON.
+  return getAxios().get(`/notes/${encodePath(path)}`, { responseType: 'text' });
 }
 
 // Whether a path exists, without transferring its content. Used for the rename dialog's

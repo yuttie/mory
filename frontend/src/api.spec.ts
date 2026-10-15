@@ -29,7 +29,14 @@ beforeEach(() => {
 describe('the requests for a note', () => {
     it('reads a note by its encoded path', async () => {
         await getNote(ODD_PATH);
-        expect(client.get).toHaveBeenCalledWith(`/notes/${ENCODED_ODD_PATH}`);
+        expect(client.get.mock.calls[0][0]).toBe(`/notes/${ENCODED_ODD_PATH}`);
+    });
+
+    // Axios otherwise parses a body that happens to be JSON: a `.json` note, or a settings file in
+    // the JSON that YAML also is, would reach the editor or the parser as an object.
+    it('reads a note as the text it holds, even where that is JSON', async () => {
+        await getNote('data.json');
+        expect(client.get.mock.calls[0][1]).toMatchObject({ responseType: 'text' });
     });
 
     it('saves a note to its encoded path', async () => {
@@ -77,7 +84,7 @@ describe('the requests for a note', () => {
 
     it('keeps the slashes of an ordinary path', async () => {
         await getNote('research/programming-learning/codewalker.md');
-        expect(client.get).toHaveBeenCalledWith('/notes/research/programming-learning/codewalker.md');
+        expect(client.get.mock.calls[0][0]).toBe('/notes/research/programming-learning/codewalker.md');
     });
 });
 
