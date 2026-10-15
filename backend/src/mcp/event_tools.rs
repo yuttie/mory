@@ -334,12 +334,13 @@ pub struct EventArgs {
     /// join the list the event keeps, `instances` or the older `times`, where their date puts
     /// them: newest or oldest first as the list runs, as the note's other lists run when it is too
     /// short to show, else newest first; at the end of a list in no order. Taking one out with
-    /// `remove_instances` and adding it here moves it.
+    /// `remove_instances` and adding it here replaces it, with only the fields given here.
     #[serde(default)]
     pub add_instances: Option<Vec<Instance>>,
     /// Occurrences to take off the event's list, named by their `start`. Matched by instant, so
     /// the note's own spelling (`2025-03-14 16:00`) and the same moment with its offset both
-    /// name it; a bare date names a whole-day occurrence, never one at midnight.
+    /// name it; a bare date names a whole-day occurrence, never one at midnight. Every occurrence
+    /// listed at that moment is removed.
     #[serde(default)]
     pub remove_instances: Option<Vec<String>>,
     /// Keys to remove from the event entirely.

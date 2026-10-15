@@ -454,9 +454,11 @@ impl Mory {
                        by one, under `instances` or the older `times`, rather than by a rule. \
                        To add one or take one out, use `add_instances` and `remove_instances`, \
                        not `start`, which is the event's own occurrence apart from that list. \
-                       An occurrence to remove is named by its `start`, matched by instant; \
-                       removing one and adding another in the same call moves it. The other \
-                       occurrences are left as the note wrote them.",
+                       An occurrence to remove is named by its `start`, matched by instant, \
+                       and every occurrence listed at that moment goes. Removing one and adding \
+                       another in the same call replaces it in one commit; the new one has only \
+                       the fields `add_instances` gives it, so repeat any of the old one's to \
+                       keep them. The other occurrences are left as the note wrote them.",
         annotations(title = "Update an event", read_only_hint = false, destructive_hint = true,
                     idempotent_hint = true, open_world_hint = false)
     )]
