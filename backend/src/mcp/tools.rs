@@ -128,7 +128,9 @@ pub struct ReadArgs {
 struct ReadOutput {
     path: String,
     content: String,
-    /// Present only when the note was longer than this tool will return in one call.
+    /// Present only when the note was longer than this tool will return in one call: how many
+    /// of its bytes `content` holds, which a cut at a character boundary can leave short of the
+    /// limit.
     #[serde(skip_serializing_if = "Option::is_none")]
     truncated_at_bytes: Option<usize>,
 }
@@ -166,10 +168,11 @@ pub async fn read_note(state: &AppState, args: ReadArgs) -> Result<CallToolResul
         },
     };
 
+    let truncated_at_bytes = truncated.then_some(content.len());
     json_result(&ReadOutput {
         path: path.to_owned(),
         content,
-        truncated_at_bytes: truncated.then_some(MAX_NOTE_BYTES),
+        truncated_at_bytes,
     })
 }
 

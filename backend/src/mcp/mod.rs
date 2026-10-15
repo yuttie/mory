@@ -484,8 +484,11 @@ impl Mory {
 
     #[tool(
         name = "read_note",
-        description = "Read one note's full Markdown source, YAML frontmatter included, by the \
-                       exact repository path a search result reported.",
+        description = "Read one note's Markdown source, YAML frontmatter included, by the \
+                       exact repository path a search result reported.\n\nA file over 256 KiB \
+                       is cut there, at a character boundary, and `truncated_at_bytes` says how \
+                       much was returned; search_notes in `grep` mode still finds text in the \
+                       rest.",
         annotations(title = "Read a note", read_only_hint = true, open_world_hint = false)
     )]
     pub async fn read_note(
