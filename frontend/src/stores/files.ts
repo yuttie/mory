@@ -51,10 +51,13 @@ export const useFilesStore = defineStore('files', () => {
     // consumer already reads through.
     let entryMap: Map<string, ListEntry2> = new Map();
 
-    // Whether `entryMap` still matches the persisted rows exactly. An optimistic patch clears it:
+    // The commit `entryMap` describes exactly, or `null` once an optimistic patch has touched it:
     // a delta is computed by the backend against the persisted commit, so applying one to a
-    // locally-patched map would compound the patch instead of replacing it.
-    let mapIsPersisted = false;
+    // locally-patched map would compound the patch instead of replacing it. A commit rather than a
+    // flag because the persisted rows are shared by every tab: another tab's sync moves them on
+    // while this map stays where it was, and a delta from their commit would then skip whatever
+    // happened in between.
+    let mapCommit: string | null = null;
 
     // When the last sync returned a commit older than HEAD, so `list()` does not spin while the
     // backend finishes a rebuild.
@@ -112,9 +115,9 @@ export const useFilesStore = defineStore('files', () => {
         else {
             // A delta is computed against the persisted rows, so it has to be applied to them --
             // never to a map an optimistic patch has already touched, which would compound the
-            // patch rather than replace it.
+            // patch rather than replace it, nor to one another tab's sync has left behind.
             let next: Map<string, ListEntry2>;
-            if (mapIsPersisted) {
+            if (mapCommit === base) {
                 next = new Map(entryMap);
             }
             else {
@@ -144,7 +147,7 @@ export const useFilesStore = defineStore('files', () => {
             entryMap = next;
             await applyEntryDelta(response.commit, response.changed, response.deleted);
         }
-        mapIsPersisted = true;
+        mapCommit = response.commit;
 
         if (response.commit === response.head) {
             validatedCommitIdRef.value = response.commit;
@@ -235,7 +238,7 @@ export const useFilesStore = defineStore('files', () => {
     async function patchEntries(patch: (entries: ListEntry2[]) => ListEntry2[]): Promise<void> {
         const patched = patch(Array.from(entryMap.values()));
         entryMap = new Map(patched.map((entry) => [entry.path, entry]));
-        mapIsPersisted = false;
+        mapCommit = null;
         publish();
         invalidate();
     }
@@ -244,7 +247,7 @@ export const useFilesStore = defineStore('files', () => {
     // private repository and must not outlive the session that fetched it.
     async function clear(): Promise<void> {
         entryMap = new Map();
-        mapIsPersisted = false;
+        mapCommit = null;
         entriesRef.value = [];
         errorRef.value = null;
         invalidate();
