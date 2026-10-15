@@ -2593,9 +2593,10 @@ fn corpus_notes(dir: &Path) -> Vec<std::path::PathBuf> {
 /// Two passes, asserting the two things the module claims.
 ///
 /// **Adding a key and removing it again is byte-identical.** This is the ordinary shape of an
-/// edit and the whole reason the editor is textual: measured on a 952-note corpus, this holds for
-/// 951 and refuses the one note whose YAML is genuinely invalid. Re-serializing the block with
-/// `serde_yaml` instead reproduces 61.
+/// edit and the whole reason the editor is textual: on a clone of the notes from 2026-10-05 this
+/// holds for all 1,608 that carry frontmatter. An earlier one held 952, of which it held for 951,
+/// refusing the one whose YAML was genuinely invalid, and re-serializing the block with
+/// `serde_yaml` reproduced 61.
 ///
 /// **Changing every scalar and changing it back preserves the note's meaning and its body.** Not
 /// its bytes: this pass overwrites block scalars, which destroys the body indentation the author

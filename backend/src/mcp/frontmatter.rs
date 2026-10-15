@@ -1,15 +1,15 @@
 //! Editing a note's YAML frontmatter in place, one key at a time.
 //!
 //! The obvious implementation -- parse the block, change the value, serialize it back -- was
-//! measured against the real repository and rejected. Of the 952 notes carrying frontmatter, a
-//! `serde_yaml` round-trip reproduces 61 byte for byte. A post-processor tuned to the house style
-//! (four-space nesting, sequences indented under their key, an empty value left empty rather than
-//! spelled `null`) reaches 494. The remaining 458 cannot be reached at all, because what they
+//! measured against the real repository and rejected. Of the 952 notes that carried frontmatter
+//! then, a `serde_yaml` round-trip reproduced 61 byte for byte. A post-processor tuned to the house
+//! style (four-space nesting, sequences indented under their key, an empty value left empty rather
+//! than spelled `null`) reached 494. The remaining 458 cannot be reached at all, because what they
 //! lose is not formatting: comments are dropped, block scalars are reflowed, and flow-style
 //! entries such as `{ start: 2025-10-06 13:00, end: +1.5h }` are expanded. One real note keeps a
 //! commented-out list of candidate interview dates directly under its `events:` block; a
 //! round-trip deletes it. "The notes must outlive the app" is not compatible with rewriting nine
-//! notes in ten every time a task's progress changes.
+//! notes in ten every time a task's status changes.
 //!
 //! So the edit is textual: find the key's line, change that line, leave every other byte alone.
 //! Text manipulation being what it is, the result is then checked against an oracle --

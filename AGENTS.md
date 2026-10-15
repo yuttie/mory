@@ -143,12 +143,13 @@ web session too.
 **Frontmatter is edited in place, never regenerated.** `mcp::frontmatter` finds a key's line,
 changes that line, and leaves every other byte alone; `serde_yaml` then parses both the intended
 result and the edited text, and the edit is refused unless they are the same value. Re-serializing
-was measured against the real 952-note corpus and rejected: a `serde_yaml` round-trip reproduces
-61 notes byte for byte and a post-processor tuned to the house style reaches 494, because what
-the rest lose is comments, block scalars and flow-style entries rather than formatting. The
-in-place editor reproduces 951. `tests::frontmatter_edits_a_real_corpus` is that measurement,
-ignored by default; point `MORY_CORPUS` at a real repository and run it whenever that module
-changes.
+was measured against the real notes, when 952 of them carried frontmatter, and rejected: a
+`serde_yaml` round-trip reproduced 61 of them byte for byte and a post-processor tuned to the house
+style reached 494, because what the rest lose is comments, block scalars and flow-style entries
+rather than formatting. The in-place editor reproduced 951 then, and reproduces all 1,608 a clone
+of 2026-10-05 holds. `tests::frontmatter_edits_a_real_corpus` measures the in-place editor, the
+one-off figures for re-serializing aside, and is ignored by default; point `MORY_CORPUS` at a real
+repository and run it whenever that module changes.
 
 A path under `.tasks/` must keep the UUIDv4 naming the web app derives the task tree from
 (`taskUuidOf` in `frontend/src/task-forest.ts`), which leaves a task named otherwise out of it,
