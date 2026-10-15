@@ -779,6 +779,11 @@ fn list_items(lines: &[String], at: usize, key: &str) -> Result<Vec<(usize, usiz
     while i < to {
         let line = &lines[i];
         if is_filler(line) {
+            if is_items_comment(line, item_indent) {
+                if let Some(item) = items.last_mut() {
+                    item.1 = i + 1;
+                }
+            }
             i += 1;
             continue;
         }
@@ -798,7 +803,20 @@ fn list_items(lines: &[String], at: usize, key: &str) -> Result<Vec<(usize, usiz
         }
         i = next;
     }
+    // `child_range` leaves trailing comments out of the list, and the last item's are its own.
+    if let Some(item) = items.last_mut() {
+        while item.1 < lines.len() && is_items_comment(&lines[item.1], item_indent) {
+            item.1 += 1;
+        }
+    }
     Ok(items)
+}
+
+/// Whether a line is a comment indented past the items' dashes, such as a field written out of
+/// use (`# end: 12:00` under `- start: …`), which goes with the item above it rather than staying
+/// behind when it is removed or ending up under the next one added.
+fn is_items_comment(line: &str, item_indent: Option<usize>) -> bool {
+    line.trim_start().starts_with('#') && item_indent.is_some_and(|dash| indent_of(line) > dash)
 }
 
 /// Where a new key at `level` goes: after the last real line of the range, before its trailing
@@ -1393,6 +1411,22 @@ mod tests {
         let kept = "---\nevents:\n    A:\n        times:\n            - start: 2025-01-01\n              note: |+\n                  Agenda\n\n---\n";
         let appended = apply(kept, &[Change::insert(&times, 1, occurrence(&[("start", "2025-01-02")]))]).expect("an append");
         assert!(appended.ends_with("Agenda\n\n            - start: 2025-01-02\n---\n"), "{appended}");
+    }
+
+    #[test]
+    fn a_comment_under_an_item_goes_with_it() {
+        let times = ["events", "A", "times"];
+        let before = "---\nevents:\n    A:\n        times:\n            - start: 2025-01-01\n              # end: 2025-01-01 12:00\n            - start: 2025-01-08\n              # end: 2025-01-08 12:00\n        color: red\n---\n";
+        let appended = apply(before, &[Change::insert(&times, 2, occurrence(&[("start", "2025-01-15")]))]).expect("an append");
+        assert_eq!(appended, before.replace("        color", "            - start: 2025-01-15\n        color"));
+        let first = apply(before, &[Change::remove_item(&times, 0)]).expect("a removal");
+        assert_eq!(first, before.replace("            - start: 2025-01-01\n              # end: 2025-01-01 12:00\n", ""));
+        let last = apply(before, &[Change::remove_item(&times, 1)]).expect("a removal");
+        assert_eq!(last, before.replace("            - start: 2025-01-08\n              # end: 2025-01-08 12:00\n", ""));
+        // One at the dashes' own indentation is the list's, and stays.
+        let between = "---\nevents:\n    A:\n        times:\n            - start: 2025-01-01\n            # - start: 2025-01-04\n            - start: 2025-01-08\n---\n";
+        let removed = apply(between, &[Change::remove_item(&times, 0)]).expect("a removal");
+        assert_eq!(removed, between.replace("            - start: 2025-01-01\n", ""));
     }
 
     /// Several list edits apply in order, each to the list the one before left.
