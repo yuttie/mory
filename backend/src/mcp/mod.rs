@@ -318,7 +318,7 @@ impl Mory {
                        blocked_by, `on_hold` needs hold_reason, `canceled` needs cancel_reason. \
                        `done` and `canceled` default their timestamp to now. Setting the status \
                        a task already has changes only the keys given and keeps the rest.",
-        annotations(title = "Update a task", read_only_hint = false, destructive_hint = false,
+        annotations(title = "Update a task", read_only_hint = false, destructive_hint = true,
                     idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn update_task(
@@ -384,7 +384,7 @@ impl Mory {
                        `due_by_alarms` and `deadline_alarms` say when each rings, as offsets \
                        (`-1h`) or times on its day (`09:00`, `-1d 18:00`).",
         annotations(title = "Set a task's dates", read_only_hint = false,
-                    destructive_hint = false, idempotent_hint = true, open_world_hint = false)
+                    destructive_hint = true, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn set_task_dates(
         &self,
@@ -438,7 +438,7 @@ impl Mory {
                        dates, a `category` that is already configured, and `alarms` as offsets \
                        or times on the day, with `clear: [\"alarms\"]` to go back to the \
                        category's and the config's.",
-        annotations(title = "Update an event", read_only_hint = false, destructive_hint = false,
+        annotations(title = "Update an event", read_only_hint = false, destructive_hint = true,
                     idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn update_event(
@@ -538,7 +538,7 @@ impl Mory {
                        day's plan, and a result it already has is refused rather than \
                        committed again.",
         annotations(title = "Record a plan result", read_only_hint = false,
-                    destructive_hint = false, idempotent_hint = true, open_world_hint = false)
+                    destructive_hint = true, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn record_plan_result(
         &self,
