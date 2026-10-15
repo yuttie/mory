@@ -16,6 +16,7 @@ import {
     eventEndsAt,
     eventsFromEntries,
     isAllDay,
+    isFromFeed,
     isInHiddenCategory,
     taskDatesFromEntries,
     mergeImported,
@@ -1559,5 +1560,30 @@ describe('readCategories', () => {
         for (const block of [undefined, null, 5, 'meeting', ['meeting']]) {
             expect(readCategories(block), JSON.stringify(block)).toEqual([]);
         }
+    });
+});
+
+describe('isFromFeed', () => {
+    const imported: ImportedOccurrence = {
+        calendar: 'work',
+        uid: 'sync@example.com',
+        recurrence_id: '2024-05-01 10:00:00+00:00',
+        name: 'Sync',
+        start: '2024-05-01 10:00:00+00:00',
+        note: 'Agenda',
+    };
+
+    it('holds for an imported event and for a note converted from one', () => {
+        const [fromFeed] = mergeImported([], [imported]);
+        const [converted] = derive([entry('.events/converted.md', {
+            Sync: { start: '2024-05-02 10:00', note: 'Agenda', ical: { calendar: 'work', uid: 'other@example.com' } },
+        })]).events;
+        expect(isFromFeed(fromFeed)).toBe(true);
+        expect(isFromFeed(converted)).toBe(true);
+    });
+
+    it('does not hold for an event the user wrote', () => {
+        const [own] = derive([entry('notes/sync.md', { Sync: { start: '2024-05-02 10:00', note: 'Agenda' } })]).events;
+        expect(isFromFeed(own)).toBe(false);
     });
 });

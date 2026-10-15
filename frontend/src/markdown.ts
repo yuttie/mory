@@ -7,6 +7,7 @@ import { remarkDefinitionList, defListHastHandlers } from 'remark-definition-lis
 import remarkMath from 'remark-math';
 import remarkRehype from 'remark-rehype';
 import rehypeRaw from 'rehype-raw';
+import rehypeSanitize from 'rehype-sanitize';
 import myRehypeEmbedLineNumbers from '@/rehype-embed-line-numbers';
 import myRehypeLazyLoadImages from '@/rehype-lazy-load-images';
 import rehypeUrlInspector from '@jsdevtools/rehype-url-inspector';
@@ -83,17 +84,17 @@ type AnyProcessor = Processor<any, any, any, any, string>;
 // progressive chunk rendering) don't rebuild the pipeline.
 const processorCache = new Map<string, Promise<AnyProcessor>>();
 
-async function getProcessor(features: PipelineFeatures): Promise<AnyProcessor> {
-  const key = `${features.math ? 'm' : ''}${features.mermaid ? 'd' : ''}:${features.languages.join(',')}`;
+async function getProcessor(features: PipelineFeatures, untrusted: boolean): Promise<AnyProcessor> {
+  const key = `${untrusted ? 'u' : ''}${features.math ? 'm' : ''}${features.mermaid ? 'd' : ''}:${features.languages.join(',')}`;
   let cached = processorCache.get(key);
   if (!cached) {
-    cached = buildProcessor(features);
+    cached = buildProcessor(features, untrusted);
     processorCache.set(key, cached);
   }
   return cached;
 }
 
-async function buildProcessor(features: PipelineFeatures): Promise<AnyProcessor> {
+async function buildProcessor(features: PipelineFeatures, untrusted: boolean): Promise<AnyProcessor> {
   // Load heavyweight plugins and highlight.js grammars in parallel, only
   // when needed.
   const [rehypeKatex, rehypeMermaid, grammars] = await Promise.all([
@@ -119,6 +120,9 @@ async function buildProcessor(features: PipelineFeatures): Promise<AnyProcessor>
       allowDangerousHtml: true,
     })
     .use(rehypeRaw)
+    // GitHub's schema, before anything below adds markup of its own: what it removes is the markup
+    // that runs, and the formatting a feed's description uses survives it.
+    .use(untrusted ? [rehypeSanitize] : [])
     .use(myRehypeEmbedLineNumbers)
     .use(myRehypeLazyLoadImages)
     .use(rehypeUrlInspector, {
@@ -160,8 +164,19 @@ async function buildProcessor(features: PipelineFeatures): Promise<AnyProcessor>
   }) as AnyProcessor;
 }
 
-export async function renderMarkdown(markdown: string): Promise<VFile> {
-  const processor = await getProcessor(detectFeatures(markdown));
+export interface RenderOptions {
+  // Text that is not the user's, such as a subscribed calendar's description. A note's raw HTML is
+  // rendered as written, scripts and all, because the user wrote it; someone else's would run as
+  // mory, with the session token in reach.
+  untrusted?: boolean;
+}
+
+export async function renderMarkdown(markdown: string, options: RenderOptions = {}): Promise<VFile> {
+  const untrusted = options.untrusted ?? false;
+  const features = detectFeatures(markdown);
+  // Mermaid draws its diagram in the live page after the sanitizer has run, so someone else's
+  // diagram stays the code block it was written as.
+  const processor = await getProcessor(untrusted ? { ...features, mermaid: false } : features, untrusted);
   const file = await processor.process(markdown);
   return file;
 }

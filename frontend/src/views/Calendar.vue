@@ -301,6 +301,7 @@ import {
     DEFAULT_IMPORTED_COLOR,
     eventEndsAt,
     eventsFromEntries,
+    isFromFeed,
     isInHiddenCategory,
     mergeImported,
     resolveCategory,
@@ -760,7 +761,7 @@ watch(selectedEvent, async (newValue) => {
         selectedEventRenderedNote.value = null;
     }
     else {
-        const renderedFile = await renderMarkdown(newValue.note);
+        const renderedFile = await renderMarkdown(newValue.note, { untrusted: isFromFeed(newValue) });
         const renderedHtml = String(renderedFile);
         selectedEventRenderedNote.value = renderedHtml;
     }

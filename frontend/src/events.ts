@@ -211,6 +211,13 @@ export interface CalendarEvent {
     alarms?: string[];
 }
 
+/// Whether what an event says came from a subscribed feed: an imported event, or a note converted
+/// from one, whose `note` is still the feed's description. Someone else's text is rendered for what
+/// it says and never as markup that runs (`renderMarkdown`'s `untrusted`).
+export function isFromFeed(event: CalendarEvent): boolean {
+    return event.source === 'ical' || event.calendar !== undefined || event.uid !== undefined;
+}
+
 // `[property, offending value, event name, note path, note title]` -- the shape `Calendar.vue`
 // renders in its error alert, kept as a tuple so that view needs no changes.
 export type EventError = [string, unknown, string, string, string | null];
