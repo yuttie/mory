@@ -608,6 +608,19 @@ fn with_value(line: &str, value: &str) -> String {
     format!("{}{}{space}{value}{comment}\n", &line[..indent], &trimmed[..=colon])
 }
 
+/// Refuses a list written other than as a block list, which the item edits do not read: flow
+/// style, an anchor or a tag on the key's line.
+fn check_block_list(line: &str, path: &[String]) -> Result<(), EditError> {
+    if ["", "[]", "null", "~"].contains(&inline_value(line).unwrap_or("")) {
+        return Ok(());
+    }
+    Err(refuse(format!(
+        "`{}` is written in flow style in this note, which the in-place editor will not edit \
+         an item at a time. Use read_note and update_note instead.",
+        path.join("."),
+    )))
+}
+
 fn apply_one(
     lines: &mut Vec<String>,
     default_step: usize,
@@ -719,13 +732,7 @@ fn apply_one(
                 lines.splice(at..at, render_entry(last, &whole(), level, step));
                 return Ok(());
             };
-            let inline = inline_value(&lines[at]).unwrap_or("");
-            if !["", "[]", "null", "~"].contains(&inline) {
-                return Err(refuse(format!(
-                    "`{last}` is written in flow style in this note, which the in-place editor \
-                     will not edit. Use read_note and update_note instead.",
-                )));
-            }
+            check_block_list(&lines[at], path)?;
             let items = list_items(lines, at, last)?;
             let Some(&(first, _)) = items.first() else {
                 // An empty list becomes a block list of one, under the key line as it was.
@@ -744,6 +751,7 @@ fn apply_one(
             let Some(at) = existing else {
                 return Err(refuse(format!("there is no list at `{}`", path.join("."))));
             };
+            check_block_list(&lines[at], path)?;
             let items = list_items(lines, at, last)?;
             let Some(&(start, end)) = items.get(*index) else {
                 return Err(refuse(format!("`{}` has no item {index}", path.join("."))));
@@ -1358,6 +1366,13 @@ mod tests {
         assert_eq!(emptied, "---\nevents:  # the calendar\n    A:\n        times: []   # newest first\n        color: red\n---\n");
         let refilled = apply(&emptied, &[Change::insert(&times, 0, occurrence(&[("start", "2025-01-04")]))]).expect("an insert");
         assert_eq!(refilled, before.replace("2025-01-02", "2025-01-04"));
+    }
+
+    #[test]
+    fn removing_from_a_flow_list_says_it_is_flow_style() {
+        let flow = "---\nevents:\n    A:\n        times: [{ start: 2025-01-02 }, { start: 2025-01-01 }]\n---\n";
+        let error = apply(flow, &[Change::remove_item(&["events", "A", "times"], 0)]).expect_err("flow style");
+        assert!(error.0.contains("flow style"), "{error}");
     }
 
     /// Several list edits apply in order, each to the list the one before left.
