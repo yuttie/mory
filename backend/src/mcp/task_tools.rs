@@ -207,7 +207,7 @@ pub async fn update_task(
     state: &AppState,
     args: UpdateTaskArgs,
 ) -> Result<CallToolResult, ErrorData> {
-    let path = match safe_path(&args.path) {
+    let path = match safe_path(&args.path).and_then(task_path) {
         Ok(path) => path,
         Err(message) => return Ok(tool_error(message)),
     };
@@ -301,6 +301,19 @@ pub async fn cancel_task(
         },
     )
     .await
+}
+
+/// Refuses a path outside the task tree, where a `task:` block makes no task: neither the web app
+/// nor `list_tasks` would show it.
+fn task_path(path: String) -> Result<String, String> {
+    if crate::tasks::in_task_tree(&path) {
+        return Ok(path);
+    }
+    Err(format!(
+        "{path:?} is not in the task tree, so a `task:` block there would not make it a task. \
+         Tasks live under `.tasks/`, named by a UUIDv4; list_tasks lists them, and create_task \
+         makes one.",
+    ))
 }
 
 /// An `UpdateTaskArgs` with nothing set, so the wrappers above can name only what they mean.
@@ -477,7 +490,7 @@ pub async fn set_task_dates(
     state: &AppState,
     args: SetTaskDatesArgs,
 ) -> Result<CallToolResult, ErrorData> {
-    let path = match safe_path(&args.path) {
+    let path = match safe_path(&args.path).and_then(task_path) {
         Ok(path) => path,
         Err(message) => return Ok(tool_error(message)),
     };
@@ -742,6 +755,16 @@ mod tests {
         // Another kind still starts afresh.
         let reopened = apply(done, &status_changes(&args("t.md"), "todo", current(done).as_ref()).unwrap());
         assert!(!reopened.contains("completed_at"), "{reopened}");
+    }
+
+    #[test]
+    fn a_task_tool_edits_only_the_task_tree() {
+        let uuid = "4955857d-3267-4b94-83f2-538a428970d7";
+        assert!(task_path(format!(".tasks/report-{uuid}.md")).is_ok());
+        assert!(task_path(format!(".tasks/{uuid}/{uuid}.md")).is_ok());
+        for outside in [format!("notes/{uuid}.md"), "ideas.md".to_owned(), ".tasks/report.md".to_owned()] {
+            assert!(task_path(outside.clone()).unwrap_err().contains("task tree"), "{outside}");
+        }
     }
 
     /// The status's own dates follow the notes' convention, as the arguments describe them.
