@@ -360,40 +360,61 @@ fn detect_indent(lines: &[String]) -> usize {
     DEFAULT_INDENT
 }
 
+/// Whether a line, leading white space removed, is a list item's dash. `-1on1:` is a key.
+fn is_dash(trimmed: &str) -> bool {
+    trimmed.strip_prefix('-').is_some_and(|rest| rest.is_empty() || rest.starts_with(char::is_whitespace))
+}
+
+/// Where the `:` that ends a line's key is, the line's leading white space removed: the first one
+/// at the end of the line or followed by white space, past the closing quote of a quoted key.
+///
+/// A quote opens a quoted key only at its start. `Mom's birthday:` is a plain key with an
+/// apostrophe in it, and `'Talk: intro':` a quoted one with a colon in it.
+fn key_end(trimmed: &str) -> Option<usize> {
+    let bytes = trimmed.as_bytes();
+    let mut from = 0;
+    if let Some(&quote @ (b'"' | b'\'')) = bytes.first() {
+        let mut i = 1;
+        loop {
+            let &byte = bytes.get(i)?;
+            if quote == b'"' && byte == b'\\' {
+                i += 2;
+                continue;
+            }
+            // `''` is a quote inside a single-quoted key.
+            if quote == b'\'' && byte == b'\'' && bytes.get(i + 1) == Some(&b'\'') {
+                i += 2;
+                continue;
+            }
+            if byte == quote {
+                break;
+            }
+            i += 1;
+        }
+        from = i + 1;
+    }
+    (from..bytes.len()).find(|&i| {
+        bytes[i] == b':' && bytes.get(i + 1).is_none_or(|next| next.is_ascii_whitespace())
+    })
+}
+
 /// The key a line declares, or `None` when it declares none.
 ///
 /// The key is parsed rather than compared as text, so a quoted key matches the name it spells.
 fn key_of(line: &str) -> Option<String> {
     let trimmed = line.trim_start();
-    if is_filler(line) || trimmed.starts_with('-') {
+    if is_filler(line) || is_dash(trimmed) {
         return None;
     }
-    // Find the `:` that ends the key: either at the end of the line or followed by whitespace.
-    let bytes = trimmed.as_bytes();
-    let mut quote: Option<u8> = None;
-    for (i, &byte) in bytes.iter().enumerate() {
-        match quote {
-            Some(open) if byte == open => quote = None,
-            Some(_) => {},
-            None if byte == b'"' || byte == b'\'' => quote = Some(byte),
-            None if byte == b':' => {
-                let ends_key = bytes.get(i + 1).is_none_or(|next| next.is_ascii_whitespace());
-                if ends_key {
-                    let raw = &trimmed[..i];
-                    return serde_yaml::from_str::<Value>(raw)
-                        .ok()
-                        .and_then(|value| match value {
-                            Value::String(key) => Some(key),
-                            other => serde_yaml::to_string(&other)
-                                .ok()
-                                .map(|text| text.trim().to_owned()),
-                        });
-                }
-            },
-            None => {},
-        }
-    }
-    None
+    let raw = &trimmed[..key_end(trimmed)?];
+    serde_yaml::from_str::<Value>(raw)
+        .ok()
+        .and_then(|value| match value {
+            Value::String(key) => Some(key),
+            other => serde_yaml::to_string(&other)
+                .ok()
+                .map(|text| text.trim().to_owned()),
+        })
 }
 
 /// The half-open range of lines belonging to the value nested under `lines[at]`.
@@ -437,9 +458,7 @@ fn find_key(lines: &[String], from: usize, to: usize, indent: usize, key: &str) 
 /// Whether a key line's value continues onto following lines rather than sitting on the line.
 fn inline_value(line: &str) -> Option<&str> {
     let trimmed = line.trim_start().trim_end_matches('\n').trim_end();
-    let colon = trimmed.find(": ").map(|i| i + 1).or_else(|| {
-        trimmed.ends_with(':').then_some(trimmed.len() - 1)
-    })?;
+    let colon = key_end(trimmed)?;
     Some(trimmed[colon + 1..].trim_start())
 }
 
@@ -557,8 +576,18 @@ fn insertion_point(lines: &[String], from: usize, to: usize) -> usize {
     at
 }
 
-/// A key, quoted only when it needs to be.
+/// A key, quoted only when it needs to be, and always as `key_of` reads it back: a key the
+/// editor writes and then cannot find is an event no tool can change or remove.
 fn spell_key(key: &str) -> String {
+    let spelled = spell_key_plainly(key);
+    if key_of(&format!("{spelled}:\n")).as_deref() == Some(key) {
+        return spelled;
+    }
+    // YAML's double-quoted style takes JSON's escapes.
+    serde_json::to_string(key).unwrap_or(spelled)
+}
+
+fn spell_key_plainly(key: &str) -> String {
     let simple = !key.is_empty()
         && !key.starts_with(['#', '-', '?', '&', '*', '!', '|', '>', '%', '@', '`', '"', '\''])
         && !key.contains(':')
@@ -838,6 +867,22 @@ mod tests {
         // Whatever spelling was chosen, it must read back as the name that was asked for.
         let parsed: Value = serde_yaml::from_str(&Note::parse(&after).block).expect("valid YAML");
         assert!(parsed["events"].as_mapping().unwrap().contains_key("2026-01-01"));
+    }
+
+    #[test]
+    fn a_key_the_editor_writes_is_one_it_finds_again() {
+        // An apostrophe is not a quote after the key's start, a dash not followed by a space is
+        // not an item, and a colon inside a quoted key does not end it.
+        for name in ["Mom's birthday", "-1on1", "Talk: intro", "'quoted'", "say \"hi\"", "a\\b"] {
+            let created = apply("---\nevents:\n---\n", &[Change::set(&["events", name, "start"], "2026-01-01")])
+                .unwrap_or_else(|e| panic!("{name:?}: {e}"));
+            for change in [
+                Change::set(&["events", name, "color"], "red"),
+                Change::remove(&["events", name]),
+            ] {
+                apply(&created, &[change]).unwrap_or_else(|e| panic!("{name:?}: {e}\n{created}"));
+            }
+        }
     }
 
     /// Flow style is the shape the editor cannot reach into, and it says so instead of guessing.
