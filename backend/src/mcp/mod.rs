@@ -254,9 +254,10 @@ impl Mory {
     #[tool(
         name = "rename_note",
         description = "Move a note to another path and commit it. Requires the notes:write \
-                       scope.\n\nA note under `.tasks/` must keep a UUIDv4 at the end of its \
-                       file name, so renaming a task usually means changing only the readable \
-                       prefix in front of it. Fails rather than overwriting an existing file.",
+                       scope.\n\nA task keeps the UUIDv4 its file name ends with, since the \
+                       day plans name it by that UUID and its subtasks live in the directory it \
+                       names: renaming one means changing only the readable prefix in front of \
+                       it. Fails rather than overwriting an existing file.",
         annotations(title = "Rename a note", read_only_hint = false, destructive_hint = false,
                     idempotent_hint = false, open_world_hint = false)
     )]

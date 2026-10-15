@@ -1060,12 +1060,30 @@ pub async fn delete_note(
 pub struct RenameNoteArgs {
     /// The note's current repository path.
     pub from: String,
-    /// Where it should be. A path under `.tasks/` must keep the UUID naming the task tree is
-    /// built from, so renaming a task usually means changing only the readable prefix.
+    /// Where it should be. A task keeps the UUID its file name ends with, so renaming one means
+    /// changing only the readable prefix before it.
     pub to: String,
     /// The commit message. Omit for "Rename <from> to <to>", which is what the web app writes.
     #[serde(default)]
     pub message: Option<String>,
+}
+
+/// Refuses a rename that gives a task another UUID within the task tree. The day plans name a task
+/// by its UUID, and its subtasks live in the directory named by it, so the renamed task would lose
+/// both; the web app never changes it.
+fn check_task_uuid_kept(from: &str, to: &str) -> Result<(), String> {
+    let uuid = |path: &str| {
+        let stem = path.strip_suffix(".md")?;
+        Some(stem.get(stem.len().checked_sub(36)?..)?.to_ascii_lowercase())
+    };
+    if crate::tasks::in_task_tree(from) && to.starts_with(crate::tasks::TASKS_DIR) && uuid(from) != uuid(to) {
+        return Err(format!(
+            "{from:?} is a task, and its UUID must stay the same: day plans name it by that UUID, \
+             and its subtasks live in the directory it names. Change only the readable prefix \
+             before it.",
+        ));
+    }
+    Ok(())
 }
 
 pub async fn rename_note(
@@ -1082,6 +1100,9 @@ pub async fn rename_note(
     };
     if from == to {
         return Ok(tool_error("The source and destination are the same path."));
+    }
+    if let Err(message) = check_task_uuid_kept(&from, &to) {
+        return Ok(tool_error(message));
     }
     if crate::find_entry_blob(state, &to).await.is_some() {
         return Ok(tool_error(format!("{to:?} already exists.")));
@@ -1362,6 +1383,19 @@ mod tests {
         assert!(message.starts_with("Not an alarm:"), "{message}");
         // A `\` continuation inside the literal once went missing and left a run of spaces.
         assert!(!message.contains("  "), "{message:?}");
+    }
+
+    #[test]
+    fn a_task_keeps_its_uuid_through_a_rename() {
+        let uuid = "4955857d-3267-4b94-83f2-538a428970d7";
+        let other = "2a997a71-0d2b-4938-b8ff-5178c28a5ad9";
+        let from = format!(".tasks/report-{uuid}.md");
+        assert!(check_task_uuid_kept(&from, &format!(".tasks/final-report-{uuid}.md")).is_ok());
+        assert!(check_task_uuid_kept(&from, &format!(".tasks/{other}/report-{}.md", uuid.to_uppercase())).is_ok());
+        assert!(check_task_uuid_kept(&from, &format!(".tasks/report-{other}.md")).unwrap_err().contains("UUID must stay"));
+        // Out of the tree is out of the plans' reach anyway, and a note entering it has no UUID to keep.
+        assert!(check_task_uuid_kept(&from, "archive/report.md").is_ok());
+        assert!(check_task_uuid_kept("ideas.md", &format!(".tasks/ideas-{other}.md")).is_ok());
     }
 
     #[test]
