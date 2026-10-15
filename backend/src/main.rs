@@ -1031,6 +1031,31 @@ async fn delete_notes_path(
     }
 }
 
+/// Write `bytes` to `path` so that a reader finds the whole of them or no file at all.
+///
+/// The image cache serves a file for as long as it is there, unchecked, so one cut short -- by
+/// moried stopping, a full disk or the machine going down -- would be served truncated from then on,
+/// and a request arriving during the write would be served the part written so far. A temporary
+/// file beside it, renamed over it once complete, is never seen half-written, and one left behind
+/// is at no path anything reads. It is synced before the rename: otherwise the rename can reach the
+/// disk before the data does, and a power cut leaves an empty file at the path. Blocking, for
+/// `spawn_blocking`.
+fn write_atomically(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    use std::os::unix::fs::PermissionsExt;
+
+    let directory = path.parent().unwrap_or(Path::new("."));
+    std::fs::create_dir_all(directory)?;
+    let mut partial = tempfile::Builder::new()
+        .prefix(".partial-")
+        // As `fs::write` creates a file, rather than the owner-only mode of a temporary one.
+        .permissions(std::fs::Permissions::from_mode(0o666))
+        .tempfile_in(directory)?;
+    partial.write_all(bytes)?;
+    partial.as_file().sync_all()?;
+    partial.persist(path).map(|_| ()).map_err(|error| error.error)
+}
+
 async fn serve_image_content(content: Vec<u8>, path: &Path) -> Response {
     // Build cache path
     let cache_root = PathBuf::from(env::var("MORIED_IMAGE_CACHE_DIR")
@@ -1072,10 +1097,13 @@ async fn serve_image_content(content: Vec<u8>, path: &Path) -> Response {
         .unwrap();
 
     if output.status.success() {
-        if let Some(parent) = cache_path.parent() {
-            tokio::fs::create_dir_all(parent).await.unwrap();
+        // The image is served whether or not it could be cached.
+        let image = output.stdout.clone();
+        match tokio::task::spawn_blocking(move || write_atomically(&cache_path, &image)).await {
+            Ok(Ok(())) => (),
+            Ok(Err(e)) => tracing::warn!("Failed to cache the converted {}: {:?}", path.display(), e),
+            Err(e) => tracing::warn!("Failed to cache the converted {}: {:?}", path.display(), e),
         }
-        tokio::fs::write(&cache_path, &output.stdout).await.unwrap();
 
         let mut res = output.stdout.into_response();
         res.headers_mut().insert(
