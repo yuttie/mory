@@ -90,6 +90,17 @@ fn status_changes(args: &UpdateTaskArgs, kind: &str, current: Option<&serde_yaml
             STATUS_KINDS.join(", "),
         ));
     }
+    for (key, value) in [
+        ("completed_at", &args.completed_at),
+        ("canceled_at", &args.canceled_at),
+        ("expected_by", &args.expected_by),
+        ("follow_up_at", &args.follow_up_at),
+        ("review_at", &args.review_at),
+    ] {
+        if let Some(value) = value {
+            validate_task_date(key, value)?;
+        }
+    }
 
     // Insertion order is the order these appear in the file, so `kind` leads.
     let mut status = serde_yaml::Mapping::new();
@@ -731,6 +742,22 @@ mod tests {
         // Another kind still starts afresh.
         let reopened = apply(done, &status_changes(&args("t.md"), "todo", current(done).as_ref()).unwrap());
         assert!(!reopened.contains("completed_at"), "{reopened}");
+    }
+
+    /// The status's own dates follow the notes' convention, as the arguments describe them.
+    #[test]
+    fn a_status_date_is_a_date_or_a_datetime_carrying_its_offset() {
+        for (kind, bad) in [
+            ("done", UpdateTaskArgs { completed_at: Some("yesterday-ish".into()), ..args("t.md") }),
+            ("done", UpdateTaskArgs { completed_at: Some("2026-03-15 18:17".into()), ..args("t.md") }),
+            ("canceled", UpdateTaskArgs { canceled_at: Some("2026-02-30".into()), cancel_reason: Some("moot".into()), ..args("t.md") }),
+            ("waiting", UpdateTaskArgs { waiting_for: Some("a reply".into()), follow_up_at: Some("next week".into()), ..args("t.md") }),
+            ("on_hold", UpdateTaskArgs { hold_reason: Some("later".into()), review_at: Some("soon".into()), ..args("t.md") }),
+        ] {
+            assert!(status_changes(&bad, kind, None).is_err(), "{kind}");
+        }
+        let good = UpdateTaskArgs { waiting_for: Some("a reply".into()), expected_by: Some("2026-03-15".into()), follow_up_at: Some("2026-03-16 09:00:00+09:00".into()), ..args("t.md") };
+        assert!(status_changes(&good, "waiting", None).is_ok());
     }
 
     #[test]
