@@ -115,6 +115,7 @@ fn check_end(value: &str) -> Result<(), String> {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct Repeat {
     /// `daily`, `weekly`, `monthly` or `yearly`.
     pub freq: String,
@@ -278,6 +279,7 @@ fn check_timezone(tz: &str) -> Result<(), String> {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct EventArgs {
     /// The note's exact repository path.
     pub path: String,
@@ -548,6 +550,7 @@ async fn apply_event(
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct RemoveEventArgs {
     /// The note's exact repository path.
     pub path: String,
@@ -891,6 +894,26 @@ mod tests {
             .expect_err("a rule without a start");
         assert!(error.contains("`repeat`"), "{error}");
         assert!(edit_and_check(ruled, serde_json::json!({ "clear": ["repeat", "exclusions"] })).is_ok());
+    }
+
+    /// An argument the tools do not know would be dropped, and the rest committed as if it had
+    /// been written.
+    #[test]
+    fn an_argument_the_tools_do_not_know_is_refused() {
+        let base = serde_json::json!({ "path": "a.md", "name": "Standup", "message": "m" });
+        for (key, value) in [
+            ("instances", serde_json::json!([{ "start": "2026-09-30" }])),
+            ("tz", serde_json::json!("Asia/Tokyo")),
+            ("repeat", serde_json::json!({ "freq": "weekly", "byweekday": ["wed"] })),
+        ] {
+            let mut args = base.clone();
+            args.as_object_mut().unwrap().insert(key.into(), value);
+            let error = serde_json::from_value::<EventArgs>(args).expect_err(key).to_string();
+            assert!(error.contains("unknown field"), "{key}: {error}");
+        }
+        let mut args = base;
+        args.as_object_mut().unwrap().insert("recursive".into(), true.into());
+        assert!(serde_json::from_value::<RemoveEventArgs>(args).is_err());
     }
 
     /// A note already out of shape is not the edit's doing, and refusing every later edit to it
