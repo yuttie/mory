@@ -513,7 +513,10 @@ fn instance_changes(args: &EventArgs, event: Option<&Value>, zone: Tz) -> Result
     let mut changes = Vec::new();
 
     for start in removes {
-        let Some(at) = note_events::instant_of(Some(&Value::String(start.clone())), zone) else {
+        // The reader is as lenient as `dayjs`, which takes `2024-05`, `20240501` and `2024/05/01`
+        // for the first of May; a name that vague is more likely a mistake than that day.
+        let dated = NAMED_START.is_match(start);
+        let Some(at) = note_events::instant_of(Some(&Value::String(start.clone())), zone).filter(|_| dated) else {
             return Err(format!(
                 "{start:?} is not a moment. Name an occurrence by its `start`, as the note writes \
                  it or with its offset.",
@@ -594,6 +597,10 @@ fn drawn_list(event: Option<&Value>) -> Option<&'static str> {
     let event = event?;
     ["instances", "times"].into_iter().find(|key| event.get(*key).is_some_and(|value| !value.is_null()))
 }
+
+/// How an occurrence to remove is named: its whole date, then its time if it has one.
+static NAMED_START: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}(?:$|[ T][0-9])").unwrap());
 
 /// The order a list keeps its occurrences in. The notes keep both.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1309,6 +1316,16 @@ mod tests {
         let added = edit_and_check(lone, serde_json::json!({ "add_instances": [{ "start": "2024-05-01 00:00:00+09:00" }] }))
             .expect("not a duplicate");
         assert_eq!(starts(&added), ["instances 2024-05-01", "instances 2024-05-01 00:00:00+09:00"]);
+    }
+
+    #[test]
+    fn an_occurrence_to_remove_is_named_by_its_whole_date() {
+        let listed = "---\nevents:\n    Standup:\n        instances:\n            - start: 2024-05-01\n            - start: 2024-05-08\n---\n";
+        for vague in ["2024-05", "20240501", "2024-5-1", "2024/05/01", " 2024-05-01", "2024-05-01x"] {
+            let error = edit_and_check(listed, serde_json::json!({ "remove_instances": [vague] })).expect_err(vague);
+            assert!(error.contains("is not a moment"), "{vague}: {error}");
+        }
+        assert!(edit_and_check(listed, serde_json::json!({ "remove_instances": ["2024-05-01"] })).is_ok());
     }
 
     /// The calendar draws an event's own `start` beside the occurrences it lists.
