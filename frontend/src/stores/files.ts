@@ -79,9 +79,9 @@ export const useFilesStore = defineStore('files', () => {
     // Collapses concurrent requests for the same stale data into one refresh.
     let inflight: Promise<ListEntry2[]> | null = null;
 
-    // Bumped by every invalidation. A sync that started before the bump must not adopt or
-    // persist its result: a mutation has landed since it read HEAD, so what it fetched no
-    // longer describes the repository and would resurrect a cache under a stale commit ID.
+    // Bumped by every invalidation. A sync that started before the bump must not adopt its result:
+    // a mutation has landed since it read HEAD, so what it fetched no longer describes the
+    // repository. What it persists describes its own commit all the same, as `syncOnce` says.
     let epoch = 0;
 
     // Bring the store up to date in a single request.
@@ -108,15 +108,15 @@ export const useFilesStore = defineStore('files', () => {
             return entriesRef.value;
         }
 
+        let next: Map<string, ListEntry2>;
         if (response.kind === 'full') {
-            entryMap = new Map(response.entries.map((entry) => [entry.path, entry]));
+            next = new Map(response.entries.map((entry) => [entry.path, entry]));
             await replaceEntries(response.commit, response.entries);
         }
         else {
             // A delta is computed against the persisted rows, so it has to be applied to them --
             // never to a map an optimistic patch has already touched, which would compound the
             // patch rather than replace it, nor to one another tab's sync has left behind.
-            let next: Map<string, ListEntry2>;
             if (mapCommit === base) {
                 next = new Map(entryMap);
             }
@@ -144,9 +144,16 @@ export const useFilesStore = defineStore('files', () => {
             for (const entry of response.changed) {
                 next.set(entry.path, entry);
             }
-            entryMap = next;
             await applyEntryDelta(response.commit, response.changed, response.deleted);
         }
+
+        if (epoch !== startEpoch) {
+            // A mutation landed while the rows were being written. They describe their commit all
+            // the same, and serve as the next sync's base; but the listing in memory, patched or
+            // not, is not to be replaced by one older than that mutation and called current.
+            return entriesRef.value;
+        }
+        entryMap = next;
         mapCommit = response.commit;
 
         if (response.commit === response.head) {
