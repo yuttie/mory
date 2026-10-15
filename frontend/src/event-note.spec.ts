@@ -4,12 +4,19 @@ import YAML from 'yaml';
 
 import metadataSchema from '@/metadata-schema.json';
 
+// The real module reads `window.location`, which a node test has none of.
+vi.mock('@/api-url', () => ({
+    apiUrl: 'https://mory.invalid/api/',
+    apiFilesUrl: 'https://mory.invalid/api/files/',
+}));
+
 import type { ImportedOccurrence, ImportedSeries, MetadataEvent } from '@/api';
 import {
     buildOccurrenceNote,
     buildSeriesNote,
     canConvertSeries,
 } from '@/event-note';
+import { renderMarkdown } from '@/markdown';
 
 vi.stubGlobal('crypto', {
     randomUUID: () => '01234567-89ab-4cde-8f01-23456789abcd',
@@ -160,5 +167,53 @@ describe('the emitted note', () => {
         const metadata = frontmatterOf(buildSeriesNote(occurrence, series).content);
         expect(Object.keys(metadata)).toEqual(['tags', 'events']);
         expect(Object.keys(metadata.events)).toEqual(['Rust release']);
+    });
+});
+
+describe('what the feed wrote', () => {
+    // The note is rendered with its raw HTML live, as any note the user wrote is, so a summary or a
+    // property that is markup would run as mory every time the note was opened.
+    const hostile: ImportedOccurrence = {
+        ...occurrence,
+        name: '<img src=x onerror=alert(1)> sync',
+    };
+    const hostileSeries: ImportedSeries = {
+        ...series,
+        name: '[sync](javascript:alert(1))',
+        unmapped: {
+            comment: '<script>alert(1)</script> \\<b>bold</b> [agenda](javascript:alert(1))',
+        },
+    };
+
+    it('reaches the rendered note as text, never as markup', async () => {
+        for (const note of [
+            buildOccurrenceNote(hostile, hostileSeries),
+            buildSeriesNote(hostile, hostileSeries),
+        ]) {
+            const html = String(await renderMarkdown(note.content));
+            expect(html).not.toMatch(/<img|<script|<b>|href="javascript:/);
+        }
+        const html = String(await renderMarkdown(buildOccurrenceNote(hostile, hostileSeries).content));
+        expect(html).toContain('onerror=alert(1)> sync</h1>');
+        expect(html).toContain('[agenda](javascript:alert(1))');
+    });
+
+    // A diagram is drawn by mermaid in the live page, from a fenced block; iCal's TEXT values hold
+    // real line breaks, so a summary can open one.
+    it('opens no diagram, and keeps the heading on one line', async () => {
+        const diagram = { ...hostile, name: 'Sync\n```mermaid\ngraph TD\n    A-->B\n```' };
+        const fenced = { ...hostileSeries, unmapped: { comment: 'Notes\n~~~mermaid\ngraph TD\n~~~' } };
+        const note = buildOccurrenceNote(diagram, fenced);
+        expect(note.content).toContain('\n# Sync \\`\\`\\`mermaid graph TD A-->B \\`\\`\\`\n');
+        const html = String(await renderMarkdown(note.content));
+        expect(html).not.toContain('mermaid"');
+        expect(html).not.toContain('<svg');
+    });
+
+    it('stays readable as the file it is', () => {
+        const content = buildOccurrenceNote(hostile, hostileSeries).content;
+        expect(content).toContain('\n# \\<img src=x onerror=alert(1)> sync\n');
+        // The frontmatter is YAML, read by the app as data: the name is its key as the feed spelt it.
+        expect(Object.keys(frontmatterOf(content).events)).toEqual([hostile.name]);
     });
 });
