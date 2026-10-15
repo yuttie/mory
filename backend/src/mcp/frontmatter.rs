@@ -455,11 +455,39 @@ fn find_key(lines: &[String], from: usize, to: usize, indent: usize, key: &str) 
     })
 }
 
-/// Whether a key line's value continues onto following lines rather than sitting on the line.
+/// Whether a key line's value continues onto following lines rather than sitting on the line:
+/// what follows the key's colon, its comment left out.
 fn inline_value(line: &str) -> Option<&str> {
+    let (value, _) = value_and_comment(line)?;
+    Some(value)
+}
+
+/// What follows a key line's colon, apart from the comment that ends the line, which keeps the
+/// white space in front of it so that a line rewritten around it keeps its spacing.
+///
+/// A `#` starts a comment only after white space. One inside a quoted or flow value may be taken
+/// for a comment, but what is left of the value is then still one that every caller refuses.
+fn value_and_comment(line: &str) -> Option<(&str, &str)> {
     let trimmed = line.trim_start().trim_end_matches('\n').trim_end();
-    let colon = key_end(trimmed)?;
-    Some(trimmed[colon + 1..].trim_start())
+    let rest = &trimmed[key_end(trimmed)? + 1..];
+    let hash = rest
+        .char_indices()
+        .find(|&(i, c)| c == '#' && rest[..i].ends_with(char::is_whitespace))
+        .map(|(i, _)| i);
+    Some(match hash {
+        Some(i) => (rest[..i].trim(), &rest[rest[..i].trim_end().len()..]),
+        None => (rest.trim(), ""),
+    })
+}
+
+/// A key line with its value replaced, keeping the key as the note spells it and its comment.
+fn with_value(line: &str, value: &str) -> String {
+    let indent = indent_of(line);
+    let trimmed = line[indent..].trim_end_matches('\n').trim_end();
+    let colon = key_end(trimmed).unwrap_or(trimmed.len().saturating_sub(1));
+    let comment = value_and_comment(line).map_or("", |(_, comment)| comment);
+    let space = if value.is_empty() { "" } else { " " };
+    format!("{}{}{space}{value}{comment}\n", &line[..indent], &trimmed[..=colon])
 }
 
 fn apply_one(
@@ -501,7 +529,7 @@ fn apply_one(
                 // `part: null` is the same emptiness as `part:`, spelled out; make it the shape
                 // a child can go under.
                 if value == "null" || value == "~" {
-                    lines[at] = format!("{}{}:\n", " ".repeat(level), spell_key(part));
+                    lines[at] = with_value(&lines[at], "");
                 }
                 let (child_from, child_to) = child_range(lines, at);
                 let child_level = (child_from..child_to)
@@ -935,6 +963,16 @@ mod tests {
         assert!(apply(unterminated, &[Change::set(&["tags"], Value::Sequence(vec!["b".into()]))]).is_err());
         // A note with no fence at all still gains a block.
         assert!(apply("# Body\n", &[Change::set(&["tags"], Value::Sequence(vec!["b".into()]))]).is_ok());
+    }
+
+    #[test]
+    fn a_comment_on_a_keys_line_stays_and_is_not_its_value() {
+        let before = "---\nevents:  # the calendar\n    A:\n        start: 2025-01-02\n---\n";
+        let added = apply(before, &[Change::set(&["events", "A", "color"], "red")]).expect("a set under it");
+        assert_eq!(added, before.replace("2025-01-02\n", "2025-01-02\n        color: red\n"));
+        let empty = "---\nevents: ~   # none yet\n---\n";
+        let filled = apply(empty, &[Change::set(&["events", "A", "start"], "2025-01-02")]).expect("a set under it");
+        assert_eq!(filled, "---\nevents:   # none yet\n    A:\n        start: 2025-01-02\n---\n");
     }
 
     #[test]
