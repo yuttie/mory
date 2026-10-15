@@ -80,3 +80,27 @@ for (const address of ['/files', '/']) {
         await reported(page);
     });
 }
+
+test('says what failed when a note cannot be saved', async ({ context, page }) => {
+    await mockBackend(context, { 'notes/note.md': '# Note\n' });
+    await page.route(`${API_URL}notes/**`, (route) => route.request().method() === 'PUT'
+        ? route.fulfill({ status: 500, json: {} })
+        : route.fallback());
+    await page.goto('/note/notes/note.md');
+    await expect(page.getByRole('heading', { name: 'Note' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Editor and viewer' }).click();
+    await page.locator('.cm-content').click();
+    await page.keyboard.type('More text.');
+    await page.getByTitle('Save').click();
+
+    await reported(page);
+});
+
+test('says what failed when the calendar cannot list the notes', async ({ context, page }) => {
+    await mockBackend(context, {});
+    await page.route(`${API_URL}v2/entries**`, (route) => route.fulfill({ status: 500, json: {} }));
+    await page.goto('/calendar');
+
+    await reported(page);
+});
