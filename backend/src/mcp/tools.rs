@@ -844,11 +844,17 @@ pub struct WriteOutput {
 /// Non-UTF-8 is an `Err`, not a `None`: it is a real failure of an operation that named an
 /// existing path, and the difference matters to the caller.
 pub async fn note_text(state: &AppState, path: &str) -> Result<Option<String>, ErrorData> {
-    let Some((_, bytes)) = crate::find_entry_blob(state, path).await else {
+    Ok(note_to_edit(state, path).await?.map(|(text, _)| text))
+}
+
+/// A note's text, with the blob it was read from in the form `AppState::save_note_checked` takes,
+/// so that a write made from it is refused if the note changed in between.
+pub async fn note_to_edit(state: &AppState, path: &str) -> Result<Option<(String, String)>, ErrorData> {
+    let Some((oid, bytes)) = crate::find_entry_blob(state, path).await else {
         return Ok(None);
     };
     String::from_utf8(bytes)
-        .map(Some)
+        .map(|text| Some((text, format!("\"{oid}\""))))
         .map_err(|_| ErrorData::invalid_params(format!("{path} is not UTF-8 text"), None))
 }
 
@@ -865,33 +871,41 @@ pub fn edited_note(text: &str, changes: &[Change], path: &str) -> Result<String,
     Ok(edited)
 }
 
-/// Apply `changes` to the note at `path`, whose text is `text`, and commit what comes of it.
+/// Apply `changes` to the note at `path`, whose text is `text` as read from the blob `expected`
+/// names, and commit what comes of it.
 pub async fn commit_edit(
     state: &AppState,
     path: &str,
-    text: &str,
+    (text, expected): &(String, String),
     changes: &[Change],
     message: &str,
 ) -> Result<CallToolResult, ErrorData> {
     match edited_note(text, changes, path) {
-        Ok(edited) => write_note(state, path, &edited, message).await,
+        Ok(edited) => write_note(state, path, &edited, message, expected).await,
         Err(reason) => Ok(tool_error(reason)),
     }
 }
 
-/// Commit an edited note and report where it landed.
+/// Commit an edited note and report where it landed: only if the note is still the blob
+/// `expected` names (or still `absent`), so that a save the web app made after the tool read the
+/// note is not overwritten by an edit of the version before it.
 pub async fn write_note(
     state: &AppState,
     path: &str,
     content: &str,
     message: &str,
+    expected: &str,
 ) -> Result<CallToolResult, ErrorData> {
-    match state.save_note(path, content.as_bytes(), message).await {
-        Ok(commit) => json_result(&WriteOutput {
+    match state.save_note_checked(path, content.as_bytes(), message, expected).await {
+        Ok(Some(commit)) => json_result(&WriteOutput {
             path: path.to_owned(),
             commit: commit.to_string(),
             message: message.to_owned(),
         }),
+        Ok(None) => Ok(tool_error(format!(
+            "{path:?} changed while this edit was being made, so nothing was committed. Make the \
+             call again to apply it to the note as it is now.",
+        ))),
         Err(e) => {
             tracing::error!("MCP could not write {}: {:?}", path, e);
             Ok(tool_error(format!("{path:?} could not be written: {e:#}")))
@@ -940,12 +954,16 @@ pub async fn create_note(
         };
     }
 
-    match state.save_note(&path, args.content.as_bytes(), &args.message).await {
-        Ok(commit) => json_result(&WriteOutput {
+    match state.save_note_checked(&path, args.content.as_bytes(), &args.message, "absent").await {
+        Ok(Some(commit)) => json_result(&WriteOutput {
             path,
             commit: commit.to_string(),
             message: args.message,
         }),
+        Ok(None) => Ok(tool_error(format!(
+            "{path:?} was created while this call was being made. Use update_note to replace its \
+             content.",
+        ))),
         Err(e) => {
             tracing::error!("MCP create_note failed for {}: {:?}", path, e);
             Ok(tool_error(format!("{path:?} could not be written: {e:#}")))

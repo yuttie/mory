@@ -128,7 +128,10 @@ Tools call the same internal functions the HTTP handlers call — `search::run_s
 `find_entry_blob`, `AppState::save_note` and the rest — so an MCP read sees the listing the web
 app sees and an MCP write is an ordinary Git commit. When a handler holds logic a tool needs,
 extract it rather than writing a second copy; that is why `run_search` and `v2::imported_events`
-exist as separate functions from the handlers that call them.
+exist as separate functions from the handlers that call them. A tool that edits what it has read
+-- the task, event and plan tools -- commits only if the file is still the blob it read
+(`AppState::save_note_checked`), so a save the web app made in between is never overwritten;
+`update_note` replaces the file whatever it holds, and says so.
 
 **OAuth artefacts are stateless JWTs** signed with `MORIED_SECRET` and told apart by a `typ`
 claim (`mcp_client`, `mcp_code`, `mcp_access`, `mcp_refresh`). A registered `client_id` is itself

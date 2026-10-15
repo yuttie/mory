@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
 
 use super::frontmatter::{self, Change};
-use super::tools::{alarm_list, commit_edit, note_text, safe_path, WriteOutput};
+use super::tools::{alarm_list, commit_edit, note_to_edit, safe_path, WriteOutput};
 use super::{json_result, tool_error};
 use crate::models::AppState;
 use crate::note_time::now_local;
@@ -182,7 +182,7 @@ pub async fn update_task(
         Ok(path) => path,
         Err(message) => return Ok(tool_error(message)),
     };
-    let Some(text) = note_text(state, &path).await? else {
+    let Some(note) = note_to_edit(state, &path).await? else {
         return Ok(tool_error(format!(
             "No note at {path:?}. Use list_tasks or search_notes to find one.",
         )));
@@ -204,7 +204,7 @@ pub async fn update_task(
         ));
     }
 
-    commit_edit(state, &path, &text, &changes, &args.message).await
+    commit_edit(state, &path, &note, &changes, &args.message).await
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -450,11 +450,11 @@ pub async fn set_task_dates(
         Ok(path) => path,
         Err(message) => return Ok(tool_error(message)),
     };
-    let Some(text) = note_text(state, &path).await? else {
+    let Some(note) = note_to_edit(state, &path).await? else {
         return Ok(tool_error(format!("No note at {path:?}.")));
     };
 
-    let changes = match date_changes(&args, &text) {
+    let changes = match date_changes(&args, &note.0) {
         Ok(changes) => changes,
         Err(message) => return Ok(tool_error(message)),
     };
@@ -464,7 +464,7 @@ pub async fn set_task_dates(
         ));
     }
 
-    commit_edit(state, &path, &text, &changes, &args.message).await
+    commit_edit(state, &path, &note, &changes, &args.message).await
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -591,8 +591,8 @@ pub async fn create_task(
         Err(e) => return Ok(tool_error(e.to_string())),
     };
 
-    match state.save_note(&path, content.as_bytes(), &args.message).await {
-        Ok(commit) => json_result(&CreatedTask {
+    match state.save_note_checked(&path, content.as_bytes(), &args.message, "absent").await {
+        Ok(Some(commit)) => json_result(&CreatedTask {
             written: WriteOutput {
                 path,
                 commit: commit.to_string(),
@@ -600,6 +600,7 @@ pub async fn create_task(
             },
             content,
         }),
+        Ok(None) => Ok(tool_error(format!("{path:?} was created while this call was being made."))),
         Err(e) => {
             tracing::error!("MCP create_task failed for {}: {:?}", path, e);
             Ok(tool_error(format!("{path:?} could not be written: {e:#}")))

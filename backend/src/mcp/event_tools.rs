@@ -14,7 +14,7 @@ use serde::Deserialize;
 use serde_yaml::{Mapping, Value};
 
 use super::frontmatter::{self, Change};
-use super::tools::{alarm_list, edited_note, note_text, safe_path, write_note};
+use super::tools::{alarm_list, edited_note, note_to_edit, safe_path, write_note};
 use super::tool_error;
 use crate::models::AppState;
 
@@ -477,7 +477,7 @@ pub async fn add_event(state: &AppState, args: EventArgs) -> Result<CallToolResu
         Ok(path) => path,
         Err(message) => return Ok(tool_error(message)),
     };
-    let Some(text) = note_text(state, &path).await? else {
+    let Some((text, expected)) = note_to_edit(state, &path).await? else {
         return Ok(tool_error(format!("No note at {path:?}.")));
     };
     if has_event(&text, &args.name) {
@@ -493,7 +493,7 @@ pub async fn add_event(state: &AppState, args: EventArgs) -> Result<CallToolResu
              its offset.",
         ));
     }
-    apply_event(state, &path, &text, &args).await
+    apply_event(state, &path, &text, &expected, &args).await
 }
 
 pub async fn update_event(state: &AppState, args: EventArgs) -> Result<CallToolResult, ErrorData> {
@@ -501,7 +501,7 @@ pub async fn update_event(state: &AppState, args: EventArgs) -> Result<CallToolR
         Ok(path) => path,
         Err(message) => return Ok(tool_error(message)),
     };
-    let Some(text) = note_text(state, &path).await? else {
+    let Some((text, expected)) = note_to_edit(state, &path).await? else {
         return Ok(tool_error(format!("No note at {path:?}.")));
     };
     if !has_event(&text, &args.name) {
@@ -511,13 +511,14 @@ pub async fn update_event(state: &AppState, args: EventArgs) -> Result<CallToolR
             path, args.name,
         )));
     }
-    apply_event(state, &path, &text, &args).await
+    apply_event(state, &path, &text, &expected, &args).await
 }
 
 async fn apply_event(
     state: &AppState,
     path: &str,
     text: &str,
+    expected: &str,
     args: &EventArgs,
 ) -> Result<CallToolResult, ErrorData> {
     let changes = match event_changes(args) {
@@ -546,7 +547,7 @@ async fn apply_event(
         Ok(edited) => edited,
         Err(reason) => return Ok(tool_error(reason)),
     };
-    write_note(state, path, &edited, &args.message).await
+    write_note(state, path, &edited, &args.message, expected).await
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -568,7 +569,7 @@ pub async fn remove_event(
         Ok(path) => path,
         Err(message) => return Ok(tool_error(message)),
     };
-    let Some(text) = note_text(state, &path).await? else {
+    let Some((text, expected)) = note_to_edit(state, &path).await? else {
         return Ok(tool_error(format!("No note at {path:?}.")));
     };
     if !has_event(&text, &args.name) {
@@ -582,7 +583,7 @@ pub async fn remove_event(
         Ok(edited) => edited,
         Err(e) => return Ok(tool_error(e.to_string())),
     };
-    write_note(state, &path, &edited, &args.message).await
+    write_note(state, &path, &edited, &args.message, &expected).await
 }
 
 #[cfg(test)]
