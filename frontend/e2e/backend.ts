@@ -131,7 +131,8 @@ export async function mockBackend(context: BrowserContext, notes: Record<string,
                 files.set(notePath, content);
                 repository.writes.push({ path: notePath, content });
                 commit += 1;
-                await route.fulfill({ json: null });
+                // As moried answers a save: with the version it left.
+                await route.fulfill({ json: null, headers: { etag: etagOf(content), 'access-control-expose-headers': 'ETag' } });
                 return;
             }
             const content = files.get(notePath);

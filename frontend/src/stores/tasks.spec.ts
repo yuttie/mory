@@ -13,6 +13,8 @@ const apiMocks = vi.hoisted(() => ({
     getHeadCommitId: vi.fn<() => Promise<string>>(async () => 'c0'),
     addNote: vi.fn<(path: string, content: string) => Promise<{ data: null }>>(
         async () => ({ data: null })),
+    saveFileChecked: vi.fn<(path: string, content: string, expectedETag: string) => Promise<string | undefined>>(
+        async () => undefined),
     renameNote: vi.fn<(oldPath: string, newPath: string) => Promise<{ data: null }>>(
         async () => ({ data: null })),
     deleteNote: vi.fn<(path: string) => Promise<{ data: boolean }>>(async () => ({ data: true })),
@@ -447,6 +449,55 @@ describe('save', () => {
         const [, content] = apiMocks.addNote.mock.calls[0];
         expect(content).toContain('status:');
         expect(content).toContain('kind: todo');
+    });
+});
+
+describe('save over a note', () => {
+    const read = (id: string): Task => ({
+        uuid: id,
+        title: 'Written',
+        tags: [],
+        status: { kind: 'todo' },
+        note: '',
+        source: '---\ntask:\n    status:\n        kind: todo\n---\n\n# Alpha\n',
+        etag: '"as-read"',
+    });
+    // As axios rejects the 412 moried answers when the note is no longer the blob named.
+    const preconditionFailed = () => Object.assign(new Error('Request failed with status code 412'), {
+        isAxiosError: true,
+        response: { status: 412 },
+    });
+
+    it('writes an edited task only over the note it was read from', async () => {
+        const { store } = await storeWith(sample);
+        const path = `.tasks/${uuid(3)}.md`;
+        apiMocks.saveFileChecked.mockResolvedValueOnce('"as-written"');
+
+        // The version it wrote, for the editor's next save to count from.
+        await expect(store.save(read(uuid(3)), path)).resolves.toBe('"as-written"');
+
+        expect(apiMocks.saveFileChecked).toHaveBeenCalledWith(path, expect.stringContaining('# Written'), '"as-read"');
+        expect(apiMocks.addNote).not.toHaveBeenCalled();
+    });
+
+    it('takes a note read without an ETag for one that changed', async () => {
+        const { store } = await storeWith(sample);
+        const path = `.tasks/${uuid(3)}.md`;
+
+        await store.save({ ...read(uuid(3)), etag: undefined }, path);
+
+        expect(apiMocks.saveFileChecked).toHaveBeenCalledWith(path, expect.any(String), 'absent');
+        expect(apiMocks.addNote).not.toHaveBeenCalled();
+    });
+
+    // The editor stays open after a save, so the note may move on while it is: completed through
+    // MCP, its dates set on another device. Writing the form over it would undo that unannounced.
+    it('refuses to write over a note changed since the task was read', async () => {
+        const { store } = await storeWith(sample);
+        apiMocks.saveFileChecked.mockRejectedValueOnce(preconditionFailed());
+
+        await expect(store.save(read(uuid(3)), `.tasks/${uuid(3)}.md`)).rejects.toThrow('changed elsewhere');
+        expect(apiMocks.addNote).not.toHaveBeenCalled();
     });
 });
 

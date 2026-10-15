@@ -647,6 +647,9 @@ const statusOptionRestricted = ref(true);
 // What the editor last gave its host to save, and whether the status was unlocked for it, for
 // `saved` to tell its own save from one an earlier editor gave.
 let emitted: { task: Task; unlocked: boolean } | null = null;
+// The ETag of the note the form counts from, which a save is checked against. Kept apart from the
+// task read, which after a save can be a change that landed since rather than the save itself.
+let formEtag: string | undefined;
 // Kept across tasks and visits, as one way of working with notes rather than a property of a task.
 const notePanes = useLocalStorage<'viewer' | 'both' | 'editor'>('task-editor-note-panes', 'both');
 const lockScroll = useConfigValue('lock-scroll', false);
@@ -880,6 +883,7 @@ function resetFromTask(t?: Task | undefined | null): void {
     statusOptionRestricted.value = true;
     filledFrom = t ? props.taskPath : null;
     emitted = null;
+    formEtag = t?.etag;
     Object.assign(form, formOf(t));
 
     // Automatically assess the task for existing tasks
@@ -894,12 +898,23 @@ function resetFromTask(t?: Task | undefined | null): void {
 // it was of what the form holds. A `written` this editor did not give came from one closed while
 // it saved; this one opened since, on the note as it was before the save landed, and its form
 // takes the saved note too, unless something has been typed into it.
-async function saved(written: Task): Promise<void> {
+//
+// The form counts from the note its own save wrote, by the ETag the save gave, whatever the read
+// then finds: a change landing between the two is refused by the next save rather than put back,
+// and a read that fails leaves the next save to go ahead. A form left on another editor's save
+// keeps counting from the note before it.
+async function saved(written: Task, writtenEtag?: string): Promise<void> {
     const own = emitted?.task === written ? emitted : null;
     emitted = null;
     const base = initialForm.value;
+    if (own && writtenEtag !== undefined) {
+        formEtag = writtenEtag;
+    }
     if (!(await reread())) {
         return;
+    }
+    if (own && writtenEtag === undefined) {
+        formEtag = task.value?.etag;
     }
     // As the save would read the form: a blank it trims away is no change.
     if (own ? differs(formOf(taskOf(written)), formOf(written)) : differs(form, base)) {
@@ -910,6 +925,7 @@ async function saved(written: Task): Promise<void> {
         statusOptionRestricted.value = true;
     }
     Object.assign(form, formOf(task.value));
+    formEtag = task.value?.etag;
 }
 
 function onBeforeunload(e: any) {
@@ -939,6 +955,7 @@ function taskOf(base: Task | null | undefined): Task {
     const alarms = taskAlarmsToWrite(form);
     return {
         source: base?.source,
+        etag: formEtag,
         created_at: base?.created_at,
         uuid: uuid.value,
         // One line: the title is written as the note's `# ` heading, and a line after that would

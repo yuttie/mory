@@ -344,6 +344,95 @@ test('keeps the editor open when a save fails', async ({ context, page }) => {
     await expect(save).toBeDisabled();
 });
 
+// The editor stays open after a save, and the note can move on while it is: completed through
+// MCP, edited on another device. Saving the form then would put back what it still holds.
+test('refuses to save over a change made since the task was opened', async ({ context, page }) => {
+    const repository = await mockBackend(context, NOTES);
+    await page.goto(`/tasks-next/${PROJECT}/descendants/status`);
+    await listed(page, 'Step').click();
+    await expect(title(page)).toHaveValue('Step');
+
+    const done = note('Step').replace('kind: todo', 'kind: done\n    completed_at: 2026-10-04 12:00:00+09:00');
+    await page.evaluate(async ([url, content]) => {
+        await fetch(url, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ Save: { content, message: 'Done elsewhere' } }),
+        });
+    }, [`${API_URL}notes/.tasks/${PROJECT}/${STEP}.md`, done]);
+    expect(repository.writes).toHaveLength(1);
+
+    await title(page).fill('First step');
+    await dialog(page).getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.getByText('The task changed elsewhere since it was opened.')).toBeVisible();
+    expect(repository.writes).toHaveLength(1);
+    expect(repository.writes[0].content).toBe(done);
+    await expect(title(page)).toHaveValue('First step');
+});
+
+// The save is read back, and what the read finds can be a change that landed after it. The form,
+// kept for what was typed meanwhile, still counts from the save, so saving it is refused.
+test('refuses a save over a change that landed while the last one was read back', async ({ context, page }) => {
+    const repository = await mockBackend(context, NOTES);
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+    await page.route(`${API_URL}v2/files/**`, async (route) => {
+        if (repository.writes.length > 0 && route.request().method() === 'GET') {
+            await held;
+        }
+        await route.fallback();
+    });
+    await page.goto(`/tasks-next/${PROJECT}/descendants/status`);
+    await listed(page, 'Step').click();
+    await title(page).fill('First step');
+    const save = dialog(page).getByRole('button', { name: 'Save', exact: true });
+    await save.click();
+    await expect.poll(() => repository.writes.length).toBe(1);
+
+    await title(page).fill('First step, revised');
+    const dated = note('First step', ['  deadline: 2026-10-20']);
+    await page.evaluate(async ([url, content]) => {
+        await fetch(url, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ Save: { content, message: 'Dated elsewhere' } }),
+        });
+    }, [`${API_URL}notes/.tasks/${PROJECT}/${STEP}.md`, dated]);
+    expect(repository.writes).toHaveLength(2);
+    release();
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
+    await expect(title(page)).toHaveValue('First step, revised');
+
+    await save.click();
+    await expect(page.getByText('The task changed elsewhere since it was opened.')).toBeVisible();
+    expect(repository.writes).toHaveLength(2);
+});
+
+// The save went through: the next one counts from it, though the note could not be read back.
+test('saves again after a save it could not read back', async ({ context, page }) => {
+    const repository = await mockBackend(context, NOTES);
+    let written = false;
+    await page.route(`${API_URL}notes/**`, async (route) => {
+        written ||= route.request().method() === 'PUT';
+        await route.fallback();
+    });
+    await page.route(`${API_URL}v2/files/**`, (route) => written && route.request().method() === 'GET' ? route.fulfill({ status: 500, json: {} }) : route.fallback());
+    await page.goto(`/tasks-next/${PROJECT}/descendants/status`);
+    await listed(page, 'Step').click();
+    await title(page).fill('First step');
+    const save = dialog(page).getByRole('button', { name: 'Save', exact: true });
+    await save.click();
+    await expect(page.getByText('Saved "First step", but could not read it again')).toBeVisible();
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
+
+    await title(page).fill('First step, again');
+    await save.click();
+    await expect.poll(() => repository.writes.length).toBe(2);
+    expect(repository.writes[1].content).toContain('# First step, again\n');
+});
+
 // Opened by its address, the dialog has no button of its own for Vuetify to give focus back to.
 test('gives focus back to the task it was opened from once closed', async ({ context, page }) => {
     await mockBackend(context, NOTES);

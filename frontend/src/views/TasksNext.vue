@@ -918,10 +918,11 @@ async function onEditedTaskSave(task: Task) {
         return;
     }
     saving.value = true;
+    let written: string | undefined;
     try {
         // The forest is derived from the file listing, so there is nothing to update by hand:
         // saving waits until the write is visible in the listing, and the tree follows from that.
-        await store.save(task, node.path);
+        written = await store.save(task, node.path);
     }
     catch (e) {
         // The editor stays open with what was typed, so it can be tried again.
@@ -933,7 +934,7 @@ async function onEditedTaskSave(task: Task) {
     // note again to count that change from. Until then it still holds this one as unsaved.
     try {
         if (editedNode.value?.uuid === task.uuid) {
-            await taskEditorRef.value?.saved(task);
+            await taskEditorRef.value?.saved(task, written);
         }
     }
     catch (e) {
