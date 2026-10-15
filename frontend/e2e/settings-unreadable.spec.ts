@@ -46,3 +46,33 @@ test('adds no calendar over a calendars.yaml that could not be read', async ({ c
     await expect(nested.getByText('so saving would replace everything in it')).toBeVisible();
     expect(repository.writes).toEqual([]);
 });
+
+const ACTIONS = `[summarize]
+name = "Summarize"
+prompt = """
+Summarize {{input}}"""
+`;
+
+// The load fails on a dropped connection, and by the time the action is added the file reads again.
+test('adds an AI action to the file as it is, though it could not be loaded', async ({ context, page }) => {
+    const repository = await mockBackend(context, { '.mory/ai-actions.toml': ACTIONS });
+    await page.route(`${API_URL}notes/.mory/ai-actions.toml`, (route) => route.request().method() === 'GET'
+        ? route.fulfill({ status: 500, json: {} })
+        : route.fallback());
+    await page.goto('/files');
+    await openTab(page, 'AI Actions');
+    await expect(page.getByText('Failed to load AI Actions')).toBeVisible();
+
+    await configDialog(page).getByRole('button', { name: 'Add', exact: true }).click();
+    const nested = page.getByRole('dialog').filter({ has: page.getByRole('textbox', { name: 'Prompt' }) });
+    await nested.getByRole('textbox', { name: 'Identifier' }).fill('fix');
+    await nested.getByRole('textbox', { name: 'Display name' }).fill('Fix');
+    await nested.getByRole('textbox', { name: 'Prompt' }).fill('Fix {{input}}');
+    await nested.getByRole('button', { name: 'Save', exact: true }).click();
+
+    await expect.poll(() => repository.writes.length).toBe(1);
+    expect(repository.writes[0].path).toBe('.mory/ai-actions.toml');
+    expect(repository.writes[0].content).toContain('[summarize]');
+    expect(repository.writes[0].content).toContain('[fix]');
+    await expect(configDialog(page).getByText('Summarize', { exact: true })).toBeVisible();
+});
