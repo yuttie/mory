@@ -424,8 +424,12 @@ fn key_of(line: &str) -> Option<String> {
 /// at that indentation can belong to the key, so a mapping's range is what it always was.
 ///
 /// Trailing filler is left outside the range, so a comment that separates two blocks stays where
-/// the author put it rather than being swept into the one above.
+/// the author put it rather than being swept into the one above. A block scalar's lines are never
+/// filler, however they read.
 fn child_range(lines: &[String], at: usize) -> (usize, usize) {
+    if let Some(end) = block_scalar_end(lines, at) {
+        return (at + 1, end);
+    }
     let parent = indent_of(&lines[at]);
     let mut end = at + 1;
     let mut last_real = at + 1;
@@ -440,10 +444,59 @@ fn child_range(lines: &[String], at: usize) -> (usize, usize) {
         if indent < parent || (indent == parent && !dash) {
             break;
         }
-        end += 1;
+        end = block_scalar_end(lines, end).unwrap_or(end + 1);
         last_real = end;
     }
     (at + 1, last_real)
+}
+
+/// Where the block scalar `lines[at]` opens ends (`note: |`, `- >-`, `- note: |+`), or `None`
+/// when it opens none.
+///
+/// Every line indented past what owns the scalar -- the key, or the dash of an item that is the
+/// scalar -- is its content however it reads: an event's `note` is Markdown, and a heading in it
+/// starts with `#`. So is a blank line between two of them, and the blank lines after them when
+/// the scalar keeps its trailing newlines (`|+`).
+fn block_scalar_end(lines: &[String], at: usize) -> Option<usize> {
+    let line = &lines[at];
+    let mut column = indent_of(line);
+    let mut rest = line[column..].trim_end_matches('\n');
+    let mut owner = column;
+    while is_dash(rest) {
+        owner = column;
+        let after = rest[1..].trim_start();
+        column += rest.len() - after.len();
+        rest = after;
+    }
+    let header = if rest.starts_with(['|', '>']) {
+        rest.split(" #").next().unwrap_or(rest).trim_end()
+    }
+    else {
+        owner = column;
+        inline_value(rest)?
+    };
+    let mut indicators = header.chars();
+    let opens = matches!(indicators.next(), Some('|' | '>'))
+        && header.len() <= 3
+        && indicators.all(|c| matches!(c, '+' | '-' | '1'..='9'));
+    if !opens {
+        return None;
+    }
+    let keep = header.contains('+');
+    let mut end = at + 1;
+    for (i, content) in lines.iter().enumerate().skip(at + 1) {
+        if content.trim().is_empty() {
+            if keep {
+                end = i + 1;
+            }
+            continue;
+        }
+        if indent_of(content) <= owner {
+            break;
+        }
+        end = i + 1;
+    }
+    Some(end)
 }
 
 /// Where `key` is declared within `[from, to)` at exactly `indent`.
@@ -973,6 +1026,16 @@ mod tests {
         let empty = "---\nevents: ~   # none yet\n---\n";
         let filled = apply(empty, &[Change::set(&["events", "A", "start"], "2025-01-02")]).expect("a set under it");
         assert_eq!(filled, "---\nevents:   # none yet\n    A:\n        start: 2025-01-02\n---\n");
+    }
+
+    #[test]
+    fn a_block_scalars_lines_go_with_it_however_they_read() {
+        // A Markdown heading in an event's note, and a blank line inside it.
+        let lone = "---\nevents:\n    A:\n        note: |\n            Agenda\n\n            # Minutes\n        start: 2025-01-01\n---\n";
+        let replaced = apply(lone, &[Change::set(&["events", "A", "note"], "short")]).expect("a set");
+        assert_eq!(replaced, "---\nevents:\n    A:\n        note: short\n        start: 2025-01-01\n---\n");
+        let removed = apply(lone, &[Change::remove(&["events", "A", "note"])]).expect("a removal");
+        assert_eq!(removed, "---\nevents:\n    A:\n        start: 2025-01-01\n---\n");
     }
 
     #[test]
