@@ -20,7 +20,9 @@ export function isPlanDate(value: string): boolean {
 
 export function readPlan(text: string, month: string): MonthPlan {
     const value: unknown = YAML.parse(text) ?? {};
-    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    // A tagged mapping such as `!!omap` parses to a `Map`, whose days `Object.entries` cannot see:
+    // read as empty, the month would be saved back without them.
+    if (value === null || typeof value !== 'object' || Object.getPrototypeOf(value) !== Object.prototype) {
         throw new Error('A plan file must map dates to ordered entries.');
     }
     const result: MonthPlan = {};
