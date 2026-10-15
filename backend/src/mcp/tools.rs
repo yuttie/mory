@@ -120,7 +120,7 @@ pub async fn search_notes(
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ReadArgs {
-    /// The exact repository path, as a search result reported it: `notes/thing-<uuid>.md`.
+    /// The exact repository path, as a search result reported it: `ideas/draft.md`.
     pub path: String,
 }
 
@@ -187,8 +187,9 @@ fn within_limit(text: &str) -> &str {
 
 /// The default and maximum page for every listing tool.
 ///
-/// The repository holds roughly 1,600 entries. Handing a model all of them costs a large part of
-/// a context window and tells it almost nothing, so a page is the only shape offered.
+/// The repository holds a few thousand files, 2,661 in a clone of 2026-10-05, 1,610 of them
+/// notes. Handing a model all of them costs a large part of a context window and tells it almost
+/// nothing, so a page is the only shape offered.
 const DEFAULT_PAGE: usize = 50;
 const MAX_PAGE: usize = 500;
 
@@ -239,7 +240,7 @@ struct ListOutput<T> {
 /// The `tags:` list, ignoring anything that is not a list of strings.
 ///
 /// Frontmatter is whatever the file said, so a malformed value means "no tags here" rather than
-/// an error that would lose the other 1,599 entries.
+/// an error that would lose the rest of the listing.
 fn tags_of(metadata: Option<&serde_yaml::Value>) -> Vec<String> {
     metadata
         .and_then(|value| value.get("tags"))
@@ -1151,7 +1152,7 @@ mod tests {
     }
 
     /// Frontmatter is whatever the file said, so every one of these has to be a shrug rather than
-    /// an error that would lose the other 1,599 entries.
+    /// an error that would lose the rest of the listing.
     #[test]
     fn a_malformed_tags_value_reads_as_no_tags() {
         assert_eq!(tags_of(Some(&yaml("tags: [a, b]"))), vec!["a", "b"]);

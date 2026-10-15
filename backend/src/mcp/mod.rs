@@ -94,9 +94,10 @@ impl Mory {
                        `title:` and `body:` restrict a term to one field, `+` requires a term \
                        and `-` excludes it, and \"a phrase\" matches words in order. Boolean \
                        syntax such as (a OR b) is not accepted.\n\nModes: `text` is the local \
-                       index and is always available; `semantic` and `hybrid` need embeddings \
-                       enabled on this server and fall back to text with a warning when they \
-                       are not; `grep` runs `git grep` over every text file, frontmatter and \
+                       index and is always available; `hybrid` needs embeddings enabled on \
+                       this server and falls back to text with a warning when they are off or \
+                       unavailable, where `semantic` fails instead; `grep` runs `git grep` over \
+                       every text file, frontmatter and \
                        `.mory/` included. Start with `hybrid`, or `text` for an exact term.\
                        \n\nIn `grep` mode the query language above does not apply: the whole \
                        query is one case-sensitive POSIX basic regular expression. `.`, `*`, \
@@ -117,8 +118,8 @@ impl Mory {
         name = "list_notes",
         description = "List the notes in the repository, newest first, with their titles, tags \
                        and task status. Optionally restricted to a path prefix such as \
-                       `.tasks/` or `projects/`.\n\nThe repository holds on the order of a \
-                       thousand entries, so this is always a page: pass the `next_offset` a \
+                       `.tasks/` or `projects/`.\n\nThe repository holds a few thousand \
+                       files, so this is always a page: pass the `next_offset` a \
                        result reports to continue. To find something specific, search_notes is \
                        the better tool.",
         annotations(title = "List notes", read_only_hint = true, open_world_hint = false)
@@ -137,14 +138,19 @@ impl Mory {
                        its status, and whichever of importance (low, medium or high), \
                        lead_time, available_from, due_by, deadline and alarms it sets. Keys \
                        an older task model wrote are read as the web app reads them: a numeric \
-                       importance by its name, start_at as available_from, and urgency, \
-                       progress and scheduled_dates not at all.\n\nBeside it are two values \
+                       importance as low (1 or 2), medium (4) or high (5) and 3 as unrated, \
+                       start_at as available_from, and urgency, progress and scheduled_dates \
+                       not at all.\n\nBeside it are two values \
                        derived from the tree, which no tool sets. `urgency.level` is overdue \
                        (the deadline has passed), target_missed (due_by has), urgent, notice \
                        or calm (within one lead time of the nearer date, within two, or \
                        further), or none (no date, or the task is done or canceled); an open \
-                       task is at least as urgent as its most urgent open subtask. `progress`, on a task with \
-                       subtasks, is the percentage of its leaf subtasks that are done, \
+                       task is at least as urgent as its most urgent open subtask. With the \
+                       level come `reference`, the date it is measured against, `slack_ratio`, \
+                       the time left until then in lead times, `actionable`, whether \
+                       available_from has come, and `short_window`, whether available_from \
+                       leaves less than one lead time before the date. `progress`, on a task \
+                       with subtasks, is the percentage of its leaf subtasks that are done, \
                        canceled ones left out.\n\nStatuses are backlog, todo, in_progress, \
                        waiting, blocked, on_hold, done and canceled.",
         annotations(title = "List tasks", read_only_hint = true, open_world_hint = false)
@@ -187,7 +193,11 @@ impl Mory {
                        are a live view of someone else's calendar: they are read-only, they are \
                        not stored in the repository, and they must never be written into it. A \
                        calendar that could not be read is reported in `calendars` with its \
-                       error rather than failing the call.",
+                       error rather than failing the call.\n\nAn event the user has converted \
+                       into a note under `.events/` is still listed here. The note, which \
+                       list_events returns, names the original in its `ical` (`uid`, and \
+                       `recurrence_id` for one occurrence), and the calendar draws only the \
+                       note, so count such an event once.",
         annotations(title = "List imported events", read_only_hint = true, open_world_hint = true)
     )]
     pub async fn list_imported_events(
@@ -608,7 +618,8 @@ impl ServerHandler for Mory {
 /// trial and error, and the places where guessing produces a file the user has to repair by hand.
 const INSTRUCTIONS: &str = "\
 mory is one person's notes, stored as Markdown files in a Git repository. Every write is a \
-commit, so say what you changed in the message.
+commit. Most write tools take its message, so say in it what you changed; the plan tools write \
+their own.
 
 Structure comes from the paths, not from a database:
 - `.tasks/` holds tasks, `.events/` holds calendar entries, `.mory/` holds configuration and, \
