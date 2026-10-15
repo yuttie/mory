@@ -31,6 +31,7 @@ const FREQUENCIES: [&str; 4] = ["daily", "weekly", "monthly", "yearly"];
 /// drawn, at an hour that moves with whoever reads it. Read with the reader the task dates are
 /// checked with, so the two kinds of date follow one rule.
 fn check_when(key: &str, value: &str) -> Result<(), String> {
+    check_unpadded(key, value)?;
     let text = Value::String(value.to_owned());
     if crate::urgency::instant(Some(&text), crate::urgency::local_zone(), false).is_none() {
         return Err(format!(
@@ -41,14 +42,55 @@ fn check_when(key: &str, value: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Refuses white space around a value. The readers trim it, but the calendar does not: an `end`
+/// of `"+90m "` is dropped with its occurrence.
+fn check_unpadded(key: &str, value: &str) -> Result<(), String> {
+    if value.trim() != value {
+        return Err(format!("{key} {value:?} has white space around it; leave it out."));
+    }
+    Ok(())
+}
+
 /// A duration, as `normalizeEndTime` in `frontend/src/events.ts` reads one: `+90m`, `+1.5h`,
-/// `+2 days`.
+/// `+2 days`. Its own pattern takes `[\d.]+`, so `+.h` too, which `parseFloat` makes `NaN`, and
+/// the calendar an end of "Invalid Date"; this one needs a digit.
 static DURATION: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r"^\+[\d.]+ *(y|M|w|d|h|m|s|ms|(?i:years?|months?|weeks?|days?|hours?|minutes?|seconds?|milliseconds?))$",
+        r"^\+([0-9]+(?:\.[0-9]*)?|\.[0-9]+) *(y|M|w|d|h|m|s|ms|(?i:years?|months?|weeks?|days?|hours?|minutes?|seconds?|milliseconds?))$",
     )
     .unwrap()
 });
+
+/// The longest duration an `end` may give, in days. An end past the year 9999 is one the calendar
+/// cannot draw, and no event lasts a thousand years.
+const LONGEST_DAYS: f64 = 1000.0 * 366.0;
+
+/// How many days a duration `DURATION` matches is, roughly: enough to tell one that is absurd.
+fn duration_days(value: &str) -> Option<f64> {
+    let captures = DURATION.captures(value)?;
+    let amount: f64 = captures[1].parse().ok()?;
+    let per = match &captures[2] {
+        "y" => 366.0,
+        "M" => 31.0,
+        "w" => 7.0,
+        "d" => 1.0,
+        "h" => 1.0 / 24.0,
+        "m" => 1.0 / 1440.0,
+        "s" => 1.0 / 86_400.0,
+        "ms" => 1.0 / 86_400_000.0,
+        long => match long.to_ascii_lowercase().trim_end_matches('s') {
+            "year" => 366.0,
+            "month" => 31.0,
+            "week" => 7.0,
+            "day" => 1.0,
+            "hour" => 1.0 / 24.0,
+            "minute" => 1.0 / 1440.0,
+            "second" => 1.0 / 86_400.0,
+            _ => 1.0 / 86_400_000.0,
+        },
+    };
+    Some(amount * per)
+}
 
 /// A time of day, which belongs to the start's date, or the next one when it would precede it.
 static TIME_OF_DAY: LazyLock<Regex> =
@@ -56,8 +98,14 @@ static TIME_OF_DAY: LazyLock<Regex> =
 
 /// An `end`: a moment as `check_when` takes one, a time of day, or a duration from the start.
 fn check_end(value: &str) -> Result<(), String> {
-    let trimmed = value.trim();
-    if DURATION.is_match(trimmed) || TIME_OF_DAY.is_match(trimmed) || check_when("`end`", value).is_ok() {
+    check_unpadded("end", value)?;
+    if let Some(days) = duration_days(value) {
+        if days > LONGEST_DAYS {
+            return Err(format!("end {value:?} is more than a thousand years after the start."));
+        }
+        return Ok(());
+    }
+    if TIME_OF_DAY.is_match(value) || check_when("`end`", value).is_ok() {
         return Ok(());
     }
     Err(format!(
@@ -109,8 +157,9 @@ impl Repeat {
         if self.until.is_some() && self.count.is_some() {
             return Err("A rule has `until` or `count`, never both.".to_owned());
         }
-        if self.interval.is_some_and(|interval| interval < 1) {
-            return Err("`interval` must be at least 1.".to_owned());
+        // `note_events` holds an interval in a `u16`, and the web app refuses a rule past it.
+        if self.interval.is_some_and(|interval| !(1..=65_535).contains(&interval)) {
+            return Err("`interval` must be a whole number from 1 to 65535.".to_owned());
         }
 
         let mut repeat = Mapping::new();
@@ -188,8 +237,14 @@ fn check_weekday(day: &str, freq: &str) -> Result<String, String> {
         ));
     }
     if !ordinal.is_empty() {
-        if ordinal.parse::<i32>().is_err() {
-            return Err(format!("{day:?} has an ordinal that is not a number."));
+        // As `toWeekday` in `frontend/src/recurrence.ts` reads one: digits after an optional
+        // minus, never a plus, and never zero, which rrule throws on.
+        let digits = ordinal.strip_prefix('-').unwrap_or(ordinal);
+        if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+            return Err(format!("{day:?} has an ordinal that is not a number, such as `3` or `-1`."));
+        }
+        if digits.bytes().all(|byte| byte == b'0') {
+            return Err(format!("{day:?} has an ordinal of zero; the first is `1`, the last `-1`."));
         }
         // An ordinal picks a weekday within a period, so there has to be a period to pick within.
         if freq != "monthly" && freq != "yearly" {
@@ -784,6 +839,30 @@ mod tests {
                 .expect_err("not an end");
             assert!(error.contains("duration"), "{end}: {error}");
         }
+    }
+
+    /// The web app drops each of these with its occurrence, refuses the rule, or draws the end
+    /// as "Invalid Date", which the calendar throws on, so none is written.
+    #[test]
+    fn a_value_the_calendar_cannot_read_is_refused() {
+        for end in ["+.h", "+..m", "+.d", "+99999999999999999999y", "+1001y", "+90m ", " 18:30", "+١h"] {
+            assert!(check_end(end).is_err(), "{end:?}");
+        }
+        for end in ["+1.h", "+.5h", "+1000y", "+500 years", "+90 Minutes"] {
+            assert!(check_end(end).is_ok(), "{end:?}");
+        }
+        for start in [" 2026-09-24", "2026-09-24 "] {
+            assert!(event_changes(&event(serde_json::json!({ "start": start }))).is_err(), "{start:?}");
+        }
+        for day in ["+1wed", "0wed", "-0fri", "-wed"] {
+            assert!(repeat("monthly", &[day]).to_value().is_err(), "{day}");
+        }
+        assert!(repeat("monthly", &["01wed"]).to_value().is_ok(), "as toWeekday reads it");
+        let mut rule = repeat("daily", &[]);
+        rule.interval = Some(65_536);
+        assert!(rule.to_value().is_err());
+        rule.interval = Some(65_535);
+        assert!(rule.to_value().is_ok());
     }
 
     fn edit_and_check(note: &str, fields: serde_json::Value) -> Result<String, String> {
