@@ -153,6 +153,15 @@ pub fn apply(text: &str, changes: &[Change]) -> Result<String, EditError> {
         return Err(refuse("CRLF frontmatter cannot be edited safely here; use read_note and update_note."));
     }
     let mut note = Note::parse(text);
+    // `parse` reads a fence it sees no close to as body, and the edit would then put a second
+    // block above it, turning the note's own frontmatter into text. A closing `---\r` is one
+    // such close, in a note whose lines end in CRLF after its opening fence.
+    if !note.had_frontmatter && text.starts_with("---\n") {
+        return Err(refuse(
+            "this note opens its frontmatter with `---` but has no closing `---` line the editor \
+             can find, so nothing was written. Use read_note and update_note instead.",
+        ));
+    }
 
     let before: Value = if note.block.trim().is_empty() {
         Value::Mapping(Mapping::new())
@@ -852,6 +861,18 @@ mod tests {
         let error = apply(before, &[Change::set(&["task", "progress"], 0)])
             .expect_err("invalid YAML should be refused");
         assert!(error.0.contains("not valid YAML"), "{error}");
+    }
+
+    #[test]
+    fn a_fence_that_does_not_close_is_refused_rather_than_doubled() {
+        // A note whose lines end in CRLF past its opening fence closes with `---\r`.
+        let mixed = "---\nevents:\r\n    A:\r\n        start: 2026-09-23\r\n---\r\n\r\n# Body\r\n";
+        let error = apply(mixed, &[Change::set(&["events", "A", "start"], "2026-09-24")]).expect_err("no close seen");
+        assert!(error.0.contains("no closing"), "{error}");
+        let unterminated = "---\ntags: [a]\n\n# Body\n";
+        assert!(apply(unterminated, &[Change::set(&["tags"], Value::Sequence(vec!["b".into()]))]).is_err());
+        // A note with no fence at all still gains a block.
+        assert!(apply("# Body\n", &[Change::set(&["tags"], Value::Sequence(vec!["b".into()]))]).is_ok());
     }
 
     #[test]
