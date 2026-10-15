@@ -995,6 +995,10 @@ async fn put_notes_path(
     match written {
         Ok(Some(_)) => Json(&true).into_response(),
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
+        Err(e) if e.downcast_ref::<models::PathConflict>().is_some() => {
+            tracing::info!("Refused to write {}: {:#}", path, e);
+            (StatusCode::CONFLICT, e.to_string()).into_response()
+        },
         Err(e) => {
             tracing::error!("Failed to write {}: {:?}", path, e);
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
@@ -2653,6 +2657,67 @@ mod models {
         index.iter().find(|entry| entry.path == path.as_bytes())
     }
 
+    /// A write refused because it would replace or remove a file HEAD holds, which the handlers
+    /// answer with 409 rather than 500.
+    #[derive(Debug)]
+    pub struct PathConflict(String);
+
+    impl std::fmt::Display for PathConflict {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str(&self.0)
+        }
+    }
+
+    impl std::error::Error for PathConflict {}
+
+    /// What already stands where a file at some path would go.
+    enum Taken {
+        /// A file at the path itself.
+        File,
+        /// Files under it, as under a directory.
+        Directory,
+        /// A file at one of its ancestors.
+        FileAbove(Vec<u8>),
+    }
+
+    /// What adding a file at `path` would take from `index`.
+    ///
+    /// libgit2's `git_index_add` makes room for the entry it is given: it removes a file at `a`
+    /// when `a/b` is added, and every file under `a/` when `a` is. Nothing here asks it to, so
+    /// every write looks first.
+    fn path_taken(index: &Index, path: &[u8]) -> Option<Taken> {
+        let below = |longer: &[u8], shorter: &[u8]| {
+            longer.len() > shorter.len()
+                && longer.starts_with(shorter)
+                && longer[shorter.len()] == b'/'
+        };
+        index.iter().find_map(|entry| {
+            if entry.path == path {
+                Some(Taken::File)
+            }
+            else if below(&entry.path, path) {
+                Some(Taken::Directory)
+            }
+            else if below(path, &entry.path) {
+                Some(Taken::FileAbove(entry.path))
+            }
+            else {
+                None
+            }
+        })
+    }
+
+    fn conflict(path: &[u8], taken: &Taken) -> PathConflict {
+        let path = String::from_utf8_lossy(path);
+        PathConflict(match taken {
+            Taken::File => format!("{path} already exists"),
+            Taken::Directory => format!("{path} is a directory"),
+            Taken::FileAbove(file) => {
+                format!("{} is a file, so {path} cannot be created under it", String::from_utf8_lossy(file))
+            },
+        })
+    }
+
     /// Write `index` out as a tree and commit it onto `parent`, moving HEAD.
     fn commit_index(
         repo: &Repository,
@@ -2667,7 +2732,8 @@ mod models {
             .context("failed to commit")
     }
 
-    /// Commit one blob at `path`, replacing whatever HEAD held there.
+    /// Commit one blob at `path`, replacing the file HEAD held there. A path that is a directory,
+    /// or lies under a file, is refused with a `PathConflict`.
     ///
     /// The four `commit_*` functions take `&Repository` rather than `&AppState` so the git
     /// logic can be exercised against a fixture repository on its own; the `AppState` methods
@@ -2679,6 +2745,10 @@ mod models {
         message: &str,
     ) -> Result<Oid> {
         let (mut index, head_commit) = head_index(repo)?;
+        match path_taken(&index, path.as_bytes()) {
+            None | Some(Taken::File) => (),
+            Some(taken) => return Err(conflict(path.as_bytes(), &taken).into()),
+        }
         let blob_oid = repo.blob(content).context("failed to write the blob")?;
         index
             .add(&blob_index_entry(path.as_bytes(), blob_oid))
@@ -2695,7 +2765,13 @@ mod models {
         expected: &str,
     ) -> Result<Option<Oid>> {
         let tree = repo.head()?.peel_to_tree()?;
-        let current = tree.get_path(std::path::Path::new(path)).ok().map(|entry| entry.id());
+        // Only a file is a version to check against. A directory at the path is no file, and
+        // goes on to `commit_save` to be refused as what it is, rather than as a stale version.
+        let current = tree
+            .get_path(std::path::Path::new(path))
+            .ok()
+            .filter(|entry| entry.kind() == Some(git2::ObjectType::Blob))
+            .map(|entry| entry.id());
         let matches = match current {
             Some(oid) => expected == format!("\"{oid}\""),
             None => expected == "absent",
@@ -2706,7 +2782,8 @@ mod models {
         commit_save(repo, path, content, message).map(Some)
     }
 
-    /// Move the blob at `from` to `to`, keeping its mode. `None` when `from` is not in HEAD.
+    /// Move the blob at `from` to `to`, keeping its mode. `None` when `from` is not in HEAD, and a
+    /// `PathConflict` when anything but `from` itself is at `to` or above it.
     pub(crate) fn commit_rename(
         repo: &Repository,
         from: &str,
@@ -2720,6 +2797,9 @@ mod models {
         index
             .remove(Path::new(from), 0)
             .with_context(|| format!("failed to unstage {}", from))?;
+        if let Some(taken) = path_taken(&index, to.as_bytes()) {
+            return Err(conflict(to.as_bytes(), &taken).into());
+        }
         entry.path = to.as_bytes().into();
         index
             .add(&entry)
@@ -2930,7 +3010,8 @@ mod models {
             Ok((cache_commit_id, entries))
         }
 
-        /// Commit `content` at `path`, replacing whatever HEAD held there.
+        /// Commit `content` at `path`, as `commit_save` does: replacing the file HEAD held there,
+        /// and refusing a directory or a path under a file.
         pub async fn save_note(
             &self,
             path: &str,

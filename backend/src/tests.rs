@@ -2557,6 +2557,76 @@ fn a_non_utf8_path_in_head_does_not_break_a_lookup() {
     assert_eq!(fixture.blob_at(commit, "dir/other.md").as_deref(), Some("other\n"));
 }
 
+fn assert_conflict(result: anyhow::Result<impl std::fmt::Debug>) {
+    let error = result.expect_err("the write should have been refused");
+    assert!(
+        error.downcast_ref::<crate::models::PathConflict>().is_some(),
+        "the refusal should be a PathConflict, not {error:#}",
+    );
+}
+
+/// libgit2's index makes room for what it is given: staging `note.md/draft.md` removes the file
+/// at `note.md`, and staging `dir` removes everything under `dir/`. A save must refuse rather
+/// than delete a note to make the path it was asked for.
+#[test]
+fn commit_save_refuses_a_path_under_a_file_or_on_a_directory() {
+    let fixture = write_fixture();
+    let before = head_of(&fixture);
+
+    assert_conflict(crate::models::commit_save(&fixture.repo, "note.md/draft.md", b"draft\n", "Add"));
+    assert_conflict(crate::models::commit_save(&fixture.repo, "dir", b"file\n", "Add"));
+
+    assert_eq!(head_of(&fixture), before, "HEAD must not move");
+    assert_eq!(fixture.blob_at(head_of(&fixture), "note.md").as_deref(), Some("first\n"));
+}
+
+/// `absent` used to pass here: HEAD has nothing at `note.md/draft.md`, only a file above it.
+#[test]
+fn commit_save_checked_refuses_a_new_file_under_a_file() {
+    let fixture = write_fixture();
+    let before = head_of(&fixture);
+
+    assert_conflict(crate::models::commit_save_checked(
+        &fixture.repo, "note.md/draft.md", b"draft\n", "Add", "absent",
+    ));
+    // A directory is not a file that changed since it was read, which would be a 412 sending the
+    // caller to read it again: it is a path no file can take.
+    assert_conflict(crate::models::commit_save_checked(&fixture.repo, "dir", b"file\n", "Add", "absent"));
+    assert_eq!(head_of(&fixture), before, "HEAD must not move");
+}
+
+#[test]
+fn commit_rename_refuses_to_replace_or_remove_what_is_there() {
+    let fixture = write_fixture();
+    let before = head_of(&fixture);
+
+    // Onto a file, onto a directory, and under a file.
+    assert_conflict(crate::models::commit_rename(&fixture.repo, "note.md", "dir/other.md", "Rename"));
+    assert_conflict(crate::models::commit_rename(&fixture.repo, "note.md", "dir", "Rename"));
+    assert_conflict(crate::models::commit_rename(&fixture.repo, "dir/other.md", "note.md/other.md", "Rename"));
+
+    assert_eq!(head_of(&fixture), before, "HEAD must not move");
+    assert_eq!(fixture.blob_at(head_of(&fixture), "note.md").as_deref(), Some("first\n"));
+    assert_eq!(fixture.blob_at(head_of(&fixture), "dir/other.md").as_deref(), Some("other\n"));
+}
+
+/// The destination is checked once the source has left it, so a file may move under its own
+/// name, and the only file in a directory may take the directory's name.
+#[test]
+fn commit_rename_lets_a_file_take_the_place_it_leaves() {
+    let fixture = write_fixture();
+
+    let commit = crate::models::commit_rename(&fixture.repo, "note.md", "note.md/draft.md", "Rename")
+        .expect("the rename should succeed")
+        .expect("the source exists");
+    assert_eq!(fixture.blob_at(commit, "note.md/draft.md").as_deref(), Some("first\n"));
+
+    let commit = crate::models::commit_rename(&fixture.repo, "dir/other.md", "dir", "Rename")
+        .expect("the rename should succeed")
+        .expect("the source exists");
+    assert_eq!(fixture.blob_at(commit, "dir").as_deref(), Some("other\n"));
+}
+
 
 
 
