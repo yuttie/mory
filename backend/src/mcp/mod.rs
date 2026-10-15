@@ -316,7 +316,8 @@ impl Mory {
                        status replaces the whole status block, so the keys the new one requires \
                        must come with it: `waiting` needs waiting_for, `blocked` needs \
                        blocked_by, `on_hold` needs hold_reason, `canceled` needs cancel_reason. \
-                       `done` and `canceled` default their timestamp to now.",
+                       `done` and `canceled` default their timestamp to now. Setting the status \
+                       a task already has changes only the keys given and keeps the rest.",
         annotations(title = "Update a task", read_only_hint = false, destructive_hint = false,
                     idempotent_hint = true, open_world_hint = false)
     )]
@@ -334,8 +335,10 @@ impl Mory {
     #[tool(
         name = "complete_task",
         description = "Mark a task done and commit it. Requires the notes:write scope.\n\nSets \
-                       the status to done with a completed_at of now unless one is given, and \
-                       changes nothing else. A parent's progress follows from it.",
+                       the status to done with a completed_at of now unless one is given. A \
+                       task already done keeps its completed_at and completion_note unless new \
+                       ones are given, so completing it again changes nothing. A parent's \
+                       progress follows from it.",
         annotations(title = "Complete a task", read_only_hint = false, destructive_hint = false,
                     idempotent_hint = true, open_world_hint = false)
     )]

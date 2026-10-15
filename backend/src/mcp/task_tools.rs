@@ -27,6 +27,7 @@ pub struct UpdateTaskArgs {
 
     /// `backlog`, `todo`, `in_progress`, `waiting`, `blocked`, `on_hold`, `done` or `canceled`.
     /// Changing it replaces the whole status, so the fields the new one needs must come with it.
+    /// Setting the status the task already has changes only the fields given.
     #[serde(default)]
     pub status: Option<String>,
     /// Required by `waiting`: what is being waited for.
@@ -78,7 +79,11 @@ pub struct UpdateTaskArgs {
 /// that moves from `waiting` to `todo` still carrying its `waiting_for` is not a valid task --
 /// and replacing the mapping wholesale does that while leaving `status:` where the author put it
 /// among its siblings.
-fn status_changes(args: &UpdateTaskArgs, kind: &str) -> Result<Vec<Change>, String> {
+///
+/// Setting the kind the task already has changes only what `args` gives, and keeps the rest of
+/// `current`: completing a done task again must not move its `completed_at` to now and drop its
+/// `completion_note`, which is the record of when and how it was done.
+fn status_changes(args: &UpdateTaskArgs, kind: &str, current: Option<&serde_yaml::Mapping>) -> Result<Vec<Change>, String> {
     if !STATUS_KINDS.contains(&kind) {
         return Err(format!(
             "{kind:?} is not a task status. Use one of: {}.",
@@ -89,6 +94,10 @@ fn status_changes(args: &UpdateTaskArgs, kind: &str) -> Result<Vec<Change>, Stri
     // Insertion order is the order these appear in the file, so `kind` leads.
     let mut status = serde_yaml::Mapping::new();
     status.insert("kind".into(), kind.into());
+    if let Some(current) = current.filter(|current| current.get("kind").and_then(Value::as_str) == Some(kind)) {
+        status.extend(current.iter().map(|(key, value)| (key.clone(), value.clone())));
+    }
+    let has = |status: &serde_yaml::Mapping, key: &str| status.get(key).is_some_and(|value| !value.is_null());
     let optional = |status: &mut serde_yaml::Mapping, pairs: &[(&str, &Option<String>)]| {
         for (key, value) in pairs {
             if let Some(value) = value {
@@ -99,10 +108,11 @@ fn status_changes(args: &UpdateTaskArgs, kind: &str) -> Result<Vec<Change>, Stri
 
     match kind {
         "waiting" => {
-            let Some(waiting_for) = args.waiting_for.as_deref() else {
-                return Err("`waiting` needs waiting_for: what is being waited for.".to_owned());
-            };
-            status.insert("waiting_for".into(), waiting_for.into());
+            match args.waiting_for.as_deref() {
+                Some(waiting_for) => { status.insert("waiting_for".into(), waiting_for.into()); },
+                None if has(&status, "waiting_for") => {},
+                None => return Err("`waiting` needs waiting_for: what is being waited for.".to_owned()),
+            }
             optional(
                 &mut status,
                 &[
@@ -113,30 +123,38 @@ fn status_changes(args: &UpdateTaskArgs, kind: &str) -> Result<Vec<Change>, Stri
             );
         },
         "blocked" => {
-            let Some(blocked_by) = args.blocked_by.as_deref() else {
-                return Err("`blocked` needs blocked_by: what is blocking it.".to_owned());
-            };
-            status.insert("blocked_by".into(), blocked_by.into());
+            match args.blocked_by.as_deref() {
+                Some(blocked_by) => { status.insert("blocked_by".into(), blocked_by.into()); },
+                None if has(&status, "blocked_by") => {},
+                None => return Err("`blocked` needs blocked_by: what is blocking it.".to_owned()),
+            }
         },
         "on_hold" => {
-            let Some(hold_reason) = args.hold_reason.as_deref() else {
-                return Err("`on_hold` needs hold_reason: why it is on hold.".to_owned());
-            };
-            status.insert("hold_reason".into(), hold_reason.into());
+            match args.hold_reason.as_deref() {
+                Some(hold_reason) => { status.insert("hold_reason".into(), hold_reason.into()); },
+                None if has(&status, "hold_reason") => {},
+                None => return Err("`on_hold` needs hold_reason: why it is on hold.".to_owned()),
+            }
             optional(&mut status, &[("review_at", &args.review_at)]);
         },
         "done" => {
-            let completed_at = args.completed_at.clone().unwrap_or_else(now_local);
-            status.insert("completed_at".into(), completed_at.into());
+            match args.completed_at.clone() {
+                Some(completed_at) => { status.insert("completed_at".into(), completed_at.into()); },
+                None if has(&status, "completed_at") => {},
+                None => { status.insert("completed_at".into(), now_local().into()); },
+            }
             optional(&mut status, &[("completion_note", &args.completion_note)]);
         },
         "canceled" => {
-            let Some(cancel_reason) = args.cancel_reason.as_deref() else {
+            if args.cancel_reason.is_none() && !has(&status, "cancel_reason") {
                 return Err("`canceled` needs cancel_reason: why it was cancelled.".to_owned());
-            };
-            let canceled_at = args.canceled_at.clone().unwrap_or_else(now_local);
-            status.insert("canceled_at".into(), canceled_at.into());
-            status.insert("cancel_reason".into(), cancel_reason.into());
+            }
+            match args.canceled_at.clone() {
+                Some(canceled_at) => { status.insert("canceled_at".into(), canceled_at.into()); },
+                None if has(&status, "canceled_at") => {},
+                None => { status.insert("canceled_at".into(), now_local().into()); },
+            }
+            optional(&mut status, &[("cancel_reason", &args.cancel_reason)]);
         },
         // `backlog`, `todo` and `in_progress` carry nothing but their kind.
         _ => {},
@@ -193,7 +211,9 @@ pub async fn update_task(
         Err(message) => return Ok(tool_error(message)),
     };
     if let Some(kind) = args.status.as_deref() {
-        match status_changes(&args, kind) {
+        let current = frontmatter::value(&note.0);
+        let current = current.as_ref().and_then(|root| root.get("task")?.get("status")?.as_mapping());
+        match status_changes(&args, kind, current) {
             Ok(status) => changes.extend(status),
             Err(message) => return Ok(tool_error(message)),
         }
@@ -547,7 +567,7 @@ pub async fn create_task(
         Err(message) => return Ok(tool_error(message)),
     };
     changes.push(Change::set(&["created_at"], now_local()));
-    match status_changes(&update, update.status.as_deref().unwrap_or(NEW_TASK_STATUS)) {
+    match status_changes(&update, update.status.as_deref().unwrap_or(NEW_TASK_STATUS), None) {
         Ok(status) => changes.extend(status),
         Err(message) => return Ok(tool_error(message)),
     }
@@ -662,7 +682,7 @@ mod tests {
     /// `waiting` to `todo` carrying its old `waiting_for` is not a valid task.
     #[test]
     fn changing_status_takes_the_old_status_keys_with_it() {
-        let changes = status_changes(&args("t.md"), "todo").expect("todo needs nothing");
+        let changes = status_changes(&args("t.md"), "todo", None).expect("todo needs nothing");
         let edited = apply(TASK, &changes);
         assert!(edited.contains("        kind: todo\n"), "{edited}");
         assert!(!edited.contains("waiting_for"), "{edited}");
@@ -681,20 +701,41 @@ mod tests {
             ("on_hold", "hold_reason"),
             ("canceled", "cancel_reason"),
         ] {
-            let error = status_changes(&args("t.md"), kind)
+            let error = status_changes(&args("t.md"), kind, None)
                 .expect_err("{kind} should require its companion");
             assert!(error.contains(wanted), "{kind}: {error}");
         }
         // And the three that need nothing.
-        assert!(status_changes(&args("t.md"), "backlog").is_ok());
-        assert!(status_changes(&args("t.md"), "todo").is_ok());
-        assert!(status_changes(&args("t.md"), "in_progress").is_ok());
-        assert!(status_changes(&args("t.md"), "procrastinating").is_err());
+        assert!(status_changes(&args("t.md"), "backlog", None).is_ok());
+        assert!(status_changes(&args("t.md"), "todo", None).is_ok());
+        assert!(status_changes(&args("t.md"), "in_progress", None).is_ok());
+        assert!(status_changes(&args("t.md"), "procrastinating", None).is_err());
+    }
+
+    /// Completing a done task again, or cancelling a canceled one, keeps the record of when and
+    /// how, and changes only what is given.
+    #[test]
+    fn setting_the_status_a_task_has_keeps_its_record() {
+        let done = "---\ntask:\n    status:\n        kind: done\n        completed_at: 2020-01-01 10:00:00+09:00\n        completion_note: shipped\n---\n";
+        let current = |text: &str| frontmatter::value(text).unwrap()["task"]["status"].as_mapping().cloned();
+        let again = status_changes(&args("t.md"), "done", current(done).as_ref()).expect("done again");
+        assert_eq!(apply(done, &again), done, "nothing to change");
+        let noted = UpdateTaskArgs { completion_note: Some("shipped twice".into()), ..args("t.md") };
+        let edited = apply(done, &status_changes(&noted, "done", current(done).as_ref()).unwrap());
+        assert_eq!(edited, done.replace("note: shipped", "note: shipped twice"));
+
+        let canceled = "---\ntask:\n    status:\n        kind: canceled\n        canceled_at: 2020-01-01\n        cancel_reason: moot\n---\n";
+        assert!(status_changes(&args("t.md"), "canceled", current(canceled).as_ref()).is_ok(), "the reason is kept");
+        let at = UpdateTaskArgs { canceled_at: Some("2020-01-02".into()), ..args("t.md") };
+        assert_eq!(apply(canceled, &status_changes(&at, "canceled", current(canceled).as_ref()).unwrap()), canceled.replace("2020-01-01", "2020-01-02"));
+        // Another kind still starts afresh.
+        let reopened = apply(done, &status_changes(&args("t.md"), "todo", current(done).as_ref()).unwrap());
+        assert!(!reopened.contains("completed_at"), "{reopened}");
     }
 
     #[test]
     fn done_and_canceled_stamp_themselves_when_no_time_is_given() {
-        let changes = status_changes(&args("t.md"), "done").expect("done defaults its time");
+        let changes = status_changes(&args("t.md"), "done", None).expect("done defaults its time");
         let edited = apply(TASK, &changes);
         let stamped = edited
             .lines()
