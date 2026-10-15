@@ -221,7 +221,9 @@ describe('subscriptions', () => {
 
     it('writes the list back and drops what was loaded for the old one', async () => {
         apiMocks.getImportedEvents.mockResolvedValue(response());
+        apiMocks.getNote.mockRejectedValue(missing());
         const store = await freshStore();
+        await store.loadConfiguration();
 
         await store.load('2024-05-01', '2024-05-31');
         expect(store.events).toHaveLength(1);
@@ -243,13 +245,96 @@ describe('subscriptions', () => {
     });
 });
 
+describe('a configuration not read', () => {
+    // Every save writes the whole file from what the store holds, and a store that could not read
+    // the file holds none of it: one colour saved after a typo or a dropped connection would leave
+    // the file holding that colour alone, every subscription, category and default gone.
+    const failure = () => Object.assign(new Error('Server Error'), { response: { status: 500 } });
+
+    it('is not written over when the read failed', async () => {
+        apiMocks.getNote.mockRejectedValueOnce(failure());
+        const store = await freshStore();
+        await expect(store.loadConfiguration()).rejects.toThrow('Server Error');
+
+        await expect(store.saveTaskDateColors({ deadline: '#b71c1c' })).rejects.toThrow('could not be read');
+        expect(apiMocks.addNote).not.toHaveBeenCalled();
+    });
+
+    it('is not written over when it is not YAML', async () => {
+        const store = await storeWith(`${YAML_FILE}alarms: [unclosed\n`);
+        await expect(store.loadConfiguration()).rejects.toThrow();
+
+        await expect(store.saveSubscriptions([])).rejects.toThrow('could not be read');
+        expect(apiMocks.addNote).not.toHaveBeenCalled();
+    });
+
+    it('is not written over when it failed to read again after reading once', async () => {
+        const store = await storeWith(YAML_FILE);
+        await store.loadConfiguration();
+        apiMocks.getNote.mockRejectedValueOnce(failure());
+        await expect(store.loadConfiguration()).rejects.toThrow('Server Error');
+
+        await expect(store.saveAlarmDefaults({})).rejects.toThrow('could not be read');
+        expect(apiMocks.addNote).not.toHaveBeenCalled();
+    });
+
+    it('is not written before it has been read', async () => {
+        const store = await storeWith(YAML_FILE);
+
+        await expect(store.saveCategories([])).rejects.toThrow('could not be read');
+        expect(apiMocks.addNote).not.toHaveBeenCalled();
+    });
+
+    // The store would then hold the refused change as though it were the file's: a category saved
+    // over a configuration that could not be read would leave every other category unknown.
+    it('keeps a refused change out of what the store holds', async () => {
+        apiMocks.getNote.mockRejectedValueOnce(failure());
+        const store = await freshStore();
+        await expect(store.loadConfiguration()).rejects.toThrow('Server Error');
+
+        await expect(store.saveCategories([{ id: 'new' }])).rejects.toThrow('could not be read');
+        const holidays = { id: 'h', name: 'H', url: 'https://example.invalid/h.ics', enabled: true };
+        await expect(store.saveSubscriptions([holidays])).rejects.toThrow('could not be read');
+        await expect(store.saveTaskDateColors({ deadline: '#b71c1c' })).rejects.toThrow('could not be read');
+
+        expect(store.categories).toBeNull();
+        expect(store.subscriptions).toEqual([]);
+        expect(store.taskDateColors).toEqual({});
+    });
+
+    it('is written once the file turns out to be missing after a failed read', async () => {
+        apiMocks.getNote.mockRejectedValueOnce(failure());
+        const store = await freshStore();
+        await expect(store.loadConfiguration()).rejects.toThrow('Server Error');
+        apiMocks.getNote.mockRejectedValue(missing());
+        await store.loadConfiguration();
+
+        await store.saveTaskDateColors({ deadline: '#b71c1c' });
+        expect(apiMocks.addNote).toHaveBeenCalledOnce();
+    });
+
+    it('is written once read again', async () => {
+        apiMocks.getNote.mockRejectedValueOnce(failure());
+        const store = await freshStore();
+        await expect(store.loadConfiguration()).rejects.toThrow('Server Error');
+        apiMocks.getNote.mockResolvedValue({ data: YAML_FILE });
+        await store.loadConfiguration();
+
+        await store.saveTaskDateColors({ deadline: '#b71c1c' });
+        const [, content] = apiMocks.addNote.mock.calls[0];
+        expect(content).toContain('https://example.invalid/work.ics');
+    });
+});
+
 describe('loading events', () => {
     it('refetches after a subscription save even when the previous response arrives late', async () => {
         let release!: (value: ImportedEventsResponse) => void;
         apiMocks.getImportedEvents
             .mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }))
             .mockResolvedValueOnce(response({ events: [] }));
+        apiMocks.getNote.mockRejectedValue(missing());
         const store = await freshStore();
+        await store.loadConfiguration();
         const oldLoad = store.load('2024-05-01', '2024-05-31');
 
         await store.saveSubscriptions([]);
