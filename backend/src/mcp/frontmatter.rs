@@ -775,8 +775,11 @@ fn list_items(lines: &[String], at: usize, key: &str) -> Result<Vec<(usize, usiz
     let (from, to) = child_range(lines, at);
     let mut items: Vec<(usize, usize)> = Vec::new();
     let mut item_indent = None;
-    for (i, line) in lines.iter().enumerate().take(to).skip(from) {
+    let mut i = from;
+    while i < to {
+        let line = &lines[i];
         if is_filler(line) {
+            i += 1;
             continue;
         }
         let indent = indent_of(line);
@@ -788,10 +791,12 @@ fn list_items(lines: &[String], at: usize, key: &str) -> Result<Vec<(usize, usiz
                  read_note and update_note instead.",
             )));
         }
+        let next = block_scalar_end(lines, i).unwrap_or(i + 1);
         match items.last_mut() {
-            Some(item) if indent > expected => item.1 = i + 1,
-            _ => items.push((i, i + 1)),
+            Some(item) if indent > expected => item.1 = next,
+            _ => items.push((i, next)),
         }
+        i = next;
     }
     Ok(items)
 }
@@ -1373,6 +1378,21 @@ mod tests {
         let flow = "---\nevents:\n    A:\n        times: [{ start: 2025-01-02 }, { start: 2025-01-01 }]\n---\n";
         let error = apply(flow, &[Change::remove_item(&["events", "A", "times"], 0)]).expect_err("flow style");
         assert!(error.0.contains("flow style"), "{error}");
+    }
+
+    #[test]
+    fn an_items_block_scalar_goes_with_it_however_it_reads() {
+        let times = ["events", "A", "times"];
+        // A Markdown heading in an occurrence's note, and a blank line inside it.
+        let before = "---\nevents:\n    A:\n        times:\n            - start: 2025-01-01\n              note: |\n                  Agenda\n\n                  # Minutes\n---\n";
+        let appended = apply(before, &[Change::insert(&times, 1, occurrence(&[("start", "2025-01-02")]))]).expect("an append");
+        assert_eq!(appended, before.replace("# Minutes\n---", "# Minutes\n            - start: 2025-01-02\n---"));
+        let removed = apply(before, &[Change::remove_item(&times, 0)]).expect("a removal");
+        assert_eq!(removed, "---\nevents:\n    A:\n        times: []\n---\n");
+        // A scalar that keeps its trailing newlines keeps the blank lines after it.
+        let kept = "---\nevents:\n    A:\n        times:\n            - start: 2025-01-01\n              note: |+\n                  Agenda\n\n---\n";
+        let appended = apply(kept, &[Change::insert(&times, 1, occurrence(&[("start", "2025-01-02")]))]).expect("an append");
+        assert!(appended.ends_with("Agenda\n\n            - start: 2025-01-02\n---\n"), "{appended}");
     }
 
     /// Several list edits apply in order, each to the list the one before left.
