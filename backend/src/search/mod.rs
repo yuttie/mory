@@ -2367,7 +2367,10 @@ async fn grep_at(
         .arg(pattern)
         .arg(revision.to_string())
         .arg("--")
-        .env("LC_ALL", "C")
+        // A character, not a byte, for `.` and `[...]`: most of the notes are Japanese, and in the
+        // C locale `日.語` cannot match 日本語. C.UTF-8 has no translations, so git's messages, which
+        // the error handling below reads, stay as they are.
+        .env("LC_ALL", "C.UTF-8")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true)
@@ -2408,7 +2411,13 @@ async fn grep_at(
     }
     if !status.success() {
         let stderr = String::from_utf8_lossy(&stderr);
-        if stderr.contains("Invalid regular expression") || stderr.contains("invalid regex") {
+        // Git reports every pattern it cannot compile as `fatal: -e option, '<pattern>': <why>`,
+        // and the why is "Unmatched [", "Trailing backslash" and others as often as "Invalid
+        // regular expression".
+        let invalid = stderr.starts_with("fatal: -e option")
+            || stderr.contains("Invalid regular expression")
+            || stderr.contains("invalid regex");
+        if invalid {
             return Err(GrepError::Invalid);
         }
         return Err(GrepError::Internal(anyhow::anyhow!(
@@ -2597,6 +2606,17 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn grep_matches_a_character_where_the_pattern_says_one() {
+        let directory = tempfile::tempdir().unwrap();
+        let repo = Repository::init(directory.path()).unwrap();
+        let commit = commit_file(&repo, directory.path(), "日本語のメモ\n", &[]);
+        let path = directory.path().to_str().unwrap();
+        for pattern in ["日.語", "^.本", "[本]語", "日\\(本\\|英\\)語"] {
+            assert_eq!(grep_at(path, pattern, commit, 10).await.unwrap().len(), 1, "{pattern}");
+        }
+    }
+
+    #[tokio::test]
     async fn grep_uses_a_fixed_commit_and_treats_option_like_patterns_as_data() {
         let directory = tempfile::tempdir().unwrap();
         let repo = Repository::init(directory.path()).unwrap();
@@ -2613,10 +2633,12 @@ mod tests {
             .await
             .unwrap()
             .is_empty());
-        assert!(matches!(
-            grep_at(directory.path().to_str().unwrap(), "[", first, 10).await,
-            Err(GrepError::Invalid)
-        ));
+        for malformed in ["[", "[abc", "\\(abc", "a\\{1", "a**", "\\"] {
+            assert!(
+                matches!(grep_at(directory.path().to_str().unwrap(), malformed, first, 10).await, Err(GrepError::Invalid)),
+                "{malformed}",
+            );
+        }
         drop(first_commit);
         drop(repo);
         let repo = Arc::new(std::sync::Mutex::new(
