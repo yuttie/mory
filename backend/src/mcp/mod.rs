@@ -509,7 +509,8 @@ impl Mory {
                        already on it stays where it is: a day lists a task once. `planned` \
                        leaves its result unrecorded; `interruption` is for work that came up \
                        unplanned, and records it as worked -- on an entry already there too, \
-                       whose origin and place are kept.",
+                       whose origin and place are kept. A call that would leave the plan as it \
+                       was is refused, and nothing is committed.",
         annotations(title = "Plan a task", read_only_hint = false, destructive_hint = false,
                     idempotent_hint = true, open_world_hint = false)
     )]
@@ -530,7 +531,8 @@ impl Mory {
                        notes:write scope.\n\n`worked` says effort went into it that day, not \
                        that it is done: complete_task says that. `missed` says it was planned \
                        and not worked on. Omit `result` to make the entry unrecorded again. \
-                       The task must already be on that day's plan.",
+                       The task must already be on that day's plan, and a result it already \
+                       has is refused rather than committed again.",
         annotations(title = "Record a plan result", read_only_hint = false,
                     destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
@@ -550,7 +552,8 @@ impl Mory {
         description = "Take a task off one day's plan and commit it. Requires the notes:write \
                        scope.\n\nThe entry goes with its result, so a record of work done is \
                        lost from the plan; the task itself, and the rest of the day, are \
-                       untouched. A UUID that names no task can be taken off too.",
+                       untouched. A UUID that names no task can be taken off too; one the day \
+                       does not list is refused.",
         annotations(title = "Remove a plan entry", read_only_hint = false,
                     destructive_hint = true, idempotent_hint = true, open_world_hint = false)
     )]

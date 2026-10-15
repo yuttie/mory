@@ -98,14 +98,14 @@ async fn edit(state: &AppState, day: &str, task: &str, mutation: impl FnOnce(&mu
     let path = format!(".mory/plans/{month}.yaml");
     let blob = crate::find_entry_blob(state, &path).await;
     let expected = blob.as_ref().map(|(oid, _)| format!("\"{oid}\"")).unwrap_or_else(|| "absent".into());
-    let mut plan = match blob {
+    let plan = match blob {
         Some((_, bytes)) => match String::from_utf8(bytes).map_err(|error| error.to_string()).and_then(|text| plans::read(&text, month)) {
             Ok(plan) => plan,
             Err(error) => return Ok(tool_error(format!("{path} is invalid; fix it before writing: {error}"))),
         },
         None => Month::new(),
     };
-    if let Err(error) = mutation(&mut plan, &uuid) { return Ok(tool_error(error)); }
+    let plan = match edited(plan, day, &uuid, mutation) { Ok(plan) => plan, Err(error) => return Ok(tool_error(error)) };
     let content = plans::write(&plan);
     let (_, entries) = state.get_entries(Some(".tasks/*")).await.map_err(|error| ErrorData::internal_error(error.to_string(), None))?;
     let unknown = !known_tasks(&entries).contains(&uuid);
@@ -116,20 +116,37 @@ async fn edit(state: &AppState, day: &str, task: &str, mutation: impl FnOnce(&mu
     }
 }
 
+/// The month as `mutation` leaves it, refused when that is the month it was: Git would take the
+/// unchanged file as a commit of its own, and a month with no file would gain one holding `{}`.
+fn edited(mut plan: Month, day: &str, uuid: &str, mutation: impl FnOnce(&mut Month, &str) -> Result<(), String>) -> Result<Month, String> {
+    let before = plan.clone();
+    mutation(&mut plan, uuid)?;
+    if plan == before {
+        return Err(format!("The plan for {day} already says that, so nothing was committed."));
+    }
+    Ok(plan)
+}
+
 pub async fn plan_task(state: &AppState, args: PlanArgs) -> Result<CallToolResult, ErrorData> {
     edit(state, &args.date, &args.task, |plan, uuid| { plan_entry(plan, &args.date, uuid, args.origin); Ok(()) }).await
 }
 pub async fn record_result(state: &AppState, args: ResultArgs) -> Result<CallToolResult, ErrorData> {
-    edit(state, &args.date, &args.task, |plan, uuid| {
-        let entry = plan.get_mut(&args.date).and_then(|entries| entries.iter_mut().find(|entry| entry.task == uuid));
-        match entry { Some(entry) => { entry.result = args.result; Ok(()) }, None => Err("This task is not planned on that date.".into()) }
-    }).await
+    edit(state, &args.date, &args.task, |plan, uuid| record_entry(plan, &args.date, uuid, args.result)).await
 }
 pub async fn unplan_task(state: &AppState, args: UnplanArgs) -> Result<CallToolResult, ErrorData> {
-    edit(state, &args.date, &args.task, |plan, uuid| {
-        if let Some(entries) = plan.get_mut(&args.date) { entries.retain(|entry| entry.task != uuid); }
-        Ok(())
-    }).await
+    edit(state, &args.date, &args.task, |plan, uuid| unplan_entry(plan, &args.date, uuid)).await
+}
+
+fn record_entry(plan: &mut Month, day: &str, uuid: &str, result: Option<Outcome>) -> Result<(), String> {
+    let entry = plan.get_mut(day).and_then(|entries| entries.iter_mut().find(|entry| entry.task == uuid));
+    match entry { Some(entry) => { entry.result = result; Ok(()) }, None => Err("This task is not planned on that date.".into()) }
+}
+
+fn unplan_entry(plan: &mut Month, day: &str, uuid: &str) -> Result<(), String> {
+    let entries = plan.get_mut(day).filter(|entries| entries.iter().any(|entry| entry.task == uuid));
+    let Some(entries) = entries else { return Err("This task is not planned on that date.".into()); };
+    entries.retain(|entry| entry.task != uuid);
+    Ok(())
 }
 
 // Recording an interruption also records work when the day already contains the task.
@@ -147,6 +164,25 @@ fn plan_entry(plan: &mut Month, day: &str, uuid: &str, origin: Origin) {
 mod tests {
     use super::*;
     use crate::plans::Entry;
+
+    #[test]
+    fn an_edit_that_changes_nothing_is_refused() {
+        let uuid = "4955857d-3267-4b94-83f2-538a428970d7";
+        let day = "2026-10-05";
+        let mut plan = Month::new();
+        plans::put(&mut plan, day, uuid, Origin::Planned);
+        let unchanged = |result: Result<Month, String>| result.expect_err("nothing changed").contains("nothing was committed");
+        assert!(unchanged(edited(plan.clone(), day, uuid, |plan, uuid| { plan_entry(plan, day, uuid, Origin::Planned); Ok(()) })));
+        assert!(unchanged(edited(plan.clone(), day, uuid, |plan, uuid| record_entry(plan, day, uuid, None))));
+        // Taking off what is not there names why, rather than committing the month as it was.
+        let absent = edited(Month::new(), day, uuid, |plan, uuid| unplan_entry(plan, day, uuid));
+        assert_eq!(absent, Err("This task is not planned on that date.".to_owned()));
+        let elsewhere = edited(plan.clone(), "2026-10-06", uuid, |plan, uuid| unplan_entry(plan, "2026-10-06", uuid));
+        assert_eq!(elsewhere, Err("This task is not planned on that date.".to_owned()));
+        let recorded = edited(plan.clone(), day, uuid, |plan, uuid| record_entry(plan, day, uuid, Some(Outcome::Worked))).unwrap();
+        assert_eq!(recorded[day][0].result, Some(Outcome::Worked));
+        assert_eq!(edited(plan, day, uuid, |plan, uuid| unplan_entry(plan, day, uuid)).unwrap()[day], vec![]);
+    }
 
     #[test]
     fn mcp_interruption_records_work_without_changing_existing_origin_or_order() {
