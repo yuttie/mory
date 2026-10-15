@@ -485,8 +485,15 @@ fn instance_changes(args: &EventArgs, event: Option<&Value>, zone: Tz) -> Result
     let starts_at = |item: &Value| note_events::instant_of(item.get("start"), zone);
     // The calendar draws `2024-05-01` all day and `2024-05-01 00:00:00+09:00` at midnight: the
     // same instant, two occurrences.
-    let is = |item: &Value, at: i64, whole_day: bool| {
-        starts_at(item) == Some(at) && is_date_only(item.get("start")) == whole_day
+    let starts = |start: Option<&Value>, at: i64, whole_day: bool| {
+        note_events::instant_of(start, zone) == Some(at) && is_date_only(start) == whole_day
+    };
+    let is = |item: &Value, at: i64, whole_day: bool| starts(item.get("start"), at, whole_day);
+    // The event's own occurrence as the edit leaves it, which the calendar draws beside the list.
+    let own_start = match &args.start {
+        Some(start) => Some(Value::String(start.clone())),
+        None if args.clear.iter().flatten().any(|key| key == "start") => None,
+        None => event.and_then(|event| event.get("start")).cloned(),
     };
 
     // The list as it stands, edited here as the note will be, so that each index is the one the
@@ -552,6 +559,12 @@ fn instance_changes(args: &EventArgs, event: Option<&Value>, zone: Tz) -> Result
             return Err(format!(
                 "{:?} already lists an occurrence starting at {:?}. To change it, name it in \
                  `remove_instances` as well.",
+                args.name, instance.start,
+            ));
+        }
+        if starts(own_start.as_ref(), at, whole_day) {
+            return Err(format!(
+                "{:?} starts at {:?} itself, so an occurrence listed there would be drawn twice.",
                 args.name, instance.start,
             ));
         }
@@ -1296,6 +1309,22 @@ mod tests {
         let added = edit_and_check(lone, serde_json::json!({ "add_instances": [{ "start": "2024-05-01 00:00:00+09:00" }] }))
             .expect("not a duplicate");
         assert_eq!(starts(&added), ["instances 2024-05-01", "instances 2024-05-01 00:00:00+09:00"]);
+    }
+
+    /// The calendar draws an event's own `start` beside the occurrences it lists.
+    #[test]
+    fn an_occurrence_at_the_events_own_start_is_refused() {
+        let lone = "---\nevents:\n    Standup:\n        start: 2026-09-23 09:00\n---\n";
+        let error = edit_and_check(lone, serde_json::json!({ "add_instances": [{ "start": "2026-09-23 09:00:00+09:00" }] }))
+            .expect_err("drawn twice");
+        assert!(error.contains("drawn twice"), "{error}");
+        // Moving the event's own occurrence into its list is no duplicate.
+        let moved = edit_and_check(lone, serde_json::json!({
+            "start": "2026-09-16 09:00:00+09:00", "add_instances": [{ "start": "2026-09-23 09:00:00+09:00" }],
+        }))
+        .expect("a move");
+        assert_eq!(starts(&moved), ["instances 2026-09-23 09:00:00+09:00"]);
+        assert!(edit_and_check(lone, serde_json::json!({ "add_instances": [{ "start": "2026-09-23" }] })).is_ok());
     }
 
     /// A note already out of shape is not the edit's doing, and refusing every later edit to it
