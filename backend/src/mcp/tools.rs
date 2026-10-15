@@ -933,8 +933,8 @@ pub async fn create_note(
     state: &AppState,
     mut args: CreateNoteArgs,
 ) -> Result<CallToolResult, ErrorData> {
-    // UUIDv4 rather than v7, matching the frontend's `crypto.randomUUID()`: `entries_to_tree`
-    // rejects every other version, so a v7 name would break the tree it appears in.
+    // UUIDv4, as the web app's `crypto.randomUUID()` names a new note, and as the task tree
+    // requires of a task.
     let path = match args.path {
         Some(path) => match writable_path(&path) {
             Ok(path) => path,
@@ -1344,8 +1344,8 @@ mod tests {
         assert!(safe_path(".mory/calendars.yaml").is_ok());
     }
 
-    /// The task tree is derived from the paths, so a name outside the convention makes the whole
-    /// forest unbuildable for the web app.
+    /// The task tree is derived from the paths, so a task named outside the convention is left
+    /// out of it.
     #[test]
     fn a_task_path_must_carry_the_uuid_the_tree_is_built_from() {
         assert!(writable_path(".tasks/1f8c4a2e-3d5b-4e7a-9c1d-2b6f8a0e4d33.md").is_ok());

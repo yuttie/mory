@@ -618,8 +618,8 @@ pub async fn create_task(
             Ok(path) => path,
             Err(message) => return Ok(tool_error(message)),
         },
-        // UUIDv4, matching the frontend: `entries_to_tree` drops every other version, and a task
-        // the tree cannot place is a task the app cannot show.
+        // UUIDv4, matching the frontend: the task tree takes no other version, and a task it
+        // cannot place is a task the app cannot show.
         None => format!(".tasks/{}.md", uuid::Uuid::new_v4()),
     };
     if crate::find_entry_blob(state, &path).await.is_some() {

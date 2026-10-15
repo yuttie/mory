@@ -150,7 +150,8 @@ in-place editor reproduces 951. `tests::frontmatter_edits_a_real_corpus` is that
 ignored by default; point `MORY_CORPUS` at a real repository and run it whenever that module
 changes.
 
-A path under `.tasks/` must keep the UUIDv4 naming `entries_to_tree` derives the task tree from,
+A path under `.tasks/` must keep the UUIDv4 naming the web app derives the task tree from
+(`taskUuidOf` in `frontend/src/task-forest.ts`), which leaves a task named otherwise out of it,
 and `.mory/tasks-v1.yaml` is read-only through MCP — 600 KB of legacy YAML using anchors and aliases
 that a rewrite would silently expand into independent copies.
 
