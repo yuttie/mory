@@ -6,9 +6,12 @@ use crate::models::{AppState, ListEntry};
 use crate::plans::{self, Month, Origin, Outcome};
 use super::{json_result, tool_error};
 
+/// The UUIDs of the tasks in the tree, each the one its file name ends with. The web app finds a
+/// task by its path alone, so a note there without a `task:` block is still one a plan can name.
 fn known_tasks(entries: &[ListEntry]) -> BTreeSet<String> {
     entries.iter().filter_map(|entry| {
-        let (path, _) = crate::tasks::task_of(entry)?;
+        let path = entry.path.to_string_lossy();
+        if !crate::tasks::in_task_tree(&path) { return None; }
         let stem = path.strip_suffix(".md")?;
         let tail = stem.get(stem.len().checked_sub(36)?..)?;
         plans::task_uuid(tail).ok()
@@ -171,6 +174,21 @@ fn plan_entry(plan: &mut Month, day: &str, uuid: &str, origin: Origin) {
 mod tests {
     use super::*;
     use crate::plans::Entry;
+
+    #[test]
+    fn a_planned_task_is_named_by_the_uuid_its_file_name_ends_with() {
+        let uuid = "4955857d-3267-4b94-83f2-538a428970d7";
+        let other = "2a997a71-0d2b-4938-b8ff-5178c28a5ad9";
+        let outside = "c1d6a3a8-5b2e-4f7a-9c3d-2e8f1b4a6d90";
+        let entries = [
+            ListEntry::note(&format!(".tasks/report-{uuid}.md"), "task: {status: {kind: todo}}"),
+            // Not in the task tree, so not a task a plan can name.
+            ListEntry::note(&format!("notes/{outside}.md"), "task: {status: {kind: todo}}"),
+            // In the tree without a block, where the web app still finds a task.
+            ListEntry::note(&format!(".tasks/{uuid}/draft-{other}.md"), "created_at: 2026-10-01"),
+        ];
+        assert_eq!(known_tasks(&entries), BTreeSet::from([uuid.to_owned(), other.to_owned()]));
+    }
 
     #[test]
     fn an_edit_that_changes_nothing_is_refused() {
