@@ -667,7 +667,8 @@ fn render_entry(key: &str, value: &Value, level: usize, indent: usize) -> Vec<St
 ///
 /// YAML takes a literal block's indentation from its first non-empty line, so a value whose
 /// first line is empty or starts with white space would need an explicit indentation indicator
-/// (`|2`). Those are spelled as a quoted string instead: uglier, but never wrong.
+/// (`|2`), and one ending in more than one newline would need `|+`. Those are spelled as a quoted
+/// string instead, by `spell_scalar`: uglier, but never wrong.
 ///
 /// A line that is only white space is fine, and worth allowing: the notes use two trailing
 /// spaces as a Markdown hard line break, and a "blank" line in such a value is really two
@@ -677,14 +678,21 @@ fn is_block_scalar_safe(text: &str) -> bool {
     let Some(first) = text.split('\n').next() else {
         return false;
     };
-    text.contains('\n') && !first.is_empty() && !first.starts_with([' ', '\t'])
+    text.contains('\n') && !first.is_empty() && !first.starts_with([' ', '\t']) && !text.ends_with("\n\n")
 }
 
 /// A scalar on one line, quoted only when it needs to be.
 ///
 /// Sequences and mappings never reach this: `render_entry` handles them as blocks, so nothing
-/// here has to fit a collection onto a line.
+/// here has to fit a collection onto a line. A string of several lines is double-quoted with its
+/// escapes, since `serde_yaml` would write it as a block scalar, which needs lines of its own.
 fn spell_scalar(value: &Value) -> String {
+    if let Value::String(text) = value {
+        if text.contains('\n') {
+            // YAML's double-quoted style takes JSON's escapes.
+            return serde_json::to_string(text).unwrap_or_default();
+        }
+    }
     serde_yaml::to_string(value)
         .map(|text| text.trim_end().trim_end_matches("\n...").trim().to_owned())
         .unwrap_or_default()
@@ -856,6 +864,15 @@ mod tests {
             after,
             "---\nevents:\n    A:\n        note: short\n        color: red\n---\n\n# N\n",
         );
+    }
+
+    #[test]
+    fn a_string_no_plain_block_can_hold_is_quoted() {
+        let lone = "---\nevents:\n    A:\n        start: 2025-01-01\n---\n";
+        for note in ["\nafter a blank line", " indented\nsecond", "two trailing\n\n"] {
+            let edited = apply(lone, &[Change::set(&["events", "A", "note"], note)]).unwrap_or_else(|e| panic!("{note:?}: {e}"));
+            assert_eq!(value(&edited).unwrap()["events"]["A"]["note"], note);
+        }
     }
 
     /// A key whose name YAML would read as something else has to be quoted, or the note would
