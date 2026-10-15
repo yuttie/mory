@@ -30,7 +30,10 @@ pub struct Entry {
 pub type Month = BTreeMap<String, Vec<Entry>>;
 
 pub fn date(text: &str) -> Result<NaiveDate, String> {
-    let date = NaiveDate::parse_from_str(text, "%Y-%m-%d").map_err(|_| "Use a valid date in YYYY-MM-DD format.".to_owned())?;
+    // `%Y` also takes a sign and a fifth digit, and a month named from such a day is a file
+    // name neither side reads back; `isPlanDate` holds the web app to the same ten characters.
+    let shaped = text.len() == 10 && text.bytes().enumerate().all(|(index, byte)| if index == 4 || index == 7 { byte == b'-' } else { byte.is_ascii_digit() });
+    let date = NaiveDate::parse_from_str(text, "%Y-%m-%d").ok().filter(|_| shaped).ok_or_else(|| "Use a valid date in YYYY-MM-DD format.".to_owned())?;
     if date.format("%Y-%m-%d").to_string() != text {
         return Err("Use a valid date in YYYY-MM-DD format.".into());
     }
@@ -48,6 +51,10 @@ pub fn task_uuid(text: &str) -> Result<String, String> {
 pub fn read(text: &str, month: &str) -> Result<Month, String> {
     let parsed: serde_yaml::Value = serde_yaml::from_str(text).map_err(|error| error.to_string())?;
     if let Some(days) = parsed.as_mapping() {
+        // `serde_yaml` reads a null as an empty list, which `readPlan` refuses.
+        if let Some((day, _)) = days.iter().find(|(_, entries)| entries.is_null()) {
+            return Err(format!("Invalid plan day {} in {month}.", day.as_str().unwrap_or("?")));
+        }
         for entries in days.values().filter_map(serde_yaml::Value::as_sequence) {
             for entry in entries {
                 if entry.get("result").is_some_and(serde_yaml::Value::is_null) {
@@ -146,7 +153,7 @@ mod tests {
     }
     #[test]
     fn malformed_plans_are_refused_instead_of_dropped() {
-        for day in ["2026-02-30", "2026-8-9", "../../foo", "2026-13-01"] {
+        for day in ["2026-02-30", "2026-8-9", "../../foo", "2026-13-01", "+12026-10-05", "-0001-10-05", "+2026-10-05"] {
             assert!(date(day).is_err());
         }
         for entries in [format!("- task: {UUID}\n  origin: planned\n  extra: x"), format!("- task: {UUID}\n  origin: planned\n  result: null"), format!("- task: {UUID}\n  origin: planned\n- task: {UUID}\n  origin: planned"), "- task: bad\n  origin: planned".into()] {
