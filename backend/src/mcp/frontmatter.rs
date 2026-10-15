@@ -728,8 +728,10 @@ fn apply_one(
             }
             let items = list_items(lines, at, last)?;
             let Some(&(first, _)) = items.first() else {
-                // An empty list becomes a block list of one.
-                lines.splice(at..at + 1, render_entry(last, &whole(), level, step));
+                // An empty list becomes a block list of one, under the key line as it was.
+                let mut list = vec![with_value(&lines[at], "")];
+                list.extend(render_item(value, level + step, step));
+                lines.splice(at..at + 1, list);
                 return Ok(());
             };
             let before = match items.get(*index) {
@@ -749,7 +751,7 @@ fn apply_one(
             lines.drain(start..end);
             // `key:` with nothing under it would read as null; the list is empty, and says so.
             if items.len() == 1 {
-                lines[at] = format!("{}{}: []\n", " ".repeat(level), spell_key(last));
+                lines[at] = with_value(&lines[at], "[]");
             }
         },
     }
@@ -1344,6 +1346,18 @@ mod tests {
 
         let after = apply(before, &[Change::remove_item(list, 1)]).expect("a removal");
         assert_eq!(after, before.replace("    - { start: 2021-01-13 10:00, end: +1h }\n", ""));
+    }
+
+    #[test]
+    fn a_comment_on_a_list_keys_line_stays_through_its_item_edits() {
+        let times = ["events", "A", "times"];
+        let before = "---\nevents:  # the calendar\n    A:\n        times:   # newest first\n            - start: 2025-01-02\n        color: red\n---\n";
+        let added = apply(before, &[Change::insert(&times, 0, occurrence(&[("start", "2025-01-03")]))]).expect("an insert");
+        assert_eq!(added, before.replace("            - start: 2025-01-02\n", "            - start: 2025-01-03\n            - start: 2025-01-02\n"));
+        let emptied = apply(before, &[Change::remove_item(&times, 0)]).expect("a removal");
+        assert_eq!(emptied, "---\nevents:  # the calendar\n    A:\n        times: []   # newest first\n        color: red\n---\n");
+        let refilled = apply(&emptied, &[Change::insert(&times, 0, occurrence(&[("start", "2025-01-04")]))]).expect("an insert");
+        assert_eq!(refilled, before.replace("2025-01-02", "2025-01-04"));
     }
 
     /// Several list edits apply in order, each to the list the one before left.
