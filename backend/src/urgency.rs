@@ -126,7 +126,8 @@ pub fn instant(value: Option<&Value>, zone: Tz, end: bool) -> Option<DateTime<Ut
 pub fn calculate(task: &Value, tags: &[String], settings: &Settings, now: DateTime<Utc>, zone: Tz) -> Urgency {
     let due = instant(task.get("due_by"), zone, true);
     let deadline = instant(task.get("deadline"), zone, true);
-    let available = instant(task.get("available_from").or_else(|| task.get("start_at")), zone, false);
+    // `??` in the web app: an `available_from:` left empty is null, and falls through to `start_at`.
+    let available = instant(task.get("available_from").filter(|value| !value.is_null()).or_else(|| task.get("start_at")), zone, false);
     let mut result = Urgency {
         level: "none".into(), slack_ratio: None, reference: None,
         actionable: available.is_none_or(|at| at <= now), short_window: false,

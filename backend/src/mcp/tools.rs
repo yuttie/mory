@@ -350,7 +350,10 @@ fn canonical_task(block: &serde_yaml::Mapping) -> serde_json::Value {
             map.remove(key);
         }
         if let Some(start) = map.remove("start_at") {
-            map.entry("available_from").or_insert(start);
+            let available = map.entry("available_from").or_insert(serde_json::Value::Null);
+            if available.is_null() {
+                *available = start;
+            }
         }
         match block.get("importance").and_then(crate::urgency::importance) {
             Some(level) => { map.insert("importance".into(), level.into()); },
@@ -1383,6 +1386,17 @@ mod tests {
         assert!(message.starts_with("Not an alarm:"), "{message}");
         // A `\` continuation inside the literal once went missing and left a run of spaces.
         assert!(!message.contains("  "), "{message:?}");
+    }
+
+    /// `available_from ?? start_at`, as the web app reads a task: an empty `available_from:` is
+    /// null, and gives way.
+    #[test]
+    fn a_legacy_start_at_fills_an_empty_available_from() {
+        let block = |text: &str| serde_yaml::from_str::<serde_yaml::Mapping>(text).unwrap();
+        let read = canonical_task(&block("available_from:\nstart_at: 2026-10-12\n"));
+        assert_eq!(read, serde_json::json!({ "available_from": "2026-10-12" }));
+        let read = canonical_task(&block("available_from: 2026-10-10\nstart_at: 2026-10-12\n"));
+        assert_eq!(read, serde_json::json!({ "available_from": "2026-10-10" }));
     }
 
     #[test]
