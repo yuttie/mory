@@ -4,17 +4,28 @@ import { createPinia, setActivePinia } from 'pinia';
 import type { ListEntry2 } from '@/api';
 
 // One IndexedDB, shared by every store created here as it is by every tab of an origin. A write
-// can be held open, to land a mutation while a sync is persisting what it fetched.
+// can be held open, to land a mutation while a sync is persisting what it fetched, and another
+// tab can be made to act just before the rows are read.
 const idb = {
     commit: null as string | null,
     rows: new Map<string, ListEntry2>(),
     hold: null as Promise<void> | null,
     // Set once a write has reached the hold.
     held: false,
+    beforeRead: null as (() => Promise<void>) | null,
 };
+async function beforeRead(): Promise<void> {
+    const act = idb.beforeRead;
+    idb.beforeRead = null;
+    await act?.();
+}
 vi.mock('@/idb', () => ({
     readCacheCommitId: async () => idb.commit,
-    readAllEntries: async () => Array.from(idb.rows.values()),
+    // As idb.ts reads them: with the commit they describe, in one transaction.
+    readEntriesAt: async (commit: string) => {
+        await beforeRead();
+        return idb.commit === commit ? Array.from(idb.rows.values()) : null;
+    },
     readEntry: async (path: string) => idb.rows.get(path) ?? null,
     replaceEntries: async (commit: string, entries: ListEntry2[]) => {
         idb.held = idb.hold !== null;
@@ -22,9 +33,13 @@ vi.mock('@/idb', () => ({
         idb.rows = new Map(entries.map((entry) => [entry.path, entry]));
         idb.commit = commit;
     },
-    applyEntryDelta: async (commit: string, changed: ListEntry2[], deleted: string[]) => {
+    // As idb.ts writes one: only onto the rows of the commit it was computed from.
+    applyEntryDelta: async (base: string, commit: string, changed: ListEntry2[], deleted: string[]) => {
         idb.held = idb.hold !== null;
         await idb.hold;
+        if (idb.commit !== base) {
+            return;
+        }
         for (const path of deleted) {
             idb.rows.delete(path);
         }
@@ -101,6 +116,7 @@ beforeEach(() => {
     idb.rows = new Map();
     idb.hold = null;
     idb.held = false;
+    idb.beforeRead = null;
     history.clear();
     head = 'C1';
     history.set(head, new Map([['a.md', entry('a.md')]]));
@@ -167,5 +183,46 @@ describe('the files store', () => {
         idb.hold = null;
         expect(paths(await tab.list())).toEqual(['a.md', 'c.md', 'd.md']);
         expect(tab.commitId).toBe(head);
+    });
+
+    // Another tab persists a newer listing between this one reading the commit its rows describe
+    // and reading the rows. Read apart, the rows of the newer commit took the older delta and were
+    // called current at the older commit, and written back labelled with it.
+    it('applies a delta only to the rows of the commit it was computed from', async () => {
+        const tabA = newTab();
+        const tabB = newTab();
+        await tabA.write('b.md', '# B');
+        expect(paths(await tabB.list())).toEqual(['a.md', 'b.md']);
+        await tabA.write('x.md', '# X');
+        expect(paths(await tabA.list())).toEqual(['a.md', 'b.md', 'x.md']);
+
+        idb.beforeRead = async () => {
+            await tabA.write('c.md', '# C');
+            await tabA.list();
+        };
+        await tabB.refresh();
+
+        expect(paths(tabB.entries)).toEqual(['a.md', 'b.md', 'c.md', 'x.md']);
+        expect(tabB.commitId).toBe(head);
+        expect(idb.commit).toBe(head);
+        expect([...idb.rows.keys()].sort()).toEqual(['a.md', 'b.md', 'c.md', 'x.md']);
+    });
+
+    // Logging out clears the rows while a sync still holds what it read of them. Written onto the
+    // cleared store, the delta left a commit ID over the delta's rows alone, which every later
+    // sync then built on. The mock answers requests after the logout, as moried would not.
+    it('leaves no delta written over rows a logout cleared', async () => {
+        const tab = newTab();
+        expect(paths(await tab.list())).toEqual(['a.md']);
+        const other = newTab();
+        await other.write('b.md', '# B');
+        await other.list();
+
+        idb.beforeRead = () => tab.clear();
+        await tab.refresh().catch(() => undefined);
+
+        // Whatever is persisted is the listing of the commit it is labelled with, or nothing.
+        const labelled = idb.commit === null ? [] : [...history.get(idb.commit)!.keys()];
+        expect([...idb.rows.keys()].sort()).toEqual(labelled.sort());
     });
 });

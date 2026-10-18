@@ -13,8 +13,8 @@ import type {
 import {
     applyEntryDelta,
     clearEntries,
-    readAllEntries,
     readCacheCommitId,
+    readEntriesAt,
     readEntry,
     replaceEntries,
 } from '@/idb';
@@ -81,7 +81,7 @@ export const useFilesStore = defineStore('files', () => {
 
     // Bumped by every invalidation. A sync that started before the bump must not adopt its result:
     // a mutation has landed since it read HEAD, so what it fetched no longer describes the
-    // repository. What it persists describes its own commit all the same, as `syncOnce` says.
+    // repository. What it persists is checked against the rows it was computed from instead.
     let epoch = 0;
 
     // Bring the store up to date in a single request.
@@ -121,10 +121,10 @@ export const useFilesStore = defineStore('files', () => {
                 next = new Map(entryMap);
             }
             else {
-                const rows = await readAllEntries<ListEntry2>();
+                const rows = base === null ? null : await readEntriesAt<ListEntry2>(base);
                 if (rows === null) {
-                    // No readable base to apply to. Ask again without one, and take the full
-                    // listing.
+                    // No readable base to apply to, or rows another tab has moved on from it since
+                    // it was read. Ask again from what they describe now.
                     validatedCommitIdRef.value = null;
                     return publish();
                 }
@@ -144,7 +144,7 @@ export const useFilesStore = defineStore('files', () => {
             for (const entry of response.changed) {
                 next.set(entry.path, entry);
             }
-            await applyEntryDelta(response.commit, response.changed, response.deleted);
+            await applyEntryDelta(response.base, response.commit, response.changed, response.deleted);
         }
 
         if (epoch !== startEpoch) {
