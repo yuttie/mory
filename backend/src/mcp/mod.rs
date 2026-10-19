@@ -233,7 +233,9 @@ impl Mory {
         description = "Replace a note's entire content and commit it. Requires the notes:write \
                        scope.\n\nThis is not a patch: read_note first and send the whole file \
                        back, frontmatter included, or everything you did not send is lost. \
-                       It also writes over anything changed in the note since you read it.\
+                       It also writes over anything changed in the note since you read it. A \
+                       file longer than read_note returns is refused, since it cannot have \
+                       been read whole.\
                        \n\nTo change a task or an event, use the task and event tools instead: \
                        they edit its frontmatter in place, in one step, and check what they \
                        write, where this writes whatever it is sent.",

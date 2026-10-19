@@ -157,7 +157,7 @@ pub async fn read_note(state: &AppState, args: ReadArgs) -> Result<CallToolResul
         )));
     }
 
-    let truncated = bytes.len() > MAX_NOTE_BYTES;
+    let truncated = is_cut_short(bytes.len());
     let content = match std::str::from_utf8(&bytes) {
         Ok(text) if !truncated => text.to_owned(),
         Ok(text) => within_limit(text).to_owned(),
@@ -174,6 +174,31 @@ pub async fn read_note(state: &AppState, args: ReadArgs) -> Result<CallToolResul
         content,
         truncated_at_bytes,
     })
+}
+
+/// Whether read_note hands over less than the whole of a file of `len` bytes.
+fn is_cut_short(len: usize) -> bool {
+    len > MAX_NOTE_BYTES
+}
+
+/// Refuses to replace a file of `len` bytes that `read_note` cuts short.
+///
+/// update_note takes the whole file back, and read_note hands over no more than `MAX_NOTE_BYTES`
+/// of one, so a file replaced from what was read of a longer one would lose the rest, which the
+/// model never saw.
+fn check_read_whole(path: &str, len: usize) -> Result<(), String> {
+    if !is_cut_short(len) {
+        return Ok(());
+    }
+    // The task and event tools are offered first, though their own fallback is this tool: for
+    // what they cannot do, only the web app remains.
+    Err(format!(
+        "{path:?} is {len} bytes, more than the {} KiB read_note returns, so it cannot have been \
+         read whole, and replacing it with what was read would delete the rest. For a task or an \
+         event, use the task and event tools, which change only what they are given; for an edit \
+         they cannot make, or anything else in it, use the web app.",
+        MAX_NOTE_BYTES / 1024,
+    ))
 }
 
 /// As much of `text` as `MAX_NOTE_BYTES` holds, cut at the last character boundary within it.
@@ -999,10 +1024,13 @@ pub async fn update_note(
         Ok(path) => path,
         Err(message) => return Ok(tool_error(message)),
     };
-    if crate::find_entry_blob(state, &path).await.is_none() {
+    let Some((_, current)) = crate::find_entry_blob(state, &path).await else {
         return Ok(tool_error(format!(
             "No file at {path:?}. Use create_note to make one, or search_notes to find the path.",
         )));
+    };
+    if let Err(message) = check_read_whole(&path, current.len()) {
+        return Ok(tool_error(message));
     }
 
     if path.ends_with(".md") {
@@ -1410,6 +1438,14 @@ mod tests {
         // Out of the tree is out of the plans' reach anyway, and a note entering it has no UUID to keep.
         assert!(check_task_uuid_kept(&from, "archive/report.md").is_ok());
         assert!(check_task_uuid_kept("ideas.md", &format!(".tasks/ideas-{other}.md")).is_ok());
+    }
+
+    /// update_note takes the whole file back, and read_note gives no more than the limit of one.
+    #[test]
+    fn a_note_longer_than_read_note_returns_is_not_replaced() {
+        assert!(check_read_whole("long.md", MAX_NOTE_BYTES).is_ok());
+        let refused = check_read_whole("long.md", MAX_NOTE_BYTES + 1).unwrap_err();
+        assert!(refused.contains("cannot have been read whole"), "{refused}");
     }
 
     #[test]
