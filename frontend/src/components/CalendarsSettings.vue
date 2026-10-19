@@ -423,7 +423,11 @@ async function save() {
     else {
         next[editingIndex.value] = entry;
     }
-    await persist(next, () => { dialogOpen.value = false; });
+    await persist(
+        next,
+        () => { dialogOpen.value = false; },
+        (message) => { draftError.value = message; },
+    );
 }
 
 async function setEnabled(index: number, enabled: boolean | null) {
@@ -539,14 +543,23 @@ async function saveCategory() {
     else {
         next[editingCategoryIndex.value] = entry;
     }
-    await persistCategories(next, () => { categoryDialogOpen.value = false; });
+    await persistCategories(
+        next,
+        () => { categoryDialogOpen.value = false; },
+        (message) => { categoryDraftError.value = message; },
+    );
 }
 
 async function removeCategory(index: number) {
     await persistCategories(categoryList.value.filter((_, at) => at !== index));
 }
 
-async function persistCategories(next: ConfiguredCategory[], onSaved?: () => void) {
+// `onFailed` is for a dialog left open by the failure, which covers the alert below it.
+async function persistCategories(
+    next: ConfiguredCategory[],
+    onSaved?: () => void,
+    onFailed?: (message: string) => void,
+) {
     isSavingCategories.value = true;
     categoryError.value = '';
     try {
@@ -555,13 +568,19 @@ async function persistCategories(next: ConfiguredCategory[], onSaved?: () => voi
     }
     catch (err) {
         categoryError.value = `Could not save ${CALENDARS_PATH}: ${err}`;
+        onFailed?.(categoryError.value);
     }
     finally {
         isSavingCategories.value = false;
     }
 }
 
-async function persist(next: CalendarSubscription[], onSaved?: () => void) {
+// `onFailed` is for a dialog left open by the failure, which covers the alert below it.
+async function persist(
+    next: CalendarSubscription[],
+    onSaved?: () => void,
+    onFailed?: (message: string) => void,
+) {
     isSaving.value = true;
     error.value = '';
     try {
@@ -570,6 +589,7 @@ async function persist(next: CalendarSubscription[], onSaved?: () => void) {
     }
     catch (err) {
         error.value = `Could not save ${CALENDARS_PATH}: ${err}`;
+        onFailed?.(error.value);
     }
     finally {
         isSaving.value = false;

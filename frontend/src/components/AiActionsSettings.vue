@@ -121,7 +121,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { mdiDelete, mdiPencil, mdiPlus } from '@mdi/js';
 
-import { AI_ACTIONS_PATH, loadAiActions, saveAiActions } from '@/ai-actions';
+import { AI_ACTIONS_PATH, loadAiActions, updateAiActions } from '@/ai-actions';
 import type { AiAction } from '@/ai-actions';
 import StoredInRepository from '@/components/StoredInRepository.vue';
 
@@ -203,11 +203,11 @@ async function reload() {
 }
 
 // Returns whether the write succeeded, so callers can keep their dialog open
-// rather than dismissing it over a failure.
-async function persist(newActions: AiAction[]): Promise<boolean> {
+// rather than dismissing it over a failure. The change is made to the file as
+// it is now, which a failed load does not show.
+async function persist(change: (current: AiAction[]) => AiAction[]): Promise<boolean> {
     try {
-        await saveAiActions(newActions);
-        actions.value = newActions;
+        actions.value = await updateAiActions(change);
         return true;
     }
     catch (err) {
@@ -251,13 +251,13 @@ async function saveDraft() {
     const edited = editingAction.value;
     // A rename changes the identifier, so match on the original one and keep
     // the action where it was in the file rather than appending it again.
-    const newActions = edited === null
-        ? [...actions.value, draft]
-        : actions.value.map((action) => action.id === edited.id ? draft : action);
+    const change = (current: AiAction[]) => edited !== null && current.some((action) => action.id === edited.id)
+        ? current.map((action) => action.id === edited.id ? draft : action)
+        : [...current, draft];
 
     // Only dismissed once the write is safely in the repository: the dialog holds
     // the only copy of what was typed, and the snackbar alone is easy to miss.
-    if (await persist(newActions)) {
+    if (await persist(change)) {
         editDialogIsVisible.value = false;
     }
 }
@@ -268,7 +268,7 @@ async function confirmDelete() {
         deleteDialogIsVisible.value = false;
         return;
     }
-    if (await persist(actions.value.filter((action) => action.id !== deleted.id))) {
+    if (await persist((current) => current.filter((action) => action.id !== deleted.id))) {
         deleteDialogIsVisible.value = false;
     }
 }

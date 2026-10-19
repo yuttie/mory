@@ -109,7 +109,7 @@ import AiActionMenu from './AiActionMenu.vue';
 import Editor from './Editor.vue';
 import { runAiAction as runAiActionRequest } from '@/api';
 import { useFilesStore } from '@/stores/files';
-import { fillPrompt, hasInputPlaceholder, loadAiActions, saveAiActions } from '@/ai-actions';
+import { fillPrompt, hasInputPlaceholder, loadAiActions, updateAiActions } from '@/ai-actions';
 import type { AiAction } from '@/ai-actions';
 import { useConfigValue } from '@/config';
 import { CliPrettify } from 'markdown-table-prettify';
@@ -475,10 +475,11 @@ async function runAdHocAiAction(prompt: string, preset: { id: string, name: stri
     if (preset) {
         // Persisted before the run, so a failing request does not discard the
         // prompt the user just wrote.
-        const saved = [...aiActions.value, { id: preset.id, name: preset.name, prompt: prompt }];
         try {
-            await saveAiActions(saved);
-            aiActions.value = saved;
+            aiActions.value = await updateAiActions((current) => [
+                ...current,
+                { id: preset.id, name: preset.name, prompt: prompt },
+            ]);
         }
         catch (err) {
             error.value = true;

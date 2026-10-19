@@ -1,3 +1,4 @@
+import axios from 'axios';
 import * as TOML from 'smol-toml';
 
 import { useFilesStore } from '@/stores/files';
@@ -46,32 +47,50 @@ export function fillPrompt(prompt: string, input: string): string {
     return prompt.replaceAll(inputPlaceholderRegExp(), () => input);
 }
 
+function isMissing(error: unknown): boolean {
+    return (error as { response?: { status?: number } } | null)?.response?.status === 404;
+}
+
+// The actions a file holds, and what else it holds -- a key that is no table, a table without a
+// string `name` and `prompt`, or a key in an action besides those two -- which the menu does
+// without, and which writing the actions back would drop.
+function parseAiActions(content: string): { actions: AiAction[]; unreadable: string[] } {
+    const parsed = TOML.parse(content);
+    const actions: AiAction[] = [];
+    const unreadable: string[] = [];
+    for (const [id, table] of Object.entries(parsed)) {
+        if (table === null || typeof table !== 'object' || Array.isArray(table)) {
+            unreadable.push(id);
+            continue;
+        }
+        const { name, prompt } = table as { name?: unknown, prompt?: unknown };
+        if (typeof name !== 'string' || typeof prompt !== 'string') {
+            unreadable.push(id);
+            continue;
+        }
+        for (const key of Object.keys(table)) {
+            if (key !== 'name' && key !== 'prompt') {
+                unreadable.push(`${id}.${key}`);
+            }
+        }
+        actions.push({ id, name, prompt });
+    }
+    return { actions, unreadable };
+}
+
 export async function loadAiActions(): Promise<AiAction[]> {
     let content: string;
     try {
         content = await useFilesStore().read(AI_ACTIONS_PATH);
     }
     catch (error) {
-        if ((error as { response?: { status?: number } }).response?.status === 404) {
+        if (isMissing(error)) {
             // The file has not been created yet: no actions have been defined.
             return [];
         }
         throw error;
     }
-
-    const parsed = TOML.parse(content);
-    const actions: AiAction[] = [];
-    for (const [id, table] of Object.entries(parsed)) {
-        if (table === null || typeof table !== 'object' || Array.isArray(table)) {
-            continue;
-        }
-        const { name, prompt } = table as { name?: unknown, prompt?: unknown };
-        if (typeof name !== 'string' || typeof prompt !== 'string') {
-            continue;
-        }
-        actions.push({ id, name, prompt });
-    }
-    return actions;
+    return parseAiActions(content).actions;
 }
 
 // Serialize a prompt as a TOML multi-line basic string, so the committed file
@@ -109,7 +128,7 @@ function toMultilineBasicString(value: string): string {
     return `"""\n${escaped}"""`;
 }
 
-export async function saveAiActions(actions: AiAction[]): Promise<void> {
+function renderAiActions(actions: AiAction[]): string {
     const tables = actions.map((action) => {
         // `stringify` handles quoting the table key and the display name; only
         // the prompt is emitted by hand, for its multi-line form.
@@ -117,7 +136,60 @@ export async function saveAiActions(actions: AiAction[]): Promise<void> {
         const name = TOML.stringify({ name: action.name }).trimEnd();
         return `${header}\n${name}\nprompt = ${toMultilineBasicString(action.prompt)}\n`;
     });
-    await useFilesStore().write(AI_ACTIONS_PATH, tables.join('\n'));
+    return tables.join('\n');
+}
+
+// Change the actions as the file holds them now, write them back, and resolve to what was written.
+//
+// The file is read here rather than taken from what a view loaded: a view that could not read it,
+// after a typo or a dropped connection, holds no actions, and the file written from that would hold
+// only the one being added. A key that is not an action refuses the change rather than be dropped
+// from the file by it, and the write is checked against the version read, so a change made
+// meanwhile is not put back either.
+export async function updateAiActions(edit: (actions: AiAction[]) => AiAction[]): Promise<AiAction[]> {
+    const files = useFilesStore();
+    let content = '';
+    let etag = 'absent';
+    try {
+        const version = await files.readVersion(AI_ACTIONS_PATH);
+        if (typeof version.content !== 'string') {
+            throw new Error(`${AI_ACTIONS_PATH} could not be read as text.`);
+        }
+        content = version.content;
+        etag = version.etag;
+    }
+    catch (error) {
+        if (!isMissing(error)) {
+            throw error;
+        }
+    }
+
+    const { actions, unreadable } = parseAiActions(content);
+    if (unreadable.length > 0) {
+        throw new Error(
+            `${AI_ACTIONS_PATH} holds ${unreadable.join(', ')}, which saving would delete: an action `
+            + 'is a table of a name and a prompt alone. Fix the file first.',
+        );
+    }
+    const next = edit(actions);
+    const ids = new Set<string>();
+    for (const { id } of next) {
+        if (ids.has(id)) {
+            throw new Error(`An AI action with the identifier ${id} already exists.`);
+        }
+        ids.add(id);
+    }
+
+    try {
+        await files.writeChecked(AI_ACTIONS_PATH, renderAiActions(next), etag);
+    }
+    catch (error) {
+        if (axios.isAxiosError(error) && error.response?.status === 412) {
+            throw new Error(`${AI_ACTIONS_PATH} changed while saving. Try again.`, { cause: error });
+        }
+        throw error;
+    }
+    return next;
 }
 
 export interface AiActionNode {

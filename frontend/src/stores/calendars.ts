@@ -173,6 +173,11 @@ export const useCalendarsStore = defineStore('calendars', () => {
             .map((calendar) => `${calendar.name}: ${calendar.error}`),
     ]);
 
+    // Why the file could not be read the last time it was asked for, or `null` when it was read, or
+    // was missing. The store then holds none of it, so a write, which puts the whole file back from
+    // the store, would leave only the change it was made for.
+    let unreadable: unknown = null;
+
     async function readConfiguration(): Promise<CalendarSubscription[]> {
         try {
             const text = await files.read(CALENDARS_PATH);
@@ -191,6 +196,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
             categories.value = readCategories(parsed?.categories, problems);
             configurationProblems.value = problems.map((problem) =>
                 `${CALENDARS_PATH}: ${problem}. It is ignored, and saving the settings removes it.`);
+            unreadable = null;
         }
         catch (error) {
             // No file means no calendars, which is the normal state before any are added -- the
@@ -201,8 +207,10 @@ export const useCalendarsStore = defineStore('calendars', () => {
             configurationProblems.value = [];
             categories.value = isMissing(error) ? [] : null;
             if (!isMissing(error)) {
+                unreadable = error;
                 throw error;
             }
+            unreadable = null;
         }
         hasLoadedConfiguration.value = true;
         return subscriptions.value;
@@ -230,8 +238,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
     }
 
     async function saveSubscriptions(next: CalendarSubscription[]): Promise<void> {
-        subscriptions.value = next;
-        await writeConfiguration();
+        await writeConfiguration({ subscriptions: next });
         // The subscription list decides what the events request returns, so what is loaded now
         // describes a configuration that no longer exists.
         invalidate();
@@ -241,50 +248,70 @@ export const useCalendarsStore = defineStore('calendars', () => {
     ///
     /// No `invalidate()`: this changes how events are drawn, not which ones the backend returns.
     async function saveTaskDateColors(next: TaskDateColors): Promise<void> {
-        taskDateColors.value = next;
-        await writeConfiguration();
+        await writeConfiguration({ taskDateColors: next });
     }
 
     /// Set when events and task dates ring where a note says nothing. A kind left out takes the
     /// built-in default. Like the colours, this changes how events are shown, not which ones the
     /// backend returns, so no `invalidate()`.
     async function saveAlarmDefaults(next: AlarmDefaults): Promise<void> {
-        alarmDefaults.value = next;
-        await writeConfiguration();
+        await writeConfiguration({ alarmDefaults: next });
     }
 
     /// Set the event categories. Like the task date colours, they change how events are drawn,
     /// not which ones the backend returns.
     async function saveCategories(next: ConfiguredCategory[]): Promise<void> {
-        categories.value = next;
-        await writeConfiguration();
+        await writeConfiguration({ categories: next });
     }
 
-    // The whole file, from whatever the store holds. Every part is written every time, so editing
-    // one never drops another.
-    async function writeConfiguration(): Promise<void> {
+    // The whole file, from what the store holds with `change` made to it. Every part is written
+    // every time, so editing one never drops another. The store takes the change only once it is
+    // written: one refused or failed would otherwise be shown, and drawn, as the file's.
+    async function writeConfiguration(change: {
+        subscriptions?: CalendarSubscription[];
+        taskDateColors?: TaskDateColors;
+        alarmDefaults?: AlarmDefaults;
+        categories?: ConfiguredCategory[];
+    }): Promise<void> {
+        if (!hasLoadedConfiguration.value || unreadable !== null) {
+            throw new Error(
+                `${CALENDARS_PATH} has not been read, or could not be read, so saving would `
+                + 'replace everything in it with this change. Fix the file, or open the settings '
+                + 'again once it can be read.',
+            );
+        }
+        const next = {
+            subscriptions: change.subscriptions ?? subscriptions.value,
+            taskDateColors: change.taskDateColors ?? taskDateColors.value,
+            alarmDefaults: change.alarmDefaults ?? alarmDefaults.value,
+            categories: change.categories ?? categories.value,
+        };
         const document = {
-            calendars: subscriptions.value.map((subscription) => ({
+            calendars: next.subscriptions.map((subscription) => ({
                 id: subscription.id,
                 name: subscription.name,
                 url: subscription.url,
                 ...(subscription.color ? { color: subscription.color } : {}),
                 enabled: subscription.enabled,
             })),
-            ...(Object.keys(taskDateColors.value).length > 0
-                ? { task_dates: { ...taskDateColors.value } }
+            ...(Object.keys(next.taskDateColors).length > 0
+                ? { task_dates: { ...next.taskDateColors } }
                 : {}),
-            ...(Object.keys(alarmDefaults.value).length > 0
-                ? { alarms: writeAlarmDefaults(alarmDefaults.value) }
+            ...(Object.keys(next.alarmDefaults).length > 0
+                ? { alarms: writeAlarmDefaults(next.alarmDefaults) }
                 : {}),
-            ...(categories.value !== null && categories.value.length > 0
+            ...(next.categories !== null && next.categories.length > 0
                 ? {
-                    categories: Object.fromEntries(categories.value.map(
+                    categories: Object.fromEntries(next.categories.map(
                         ({ id, ...defaults }) => [id, defaults])),
                 }
                 : {}),
         };
         await files.write(CALENDARS_PATH, stringifyWithFlowAlarms(document, { indent: 4 }));
+        subscriptions.value = next.subscriptions;
+        taskDateColors.value = next.taskDateColors;
+        alarmDefaults.value = next.alarmDefaults;
+        categories.value = next.categories;
         // What was dropped on reading is now gone from the file, which is what was warned of.
         configurationProblems.value = [];
     }
