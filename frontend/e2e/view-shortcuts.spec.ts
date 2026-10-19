@@ -37,6 +37,29 @@ test('types a slash into the Files search rather than jumping to it', async ({ c
     await expect(search).toHaveValue('projects/plan');
 });
 
+// From the page, and from the note's own editor once it is open.
+test('opens, saves and closes a note\'s editor from the keyboard', async ({ context, page }) => {
+    const repository = await mockBackend(context, { 'projects/plan.md': '# Plan\n' });
+    await page.goto('/note/projects/plan.md');
+    await expect(page.getByRole('heading', { name: 'Plan' })).toBeVisible();
+    // Loaded, which shows the viewer alone: an editor opened before then is closed again.
+    await expect(page.getByRole('progressbar')).toBeHidden();
+    const mode = (name: string) => page.getByRole('button', { name, exact: true });
+    await page.keyboard.press('e');
+    await expect(page.locator('.cm-content')).toBeFocused();
+    await expect(mode('Editor and viewer')).toHaveClass(/v-btn--active/);
+
+    await page.keyboard.type('More text.');
+    await page.keyboard.press('Control+s');
+    await expect.poll(() => repository.writes.map(({ path }) => path)).toEqual(['projects/plan.md']);
+    expect(repository.writes[0].content).toContain('More text.');
+
+    await page.keyboard.press('Shift+Enter');
+    await expect(mode('Editor')).toHaveClass(/v-btn--active/);
+    await page.keyboard.press('Control+Enter');
+    await expect(mode('Viewer')).toHaveClass(/v-btn--active/);
+});
+
 // A dialog over a note keeps every key from it, wherever the focus is. The parent picker, closed
 // over a new task's editor, leaves the focus on the page rather than in the editor beneath it: the
 // note took Ctrl+S from there, and saved its own edit along with the task.
