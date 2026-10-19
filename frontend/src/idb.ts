@@ -191,21 +191,52 @@ export function replaceEntries(commitId: string, entries: unknown[]): Promise<vo
     }).then(() => undefined);
 }
 
-// Apply only what changed, and move the commit ID with it.
+// Apply only what changed, and move the commit ID with it -- if the rows still describe `base`,
+// the commit the delta was computed from. Every tab of the origin shares them, so another tab's
+// sync may have moved them on since they were read, or a logout cleared them; the delta applied
+// to either would leave rows of no commit labelled as one, and later deltas would build on that.
+// Checked in the transaction that writes, which no other can come between.
 export function applyEntryDelta(
+    base: string,
     commitId: string,
     changed: unknown[],
     deleted: string[],
 ): Promise<void> {
     return runMultiTransaction([ENTRY_STORE, STORE_NAME], 'readwrite', (stores) => {
-        for (const path of deleted) {
-            stores[ENTRY_STORE].delete(path);
-        }
-        for (const entry of changed) {
-            stores[ENTRY_STORE].put(entry);
-        }
-        stores[STORE_NAME].put(commitId, CACHE_COMMIT_KEY);
+        const current = stores[STORE_NAME].get(CACHE_COMMIT_KEY);
+        current.onsuccess = () => {
+            if (current.result !== base) {
+                return;
+            }
+            for (const path of deleted) {
+                stores[ENTRY_STORE].delete(path);
+            }
+            for (const entry of changed) {
+                stores[ENTRY_STORE].put(entry);
+            }
+            stores[STORE_NAME].put(commitId, CACHE_COMMIT_KEY);
+        };
     }).then(() => undefined);
+}
+
+// The rows, if they still describe `commitId`, and `null` if they do not. Read with the commit ID
+// in one transaction: between two separate reads another tab's sync can replace both, and a delta
+// from `commitId` applied to the rows it left would make a listing of neither commit.
+export function readEntriesAt<T>(commitId: string): Promise<T[] | null> {
+    return runMultiTransaction([ENTRY_STORE, STORE_NAME], 'readonly', (stores) => {
+        const read: { rows: T[] | null } = { rows: null };
+        const current = stores[STORE_NAME].get(CACHE_COMMIT_KEY);
+        current.onsuccess = () => {
+            if (current.result !== commitId) {
+                return;
+            }
+            const rows = stores[ENTRY_STORE].getAll();
+            rows.onsuccess = () => {
+                read.rows = rows.result as T[];
+            };
+        };
+        return read;
+    }).then((read) => read?.rows ?? null);
 }
 
 export function readAllEntries<T>(): Promise<T[] | null> {

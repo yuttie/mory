@@ -13,8 +13,8 @@ import type {
 import {
     applyEntryDelta,
     clearEntries,
-    readAllEntries,
     readCacheCommitId,
+    readEntriesAt,
     readEntry,
     replaceEntries,
 } from '@/idb';
@@ -51,10 +51,13 @@ export const useFilesStore = defineStore('files', () => {
     // consumer already reads through.
     let entryMap: Map<string, ListEntry2> = new Map();
 
-    // Whether `entryMap` still matches the persisted rows exactly. An optimistic patch clears it:
+    // The commit `entryMap` describes exactly, or `null` once an optimistic patch has touched it:
     // a delta is computed by the backend against the persisted commit, so applying one to a
-    // locally-patched map would compound the patch instead of replacing it.
-    let mapIsPersisted = false;
+    // locally-patched map would compound the patch instead of replacing it. A commit rather than a
+    // flag because the persisted rows are shared by every tab: another tab's sync moves them on
+    // while this map stays where it was, and a delta from their commit would then skip whatever
+    // happened in between.
+    let mapCommit: string | null = null;
 
     // When the last sync returned a commit older than HEAD, so `list()` does not spin while the
     // backend finishes a rebuild.
@@ -76,9 +79,9 @@ export const useFilesStore = defineStore('files', () => {
     // Collapses concurrent requests for the same stale data into one refresh.
     let inflight: Promise<ListEntry2[]> | null = null;
 
-    // Bumped by every invalidation. A sync that started before the bump must not adopt or
-    // persist its result: a mutation has landed since it read HEAD, so what it fetched no
-    // longer describes the repository and would resurrect a cache under a stale commit ID.
+    // Bumped by every invalidation. A sync that started before the bump must not adopt its result:
+    // a mutation has landed since it read HEAD, so what it fetched no longer describes the
+    // repository. What it persists is checked against the rows it was computed from instead.
     let epoch = 0;
 
     // Bring the store up to date in a single request.
@@ -105,23 +108,23 @@ export const useFilesStore = defineStore('files', () => {
             return entriesRef.value;
         }
 
+        let next: Map<string, ListEntry2>;
         if (response.kind === 'full') {
-            entryMap = new Map(response.entries.map((entry) => [entry.path, entry]));
+            next = new Map(response.entries.map((entry) => [entry.path, entry]));
             await replaceEntries(response.commit, response.entries);
         }
         else {
             // A delta is computed against the persisted rows, so it has to be applied to them --
             // never to a map an optimistic patch has already touched, which would compound the
-            // patch rather than replace it.
-            let next: Map<string, ListEntry2>;
-            if (mapIsPersisted) {
+            // patch rather than replace it, nor to one another tab's sync has left behind.
+            if (mapCommit === base) {
                 next = new Map(entryMap);
             }
             else {
-                const rows = await readAllEntries<ListEntry2>();
+                const rows = base === null ? null : await readEntriesAt<ListEntry2>(base);
                 if (rows === null) {
-                    // No readable base to apply to. Ask again without one, and take the full
-                    // listing.
+                    // No readable base to apply to, or rows another tab has moved on from it since
+                    // it was read. Ask again from what they describe now.
                     validatedCommitIdRef.value = null;
                     return publish();
                 }
@@ -141,10 +144,17 @@ export const useFilesStore = defineStore('files', () => {
             for (const entry of response.changed) {
                 next.set(entry.path, entry);
             }
-            entryMap = next;
-            await applyEntryDelta(response.commit, response.changed, response.deleted);
+            await applyEntryDelta(response.base, response.commit, response.changed, response.deleted);
         }
-        mapIsPersisted = true;
+
+        if (epoch !== startEpoch) {
+            // A mutation landed while the rows were being written. They describe their commit all
+            // the same, and serve as the next sync's base; but the listing in memory, patched or
+            // not, is not to be replaced by one older than that mutation and called current.
+            return entriesRef.value;
+        }
+        entryMap = next;
+        mapCommit = response.commit;
 
         if (response.commit === response.head) {
             validatedCommitIdRef.value = response.commit;
@@ -235,7 +245,7 @@ export const useFilesStore = defineStore('files', () => {
     async function patchEntries(patch: (entries: ListEntry2[]) => ListEntry2[]): Promise<void> {
         const patched = patch(Array.from(entryMap.values()));
         entryMap = new Map(patched.map((entry) => [entry.path, entry]));
-        mapIsPersisted = false;
+        mapCommit = null;
         publish();
         invalidate();
     }
@@ -244,7 +254,7 @@ export const useFilesStore = defineStore('files', () => {
     // private repository and must not outlive the session that fetched it.
     async function clear(): Promise<void> {
         entryMap = new Map();
-        mapIsPersisted = false;
+        mapCommit = null;
         entriesRef.value = [];
         errorRef.value = null;
         invalidate();

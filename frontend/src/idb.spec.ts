@@ -96,7 +96,7 @@ describe('the entry store', () => {
 
     it('applies a delta and moves the commit id with it', async () => {
         await idb.replaceEntries('commit-1', listing);
-        await idb.applyEntryDelta('commit-2', [entry('.tasks/new.md')], ['.tasks/a.md']);
+        await idb.applyEntryDelta('commit-1', 'commit-2', [entry('.tasks/new.md')], ['.tasks/a.md']);
 
         const rows = await idb.readEntriesByPrefix<ListEntry2>('.tasks/');
         expect(rows?.map((r) => r.path).sort()).toEqual(['.tasks/nested/b.md', '.tasks/new.md']);
@@ -105,11 +105,30 @@ describe('the entry store', () => {
 
     it('overwrites a changed row rather than duplicating it', async () => {
         await idb.replaceEntries('commit-1', listing);
-        await idb.applyEntryDelta('commit-2', [{ ...entry('.tasks/a.md'), title: 'renamed' }], []);
+        await idb.applyEntryDelta('commit-1', 'commit-2', [{ ...entry('.tasks/a.md'), title: 'renamed' }], []);
 
         const rows = await idb.readEntriesByPrefix<ListEntry2>('.tasks/');
         expect(rows?.filter((r) => r.path === '.tasks/a.md')).toHaveLength(1);
         expect(rows?.find((r) => r.path === '.tasks/a.md')?.title).toBe('renamed');
+    });
+
+    // Another tab moved the rows on, or a logout cleared them, after the base was read.
+    it('applies no delta to rows of another commit than its base', async () => {
+        await idb.replaceEntries('commit-3', listing);
+        await idb.applyEntryDelta('commit-1', 'commit-2', [entry('ghost.md')], []);
+        expect(await idb.readCacheCommitId()).toBe('commit-3');
+        expect(await idb.readEntry<ListEntry2>('ghost.md')).toBeUndefined();
+
+        await idb.clearEntries();
+        await idb.applyEntryDelta('commit-3', 'commit-4', [entry('ghost.md')], []);
+        expect(await idb.readAllEntries<ListEntry2>()).toEqual([]);
+        expect(await idb.readCacheCommitId()).toBeUndefined();
+    });
+
+    it('reads the rows only while they describe the commit asked for', async () => {
+        await idb.replaceEntries('commit-1', listing);
+        expect((await idb.readEntriesAt<ListEntry2>('commit-1'))?.length).toBe(listing.length);
+        expect(await idb.readEntriesAt<ListEntry2>('commit-2')).toBeNull();
     });
 
     it('reads a single row without the listing', async () => {
@@ -139,6 +158,8 @@ describe('without IndexedDB', () => {
         await expect(idb.replaceEntries('commit-1', listing)).resolves.toBeUndefined();
         await expect(idb.readEntriesByPrefix<ListEntry2>('.tasks/')).resolves.toBeNull();
         await expect(idb.readAllEntries<ListEntry2>()).resolves.toBeNull();
+        await expect(idb.readEntriesAt<ListEntry2>('commit-1')).resolves.toBeNull();
+        await expect(idb.applyEntryDelta('commit-1', 'commit-2', listing, [])).resolves.toBeUndefined();
         await expect(idb.readCacheCommitId()).resolves.toBeNull();
     });
 });
