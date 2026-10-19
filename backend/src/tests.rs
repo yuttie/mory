@@ -2485,6 +2485,69 @@ fn message_of(fixture: &RepoFixture, commit: Oid) -> String {
         .to_owned()
 }
 
+/// A request that arrives while an image is being cached reads the same path, and must find the
+/// image that was there or the new one, never part of the new one.
+#[test]
+fn a_cached_image_is_never_read_half_written() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    let directory = tempfile::tempdir().expect("failed to make a directory");
+    let path = directory.path().join("0123abcd");
+    let old = vec![1u8; 1024];
+    // Large enough that writing it takes many reads' time.
+    let new = vec![2u8; 64 * 1024 * 1024];
+    std::fs::write(&path, &old).unwrap();
+
+    let reading = Arc::new(AtomicBool::new(false));
+    let written = Arc::new(AtomicBool::new(false));
+    let reader = {
+        let (path, reading, written) = (path.clone(), reading.clone(), written.clone());
+        let sizes = [old.len(), new.len()];
+        std::thread::spawn(move || {
+            let mut torn = 0;
+            while !written.load(Ordering::SeqCst) {
+                if let Ok(bytes) = std::fs::read(&path) {
+                    if !sizes.contains(&bytes.len()) {
+                        torn += 1;
+                    }
+                }
+                reading.store(true, Ordering::SeqCst);
+            }
+            torn
+        })
+    };
+    while !reading.load(Ordering::SeqCst) {
+        std::hint::spin_loop();
+    }
+    crate::write_atomically(&path, &new).expect("the write should succeed");
+    written.store(true, Ordering::SeqCst);
+
+    assert_eq!(reader.join().unwrap(), 0, "a read found the image part written");
+    assert_eq!(std::fs::read(&path).unwrap(), new);
+}
+
+/// What it replaces: the mode `fs::write` gave a cached image, and nothing left beside it.
+#[test]
+fn a_cached_image_is_written_as_fs_write_wrote_one() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let directory = tempfile::tempdir().expect("failed to make a directory");
+    let path = directory.path().join("0123abcd");
+    crate::write_atomically(&path, b"the converted image").expect("the write should succeed");
+    assert_eq!(std::fs::read(&path).unwrap(), b"the converted image");
+
+    let plain = directory.path().join("plain");
+    std::fs::write(&plain, b"").unwrap();
+    assert_eq!(
+        std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+        std::fs::metadata(&plain).unwrap().permissions().mode() & 0o777,
+    );
+    std::fs::remove_file(&plain).unwrap();
+    // The partial file it was written through is gone.
+    assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 1);
+}
+
 #[test]
 fn commit_save_replaces_the_blob_and_leaves_the_rest_alone() {
     let fixture = write_fixture();
