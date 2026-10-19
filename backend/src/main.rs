@@ -973,6 +973,12 @@ async fn put_notes_path(
     tracing::debug!("put_notes_path");
     tracing::debug!("{:?}", note_save);
 
+    // The version a save leaves, for a client saving again to check against: reading the note
+    // back would find whatever has landed since, and take that for its own.
+    let saved_blob = match &note_save {
+        NoteSave::Save { content, .. } => Oid::hash_object(git2::ObjectType::Blob, content.as_bytes()).ok(),
+        NoteSave::Rename { .. } => None,
+    };
     let written = match note_save {
         NoteSave::Save { content, message, expected_etag } => {
             if let Some(expected) = expected_etag {
@@ -993,7 +999,10 @@ async fn put_notes_path(
     };
 
     match written {
-        Ok(Some(_)) => Json(&true).into_response(),
+        Ok(Some(_)) => match saved_blob {
+            Some(blob) => v2::attach_oid(Json(&true).into_response(), blob),
+            None => Json(&true).into_response(),
+        },
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(e) if e.downcast_ref::<models::PathConflict>().is_some() => {
             tracing::info!("Refused to write {}: {:#}", path, e);
@@ -2089,7 +2098,7 @@ Write note suggestions in GitHub Flavored Markdown, ready to add to the task's n
         Ok(Json(commit_id.to_string()))
     }
 
-    fn attach_oid(mut res: Response, oid: git2::Oid) -> Response {
+    pub(crate) fn attach_oid(mut res: Response, oid: git2::Oid) -> Response {
         // ETag values should be quoted
         let etag_value = format!("\"{}\"", oid);
         res.headers_mut().insert(

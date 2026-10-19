@@ -260,8 +260,10 @@ export async function getFile(path: string, etag?: string): Promise<{ content: s
     return { content: response.status === 304 ? null : response.data, etag: response.headers.etag };
 }
 
-export async function saveFileChecked(path: string, content: string, expectedETag: string): Promise<void> {
-    await getAxios().put(`/notes/${encodePath(path)}`, { Save: { content, message: `Update ${path}`, expected_etag: expectedETag } });
+// Resolves to the ETag of what it wrote, which moried sends.
+export async function saveFileChecked(path: string, content: string, expectedETag: string): Promise<string | undefined> {
+    const response = await getAxios().put(`/notes/${encodePath(path)}`, { Save: { content, message: `Update ${path}`, expected_etag: expectedETag } });
+    return response.headers?.etag;
 }
 
 export function getNote(path: string) {

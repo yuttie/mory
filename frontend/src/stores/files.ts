@@ -267,9 +267,11 @@ export const useFilesStore = defineStore('files', () => {
         return api.getFile(path, etag);
     }
 
-    async function writeChecked(path: string, content: string, expectedETag: string): Promise<void> {
-        await api.saveFileChecked(path, content, expectedETag);
+    // Resolves to the ETag of what it wrote, for a write after it to be checked against.
+    async function writeChecked(path: string, content: string, expectedETag: string): Promise<string | undefined> {
+        const written = await api.saveFileChecked(path, content, expectedETag);
         invalidate();
+        return written;
     }
 
     async function read(path: string): Promise<string> {

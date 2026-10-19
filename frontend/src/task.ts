@@ -100,7 +100,10 @@ export interface Task {
     importance?: Importance;
     available_from?: string;
     lead_time?: string;
+    // The note as it was read, which a save edits rather than regenerates, and the ETag it was read
+    // at, which the save is checked against so that it cannot undo a change made since.
     source?: string;
+    etag?: string;
     due_by?: string;
     deadline?: string;
     // When `due_by` and `deadline` ring, where this task says so; `render` has to write it, or a

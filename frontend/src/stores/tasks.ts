@@ -2,6 +2,7 @@ import { urgencyOf, mostUrgent, type Urgency } from '@/urgency';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
 import { onScopeDispose, ref, computed } from 'vue';
 import { defineStore } from 'pinia';
+import axios from 'axios';
 import dayjs from 'dayjs';
 
 import type { UUID } from '@/api';
@@ -295,9 +296,35 @@ export const useTasksStore = defineStore('tasks', () => {
 
     // --- Mutations. Server first, then wait for the listing to show the result. ---
 
-    async function save(task: Task, path: string): Promise<void> {
-        await files.write(path, render(task));
+    // Resolves to the ETag of the note it wrote over, for the editor's next save to check against.
+    async function save(task: Task, path: string): Promise<string | undefined> {
+        const content = render(task);
+        let written: string | undefined;
+        if (task.source === undefined) {
+            // A task not read from a note: a new one, at a path of its own.
+            await files.write(path, content);
+        }
+        else {
+            // Only over the note it was read from. The editor stays open after a save, so the note
+            // can move on while it is -- completed through MCP, its dates set on another device --
+            // and writing the form over that would undo it unannounced. A note read without an
+            // ETag is refused as one that changed, rather than written over unchecked.
+            try {
+                written = await files.writeChecked(path, content, task.etag ?? 'absent');
+            }
+            catch (error) {
+                if (axios.isAxiosError(error) && error.response?.status === 412) {
+                    throw new Error(
+                        'The task changed elsewhere since it was opened. Copy anything you want to keep, '
+                        + 'then close it and open it again.',
+                        { cause: error },
+                    );
+                }
+                throw error;
+            }
+        }
         await subset.settle(path, true);
+        return written;
     }
 
     // Write new tasks in the order given, which must put each after the one it sits under, and

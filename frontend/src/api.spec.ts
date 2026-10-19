@@ -9,7 +9,8 @@ const client = vi.hoisted(() => ({
 
 vi.mock('@/axios', () => ({ getAxios: () => client }));
 
-import { addNote, deleteNote, getFile, getNote, getTaskData, noteExists, renameNote } from '@/api';
+import { addNote, deleteNote, getFile, getNote, getTaskData, noteExists, renameNote, saveFileChecked } from '@/api';
+import { getTask } from '@/api/task';
 
 // A path with the characters that end a URL's path early when they are not encoded.
 const ODD_PATH = 'notes/name#draft?100%.md';
@@ -50,6 +51,22 @@ describe('the requests for a note', () => {
     it('asks whether a path exists by its encoded path', async () => {
         await noteExists(ODD_PATH);
         expect(client.head.mock.calls[0][0]).toBe(`/v2/files/${ENCODED_ODD_PATH}`);
+    });
+
+    // A save is checked against the version it was read at, and the next against the one it left.
+    it('reads a task with the version it was read at', async () => {
+        client.get.mockResolvedValue({
+            status: 200,
+            data: '---\ntask:\n    status:\n        kind: todo\n---\n\n# Step\n',
+            headers: { etag: '"v1"' },
+        });
+        const [, task] = await getTask('.tasks/00000000-0000-4000-8000-000000000001.md');
+        expect(task?.etag).toBe('"v1"');
+    });
+
+    it('gives the version a checked save left', async () => {
+        client.put.mockResolvedValue({ status: 200, data: true, headers: { etag: '"v2"' } });
+        await expect(saveFileChecked('.tasks/a.md', 'text', '"v1"')).resolves.toBe('"v2"');
     });
 
     it('reads a file\'s version as the text it holds, even where that is JSON', async () => {
