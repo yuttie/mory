@@ -144,7 +144,7 @@ import type {
 import { routeForMime } from '@/file-route';
 import { useFilesStore } from '@/stores/files';
 import AppBarContent from '@/components/AppBarContent.vue';
-import { hasActiveDialog, isInOverlay, isTyping } from '@/keyboard';
+import { isInOverlay, isTyping, useShortcuts } from '@/keyboard';
 
 const emit = defineEmits<{
     (e: 'tokenExpired', callback: () => void): void;
@@ -226,13 +226,11 @@ const statusType = computed(() => {
 onMounted(() => {
     mounted = true;
     document.title = `Search | ${import.meta.env.VITE_APP_NAME}`;
-    window.addEventListener('keydown', handleKeydown);
     pollStatus();
 });
 
 onUnmounted(() => {
     mounted = false;
-    window.removeEventListener('keydown', handleKeydown);
     requestController?.abort();
     statusController?.abort();
     requestGeneration += 1;
@@ -241,6 +239,8 @@ onUnmounted(() => {
         clearTimeout(pollTimer);
     }
 });
+
+useShortcuts(handleKeydown);
 
 function submit(): void {
     const query = draftQuery.value?.trim() ?? '';
@@ -429,9 +429,7 @@ async function pollStatus(): Promise<void> {
 }
 
 function handleKeydown(event: KeyboardEvent): void {
-    // A dialog open over the view owns every key, wherever the focus is: the parent picker closed
-    // over a task's editor leaves it on the page, where `/` took it to the search field behind.
-    if (hasActiveDialog() || isTyping(event) || isInOverlay(event)) {
+    if (isTyping(event) || isInOverlay(event)) {
         return;
     }
     if (event.key === '/') {

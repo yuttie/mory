@@ -562,7 +562,7 @@ import { useFetchTask } from '@/composables/fetchTask';
 import { useLocalStorage } from '@/composables/localStorage';
 import { useConfigValue } from '@/config';
 import { required } from '@/rules';
-import { topDialog } from '@/keyboard';
+import { useShortcuts } from '@/keyboard';
 import dayjs from 'dayjs';
 import { useCalendarsStore } from '@/stores/calendars';
 
@@ -846,7 +846,6 @@ watch(
 // Lifecycle hooks
 onMounted(() => {
     window.addEventListener('beforeunload', onBeforeunload);
-    window.addEventListener('keydown', onKeydown);
     window.addEventListener('resize', fitAssessment);
     headerObserver.observe(headerRef.value!.$el);
     // The default alarms are shown beside a date's own, and live in the calendar configuration.
@@ -858,13 +857,14 @@ onMounted(() => {
 
 onUnmounted(() => {
     window.removeEventListener('beforeunload', onBeforeunload);
-    window.removeEventListener('keydown', onKeydown);
     window.removeEventListener('resize', fitAssessment);
     headerObserver.disconnect();
     if (assessmentTimeout) {
         clearTimeout(assessmentTimeout);
     }
 });
+
+useShortcuts(onKeydown, () => rootRef.value?.$el);
 
 // Methods
 function getNewTaskTitle(): string {
@@ -946,18 +946,12 @@ function onBeforeunload(e: any) {
     }
 }
 
-// Ctrl+S saves, as it saves a note. Listened for on the window rather than on the editor: a click
-// between the fields leaves the focus on the dialog around the editor, and a date picker or the
-// assessment is drawn outside it. Every host draws the editor in a dialog, and the key is the
-// editor's while that dialog is the one on top: not while another is open over it, such as a new
-// subtask's own editor. Taken from the browser even with nothing to save, whose Save would only
-// save the page.
+// Ctrl+S saves, as it saves a note. A shortcut of the dialog the editor is drawn in rather than a key
+// listened for on the editor: a click between the fields leaves the focus on the dialog around the
+// editor, and a date picker or the assessment is drawn outside it. Taken from the browser even with
+// nothing to save, whose Save would only save the page.
 function onKeydown(e: KeyboardEvent): void {
     if (!e.ctrlKey || e.key !== 's') {
-        return;
-    }
-    const dialog = rootRef.value?.$el.closest('.v-overlay');
-    if (!dialog || dialog !== topDialog()) {
         return;
     }
     e.preventDefault();

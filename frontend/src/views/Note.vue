@@ -392,7 +392,7 @@ import Ajv from 'ajv';
 import type { DefinedError } from 'ajv';
 import AppBarContent from '@/components/AppBarContent.vue';
 import EditableViewer from '@/components/EditableViewer.vue';
-import { hasActiveDialog, isInOverlay } from '@/keyboard';
+import { hasActiveDialog, isInOverlay, useShortcuts } from '@/keyboard';
 import { LAGGING_RETRY_MS, useFilesStore } from '@/stores/files';
 import { useConfigValue } from '@/config';
 import { noteBreadcrumbs } from '@/note-forest';
@@ -635,8 +635,6 @@ onMounted(async () => {
 
     window.addEventListener('beforeunload', onBeforeunload);
 
-    window.addEventListener('keydown', handleKeydown);
-
     await loadNoteFromRoute();
 });
 
@@ -647,9 +645,9 @@ onUnmounted(() => {
     window.removeEventListener('focus', focusOrBlurEditor);
 
     window.removeEventListener('beforeunload', onBeforeunload);
-
-    window.removeEventListener('keydown', handleKeydown);
 });
+
+useShortcuts(handleKeydown);
 
 // Methods
 async function refreshBreadcrumbListing() {
@@ -1031,10 +1029,7 @@ function onBeforeunload(e: any) {
 
 function handleKeydown(e: KeyboardEvent) {
     // Not `isTyping`: the shortcuts are for the note's own editor too, which Ctrl+S saves from.
-    // A dialog open over the note, its own rename dialog among them, owns every key wherever the
-    // focus is, which is not always inside it: the parent picker closed over a task's editor
-    // leaves it on the page, where the note took Ctrl+S and saved itself along with the task.
-    if (hasActiveDialog() || isInOverlay(e)) {
+    if (isInOverlay(e)) {
         return;
     }
     if (e.key === 'e') {

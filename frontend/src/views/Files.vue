@@ -111,7 +111,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 
 import { useRoute, useRouter } from 'vue-router';
 
@@ -131,7 +131,7 @@ import { compareTags } from '@/api';
 import { useFilesStore } from '@/stores/files';
 import { routeForMime } from '@/file-route';
 import AppBarContent from '@/components/AppBarContent.vue';
-import { hasActiveDialog, isInOverlay, isTyping } from '@/keyboard';
+import { isInOverlay, isTyping, useShortcuts } from '@/keyboard';
 
 import dayjs from 'dayjs';
 
@@ -274,8 +274,6 @@ const matchedEntries = computed(() => {
 onMounted(() => {
     document.title = `Files | ${import.meta.env.VITE_APP_NAME}`;
 
-    window.addEventListener('keydown', handleKeydown);
-
     load();
 
     if (route.query.q) {
@@ -283,9 +281,7 @@ onMounted(() => {
     }
 });
 
-onUnmounted(() => {
-    window.removeEventListener('keydown', handleKeydown);
-});
+useShortcuts(handleKeydown);
 
 // Methods
 function load() {
@@ -324,9 +320,7 @@ function load() {
 }
 
 function handleKeydown(e: KeyboardEvent) {
-    // A dialog open over the view owns every key, wherever the focus is: the parent picker closed
-    // over a task's editor leaves it on the page, where `/` took it to the search field behind.
-    if (hasActiveDialog() || isTyping(e) || isInOverlay(e)) {
+    if (isTyping(e) || isInOverlay(e)) {
         return;
     }
     if (e.key === '/') {
