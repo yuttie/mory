@@ -1138,7 +1138,7 @@ function save(): void {
         }
         else {
             error.value = true;
-            errorText.value = failure.response ?? String(failure);
+            errorText.value = String(failure);
         }
     }).finally(() => {
         isSaving.value = false;

@@ -571,7 +571,7 @@ function load() {
                 }
                 else {
                     error.value = true;
-                    errorText.value = err.response;
+                    errorText.value = err.toString();
                     isLoading.value = false;
                     throw err;
                 }
