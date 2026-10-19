@@ -326,7 +326,7 @@ import { parseEventColor } from '@/event-color';
 import dayjs from 'dayjs';
 import { renderMarkdown } from '@/markdown';
 import AppBarContent from '@/components/AppBarContent.vue';
-import { hasActiveDialog, isInOverlay, isTyping } from '@/keyboard';
+import { hasActiveDialog, isInOverlay, isTyping, useShortcuts } from '@/keyboard';
 import { taskRoute } from '@/task-route';
 
 // Emits
@@ -447,7 +447,6 @@ onMounted(() => {
         // back from the backend, which reads the same file.
     });
 
-    window.addEventListener('keydown', onKeydown);
     window.addEventListener('wheel', onWheel);
     window.addEventListener('focus', load);
 
@@ -455,10 +454,11 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-    window.removeEventListener('keydown', onKeydown);
     window.removeEventListener('wheel', onWheel);
     window.removeEventListener('focus', load);
 });
+
+useShortcuts(onKeydown);
 
 // Methods
 function onCalendarInput(date: unknown) {
@@ -526,9 +526,7 @@ function navigateCalendar(direction: 'prev' | 'next', amount = 1) {
 }
 
 function onKeydown(e: KeyboardEvent) {
-    // A dialog open over the view owns every key, wherever the focus is: the parent picker closed
-    // over a task's editor leaves it on the page, where the arrows moved the calendar behind it.
-    if (hasActiveDialog() || isTyping(e) || isInOverlay(e)) {
+    if (isTyping(e) || isInOverlay(e)) {
         return;
     }
     if (e.key === 'ArrowLeft') {
