@@ -144,7 +144,7 @@ import type {
 import { routeForMime } from '@/file-route';
 import { useFilesStore } from '@/stores/files';
 import AppBarContent from '@/components/AppBarContent.vue';
-import { isInOverlay, isTyping } from '@/keyboard';
+import { hasActiveDialog, isInOverlay, isTyping } from '@/keyboard';
 
 const emit = defineEmits<{
     (e: 'tokenExpired', callback: () => void): void;
@@ -429,7 +429,9 @@ async function pollStatus(): Promise<void> {
 }
 
 function handleKeydown(event: KeyboardEvent): void {
-    if (isTyping(event) || isInOverlay(event)) {
+    // A dialog open over the view owns every key, wherever the focus is: the parent picker closed
+    // over a task's editor leaves it on the page, where `/` took it to the search field behind.
+    if (hasActiveDialog() || isTyping(event) || isInOverlay(event)) {
         return;
     }
     if (event.key === '/') {

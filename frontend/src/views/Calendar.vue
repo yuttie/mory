@@ -526,7 +526,9 @@ function navigateCalendar(direction: 'prev' | 'next', amount = 1) {
 }
 
 function onKeydown(e: KeyboardEvent) {
-    if (isTyping(e) || isInOverlay(e)) {
+    // A dialog open over the view owns every key, wherever the focus is: the parent picker closed
+    // over a task's editor leaves it on the page, where the arrows moved the calendar behind it.
+    if (hasActiveDialog() || isTyping(e) || isInOverlay(e)) {
         return;
     }
     if (e.key === 'ArrowLeft') {

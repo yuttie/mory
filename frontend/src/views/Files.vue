@@ -131,7 +131,7 @@ import { compareTags } from '@/api';
 import { useFilesStore } from '@/stores/files';
 import { routeForMime } from '@/file-route';
 import AppBarContent from '@/components/AppBarContent.vue';
-import { isInOverlay, isTyping } from '@/keyboard';
+import { hasActiveDialog, isInOverlay, isTyping } from '@/keyboard';
 
 import dayjs from 'dayjs';
 
@@ -324,7 +324,9 @@ function load() {
 }
 
 function handleKeydown(e: KeyboardEvent) {
-    if (isTyping(e) || isInOverlay(e)) {
+    // A dialog open over the view owns every key, wherever the focus is: the parent picker closed
+    // over a task's editor leaves it on the page, where `/` took it to the search field behind.
+    if (hasActiveDialog() || isTyping(e) || isInOverlay(e)) {
         return;
     }
     if (e.key === '/') {
