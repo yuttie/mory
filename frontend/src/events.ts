@@ -211,6 +211,29 @@ export interface CalendarEvent {
     alarms?: string[];
 }
 
+/// Whether what an event says came from a subscribed feed: an imported event, or a note converted
+/// from one, whose `note` is still the feed's description. Someone else's text is rendered for what
+/// it says and never as markup that runs (`renderMarkdown`'s `untrusted`).
+export function isFromFeed(event: CalendarEvent): boolean {
+    return event.source === 'ical' || event.calendar !== undefined || event.uid !== undefined;
+}
+
+/// An event's `url` as a link, when it is one to the web or to mail. A feed chooses its own URLs,
+/// and an `<a href>` runs a `javascript:` one as mory.
+export function linkableUrl(url: string | undefined): string | undefined {
+    if (typeof url !== 'string') {
+        return undefined;
+    }
+    let protocol: string;
+    try {
+        protocol = new URL(url).protocol;
+    }
+    catch {
+        return undefined;
+    }
+    return ['http:', 'https:', 'mailto:'].includes(protocol) ? url : undefined;
+}
+
 // `[property, offending value, event name, note path, note title]` -- the shape `Calendar.vue`
 // renders in its error alert, kept as a tuple so that view needs no changes.
 export type EventError = [string, unknown, string, string, string | null];

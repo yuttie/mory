@@ -99,15 +99,28 @@ function render(
     if (unmapped !== undefined && Object.keys(unmapped).length > 0) {
         body.push('## Imported details');
         body.push(Object.entries(unmapped)
-            .map(([key, value]) => `- ${key}: ${value}`)
+            .map(([key, value]) => `- ${asText(key)}: ${asText(value)}`)
             .join('\n'));
     }
 
     // Same shape as `render()` in `task.ts`, so a note written here reads like one written there.
     const frontmatter = '---\n' + YAML.stringify(metadata, { indent: 4 }) + '---\n';
-    const heading = `\n# ${name}\n`;
+    // On one line: a line break would end the heading there, and leave the rest to the body.
+    const heading = `\n# ${asText(name).replace(/\s*[\r\n]+\s*/g, ' ')}\n`;
     const rest = body.length === 0 ? '' : `\n${body.join('\n\n')}\n`;
     return { path: eventNotePath(), content: frontmatter + heading + rest };
+}
+
+/// What a feed wrote, as Markdown that builds no markup, link or diagram from it.
+///
+/// The body is rendered with its raw HTML live, as any note the user wrote is, so a summary of
+/// `<img onerror=...>` or a property holding `[agenda](javascript:...)` would run as mory each
+/// time the note was opened. Markup starts with `<`, a link with `[`, and the fenced code block a
+/// mermaid diagram is drawn from with three backticks or tildes, so escaping those leaves Markdown
+/// none of them to build; the backslash is escaped too, or the feed's own could cancel the escape
+/// that follows it. Emphasis and the like still format, as they would have in the feed.
+function asText(text: string): string {
+    return text.replace(/[\\<[`~]/g, '\\$&');
 }
 
 /// `.events/<uuidv4>.md`, the convention `.tasks/` writes.
