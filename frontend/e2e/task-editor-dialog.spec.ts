@@ -126,6 +126,46 @@ test('saves a task and stays open on it', async ({ context, page }) => {
     await expect(page).toHaveURL(url(PROJECT, 'status'));
 });
 
+// As a note is saved: from a field, from the note's own editor, and from the dialog around them,
+// which a click between the fields leaves the focus on. With nothing to save the key is still taken
+// from the browser, whose Save would offer to save the page.
+test('saves a task with Ctrl+S', async ({ context, page }) => {
+    const repository = await mockBackend(context, NOTES);
+    await page.goto(`/tasks-next/${PROJECT}/descendants/status?task=${STEP}`);
+    await title(page).fill('First step');
+    await page.keyboard.press('Control+s');
+    await expect.poll(() => repository.writes.length).toBe(1);
+    expect(repository.writes[0].content).toContain('# First step\n');
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
+
+    await dialog(page).locator('.cm-content').click();
+    await page.keyboard.type('Ask for the figures.');
+    await page.keyboard.press('Control+s');
+    await expect.poll(() => repository.writes.length).toBe(2);
+    expect(repository.writes[1].content).toContain('Ask for the figures.');
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
+
+    await title(page).fill('First step, revised');
+    await dialog(page).getByText('No planned days').click();
+    await expect(dialog(page).locator('.v-overlay__content')).toBeFocused();
+    await page.keyboard.press('Control+s');
+    await expect.poll(() => repository.writes.length).toBe(3);
+    expect(repository.writes[2].content).toContain('# First step, revised\n');
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
+
+    await page.evaluate(() => {
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 's') {
+                document.body.dataset.saveTaken = String(e.defaultPrevented);
+            }
+        });
+    });
+    await page.keyboard.press('Control+s');
+    await expect(page.locator('body')).toHaveAttribute('data-save-taken', 'true');
+    await page.waitForTimeout(500);
+    expect(repository.writes).toHaveLength(3);
+});
+
 // Written back as it was read, and on one line, where a second would be read back as the note.
 test('keeps a title\'s Markdown, on one line', async ({ context, page }) => {
     const repository = await mockBackend(context, { ...NOTES, [`.tasks/${ERRAND}.md`]: note('Buy *the* `milk`') });
@@ -248,6 +288,27 @@ test('adds a subtask from the editor', async ({ context, page }) => {
     await expect(page).toHaveURL(url('_', 'status', PROJECT));
     await expect(title(page)).toHaveValue('Project, renamed');
     await expect(listed(page, 'Second step')).toBeVisible();
+});
+
+// Ctrl+S is the dialog's on top: the draft over the editor is created alone, and the change under it
+// waits for the next press, once the draft has closed.
+test('saves with Ctrl+S only the task in the dialog on top', async ({ context, page }) => {
+    const repository = await mockBackend(context, NOTES);
+    await page.goto(`/tasks-next/_/descendants/status?task=${PROJECT}`);
+    await title(page).fill('Project, renamed');
+    await dialog(page).getByRole('button', { name: 'Add Subtask' }).click();
+    const draft = page.getByRole('dialog').filter({ hasText: 'New subtask of "Project"' });
+    await draft.getByRole('textbox', { name: 'Title', exact: true }).fill('Second step');
+    await page.keyboard.press('Control+s');
+    await expect(draft).toBeHidden();
+    expect(repository.writes.map(({ path }) => path)).toEqual([expect.stringMatching(new RegExp(`^\\.tasks/${PROJECT}/[0-9a-f-]{36}\\.md$`))]);
+    expect(repository.writes[0].content).toContain('# Second step\n');
+    await expect(title(page)).toHaveValue('Project, renamed');
+
+    await page.keyboard.press('Control+s');
+    await expect.poll(() => repository.writes.length).toBe(2);
+    expect(repository.writes[1].path).toBe(`.tasks/${PROJECT}.md`);
+    expect(repository.writes[1].content).toContain('# Project, renamed\n');
 });
 
 // In the directory named by its UUID alone, where the task view looks for the tasks under it.

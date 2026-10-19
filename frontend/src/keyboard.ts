@@ -19,3 +19,19 @@ export function isInOverlay(event: Event): boolean {
 export function hasActiveDialog(): boolean {
     return document.querySelector('.v-overlay--active[role="dialog"]') !== null;
 }
+
+// The dialog drawn over every other open one, which owns each key pressed while it is open, wherever
+// the focus is: a menu opened from it is drawn over it too, but is no dialog. Told by z-index, as it
+// is drawn: Vuetify gives each overlay it opens one above every open overlay's.
+export function topDialog(): Element | null {
+    let top: Element | null = null;
+    let topZIndex = -Infinity;
+    for (const dialog of document.querySelectorAll('.v-overlay--active[role="dialog"]')) {
+        const zIndex = Number(getComputedStyle(dialog).zIndex) || 0;
+        if (zIndex >= topZIndex) {
+            top = dialog;
+            topZIndex = zIndex;
+        }
+    }
+    return top;
+}

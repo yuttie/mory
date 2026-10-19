@@ -150,6 +150,23 @@ test('creates the task under the parent chosen for it', async ({ context, page }
         .toEqual([expect.stringMatching(new RegExp(`^\\.tasks/${PROJECT}/[0-9a-f-]{36}\\.md$`))]);
 });
 
+// A date picked is still in its picker, which is drawn outside the dialog, over it. Here rather than
+// beside the editor's other Ctrl+S tests, whose fixed clock keeps the picker from opening: the day
+// is the 10th of whatever month it opens on.
+test('creates a task with Ctrl+S from a date picker', async ({ context, page }) => {
+    const repository = await mockBackend(context, NOTES);
+    await page.goto('/');
+    await openNewTask(page);
+    await title(page).fill('Write the review');
+    await dialog(page).getByRole('textbox', { name: 'Due date (soft target)', exact: true }).click();
+    const day = page.locator('.v-date-picker').getByRole('button', { name: / 10, \d{4}$/ });
+    await day.click();
+    await expect(day).toBeFocused();
+    await page.keyboard.press('Control+s');
+    await expect.poll(() => repository.writes.filter((write) => TASK.test(write.path)).length).toBe(1);
+    expect(repository.writes.find((write) => TASK.test(write.path))!.content).toMatch(/due_by: \d{4}-\d{2}-10\n/);
+});
+
 // The assessment's menu is drawn outside the dialog, whose focus trap took Tab from the menu back
 // to the dialog's first button. The menu keeps its own, so its suggestions can be reached and
 // added from the keyboard.
