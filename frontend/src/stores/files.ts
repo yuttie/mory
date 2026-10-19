@@ -291,7 +291,8 @@ export const useFilesStore = defineStore('files', () => {
         return deleted;
     }
 
-    async function upload(formData: FormData): Promise<[string, string][]> {
+    // Each file's form field, "success" or "error", and for an error why moried refused it.
+    async function upload(formData: FormData): Promise<[string, string, string | null][]> {
         const res = await api.uploadFiles(formData);
         invalidate();
         return res.data;
