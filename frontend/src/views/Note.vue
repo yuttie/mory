@@ -1031,7 +1031,10 @@ function onBeforeunload(e: any) {
 
 function handleKeydown(e: KeyboardEvent) {
     // Not `isTyping`: the shortcuts are for the note's own editor too, which Ctrl+S saves from.
-    if (renameDialogIsVisible.value || isInOverlay(e)) {
+    // A dialog open over the note, its own rename dialog among them, owns every key wherever the
+    // focus is, which is not always inside it: the parent picker closed over a task's editor
+    // leaves it on the page, where the note took Ctrl+S and saved itself along with the task.
+    if (hasActiveDialog() || isInOverlay(e)) {
         return;
     }
     if (e.key === 'e') {
