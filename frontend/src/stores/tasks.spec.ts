@@ -599,6 +599,43 @@ describe('remove', () => {
         await expect(store.remove(`.tasks/${uuid(3)}.md`)).resolves.toBe(false);
         expect(store.allTasks.map((t) => t.title)).toContain('Alpha');
     });
+
+    // Its subtasks live in the directory it names, which deleting its file leaves behind: they
+    // would be shown at the top of the tree, with nothing to say what they were part of.
+    it('refuses a task that has subtasks', async () => {
+        const { store, repo } = await storeWith(sample);
+        await expect(store.remove(`.tasks/${uuid(1)}.md`)).rejects.toThrow('subtasks');
+        expect(apiMocks.deleteNote).not.toHaveBeenCalled();
+        expect(repo.paths()).toContain(`.tasks/${uuid(1)}.md`);
+        expect(store.childrenOf(uuid(1)).map((t) => t.title)).toEqual(['Child']);
+    });
+
+    // A move renames the task's file before its subtasks', and in between the forest draws them at
+    // the top of the tree: the task looks childless to a delete that does not wait for the move.
+    it('refuses a task whose subtasks are still being moved with it', async () => {
+        const { store } = await storeWith(sample);
+        const moved = `.tasks/${uuid(3)}/${uuid(1)}.md`;
+        const rename = apiMocks.renameNote.getMockImplementation()!;
+        let release!: () => void;
+        const held = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        apiMocks.renameNote
+            .mockImplementationOnce(rename)
+            .mockImplementationOnce(async (from: string, to: string) => {
+                await held;
+                return rename(from, to);
+            });
+
+        const moving = store.move(uuid(1), uuid(3));
+        await vi.waitFor(() => expect(store.idByPath(moved)).toBe(uuid(1)));
+        const refused = expect(store.remove(moved)).rejects.toThrow('subtasks');
+        release();
+        await moving;
+
+        await refused;
+        expect(apiMocks.deleteNote).not.toHaveBeenCalled();
+    });
 });
 
 describe('parentForDrop', () => {
