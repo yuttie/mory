@@ -301,24 +301,24 @@ function load() {
                     console.log(entry);
                 }
             }
-        }).catch(error => {
-            if (error.response) {
-                if (error.response.status === 401) {
+        }).catch(err => {
+            if (err.response) {
+                if (err.response.status === 401) {
                     // Unauthorized
                     emit('tokenExpired', () => load());
                 }
                 else {
                     error.value = true;
-                    errorText.value = error.response;
+                    errorText.value = err.toString();
                     isLoading.value = false;
-                    throw error;
+                    throw err;
                 }
             }
             else {
                 error.value = true;
-                errorText.value = error.toString();
+                errorText.value = err.toString();
                 isLoading.value = false;
-                throw error;
+                throw err;
             }
         });
 }
@@ -446,24 +446,24 @@ function deleteSelected() {
                     error.value = true;
                     errorText.value = `Something wrong happened when deleting ${path}`;
                 }
-            }).catch(error => {
-                if (error.response) {
-                    if (error.response.status === 401) {
+            }).catch(err => {
+                if (err.response) {
+                    if (err.response.status === 401) {
                         // Unauthorized
                         emit('tokenExpired', () => deleteSelected());
                     }
                     else {
                         error.value = true;
-                        errorText.value = error.response;
+                        errorText.value = err.toString();
                         isLoading.value = false;
-                        throw error;
+                        throw err;
                     }
                 }
                 else {
                     error.value = true;
-                    errorText.value = error.toString();
+                    errorText.value = err.toString();
                     isLoading.value = false;
-                    throw error;
+                    throw err;
                 }
             });
     }

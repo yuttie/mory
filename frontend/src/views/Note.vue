@@ -845,32 +845,32 @@ async function load(path: string) {
 
         isLoading.value = false;
         notFound.value = false;
-    }).catch(error => {
-        if (error.response) {
-            if (error.response.status === 401) {
+    }).catch(err => {
+        if (err.response) {
+            if (err.response.status === 401) {
                 // Unauthorized
                 emit('tokenExpired', async () => {
                     await load(path);
                     focusOrBlurEditor();
                 });
             }
-            else if (error.response.status === 404) {
+            else if (err.response.status === 404) {
                 // Not Found
                 isLoading.value = false;
                 notFound.value = true;
             }
             else {
                 error.value = true;
-                errorText.value = error.response;
+                errorText.value = err.toString();
                 isLoading.value = false;
-                throw error;
+                throw err;
             }
         }
         else {
             error.value = true;
-            errorText.value = error.toString();
+            errorText.value = err.toString();
             isLoading.value = false;
-            throw error;
+            throw err;
         }
     });
 }
@@ -888,32 +888,32 @@ async function loadTemplate(path: string) {
 
         isLoading.value = false;
         notFound.value = false;
-    }).catch(error => {
-        if (error.response) {
-            if (error.response.status === 401) {
+    }).catch(err => {
+        if (err.response) {
+            if (err.response.status === 401) {
                 // Unauthorized
                 emit('tokenExpired', async () => {
                     await load(path);
                     focusOrBlurEditor();
                 });
             }
-            else if (error.response.status === 404) {
+            else if (err.response.status === 404) {
                 // Not Found
                 isLoading.value = false;
                 notFound.value = true;
             }
             else {
                 error.value = true;
-                errorText.value = error.response;
+                errorText.value = err.toString();
                 isLoading.value = false;
-                throw error;
+                throw err;
             }
         }
         else {
             error.value = true;
-            errorText.value = error.toString();
+            errorText.value = err.toString();
             isLoading.value = false;
-            throw error;
+            throw err;
         }
     });
 }
@@ -996,9 +996,9 @@ function notifyUpstreamState(e: FocusEvent) {
                 showUpstreamState.value = true;
             }
         })
-        .catch(error => {
-            if (error.response) {
-                if (error.response.status === 401) {
+        .catch(err => {
+            if (err.response) {
+                if (err.response.status === 401) {
                     // Unauthorized
                     emit('tokenExpired', () => {
                         notifyUpstreamState(e);
@@ -1006,14 +1006,14 @@ function notifyUpstreamState(e: FocusEvent) {
                 }
                 else {
                     error.value = true;
-                    errorText.value = error.response;
-                    throw error;
+                    errorText.value = err.toString();
+                    throw err;
                 }
             }
             else {
                 error.value = true;
-                errorText.value = error.toString();
-                throw error;
+                errorText.value = err.toString();
+                throw err;
             }
         });
 }
@@ -1089,9 +1089,9 @@ function saveIfNeeded() {
                     }
                 }
             })
-            .catch(error => {
-                if (error.response) {
-                    if (error.response.status === 401) {
+            .catch(err => {
+                if (err.response) {
+                    if (err.response.status === 401) {
                         // Unauthorized
                         emit('tokenExpired', () => {
                             saveIfNeeded();
@@ -1099,14 +1099,14 @@ function saveIfNeeded() {
                     }
                     else {
                         error.value = true;
-                        errorText.value = error.response;
-                        throw error;
+                        errorText.value = err.toString();
+                        throw err;
                     }
                 }
                 else {
                     error.value = true;
-                    errorText.value = error.toString();
-                    throw error;
+                    errorText.value = err.toString();
+                    throw err;
                 }
             });
     }
@@ -1183,9 +1183,9 @@ function rename() {
                     params: { path: renamedTo.split('/') },
                 });
                 isRenaming.value = false;
-            }).catch(error => {
-                if (error.response) {
-                    if (error.response.status === 401) {
+            }).catch(err => {
+                if (err.response) {
+                    if (err.response.status === 401) {
                         // Unauthorized
                         emit('tokenExpired', () => {
                             rename();
@@ -1194,16 +1194,16 @@ function rename() {
                     }
                     else {
                         error.value = true;
-                        errorText.value = error.response;
+                        errorText.value = err.toString();
                         isRenaming.value = false;
-                        throw error;
+                        throw err;
                     }
                 }
                 else {
                     error.value = true;
-                    errorText.value = error.toString();
+                    errorText.value = err.toString();
                     isRenaming.value = false;
-                    throw error;
+                    throw err;
                 }
             });
     }
