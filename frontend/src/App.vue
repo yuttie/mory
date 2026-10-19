@@ -177,6 +177,7 @@
                                     v-for="entry of uploadList"
                                     v-bind:key="entry.uuid"
                                     v-bind:title="entry.filename"
+                                    v-bind:lines="entry.status === 'error' ? false : undefined"
                                     v-on:click="copyToClipboard(entry.filename)"
                                     style="white-space: nowrap;"
                                 >
@@ -184,6 +185,16 @@
                                         <v-icon
                                             v-bind:color="uploadStatusColor(entry.status)"
                                         >{{ uploadStatusIcon(entry.status) }}</v-icon>
+                                    </template>
+                                    <template
+                                        v-if="entry.status === 'error'"
+                                        #subtitle
+                                    >
+                                        <!-- The name stays on one line, but the reason wraps,
+                                             unclamped (`lines` above), rather than widening the
+                                             menu past the screen or losing what to do to an
+                                             ellipsis. -->
+                                        <span style="white-space: normal;">{{ entry.statusMessage }}</span>
                                     </template>
                                 </v-list-item>
                                 <v-list-item
@@ -395,6 +406,7 @@
                                     v-for="entry of uploadList"
                                     v-bind:key="entry.uuid"
                                     v-bind:title="entry.filename"
+                                    v-bind:lines="entry.status === 'error' ? false : undefined"
                                     v-on:click="copyToClipboard(entry.filename)"
                                     style="white-space: nowrap;"
                                 >
@@ -402,6 +414,16 @@
                                         <v-icon
                                             v-bind:color="uploadStatusColor(entry.status)"
                                         >{{ uploadStatusIcon(entry.status) }}</v-icon>
+                                    </template>
+                                    <template
+                                        v-if="entry.status === 'error'"
+                                        #subtitle
+                                    >
+                                        <!-- The name stays on one line, but the reason wraps,
+                                             unclamped (`lines` above), rather than widening the
+                                             menu past the screen or losing what to do to an
+                                             ellipsis. -->
+                                        <span style="white-space: normal;">{{ entry.statusMessage }}</span>
                                     </template>
                                 </v-list-item>
                                 <v-list-item
@@ -1032,11 +1054,14 @@ function uploadFiles(files: File[]) {
 
     // POST the FormData
     fileStore.upload(fd).then(results => {
-        for (const [uuid, result] of results) {
+        for (const [uuid, result, reason] of results) {
             const entry = uploadList.value.find(e => e.uuid === uuid);
             if (entry) {
                 entry.status = result;
-                entry.statusMessage = 'Successfully uploaded';
+                // A file is refused only where its name is taken, so renaming it is the way out.
+                entry.statusMessage = result === 'error'
+                    ? `${reason ?? 'It was refused'}. Rename the file and upload it again.`
+                    : 'Successfully uploaded';
             }
         }
     }).catch(error => {
