@@ -1831,7 +1831,9 @@ Write note suggestions in GitHub Flavored Markdown, ready to add to the task's n
             && !host.ends_with(".internal")
     }
 
-    fn feed_client() -> reqwest::Client {
+    /// A client that checks every redirect as `is_fetchable_feed_url` checked the first URL, for a
+    /// URL someone else chose: a calendar feed, and an OAuth client's metadata document.
+    pub(crate) fn feed_client() -> reqwest::Client {
         let redirect = reqwest::redirect::Policy::custom(|attempt| {
             if attempt.previous().len() >= MAX_FEED_REDIRECTS {
                 return attempt.error("too many redirects");
