@@ -12,6 +12,14 @@ const apiMocks = vi.hoisted(() => ({
     getNote: vi.fn<(path: string) => Promise<{ data: string }>>(),
     addNote: vi.fn<(path: string, content: string) => Promise<{ data: null }>>(
         async () => ({ data: null })),
+    // Through `getNote` and `addNote`, which the tests set up and look at: the version is all
+    // these add, and only the tests of the check look at that.
+    getFile: vi.fn(async (path: string): Promise<{ content: string | null; etag: string }> =>
+        ({ content: (await apiMocks.getNote(path)).data, etag: '"as-read"' })),
+    saveFileChecked: vi.fn(async (path: string, content: string, _expected: string): Promise<string | undefined> => {
+        await apiMocks.addNote(path, content);
+        return `"written-${apiMocks.addNote.mock.calls.length}"`;
+    }),
     renameNote: vi.fn(async () => ({ data: null })),
     deleteNote: vi.fn(async () => ({ data: true })),
     uploadFiles: vi.fn(async () => ({ data: [] })),
@@ -323,6 +331,83 @@ describe('a configuration not read', () => {
         await store.saveTaskDateColors({ deadline: '#b71c1c' });
         const [, content] = apiMocks.addNote.mock.calls[0];
         expect(content).toContain('https://example.invalid/work.ics');
+    });
+});
+
+describe('saves made together', () => {
+    // The store takes a change once it is written, and each save writes the whole file from the
+    // store: a save started while another was in flight wrote the file without that one's change.
+    it('write each with the changes saved before it', async () => {
+        const store = await storeWith(YAML_FILE);
+        await store.loadConfiguration();
+        let release!: () => void;
+        apiMocks.addNote.mockImplementationOnce(() => new Promise((resolve) => {
+            release = () => resolve({ data: null });
+        }));
+
+        const first = store.saveTaskDateColors({ deadline: '#b71c1c' });
+        const second = store.saveCategories([{ id: 'meeting', color: '#00796b' }]);
+        await vi.waitFor(() => expect(apiMocks.addNote).toHaveBeenCalledOnce());
+        release();
+        await Promise.all([first, second]);
+
+        expect(apiMocks.addNote).toHaveBeenCalledTimes(2);
+        const [, content] = apiMocks.addNote.mock.calls[1];
+        expect(content).toContain('#b71c1c');
+        expect(content).toContain('#00796b');
+        expect(store.taskDateColors).toEqual({ deadline: '#b71c1c' });
+    });
+
+    it('write the next one when one fails', async () => {
+        const store = await storeWith(YAML_FILE);
+        await store.loadConfiguration();
+        apiMocks.addNote.mockRejectedValueOnce(new Error('offline'));
+
+        const first = store.saveTaskDateColors({ deadline: '#b71c1c' });
+        const second = store.saveCategories([{ id: 'meeting', color: '#00796b' }]);
+
+        await expect(first).rejects.toThrow('offline');
+        await second;
+        const [, content] = apiMocks.addNote.mock.calls[1];
+        expect(content).not.toContain('#b71c1c');
+        expect(content).toContain('#00796b');
+    });
+});
+
+describe('a configuration changed since it was read', () => {
+    it('is written only over the version read', async () => {
+        const store = await storeWith(YAML_FILE);
+        await store.loadConfiguration();
+
+        await store.saveTaskDateColors({ deadline: '#b71c1c' });
+        await store.saveSubscriptions([]);
+
+        expect(apiMocks.saveFileChecked.mock.calls.map(([, , expected]) => expected))
+            .toEqual(['"as-read"', '"written-1"']);
+    });
+
+    it('is created only where there is none', async () => {
+        apiMocks.getNote.mockRejectedValue(missing());
+        const store = await freshStore();
+        await store.loadConfiguration();
+
+        await store.saveTaskDateColors({ deadline: '#b71c1c' });
+
+        expect(apiMocks.saveFileChecked.mock.calls[0][2]).toBe('absent');
+    });
+
+    // Edited on another device, or in the note view, since the settings read it: the whole file
+    // written from what the store holds would undo that edit.
+    it('is not written over', async () => {
+        const store = await storeWith(YAML_FILE);
+        await store.loadConfiguration();
+        apiMocks.saveFileChecked.mockRejectedValueOnce(Object.assign(new Error('Request failed with status code 412'), {
+            isAxiosError: true,
+            response: { status: 412 },
+        }));
+
+        await expect(store.saveTaskDateColors({ deadline: '#b71c1c' })).rejects.toThrow('changed since');
+        expect(store.taskDateColors).toEqual({});
     });
 });
 

@@ -12,6 +12,7 @@
 import { computed, ref, shallowRef } from 'vue';
 import { defineStore } from 'pinia';
 import YAML from 'yaml';
+import axios from 'axios';
 
 import type { AlarmDefaults } from '@/alarms';
 import {
@@ -68,6 +69,14 @@ interface Loaded {
 }
 
 const EMPTY: Loaded = { events: [], series: {}, calendars: [], truncated: false };
+
+// The parts of the configuration one save changes; what it leaves out is written as it was.
+interface ConfigurationChange {
+    subscriptions?: CalendarSubscription[];
+    taskDateColors?: TaskDateColors;
+    alarmDefaults?: AlarmDefaults;
+    categories?: ConfiguredCategory[];
+}
 
 export const useCalendarsStore = defineStore('calendars', () => {
     const files = useFilesStore();
@@ -178,10 +187,14 @@ export const useCalendarsStore = defineStore('calendars', () => {
     // the store, would leave only the change it was made for.
     let unreadable: unknown = null;
 
+    // The version of the file the store holds, for a write to be checked against: `absent` when
+    // there was none, `null` when it is not known.
+    let version: string | null = null;
+
     async function readConfiguration(): Promise<CalendarSubscription[]> {
         try {
-            const text = await files.read(CALENDARS_PATH);
-            const parsed = YAML.parse(text);
+            const { content: text, etag } = await files.readVersion(CALENDARS_PATH);
+            const parsed = YAML.parse(text ?? '');
             const list = Array.isArray(parsed?.calendars) ? parsed.calendars : [];
             subscriptions.value = list.map((entry: Record<string, unknown>) => ({
                 id: String(entry.id ?? ''),
@@ -197,6 +210,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
             configurationProblems.value = problems.map((problem) =>
                 `${CALENDARS_PATH}: ${problem}. It is ignored, and saving the settings removes it.`);
             unreadable = null;
+            version = etag;
         }
         catch (error) {
             // No file means no calendars, which is the normal state before any are added -- the
@@ -208,9 +222,11 @@ export const useCalendarsStore = defineStore('calendars', () => {
             categories.value = isMissing(error) ? [] : null;
             if (!isMissing(error)) {
                 unreadable = error;
+                version = null;
                 throw error;
             }
             unreadable = null;
+            version = 'absent';
         }
         hasLoadedConfiguration.value = true;
         return subscriptions.value;
@@ -264,16 +280,23 @@ export const useCalendarsStore = defineStore('calendars', () => {
         await writeConfiguration({ categories: next });
     }
 
+    // The write under way, which a save made meanwhile waits out. Each builds the whole file from
+    // what the store holds, and the store takes a change only once it is written, so a save started
+    // before the last one landed would write the file without that one's change: a second switch
+    // flipped while the first was saving put the first back.
+    let writing: Promise<void> = Promise.resolve();
+
+    function writeConfiguration(change: ConfigurationChange): Promise<void> {
+        const written = writing.then(() => writeWhole(change));
+        writing = written.catch(() => undefined);
+        return written;
+    }
+
     // The whole file, from what the store holds with `change` made to it. Every part is written
     // every time, so editing one never drops another. The store takes the change only once it is
     // written: one refused or failed would otherwise be shown, and drawn, as the file's.
-    async function writeConfiguration(change: {
-        subscriptions?: CalendarSubscription[];
-        taskDateColors?: TaskDateColors;
-        alarmDefaults?: AlarmDefaults;
-        categories?: ConfiguredCategory[];
-    }): Promise<void> {
-        if (!hasLoadedConfiguration.value || unreadable !== null) {
+    async function writeWhole(change: ConfigurationChange): Promise<void> {
+        if (!hasLoadedConfiguration.value || unreadable !== null || version === null) {
             throw new Error(
                 `${CALENDARS_PATH} has not been read, or could not be read, so saving would `
                 + 'replace everything in it with this change. Fix the file, or open the settings '
@@ -307,7 +330,25 @@ export const useCalendarsStore = defineStore('calendars', () => {
                 }
                 : {}),
         };
-        await files.write(CALENDARS_PATH, stringifyWithFlowAlarms(document, { indent: 4 }));
+        // Only over the file as it was read: changed since, on another device or in the note view,
+        // it would be replaced whole by a switch flipped here.
+        try {
+            version = await files.writeChecked(
+                CALENDARS_PATH,
+                stringifyWithFlowAlarms(document, { indent: 4 }),
+                version,
+            ) ?? null;
+        }
+        catch (error) {
+            if (axios.isAxiosError(error) && error.response?.status === 412) {
+                throw new Error(
+                    `${CALENDARS_PATH} changed since the settings were read, so saving would undo that `
+                    + 'change. Open the settings again, then make this one again.',
+                    { cause: error },
+                );
+            }
+            throw error;
+        }
         subscriptions.value = next.subscriptions;
         taskDateColors.value = next.taskDateColors;
         alarmDefaults.value = next.alarmDefaults;
