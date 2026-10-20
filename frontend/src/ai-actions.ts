@@ -78,6 +78,36 @@ function parseAiActions(content: string): { actions: AiAction[]; unreadable: str
     return { actions, unreadable };
 }
 
+// Whether TOML that parsed holds a comment: a `#` outside every string. The file is written from
+// the actions it holds, so a comment is lost the way a key no action has would be.
+function hasComment(content: string): boolean {
+    let i = 0;
+    while (i < content.length) {
+        const character = content[i];
+        if (character === '#') {
+            return true;
+        }
+        if (character !== '"' && character !== "'") {
+            i += 1;
+            continue;
+        }
+        // Only a basic string, `"`, has escapes, and only a multi-line one, three quotes, may span
+        // lines.
+        const basic = character === '"';
+        const delimiter = content.startsWith(character.repeat(3), i) ? character.repeat(3) : character;
+        i += delimiter.length;
+        while (i < content.length && !content.startsWith(delimiter, i)) {
+            i += basic && content[i] === '\\' ? 2 : 1;
+        }
+        i += delimiter.length;
+        // A multi-line string may end in one or two quotes of its own before its delimiter.
+        while (delimiter.length === 3 && content[i] === character) {
+            i += 1;
+        }
+    }
+    return false;
+}
+
 export async function loadAiActions(): Promise<AiAction[]> {
     let content: string;
     try {
@@ -169,6 +199,12 @@ export async function updateAiActions(edit: (actions: AiAction[]) => AiAction[])
         throw new Error(
             `${AI_ACTIONS_PATH} holds ${unreadable.join(', ')}, which saving would delete: an action `
             + 'is a table of a name and a prompt alone. Fix the file first.',
+        );
+    }
+    if (hasComment(content)) {
+        throw new Error(
+            `${AI_ACTIONS_PATH} holds comments, which saving would delete. Move what they say into `
+            + 'a prompt, or make this change in the file itself.',
         );
     }
     const next = edit(actions);

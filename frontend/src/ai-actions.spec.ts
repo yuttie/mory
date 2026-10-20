@@ -91,6 +91,39 @@ describe('updateAiActions', () => {
         expect(apiMocks.saveFileChecked).not.toHaveBeenCalled();
     });
 
+    // The file is written from the actions it holds, which leaves out what was said beside them.
+    it('writes nothing over a file with comments', async () => {
+        for (const content of [
+            `# Keep these short.\n${FILE}`,
+            FILE.replace('name = "Summarize"', 'name = "Summarize" # shown in the menu'),
+        ]) {
+            apiMocks.getFile.mockResolvedValue({ content, etag: '"read"' });
+
+            await expect(updateAiActions((current) => [...current, added])).rejects.toThrow('comments');
+        }
+        expect(apiMocks.saveFileChecked).not.toHaveBeenCalled();
+    });
+
+    it('takes a # inside a string for no comment', async () => {
+        const content = `["#tag"]
+name = "C# \\"#1\\""
+prompt = '''
+# Heading {{input}}'''
+
+[other]
+name = 'C#'
+prompt = """
+\\""" # still a prompt
+"""""
+`;
+        apiMocks.getFile.mockResolvedValue({ content, etag: '"read"' });
+
+        const written = await updateAiActions((current) => [...current, added]);
+
+        expect(written.map(({ name }) => name)).toEqual(['C# "#1"', 'C#', 'Fix']);
+        expect(written[1].prompt).toBe('""" # still a prompt\n""');
+    });
+
     it('writes nothing that gives two actions one identifier', async () => {
         apiMocks.getFile.mockResolvedValue({ content: FILE, etag: '"read"' });
 
