@@ -178,7 +178,7 @@
                                     v-bind:key="entry.uuid"
                                     v-bind:title="entry.filename"
                                     v-bind:lines="entry.status === 'error' ? false : undefined"
-                                    v-on:click="copyToClipboard(entry.filename)"
+                                    v-on:click="copyUploadedName(entry)"
                                     style="white-space: nowrap;"
                                 >
                                     <template v-slot:prepend>
@@ -407,7 +407,7 @@
                                     v-bind:key="entry.uuid"
                                     v-bind:title="entry.filename"
                                     v-bind:lines="entry.status === 'error' ? false : undefined"
-                                    v-on:click="copyToClipboard(entry.filename)"
+                                    v-on:click="copyUploadedName(entry)"
                                     style="white-space: nowrap;"
                                 >
                                     <template v-slot:prepend>
@@ -612,6 +612,7 @@ import {
     mdiSubdirectoryArrowRight,
     mdiUpload,
 } from '@mdi/js';
+import axios from 'axios';
 
 import { useAppStore } from '@/stores/app';
 
@@ -1069,14 +1070,36 @@ function uploadFiles(files: File[]) {
             const entry = uploadList.value.find(e => e.uuid === uuid);
             if (entry) {
                 entry.status = 'error';
-                entry.statusMessage = error.message;
+                entry.statusMessage = uploadFailure(error);
             }
         }
     });
 }
 
+// Why an upload failed whole. One too large is the likely case, and "status code 413" reads as a
+// failure of the app rather than of the file: moried says how large an upload may be, and a proxy
+// in front of it, which may hold to a smaller limit, answers with a page of its own.
+function uploadFailure(error: unknown): string {
+    if (axios.isAxiosError(error) && error.response?.status === 413) {
+        const { data, headers } = error.response;
+        const said = typeof data === 'string' && String(headers['content-type']).startsWith('text/plain')
+            ? data
+            : 'The upload is too large';
+        return `${said}. Upload fewer files at once, or smaller ones.`;
+    }
+    return error instanceof Error ? error.message : String(error);
+}
+
 function copyToClipboard(text: string) {
     navigator.clipboard.writeText(text);
+}
+
+// The name to link the file by, once it is there under it: a refused upload's name is that of
+// another file, which a note linking it would show instead.
+function copyUploadedName(entry: UploadEntry) {
+    if (entry.status === 'success') {
+        copyToClipboard(entry.filename);
+    }
 }
 
 // Watchers
