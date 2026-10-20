@@ -435,6 +435,103 @@ fn extract_metadata_reports_malformed_yaml_as_an_error_object() {
 }
 
 #[test]
+fn extract_metadata_leaves_out_only_the_keys_json_cannot_hold() {
+    let keys = [
+        "~: x",
+        "null: x",
+        "? [a, b]\n: x",
+        "? {a: 1}\n: x",
+        "!tag key: x",
+        ".nan: x",
+        ".inf: x",
+    ];
+    for key in keys {
+        let blob = format!("---\n{key}\ntags: [kept]\n---\n\n# Title\n");
+        let (metadata, title) = crate::extract_metadata(blob.as_bytes(), "text/markdown");
+        let metadata = metadata.expect("expected frontmatter to be parsed");
+        assert_eq!(serde_json::to_value(&metadata).unwrap(), serde_json::json!({"tags": ["kept"]}), "{key:?}");
+        assert_eq!(title.as_deref(), Some("Title"));
+    }
+
+    // At any depth, and only the key with its value: the event beside it and the task stay.
+    let (metadata, _) = crate::extract_metadata(
+        b"---\ntask:\n  status: {kind: done}\nevents:\n  ~:\n    start: 2026-10-20\n  Meeting:\n    start: 2026-10-21\nlinks:\n  - ~: x\n    url: y\n---\n",
+        "text/markdown",
+    );
+    assert_eq!(
+        serde_json::to_value(metadata.expect("expected frontmatter to be parsed")).unwrap(),
+        serde_json::json!({
+            "task": {"status": {"kind": "done"}},
+            "events": {"Meeting": {"start": "2026-10-21"}},
+            "links": [{"url": "y"}],
+        }),
+    );
+}
+
+#[test]
+fn extract_metadata_lists_any_other_key_as_json_writes_it() {
+    // serde_json writes a number or a boolean key as a string, and a date or a quoted "null" is
+    // one already, so frontmatter the cache could already hold is listed as it was.
+    let frontmatter = "1: a\ntrue: b\n1.5: c\n0x1F: d\n2026-10-20: e\n\"null\": f\nx: !tag g\ny: 1.602176634e-19\n1e16: h\n1.0e+300: i\n-2.5e-8: j\n";
+    let original: serde_yaml::Value = serde_yaml::from_str(frontmatter).unwrap();
+    let (metadata, _) = crate::extract_metadata(format!("---\n{frontmatter}---\n").as_bytes(), "text/markdown");
+    assert_eq!(
+        serde_json::to_string(&metadata.expect("expected frontmatter to be parsed")).unwrap(),
+        serde_json::to_string(&original).unwrap(),
+    );
+
+    // Two keys named alike keep the later value where the first stood, as JavaScript does. JSON
+    // holding both would be refused when the listing reads it back.
+    let (metadata, _) = crate::extract_metadata(b"---\n1: a\nz: b\n\"1\": c\n---\n", "text/markdown");
+    assert_eq!(
+        serde_json::to_string(&metadata.expect("expected frontmatter to be parsed")).unwrap(),
+        r#"{"1":"c","z":"b"}"#,
+    );
+}
+
+#[test]
+fn extract_metadata_reports_frontmatter_the_listing_cannot_read_back_as_an_error_object() {
+    // serde_yaml reads 127 levels of nesting, which serde_json refuses to read back.
+    let blob = format!("---\na: {}{}\n---\n", "[".repeat(127), "]".repeat(127));
+    let (metadata, _) = crate::extract_metadata(blob.as_bytes(), "text/markdown");
+    let metadata = metadata.expect("expected an error object rather than None");
+    assert!(
+        metadata.get("error").and_then(|e| e.as_str()).is_some(),
+        "expected an `error` key, got {:?}",
+        metadata,
+    );
+}
+
+#[test]
+fn listable_reports_each_key_it_leaves_out_by_where_it_was() {
+    let cases = [
+        (
+            "~: a\nevents:\n  ? [a, b]\n  : b\n  Meeting:\n    instances:\n      - !tag start: c\n\
+             links:\n  - .nan: d\n  - 1: e\n    \"1\": f\n? !tag {a: 1}\n: g\n",
+            vec![
+                "a null key at the top level",
+                "a list key in `events`",
+                "a key tagged `!tag` in `events.Meeting.instances.0`",
+                "`.nan` in `links.0`",
+                "two frontmatter keys named `1` in `links.1`",
+                "a key tagged `!tag` at the top level",
+            ],
+        ),
+        // A top-level list is no mapping, and its items are not at the top level.
+        ("- ~: a\n", vec!["a null key in `0`"]),
+    ];
+    for (frontmatter, expected) in cases {
+        let mut left_out = Vec::new();
+        crate::listable(serde_yaml::from_str(frontmatter).unwrap(), None, &mut left_out);
+        assert_eq!(left_out.len(), expected.len(), "{left_out:#?}");
+        for (warning, expected) in left_out.iter().zip(expected) {
+            assert!(warning.contains(expected), "{warning:?} should say {expected:?}");
+            assert!(!warning.contains('\n'), "{warning:?} should be one line");
+        }
+    }
+}
+
+#[test]
 fn extract_metadata_bails_out_on_non_utf8_content() {
     // A JPEG header: not UTF-8, so neither metadata nor a title can be extracted.
     let (metadata, title) = crate::extract_metadata(&[0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10], "application/octet-stream");
@@ -822,6 +919,119 @@ async fn cached_rows_carry_the_blob_id_and_never_a_null_metadata() {
     let (_, _, plain_meta, plain_title) = &rows[0];
     assert_eq!(plain_meta, "null");
     assert_eq!(plain_title.as_deref(), None);
+}
+
+#[tokio::test]
+async fn a_row_schema_2_left_is_refilled_although_its_blob_is_unchanged() {
+    // A sync reuses a row whose blob is unchanged, so a row derived before keys were named as
+    // JSON names them would otherwise stay as it was.
+    let fixture = RepoFixture::new();
+    let head = fixture.commit_at(
+        "refs/heads/main",
+        &[],
+        &[("duplicate-key.md", Some("---\n1: a\n\"1\": b\n---\n"))],
+        1_000,
+        0,
+        "base",
+    );
+    fixture.set_head("refs/heads/main");
+    let mut conn = test_cache_db().await;
+    sync_to(&mut conn, &fixture, head).await.unwrap();
+    // As moried left the row at schema 2.
+    sqlx::query(r#"UPDATE entry SET metadata = '{"1":"a","1":"b"}';"#)
+        .execute(&mut conn)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE cache_state SET value = 2 WHERE key = 'schema_version';")
+        .execute(&mut conn)
+        .await
+        .unwrap();
+
+    crate::init_cache_database(&mut conn).await.unwrap();
+    sync_to(&mut conn, &fixture, head).await.unwrap();
+
+    let metadata: String = sqlx::query_scalar("SELECT metadata FROM entry;")
+        .fetch_one(&mut conn)
+        .await
+        .unwrap();
+    assert_eq!(metadata, r#"{"1":"b"}"#);
+}
+
+#[tokio::test]
+async fn a_cached_row_the_listing_cannot_read_is_listed_as_an_error() {
+    // As a moried that wrote keys named alike as they came left the row.
+    let mut conn = test_cache_db().await;
+    for (path, metadata) in [("duplicate-key.md", r#"{"1":"a","1":"b"}"#), ("fine.md", r#"{"tags":["x"]}"#)] {
+        sqlx::query("INSERT INTO entry VALUES (?, ?, 0, 'text/markdown', ?, NULL, 0, 0);")
+            .bind(path)
+            .bind(Oid::zero().to_string())
+            .bind(metadata)
+            .execute(&mut conn)
+            .await
+            .unwrap();
+    }
+
+    let listed = sqlx::query("SELECT * FROM entry ORDER BY path;")
+        .map(crate::models::row_to_list_entry)
+        .fetch_all(&mut conn)
+        .await
+        .unwrap();
+    let metadata = |index: usize| serde_json::to_value(&listed[index].metadata).unwrap();
+    assert!(metadata(0).get("error").is_some(), "got {}", metadata(0));
+    assert_eq!(metadata(1), serde_json::json!({"tags": ["x"]}));
+}
+
+#[tokio::test]
+async fn frontmatter_json_cannot_hold_neither_stops_a_sync_nor_a_listing_read() {
+    // The first sync runs before moried listens, so one that fails on a note keeps moried from
+    // starting; a row the listing cannot read back fails every read of the whole listing.
+    let deep = format!("---\na: {}{}\n---\n", "[".repeat(127), "]".repeat(127));
+    let fixture = RepoFixture::new();
+    let head = fixture.commit_at(
+        "refs/heads/main",
+        &[],
+        &[
+            (
+                "null-key.md",
+                Some("---\ntags: [x]\nevents:\n  ~:\n    start: 2026-10-20\n  Meeting:\n    start: 2026-10-21\n---\n\n# Null key\n"),
+            ),
+            ("duplicate-key.md", Some("---\n1: a\n\"1\": b\n---\n")),
+            ("deep.md", Some(&deep)),
+        ],
+        1_000,
+        0,
+        "base",
+    );
+    fixture.set_head("refs/heads/main");
+
+    let mut conn = test_cache_db().await;
+    sync_to(&mut conn, &fixture, head).await.unwrap();
+
+    let rows: Vec<(String, String, Option<String>)> =
+        sqlx::query_as("SELECT path, metadata, title FROM entry ORDER BY path;")
+            .fetch_all(&mut conn)
+            .await
+            .unwrap();
+    let listed: Vec<(String, serde_json::Value, Option<String>)> = rows
+        .into_iter()
+        .map(|(path, metadata, title)| {
+            // As the listing reads a row.
+            let metadata: Option<serde_yaml::Value> = serde_json::from_str(&metadata)
+                .unwrap_or_else(|e| panic!("{path}: the listing cannot read {metadata}: {e}"));
+            (path, serde_json::to_value(metadata).unwrap(), title)
+        })
+        .collect();
+    assert_eq!(listed[0].0, "deep.md");
+    assert!(listed[0].1.get("error").is_some(), "got {}", listed[0].1);
+    assert_eq!(listed[1], ("duplicate-key.md".to_owned(), serde_json::json!({"1": "b"}), None));
+    assert_eq!(
+        listed[2],
+        (
+            "null-key.md".to_owned(),
+            serde_json::json!({"tags": ["x"], "events": {"Meeting": {"start": "2026-10-21"}}}),
+            Some("Null key".to_owned()),
+        ),
+    );
 }
 
 // ---------------------------------------------------------------------------

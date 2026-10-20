@@ -280,8 +280,11 @@ fn mcp_routes(oauth_state: oauth::OauthState) -> Router {
         )
 }
 
-/// Bumping this drops and refills the `entry` table on the next start.
-const ENTRY_SCHEMA_VERSION: i64 = 2;
+/// Bumping this drops and refills the `entry` table on the next start. A row outlives the moried
+/// that wrote it for as long as its blob is unchanged, so this moves whenever what a row holds for
+/// a blob does, as well as when its columns do: 3 refilled the rows written before keys JSON cannot
+/// hold were left out of the listing one by one.
+const ENTRY_SCHEMA_VERSION: i64 = 3;
 
 async fn init_cache_database(
     conn: &mut SqliteConnection,
@@ -846,6 +849,8 @@ async fn sync_cache_to(
             let repo = repo.lock().unwrap();
             let blob = repo.find_blob(*blob_id)?;
             let size = blob.size();
+            // Names the note in what `extract_metadata` warns about it, which it cannot itself.
+            let _entry = tracing::warn_span!("entry", path = %path.display()).entered();
             let (metadata, title) = extract_metadata(blob.content(), &mime_type);
             (size, metadata, title)
         };
@@ -882,7 +887,7 @@ async fn sync_cache_to(
             .bind(blob_id.to_string())
             .bind(size as i64)
             .bind(mime_type)
-            .bind(serde_json::to_string(&metadata).unwrap())
+            .bind(serde_json::to_string(&metadata).expect("extract_metadata keeps only what JSON can hold"))
             .bind(title)
             .bind(when.seconds())
             .bind(when.offset_minutes() * 60)
@@ -1255,17 +1260,33 @@ fn extract_metadata(blob: &[u8], mime_type: &str) -> (Option<serde_yaml::Value>,
         let mut opts = markdown::ParseOptions::gfm();
         opts.constructs.frontmatter = true;
         if let Ok(node) = markdown::to_mdast(text, &opts) {
+            let error_metadata = |message: String| {
+                let mut mapping = serde_yaml::Mapping::new();
+                mapping.insert("error".into(), message.into());
+                Some(serde_yaml::Value::Mapping(mapping))
+            };
             let metadata = if let Some(markdown::mdast::Node::Yaml(yaml_node)) = get_frontmatter_node(&node) {
                 match serde_yaml::from_str::<serde_yaml::Value>(&yaml_node.value) {
                     Ok(doc) => {
                         tracing::debug!("parsed YAML metadata: {:?}", &doc);
-                        Some(doc)
+                        let mut left_out = Vec::new();
+                        let doc = listable(doc, None, &mut left_out);
+                        for warning in left_out {
+                            tracing::warn!("{}", warning);
+                        }
+                        // Read back as the listing reads it, so whatever the sync stores the
+                        // listing can read: YAML nested 127 deep is within serde_yaml's limit
+                        // but past serde_json's, and every read of a row it could not read
+                        // would fail. `doc` itself is what is stored, not what was read back:
+                        // serde_json reads some floats back a digit off what it wrote.
+                        match serde_json::to_string(&doc).and_then(|text| serde_json::from_str::<serde_yaml::Value>(&text)) {
+                            Ok(_) => Some(doc),
+                            Err(err) => error_metadata(format!("The frontmatter cannot be listed: {}", err)),
+                        }
                     },
                     Err(err) => {
                         tracing::debug!("failed to parse YAML metadata: {:?}", &err);
-                        let mut error_object = serde_yaml::Mapping::new();
-                        error_object.insert("error".into(), format!("{}", err).into());
-                        Some(serde_yaml::Value::Mapping(error_object))
+                        error_metadata(format!("{}", err))
                     },
                 }
             }
@@ -1281,6 +1302,77 @@ fn extract_metadata(blob: &[u8], mime_type: &str) -> (Option<serde_yaml::Value>,
     }
     else {
         (None, None)
+    }
+}
+
+/// `value` as the listing can hold it: the cache stores metadata as JSON, whose keys are strings.
+///
+/// A key is named as serde_json writes it, so frontmatter the cache could already hold is listed
+/// as it was. A key it cannot name -- null (`~:`), a list or mapping, a tagged one, `.nan` -- is
+/// left out with its value, rather than taking the rest with it: the note's task, tags and other
+/// events stay in the listing, as the web app, which reads them from the note itself, still shows
+/// them. Of two keys named alike, such as `1` and `"1"`, the later value is kept, as JavaScript
+/// keeps it. Each key left out adds the warning to give about it to `left_out`, saying where it
+/// was: `at` is where `value` is, `None` at the top level.
+fn listable(value: serde_yaml::Value, at: Option<&str>, left_out: &mut Vec<String>) -> serde_yaml::Value {
+    use serde_yaml::Value;
+
+    let within = |name: &str| match at {
+        None => name.to_owned(),
+        Some(at) => format!("{at}.{name}"),
+    };
+    let place = match at {
+        None => "at the top level".to_owned(),
+        Some(at) => format!("in `{at}`"),
+    };
+    match value {
+        Value::Mapping(mapping) => {
+            let mut listed = serde_yaml::Mapping::with_capacity(mapping.len());
+            for (key, value) in mapping {
+                let name = match &key {
+                    Value::String(name) => Ok(name.clone()),
+                    Value::Bool(flag) => Ok(flag.to_string()),
+                    // Not as `Number` displays itself, which is not always serde_json's spelling:
+                    // `1e16` is `1e+16` to serde_json.
+                    Value::Number(number) if number.is_finite() => {
+                        serde_json::to_string(number).map_err(|_| format!("`{number}`"))
+                    },
+                    Value::Number(number) => Err(format!("`{number}`")),
+                    Value::Null => Err("a null key".to_owned()),
+                    Value::Sequence(_) => Err("a list key".to_owned()),
+                    Value::Mapping(_) => Err("a mapping key".to_owned()),
+                    Value::Tagged(tagged) => Err(format!("a key tagged `{}`", tagged.tag)),
+                };
+                match name {
+                    Ok(name) => {
+                        let value = listable(value, Some(&within(&name)), left_out);
+                        if listed.insert(Value::String(name.clone()), value).is_some() {
+                            left_out.push(format!(
+                                "The listing keeps only the later of two frontmatter keys named \
+                                 `{name}` {place}, as JSON holds one: rename one to keep both",
+                            ));
+                        }
+                    },
+                    Err(key) => left_out.push(format!(
+                        "The listing leaves out {key} {place}, a frontmatter key JSON cannot hold, \
+                         with its value: quote or rename the key to keep it",
+                    )),
+                }
+            }
+            Value::Mapping(listed)
+        },
+        Value::Sequence(sequence) => Value::Sequence(
+            sequence
+                .into_iter()
+                .enumerate()
+                .map(|(index, item)| listable(item, Some(&within(&index.to_string())), left_out))
+                .collect(),
+        ),
+        Value::Tagged(tagged) => {
+            let serde_yaml::value::TaggedValue { tag, value } = *tagged;
+            Value::Tagged(Box::new(serde_yaml::value::TaggedValue { tag, value: listable(value, at, left_out) }))
+        },
+        scalar => scalar,
     }
 }
 
@@ -2646,14 +2738,33 @@ mod models {
         }
     }
 
-    fn row_to_list_entry(row: SqliteRow) -> ListEntry {
+    pub(crate) fn row_to_list_entry(row: SqliteRow) -> ListEntry {
         let tz = FixedOffset::east_opt(row.get("tz_offset")).unwrap();
         let time = tz.timestamp_opt(row.get("time"), 0).unwrap();
+        let path: PathBuf = row.get::<String, _>("path").into();
+        // A row outlives the moried that wrote it, as long as its blob is unchanged and
+        // `ENTRY_SCHEMA_VERSION` stays, and one an older moried wrote may not read: one holding
+        // keys named alike, such as `1` and `"1"`, which serde_yaml refuses. A panic here would
+        // fail every read of the whole listing.
+        let metadata = match serde_json::from_str(&row.get::<String, _>("metadata")) {
+            Ok(metadata) => metadata,
+            Err(e) => {
+                tracing::warn!(
+                    "Cannot read the cached metadata of {}, listed as an error until the note \
+                     changes or cache.sqlite is deleted: {}",
+                    path.display(),
+                    e,
+                );
+                let mut mapping = serde_yaml::Mapping::new();
+                mapping.insert("error".into(), format!("The cached metadata cannot be read: {}", e).into());
+                Some(serde_yaml::Value::Mapping(mapping))
+            },
+        };
         ListEntry {
-            path: row.get::<String, _>("path").into(),
+            path,
             size: row.get::<i64, _>("size") as usize,
             mime_type: row.get("mime_type"),
-            metadata: serde_json::from_str(&row.get::<String, _>("metadata")).unwrap(),
+            metadata,
             title: row.get("title"),
             time: time,
         }
