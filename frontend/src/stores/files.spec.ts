@@ -7,7 +7,8 @@ import type { ListEntry2 } from '@/api';
 // can be held open, to land a mutation while a sync is persisting what it fetched, and another
 // tab can be made to act just before the rows are read.
 const idb = {
-    commit: null as string | null,
+    // As idb.ts records it: `undefined` before any listing, `null` after a logout.
+    commit: undefined as string | null | undefined,
     rows: new Map<string, ListEntry2>(),
     hold: null as Promise<void> | null,
     // Set once a write has reached the hold.
@@ -27,9 +28,13 @@ vi.mock('@/idb', () => ({
         return idb.commit === commit ? Array.from(idb.rows.values()) : null;
     },
     readEntry: async (path: string) => idb.rows.get(path) ?? null,
-    replaceEntries: async (commit: string, entries: ListEntry2[]) => {
+    // As idb.ts writes one: only over the commit recorded when it was asked for.
+    replaceEntries: async (base: string | null | undefined, commit: string, entries: ListEntry2[]) => {
         idb.held = idb.hold !== null;
         await idb.hold;
+        if (idb.commit !== base) {
+            return;
+        }
         idb.rows = new Map(entries.map((entry) => [entry.path, entry]));
         idb.commit = commit;
     },
@@ -112,7 +117,7 @@ function newTab(): ReturnType<typeof useFilesStore> {
 const paths = (entries: readonly ListEntry2[]) => entries.map((candidate) => candidate.path).sort();
 
 beforeEach(() => {
-    idb.commit = null;
+    idb.commit = undefined;
     idb.rows = new Map();
     idb.hold = null;
     idb.held = false;
@@ -222,7 +227,25 @@ describe('the files store', () => {
         await tab.refresh().catch(() => undefined);
 
         // Whatever is persisted is the listing of the commit it is labelled with, or nothing.
-        const labelled = idb.commit === null ? [] : [...history.get(idb.commit)!.keys()];
+        const labelled = typeof idb.commit === 'string' ? [...history.get(idb.commit)!.keys()] : [];
         expect([...idb.rows.keys()].sort()).toEqual(labelled.sort());
+    });
+
+    // Another tab logged out while this one's first listing was on its way, and its persisting
+    // waited on that: written after the logout, the listing of a private repository outlived it.
+    it('leaves no full listing written after a logout', async () => {
+        const tab = newTab();
+        let release!: () => void;
+        idb.hold = new Promise((resolve) => {
+            release = resolve;
+        });
+        const syncing = tab.list();
+        await vi.waitFor(() => expect(idb.held).toBe(true));
+        await newTab().clear();
+        release();
+        await syncing;
+
+        expect(idb.rows.size).toBe(0);
+        expect(idb.commit).toBeNull();
     });
 });

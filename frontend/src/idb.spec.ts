@@ -46,7 +46,7 @@ afterEach(() => {
 
 describe('readEntriesByPrefix', () => {
     beforeEach(async () => {
-        await idb.replaceEntries('commit-1', listing);
+        await idb.replaceEntries(undefined, 'commit-1', listing);
     });
 
     // The store is keyed by `path`, so a prefix is a bounded range over the primary key and no
@@ -86,16 +86,16 @@ describe('readEntriesByPrefix', () => {
 
 describe('the entry store', () => {
     it('replaces rows and their commit id together', async () => {
-        await idb.replaceEntries('commit-1', listing);
+        await idb.replaceEntries(undefined, 'commit-1', listing);
         expect(await idb.readCacheCommitId()).toBe('commit-1');
 
-        await idb.replaceEntries('commit-2', [entry('only.md')]);
+        await idb.replaceEntries('commit-1', 'commit-2', [entry('only.md')]);
         expect((await idb.readAllEntries<ListEntry2>())?.map((r) => r.path)).toEqual(['only.md']);
         expect(await idb.readCacheCommitId()).toBe('commit-2');
     });
 
     it('applies a delta and moves the commit id with it', async () => {
-        await idb.replaceEntries('commit-1', listing);
+        await idb.replaceEntries(undefined, 'commit-1', listing);
         await idb.applyEntryDelta('commit-1', 'commit-2', [entry('.tasks/new.md')], ['.tasks/a.md']);
 
         const rows = await idb.readEntriesByPrefix<ListEntry2>('.tasks/');
@@ -104,7 +104,7 @@ describe('the entry store', () => {
     });
 
     it('overwrites a changed row rather than duplicating it', async () => {
-        await idb.replaceEntries('commit-1', listing);
+        await idb.replaceEntries(undefined, 'commit-1', listing);
         await idb.applyEntryDelta('commit-1', 'commit-2', [{ ...entry('.tasks/a.md'), title: 'renamed' }], []);
 
         const rows = await idb.readEntriesByPrefix<ListEntry2>('.tasks/');
@@ -114,7 +114,7 @@ describe('the entry store', () => {
 
     // Another tab moved the rows on, or a logout cleared them, after the base was read.
     it('applies no delta to rows of another commit than its base', async () => {
-        await idb.replaceEntries('commit-3', listing);
+        await idb.replaceEntries(undefined, 'commit-3', listing);
         await idb.applyEntryDelta('commit-1', 'commit-2', [entry('ghost.md')], []);
         expect(await idb.readCacheCommitId()).toBe('commit-3');
         expect(await idb.readEntry<ListEntry2>('ghost.md')).toBeUndefined();
@@ -122,26 +122,62 @@ describe('the entry store', () => {
         await idb.clearEntries();
         await idb.applyEntryDelta('commit-3', 'commit-4', [entry('ghost.md')], []);
         expect(await idb.readAllEntries<ListEntry2>()).toEqual([]);
-        expect(await idb.readCacheCommitId()).toBeUndefined();
+        expect(await idb.readCacheCommitId()).toBeNull();
     });
 
     it('reads the rows only while they describe the commit asked for', async () => {
-        await idb.replaceEntries('commit-1', listing);
+        await idb.replaceEntries(undefined, 'commit-1', listing);
         expect((await idb.readEntriesAt<ListEntry2>('commit-1'))?.length).toBe(listing.length);
         expect(await idb.readEntriesAt<ListEntry2>('commit-2')).toBeNull();
     });
 
     it('reads a single row without the listing', async () => {
-        await idb.replaceEntries('commit-1', listing);
+        await idb.replaceEntries(undefined, 'commit-1', listing);
         expect((await idb.readEntry<ListEntry2>('.tasks/a.md'))?.path).toBe('.tasks/a.md');
         expect(await idb.readEntry<ListEntry2>('missing.md')).toBeUndefined();
     });
 
     it('wipes rows and commit id together', async () => {
-        await idb.replaceEntries('commit-1', listing);
+        await idb.replaceEntries(undefined, 'commit-1', listing);
         await idb.clearEntries();
         expect(await idb.readAllEntries<ListEntry2>()).toEqual([]);
-        expect(await idb.readCacheCommitId()).toBeUndefined();
+        expect(await idb.readCacheCommitId()).toBeNull();
+    });
+
+    // A tab asked for a listing, then another logged out. Written after that, the listing of a
+    // private repository outlived the session it was fetched in.
+    it('writes no listing asked for before a logout', async () => {
+        for (const before of [undefined, 'commit-1']) {
+            if (before !== undefined) {
+                await idb.replaceEntries(undefined, before, listing);
+            }
+            const base = await idb.readCacheCommitId();
+            await idb.clearEntries();
+
+            await idb.replaceEntries(base, 'commit-2', listing);
+
+            expect(await idb.readAllEntries<ListEntry2>()).toEqual([]);
+            expect(await idb.readCacheCommitId()).toBeNull();
+            idb = await freshIdb();
+        }
+    });
+
+    it('writes a listing asked for after a logout', async () => {
+        await idb.replaceEntries(undefined, 'commit-1', listing);
+        await idb.clearEntries();
+
+        await idb.replaceEntries(await idb.readCacheCommitId(), 'commit-2', [entry('only.md')]);
+
+        expect((await idb.readAllEntries<ListEntry2>())?.map((r) => r.path)).toEqual(['only.md']);
+        expect(await idb.readCacheCommitId()).toBe('commit-2');
+    });
+
+    it('keeps a listing another tab wrote since its own was asked for', async () => {
+        await idb.replaceEntries(undefined, 'commit-2', [entry('only.md')]);
+
+        await idb.replaceEntries(undefined, 'commit-1', listing);
+
+        expect(await idb.readCacheCommitId()).toBe('commit-2');
     });
 });
 
@@ -190,7 +226,7 @@ describe('without IndexedDB', () => {
     });
 
     it('degrades to null rather than throwing', async () => {
-        await expect(idb.replaceEntries('commit-1', listing)).resolves.toBeUndefined();
+        await expect(idb.replaceEntries(undefined, 'commit-1', listing)).resolves.toBeUndefined();
         await expect(idb.readEntriesByPrefix<ListEntry2>('.tasks/')).resolves.toBeNull();
         await expect(idb.readAllEntries<ListEntry2>()).resolves.toBeNull();
         await expect(idb.readEntriesAt<ListEntry2>('commit-1')).resolves.toBeNull();

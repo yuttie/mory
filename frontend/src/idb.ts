@@ -196,14 +196,25 @@ function runMultiTransaction<T>(
     });
 }
 
-// Replace the whole listing: clear the rows, write the new ones, record their commit.
-export function replaceEntries(commitId: string, entries: unknown[]): Promise<void> {
+// Replace the whole listing: clear the rows, write the new ones, record their commit -- if the
+// commit recorded is still `base`, what `readCacheCommitId` gave as the listing was asked for. A
+// logout records `null`, which no store that has never held a listing reads, so a listing a tab
+// had asked for before one is not written after it: the listing describes a private repository
+// and must not outlive the session. One another tab wrote meanwhile is kept, as it describes its
+// commit as well as this one would.
+export function replaceEntries(base: string | null | undefined, commitId: string, entries: unknown[]): Promise<void> {
     return runMultiTransaction([ENTRY_STORE, STORE_NAME], 'readwrite', (stores) => {
-        stores[ENTRY_STORE].clear();
-        for (const entry of entries) {
-            stores[ENTRY_STORE].put(entry);
-        }
-        stores[STORE_NAME].put(commitId, CACHE_COMMIT_KEY);
+        const current = stores[STORE_NAME].get(CACHE_COMMIT_KEY);
+        current.onsuccess = () => {
+            if (current.result !== base) {
+                return;
+            }
+            stores[ENTRY_STORE].clear();
+            for (const entry of entries) {
+                stores[ENTRY_STORE].put(entry);
+            }
+            stores[STORE_NAME].put(commitId, CACHE_COMMIT_KEY);
+        };
     }).then(() => undefined);
 }
 
@@ -280,7 +291,9 @@ export function readEntry<T>(path: string): Promise<T | null> {
     return runTransactionOn<T>(ENTRY_STORE, 'readonly', (store) => store.get(path) as IDBRequest<T>);
 }
 
-export function readCacheCommitId(): Promise<string | null> {
+// The commit the rows describe: `undefined` before any listing was written, and `null` after a
+// logout, or when the cache cannot be read.
+export function readCacheCommitId(): Promise<string | null | undefined> {
     return readRecord<string>(CACHE_COMMIT_KEY);
 }
 
@@ -288,6 +301,6 @@ export function readCacheCommitId(): Promise<string | null> {
 export function clearEntries(): Promise<void> {
     return runMultiTransaction([ENTRY_STORE, STORE_NAME], 'readwrite', (stores) => {
         stores[ENTRY_STORE].clear();
-        stores[STORE_NAME].delete(CACHE_COMMIT_KEY);
+        stores[STORE_NAME].put(null, CACHE_COMMIT_KEY);
     }).then(() => undefined);
 }

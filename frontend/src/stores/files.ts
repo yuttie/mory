@@ -111,7 +111,7 @@ export const useFilesStore = defineStore('files', () => {
         let next: Map<string, ListEntry2>;
         if (response.kind === 'full') {
             next = new Map(response.entries.map((entry) => [entry.path, entry]));
-            await replaceEntries(response.commit, response.entries);
+            await replaceEntries(base, response.commit, response.entries);
         }
         else {
             // A delta is computed against the persisted rows, so it has to be applied to them --
@@ -121,7 +121,7 @@ export const useFilesStore = defineStore('files', () => {
                 next = new Map(entryMap);
             }
             else {
-                const rows = base === null ? null : await readEntriesAt<ListEntry2>(base);
+                const rows = typeof base === 'string' ? await readEntriesAt<ListEntry2>(base) : null;
                 if (rows === null) {
                     // No readable base to apply to, or rows another tab has moved on from it since
                     // it was read. Ask again from what they describe now.
