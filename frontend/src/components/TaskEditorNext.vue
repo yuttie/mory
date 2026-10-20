@@ -362,27 +362,31 @@
                             <v-icon>{{ mdiTagMultipleOutline }}</v-icon>
                         </template>
                     </v-combobox>
-                    <!-- Status -->
-                    <div class="d-flex align-center">
-                        <v-select
-                            v-model="selectedKind"
-                            v-bind:items="statusOptions"
-                            v-bind:error-messages="statusGateError ? [statusGateError] : []"
-                            label="Status"
-                            item-title="label"
-                            item-value="kind"
-                        >
-                            <template v-slot:prepend>
-                                <v-icon>{{ mdiTrafficLightOutline }}</v-icon>
-                            </template>
-                        </v-select>
-                        <v-icon-btn
-                            v-bind:icon="statusOptionRestricted ? mdiLock : mdiLockOpenVariant"
-                            v-bind:title="statusOptionRestricted ? 'Show all statuses' : 'Show only the statuses this task can move to'"
-                            v-bind:active="statusOptionRestricted ? undefined : true"
-                            v-on:click="statusOptionRestricted = !statusOptionRestricted"
-                        ></v-icon-btn>
-                    </div>
+                    <!-- Status. The lock is in the field's append slot rather than beside the
+                         input, where a row centring the two centred it on the field and the space
+                         kept under it for a message together. The slot is as tall as the field
+                         alone, and Vuetify centres what it holds. -->
+                    <v-select
+                        v-model="selectedKind"
+                        v-bind:items="statusOptions"
+                        v-bind:error-messages="statusGateError ? [statusGateError] : []"
+                        label="Status"
+                        item-title="label"
+                        item-value="kind"
+                    >
+                        <template v-slot:prepend>
+                            <v-icon>{{ mdiTrafficLightOutline }}</v-icon>
+                        </template>
+                        <template v-slot:append>
+                            <v-icon-btn
+                                v-bind:icon="statusOptionRestricted ? mdiLock : mdiLockOpenVariant"
+                                v-bind:title="statusOptionRestricted ? 'Show all statuses' : 'Show only the statuses this task can move to'"
+                                v-bind:active="statusOptionRestricted ? undefined : true"
+                                v-on:click="statusOptionRestricted = !statusOptionRestricted"
+                                v-on:keydown="keepKeyFromStatusSelect"
+                            ></v-icon-btn>
+                        </template>
+                    </v-select>
                     <!-- Status-specific fields -->
                     <TaskStatusFields
                         v-model="form.status"
@@ -760,6 +764,17 @@ const selectedKind = computed<StatusKind>({
         form.status = makeDefaultStatus(k);
     },
 });
+
+// The lock sits inside the Status select, which listens for keys on the whole of it: Enter or Space
+// on the lock would open the menu rather than press the lock, an arrow would open it too, and a
+// letter would pick the status it starts. Escape, Tab and keys held with Ctrl or Meta go on, since
+// the dialog closes on Escape and the editor saves on Ctrl+S, both listening on the window.
+function keepKeyFromStatusSelect(e: KeyboardEvent): void {
+    if (e.key === 'Escape' || e.key === 'Tab' || e.ctrlKey || e.metaKey) {
+        return;
+    }
+    e.stopPropagation();
+}
 
 const statusGateError = computed<string | undefined>(() => {
     const from = initialForm.value.status;
