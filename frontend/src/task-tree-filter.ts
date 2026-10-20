@@ -3,7 +3,7 @@
 // torn from its parents.
 
 import type { StatusKind } from '@/task';
-import type { TaskTreeItem } from '@/task-forest';
+import { type TaskTreeItem, isTagGroupId } from '@/task-forest';
 
 export interface TaskTreeFilter {
     // Words a task's title must each hold, in any case and any order.
@@ -105,7 +105,7 @@ export function filterTaskTree(items: TaskTreeItem[], filter: TaskTreeFilter): T
     const matches = matcher(terms);
     function keep(item: TaskTreeItem): TaskTreeItem | null {
         const children = item.children?.map(keep).filter((child) => child !== null) ?? [];
-        const found = item.metadata?.tag_group === undefined
+        const found = !isTagGroupId(item.uuid)
             && !hidden.has(item.metadata?.task?.status?.kind ?? 'backlog')
             && matches(item.title);
         if (children.length > 0) {

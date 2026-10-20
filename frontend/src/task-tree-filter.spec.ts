@@ -170,6 +170,12 @@ describe('filterTaskTree', () => {
         expect(titles(filterTaskTree(both, { query: 'write', hiddenStatuses: ['done'] }))).toEqual(['Write the draft']);
     });
 
+    // Told by its id, as a task's frontmatter may hold any key.
+    it('keeps a task whose note claims to be a tag group as a task', () => {
+        const claimant = { ...task('Write the claim'), metadata: { tag_group: 'home', task: { status: { kind: 'todo' } } } } as TaskTreeItem;
+        expect(titles(filterTaskTree([claimant], { query: 'claim', hiddenStatuses: [] }))).toEqual(['Write the claim']);
+    });
+
     it('never keeps a tag group for its own name', () => {
         expect(filterTaskTree(tree, { query: 'home', hiddenStatuses: [] })).toEqual([]);
     });
