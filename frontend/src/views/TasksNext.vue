@@ -679,16 +679,17 @@ let composing = false;
 
 function applySearch(query: string | null) {
     clearTimeout(searchTimer);
-    const text = query ?? '';
     if (composing) {
         return;
     }
-    if (searchTerms(text).length === 0) {
-        treeSearch.value = text;
+    // By its words alone, so that a space typed or taken out between them leaves the tree as it is.
+    const search = searchTerms(query ?? '').join(' ');
+    if (search === '' || search === treeSearch.value) {
+        treeSearch.value = search;
         return;
     }
     searchTimer = setTimeout(() => {
-        treeSearch.value = text;
+        treeSearch.value = search;
     }, 250);
 }
 
