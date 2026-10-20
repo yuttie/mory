@@ -18,9 +18,12 @@ struct PlannedTask {
 }
 
 /// Every task in the tree, keyed by the UUID its file name ends with. The web app finds a task by
-/// its path alone, so a note there without a `task:` block is still one a plan can name.
+/// its path alone, so a note there without a `task:` block is still one a plan can name. Of two
+/// files ending with one UUID, the first listed is the task, as the web app's forest and
+/// `TaskHierarchy` take it.
 fn known_tasks(entries: &[ListEntry]) -> BTreeMap<String, PlannedTask> {
-    entries.iter().filter_map(|entry| {
+    let mut known = BTreeMap::new();
+    let tasks = entries.iter().filter_map(|entry| {
         let path = entry.path.to_string_lossy();
         if !crate::tasks::in_task_tree(&path) { return None; }
         let stem = path.strip_suffix(".md")?;
@@ -32,7 +35,11 @@ fn known_tasks(entries: &[ListEntry]) -> BTreeMap<String, PlannedTask> {
             status: crate::tasks::task_status_of(entry.metadata.as_ref()),
         };
         Some((uuid, task))
-    }).collect()
+    });
+    for (uuid, task) in tasks {
+        known.entry(uuid).or_insert(task);
+    }
+    known
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -198,13 +205,16 @@ mod tests {
     fn a_planned_task_is_named_by_the_uuid_its_file_name_ends_with() {
         let uuid = "4955857d-3267-4b94-83f2-538a428970d7";
         let other = "2a997a71-0d2b-4938-b8ff-5178c28a5ad9";
+        let outside = "7c0b5a3e-1f4d-4e8a-9b2c-3d4e5f6a7b8c";
         let entries = [
             ListEntry {
                 title: Some("Report".to_owned()),
                 ..ListEntry::note(&format!(".tasks/report-{uuid}.md"), "task: {status: {kind: todo}}")
             },
+            // A second file ending with the same UUID is no task, as the web app takes it.
+            ListEntry::note(&format!(".tasks/second-{uuid}.md"), "task: {status: {kind: done}}"),
             // Not in the task tree, so not a task a plan can name.
-            ListEntry::note(&format!("notes/{uuid}.md"), "task: {status: {kind: todo}}"),
+            ListEntry::note(&format!("notes/{outside}.md"), "task: {status: {kind: todo}}"),
             // In the tree without a block: the web app lists it, untitled and with no status.
             ListEntry::note(&format!(".tasks/{uuid}/draft-{other}.md"), "created_at: 2026-10-01"),
         ];
