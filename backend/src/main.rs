@@ -846,6 +846,8 @@ async fn sync_cache_to(
             let repo = repo.lock().unwrap();
             let blob = repo.find_blob(*blob_id)?;
             let size = blob.size();
+            // Names the note in what `extract_metadata` warns about it, which it cannot itself.
+            let _entry = tracing::warn_span!("entry", path = %path.display()).entered();
             let (metadata, title) = extract_metadata(blob.content(), &mime_type);
             (size, metadata, title)
         };
@@ -1255,30 +1257,36 @@ fn extract_metadata(blob: &[u8], mime_type: &str) -> (Option<serde_yaml::Value>,
         let mut opts = markdown::ParseOptions::gfm();
         opts.constructs.frontmatter = true;
         if let Ok(node) = markdown::to_mdast(text, &opts) {
-            let error_object = |message: String| {
-                let mut error_object = serde_yaml::Mapping::new();
-                error_object.insert("error".into(), message.into());
-                Some(serde_yaml::Value::Mapping(error_object))
+            let error_metadata = |message: String| {
+                let mut mapping = serde_yaml::Mapping::new();
+                mapping.insert("error".into(), message.into());
+                Some(serde_yaml::Value::Mapping(mapping))
             };
             let metadata = if let Some(markdown::mdast::Node::Yaml(yaml_node)) = get_frontmatter_node(&node) {
                 match serde_yaml::from_str::<serde_yaml::Value>(&yaml_node.value) {
-                    // The cache stores metadata as JSON, which writes a number or a boolean key
-                    // as a string but refuses a null one (`~:`), a list or mapping as a key, and
-                    // a tagged one. The sync storing it runs before moried listens, so one such
-                    // key in one note kept moried from starting at all.
-                    Ok(doc) => match serde_json::to_string(&doc) {
-                        Ok(_) => {
-                            tracing::debug!("parsed YAML metadata: {:?}", &doc);
-                            Some(doc)
-                        },
-                        Err(err) => {
-                            tracing::debug!("YAML metadata JSON cannot hold: {:?}", &doc);
-                            error_object(format!("The frontmatter cannot be stored as JSON: {}", err))
-                        },
+                    Ok(doc) => {
+                        tracing::debug!("parsed YAML metadata: {:?}", &doc);
+                        let mut left_out = Vec::new();
+                        let doc = listable(doc, "", &mut left_out);
+                        for place in left_out {
+                            tracing::warn!(
+                                "The listing leaves out {}, a frontmatter key JSON cannot hold, \
+                                 with its value: quote or rename the key to keep it",
+                                place,
+                            );
+                        }
+                        // Read back as the listing reads it, so whatever the sync stores the
+                        // listing can read: YAML nested 127 deep is within serde_yaml's limit
+                        // but past serde_json's, and every read of a row it could not read
+                        // would fail.
+                        match serde_json::to_string(&doc).and_then(|text| serde_json::from_str(&text)) {
+                            Ok(listed) => Some(listed),
+                            Err(err) => error_metadata(format!("The frontmatter cannot be listed: {}", err)),
+                        }
                     },
                     Err(err) => {
                         tracing::debug!("failed to parse YAML metadata: {:?}", &err);
-                        error_object(format!("{}", err))
+                        error_metadata(format!("{}", err))
                     },
                 }
             }
@@ -1294,6 +1302,59 @@ fn extract_metadata(blob: &[u8], mime_type: &str) -> (Option<serde_yaml::Value>,
     }
     else {
         (None, None)
+    }
+}
+
+/// `value` as the listing can hold it: the cache stores metadata as JSON, whose keys are strings.
+///
+/// A key is named as `note_events::key_name` names an event, which spells a number or a boolean
+/// as serde_json writes one, so frontmatter the cache could already hold is listed as it was. A
+/// key it cannot name -- null (`~:`), a list or mapping, a tagged one, `.nan` -- is left out with
+/// its value and reported in `left_out` by where it was, rather than taking the rest with it: the
+/// note's task, tags and other events stay in the listing, as the web app, which reads them from
+/// the note itself, still shows them. Two keys named alike, such as `1` and `"1"`, keep the later
+/// value, as JavaScript does.
+fn listable(value: serde_yaml::Value, at: &str, left_out: &mut Vec<String>) -> serde_yaml::Value {
+    use serde_yaml::Value;
+
+    match value {
+        Value::Mapping(mapping) => {
+            let mut listed = serde_yaml::Mapping::with_capacity(mapping.len());
+            for (key, value) in mapping {
+                let name = match &key {
+                    Value::Number(number) if !number.is_finite() => None,
+                    key => note_events::key_name(key),
+                };
+                match name {
+                    Some(name) => {
+                        let inner = if at.is_empty() { name.clone() } else { format!("{at}.{name}") };
+                        listed.insert(Value::String(name), listable(value, &inner, left_out));
+                    },
+                    None => {
+                        let key = match &key {
+                            Value::Null => "a null key".to_owned(),
+                            Value::Sequence(_) => "a list key".to_owned(),
+                            Value::Mapping(_) => "a mapping key".to_owned(),
+                            key => format!("`{}`", serde_yaml::to_string(key).unwrap_or_default().trim_end()),
+                        };
+                        left_out.push(if at.is_empty() { format!("{key} at the top level") } else { format!("{key} in `{at}`") });
+                    },
+                }
+            }
+            Value::Mapping(listed)
+        },
+        Value::Sequence(sequence) => Value::Sequence(
+            sequence
+                .into_iter()
+                .enumerate()
+                .map(|(index, item)| listable(item, &format!("{at}.{index}"), left_out))
+                .collect(),
+        ),
+        Value::Tagged(tagged) => {
+            let serde_yaml::value::TaggedValue { tag, value } = *tagged;
+            Value::Tagged(Box::new(serde_yaml::value::TaggedValue { tag, value: listable(value, at, left_out) }))
+        },
+        scalar => scalar,
     }
 }
 
