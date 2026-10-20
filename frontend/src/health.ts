@@ -315,10 +315,24 @@ export function taskChecks(entries: readonly ListEntry2[]): HealthCheck[] {
     const legacy: HealthProblem[] = [];
     const unreadDates: HealthProblem[] = [];
     const covered = new Set<string>();
+    const pathsOf = new Map<string, string[]>();
     for (const entry of entries) {
         const directory = taskDirectoryOf(entry.path);
         if (directory !== null) {
             covered.add(directory);
+        }
+        const id = taskUuidOf(entry.path);
+        if (id !== null) {
+            pathsOf.set(id, [...(pathsOf.get(id) ?? []), entry.path]);
+        }
+    }
+    // The tree keeps the first file it meets for an id and drops the rest, saying so only in the
+    // console: a copied task file, or one renamed beside its original, goes missing silently.
+    const shared: HealthProblem[] = [];
+    for (const paths of pathsOf.values()) {
+        for (const path of paths.length > 1 ? paths : []) {
+            const others = paths.filter((other) => other !== path);
+            shared.push({ severity: 'error', message: `Shares its UUID with ${others.join(', ')}; the task tree shows only one of them.`, path });
         }
     }
     for (const entry of entries) {
@@ -363,6 +377,12 @@ export function taskChecks(entries: readonly ListEntry2[]): HealthCheck[] {
             title: 'Task files are named for the task tree',
             description: 'Each note under .tasks/ has a file name ending with a UUIDv4, in directories each named by a bare UUIDv4. The tree leaves out any other.',
             problems: misnamed,
+        },
+        {
+            id: 'task-ids',
+            title: 'Each task\'s UUID names one file',
+            description: 'No two files under .tasks/ end with the same UUIDv4, wherever they are and whatever name precedes it. A task is known by its UUID, and the tree keeps only one file of a pair.',
+            problems: shared,
         },
         {
             id: 'task-parents',

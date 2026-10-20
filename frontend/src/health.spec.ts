@@ -132,6 +132,13 @@ describe('taskChecks', () => {
         expect(taskChecks([{ ...entry('.tasks/photo.png', null), mime_type: 'image/png' }]).flatMap((check) => check.problems)).toEqual([]);
     });
 
+    it('reports every file of a UUID that names more than one', () => {
+        const paths = [`.tasks/${A}.md`, `.tasks/old-${A}.md`, `.tasks/${B}/${A}.md`];
+        const problems = problemsOf(taskChecks([...paths, `.tasks/${B}.md`].map((path) => entry(path, null))))['task-ids'];
+        expect(problems.map((problem) => problem.path)).toEqual(paths);
+        expect(problems[0].message).toBe(`Shares its UUID with .tasks/old-${A}.md, .tasks/${B}/${A}.md; the task tree shows only one of them.`);
+    });
+
     it('reports a subtask whose parent is missing', () => {
         const [problem] = problemsOf(taskChecks([entry(`.tasks/${A}/${B}.md`, null)]))['task-parents'];
         expect(problem.path).toBe(`.tasks/${A}/${B}.md`);
