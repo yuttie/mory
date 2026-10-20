@@ -84,6 +84,8 @@ async fn main() -> Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .with(tracing_subscriber::EnvFilter::from_default_env())
         .init();
+    // Before the first sync, the first to parse a note.
+    install_panic_hook();
 
     dotenv().ok();
 
@@ -1259,15 +1261,55 @@ fn get_first_toplevel_rank1_heading(node: &markdown::mdast::Node) -> Option<&mar
 fn markdown_tree(source: &str) -> Option<markdown::mdast::Node> {
     let mut options = markdown::ParseOptions::gfm();
     options.constructs.frontmatter = true;
+    PARSING.set(true);
     // Asserted, because `ParseOptions` can hold callbacks, which `gfm()` leaves unset: the parser
     // only reads what it is given, so a panic leaves nothing of ours half-changed.
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| markdown::to_mdast(source, &options))) {
+    let parsed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| markdown::to_mdast(source, &options)));
+    PARSING.set(false);
+    match parsed {
         Ok(tree) => tree.ok(),
         Err(_) => {
-            tracing::warn!("The Markdown parser panicked on a note, which is read without its Markdown structure");
+            tracing::warn!(
+                "The Markdown parser panicked on a note, which is read without its Markdown structure: {}",
+                PARSER_PANIC.take().unwrap_or_default(),
+            );
             None
         },
     }
+}
+
+thread_local! {
+    /// Whether `markdown_tree` is parsing on this thread, so a panic here is one it catches.
+    static PARSING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// What the panic hook made of the last such panic, for `markdown_tree` to warn with.
+    static PARSER_PANIC: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Keeps the panics `markdown_tree` catches off stderr, and leaves every other panic as it was.
+///
+/// Rust's own hook prints every panic, caught or not, without a timestamp and past `RUST_LOG`:
+/// in a log, a note the parser panics on would read as a crash after each sync and index build,
+/// though moried goes on. The hook is the whole process's, so it asks the thread whether the panic
+/// is one of the parser's, rather than being swapped out around each parse, which would race with
+/// a panic on another thread.
+fn install_panic_hook() {
+    let default = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        if !PARSING.get() {
+            return default(info);
+        }
+        let payload = info.payload();
+        let message = payload
+            .downcast_ref::<&str>()
+            .map(|message| message.to_string())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .unwrap_or_default();
+        let place = info
+            .location()
+            .map(|location| format!(" at {}:{}", location.file(), location.line()))
+            .unwrap_or_default();
+        PARSER_PANIC.set(Some(format!("{message}{place}")));
+    }));
 }
 
 /// The tree of a note's frontmatter alone, for a note whose body markdown-rs panics on.
