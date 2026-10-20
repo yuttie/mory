@@ -882,7 +882,7 @@ async fn sync_cache_to(
             .bind(blob_id.to_string())
             .bind(size as i64)
             .bind(mime_type)
-            .bind(serde_json::to_string(&metadata).unwrap())
+            .bind(serde_json::to_string(&metadata).expect("extract_metadata keeps only what JSON can hold"))
             .bind(title)
             .bind(when.seconds())
             .bind(when.offset_minutes() * 60)
@@ -1255,17 +1255,30 @@ fn extract_metadata(blob: &[u8], mime_type: &str) -> (Option<serde_yaml::Value>,
         let mut opts = markdown::ParseOptions::gfm();
         opts.constructs.frontmatter = true;
         if let Ok(node) = markdown::to_mdast(text, &opts) {
+            let error_object = |message: String| {
+                let mut error_object = serde_yaml::Mapping::new();
+                error_object.insert("error".into(), message.into());
+                Some(serde_yaml::Value::Mapping(error_object))
+            };
             let metadata = if let Some(markdown::mdast::Node::Yaml(yaml_node)) = get_frontmatter_node(&node) {
                 match serde_yaml::from_str::<serde_yaml::Value>(&yaml_node.value) {
-                    Ok(doc) => {
-                        tracing::debug!("parsed YAML metadata: {:?}", &doc);
-                        Some(doc)
+                    // The cache stores metadata as JSON, which writes a number or a boolean key
+                    // as a string but refuses a null one (`~:`), a list or mapping as a key, and
+                    // a tagged one. The sync storing it runs before moried listens, so one such
+                    // key in one note kept moried from starting at all.
+                    Ok(doc) => match serde_json::to_string(&doc) {
+                        Ok(_) => {
+                            tracing::debug!("parsed YAML metadata: {:?}", &doc);
+                            Some(doc)
+                        },
+                        Err(err) => {
+                            tracing::debug!("YAML metadata JSON cannot hold: {:?}", &doc);
+                            error_object(format!("The frontmatter cannot be stored as JSON: {}", err))
+                        },
                     },
                     Err(err) => {
                         tracing::debug!("failed to parse YAML metadata: {:?}", &err);
-                        let mut error_object = serde_yaml::Mapping::new();
-                        error_object.insert("error".into(), format!("{}", err).into());
-                        Some(serde_yaml::Value::Mapping(error_object))
+                        error_object(format!("{}", err))
                     },
                 }
             }

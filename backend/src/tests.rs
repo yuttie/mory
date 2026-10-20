@@ -435,6 +435,26 @@ fn extract_metadata_reports_malformed_yaml_as_an_error_object() {
 }
 
 #[test]
+fn extract_metadata_reports_keys_json_cannot_hold_as_an_error_object() {
+    for frontmatter in ["~: x", "null: x", "? [a, b]\n: x", "!tag key: x", "events:\n  ~:\n    start: 2026-10-20"] {
+        let blob = format!("---\n{frontmatter}\n---\n\n# Title\n");
+        let (metadata, title) = crate::extract_metadata(blob.as_bytes(), "text/markdown");
+        let metadata = metadata.expect("expected an error object rather than None");
+        assert!(
+            metadata.get("error").and_then(|e| e.as_str()).is_some(),
+            "{frontmatter:?}: expected an `error` key, got {metadata:?}",
+        );
+        serde_json::to_string(&metadata).expect("the error object must be JSON");
+        assert_eq!(title.as_deref(), Some("Title"));
+    }
+
+    // JSON writes these keys as strings, so they are metadata like any other.
+    let (metadata, _) = crate::extract_metadata(b"---\n1: a\ntrue: b\n2026-10-20: c\n\"null\": d\n---\n", "text/markdown");
+    let metadata = metadata.expect("expected frontmatter to be parsed");
+    assert!(metadata.get("error").is_none(), "got {metadata:?}");
+}
+
+#[test]
 fn extract_metadata_bails_out_on_non_utf8_content() {
     // A JPEG header: not UTF-8, so neither metadata nor a title can be extracted.
     let (metadata, title) = crate::extract_metadata(&[0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10], "application/octet-stream");
@@ -822,6 +842,35 @@ async fn cached_rows_carry_the_blob_id_and_never_a_null_metadata() {
     let (_, _, plain_meta, plain_title) = &rows[0];
     assert_eq!(plain_meta, "null");
     assert_eq!(plain_title.as_deref(), None);
+}
+
+#[tokio::test]
+async fn a_frontmatter_key_json_cannot_hold_does_not_stop_a_sync() {
+    // The sync that runs before moried listens panicked on this note, so moried never started.
+    let fixture = RepoFixture::new();
+    let head = fixture.commit_at(
+        "refs/heads/main",
+        &[],
+        &[
+            ("null-key.md", Some("---\nevents:\n  ~:\n    start: 2026-10-20\n---\n\n# Null key\n")),
+            ("fine.md", Some("---\ntags: [x]\n---\n\n# Fine\n")),
+        ],
+        1_000,
+        0,
+        "base",
+    );
+    fixture.set_head("refs/heads/main");
+
+    let mut conn = test_cache_db().await;
+    sync_to(&mut conn, &fixture, head).await.unwrap();
+
+    assert_eq!(cached_paths(&mut conn).await, vec!["fine.md", "null-key.md"]);
+    let metadata: String = sqlx::query_scalar("SELECT metadata FROM entry WHERE path = 'null-key.md';")
+        .fetch_one(&mut conn)
+        .await
+        .unwrap();
+    let metadata: serde_json::Value = serde_json::from_str(&metadata).unwrap();
+    assert!(metadata.get("error").is_some(), "got {metadata}");
 }
 
 // ---------------------------------------------------------------------------
