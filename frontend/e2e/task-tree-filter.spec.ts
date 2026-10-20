@@ -116,6 +116,34 @@ test('finds tasks by title and opens the tasks above them', async ({ context, pa
     await expect(tree(page)).toContainText('No tasks match.');
 });
 
+// A row shown for what is under it is not marked, though its title may hold some of the words, or
+// all of them under a status the tree hides.
+test('marks the titles of the tasks found alone', async ({ context, page }) => {
+    await mockBackend(context, {
+        [`.tasks/${uuid(11)}.md`]: note('Release plan'),
+        [`.tasks/${uuid(11)}/${uuid(12)}.md`]: note('Write release notes'),
+        [`.tasks/${uuid(13)}.md`]: note('Release notes', { status: 'done' }),
+        [`.tasks/${uuid(13)}/${uuid(14)}.md`]: note('Proofread the release notes'),
+        [`.tasks/${uuid(15)}.md`]: note('Send the release notes', { tags: ['release'] }),
+    });
+    await page.addInitScript(() => {
+        localStorage.setItem('task-tree-hidden-statuses', JSON.stringify(['done']));
+    });
+    await page.goto('/tasks-next');
+    await search(page).fill('release notes');
+    await expect(rows(page)).toHaveCount(6);
+    // By the whole title: a mark holding "release" is text of its own.
+    const marks = (name: string) => tree(page).getByRole('treeitem')
+        .filter({ has: page.locator('.v-list-item-title', { hasText: new RegExp(`^\\s*${name}\\s*$`) }) })
+        .locator('mark');
+    for (const name of ['Write release notes', 'Proofread the release notes', 'Send the release notes']) {
+        await expect(marks(name)).toHaveText(['release', 'notes']);
+    }
+    for (const name of ['Release plan', 'Release notes', 'release']) {
+        await expect(marks(name)).toHaveCount(0);
+    }
+});
+
 // A reading and its candidates are not what is searched for, however long one is dwelt on.
 test('searches for the word an input method gives, not for what it composes', async ({ context, page, browserName }) => {
     test.skip(browserName !== 'chromium', 'Composes through the DevTools protocol, which only Chromium speaks.');

@@ -183,6 +183,7 @@
                     v-bind:route-for="treeRouteFor"
                     v-bind:open="treeOpenNodes"
                     v-bind:highlight="treeTerms"
+                    v-bind:found="filteredTree.found"
                     show-add-child
                     show-edit
                     movable
@@ -708,10 +709,12 @@ function onSearchCompositionEnd() {
 
 const treeTerms = computed<string[]>(() => searchTerms(treeSearch.value));
 
-// Computed property for filtered forest with tags
-const filteredForestWithTags = computed(() => {
+const filteredTree = computed(() => {
     return filterTaskTree(store.treeWithTagGroups, { query: treeSearch.value, hiddenStatuses: hiddenTreeStatuses.value });
 });
+
+// The rows alone, for what depends on them and not on which of them were found.
+const filteredForestWithTags = computed(() => filteredTree.value.items);
 
 // A search opens every branch it keeps, each being there for a task found under it. Opened again
 // only when the branches change, so a branch closed meanwhile stays closed while what was found

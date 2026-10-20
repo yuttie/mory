@@ -27,9 +27,7 @@
                 v-bind:class="{ 'text-disabled': !item.metadata?.tag_group && !tasks.ownUrgency(item.uuid).actionable }"
                 v-bind:style="{ textDecorationLine: item.metadata?.task?.status?.kind === 'canceled' ? 'line-through' : 'none' }"
             >
-                <!-- Not a tag group's name, which a search never finds: the group is there for
-                     the tasks in it. -->
-                <template v-if="highlight !== undefined && highlight.length > 0 && !item.metadata?.tag_group">
+                <template v-if="highlight !== undefined && highlight.length > 0 && found?.has(item.uuid)">
                     <template
                         v-for="(segment, index) of highlightTitle(item.title ?? '', highlight)"
                         v-bind:key="index"
@@ -104,9 +102,10 @@ defineProps<{
     // Whether a task can be dragged onto another to move it there. Off unless the parent handles
     // `move`, as `showAddChild` is.
     movable?: boolean;
-    // Search terms to mark in the titles, so a row shown for what it holds stands apart from one
-    // shown for its own title.
+    // Search terms to mark in the titles of the rows `found` holds, so a row shown for its own
+    // title stands apart from one shown for what is under it, as a tag group always is.
     highlight?: string[];
+    found?: ReadonlySet<string>;
 }>();
 
 // Emits

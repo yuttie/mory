@@ -92,33 +92,49 @@ export function highlight(title: string, terms: readonly string[]): TitleSegment
     return segments;
 }
 
+// One set for every tree left whole, so a tree given it has nothing new to draw.
+const NONE_FOUND: ReadonlySet<string> = new Set();
+
+export interface FilteredTaskTree {
+    items: TaskTreeItem[];
+    // The tasks let through on their own account, rather than kept for those under them: the ones
+    // whose titles a search marks. Empty when nothing is filtered.
+    found: ReadonlySet<string>;
+}
+
 // A tag group is only a heading for its members, so it is kept for them and never for its own name.
 // A kept task whose subtasks are all left out is made a leaf, as v-treeview would otherwise give it
 // a chevron that opens on nothing.
-export function filterTaskTree(items: TaskTreeItem[], filter: TaskTreeFilter): TaskTreeItem[] {
+export function filterTaskTree(items: TaskTreeItem[], filter: TaskTreeFilter): FilteredTaskTree {
     const terms = searchTerms(filter.query);
     const hidden = new Set<unknown>(filter.hiddenStatuses);
     // The same array when nothing is filtered, so the tree has nothing new to draw.
     if (terms.length === 0 && hidden.size === 0) {
-        return items;
+        return { items, found: NONE_FOUND };
     }
+    const found = new Set<string>();
     const matches = matcher(terms);
     function keep(item: TaskTreeItem): TaskTreeItem | null {
         const children = item.children?.map(keep).filter((child) => child !== null) ?? [];
-        const found = !isTagGroupId(item.uuid)
+        if (!isTagGroupId(item.uuid)
             && !hidden.has(item.metadata?.task?.status?.kind ?? 'backlog')
-            && matches(item.title);
+            && matches(item.title)) {
+            found.add(item.uuid);
+        }
         if (children.length > 0) {
             return { ...item, children };
         }
-        if (!found) {
+        if (!found.has(item.uuid)) {
             return null;
+        }
+        if (item.children === undefined) {
+            return item;
         }
         const leaf = { ...item };
         delete leaf.children;
         return leaf;
     }
-    return items.map(keep).filter((item) => item !== null);
+    return { items: items.map(keep).filter((item) => item !== null), found };
 }
 
 // The rows holding others in a filtered tree: each is there for a task under it, and is opened to

@@ -109,18 +109,20 @@ describe('filterTaskTree', () => {
     ];
 
     it('hands back the tree it was given when there is nothing to search for', () => {
-        expect(filterTaskTree(tree, { query: ' ', hiddenStatuses: [] })).toBe(tree);
+        const whole = filterTaskTree(tree, { query: ' ', hiddenStatuses: [] });
+        expect(whole.items).toBe(tree);
+        expect(whole.found).toBe(filterTaskTree(tree, { query: '', hiddenStatuses: [] }).found);
     });
 
     it('keeps the tasks found and everything above them', () => {
-        expect(titles(filterTaskTree(tree, { query: 'write', hiddenStatuses: [] }))).toEqual([
+        expect(titles(filterTaskTree(tree, { query: 'write', hiddenStatuses: [] }).items)).toEqual([
             ['Launch', ['Write the announcement', ['Ship', ['Write release notes']]]],
             ['home', ['Write to the landlord']],
         ]);
     });
 
     it('draws a task found as a leaf when none of its subtasks is', () => {
-        const [launch] = filterTaskTree(tree, { query: 'launch', hiddenStatuses: [] });
+        const [launch] = filterTaskTree(tree, { query: 'launch', hiddenStatuses: [] }).items;
         expect(launch.title).toBe('Launch');
         expect(launch).not.toHaveProperty('children');
     });
@@ -139,7 +141,7 @@ describe('filterTaskTree', () => {
             ], { kind: 'done' }),
             group('home', [task('Done chore', undefined, { kind: 'done' })]),
         ];
-        expect(titles(filterTaskTree(statuses, { query: '', hiddenStatuses: ['done', 'canceled'] }))).toEqual([
+        expect(titles(filterTaskTree(statuses, { query: '', hiddenStatuses: ['done', 'canceled'] }).items)).toEqual([
             ['Done project', ['Open step']],
             'Open project',
         ]);
@@ -151,10 +153,10 @@ describe('filterTaskTree', () => {
             task('Misspelt', undefined, { kind: 'finished' }),
             task('Garbled', undefined, 'done'),
         ];
-        expect(titles(filterTaskTree(statuses, { query: '', hiddenStatuses: ['backlog', 'done'] }))).toEqual([
+        expect(titles(filterTaskTree(statuses, { query: '', hiddenStatuses: ['backlog', 'done'] }).items)).toEqual([
             'Misspelt',
         ]);
-        expect(titles(filterTaskTree(statuses, { query: '', hiddenStatuses: ['done'] }))).toEqual([
+        expect(titles(filterTaskTree(statuses, { query: '', hiddenStatuses: ['done'] }).items)).toEqual([
             'Unsorted',
             'Misspelt',
             'Garbled',
@@ -167,24 +169,42 @@ describe('filterTaskTree', () => {
             task('Write the summary', undefined, { kind: 'done' }),
             task('Read the paper'),
         ];
-        expect(titles(filterTaskTree(both, { query: 'write', hiddenStatuses: ['done'] }))).toEqual(['Write the draft']);
+        expect(titles(filterTaskTree(both, { query: 'write', hiddenStatuses: ['done'] }).items)).toEqual(['Write the draft']);
     });
 
     // Told by its id, as a task's frontmatter may hold any key.
     it('keeps a task whose note claims to be a tag group as a task', () => {
         const claimant = { ...task('Write the claim'), metadata: { tag_group: 'home', task: { status: { kind: 'todo' } } } } as TaskTreeItem;
-        expect(titles(filterTaskTree([claimant], { query: 'claim', hiddenStatuses: [] }))).toEqual(['Write the claim']);
+        expect(titles(filterTaskTree([claimant], { query: 'claim', hiddenStatuses: [] }).items)).toEqual(['Write the claim']);
+    });
+
+    it('tells the tasks found from those kept for what is under them', () => {
+        const nested = [
+            task('Release plan', [task('Write release notes')]),
+            task('Release notes', [task('Proofread the release notes')], { kind: 'done' }),
+            group('release', [task('Send the release notes')]),
+        ];
+        expect([...filterTaskTree(nested, { query: 'release notes', hiddenStatuses: ['done'] }).found]).toEqual([
+            'Write release notes',
+            'Proofread the release notes',
+            'Send the release notes',
+        ]);
+    });
+
+    it('hands back a leaf it keeps as it was', () => {
+        const leaf = task('Write the draft');
+        expect(filterTaskTree([leaf], { query: 'draft', hiddenStatuses: [] }).items[0]).toBe(leaf);
     });
 
     it('never keeps a tag group for its own name', () => {
-        expect(filterTaskTree(tree, { query: 'home', hiddenStatuses: [] })).toEqual([]);
+        expect(filterTaskTree(tree, { query: 'home', hiddenStatuses: [] }).items).toEqual([]);
     });
 });
 
 describe('branchIds', () => {
     it('names every row holding others, at any depth', () => {
         const filtered = filterTaskTree([task('A', [task('B', [task('C')]), task('D')])], { query: 'c', hiddenStatuses: [] });
-        expect(branchIds(filtered)).toEqual(['A', 'B']);
+        expect(branchIds(filtered.items)).toEqual(['A', 'B']);
     });
 });
 
