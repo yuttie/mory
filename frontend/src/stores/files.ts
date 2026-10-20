@@ -15,7 +15,7 @@ import {
     clearEntries,
     readCacheCommitId,
     readEntriesAt,
-    readEntry,
+    readEntryAt,
     replaceEntries,
 } from '@/idb';
 
@@ -111,7 +111,7 @@ export const useFilesStore = defineStore('files', () => {
         let next: Map<string, ListEntry2>;
         if (response.kind === 'full') {
             next = new Map(response.entries.map((entry) => [entry.path, entry]));
-            await replaceEntries(response.commit, response.entries);
+            await replaceEntries(base, response.commit, response.entries);
         }
         else {
             // A delta is computed against the persisted rows, so it has to be applied to them --
@@ -121,7 +121,7 @@ export const useFilesStore = defineStore('files', () => {
                 next = new Map(entryMap);
             }
             else {
-                const rows = base === null ? null : await readEntriesAt<ListEntry2>(base);
+                const rows = typeof base === 'string' ? await readEntriesAt<ListEntry2>(base) : null;
                 if (rows === null) {
                     // No readable base to apply to, or rows another tab has moved on from it since
                     // it was read. Ask again from what they describe now.
@@ -319,17 +319,15 @@ export const useFilesStore = defineStore('files', () => {
             return entryMap.get(path);
         }
 
-        const [head, cachedCommitId] = await Promise.all([
-            api.getHeadCommitId().catch(() => null),
-            readCacheCommitId(),
-        ]);
-        if (head !== null && cachedCommitId === head) {
-            const cached = await readEntry<ListEntry2>(path);
+        const head = await api.getHeadCommitId().catch(() => null);
+        if (head !== null) {
+            const cached = await readEntryAt<ListEntry2>(head, path);
             if (cached !== null) {
                 return cached;
             }
             // Absent from a cache that is current means the file does not exist, but fall
-            // through rather than assert it: a cache that failed to open reads the same way.
+            // through rather than assert it: a cache of another commit, or one that failed to
+            // open, reads the same way.
         }
 
         const entries = await list();

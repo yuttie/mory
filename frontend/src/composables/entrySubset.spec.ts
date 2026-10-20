@@ -122,7 +122,7 @@ describe('init', () => {
     // The point of the prefix read: paint from the cache without waiting for the whole listing.
     it('primes from IndexedDB before the listing request answers', async () => {
         const { useEntrySubset, idb } = await load();
-        await idb.replaceEntries('c0', [entry('.tasks/cached.md'), entry('notes/other.md')]);
+        await idb.replaceEntries(undefined, 'c0', [entry('.tasks/cached.md'), entry('notes/other.md')]);
 
         let release: (value: EntriesResponse) => void = () => {};
         apiMocks.getEntries.mockImplementation(

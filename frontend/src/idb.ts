@@ -5,7 +5,8 @@
 // then fall back to the API, so a broken cache never breaks the app.
 
 const DB_NAME = 'mory';
-const DB_VERSION = 2;
+// 3 drops what 2 held: see `onupgradeneeded`.
+const DB_VERSION = 3;
 const STORE_NAME = 'repository';
 const ENTRY_STORE = 'entries';
 
@@ -32,7 +33,7 @@ function openDatabase(): Promise<IDBDatabase | null> {
             return;
         }
 
-        request.onupgradeneeded = () => {
+        request.onupgradeneeded = (event) => {
             const db = request.result;
             if (!db.objectStoreNames.contains(STORE_NAME)) {
                 db.createObjectStore(STORE_NAME);
@@ -40,14 +41,29 @@ function openDatabase(): Promise<IDBDatabase | null> {
             if (!db.objectStoreNames.contains(ENTRY_STORE)) {
                 db.createObjectStore(ENTRY_STORE, { keyPath: 'path' });
             }
-            // Drop the whole-listing record the row store replaces, so a v1 database does not
-            // keep several hundred kilobytes nothing will ever read again.
             if (request.transaction !== null) {
+                // Drop the whole-listing record the row store replaces, so a v1 database does not
+                // keep several hundred kilobytes nothing will ever read again.
                 try {
                     request.transaction.objectStore(STORE_NAME).delete(LEGACY_LISTING_KEY);
                 }
                 catch (error) {
                     console.warn('Failed to drop the legacy listing record:', error);
+                }
+                // And the rows a v2 database holds. Until `applyEntryDelta` checked its base, a
+                // delta could land on rows another tab had moved on, labelled as the commit it came
+                // from: a row that commit has not -- a note deleted since -- then stayed in every
+                // tab, since each delta after is computed from that commit and never names it. The
+                // label cannot tell such rows from good ones, so all of them go, for one full
+                // listing per browser.
+                if (event.oldVersion > 0 && event.oldVersion < 3) {
+                    try {
+                        request.transaction.objectStore(ENTRY_STORE).clear();
+                        request.transaction.objectStore(STORE_NAME).delete(CACHE_COMMIT_KEY);
+                    }
+                    catch (error) {
+                        console.warn('Failed to drop the listing an older version persisted:', error);
+                    }
                 }
             }
         };
@@ -180,14 +196,25 @@ function runMultiTransaction<T>(
     });
 }
 
-// Replace the whole listing: clear the rows, write the new ones, record their commit.
-export function replaceEntries(commitId: string, entries: unknown[]): Promise<void> {
+// Replace the whole listing: clear the rows, write the new ones, record their commit -- if the
+// commit recorded is still `base`, what `readCacheCommitId` gave as the listing was asked for. A
+// logout records `null`, which no store that has never held a listing reads, so a listing a tab
+// had asked for before one is not written after it: the listing describes a private repository
+// and must not outlive the session. One another tab wrote meanwhile is kept, as it describes its
+// commit as well as this one would.
+export function replaceEntries(base: string | null | undefined, commitId: string, entries: unknown[]): Promise<void> {
     return runMultiTransaction([ENTRY_STORE, STORE_NAME], 'readwrite', (stores) => {
-        stores[ENTRY_STORE].clear();
-        for (const entry of entries) {
-            stores[ENTRY_STORE].put(entry);
-        }
-        stores[STORE_NAME].put(commitId, CACHE_COMMIT_KEY);
+        const current = stores[STORE_NAME].get(CACHE_COMMIT_KEY);
+        current.onsuccess = () => {
+            if (current.result !== base) {
+                return;
+            }
+            stores[ENTRY_STORE].clear();
+            for (const entry of entries) {
+                stores[ENTRY_STORE].put(entry);
+            }
+            stores[STORE_NAME].put(commitId, CACHE_COMMIT_KEY);
+        };
     }).then(() => undefined);
 }
 
@@ -258,13 +285,29 @@ export function readEntriesByPrefix<T>(prefix: string): Promise<T[] | null> {
     return runTransactionOn<T[]>(ENTRY_STORE, 'readonly', (store) => store.getAll(range) as IDBRequest<T[]>);
 }
 
-// One row, without reading the listing. This is what lets a single-entry lookup avoid pulling
-// every entry in the repository.
-export function readEntry<T>(path: string): Promise<T | null> {
-    return runTransactionOn<T>(ENTRY_STORE, 'readonly', (store) => store.get(path) as IDBRequest<T>);
+// One row, without reading the listing, if the rows still describe `commitId`: `null` when they do
+// not, or hold no such row. This is what lets a single-entry lookup avoid pulling every entry in
+// the repository. Read with the commit ID in one transaction, as `readEntriesAt` reads the rows.
+export function readEntryAt<T>(commitId: string, path: string): Promise<T | null> {
+    return runMultiTransaction([ENTRY_STORE, STORE_NAME], 'readonly', (stores) => {
+        const read: { row: T | null } = { row: null };
+        const current = stores[STORE_NAME].get(CACHE_COMMIT_KEY);
+        current.onsuccess = () => {
+            if (current.result !== commitId) {
+                return;
+            }
+            const row = stores[ENTRY_STORE].get(path);
+            row.onsuccess = () => {
+                read.row = (row.result as T | undefined) ?? null;
+            };
+        };
+        return read;
+    }).then((read) => read?.row ?? null);
 }
 
-export function readCacheCommitId(): Promise<string | null> {
+// The commit the rows describe: `undefined` before any listing was written, and `null` after a
+// logout, or when the cache cannot be read.
+export function readCacheCommitId(): Promise<string | null | undefined> {
     return readRecord<string>(CACHE_COMMIT_KEY);
 }
 
@@ -272,6 +315,6 @@ export function readCacheCommitId(): Promise<string | null> {
 export function clearEntries(): Promise<void> {
     return runMultiTransaction([ENTRY_STORE, STORE_NAME], 'readwrite', (stores) => {
         stores[ENTRY_STORE].clear();
-        stores[STORE_NAME].delete(CACHE_COMMIT_KEY);
+        stores[STORE_NAME].put(null, CACHE_COMMIT_KEY);
     }).then(() => undefined);
 }
