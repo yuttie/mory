@@ -1663,9 +1663,10 @@ fn a_public_address_literal_is_still_fetchable() {
 
 /// A redirect is checked as the first URL was: the shared client follows any, so a URL that passed
 /// the check could hand the fetch on into this host's network. An OAuth `client_id` is such a
-/// URL, chosen by whoever opens the authorization page.
+/// URL, chosen by whoever opens the authorization page, and its document is fetched here past the
+/// check of the first URL, which no URL a test can serve would pass.
 #[tokio::test]
-async fn the_guarded_client_follows_no_redirect_to_a_private_address() {
+async fn a_client_id_document_is_fetched_following_no_redirect_to_a_private_address() {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -1695,8 +1696,13 @@ async fn the_guarded_client_follows_no_redirect_to_a_private_address() {
         Arc::new(AtomicUsize::new(0)),
     ));
 
-    let refused = crate::v2::feed_client().get(&url).send().await.expect_err("the redirect must be refused");
-    assert!(refused.is_redirect(), "refused for the redirect, not for {refused:?}");
+    let refused = crate::oauth::fetch_client_id_document(reqwest::Url::parse(&url).unwrap())
+        .await
+        .expect_err("the redirect must be refused");
+    assert!(
+        refused.downcast_ref::<reqwest::Error>().is_some_and(reqwest::Error::is_redirect),
+        "refused for the redirect, not for {refused:?}",
+    );
     assert_eq!(reached.load(Ordering::SeqCst), 0, "the redirect must not have been followed");
 
     // reqwest's default policy, the shared client's, follows it.
