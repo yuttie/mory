@@ -250,6 +250,8 @@ export function settingsChecks(reports: {
     calendarErrors: readonly string[];
     tasksPath: string;
     taskSettingsProblems: readonly string[];
+    /// Every file the listing holds under `.mory/plans/`.
+    planPaths: readonly string[];
     /// Each unreadable month's error, by `YYYY-MM`.
     planErrors: Readonly<Record<string, string>>;
 }): HealthCheck[] {
@@ -286,14 +288,33 @@ export function settingsChecks(reports: {
         {
             id: 'plans',
             title: 'Every day plan reads cleanly',
-            description: 'Each month under .mory/plans/ is one the app can read. One that is not is refused whole, and cannot be planned in until fixed.',
-            problems: Object.entries(reports.planErrors).map(([month, message]) => ({
-                severity: 'error',
-                message,
-                path: `.mory/plans/${month}.yaml`,
-            })),
+            description: 'Each file under .mory/plans/ is named for a month and holds a plan the app can read. One that does not is refused whole, and cannot be planned in until fixed.',
+            problems: planProblems(reports.planPaths, reports.planErrors),
         },
     ];
+}
+
+/// The month a file under `.mory/plans/` holds the plan of, or `null` for one no plan is read from.
+export function planMonthOf(path: string): string | null {
+    return /^\.mory\/plans\/([0-9]{4}-(?:0[1-9]|1[0-2]))\.yaml$/.exec(path)?.[1] ?? null;
+}
+
+// Only listed files: the store keeps a month's error after its file is deleted, and that one has
+// nothing left to fix.
+function planProblems(paths: readonly string[], errors: Readonly<Record<string, string>>): HealthProblem[] {
+    const problems: HealthProblem[] = [];
+    for (const path of paths) {
+        const month = planMonthOf(path);
+        if (month === null) {
+            problems.push({ severity: 'warning', message: 'Never read as a day plan: a plan is named for its month, as YYYY-MM.yaml.', path });
+        }
+        // Read rather than asked with `Object.hasOwn`: the store's errors are reactive, and Vue does
+        // not track an own-property check, so a month failing after the first look went unseen.
+        else if (errors[month] !== undefined) {
+            problems.push({ severity: 'error', message: errors[month], path });
+        }
+    }
+    return problems;
 }
 
 /// The checks `run` makes, or one failed check in their place when it throws.

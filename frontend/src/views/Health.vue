@@ -115,7 +115,7 @@ import dayjs from 'dayjs';
 
 import AppBarContent from '@/components/AppBarContent.vue';
 import { routeForMime } from '@/file-route';
-import { eventChecks, frontmatterChecks, guardChecks, settingsChecks, taskChecks } from '@/health';
+import { eventChecks, frontmatterChecks, guardChecks, planMonthOf, settingsChecks, taskChecks } from '@/health';
 import type { HealthCheck, HealthProblem, HealthSeverity } from '@/health';
 import { CALENDARS_PATH, useCalendarsStore } from '@/stores/calendars';
 import { useFilesStore } from '@/stores/files';
@@ -148,6 +148,10 @@ const eventWindow = {
     to: today.add(1, 'year').format('YYYY-MM-DD'),
 };
 
+const planPaths = computed(() => files.entries
+    .map((entry) => entry.path)
+    .filter((path) => path.startsWith('.mory/plans/')));
+
 const entryOf = computed(() => new Map(files.entries.map((entry) => [entry.path, entry])));
 
 const sections = computed<Section[]>(() => [
@@ -179,6 +183,7 @@ const sections = computed<Section[]>(() => [
                 : [`${CALENDARS_PATH}: It cannot be read: ${calendarsReadError.value}`, ...calendars.errors],
             tasksPath: TASK_SETTINGS_PATH,
             taskSettingsProblems: taskSettings.problems,
+            planPaths: planPaths.value,
             planErrors: plans.errors,
         })),
     },
@@ -239,16 +244,26 @@ async function check(): Promise<void> {
     await Promise.all([
         files.refresh().catch((error) => {
             listingError.value = String(error);
-        }),
+        }).then(readPlans),
         calendars.loadConfiguration().catch((error) => {
             calendarsReadError.value = String(error);
         }),
         // Never rejects: the store reports a file it cannot read among its problems.
         taskSettings.load(),
-        // Each month that fails is in `plans.errors` already.
-        plans.loadAll().catch(() => undefined),
     ]);
     checking.value = false;
+}
+
+// Each listed month on its own, after the listing that names them: the store's own `loadAll` stops
+// at the first month it cannot read, and the months after it would read as clean. A month that
+// fails is in `plans.errors`.
+async function readPlans(): Promise<void> {
+    for (const path of planPaths.value) {
+        const month = planMonthOf(path);
+        if (month !== null) {
+            await plans.loadMonths([month]).catch(() => undefined);
+        }
+    }
 }
 
 onMounted(() => {

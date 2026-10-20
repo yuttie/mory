@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { computed, reactive } from 'vue';
 
 import type { ListEntry2 } from '@/api';
 import { eventChecks, frontmatterChecks, guardChecks, settingsChecks, taskChecks } from '@/health';
@@ -139,6 +140,7 @@ describe('settingsChecks', () => {
             calendarErrors: ['.mory/calendars.yaml: alarms.timed: not an alarm', 'Work: 404'],
             tasksPath: '.mory/tasks.yaml',
             taskSettingsProblems: ['Invalid default_lead_time'],
+            planPaths: ['.mory/plans/2026-10.yaml'],
             planErrors: { '2026-10': 'not a mapping' },
         }))).toEqual({
             'calendars-settings': [{ path: '.mory/calendars.yaml', message: 'alarms.timed: not an alarm' }],
@@ -146,6 +148,43 @@ describe('settingsChecks', () => {
             'tasks-settings': [{ path: '.mory/tasks.yaml', message: 'Invalid default_lead_time' }],
             'plans': [{ path: '.mory/plans/2026-10.yaml', message: 'not a mapping' }],
         });
+    });
+});
+
+describe('the plans check', () => {
+    const plansOf = (planPaths: string[], planErrors: Record<string, string>) => problemsOf(settingsChecks({
+        calendarsPath: '.mory/calendars.yaml',
+        calendarErrors: [],
+        tasksPath: '.mory/tasks.yaml',
+        taskSettingsProblems: [],
+        planPaths,
+        planErrors,
+    })).plans;
+
+    it('reports every unreadable month listed', () => {
+        expect(plansOf(['.mory/plans/2026-01.yaml', '.mory/plans/2026-02.yaml'], { '2026-01': 'bad', '2026-02': 'worse' })).toEqual([
+            { path: '.mory/plans/2026-01.yaml', message: 'bad' },
+            { path: '.mory/plans/2026-02.yaml', message: 'worse' },
+        ]);
+    });
+
+    it('sees a month that fails after the first look', () => {
+        const errors = reactive<Record<string, string>>({});
+        const problems = computed(() => plansOf(['.mory/plans/2026-01.yaml'], errors));
+        expect(problems.value).toEqual([]);
+        errors['2026-01'] = 'bad';
+        expect(problems.value).toEqual([{ path: '.mory/plans/2026-01.yaml', message: 'bad' }]);
+    });
+
+    it('leaves out the error of a month whose file is gone', () => {
+        expect(plansOf([], { '2026-01': 'bad' })).toEqual([]);
+    });
+
+    it('reports a file no plan is read from', () => {
+        expect(plansOf(['.mory/plans/2026-13.yaml', '.mory/plans/notes.md'], {}).map((problem) => problem.path)).toEqual([
+            '.mory/plans/2026-13.yaml',
+            '.mory/plans/notes.md',
+        ]);
     });
 });
 
