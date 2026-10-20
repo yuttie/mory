@@ -209,8 +209,8 @@ export function frontmatterChecks(entries: readonly ListEntry2[]): HealthCheck[]
     return [
         {
             id: 'frontmatter-yaml',
-            title: 'Frontmatter is valid YAML',
-            description: 'A note whose frontmatter cannot be parsed has no tags, events or task as far as the app can tell.',
+            title: 'Frontmatter can be read',
+            description: 'moried reads each note\'s frontmatter as YAML and lists it. A note whose frontmatter it cannot parse, or cannot list, has no tags, events or task as far as the app can tell.',
             problems: unreadable,
         },
         {
@@ -288,7 +288,10 @@ export function eventChecks(
     // A bad `end` on a series is met once per occurrence, and is one mistake to fix.
     const seen = new Set<string>();
     for (const [property, value, eventName, path] of errors) {
-        const message = `Invalid ${property} "${describeValue(value)}" of "${eventName}"`;
+        // A rule's error is a sentence of its own rather than the value at fault.
+        const message = property === 'repeat'
+            ? `The rule of "${eventName}": ${describeValue(value)}`
+            : `Invalid ${property} "${describeValue(value)}" of "${eventName}"`;
         const key = `${path}\0${message}`;
         if (seen.has(key)) {
             continue;
@@ -296,7 +299,11 @@ export function eventChecks(
         seen.add(key);
         // A property no check names yet is still a problem the calendar met, and lands with the
         // times rather than nowhere.
-        (checkOf.get(property) ?? checks[0]).problems.push({ severity: 'error', message, path });
+        // A series whose start cannot be read fails in the rule, but the start is what to fix.
+        const check = property === 'repeat' && typeof value === 'string' && value.startsWith('Unusable start')
+            ? checks[0]
+            : checkOf.get(property) ?? checks[0];
+        check.problems.push({ severity: 'error', message, path });
     }
     return checks;
 }
@@ -348,7 +355,7 @@ export function taskChecks(entries: readonly ListEntry2[]): HealthCheck[] {
         if (parent !== '.tasks' && !covered.has(parent)) {
             orphaned.push({
                 severity: 'warning',
-                message: `Shown at the top level: no task file covers ${parent}/.`,
+                message: `Placed as though it had no parent: no task file covers ${parent}/.`,
                 path: entry.path,
             });
         }
@@ -387,7 +394,7 @@ export function taskChecks(entries: readonly ListEntry2[]): HealthCheck[] {
         {
             id: 'task-parents',
             title: 'Every subtask\'s parent task exists',
-            description: 'A task in .tasks/<uuid>/ has a task file for <uuid> beside that directory. Without one it is shown at the top level instead.',
+            description: 'A task in .tasks/<uuid>/ has a task file for <uuid> beside that directory. Without one the tree places it as though it had no parent.',
             problems: orphaned,
         },
         {
@@ -428,7 +435,7 @@ export function settingsChecks(reports: {
         {
             id: 'calendars-settings',
             title: `${reports.calendarsPath} reads cleanly`,
-            description: 'Its alarms: defaults and categories: are each what they should be. What is not is ignored, and saving the calendar settings removes it.',
+            description: 'The alarms it sets, under alarms: and on each category, follow the alarm grammar. One that does not is ignored, and saving the calendar settings removes it. The rest of the file is not checked here.',
             problems: calendars,
         },
         {

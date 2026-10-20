@@ -99,6 +99,16 @@ describe('eventChecks', () => {
         expect(problems['event-alarms']).toEqual([{ path: 'meetings.md', message: 'Invalid alarms "10m" of "standup"' }]);
     });
 
+    it('quotes a rule\'s error as it is, and files a series\' unusable start under the times', () => {
+        const events = {
+            weekly: { start: '2026-10-01', repeat: { freq: 'weekly', byday: ['WE'] } },
+            broken: { start: 'soon', repeat: { freq: 'daily' } },
+        };
+        const problems = problemsOf(eventChecks([entry('series.md', { events })], window, { categories: new Map() }));
+        expect(problems['event-repeat']).toEqual([{ path: 'series.md', message: 'The rule of "weekly": Unknown weekday "WE"' }]);
+        expect(problems['event-times']).toEqual([{ path: 'series.md', message: 'The rule of "broken": Unusable start "soon"' }]);
+    });
+
     it('says the categories were not verified without the configuration', () => {
         const events = { standup: { start: '2026-10-01', category: 'typo' } };
         expect(problemsOf(eventChecks([entry('meetings.md', { events })], window))['event-category']).toEqual([
