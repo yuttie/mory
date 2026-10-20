@@ -140,9 +140,9 @@ extract it rather than writing a second copy; that is why `run_search` and `v2::
 exist as separate functions from the handlers that call them. A tool that edits what it has read
 -- the task, event and plan tools -- commits only if the file is still the blob it read
 (`AppState::save_note_checked`), so a save the web app made in between is never overwritten;
-`update_note` replaces the file whatever it holds, and says so, but refuses one longer than
-`read_note` returns (`MAX_NOTE_BYTES`): a model cannot have read that one whole, so what it sent
-back would delete the rest.
+`update_note` replaces the file whatever it holds, and says so, but refuses one `read_note` does
+not return whole -- one longer than it returns (`MAX_NOTE_BYTES`), an image, or text not in UTF-8:
+a model cannot have read that one whole, so what it sent back would delete the rest.
 
 **OAuth artefacts are stateless JWTs** signed with `MORIED_SECRET` and told apart by a `typ`
 claim (`mcp_client`, `mcp_code`, `mcp_access`, `mcp_refresh`). A registered `client_id` is itself

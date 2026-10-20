@@ -148,25 +148,14 @@ pub async fn read_note(state: &AppState, args: ReadArgs) -> Result<CallToolResul
         )));
     };
 
-    // Reading an image as text would produce a page of replacement characters and teach the
-    // model nothing, so say what the file is instead.
-    let mime = crate::guess_mime_from_path(path);
-    if mime.starts_with("image/") || mime.starts_with("video/") || mime.starts_with("audio/") {
-        return Ok(tool_error(format!(
-            "{path:?} is {mime}, not text. This tool reads notes.",
-        )));
+    if let Some(what) = not_text(path, &bytes) {
+        return Ok(tool_error(format!("{what} This tool reads notes.")));
     }
 
     let truncated = is_cut_short(bytes.len());
-    let content = match std::str::from_utf8(&bytes) {
-        Ok(text) if !truncated => text.to_owned(),
-        Ok(text) => within_limit(text).to_owned(),
-        Err(_) => {
-            return Ok(tool_error(format!(
-                "{path:?} is not UTF-8 text, so it cannot be read as a note.",
-            )))
-        },
-    };
+    // `not_text` has checked it is UTF-8.
+    let text = std::str::from_utf8(&bytes).unwrap_or_default();
+    let content = if truncated { within_limit(text) } else { text }.to_owned();
 
     let truncated_at_bytes = truncated.then_some(content.len());
     json_result(&ReadOutput {
@@ -176,17 +165,40 @@ pub async fn read_note(state: &AppState, args: ReadArgs) -> Result<CallToolResul
     })
 }
 
+/// What a file is, when read_note returns none of it because it is not text.
+///
+/// Reading an image as text would produce a page of replacement characters and teach the model
+/// nothing, so it is told what the file is instead.
+fn not_text(path: &str, bytes: &[u8]) -> Option<String> {
+    let mime = crate::guess_mime_from_path(path);
+    if mime.starts_with("image/") || mime.starts_with("video/") || mime.starts_with("audio/") {
+        return Some(format!("{path:?} is {mime}, not text."));
+    }
+    if std::str::from_utf8(bytes).is_err() {
+        return Some(format!("{path:?} is not UTF-8 text."));
+    }
+    None
+}
+
 /// Whether read_note hands over less than the whole of a file of `len` bytes.
 fn is_cut_short(len: usize) -> bool {
     len > MAX_NOTE_BYTES
 }
 
-/// Refuses to replace a file of `len` bytes that `read_note` cuts short.
+/// Refuses to replace a file that `read_note` does not return whole.
 ///
 /// update_note takes the whole file back, and read_note hands over no more than `MAX_NOTE_BYTES`
 /// of one, so a file replaced from what was read of a longer one would lose the rest, which the
-/// model never saw.
-fn check_read_whole(path: &str, len: usize) -> Result<(), String> {
+/// model never saw. Of an image, or a file in another encoding, it hands over nothing, and text
+/// written over one would replace a file the model never saw at all.
+fn check_read_whole(path: &str, bytes: &[u8]) -> Result<(), String> {
+    if let Some(what) = not_text(path, bytes) {
+        return Err(format!(
+            "{what} read_note returns none of it, so it cannot have been read, and replacing it \
+             with text would delete it. Use the web app for it.",
+        ));
+    }
+    let len = bytes.len();
     if !is_cut_short(len) {
         return Ok(());
     }
@@ -1029,7 +1041,7 @@ pub async fn update_note(
             "No file at {path:?}. Use create_note to make one, or search_notes to find the path.",
         )));
     };
-    if let Err(message) = check_read_whole(&path, current.len()) {
+    if let Err(message) = check_read_whole(&path, &current) {
         return Ok(tool_error(message));
     }
 
@@ -1443,9 +1455,19 @@ mod tests {
     /// update_note takes the whole file back, and read_note gives no more than the limit of one.
     #[test]
     fn a_note_longer_than_read_note_returns_is_not_replaced() {
-        assert!(check_read_whole("long.md", MAX_NOTE_BYTES).is_ok());
-        let refused = check_read_whole("long.md", MAX_NOTE_BYTES + 1).unwrap_err();
+        assert!(check_read_whole("long.md", &[b'a'; MAX_NOTE_BYTES]).is_ok());
+        let refused = check_read_whole("long.md", &[b'a'; MAX_NOTE_BYTES + 1]).unwrap_err();
         assert!(refused.contains("cannot have been read whole"), "{refused}");
+    }
+
+    /// read_note returns nothing of these, so text sent back for one replaces a file unseen.
+    #[test]
+    fn a_file_read_note_does_not_read_is_not_replaced() {
+        let refused = check_read_whole("photo.png", b"short enough").unwrap_err();
+        assert!(refused.contains("image/png"), "{refused}");
+        let refused = check_read_whole("memo.txt", b"\x83\x81\x83\x82").unwrap_err();
+        assert!(refused.contains("not UTF-8"), "{refused}");
+        assert!(check_read_whole(".mory/calendars.yaml", b"calendars: []\n").is_ok());
     }
 
     #[test]
