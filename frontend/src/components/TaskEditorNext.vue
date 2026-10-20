@@ -391,7 +391,7 @@
                     <TaskStatusFields
                         v-model="form.status"
                         v-bind:known-contacts="knownContacts"
-                        class="ml-10"
+                        class="under-field"
                     />
                     <v-select
                         v-model="form.importance"
