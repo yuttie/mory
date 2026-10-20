@@ -391,6 +391,7 @@ import Ajv from 'ajv';
 import type { DefinedError } from 'ajv';
 import AppBarContent from '@/components/AppBarContent.vue';
 import EditableViewer from '@/components/EditableViewer.vue';
+import { refusalOf } from '@/api';
 import { hasActiveDialog, isInOverlay, useShortcuts } from '@/keyboard';
 import { LAGGING_RETRY_MS, useFilesStore } from '@/stores/files';
 import { useConfigValue } from '@/config';
@@ -1135,7 +1136,7 @@ function save(): void {
         }
         else {
             error.value = true;
-            errorText.value = String(failure);
+            errorText.value = refusalOf(failure) ?? String(failure);
         }
     }).finally(() => {
         isSaving.value = false;
@@ -1191,7 +1192,7 @@ function rename() {
                     }
                     else {
                         error.value = true;
-                        errorText.value = err.toString();
+                        errorText.value = refusalOf(err) ?? err.toString();
                         isRenaming.value = false;
                         throw err;
                     }

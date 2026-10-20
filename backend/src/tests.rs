@@ -2704,6 +2704,27 @@ fn commit_save_checked_refuses_a_new_file_under_a_file() {
     assert_eq!(head_of(&fixture), before, "HEAD must not move");
 }
 
+/// A submodule is no file, but it is something `absent` says is not there.
+#[test]
+fn commit_save_checked_refuses_to_create_over_a_submodule() {
+    let fixture = write_fixture();
+    let head = fixture.repo.find_commit(head_of(&fixture)).unwrap();
+    let mut builder = fixture.repo.treebuilder(Some(&head.tree().unwrap())).unwrap();
+    builder.insert("sub", head.id(), 0o160000).unwrap();
+    let tree = fixture.repo.find_tree(builder.write().unwrap()).unwrap();
+    let signature = fixture.repo.signature().unwrap();
+    fixture.repo
+        .commit(Some("HEAD"), &signature, &signature, "Add a submodule", &tree, &[&head])
+        .unwrap();
+    let before = head_of(&fixture);
+
+    let written = crate::models::commit_save_checked(&fixture.repo, "sub", b"file\n", "Add", "absent")
+        .expect("a stale version is not an error");
+
+    assert_eq!(written, None);
+    assert_eq!(head_of(&fixture), before, "HEAD must not move");
+}
+
 #[test]
 fn commit_rename_refuses_to_replace_or_remove_what_is_there() {
     let fixture = write_fixture();
@@ -2780,6 +2801,57 @@ fn commit_files_accepts_the_same_content_again_without_committing() {
     assert_eq!(outcomes, [crate::models::Uploaded::Unchanged]);
     assert_eq!(commit, None);
     assert_eq!(head_of(&fixture), before, "HEAD must not move");
+}
+
+fn assert_bad_path(result: anyhow::Result<impl std::fmt::Debug>) {
+    let error = result.expect_err("the write should have been refused");
+    assert!(
+        error.downcast_ref::<crate::models::BadPath>().is_some(),
+        "the refusal should be a BadPath, not {error:#}",
+    );
+}
+
+/// `write_tree` drops a leading `/`, so `/dir/other.md` lands on `dir/other.md` while
+/// `path_taken`, comparing bytes, finds nothing there: the rename reported success and left one
+/// of the two files out of the tree, and a create-only save replaced what was there.
+#[test]
+fn a_write_refuses_a_path_the_tree_would_store_under_another_name() {
+    let fixture = write_fixture();
+    let before = head_of(&fixture);
+
+    assert_bad_path(crate::models::commit_rename(&fixture.repo, "note.md", "/dir/other.md", "Rename"));
+    assert_bad_path(crate::models::commit_save(&fixture.repo, "/note.md", b"replaced\n", "Save"));
+    assert_bad_path(crate::models::commit_save_checked(
+        &fixture.repo, "/note.md", b"replaced\n", "Save", "absent",
+    ));
+    for path in ["dir//other.md", "dir/", "./note.md", "dir/../note.md", ".git/config", ""] {
+        assert_bad_path(crate::models::commit_save(&fixture.repo, path, b"x\n", "Save"));
+    }
+
+    assert_eq!(head_of(&fixture), before, "HEAD must not move");
+    assert_eq!(fixture.blob_at(head_of(&fixture), "note.md").as_deref(), Some("first\n"));
+    assert_eq!(fixture.blob_at(head_of(&fixture), "dir/other.md").as_deref(), Some("other\n"));
+}
+
+/// libgit2 refused `..` and `.git` only at `index.add`, which failed the whole upload.
+#[test]
+fn commit_files_refuses_a_bad_name_alone() {
+    use crate::models::Uploaded::{Refused, Written};
+    let fixture = write_fixture();
+
+    let files = vec![
+        (b"/note.md".to_vec(), b"replacement".to_vec()),
+        (b"../x.png".to_vec(), b"outside".to_vec()),
+        (b".git/config".to_vec(), b"config".to_vec()),
+        (b"new.png".to_vec(), b"one".to_vec()),
+    ];
+    let (commit, outcomes) = crate::models::commit_files(&fixture.repo, &files)
+        .expect("the upload should succeed");
+
+    assert!(matches!(outcomes.as_slice(), [Refused(_), Refused(_), Refused(_), Written]), "{outcomes:?}");
+    let commit = commit.expect("one file was new, so there is a commit");
+    assert_eq!(fixture.blob_at(commit, "new.png").as_deref(), Some("one"));
+    assert_eq!(fixture.blob_at(commit, "note.md").as_deref(), Some("first\n"));
 }
 
 
