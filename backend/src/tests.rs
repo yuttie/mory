@@ -2674,6 +2674,23 @@ fn assert_conflict(result: anyhow::Result<impl std::fmt::Debug>) {
     );
 }
 
+/// `put_notes_path` answers a save with the hash of the content it was sent, rather than reading
+/// the blob back, for the web app's next save to be checked against: the two must be one.
+#[test]
+fn a_saved_blob_is_the_hash_of_the_content_sent() {
+    let fixture = write_fixture();
+    let content = "---\ntags: [a]\n---\r\n\r\n# CRLF and no final newline";
+
+    let commit = crate::models::commit_save(&fixture.repo, "note.md", content.as_bytes(), "Save")
+        .expect("the save should succeed");
+
+    let tree = fixture.repo.find_commit(commit).unwrap().tree().unwrap();
+    assert_eq!(
+        tree.get_path(Path::new("note.md")).unwrap().id(),
+        Oid::hash_object(git2::ObjectType::Blob, content.as_bytes()).unwrap(),
+    );
+}
+
 /// libgit2's index makes room for what it is given: staging `note.md/draft.md` removes the file
 /// at `note.md`, and staging `dir` removes everything under `dir/`. A save must refuse rather
 /// than delete a note to make the path it was asked for.
