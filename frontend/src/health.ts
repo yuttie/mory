@@ -246,8 +246,11 @@ export function taskChecks(entries: readonly ListEntry2[]): HealthCheck[] {
 /// What the stores report of the files under `.mory/`, each file a check of its own.
 export function settingsChecks(reports: {
     calendarsPath: string;
-    /// The calendar store's errors: those of the file prefixed with its path, those of a feed not.
+    /// The calendar store's errors. Only those of the file, prefixed with its path, are taken: those
+    /// of a feed describe the last window a view loaded, if any, and the feeds are asked afresh.
     calendarErrors: readonly string[];
+    /// One line per feed that could not be read, or why the feeds could not be asked at all.
+    feedErrors: readonly string[];
     tasksPath: string;
     taskSettingsProblems: readonly string[];
     /// Every file the listing holds under `.mory/plans/`.
@@ -256,16 +259,9 @@ export function settingsChecks(reports: {
     planErrors: Readonly<Record<string, string>>;
 }): HealthCheck[] {
     const prefix = `${reports.calendarsPath}: `;
-    const calendars: HealthProblem[] = [];
-    const feeds: HealthProblem[] = [];
-    for (const message of reports.calendarErrors) {
-        if (message.startsWith(prefix)) {
-            calendars.push({ severity: 'error', message: message.slice(prefix.length), path: reports.calendarsPath });
-        }
-        else {
-            feeds.push({ severity: 'error', message });
-        }
-    }
+    const calendars: HealthProblem[] = reports.calendarErrors
+        .filter((message) => message.startsWith(prefix))
+        .map((message) => ({ severity: 'error', message: message.slice(prefix.length), path: reports.calendarsPath }));
     return [
         {
             id: 'calendars-settings',
@@ -276,8 +272,8 @@ export function settingsChecks(reports: {
         {
             id: 'calendar-feeds',
             title: 'Subscribed calendars load',
-            description: 'Each subscribed feed could be fetched and read, the last time the calendar asked for its events in this session.',
-            problems: feeds,
+            description: 'Each enabled feed in .mory/calendars.yaml can be fetched and read by moried. moried keeps a feed it fetched for an hour by default, so a feed fixed since is seen when that runs out.',
+            problems: reports.feedErrors.map((message) => ({ severity: 'error', message })),
         },
         {
             id: 'tasks-settings',

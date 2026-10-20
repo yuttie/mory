@@ -357,6 +357,13 @@ export const useCalendarsStore = defineStore('calendars', () => {
         configurationProblems.value = [];
     }
 
+    /// How each subscribed feed fares now, for a check rather than a view: what is loaded for a view
+    /// is left alone, since replacing it would make the calendar fetch its own window again. Any
+    /// window will do, as the feeds are read whole whichever window is asked for.
+    async function feedReports(day: string): Promise<ImportedCalendarReport[]> {
+        return (await getImportedEvents(day, day)).calendars ?? [];
+    }
+
     function invalidate(): void {
         loadedWindow.value = null;
         loaded.value = EMPTY;
@@ -452,6 +459,7 @@ export const useCalendarsStore = defineStore('calendars', () => {
         saveCategories,
         invalidate,
         load,
+        feedReports,
     };
 });
 

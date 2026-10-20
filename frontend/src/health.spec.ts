@@ -134,10 +134,11 @@ describe('taskChecks', () => {
 });
 
 describe('settingsChecks', () => {
-    it('tells the configuration\'s problems from a feed\'s, and names each plan month\'s file', () => {
+    it('takes the configuration\'s problems from the store, and the feeds\' from asking them', () => {
         expect(problemsOf(settingsChecks({
             calendarsPath: '.mory/calendars.yaml',
-            calendarErrors: ['.mory/calendars.yaml: alarms.timed: not an alarm', 'Work: 404'],
+            calendarErrors: ['.mory/calendars.yaml: alarms.timed: not an alarm', 'Stale: 500'],
+            feedErrors: ['Work: 404'],
             tasksPath: '.mory/tasks.yaml',
             taskSettingsProblems: ['Invalid default_lead_time'],
             planPaths: ['.mory/plans/2026-10.yaml'],
@@ -155,6 +156,7 @@ describe('the plans check', () => {
     const plansOf = (planPaths: string[], planErrors: Record<string, string>) => problemsOf(settingsChecks({
         calendarsPath: '.mory/calendars.yaml',
         calendarErrors: [],
+        feedErrors: [],
         tasksPath: '.mory/tasks.yaml',
         taskSettingsProblems: [],
         planPaths,

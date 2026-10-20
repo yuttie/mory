@@ -139,6 +139,7 @@ const checking = ref(false);
 // What could not be read at all, which no store holds a problem for.
 const listingError = ref<string | null>(null);
 const calendarsReadError = ref<string | null>(null);
+const feedErrors = ref<string[]>([]);
 
 // The calendar draws a few months at a time; a year either side covers what anyone is planning
 // around without expanding every series without end.
@@ -178,6 +179,7 @@ const sections = computed<Section[]>(() => [
         title: 'Settings and plans',
         checks: guardChecks('settings', 'Settings and plans can be checked', () => settingsChecks({
             calendarsPath: CALENDARS_PATH,
+            feedErrors: feedErrors.value,
             calendarErrors: calendarsReadError.value === null
                 ? calendars.errors
                 : [`${CALENDARS_PATH}: It cannot be read: ${calendarsReadError.value}`, ...calendars.errors],
@@ -247,6 +249,13 @@ async function check(): Promise<void> {
         }).then(readPlans),
         calendars.loadConfiguration().catch((error) => {
             calendarsReadError.value = String(error);
+        }),
+        calendars.feedReports(today.format('YYYY-MM-DD')).then((reports) => {
+            feedErrors.value = reports
+                .filter((report) => report.error !== null)
+                .map((report) => `${report.name || report.id}: ${report.error}`);
+        }, (error) => {
+            feedErrors.value = [`The subscribed calendars cannot be asked for: ${error}`];
         }),
         // Never rejects: the store reports a file it cannot read among its problems.
         taskSettings.load(),
