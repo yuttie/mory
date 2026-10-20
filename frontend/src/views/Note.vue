@@ -74,7 +74,6 @@
                     v-bind:icon="mdiContentSave"
                     title="Save"
                     v-bind:color="needSave ? 'pink' : undefined"
-                    v-bind:active="needSave"
                     v-bind:disabled="!needSave"
                     v-on:click.stop="saveIfNeeded"
                 ></v-icon-btn>
