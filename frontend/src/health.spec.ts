@@ -158,9 +158,11 @@ describe('taskChecks', () => {
         expect(problemsOf(taskChecks([entry(`.tasks/${A}.md`, { task })]))['task-date-values']).toEqual([]);
     });
 
-    it('reports the older task model\'s keys', () => {
-        const [problem] = problemsOf(taskChecks([entry(`.tasks/${A}.md`, { task: { urgency: 3, importance: 2 } })]))['task-model'];
-        expect(problem.message).toContain('urgency, importance (as a number)');
+    it('reports the older task model\'s keys, under the task model alone', () => {
+        const metadata = { task: { status: { kind: 'todo' }, urgency: 3, start_at: '2026-01-01', importance: 2 } };
+        const [problem] = problemsOf(taskChecks([entry(`.tasks/${A}.md`, metadata)]))['task-model'];
+        expect(problem.message).toBe('Holds urgency, start_at, importance (as a number).');
+        expect(frontmatterChecks([entry(`.tasks/${A}.md`, metadata)]).flatMap((check) => check.problems)).toEqual([]);
     });
 });
 

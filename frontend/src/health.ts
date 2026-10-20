@@ -150,17 +150,29 @@ function statusErrors(metadata: unknown): { at: string; message: string }[] | nu
     return readableErrors(validate.errors as DefinedError[]).map((error) => ({ at: at + error.at, message: error.message }));
 }
 
+function isLegacyTaskKey(error: DefinedError): boolean {
+    if (error.keyword === 'additionalProperties' && error.instancePath === '/task') {
+        return LEGACY_TASK_KEYS.includes(error.params.additionalProperty);
+    }
+    return error.instancePath === '/task/importance' && typeof error.data === 'number';
+}
+
 /// What `metadata-schema.json` finds wrong with a note's frontmatter, one line per mistake.
 function schemaProblems(metadata: unknown): string[] {
     if (validateMetadata(metadata)) {
         return [];
     }
-    let errors = validateMetadata.errors as DefinedError[];
+    // The older task model's keys are the task-model check's: the schema refuses them, but the app
+    // still reads some, and one mistake is reported once.
+    let errors = (validateMetadata.errors as DefinedError[]).filter((error) => !isLegacyTaskKey(error));
+    // They are still why the task is refused, and the `oneOf` around it must not read as though
+    // nothing below it were wrong.
+    const legacy = (validateMetadata.errors as DefinedError[]).filter(isLegacyTaskKey).map((error) => ({ at: error.instancePath }));
     const status = statusErrors(metadata);
     if (status !== null) {
         errors = errors.filter((error) => !isAtOrUnder(error.instancePath, '/task/status'));
     }
-    const lines = [...readableErrors(errors, status ?? []), ...(status ?? [])].map(({ at, message }) => `${at || '/'}: ${message}`);
+    const lines = [...readableErrors(errors, [...legacy, ...(status ?? [])]), ...(status ?? [])].map(({ at, message }) => `${at || '/'}: ${message}`);
     return [...new Set(lines)];
 }
 
@@ -292,7 +304,7 @@ export function eventChecks(
 // The dates a task's urgency is worked out from, which `taskInstant` must read.
 const TASK_DATE_KEYS = ['due_by', 'deadline', 'available_from'];
 
-// What the older task model stored, which the task editor drops on its next save.
+// What the older task model stored, which the task editor rewrites on its next save.
 const LEGACY_TASK_KEYS = ['urgency', 'progress', 'scheduled_dates', 'start_at'];
 
 /// Files under `.tasks/` the task tree leaves out or places other than where they are, and tasks
@@ -367,7 +379,7 @@ export function taskChecks(entries: readonly ListEntry2[]): HealthCheck[] {
         {
             id: 'task-model',
             title: 'Tasks hold only the current task model',
-            description: 'No task keeps urgency, progress, scheduled_dates, start_at or a numeric importance. These are ignored, and the task editor drops them on its next save.',
+            description: 'No task keeps what the older task model stored. start_at is read as available_from and a numeric importance as low, medium or high where it maps to one; urgency, progress and scheduled_dates are ignored. The task editor writes them as the current model on its next save.',
             problems: legacy,
         },
     ];
