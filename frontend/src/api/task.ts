@@ -3,7 +3,7 @@ import YAML from 'yaml';
 import { readTaskAlarms } from '@/alarms';
 import { getAxios } from '@/axios';
 import { encodePath } from '@/encode-path';
-import type { UUID } from '@/api';
+import { type UUID, versionOf } from '@/api';
 import type { Task } from '@/task';
 import { readImportance } from '@/urgency';
 
@@ -19,7 +19,7 @@ export async function getTask(taskPath: string, eTag?: string): Promise<[string,
         validateStatus: (status) => (status >= 200 && status < 300) || status === 304,
     });
     if (res.status === 304) {
-        return [res.headers.etag, null];
+        return [versionOf(res.headers.etag), null];
     }
     else {
         const { extractFrontmatterH1AndRest } = await import('@/markdown-utils');
@@ -35,7 +35,7 @@ export async function getTask(taskPath: string, eTag?: string): Promise<[string,
             tags: metadata.tags,
             status: metadata.task.status,
             source: md,
-            etag: res.headers.etag,
+            etag: versionOf(res.headers.etag),
             importance: readImportance(metadata.task.importance),
             available_from: metadata.task.available_from ?? metadata.task.start_at,
             lead_time: typeof metadata.task.lead_time === 'string' ? metadata.task.lead_time : undefined,
@@ -45,7 +45,7 @@ export async function getTask(taskPath: string, eTag?: string): Promise<[string,
             note: rest,
         };
 
-        return [res.headers.etag, task];
+        return [versionOf(res.headers.etag), task];
     }
 }
 
