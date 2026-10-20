@@ -92,6 +92,13 @@ describe('the requests for a note', () => {
 describe('legacy task archive', () => {
     const data = 'tasks:\n    backlog: []\n    scheduled: {}\ngroups: []\n';
 
+    // `{"tasks": ...}` is YAML too, and axios would hand it over parsed, which `YAML.parse` throws on.
+    it('reads the archive as the text it holds', async () => {
+        client.get.mockResolvedValue({ status: 200, data, headers: { etag: 'archive' } });
+        await getTaskData();
+        expect(client.get.mock.calls[0][1]).toMatchObject({ responseType: 'text' });
+    });
+
     it('reads the renamed archive first', async () => {
         client.get.mockResolvedValue({ status: 200, data, headers: { etag: 'archive' } });
         const [etag, archive] = await getTaskData();
