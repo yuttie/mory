@@ -207,9 +207,13 @@ function colorOf(status: Status): string {
     return { error: 'error', warning: 'warning', ok: 'success' }[status];
 }
 
+// Files where the problems have them, and problems where some belong to no file, such as a feed:
+// three dead feeds are not one file.
 function countOf(item: HealthCheck): string {
-    const count = groupsOf(item).length;
-    return count === 1 ? '1 file' : `${count.toLocaleString()} files`;
+    const plural = (count: number, noun: string) => `${count.toLocaleString()} ${noun}${count === 1 ? '' : 's'}`;
+    return item.problems.every((problem) => problem.path !== undefined)
+        ? plural(groupsOf(item).length, 'file')
+        : plural(item.problems.length, 'problem');
 }
 
 // One row per file, in the order the files are first met, so a note with several problems is one
