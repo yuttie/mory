@@ -88,7 +88,7 @@ function status(page: Page, name: string): Locator {
 }
 
 function hiddenCount(page: Page): Locator {
-    return statuses(page).getByRole('status', { name: 'Statuses hidden' });
+    return statuses(page).getByRole('status');
 }
 
 test('finds tasks by title and opens the tasks above them', async ({ context, page }) => {
@@ -225,6 +225,8 @@ test('leaves out the tasks of the statuses unticked, and remembers them', async 
     await status(page, 'Done').click();
     await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Build the release', 'home']);
     await expect(hiddenCount(page)).toHaveText('1');
+    await expect(hiddenCount(page)).toHaveAccessibleName('1 status hidden');
+    await expect(statuses(page)).toHaveAccessibleName('Choose which statuses are shown, 1 status hidden');
 
     // Every task here is To do or Done.
     await status(page, 'To do').click();
@@ -248,9 +250,12 @@ test('shows or hides a group of statuses at once', async ({ context, page }) => 
     await statuses(page).click();
     const completed = status(page, 'Completed');
 
+    // Its statuses named as well as drawn.
+    await expect(completed).toContainText('Done, Canceled');
     await completed.click();
     await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Build the release', 'home']);
     await expect(hiddenCount(page)).toHaveText('2');
+    await expect(statuses(page)).toHaveAccessibleName('Choose which statuses are shown, 2 statuses hidden');
     await expect(completed.getByRole('checkbox')).not.toBeChecked();
     await expect(status(page, 'Done').getByRole('checkbox')).not.toBeChecked();
     await expect(status(page, 'Canceled').getByRole('checkbox')).not.toBeChecked();

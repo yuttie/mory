@@ -89,7 +89,8 @@
                         v-on:compositionend="onSearchCompositionEnd"
                     />
                     <!-- Counts the statuses left out, so a tree missing tasks says why. Named
-                         outright, as the badge would otherwise name the button after itself. -->
+                         outright, count and all, as the badge would otherwise name the button
+                         after itself, and announces the count as it changes. -->
                     <v-menu
                         v-bind:close-on-content-click="false"
                         location="bottom end"
@@ -99,12 +100,12 @@
                                 v-bind="filterProps"
                                 class="ml-1"
                                 title="Choose which statuses are shown"
-                                aria-label="Choose which statuses are shown"
+                                v-bind:aria-label="hiddenTreeStatuses.length === 0 ? 'Choose which statuses are shown' : `Choose which statuses are shown, ${hiddenStatusesText}`"
                             >
                                 <v-badge
                                     v-bind:model-value="hiddenTreeStatuses.length > 0"
                                     v-bind:content="hiddenTreeStatuses.length"
-                                    label="Statuses hidden"
+                                    v-bind:label="hiddenStatusesText"
                                     color="grey"
                                 >
                                     <v-icon>{{ mdiFilterVariant }}</v-icon>
@@ -130,15 +131,19 @@
                                             tabindex="-1"
                                         />
                                     </template>
+                                    <!-- The icons are drawn alone, so their names are given
+                                         apart, to a pointer and to a screen reader. -->
                                     <template v-slot:append>
                                         <v-icon
                                             v-for="kind of preset.kinds"
                                             v-bind:key="kind"
                                             v-bind:icon="statusIcon(kind, false)"
                                             v-bind:color="statusColor(kind, taskSettings.resolvedStatusColors)"
+                                            v-bind:title="STATUS_LABEL[kind]"
                                             size="small"
                                             class="ml-1"
                                         />
+                                        <span class="d-sr-only">{{ preset.kinds.map((kind) => STATUS_LABEL[kind]).join(', ') }}</span>
                                     </template>
                                 </v-list-item>
                                 <v-divider />
@@ -735,6 +740,12 @@ const treeOpenNodes = computed<string[]>({
             openNodes.value = ids;
         }
     },
+});
+
+// Whole words, as the badge's number alone says nothing to a screen reader.
+const hiddenStatusesText = computed<string>(() => {
+    const count = hiddenTreeStatuses.value.length;
+    return `${count} ${count === 1 ? 'status' : 'statuses'} hidden`;
 });
 
 const presetStates = computed<PresetState[]>(() => STATUS_PRESETS.map((preset) => presetState(hiddenTreeStatuses.value, preset.kinds)));
