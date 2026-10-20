@@ -10,6 +10,7 @@ import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import myRehypeEmbedLineNumbers from '@/rehype-embed-line-numbers';
 import myRehypeLazyLoadImages from '@/rehype-lazy-load-images';
+import myRehypeNoReferrer from '@/rehype-no-referrer';
 import rehypeUrlInspector from '@jsdevtools/rehype-url-inspector';
 import rehypeSlug from 'rehype-slug';
 import rehypeAutolinkHeadings from 'rehype-autolink-headings';
@@ -122,7 +123,7 @@ async function buildProcessor(features: PipelineFeatures, untrusted: boolean): P
     .use(rehypeRaw)
     // GitHub's schema, before anything below adds markup of its own: what it removes is the markup
     // that runs, and the formatting a feed's description uses survives it.
-    .use(untrusted ? [rehypeSanitize] : [])
+    .use(untrusted ? [rehypeSanitize, myRehypeNoReferrer] : [])
     .use(myRehypeEmbedLineNumbers)
     .use(myRehypeLazyLoadImages)
     .use(rehypeUrlInspector, {

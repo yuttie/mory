@@ -98,8 +98,10 @@ function render(
     }
     if (unmapped !== undefined && Object.keys(unmapped).length > 0) {
         body.push('## Imported details');
+        // A value's later lines are indented into its item: at the margin, a line break and a
+        // `# ` after it would end the list and head the rest of the note.
         body.push(Object.entries(unmapped)
-            .map(([key, value]) => `- ${asText(key)}: ${asText(value)}`)
+            .map(([key, value]) => `- ${asText(key)}: ${asText(value).replace(/\n(?=[^\n])/g, '\n  ')}`)
             .join('\n'));
     }
 
@@ -119,8 +121,16 @@ function render(
 /// mermaid diagram is drawn from with three backticks or tildes, so escaping those leaves Markdown
 /// none of them to build; the backslash is escaped too, or the feed's own could cancel the escape
 /// that follows it. Emphasis and the like still format, as they would have in the feed.
+///
+/// Backticks and tildes are escaped only three or more in a row, which a fence needs and a link
+/// does not hold: a bare address is a link as it is written, backslashes and all, so the `~` of
+/// `https://example.edu/~smith/` escaped led somewhere else. Every one in such a run is escaped,
+/// since a fence opens wherever a list item or a quote begins as well as at the margin, and the
+/// rest of a longer run would open one.
 function asText(text: string): string {
-    return text.replace(/[\\<[`~]/g, '\\$&');
+    return text
+        .replace(/[\\<[]/g, '\\$&')
+        .replace(/`{3,}|~{3,}/g, (run) => run.replace(/./g, '\\$&'));
 }
 
 /// `.events/<uuidv4>.md`, the convention `.tasks/` writes.
