@@ -1245,6 +1245,31 @@ fn get_first_toplevel_rank1_heading(node: &markdown::mdast::Node) -> Option<&mar
     }
 }
 
+/// The Markdown tree of a note, as the listing and the search index read one: GFM with
+/// frontmatter.
+///
+/// `None` where markdown-rs panics instead, as it does, 1.0.0 too, on two kinds of note: one
+/// whose frontmatter is still being written, its fence unclosed and its last line an unfinished
+/// list item or block quote, such as `---\ntags:\n- a`; and one with a list item holding an
+/// unclosed code fence or HTML block before an item of the other kind of list, such as
+/// ``1. ```\n- c\n``. The sync and the search index parse notes before moried listens, so one
+/// such note would keep moried from starting; and after that, both parse while they hold the
+/// repository's lock, which a panic would leave poisoned for every request that reads the
+/// repository.
+fn markdown_tree(source: &str) -> Option<markdown::mdast::Node> {
+    let mut options = markdown::ParseOptions::gfm();
+    options.constructs.frontmatter = true;
+    // Asserted, because `ParseOptions` can hold callbacks, which `gfm()` leaves unset: the parser
+    // only reads what it is given, so a panic leaves nothing of ours half-changed.
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| markdown::to_mdast(source, &options))) {
+        Ok(tree) => tree.ok(),
+        Err(_) => {
+            tracing::warn!("The Markdown parser panicked on a note, which is read without its Markdown structure");
+            None
+        },
+    }
+}
+
 /// Extract YAML frontmatter and the first top-level `#` heading from a blob.
 ///
 /// `mime_type` gates the markdown parse. Images are skipped even when their bytes are valid
@@ -1257,9 +1282,7 @@ fn extract_metadata(blob: &[u8], mime_type: &str) -> (Option<serde_yaml::Value>,
         return (None, None);
     }
     if let Ok(text) = std::str::from_utf8(blob) {
-        let mut opts = markdown::ParseOptions::gfm();
-        opts.constructs.frontmatter = true;
-        if let Ok(node) = markdown::to_mdast(text, &opts) {
+        if let Some(node) = markdown_tree(text) {
             let error_metadata = |message: String| {
                 let mut mapping = serde_yaml::Mapping::new();
                 mapping.insert("error".into(), message.into());

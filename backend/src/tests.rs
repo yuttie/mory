@@ -532,6 +532,17 @@ fn listable_reports_each_key_it_leaves_out_by_where_it_was() {
 }
 
 #[test]
+fn extract_metadata_finds_neither_in_a_note_the_markdown_parser_panics_on() {
+    // Unclosed `---` fences ending in a bare `-` or `>`, as a note is while its frontmatter is
+    // being written.
+    for blob in ["---\ntitle: x\n\n-", "---\n\n-", "---\n\n> ", "---\n\ntext\n\n-"] {
+        let (metadata, title) = crate::extract_metadata(blob.as_bytes(), "text/markdown");
+        assert!(metadata.is_none(), "{blob:?}: got {metadata:?}");
+        assert!(title.is_none(), "{blob:?}: got {title:?}");
+    }
+}
+
+#[test]
 fn extract_metadata_bails_out_on_non_utf8_content() {
     // A JPEG header: not UTF-8, so neither metadata nor a title can be extracted.
     let (metadata, title) = crate::extract_metadata(&[0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10], "application/octet-stream");
@@ -955,6 +966,40 @@ async fn a_row_schema_2_left_is_refilled_although_its_blob_is_unchanged() {
         .await
         .unwrap();
     assert_eq!(metadata, r#"{"1":"b"}"#);
+}
+
+#[tokio::test]
+async fn a_note_the_markdown_parser_panics_on_does_not_stop_a_sync() {
+    // The first sync runs before moried listens, so a panic in it keeps moried from starting.
+    let fixture = RepoFixture::new();
+    let head = fixture.commit_at(
+        "refs/heads/main",
+        &[],
+        &[
+            ("draft.md", Some("---\ntitle: x\n\n-")),
+            ("fine.md", Some("# Fine\n")),
+        ],
+        1_000,
+        0,
+        "base",
+    );
+    fixture.set_head("refs/heads/main");
+
+    let mut conn = test_cache_db().await;
+    sync_to(&mut conn, &fixture, head).await.unwrap();
+
+    let rows: Vec<(String, String, Option<String>)> =
+        sqlx::query_as("SELECT path, metadata, title FROM entry ORDER BY path;")
+            .fetch_all(&mut conn)
+            .await
+            .unwrap();
+    assert_eq!(
+        rows,
+        vec![
+            ("draft.md".to_owned(), "null".to_owned(), None),
+            ("fine.md".to_owned(), "null".to_owned(), Some("Fine".to_owned())),
+        ],
+    );
 }
 
 #[tokio::test]
