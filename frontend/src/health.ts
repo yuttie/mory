@@ -14,6 +14,7 @@ import { eventsFromEntries, taskDatesFromEntries } from '@/events';
 import type { EventCategories, EventError, EventWindow } from '@/events';
 import metadataSchema from '@/metadata-schema.json';
 import { isTaskPath, taskDirectoryOf, taskUuidOf } from '@/task-forest';
+import { taskInstant } from '@/urgency';
 
 export type HealthSeverity = 'error' | 'warning';
 
@@ -140,8 +141,8 @@ const EVENT_CHECKS: { id: string; title: string; description: string; properties
     },
     {
         id: 'task-dates',
-        title: 'Task due dates and deadlines are dates',
-        description: 'Each due_by and deadline is a date or a datetime with its offset, so the calendar can draw it and its alarms can ring.',
+        title: 'Task due dates and deadlines can be drawn',
+        description: 'Each due_by and deadline is a value the calendar reads as a moment, to draw it and ring its alarms. Whether urgency reads it too is a task check.',
         properties: ['due_by', 'deadline'],
     },
 ];
@@ -184,6 +185,9 @@ export function eventChecks(
     return checks;
 }
 
+// The dates a task's urgency is worked out from, which `taskInstant` must read.
+const TASK_DATE_KEYS = ['due_by', 'deadline', 'available_from'];
+
 // What the older task model stored, which the task editor drops on its next save.
 const LEGACY_TASK_KEYS = ['urgency', 'progress', 'scheduled_dates', 'start_at'];
 
@@ -193,6 +197,7 @@ export function taskChecks(entries: readonly ListEntry2[]): HealthCheck[] {
     const misnamed: HealthProblem[] = [];
     const orphaned: HealthProblem[] = [];
     const legacy: HealthProblem[] = [];
+    const unreadDates: HealthProblem[] = [];
     const covered = new Set<string>();
     for (const entry of entries) {
         const directory = taskDirectoryOf(entry.path);
@@ -227,6 +232,13 @@ export function taskChecks(entries: readonly ListEntry2[]): HealthCheck[] {
             if (keys.length > 0) {
                 legacy.push({ severity: 'warning', message: `Holds ${keys.join(', ')}.`, path: entry.path });
             }
+            for (const key of TASK_DATE_KEYS) {
+                const value = record[key];
+                // Whether a value is read does not depend on the zone, only the instant it names.
+                if (value !== undefined && value !== null && taskInstant(value, 'UTC') === undefined) {
+                    unreadDates.push({ severity: 'error', message: `${key} "${describeValue(value)}" is not read.`, path: entry.path });
+                }
+            }
         }
     }
     return [
@@ -241,6 +253,12 @@ export function taskChecks(entries: readonly ListEntry2[]): HealthCheck[] {
             title: 'Every subtask\'s parent task exists',
             description: 'A task in .tasks/<uuid>/ has a task file for <uuid> beside that directory. Without one it is shown at the top level instead.',
             problems: orphaned,
+        },
+        {
+            id: 'task-date-values',
+            title: 'Task dates are ones urgency can read',
+            description: 'Each due_by, deadline and available_from is a bare date or a datetime carrying its offset, such as 2026-10-21 or 2026-10-21 09:00+09:00. Urgency ignores any other, and the MCP tools refuse it.',
+            problems: unreadDates,
         },
         {
             id: 'task-model',
