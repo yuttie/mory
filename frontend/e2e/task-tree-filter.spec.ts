@@ -52,6 +52,14 @@ function search(page: Page): Locator {
     return page.getByRole('textbox', { name: 'Search tasks' });
 }
 
+function statuses(page: Page): Locator {
+    return page.getByRole('button', { name: 'Choose which statuses are shown' });
+}
+
+function status(page: Page, name: string): Locator {
+    return page.locator('.v-overlay--active .v-list-item').filter({ hasText: name });
+}
+
 test('finds tasks by title and opens the tasks above them', async ({ context, page }) => {
     await mockBackend(context, NOTES);
     await page.goto('/tasks-next');
@@ -74,7 +82,7 @@ test('finds tasks by title and opens the tasks above them', async ({ context, pa
 
     await search(page).fill('nothing like it');
     await expect(tree(page).getByRole('treeitem')).toHaveCount(0);
-    await expect(tree(page)).toContainText('No tasks match the search.');
+    await expect(tree(page)).toContainText('No tasks match.');
 });
 
 test('gives the tree back as it was once the search is cleared', async ({ context, page }) => {
@@ -92,4 +100,46 @@ test('gives the tree back as it was once the search is cleared', async ({ contex
     await page.getByRole('button', { name: 'Clear Search tasks' }).click();
     await expect(search(page)).toHaveValue('');
     await expect(rows(page)).toHaveText(['Launch', 'home', 'Water the plants', 'Plan the release party']);
+});
+
+test('leaves out the tasks of the statuses unticked, and remembers them', async ({ context, page }) => {
+    await mockBackend(context, NOTES);
+    await page.goto('/tasks-next');
+    await toggle(page, 'Launch');
+    await toggle(page, 'Ship');
+    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Build the release', 'Write release notes', 'home']);
+
+    await statuses(page).click();
+    await status(page, 'Done').click();
+    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Build the release', 'home']);
+    await expect(statuses(page).getByRole('status', { name: 'Statuses hidden' })).toHaveText('1');
+
+    // Every task here is To do or Done.
+    await status(page, 'To do').click();
+    await expect(rows(page)).toHaveCount(0);
+    await expect(tree(page)).toContainText('No tasks match.');
+    await page.keyboard.press('Escape');
+
+    await page.reload();
+    await expect(tree(page)).toContainText('No tasks match.');
+    await statuses(page).click();
+    await status(page, 'Show all').click();
+    // Closed, as the tree opens nothing of itself on a new page.
+    await expect(rows(page)).toHaveText(['Launch', 'home']);
+});
+
+// The switch it replaced hid Done and Canceled.
+test('starts from what the switch for completed tasks hid', async ({ context, page }) => {
+    await mockBackend(context, NOTES);
+    await context.addInitScript(() => {
+        if (localStorage.getItem('task-tree-hidden-statuses') === null) {
+            localStorage.setItem('hide-completed-in-tree-view', 'true');
+        }
+    });
+    await page.goto('/tasks-next');
+    await toggle(page, 'Launch');
+    await toggle(page, 'Ship');
+    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Build the release', 'home']);
+    await expect(statuses(page).getByRole('status', { name: 'Statuses hidden' })).toHaveText('2');
+    expect(await page.evaluate(() => localStorage.getItem('hide-completed-in-tree-view'))).toBeNull();
 });

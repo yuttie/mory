@@ -71,33 +71,10 @@
                     >All tasks</span>
                 </div>
             </v-toolbar-title>
-            <v-menu
-                v-bind:close-on-content-click="false"
-            >
-                <template v-slot:activator="{ props: menuProps }">
-                    <v-icon-btn
-                        v-bind:icon="mdiDotsVertical"
-                        v-bind="menuProps"
-                        class="mr-2"
-                    ></v-icon-btn>
-                </template>
-                <v-list>
-                    <v-list-subheader>Config</v-list-subheader>
-                    <v-list-item title="Hide completed tasks in tree view">
-                        <template v-slot:prepend>
-                            <v-switch
-                                v-model="hideCompletedInTreeView"
-                                hide-details
-                                class="mt-0 mr-2"
-                            ></v-switch>
-                        </template>
-                    </v-list-item>
-                </v-list>
-            </v-menu>
         </AppBarContent>
         <template v-if="store.isLoaded">
             <v-sheet class="d-flex flex-column task-tree-container"><!-- NOTE: Necessary for <TaskTree> to have vertical scrollbar -->
-                <div class="tree-search flex-grow-0">
+                <div class="tree-search d-flex align-center flex-grow-0">
                     <v-text-field
                         v-model="treeQuery"
                         v-bind:prepend-inner-icon="mdiMagnify"
@@ -109,12 +86,66 @@
                         clearable
                         autocomplete="off"
                     />
+                    <!-- Counts the statuses left out, so a tree missing tasks says why. Named
+                         outright, as the badge would otherwise name the button after itself. -->
+                    <v-menu
+                        v-bind:close-on-content-click="false"
+                        location="bottom end"
+                    >
+                        <template v-slot:activator="{ props: filterProps }">
+                            <v-icon-btn
+                                v-bind="filterProps"
+                                class="ml-1"
+                                title="Choose which statuses are shown"
+                                aria-label="Choose which statuses are shown"
+                            >
+                                <v-badge
+                                    v-bind:model-value="hiddenTreeStatuses.length > 0"
+                                    v-bind:content="hiddenTreeStatuses.length"
+                                    label="Statuses hidden"
+                                    color="grey"
+                                >
+                                    <v-icon>{{ mdiFilterVariant }}</v-icon>
+                                </v-badge>
+                            </v-icon-btn>
+                        </template>
+                        <v-card min-width="14em">
+                            <v-list class="py-0">
+                                <v-list-subheader>Statuses</v-list-subheader>
+                                <v-list-item
+                                    v-for="kind of STATUS_KINDS"
+                                    v-bind:key="kind"
+                                    v-bind:title="STATUS_LABEL[kind]"
+                                    v-on:click="toggleTreeStatus(kind)"
+                                >
+                                    <template v-slot:prepend>
+                                        <v-checkbox-btn
+                                            v-bind:model-value="!hiddenTreeStatuses.includes(kind)"
+                                            class="mr-1"
+                                            tabindex="-1"
+                                        />
+                                        <v-icon
+                                            v-bind:icon="statusIcon(kind, false)"
+                                            v-bind:color="statusColor(kind, taskSettings.resolvedStatusColors)"
+                                            class="mr-3"
+                                        />
+                                    </template>
+                                </v-list-item>
+                                <v-divider />
+                                <v-list-item
+                                    v-bind:disabled="hiddenTreeStatuses.length === 0"
+                                    title="Show all"
+                                    v-on:click="hiddenTreeStatuses = []"
+                                />
+                            </v-list>
+                        </v-card>
+                    </v-menu>
                 </div>
                 <div
-                    v-if="treeTerms.length > 0 && filteredForestWithTags.length === 0"
+                    v-if="filteredForestWithTags.length === 0 && store.treeWithTagGroups.length > 0"
                     class="text-medium-emphasis pa-4"
                 >
-                    No tasks match the search.
+                    No tasks match.
                 </div>
                 <TaskTree
                     v-bind:items="filteredForestWithTags"
@@ -354,6 +385,7 @@ import type NewTaskDialog from '@/components/NewTaskDialog.vue';
 import {
     mdiCalendarMultiselectOutline,
     mdiDotsVertical,
+    mdiFilterVariant,
     mdiFormatListChecks,
     mdiGridLarge,
     mdiMagnify,
@@ -362,8 +394,10 @@ import {
     mdiTrafficLightOutline,
 } from '@mdi/js';
 
-import { type TaskNode, type TaskTreeItem } from '@/task-forest';
+import { type TaskNode } from '@/task-forest';
 import { branchIds, filterTaskTree, searchTerms } from '@/task-tree-filter';
+import { statusColor } from '@/status-color';
+import { statusIcon } from '@/status-icon';
 import { taskRoute, tasksRoute } from '@/task-route';
 import { SavedUnlisted, isTagGroupId, isUntaggedGroupId, tagGroupId, tagNameOf, useTasksStore } from '@/stores/tasks';
 
@@ -407,7 +441,9 @@ const newTaskDialogIsVisible = ref(false);
 // tag; from a row's own button, under that row's task or with its group's tag.
 const newTaskStart = ref<{ parent: UUID | null; tag?: string | null }>({ parent: null });
 const error = ref<string | null>(null);
-const hideCompletedInTreeView = useLocalStorage('hide-completed-in-tree-view', false);
+// The statuses the tree leaves out, by name rather than by those it shows, so a status added
+// later is shown until it is unticked.
+const hiddenTreeStatuses = useLocalStorage<string[]>('task-tree-hidden-statuses', hiddenBySwitch());
 const hideCompletedInItemView = useLocalStorage('hide-completed-in-item-view', false);
 const showParentDialog = ref<boolean>(false);
 // A save waits for the listing to show it and the editor to read it again, and a second press
@@ -596,71 +632,6 @@ const taskStatuses = computed<Record<StatusKind, TaskNode[]>>(() => {
     return statuses;
 });
 
-// Helper function to check if entire subtree should be filtered
-function isEntireSubtreeCompleted(node: TaskTreeItem): boolean {
-    const status = node.metadata?.task?.status?.kind;
-    const completed = status === 'done' || status === 'canceled';
-    if (!completed) {
-        return false;
-    }
-
-    // Check if ALL descendants have statuses considered completed
-    return (node.children ?? []).every(isEntireSubtreeCompleted);
-}
-
-// Helper function to recursively filter tree nodes based on task status with subtree logic
-function filterTreeNodes(nodes: TaskTreeItem[], hideCompleted: boolean): TaskTreeItem[] {
-    return nodes
-        .map(node => {
-            // Check if this is a tag group node (virtual parent)
-            if (isTagGroupId(node.uuid)) {
-                // For tag groups, filter children individually since they're virtual parents
-                const filteredChildren = (node.children ?? []).filter((child: TaskTreeItem) => {
-                    const taskStatus = child.metadata?.task?.status?.kind;
-                    const shouldFilterOut =
-                        hideCompleted && (taskStatus === 'done' || taskStatus === 'canceled');
-                    return !shouldFilterOut;
-                });
-
-                // A group is only a heading for its members, so one whose members are all hidden
-                // has nothing to show.
-                if (filteredChildren.length === 0) {
-                    return null;
-                }
-
-                // Return the tag group with filtered children
-                return { ...node, children: filteredChildren };
-            }
-
-            // For real task nodes
-            const taskStatus = node.metadata?.task?.status?.kind;
-
-            // Check if this node has children (is a real parent task forming a subtree)
-            if (node.children && node.children.length > 0) {
-                // This is a parent task - check if ALL descendants are completed
-                const completed = isEntireSubtreeCompleted(node);
-
-                if (hideCompleted && completed) {
-                    return null; // Filter out entire subtree
-                }
-
-                return node;
-            } else {
-                // This is a leaf task without children - apply individual filtering
-                // (This should only happen for tasks under tag groups, as per the logic)
-                const shouldFilterOut =
-                    hideCompleted && (taskStatus === 'done' || taskStatus === 'canceled');
-
-                if (shouldFilterOut) {
-                    return null; // Filter out this individual task
-                }
-
-                return node;
-            }
-        })
-        .filter(node => node !== null); // Remove filtered out nodes
-}
-
 // Cleared at once: clearing is a single press, and the tree it gives back is the one left before.
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 watch(treeQuery, (query) => {
@@ -680,10 +651,7 @@ const treeTerms = computed<string[]>(() => searchTerms(treeSearch.value));
 
 // Computed property for filtered forest with tags
 const filteredForestWithTags = computed(() => {
-    return filterTaskTree(
-        filterTreeNodes(store.treeWithTagGroups, hideCompletedInTreeView.value),
-        { query: treeSearch.value },
-    );
+    return filterTaskTree(store.treeWithTagGroups, { query: treeSearch.value, hiddenStatuses: hiddenTreeStatuses.value });
 });
 
 // A search opens every branch it keeps, each being there for a task found under it. Opened again
@@ -705,6 +673,20 @@ const treeOpenNodes = computed<string[]>({
         }
     },
 });
+
+function toggleTreeStatus(kind: StatusKind) {
+    hiddenTreeStatuses.value = hiddenTreeStatuses.value.includes(kind)
+        ? hiddenTreeStatuses.value.filter((hidden) => hidden !== kind)
+        : [...hiddenTreeStatuses.value, kind];
+}
+
+// Where the statuses start for a browser that has not chosen any yet: what the switch they replace
+// hid, Done and Canceled, if it was on. Its key is dropped, having nothing left to say.
+function hiddenBySwitch(): StatusKind[] {
+    const hidden = localStorage.getItem('hide-completed-in-tree-view') === 'true';
+    localStorage.removeItem('hide-completed-in-tree-view');
+    return hidden ? ['done', 'canceled'] : [];
+}
 
 // Helper function to filter task list based on status
 function filterTasksByStatus(tasks: TaskNode[], hideCompleted: boolean): TaskNode[] {
@@ -732,8 +714,8 @@ const filteredSelectedNodeDescendants = computed<TaskNode[]>(() => {
 });
 
 // Among the tasks the list holds, so the count follows the selection. A task in the backlog is not
-// taken on yet and a done or canceled one is over, so neither is left, whatever the hide-completed
-// switches say. Counted from the Status view's columns, as the popover is, so the two agree on
+// taken on yet and a done or canceled one is over, so neither is left, whatever the list and the
+// tree hide. Counted from the Status view's columns, as the popover is, so the two agree on
 // where a task naming no status belongs.
 const tasksLeftCount = computed<number>(() => {
     return STATUS_KINDS

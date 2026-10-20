@@ -16,7 +16,7 @@
                 {{ mdiTag }}
             </v-icon>
             <!-- A folder for the subtasks the task holds, not the ones the row shows, which a
-                 search may leave out. -->
+                 search or the statuses shown may leave out. -->
             <v-icon v-else v-bind:color="statusColor(item.metadata?.task?.status?.kind, taskSettings.resolvedStatusColors)">
                 {{ statusIcon(item.metadata?.task?.status?.kind, tasks.childrenOf(item.uuid).length > 0) }}
             </v-icon>

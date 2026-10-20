@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { TaskTreeItem } from '@/task-forest';
 import { branchIds, filterTaskTree, highlight, searchTerms, titleMatches } from '@/task-tree-filter';
 
-function task(title: string | null, children?: TaskTreeItem[]): TaskTreeItem {
+function task(title: string | null, children?: TaskTreeItem[], status: unknown = { kind: 'todo' }): TaskTreeItem {
     const id = title ?? 'untitled';
     return {
         id,
@@ -13,7 +13,7 @@ function task(title: string | null, children?: TaskTreeItem[]): TaskTreeItem {
         path: `.tasks/${id}.md`,
         size: 0,
         mime_type: 'text/markdown',
-        metadata: { task: { status: { kind: 'todo' } } },
+        metadata: { task: { status } } as TaskTreeItem['metadata'],
         title,
         mtime: '',
         ...(children === undefined ? {} : { children }),
@@ -99,30 +99,75 @@ describe('filterTaskTree', () => {
     ];
 
     it('hands back the tree it was given when there is nothing to search for', () => {
-        expect(filterTaskTree(tree, { query: ' ' })).toBe(tree);
+        expect(filterTaskTree(tree, { query: ' ', hiddenStatuses: [] })).toBe(tree);
     });
 
     it('keeps the tasks found and everything above them', () => {
-        expect(titles(filterTaskTree(tree, { query: 'write' }))).toEqual([
+        expect(titles(filterTaskTree(tree, { query: 'write', hiddenStatuses: [] }))).toEqual([
             ['Launch', ['Write the announcement', ['Ship', ['Write release notes']]]],
             ['home', ['Write to the landlord']],
         ]);
     });
 
     it('draws a task found as a leaf when none of its subtasks is', () => {
-        const [launch] = filterTaskTree(tree, { query: 'launch' });
+        const [launch] = filterTaskTree(tree, { query: 'launch', hiddenStatuses: [] });
         expect(launch.title).toBe('Launch');
         expect(launch).not.toHaveProperty('children');
     });
 
+    it('leaves out the tasks of a hidden status, at any depth, unless one under them is kept', () => {
+        const statuses = [
+            task('Done project', [
+                task('Done step', undefined, { kind: 'done' }),
+                task('Open step'),
+            ], { kind: 'done' }),
+            task('Open project', [
+                task('Canceled step', undefined, { kind: 'canceled' }),
+            ]),
+            task('Finished project', [
+                task('Last step', undefined, { kind: 'done' }),
+            ], { kind: 'done' }),
+            group('home', [task('Done chore', undefined, { kind: 'done' })]),
+        ];
+        expect(titles(filterTaskTree(statuses, { query: '', hiddenStatuses: ['done', 'canceled'] }))).toEqual([
+            ['Done project', ['Open step']],
+            'Open project',
+        ]);
+    });
+
+    it('files a task naming no status in the backlog, and never hides one naming no known status', () => {
+        const statuses = [
+            task('Unsorted', undefined, null),
+            task('Misspelt', undefined, { kind: 'finished' }),
+            task('Garbled', undefined, 'done'),
+        ];
+        expect(titles(filterTaskTree(statuses, { query: '', hiddenStatuses: ['backlog', 'done'] }))).toEqual([
+            'Misspelt',
+        ]);
+        expect(titles(filterTaskTree(statuses, { query: '', hiddenStatuses: ['done'] }))).toEqual([
+            'Unsorted',
+            'Misspelt',
+            'Garbled',
+        ]);
+    });
+
+    it('keeps only the tasks both the search and the statuses let through', () => {
+        const both = [
+            task('Write the draft'),
+            task('Write the summary', undefined, { kind: 'done' }),
+            task('Read the paper'),
+        ];
+        expect(titles(filterTaskTree(both, { query: 'write', hiddenStatuses: ['done'] }))).toEqual(['Write the draft']);
+    });
+
     it('never keeps a tag group for its own name', () => {
-        expect(filterTaskTree(tree, { query: 'home' })).toEqual([]);
+        expect(filterTaskTree(tree, { query: 'home', hiddenStatuses: [] })).toEqual([]);
     });
 });
 
 describe('branchIds', () => {
     it('names every row holding others, at any depth', () => {
-        const filtered = filterTaskTree([task('A', [task('B', [task('C')]), task('D')])], { query: 'c' });
+        const filtered = filterTaskTree([task('A', [task('B', [task('C')]), task('D')])], { query: 'c', hiddenStatuses: [] });
         expect(branchIds(filtered)).toEqual(['A', 'B']);
     });
 });

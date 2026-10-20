@@ -1,11 +1,16 @@
-// Which rows the task tree draws under a search: the tasks it finds, and every task and tag group
-// above one, so a task found is still seen where it lives rather than torn from its parents.
+// Which rows the task tree draws under a search and a status filter: the tasks both let through,
+// and every task and tag group above one, so a task found is still seen where it lives rather than
+// torn from its parents.
 
 import type { TaskTreeItem } from '@/task-forest';
 
 export interface TaskTreeFilter {
     // Words a task's title must each hold, in any case and any order.
     query: string;
+    // The statuses whose tasks are left out. A task naming no status is in the backlog, as its icon
+    // and the Status view have it. One naming a status there is none of is never left out: no box
+    // in the filter is its own, and a filter should not be what hides a task whose note is wrong.
+    hiddenStatuses: readonly string[];
 }
 
 // A part of a title, and whether a search term covers it.
@@ -65,14 +70,17 @@ export function highlight(title: string, terms: readonly string[]): TitleSegment
 // a chevron that opens on nothing.
 export function filterTaskTree(items: TaskTreeItem[], filter: TaskTreeFilter): TaskTreeItem[] {
     const terms = searchTerms(filter.query);
+    const hidden = new Set<unknown>(filter.hiddenStatuses);
     // The same array when nothing is filtered, so the tree has nothing new to draw.
-    if (terms.length === 0) {
+    if (terms.length === 0 && hidden.size === 0) {
         return items;
     }
     const matches = matcher(terms);
     function keep(item: TaskTreeItem): TaskTreeItem | null {
         const children = item.children?.map(keep).filter((child) => child !== null) ?? [];
-        const found = item.metadata?.tag_group === undefined && matches(item.title);
+        const found = item.metadata?.tag_group === undefined
+            && !hidden.has(item.metadata?.task?.status?.kind ?? 'backlog')
+            && matches(item.title);
         if (children.length > 0) {
             return { ...item, children };
         }

@@ -95,10 +95,10 @@ test('hides a group whose tasks are all hidden as completed', async ({ context, 
     await page.goto('/tasks-next');
     await expect(row(page, 'home')).toBeVisible();
 
-    // Turned on where the switch keeps it. A page gets no storage event for its own writes, hence
-    // the reload.
+    // Hidden where the filter keeps it. A page gets no storage event for its own writes, hence the
+    // reload.
     await page.evaluate(() => {
-        localStorage.setItem('hide-completed-in-tree-view', 'true');
+        localStorage.setItem('task-tree-hidden-statuses', JSON.stringify(['done', 'canceled']));
     });
     await page.reload();
     await expect(row(page, 'work')).toBeVisible();
