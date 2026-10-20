@@ -70,7 +70,7 @@ describe('eventChecks', () => {
     const window = { from: '2026-01-01', to: '2026-12-31' };
 
     it('lists every check, each passing, for notes without mistakes', () => {
-        const checks = eventChecks([entry('plain.md', { tags: [], events: { lunch: { start: '2026-10-01' } } })], window);
+        const checks = eventChecks([entry('plain.md', { tags: [], events: { lunch: { start: '2026-10-01' } } })], window, { categories: new Map() });
         expect(checks.map((check) => check.id)).toEqual([
             'event-times', 'event-repeat', 'event-adjustments', 'event-category', 'event-alarms', 'task-dates',
         ]);
@@ -89,6 +89,16 @@ describe('eventChecks', () => {
         const problems = problemsOf(eventChecks([entry('meetings.md', { tags: [], events })], window));
         expect(problems['event-times']).toEqual([{ path: 'meetings.md', message: 'Invalid end "soon" of "standup"' }]);
         expect(problems['event-alarms']).toEqual([{ path: 'meetings.md', message: 'Invalid alarms "10m" of "standup"' }]);
+    });
+
+    it('says the categories were not verified without the configuration', () => {
+        const events = { standup: { start: '2026-10-01', category: 'typo' } };
+        expect(problemsOf(eventChecks([entry('meetings.md', { events })], window))['event-category']).toEqual([
+            { message: 'Not verified: the categories in .mory/calendars.yaml could not be read.' },
+        ]);
+        expect(problemsOf(eventChecks([entry('meetings.md', { events })], window, { categories: new Map() }))['event-category']).toEqual([
+            { path: 'meetings.md', message: 'Invalid category "typo" of "standup"' },
+        ]);
     });
 
     it('reports a task date the calendar refuses under the task dates', () => {

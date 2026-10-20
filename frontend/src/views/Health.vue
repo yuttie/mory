@@ -45,7 +45,7 @@
                     class="check d-flex mb-3"
                 >
                     <span
-                        v-if="checking && item.problems.length === 0"
+                        v-if="checking"
                         class="label text-body-2 text-medium-emphasis"
                     >…</span>
                     <span

@@ -158,6 +158,14 @@ export function eventChecks(
         ...taskDatesFromEntries(entries, window, { alarmDefaults: options.alarmDefaults }).errors,
     ];
     const checks: HealthCheck[] = EVENT_CHECKS.map(({ id, title, description }) => ({ id, title, description, problems: [] }));
+    // Without the configuration every category would look unknown, so `categoryOf` checks none, and
+    // an OK would claim what was never looked at.
+    if (options.categories === undefined) {
+        checks.find((check) => check.id === 'event-category')?.problems.push({
+            severity: 'warning',
+            message: 'Not verified: the categories in .mory/calendars.yaml could not be read.',
+        });
+    }
     const checkOf = new Map(EVENT_CHECKS.flatMap(({ properties }, index) =>
         properties.map((property) => [property, checks[index]] as const)));
     // A bad `end` on a series is met once per occurrence, and is one mistake to fix.
