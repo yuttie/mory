@@ -64,3 +64,33 @@ test('keeps the reason for a refused upload on a phone screen', async ({ context
         / parseFloat(getComputedStyle(element).lineHeight));
     expect(hidden).toBeLessThan(1);
 });
+
+// A refused file's name is that of another file already there, which a note linking it would show.
+test('copies the name only of a file that was uploaded', async ({ context, page }) => {
+    await mockBackend(context, {});
+    await page.addInitScript(() => {
+        const copied: string[] = [];
+        Object.assign(window, { copied });
+        Object.defineProperty(navigator, 'clipboard', {
+            value: {
+                writeText: async (text: string) => {
+                    copied.push(text);
+                },
+            },
+        });
+    });
+    await page.goto('/');
+    await uploadTakenAndFree(page);
+    const openMenu = () => page.getByRole('listitem').filter({ hasText: /^Upload file$/ }).click();
+
+    await openMenu();
+    await expect(uploaded(page, 'image.png')).toContainText(REASON);
+    await uploaded(page, 'image.png').click();
+    if (!await uploaded(page, 'new.png').isVisible()) {
+        await openMenu();
+    }
+    await uploaded(page, 'new.png').click();
+
+    await expect.poll(() => page.evaluate(() => (window as unknown as { copied: string[] }).copied))
+        .toEqual(['new.png']);
+});

@@ -178,7 +178,7 @@
                                     v-bind:key="entry.uuid"
                                     v-bind:title="entry.filename"
                                     v-bind:lines="entry.status === 'error' ? false : undefined"
-                                    v-on:click="copyToClipboard(entry.filename)"
+                                    v-on:click="copyUploadedName(entry)"
                                     style="white-space: nowrap;"
                                 >
                                     <template v-slot:prepend>
@@ -407,7 +407,7 @@
                                     v-bind:key="entry.uuid"
                                     v-bind:title="entry.filename"
                                     v-bind:lines="entry.status === 'error' ? false : undefined"
-                                    v-on:click="copyToClipboard(entry.filename)"
+                                    v-on:click="copyUploadedName(entry)"
                                     style="white-space: nowrap;"
                                 >
                                     <template v-slot:prepend>
@@ -1077,6 +1077,14 @@ function uploadFiles(files: File[]) {
 
 function copyToClipboard(text: string) {
     navigator.clipboard.writeText(text);
+}
+
+// The name to link the file by, once it is there under it: a refused upload's name is that of
+// another file, which a note linking it would show instead.
+function copyUploadedName(entry: UploadEntry) {
+    if (entry.status === 'success') {
+        copyToClipboard(entry.filename);
+    }
 }
 
 // Watchers
