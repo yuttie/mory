@@ -612,6 +612,7 @@ import {
     mdiSubdirectoryArrowRight,
     mdiUpload,
 } from '@mdi/js';
+import axios from 'axios';
 
 import { useAppStore } from '@/stores/app';
 
@@ -1069,10 +1070,24 @@ function uploadFiles(files: File[]) {
             const entry = uploadList.value.find(e => e.uuid === uuid);
             if (entry) {
                 entry.status = 'error';
-                entry.statusMessage = error.message;
+                entry.statusMessage = uploadFailure(error);
             }
         }
     });
+}
+
+// Why an upload failed whole. One too large is the likely case, and "status code 413" reads as a
+// failure of the app rather than of the file: moried says how large an upload may be, and a proxy
+// in front of it, which may hold to a smaller limit, answers with a page of its own.
+function uploadFailure(error: unknown): string {
+    if (axios.isAxiosError(error) && error.response?.status === 413) {
+        const { data, headers } = error.response;
+        const said = typeof data === 'string' && String(headers['content-type']).startsWith('text/plain')
+            ? data
+            : 'The upload is too large';
+        return `${said}. Upload fewer files at once, or smaller ones.`;
+    }
+    return error instanceof Error ? error.message : String(error);
 }
 
 function copyToClipboard(text: string) {

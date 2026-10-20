@@ -94,3 +94,35 @@ test('copies the name only of a file that was uploaded', async ({ context, page 
     await expect.poll(() => page.evaluate(() => (window as unknown as { copied: string[] }).copied))
         .toEqual(['new.png']);
 });
+
+// "Request failed with status code 413" reads as a failure of the app, not of the file.
+test('says an upload was too large', async ({ context, page }) => {
+    await mockBackend(context, {});
+    await page.goto('/');
+    const input = page.locator('input[type="file"]');
+    const openMenu = () => page.getByRole('listitem').filter({ hasText: /^Upload file$/ }).click();
+
+    // As moried says it.
+    await page.route(`${API_URL}files`, (route) => route.fulfill({
+        status: 413,
+        contentType: 'text/plain; charset=utf-8',
+        body: 'The upload is larger than the 16 MiB moried takes at once',
+    }));
+    await input.setInputFiles([{ name: 'video.mp4', mimeType: 'video/mp4', buffer: Buffer.from('large') }]);
+    await openMenu();
+    await expect(uploaded(page, 'video.mp4')).toContainText(
+        'The upload is larger than the 16 MiB moried takes at once. Upload fewer files at once, or smaller ones.');
+
+    // As a proxy in front of moried answers it, with a page of its own.
+    await page.unroute(`${API_URL}files`);
+    await page.route(`${API_URL}files`, (route) => route.fulfill({
+        status: 413,
+        contentType: 'text/html',
+        body: '<html><body><h1>413 Request Entity Too Large</h1></body></html>',
+    }));
+    await page.keyboard.press('Escape');
+    await input.setInputFiles([{ name: 'other.mp4', mimeType: 'video/mp4', buffer: Buffer.from('large') }]);
+    await openMenu();
+    await expect(uploaded(page, 'other.mp4')).toContainText('The upload is too large. Upload fewer files');
+    await expect(uploaded(page, 'other.mp4')).not.toContainText('<html>');
+});
