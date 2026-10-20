@@ -48,45 +48,54 @@ export interface TitleSegment {
 
 // Split on any white space, the ideographic space included, so a query typed through an input
 // method splits as one typed without.
+//
+// The terms and the titles are searched composed (NFC), as an input method types them: a title can
+// be written with a letter and its mark apart, as in a name copied from a file on macOS, and its ガ
+// would otherwise be no ガ that is typed.
 export function searchTerms(query: string): string[] {
-    return query.split(/\s+/u).filter((term) => term !== '');
+    return query.normalize('NFC').split(/\s+/u).filter((term) => term !== '');
 }
 
 // Case is ignored by the expression rather than by lowercasing both sides: a lowercased title can
-// change length, and `highlight` marks positions in the title as written.
+// change length, and `highlight` marks positions in the title it draws.
 function termPattern(term: string, flags: string): RegExp {
     return new RegExp(term.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), `iu${flags}`);
 }
 
 function matcher(terms: readonly string[]): (title: string | null) => boolean {
     const patterns = terms.map((term) => termPattern(term, ''));
-    return (title) => patterns.every((pattern) => pattern.test(title ?? ''));
+    return (title) => {
+        const text = (title ?? '').normalize('NFC');
+        return patterns.every((pattern) => pattern.test(text));
+    };
 }
 
 export function titleMatches(title: string | null, terms: readonly string[]): boolean {
     return matcher(terms)(title);
 }
 
-// The title cut where the terms start and end, every occurrence of each marked, overlaps merged.
+// The title, composed, cut where the terms start and end, every occurrence of each marked, overlaps
+// merged. Composed, it looks as it did.
 export function highlight(title: string, terms: readonly string[]): TitleSegment[] {
-    const marked = new Array<boolean>(title.length).fill(false);
+    const text = title.normalize('NFC');
+    const marked = new Array<boolean>(text.length).fill(false);
     for (const term of terms) {
         // From each character on, not from the end of the last occurrence, so that both of the
         // overlapping ones in "Banana" are marked.
         const pattern = termPattern(term, 'g');
-        for (let found = pattern.exec(title); found !== null; found = pattern.exec(title)) {
+        for (let found = pattern.exec(text); found !== null; found = pattern.exec(text)) {
             marked.fill(true, found.index, found.index + found[0].length);
-            pattern.lastIndex = found.index + String.fromCodePoint(title.codePointAt(found.index)!).length;
+            pattern.lastIndex = found.index + String.fromCodePoint(text.codePointAt(found.index)!).length;
         }
     }
     const segments: TitleSegment[] = [];
-    for (let index = 0; index < title.length; index++) {
+    for (let index = 0; index < text.length; index++) {
         const last = segments.at(-1);
         if (last !== undefined && last.match === marked[index]) {
-            last.text += title[index];
+            last.text += text[index];
         }
         else {
-            segments.push({ text: title[index], match: marked[index] });
+            segments.push({ text: text[index], match: marked[index] });
         }
     }
     return segments;

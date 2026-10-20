@@ -57,6 +57,13 @@ describe('titleMatches', () => {
         expect(titleMatches('Fix aab', ['a+b'])).toBe(false);
     });
 
+    it('finds a title written in decomposed characters by the composed ones typed', () => {
+        // ガ written as カ and its voicing mark apart, and é as e and its accent.
+        expect(titleMatches('\u30AB\u3099イドライン', ['ガイド'])).toBe(true);
+        expect(titleMatches('Cafe\u0301 menu', ['café'])).toBe(true);
+        expect(titleMatches('ガイドライン', [searchTerms('\u30AB\u3099イド')[0]])).toBe(true);
+    });
+
     it('finds nothing in a task with no title', () => {
         expect(titleMatches(null, ['draft'])).toBe(false);
     });
@@ -84,6 +91,13 @@ describe('highlight', () => {
         expect(highlight('İstanbul trip', ['trip'])).toEqual([
             { text: 'İstanbul ', match: false },
             { text: 'trip', match: true },
+        ]);
+    });
+
+    it('marks a title written in decomposed characters as it is drawn, composed', () => {
+        expect(highlight('\u30AB\u3099イドライン', ['ガイド'])).toEqual([
+            { text: 'ガイド', match: true },
+            { text: 'ライン', match: false },
         ]);
     });
 
