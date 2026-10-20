@@ -2,6 +2,7 @@
 // and every task and tag group above one, so a task found is still seen where it lives rather than
 // torn from its parents.
 
+import type { StatusKind } from '@/task';
 import type { TaskTreeItem } from '@/task-forest';
 
 export interface TaskTreeFilter {
@@ -11,6 +12,32 @@ export interface TaskTreeFilter {
     // and the Status view have it. One naming a status there is none of is never left out: no box
     // in the filter is its own, and a filter should not be what hides a task whose note is wrong.
     hiddenStatuses: readonly string[];
+}
+
+// Statuses the filter shows or hides together. To do is in none: it is neither started nor set aside.
+export const STATUS_PRESETS = [
+    { title: 'Completed', kinds: ['done', 'canceled'] },
+    { title: 'Inactive', kinds: ['backlog', 'on_hold'] },
+    { title: 'Active', kinds: ['in_progress', 'waiting', 'blocked'] },
+] as const satisfies readonly { title: string; kinds: readonly StatusKind[] }[];
+
+export type PresetState = 'shown' | 'hidden' | 'mixed';
+
+export function presetState(hidden: readonly string[], kinds: readonly string[]): PresetState {
+    const shown = kinds.filter((kind) => !hidden.includes(kind)).length;
+    if (shown === kinds.length) {
+        return 'shown';
+    }
+    return shown === 0 ? 'hidden' : 'mixed';
+}
+
+// The hidden statuses with a group's shown, or hidden once all of them are shown already: a group
+// partly shown is shown whole, as a box for a whole list ticks the list rather than clears it.
+export function togglePreset(hidden: readonly string[], kinds: readonly string[]): string[] {
+    if (presetState(hidden, kinds) === 'shown') {
+        return [...hidden, ...kinds];
+    }
+    return hidden.filter((kind) => !kinds.includes(kind));
 }
 
 // A part of a title, and whether a search term covers it.

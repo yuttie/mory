@@ -112,6 +112,34 @@
                         <v-card min-width="14em">
                             <v-list class="py-0">
                                 <v-list-subheader>Statuses</v-list-subheader>
+                                <!-- A group at once: ticked while all its statuses are shown, half
+                                     ticked while some are, with their icons to say which. -->
+                                <v-list-item
+                                    v-for="(preset, index) of STATUS_PRESETS"
+                                    v-bind:key="preset.title"
+                                    v-bind:title="preset.title"
+                                    v-on:click="hiddenTreeStatuses = togglePreset(hiddenTreeStatuses, preset.kinds)"
+                                >
+                                    <template v-slot:prepend>
+                                        <v-checkbox-btn
+                                            v-bind:model-value="presetStates[index] === 'shown'"
+                                            v-bind:indeterminate="presetStates[index] === 'mixed'"
+                                            class="mr-1"
+                                            tabindex="-1"
+                                        />
+                                    </template>
+                                    <template v-slot:append>
+                                        <v-icon
+                                            v-for="kind of preset.kinds"
+                                            v-bind:key="kind"
+                                            v-bind:icon="statusIcon(kind, false)"
+                                            v-bind:color="statusColor(kind, taskSettings.resolvedStatusColors)"
+                                            size="small"
+                                            class="ml-1"
+                                        />
+                                    </template>
+                                </v-list-item>
+                                <v-divider />
                                 <v-list-item
                                     v-for="kind of STATUS_KINDS"
                                     v-bind:key="kind"
@@ -395,7 +423,15 @@ import {
 } from '@mdi/js';
 
 import { type TaskNode } from '@/task-forest';
-import { branchIds, filterTaskTree, searchTerms } from '@/task-tree-filter';
+import {
+    STATUS_PRESETS,
+    type PresetState,
+    branchIds,
+    filterTaskTree,
+    presetState,
+    searchTerms,
+    togglePreset,
+} from '@/task-tree-filter';
 import { statusColor } from '@/status-color';
 import { statusIcon } from '@/status-icon';
 import { taskRoute, tasksRoute } from '@/task-route';
@@ -673,6 +709,8 @@ const treeOpenNodes = computed<string[]>({
         }
     },
 });
+
+const presetStates = computed<PresetState[]>(() => STATUS_PRESETS.map((preset) => presetState(hiddenTreeStatuses.value, preset.kinds)));
 
 function toggleTreeStatus(kind: StatusKind) {
     hiddenTreeStatuses.value = hiddenTreeStatuses.value.includes(kind)

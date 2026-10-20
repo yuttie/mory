@@ -56,8 +56,13 @@ function statuses(page: Page): Locator {
     return page.getByRole('button', { name: 'Choose which statuses are shown' });
 }
 
+// A row of the open status menu, by its title alone: "Active" is in "Inactive" too.
 function status(page: Page, name: string): Locator {
-    return page.locator('.v-overlay--active .v-list-item').filter({ hasText: name });
+    return page.locator('.v-overlay--active .v-list-item').filter({ has: page.getByText(name, { exact: true }) });
+}
+
+function hiddenCount(page: Page): Locator {
+    return statuses(page).getByRole('status', { name: 'Statuses hidden' });
 }
 
 test('finds tasks by title and opens the tasks above them', async ({ context, page }) => {
@@ -112,7 +117,7 @@ test('leaves out the tasks of the statuses unticked, and remembers them', async 
     await statuses(page).click();
     await status(page, 'Done').click();
     await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Build the release', 'home']);
-    await expect(statuses(page).getByRole('status', { name: 'Statuses hidden' })).toHaveText('1');
+    await expect(hiddenCount(page)).toHaveText('1');
 
     // Every task here is To do or Done.
     await status(page, 'To do').click();
@@ -128,6 +133,34 @@ test('leaves out the tasks of the statuses unticked, and remembers them', async 
     await expect(rows(page)).toHaveText(['Launch', 'home']);
 });
 
+test('shows or hides a group of statuses at once', async ({ context, page }) => {
+    await mockBackend(context, NOTES);
+    await page.goto('/tasks-next');
+    await toggle(page, 'Launch');
+    await toggle(page, 'Ship');
+    await statuses(page).click();
+    const completed = status(page, 'Completed');
+
+    await completed.click();
+    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Build the release', 'home']);
+    await expect(hiddenCount(page)).toHaveText('2');
+    await expect(completed.getByRole('checkbox')).not.toBeChecked();
+    await expect(status(page, 'Done').getByRole('checkbox')).not.toBeChecked();
+    await expect(status(page, 'Canceled').getByRole('checkbox')).not.toBeChecked();
+    // The groups apart.
+    await expect(status(page, 'Active').getByRole('checkbox')).toBeChecked();
+    await expect(status(page, 'Inactive').getByRole('checkbox')).toBeChecked();
+
+    // Partly shown, a group is half ticked, and shown whole when chosen.
+    await status(page, 'Done').click();
+    await expect(completed.getByRole('checkbox')).toHaveAttribute('aria-checked', 'mixed');
+    await completed.click();
+    await expect(completed.getByRole('checkbox')).toBeChecked();
+    await expect(completed.getByRole('checkbox')).not.toHaveAttribute('aria-checked', 'mixed');
+    await expect(hiddenCount(page)).toBeHidden();
+    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Build the release', 'Write release notes', 'home']);
+});
+
 // The switch it replaced hid Done and Canceled.
 test('starts from what the switch for completed tasks hid', async ({ context, page }) => {
     await mockBackend(context, NOTES);
@@ -140,6 +173,6 @@ test('starts from what the switch for completed tasks hid', async ({ context, pa
     await toggle(page, 'Launch');
     await toggle(page, 'Ship');
     await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Build the release', 'home']);
-    await expect(statuses(page).getByRole('status', { name: 'Statuses hidden' })).toHaveText('2');
+    await expect(hiddenCount(page)).toHaveText('2');
     expect(await page.evaluate(() => localStorage.getItem('hide-completed-in-tree-view'))).toBeNull();
 });

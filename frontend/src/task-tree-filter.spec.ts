@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
 import type { TaskTreeItem } from '@/task-forest';
-import { branchIds, filterTaskTree, highlight, searchTerms, titleMatches } from '@/task-tree-filter';
+import { STATUS_KINDS } from '@/task';
+import {
+    STATUS_PRESETS,
+    branchIds,
+    filterTaskTree,
+    highlight,
+    presetState,
+    searchTerms,
+    titleMatches,
+    togglePreset,
+} from '@/task-tree-filter';
 
 function task(title: string | null, children?: TaskTreeItem[], status: unknown = { kind: 'todo' }): TaskTreeItem {
     const id = title ?? 'untitled';
@@ -169,5 +179,33 @@ describe('branchIds', () => {
     it('names every row holding others, at any depth', () => {
         const filtered = filterTaskTree([task('A', [task('B', [task('C')]), task('D')])], { query: 'c', hiddenStatuses: [] });
         expect(branchIds(filtered)).toEqual(['A', 'B']);
+    });
+});
+
+describe('STATUS_PRESETS', () => {
+    it('puts every status but To do in exactly one group', () => {
+        const grouped: string[] = STATUS_PRESETS.flatMap((preset) => preset.kinds);
+        expect(new Set(grouped).size).toBe(grouped.length);
+        expect(STATUS_KINDS.filter((kind) => !grouped.includes(kind))).toEqual(['todo']);
+    });
+});
+
+describe('presetState', () => {
+    it('tells a group shown, hidden or partly shown', () => {
+        expect(presetState([], ['done', 'canceled'])).toBe('shown');
+        expect(presetState(['backlog'], ['done', 'canceled'])).toBe('shown');
+        expect(presetState(['canceled', 'done'], ['done', 'canceled'])).toBe('hidden');
+        expect(presetState(['done'], ['done', 'canceled'])).toBe('mixed');
+    });
+});
+
+describe('togglePreset', () => {
+    it('hides a group all shown, keeping the other statuses hidden', () => {
+        expect(togglePreset(['backlog'], ['done', 'canceled'])).toEqual(['backlog', 'done', 'canceled']);
+    });
+
+    it('shows a group hidden or partly shown, whole', () => {
+        expect(togglePreset(['done', 'backlog', 'canceled'], ['done', 'canceled'])).toEqual(['backlog']);
+        expect(togglePreset(['blocked', 'todo'], ['in_progress', 'waiting', 'blocked'])).toEqual(['todo']);
     });
 });
