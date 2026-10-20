@@ -101,10 +101,20 @@ describe('highlight', () => {
         ]);
     });
 
+    // Searching on from inside the pair of code units such a character is would find it again, so
+    // a regression hangs this test rather than fails it.
     it('keeps a character outside the Basic Multilingual Plane whole', () => {
         expect(highlight('🎉 party', ['🎉'])).toEqual([
             { text: '🎉', match: true },
             { text: ' party', match: false },
+        ]);
+    });
+
+    it('marks the whole of what is drawn as one character', () => {
+        // A family emoji is three joined by zero-width joiners.
+        expect(highlight('👨\u200D👩\u200D👧 trip', ['👨'])).toEqual([
+            { text: '👨\u200D👩\u200D👧', match: true },
+            { text: ' trip', match: false },
         ]);
     });
 });

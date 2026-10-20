@@ -74,6 +74,8 @@ export function titleMatches(title: string | null, terms: readonly string[]): bo
     return matcher(terms)(title);
 }
 
+const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
 // The title, composed, cut where the terms start and end, every occurrence of each marked, overlaps
 // merged. Composed, it looks as it did.
 export function highlight(title: string, terms: readonly string[]): TitleSegment[] {
@@ -86,6 +88,14 @@ export function highlight(title: string, terms: readonly string[]): TitleSegment
         for (let found = pattern.exec(text); found !== null; found = pattern.exec(text)) {
             marked.fill(true, found.index, found.index + found[0].length);
             pattern.lastIndex = found.index + String.fromCodePoint(text.codePointAt(found.index)!).length;
+        }
+    }
+    // A mark ending inside what is drawn as one character, such as an emoji joined from several, is
+    // widened to the whole of it: cut, it would be drawn as its parts.
+    for (const { index, segment } of graphemes.segment(text)) {
+        const end = index + segment.length;
+        if (marked.slice(index, end).includes(true)) {
+            marked.fill(true, index, end);
         }
     }
     const segments: TitleSegment[] = [];
