@@ -24,7 +24,6 @@ test('reads the note a name with a fragment and a query names', async ({ context
 test('saves a note to the path its name gives', async ({ context, page }) => {
     const repository = await mockBackend(context, { [ODD_PATH]: '# Odd name\n' });
     await page.goto(`/note/${ENCODED_ODD_PATH}`);
-    // Loading the note resets the panes, so the switch waits for the note to be drawn.
     await expect(page.getByRole('heading', { name: 'Odd name' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Editor and viewer' }).click();

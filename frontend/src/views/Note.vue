@@ -593,6 +593,8 @@ async function loadNoteFromRoute() {
     errorText.value = '';
     void refreshBreadcrumbListing();
 
+    // The panes are chosen before the note is read rather than after, so a mode picked while it
+    // loads stands.
     if (route.query.mode === 'create') {
         // A newly created note has no saved copy on the server yet, so the
         // save button must stay enabled regardless of leftover state from
@@ -600,6 +602,8 @@ async function loadNoteFromRoute() {
         noteHasUpstream.value = false;
         notFound.value = false;
         loadFailed.value = false;
+        editorIsVisible.value = true;
+        viewerIsVisible.value = true;
 
         if (route.query.template) {
             await loadTemplate(route.query.template as string);
@@ -612,14 +616,10 @@ events:
 
 # ${notePath.value}`;
             initialText.value = text.value;
-            editorIsVisible.value = true;
             editableViewer.value?.focus();
         }
-        editorIsVisible.value = true;
-        viewerIsVisible.value = true;
     }
     else {
-        await load(notePath.value);
         if (/\.(md|markdown)$/i.test(notePath.value)) {
             // Show only viewer for files with rendering support
             editorIsVisible.value = false;
@@ -630,6 +630,7 @@ events:
             editorIsVisible.value = true;
             viewerIsVisible.value = false;
         }
+        await load(notePath.value);
     }
     focusOrBlurEditor();
 }
@@ -897,7 +898,6 @@ async function loadTemplate(path: string) {
     .then(async content => {
         text.value = content;
         initialText.value = text.value;
-        editorIsVisible.value = true;
         editableViewer.value?.focus();
 
         await editableViewer.value?.whenRendered();

@@ -42,8 +42,6 @@ test('opens, saves and closes a note\'s editor from the keyboard', async ({ cont
     const repository = await mockBackend(context, { 'projects/plan.md': '# Plan\n' });
     await page.goto('/note/projects/plan.md');
     await expect(page.getByRole('heading', { name: 'Plan' })).toBeVisible();
-    // Loaded, which shows the viewer alone: an editor opened before then is closed again.
-    await expect(page.getByRole('progressbar')).toBeHidden();
     const mode = (name: string) => page.getByRole('button', { name, exact: true });
     await page.keyboard.press('e');
     await expect(page.locator('.cm-content')).toBeFocused();
