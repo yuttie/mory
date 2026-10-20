@@ -12,6 +12,14 @@ const apiMocks = vi.hoisted(() => ({
     getNote: vi.fn<(path: string) => Promise<{ data: string }>>(),
     addNote: vi.fn<(path: string, content: string) => Promise<{ data: null }>>(
         async () => ({ data: null })),
+    // Through `getNote` and `addNote`, which the tests set up and look at: the version is all
+    // these add, and only the tests of the check look at that.
+    getFile: vi.fn(async (path: string): Promise<{ content: string | null; etag: string }> =>
+        ({ content: (await apiMocks.getNote(path)).data, etag: '"as-read"' })),
+    saveFileChecked: vi.fn(async (path: string, content: string, _expected: string): Promise<string | undefined> => {
+        await apiMocks.addNote(path, content);
+        return `"written-${apiMocks.addNote.mock.calls.length}"`;
+    }),
     renameNote: vi.fn(async () => ({ data: null })),
     deleteNote: vi.fn(async () => ({ data: true })),
     uploadFiles: vi.fn(async () => ({ data: [] })),
@@ -363,6 +371,43 @@ describe('saves made together', () => {
         const [, content] = apiMocks.addNote.mock.calls[1];
         expect(content).not.toContain('#b71c1c');
         expect(content).toContain('#00796b');
+    });
+});
+
+describe('a configuration changed since it was read', () => {
+    it('is written only over the version read', async () => {
+        const store = await storeWith(YAML_FILE);
+        await store.loadConfiguration();
+
+        await store.saveTaskDateColors({ deadline: '#b71c1c' });
+        await store.saveSubscriptions([]);
+
+        expect(apiMocks.saveFileChecked.mock.calls.map(([, , expected]) => expected))
+            .toEqual(['"as-read"', '"written-1"']);
+    });
+
+    it('is created only where there is none', async () => {
+        apiMocks.getNote.mockRejectedValue(missing());
+        const store = await freshStore();
+        await store.loadConfiguration();
+
+        await store.saveTaskDateColors({ deadline: '#b71c1c' });
+
+        expect(apiMocks.saveFileChecked.mock.calls[0][2]).toBe('absent');
+    });
+
+    // Edited on another device, or in the note view, since the settings read it: the whole file
+    // written from what the store holds would undo that edit.
+    it('is not written over', async () => {
+        const store = await storeWith(YAML_FILE);
+        await store.loadConfiguration();
+        apiMocks.saveFileChecked.mockRejectedValueOnce(Object.assign(new Error('Request failed with status code 412'), {
+            isAxiosError: true,
+            response: { status: 412 },
+        }));
+
+        await expect(store.saveTaskDateColors({ deadline: '#b71c1c' })).rejects.toThrow('changed since');
+        expect(store.taskDateColors).toEqual({});
     });
 });
 

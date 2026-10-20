@@ -29,7 +29,7 @@ categories:
 
 test('adds no calendar over a calendars.yaml that could not be read', async ({ context, page }) => {
     const repository = await mockBackend(context, { '.mory/calendars.yaml': CALENDARS });
-    await page.route(`${API_URL}notes/.mory/calendars.yaml`, (route) => route.request().method() === 'GET'
+    await page.route(`${API_URL}v2/files/.mory/calendars.yaml`, (route) => route.request().method() === 'GET'
         ? route.fulfill({ status: 500, json: {} })
         : route.fallback());
     await page.goto('/files');
