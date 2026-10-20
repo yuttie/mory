@@ -543,6 +543,24 @@ fn extract_metadata_finds_neither_in_a_note_the_markdown_parser_panics_on() {
 }
 
 #[test]
+fn extract_metadata_keeps_closed_frontmatter_whose_body_the_markdown_parser_panics_on() {
+    // A list item holding an unclosed code fence or HTML block, before one of the other kind of
+    // list. A closing fence may end in spaces or tabs.
+    for fence in ["---", "--- \t"] {
+        for body in ["1. ```\n- c\n", "- <!--x\n1. a\n"] {
+            let blob = format!("---\ntags: [work]\ntask:\n  status: todo\n{fence}\n# Release notes\n\n{body}");
+            let (metadata, title) = crate::extract_metadata(blob.as_bytes(), "text/markdown");
+            assert_eq!(
+                serde_json::to_value(metadata).unwrap(),
+                serde_json::json!({"tags": ["work"], "task": {"status": "todo"}}),
+                "{blob:?}",
+            );
+            assert!(title.is_none(), "{blob:?}: got {title:?}");
+        }
+    }
+}
+
+#[test]
 fn extract_metadata_bails_out_on_non_utf8_content() {
     // A JPEG header: not UTF-8, so neither metadata nor a title can be extracted.
     let (metadata, title) = crate::extract_metadata(&[0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10], "application/octet-stream");
@@ -978,6 +996,7 @@ async fn a_note_the_markdown_parser_panics_on_does_not_stop_a_sync() {
         &[
             ("draft.md", Some("---\ntitle: x\n\n-")),
             ("fine.md", Some("# Fine\n")),
+            ("task.md", Some("---\ntags: [work]\n---\n# Release notes\n\n1. ```\n- c\n")),
         ],
         1_000,
         0,
@@ -998,6 +1017,7 @@ async fn a_note_the_markdown_parser_panics_on_does_not_stop_a_sync() {
         vec![
             ("draft.md".to_owned(), "null".to_owned(), None),
             ("fine.md".to_owned(), "null".to_owned(), Some("Fine".to_owned())),
+            ("task.md".to_owned(), r#"{"tags":["work"]}"#.to_owned(), None),
         ],
     );
 }

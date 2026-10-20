@@ -1270,6 +1270,31 @@ fn markdown_tree(source: &str) -> Option<markdown::mdast::Node> {
     }
 }
 
+/// The tree of a note's frontmatter alone, for a note whose body markdown-rs panics on.
+///
+/// The frontmatter is what the listing knows a note by -- its task, tags and events -- and closed,
+/// it is not what markdown-rs panics on: the body after it is. So the note is parsed again up to
+/// the end of its closing fence, found as markdown-rs finds one: the three `-` or `+` the opening
+/// fence has, then only spaces or tabs to the end of the line. The title stays with the body.
+fn frontmatter_tree(text: &str) -> Option<markdown::mdast::Node> {
+    let is_fence = |line: &str, marker: &str| {
+        line.trim_end_matches(['\n', '\r'])
+            .strip_prefix(marker)
+            .is_some_and(|rest| rest.trim_end_matches([' ', '\t']).is_empty())
+    };
+    let mut lines = text.split_inclusive('\n');
+    let opening = lines.next()?;
+    let marker = ["---", "+++"].into_iter().find(|marker| is_fence(opening, marker))?;
+    let mut end = opening.len();
+    for line in lines {
+        end += line.len();
+        if is_fence(line, marker) {
+            return markdown_tree(&text[..end]);
+        }
+    }
+    None
+}
+
 /// Extract YAML frontmatter and the first top-level `#` heading from a blob.
 ///
 /// `mime_type` gates the markdown parse. Images are skipped even when their bytes are valid
@@ -1282,7 +1307,7 @@ fn extract_metadata(blob: &[u8], mime_type: &str) -> (Option<serde_yaml::Value>,
         return (None, None);
     }
     if let Ok(text) = std::str::from_utf8(blob) {
-        if let Some(node) = markdown_tree(text) {
+        if let Some(node) = markdown_tree(text).or_else(|| frontmatter_tree(text)) {
             let error_metadata = |message: String| {
                 let mut mapping = serde_yaml::Mapping::new();
                 mapping.insert("error".into(), message.into());
