@@ -2860,12 +2860,13 @@ mod models {
         // would answer it as a stale version rather than as what it is.
         check_path(path.as_bytes())?;
         let tree = repo.head()?.peel_to_tree()?;
-        // Only a file is a version to check against. A directory at the path is no file, and
-        // goes on to `commit_save` to be refused as what it is, rather than as a stale version.
+        // A directory at the path is no version to check against, and goes on to `commit_save`
+        // to be refused as what it is, rather than as a stale version. Anything else is one: a
+        // submodule taken for no file would pass `absent` and be replaced.
         let current = tree
             .get_path(std::path::Path::new(path))
             .ok()
-            .filter(|entry| entry.kind() == Some(git2::ObjectType::Blob))
+            .filter(|entry| entry.kind() != Some(git2::ObjectType::Tree))
             .map(|entry| entry.id());
         let matches = match current {
             Some(oid) => expected == format!("\"{oid}\""),

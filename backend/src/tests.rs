@@ -2704,6 +2704,27 @@ fn commit_save_checked_refuses_a_new_file_under_a_file() {
     assert_eq!(head_of(&fixture), before, "HEAD must not move");
 }
 
+/// A submodule is no file, but it is something `absent` says is not there.
+#[test]
+fn commit_save_checked_refuses_to_create_over_a_submodule() {
+    let fixture = write_fixture();
+    let head = fixture.repo.find_commit(head_of(&fixture)).unwrap();
+    let mut builder = fixture.repo.treebuilder(Some(&head.tree().unwrap())).unwrap();
+    builder.insert("sub", head.id(), 0o160000).unwrap();
+    let tree = fixture.repo.find_tree(builder.write().unwrap()).unwrap();
+    let signature = fixture.repo.signature().unwrap();
+    fixture.repo
+        .commit(Some("HEAD"), &signature, &signature, "Add a submodule", &tree, &[&head])
+        .unwrap();
+    let before = head_of(&fixture);
+
+    let written = crate::models::commit_save_checked(&fixture.repo, "sub", b"file\n", "Add", "absent")
+        .expect("a stale version is not an error");
+
+    assert_eq!(written, None);
+    assert_eq!(head_of(&fixture), before, "HEAD must not move");
+}
+
 #[test]
 fn commit_rename_refuses_to_replace_or_remove_what_is_there() {
     let fixture = write_fixture();
