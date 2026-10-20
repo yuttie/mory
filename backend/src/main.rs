@@ -1008,6 +1008,10 @@ async fn put_notes_path(
             tracing::info!("Refused to write {}: {:#}", path, e);
             (StatusCode::CONFLICT, e.to_string()).into_response()
         },
+        Err(e) if e.downcast_ref::<models::BadPath>().is_some() => {
+            tracing::info!("Refused to write {}: {:#}", path, e);
+            (StatusCode::BAD_REQUEST, e.to_string()).into_response()
+        },
         Err(e) => {
             tracing::error!("Failed to write {}: {:?}", path, e);
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
@@ -2715,6 +2719,48 @@ mod models {
 
     impl std::error::Error for PathConflict {}
 
+    /// A write refused because its path does not name one file, which the handlers answer with
+    /// 400.
+    #[derive(Debug)]
+    pub struct BadPath(String);
+
+    impl std::fmt::Display for BadPath {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str(&self.0)
+        }
+    }
+
+    impl std::error::Error for BadPath {}
+
+    /// Refuse a path the tree would store under another name.
+    ///
+    /// `write_tree` drops a leading `/`, so `/a` written beside `a` gives the tree two entries
+    /// for one name and keeps only one: `path_taken`, comparing bytes, sees no collision, and a
+    /// save or rename replaces or loses a file while reporting success. The other cases libgit2
+    /// refuses only once the index is half staged, or not until the tree is written.
+    fn check_path(path: &[u8]) -> std::result::Result<(), BadPath> {
+        let shown = || String::from_utf8_lossy(path).into_owned();
+        if path.is_empty() {
+            return Err(BadPath("A path is required".to_owned()));
+        }
+        if path.contains(&0) {
+            return Err(BadPath(format!("{} contains a null byte", shown())));
+        }
+        for component in path.split(|&byte| byte == b'/') {
+            if component.is_empty() {
+                return Err(BadPath(format!(
+                    "{} has an empty component: a path is relative to the repository root, and \
+                     names a file rather than a directory",
+                    shown(),
+                )));
+            }
+            if component == b"." || component == b".." || component.eq_ignore_ascii_case(b".git") {
+                return Err(BadPath(format!("{} must not contain ., .. or .git", shown())));
+            }
+        }
+        Ok(())
+    }
+
     /// What already stands where a file at some path would go.
     enum Taken {
         /// A file at the path itself, with its blob.
@@ -2789,6 +2835,7 @@ mod models {
         content: &[u8],
         message: &str,
     ) -> Result<Oid> {
+        check_path(path.as_bytes())?;
         let (mut index, head_commit) = head_index(repo)?;
         match path_taken(&index, path.as_bytes()) {
             None | Some(Taken::File(_)) => (),
@@ -2809,6 +2856,9 @@ mod models {
         message: &str,
         expected: &str,
     ) -> Result<Option<Oid>> {
+        // Before the version is looked up: `get_path` finds nothing at a malformed path, which
+        // would answer it as a stale version rather than as what it is.
+        check_path(path.as_bytes())?;
         let tree = repo.head()?.peel_to_tree()?;
         // Only a file is a version to check against. A directory at the path is no file, and
         // goes on to `commit_save` to be refused as what it is, rather than as a stale version.
@@ -2835,6 +2885,7 @@ mod models {
         to: &str,
         message: &str,
     ) -> Result<Option<Oid>> {
+        check_path(to.as_bytes())?;
         let (mut index, head_commit) = head_index(repo)?;
         let Some(mut entry) = find_index_entry(&index, from) else {
             return Ok(None);
@@ -2916,6 +2967,11 @@ mod models {
         for (path, content) in files {
             let blob_oid = Oid::hash_object(git2::ObjectType::Blob, content)
                 .context("failed to hash the blob")?;
+            // One bad name refuses its own file, not the whole upload.
+            if let Err(bad) = check_path(path) {
+                outcomes.push(Uploaded::Refused(bad.to_string()));
+                continue;
+            }
             let outcome = match path_taken(&index, path) {
                 None => {
                     repo.blob(content).context("failed to write the blob")?;
