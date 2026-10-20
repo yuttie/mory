@@ -71,6 +71,35 @@ test('says so when a note cannot be read', async ({ context, page }) => {
     await reported(page);
 });
 
+// Moving from one note to another that cannot be read kept the first one's text, under the second
+// one's path: edited and saved, it went over the second.
+test('saves nothing over a note that could not be read', async ({ context, page }) => {
+    const repository = await mockBackend(context, {
+        'notes/first.md': '# First\n\nSee [the second](second.md).\n',
+        'notes/second.md': '# Second\n',
+    });
+    await page.route(`${API_URL}notes/notes/second.md`, (route) => route.request().method() === 'GET'
+        ? route.fulfill({ status: 500, json: {} })
+        : route.fallback());
+    await page.goto('/note/notes/first.md');
+    await expect(page.getByRole('heading', { name: 'First' })).toBeVisible();
+
+    await page.getByRole('link', { name: 'the second' }).click();
+    await expect(page).toHaveURL(/\/note\/notes\/second\.md$/);
+    await reported(page);
+    await expect(page.getByRole('heading', { name: 'First' })).toBeHidden();
+
+    await page.getByRole('button', { name: 'Editor and viewer' }).click();
+    await page.locator('.cm-content').click();
+    await page.keyboard.type('More text.');
+    await page.keyboard.press('Control+s');
+    // A disabled icon button says so by its class alone, and a click on it is still a click.
+    await expect(page.getByTitle('Save')).toHaveClass(/v-icon-btn--disabled/);
+    await page.getByTitle('Save').click({ force: true });
+    await page.waitForTimeout(500);
+    expect(repository.writes).toEqual([]);
+});
+
 for (const address of ['/files', '/']) {
     test(`says so when ${address} cannot list the notes`, async ({ context, page }) => {
         await mockBackend(context, {});
