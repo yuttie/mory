@@ -717,11 +717,11 @@ const filteredTree = computed(() => {
 // The rows alone, for what depends on them and not on which of them were found.
 const filteredForestWithTags = computed(() => filteredTree.value.items);
 
-// A search opens every branch it keeps, each being there for a task found under it. Opened again
-// only when the branches change, so a branch closed meanwhile stays closed while what was found
-// stays the same.
+// A search opens every branch it keeps, each being there for a task found under it. So does the
+// next search, and a change to the notes that changes which branches it keeps. Otherwise a branch
+// closed meanwhile stays closed, when a save only reorders the branches too.
 const searchBranches = computed<string[]>(() => treeTerms.value.length > 0 ? branchIds(filteredForestWithTags.value) : []);
-watch(() => searchBranches.value.join('\n'), () => {
+watch(() => [treeSearch.value, ...[...searchBranches.value].sort()].join('\n'), () => {
     searchOpenNodes.value = searchBranches.value;
 });
 

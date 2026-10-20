@@ -179,6 +179,19 @@ test('gives the tree back as it was once the search is cleared', async ({ contex
     await expect(rows(page)).toHaveText(['Launch', 'home', 'Water the plants', 'Plan the release party']);
 });
 
+// What a new search finds is shown, though it keeps the branches the last one did.
+test('opens again for a new search a branch closed during the last', async ({ context, page }) => {
+    await mockBackend(context, NOTES);
+    await page.goto('/tasks-next');
+    await search(page).fill('write');
+    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Write release notes']);
+    await toggle(page, 'Ship');
+    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship']);
+
+    await search(page).fill('writ');
+    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Write release notes']);
+});
+
 // The drop leaves the same branches holding what was found, so the search would not open them anew.
 test('opens the task a drop moved during a search where it went', async ({ context, page }) => {
     const repository = await mockBackend(context, NOTES);
