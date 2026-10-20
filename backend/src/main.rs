@@ -1278,9 +1278,10 @@ fn extract_metadata(blob: &[u8], mime_type: &str) -> (Option<serde_yaml::Value>,
                         // Read back as the listing reads it, so whatever the sync stores the
                         // listing can read: YAML nested 127 deep is within serde_yaml's limit
                         // but past serde_json's, and every read of a row it could not read
-                        // would fail.
-                        match serde_json::to_string(&doc).and_then(|text| serde_json::from_str(&text)) {
-                            Ok(listed) => Some(listed),
+                        // would fail. `doc` itself is what is stored, not what was read back:
+                        // serde_json reads some floats back a digit off what it wrote.
+                        match serde_json::to_string(&doc).and_then(|text| serde_json::from_str::<serde_yaml::Value>(&text)) {
+                            Ok(_) => Some(doc),
                             Err(err) => error_metadata(format!("The frontmatter cannot be listed: {}", err)),
                         }
                     },

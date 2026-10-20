@@ -472,7 +472,7 @@ fn extract_metadata_leaves_out_only_the_keys_json_cannot_hold() {
 fn extract_metadata_lists_any_other_key_as_json_writes_it() {
     // serde_json writes a number or a boolean key as a string, and a date or a quoted "null" is
     // one already, so frontmatter the cache could already hold is listed as it was.
-    let frontmatter = "1: a\ntrue: b\n1.5: c\n0x1F: d\n2026-10-20: e\n\"null\": f\nx: !tag g\n";
+    let frontmatter = "1: a\ntrue: b\n1.5: c\n0x1F: d\n2026-10-20: e\n\"null\": f\nx: !tag g\ny: 1.602176634e-19\n";
     let original: serde_yaml::Value = serde_yaml::from_str(frontmatter).unwrap();
     let (metadata, _) = crate::extract_metadata(format!("---\n{frontmatter}---\n").as_bytes(), "text/markdown");
     assert_eq!(
