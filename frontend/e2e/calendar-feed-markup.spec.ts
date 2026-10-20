@@ -3,7 +3,9 @@ import { API_URL, mockBackend } from './backend';
 
 // A subscribed calendar is someone else's: what its events say has to reach the page as what they
 // say, and nothing in them may run as mory, where the session token is in reach.
-const RUNS = 'window.__ran = true';
+// Without spaces, which no link destination may hold: a link of `javascript:window.__ran = true`
+// was no link at all, and tested nothing.
+const RUNS = 'window.__ran=true';
 const NAME = `Sync <img src="y" onerror="${RUNS}">`;
 
 function today(): { year: number; month: string; day: string; date: string } {
@@ -39,7 +41,14 @@ test('an imported event shows what its feed says and runs none of it', async ({ 
             note: `Agenda <b>first</b> <img src="x" onerror="${RUNS}"> [notes](javascript:${RUNS})`,
             url: `javascript:${RUNS}`,
         }],
-        series: {},
+        // What the feed says that mory has no key for, which conversion writes into the note's body.
+        series: {
+            'sync@example.com': {
+                name: NAME,
+                start: date,
+                unmapped: { comment: `Minutes <img src="z" onerror="${RUNS}"> [minutes](javascript:${RUNS})` },
+            },
+        },
         truncated: false,
     } }));
 
@@ -70,6 +79,8 @@ test('an imported event shows what its feed says and runs none of it', async ({ 
 
     await page.goto(`/note/${path}`);
     await expect(page.getByRole('heading', { name: NAME })).toBeVisible();
+    await expect(page.getByText('[minutes](javascript:', { exact: false }).last()).toBeVisible();
     await settled(page, 'img');
+    await expect(page.locator('a[href^="javascript:"]')).toHaveCount(0);
     expect(await ran(page)).toBeUndefined();
 });
