@@ -204,6 +204,19 @@ describe('eventsFromEntries', () => {
         expect(errors).toEqual([['end', 'nonsense', 'Broken', 'a.md', null]]);
     });
 
+    it('reports the end the occurrences of a series inherit as the event writes it', () => {
+        const { errors } = derive([
+            entry('a.md', {
+                Broken: { start: '2024-05-01 09:00', end: 'nonsense', repeat: { freq: 'daily', count: 2 } },
+            }),
+        ]);
+
+        expect(errors).toEqual([
+            ['end', 'nonsense', 'Broken', 'a.md', null],
+            ['end', 'nonsense', 'Broken', 'a.md', null],
+        ]);
+    });
+
     it('ignores entries with no metadata and notes with no events', () => {
         const { events, errors } = derive([
             entry('image.png', null),
