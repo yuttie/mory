@@ -244,6 +244,12 @@ function routeOf(path: string) {
 // read is caught on its own: one that fails leaves the checks on what the others found, and the
 // page says so rather than staying in its checking state.
 async function check(): Promise<void> {
+    // The button's loading state stops a click but not Enter or Space on it. A second run would
+    // clear what the first is about to report, and the first, ending, would end the second's
+    // checking state.
+    if (checking.value) {
+        return;
+    }
     checking.value = true;
     listingError.value = null;
     calendarsReadError.value = null;
