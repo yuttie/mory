@@ -40,6 +40,10 @@
         /* An icon, and the smaller one a button holds beside or instead of a label. */
         --mory-icon-size: 20px;
         --mory-button-icon-size: 16px;
+        /* How far a field's box starts from its edge when an icon stands before it: the icon, and
+           the gap Vuetify puts after a field's prepend slot. That gap is a SASS variable,
+           `$input-affix-margin-inside`, which no rule here can read, so it is restated. */
+        --mory-field-prepend-width: calc(var(--mory-icon-size) + 16px);
         /* A progress bar with its value written on it: tall enough for the text. */
         --mory-labelled-progress-height: 24px;
         /* .v-btn's own radius, which a list item and an icon button both take. */

@@ -362,32 +362,36 @@
                             <v-icon>{{ mdiTagMultipleOutline }}</v-icon>
                         </template>
                     </v-combobox>
-                    <!-- Status -->
-                    <div class="d-flex align-center">
-                        <v-select
-                            v-model="selectedKind"
-                            v-bind:items="statusOptions"
-                            v-bind:error-messages="statusGateError ? [statusGateError] : []"
-                            label="Status"
-                            item-title="label"
-                            item-value="kind"
-                        >
-                            <template v-slot:prepend>
-                                <v-icon>{{ mdiTrafficLightOutline }}</v-icon>
-                            </template>
-                        </v-select>
-                        <v-icon-btn
-                            v-bind:icon="statusOptionRestricted ? mdiLock : mdiLockOpenVariant"
-                            v-bind:title="statusOptionRestricted ? 'Show all statuses' : 'Show only the statuses this task can move to'"
-                            v-bind:active="statusOptionRestricted ? undefined : true"
-                            v-on:click="statusOptionRestricted = !statusOptionRestricted"
-                        ></v-icon-btn>
-                    </div>
+                    <!-- Status. The lock is in the field's append slot rather than beside the
+                         input, where a row centring the two centred it on the field and the space
+                         kept under it for a message together. The slot is as tall as the field
+                         alone, and Vuetify centres what it holds. -->
+                    <v-select
+                        v-model="selectedKind"
+                        v-bind:items="statusOptions"
+                        v-bind:error-messages="statusGateError ? [statusGateError] : []"
+                        label="Status"
+                        item-title="label"
+                        item-value="kind"
+                    >
+                        <template v-slot:prepend>
+                            <v-icon>{{ mdiTrafficLightOutline }}</v-icon>
+                        </template>
+                        <template v-slot:append>
+                            <v-icon-btn
+                                v-bind:icon="statusOptionRestricted ? mdiLock : mdiLockOpenVariant"
+                                v-bind:title="statusOptionRestricted ? 'Show all statuses' : 'Show only the statuses this task can move to'"
+                                v-bind:active="statusOptionRestricted ? undefined : true"
+                                v-on:click="statusOptionRestricted = !statusOptionRestricted"
+                                v-on:keydown="keepKeyFromStatusSelect"
+                            ></v-icon-btn>
+                        </template>
+                    </v-select>
                     <!-- Status-specific fields -->
                     <TaskStatusFields
                         v-model="form.status"
                         v-bind:known-contacts="knownContacts"
-                        class="ml-10"
+                        class="under-field"
                     />
                     <v-select
                         v-model="form.importance"
@@ -428,9 +432,12 @@
                             <v-icon>{{ mdiCalendarOutline }}</v-icon>
                         </template>
                     </DateSelector>
-                    <!-- Due date -->
+                    <!-- Due date. Set, it has its alarms under it, so it keeps no empty row for a
+                         message between the two: the alarms would sit nearer the next date than
+                         their own. Empty, the row is the space before the next field. -->
                     <DateSelector
                         v-bind:model-value="form.due_by"
+                        v-bind:hide-details="form.due_by === '' ? false : 'auto'"
                         v-on:update:model-value="form.due_by = $event ?? ''"
                         v-bind:rules="[() => taskDateRule(form.due_by)]"
                         label="Due date (soft target)"
@@ -443,10 +450,12 @@
                         v-if="form.due_by !== ''"
                         v-model="form.due_by_alarms"
                         v-bind:fallback="calendars.effectiveAlarmDefaults.dueBy"
+                        class="under-field"
                     ></InheritableAlarms>
-                    <!-- Deadline -->
+                    <!-- Deadline, kept as the due date is. -->
                     <DateSelector
                         v-bind:model-value="form.deadline"
+                        v-bind:hide-details="form.deadline === '' ? false : 'auto'"
                         v-on:update:model-value="form.deadline = $event ?? ''"
                         v-bind:rules="[() => taskDateRule(form.deadline)]"
                         label="Deadline (hard cutoff)"
@@ -459,6 +468,7 @@
                         v-if="form.deadline !== ''"
                         v-model="form.deadline_alarms"
                         v-bind:fallback="calendars.effectiveAlarmDefaults.deadline"
+                        class="under-field"
                     ></InheritableAlarms>
                     <v-alert v-for="problem of Object.values(plans.errors)" v-bind:key="problem" type="warning">{{ problem }}</v-alert>
                     <v-list-subheader>Planned days</v-list-subheader>
@@ -760,6 +770,17 @@ const selectedKind = computed<StatusKind>({
         form.status = makeDefaultStatus(k);
     },
 });
+
+// The lock sits inside the Status select, which listens for keys on the whole of it: Enter or Space
+// on the lock would open the menu rather than press the lock, an arrow would open it too, and a
+// letter would pick the status it starts. Escape, Tab and keys held with Ctrl or Meta go on, since
+// the dialog closes on Escape and the editor saves on Ctrl+S, both listening on the window.
+function keepKeyFromStatusSelect(e: KeyboardEvent): void {
+    if (e.key === 'Escape' || e.key === 'Tab' || e.ctrlKey || e.metaKey) {
+        return;
+    }
+    e.stopPropagation();
+}
 
 const statusGateError = computed<string | undefined>(() => {
     const from = initialForm.value.status;
@@ -1235,6 +1256,13 @@ defineExpose({
 .props-pane {
     max-width: 350px;
     overflow-y: auto;
+}
+
+// What belongs to the field above it, such as a date's alarms, starts where that field's box does,
+// past its icon, so the column of icons marks where each field begins and the rest reads as part of
+// the field before it.
+.under-field {
+    margin-inline-start: var(--mory-field-prepend-width);
 }
 
 // Sized from zero rather than from its content: the editor's lines and the rendered note are wider
