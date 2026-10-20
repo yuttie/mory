@@ -79,6 +79,25 @@ test('leaves a note unsaved under a task created with Ctrl+S', async ({ context,
     expect(repository.writes.map(({ path }) => path)).toEqual([expect.stringMatching(new RegExp(`^\\.tasks/${PROJECT}/[0-9a-f-]{36}\\.md$`))]);
 });
 
+// The note saves with Ctrl+S, and a dialog over it without a Ctrl+S of its own left the key to the
+// browser, which offered to save the page. Caps Lock makes the key an `S`.
+test('keeps Ctrl+S from the browser under a dialog over a note', async ({ context, page }) => {
+    await mockBackend(context, { 'projects/plan.md': '# Plan\n' });
+    await page.goto('/note/projects/plan.md');
+    await expect(page.getByRole('heading', { name: 'Plan' })).toBeVisible();
+    await expect(page.getByRole('progressbar')).toBeHidden();
+    await page.getByRole('button', { name: 'Rename', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'New path' })).toBeFocused();
+
+    const taken = (key: string) => page.evaluate((key) => {
+        const event = new KeyboardEvent('keydown', { key, ctrlKey: true, bubbles: true, cancelable: true });
+        document.activeElement!.dispatchEvent(event);
+        return event.defaultPrevented;
+    }, key);
+    expect(await taken('s')).toBe(true);
+    expect(await taken('S')).toBe(true);
+});
+
 // Each view's own shortcuts wait as the note's do, and work again once the dialog is gone.
 for (const address of ['/files', '/search']) {
     test(`leaves the slash on ${address} to a dialog over it`, async ({ context, page }) => {

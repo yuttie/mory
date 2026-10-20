@@ -166,6 +166,27 @@ test('saves a task with Ctrl+S', async ({ context, page }) => {
     expect(repository.writes).toHaveLength(3);
 });
 
+// A tag typed and not yet entered is held in its field until the field loses the focus, which a
+// click on Save takes from it: Ctrl+S found nothing to save. Another task's tag is offered as the
+// tag is typed, and a field showing suggestions takes back a focus that went nowhere.
+test('saves a tag still being typed with Ctrl+S', async ({ context, page }) => {
+    const tagged = ['---', 'tags: [errands]', 'task:', '  status:', '    kind: todo', '---', '', '# Errand', ''].join('\n');
+    const repository = await mockBackend(context, { ...NOTES, [`.tasks/${ERRAND}.md`]: tagged });
+    await page.goto(`/tasks-next/${PROJECT}/descendants/status?task=${STEP}`);
+    await expect(title(page)).toHaveValue('Step');
+    const tags = dialog(page).getByRole('combobox', { name: 'Tags' });
+    await tags.click();
+    await page.keyboard.type('errand');
+    await expect(page.locator('.v-overlay--active .v-list-item').filter({ hasText: 'errands' })).toBeVisible();
+
+    await page.keyboard.press('Control+s');
+
+    await expect.poll(() => repository.writes.length).toBe(1);
+    expect(repository.writes[0].content).toMatch(/^tags:\n\s*- errand$/m);
+    await expect(saving(page)).toHaveAttribute('aria-hidden', 'true');
+    await expect(tags).toBeFocused();
+});
+
 // Written back as it was read, and on one line, where a second would be read back as the note.
 test('keeps a title\'s Markdown, on one line', async ({ context, page }) => {
     const repository = await mockBackend(context, { ...NOTES, [`.tasks/${ERRAND}.md`]: note('Buy *the* `milk`') });

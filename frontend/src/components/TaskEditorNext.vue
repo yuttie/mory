@@ -527,7 +527,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive, computed, watch, toRef, onMounted, onUnmounted, type ComponentPublicInstance } from 'vue';
+import { ref, reactive, computed, watch, toRef, nextTick, onMounted, onUnmounted, type ComponentPublicInstance } from 'vue';
 import type { VMenu } from 'vuetify/components';
 
 import {
@@ -571,7 +571,7 @@ import { useFetchTask } from '@/composables/fetchTask';
 import { useLocalStorage } from '@/composables/localStorage';
 import { useConfigValue } from '@/config';
 import { required } from '@/rules';
-import { useShortcuts } from '@/keyboard';
+import { isSaveKey, useShortcuts } from '@/keyboard';
 import dayjs from 'dayjs';
 import { useCalendarsStore } from '@/stores/calendars';
 
@@ -971,11 +971,31 @@ function onBeforeunload(e: any) {
 // editor, and a date picker or the assessment is drawn outside it. Taken from the browser even with
 // nothing to save, whose Save would only save the page.
 function onKeydown(e: KeyboardEvent): void {
-    if (!e.ctrlKey || e.key !== 's') {
+    if (!isSaveKey(e)) {
         return;
     }
     e.preventDefault();
-    void onSave();
+    void commitTyping().then(onSave);
+}
+
+// A tag or an alarm being typed is held in its field until the field loses the focus, as it does to
+// a click on Save: Ctrl+S would otherwise save without it, or find nothing to save. The focus goes
+// to the dialog around the editor rather than nowhere, which a field showing its suggestions takes
+// back, and then returns.
+async function commitTyping(): Promise<void> {
+    const focused = document.activeElement;
+    if (!(focused instanceof HTMLElement) || focused.closest('.v-combobox') === null) {
+        return;
+    }
+    const around = rootRef.value?.$el.closest('.v-overlay__content');
+    if (around instanceof HTMLElement) {
+        around.focus({ preventScroll: true });
+    }
+    else {
+        focused.blur();
+    }
+    await nextTick();
+    focused.focus({ preventScroll: true });
 }
 
 // Save/Delete
