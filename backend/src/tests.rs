@@ -3010,6 +3010,24 @@ fn commit_save_checked_takes_the_weak_etag_a_compressing_proxy_passes_on() {
     assert_eq!(head_of(&fixture), before);
 }
 
+/// A browser revalidates a file with the tag it was given, which behind a proxy that gzipped the
+/// file is the weak one the proxy passed on: `If-None-Match` compares weakly.
+#[test]
+fn holds_version_compares_if_none_match_weakly() {
+    use axum::http::{header, HeaderMap, HeaderValue};
+    let held = |value: &str| {
+        let mut headers = HeaderMap::new();
+        headers.insert(header::IF_NONE_MATCH, HeaderValue::from_str(value).unwrap());
+        crate::v2::holds_version(&headers, "\"0123\"")
+    };
+    assert!(held("\"0123\""));
+    assert!(held("W/\"0123\""));
+    assert!(held("\"4567\", W/\"0123\""));
+    assert!(!held("W/\"4567\""));
+    assert!(!held("0123"));
+    assert!(!crate::v2::holds_version(&HeaderMap::new(), "\"0123\""));
+}
+
 /// `absent` used to pass here: HEAD has nothing at `note.md/draft.md`, only a file above it.
 #[test]
 fn commit_save_checked_refuses_a_new_file_under_a_file() {
