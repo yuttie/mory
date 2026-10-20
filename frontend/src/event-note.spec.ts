@@ -210,6 +210,37 @@ describe('what the feed wrote', () => {
         expect(html).not.toContain('<svg');
     });
 
+    // Inside a quote or a list item a fence opens as well as at the margin, and four backticks
+    // with the first escaped still left three.
+    it('opens no diagram from a fence anywhere a line can hold one', async () => {
+        for (const comment of ['> ```mermaid\n> graph TD\n> ```', '- ````mermaid\n  graph TD\n  ````']) {
+            const note = buildSeriesNote(occurrence, { ...hostileSeries, unmapped: { comment } });
+            const html = String(await renderMarkdown(note.content));
+            expect(html).not.toContain('mermaid"');
+            expect(html).not.toContain('<code');
+        }
+    });
+
+    // A bare address is a link as written, backslashes and all.
+    it('leaves an address in the imported details as it was written', async () => {
+        const unmapped = { attach: 'https://www.example.edu/~smith/syllabus.pdf', comment: 'Use `make`, ~not~ this.' };
+        const note = buildSeriesNote(occurrence, { ...hostileSeries, unmapped });
+        const html = String(await renderMarkdown(note.content));
+        expect(html).toContain('href="https://www.example.edu/~smith/syllabus.pdf"');
+        expect(html).toContain('<code>make</code>');
+    });
+
+    // A line break at the margin ends the list, and what follows heads the rest of the note.
+    it('keeps a value of several lines in its item', async () => {
+        const unmapped = { comment: 'First line\n\n# Not a heading\n---', transp: 'OPAQUE' };
+        const note = buildSeriesNote(occurrence, { ...hostileSeries, unmapped });
+        const html = String(await renderMarkdown(note.content));
+        expect(html.match(/<ul\b/g)).toHaveLength(1);
+        // Loose, for the blank line in it, so each item is a paragraph.
+        expect(html).toMatch(/First line[^]*Not a heading[^]*<\/li>\s*<li\b[^>]*>\s*<p\b[^>]*>transp: OPAQUE<\/p>/);
+        expect(note.content).not.toMatch(/ +$/m);
+    });
+
     it('stays readable as the file it is', () => {
         const content = buildOccurrenceNote(hostile, hostileSeries).content;
         expect(content).toContain('\n# \\<img src=x onerror=alert(1)> sync\n');
