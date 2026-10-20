@@ -280,8 +280,11 @@ fn mcp_routes(oauth_state: oauth::OauthState) -> Router {
         )
 }
 
-/// Bumping this drops and refills the `entry` table on the next start.
-const ENTRY_SCHEMA_VERSION: i64 = 2;
+/// Bumping this drops and refills the `entry` table on the next start. A row outlives the moried
+/// that wrote it for as long as its blob is unchanged, so this moves whenever what a row holds for
+/// a blob does, as well as when its columns do: 3 refilled the rows written before keys JSON cannot
+/// hold were left out of the listing one by one.
+const ENTRY_SCHEMA_VERSION: i64 = 3;
 
 async fn init_cache_database(
     conn: &mut SqliteConnection,
@@ -2739,9 +2742,10 @@ mod models {
         let tz = FixedOffset::east_opt(row.get("tz_offset")).unwrap();
         let time = tz.timestamp_opt(row.get("time"), 0).unwrap();
         let path: PathBuf = row.get::<String, _>("path").into();
-        // A row outlives the moried that wrote it, as long as its blob is unchanged, and one an
-        // older moried wrote may not read: one holding keys named alike, such as `1` and `"1"`,
-        // which serde_yaml refuses. A panic here would fail every read of the whole listing.
+        // A row outlives the moried that wrote it, as long as its blob is unchanged and
+        // `ENTRY_SCHEMA_VERSION` stays, and one an older moried wrote may not read: one holding
+        // keys named alike, such as `1` and `"1"`, which serde_yaml refuses. A panic here would
+        // fail every read of the whole listing.
         let metadata = match serde_json::from_str(&row.get::<String, _>("metadata")) {
             Ok(metadata) => metadata,
             Err(e) => {

@@ -922,6 +922,42 @@ async fn cached_rows_carry_the_blob_id_and_never_a_null_metadata() {
 }
 
 #[tokio::test]
+async fn a_row_schema_2_left_is_refilled_although_its_blob_is_unchanged() {
+    // A sync reuses a row whose blob is unchanged, so a row derived before keys were named as
+    // JSON names them would otherwise stay as it was.
+    let fixture = RepoFixture::new();
+    let head = fixture.commit_at(
+        "refs/heads/main",
+        &[],
+        &[("duplicate-key.md", Some("---\n1: a\n\"1\": b\n---\n"))],
+        1_000,
+        0,
+        "base",
+    );
+    fixture.set_head("refs/heads/main");
+    let mut conn = test_cache_db().await;
+    sync_to(&mut conn, &fixture, head).await.unwrap();
+    // As moried left the row at schema 2.
+    sqlx::query(r#"UPDATE entry SET metadata = '{"1":"a","1":"b"}';"#)
+        .execute(&mut conn)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE cache_state SET value = 2 WHERE key = 'schema_version';")
+        .execute(&mut conn)
+        .await
+        .unwrap();
+
+    crate::init_cache_database(&mut conn).await.unwrap();
+    sync_to(&mut conn, &fixture, head).await.unwrap();
+
+    let metadata: String = sqlx::query_scalar("SELECT metadata FROM entry;")
+        .fetch_one(&mut conn)
+        .await
+        .unwrap();
+    assert_eq!(metadata, r#"{"1":"b"}"#);
+}
+
+#[tokio::test]
 async fn a_cached_row_the_listing_cannot_read_is_listed_as_an_error() {
     // As a moried that wrote keys named alike as they came left the row.
     let mut conn = test_cache_db().await;
