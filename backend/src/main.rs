@@ -1343,7 +1343,9 @@ async fn grep_bare_repo(
         .arg(pattern)
         .arg(revision)
         .arg("--")
-        .env("LC_ALL", "C")
+        // As grep mode runs it, or this route would still match a byte where the pattern says a
+        // character, and report a malformed pattern as a failure of its own.
+        .env("LC_ALL", search::GREP_LOCALE)
         .output()
         .await
         .map_err(|err| GrepBareError::Internal(err.into()))?;
@@ -1352,8 +1354,7 @@ async fn grep_bare_repo(
         return Ok(Vec::new());
     }
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        if stderr.contains("Invalid regular expression") || stderr.contains("invalid regex") {
+        if search::is_invalid_pattern(&String::from_utf8_lossy(&output.stderr)) {
             return Err(GrepBareError::Invalid);
         }
         return Err(GrepBareError::Internal(anyhow::anyhow!(

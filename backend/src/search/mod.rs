@@ -2350,6 +2350,21 @@ enum GrepError {
     Internal(anyhow::Error),
 }
 
+/// The locale `git grep` runs in. A character, not a byte, for `.` and `[...]`: most of the notes
+/// are Japanese, and in the C locale `日.語` cannot match 日本語. C.UTF-8 has no translations, so
+/// git's messages, which `is_invalid_pattern` reads, stay as they are.
+pub(crate) const GREP_LOCALE: &str = "C.UTF-8";
+
+/// Whether `git grep` failed for the pattern it was given, by what it said on stderr.
+///
+/// Git reports every pattern it cannot compile as `fatal: -e option, '<pattern>': <why>`, and the
+/// why is "Unmatched [", "Trailing backslash" and others as often as "Invalid regular expression".
+pub(crate) fn is_invalid_pattern(stderr: &str) -> bool {
+    stderr.starts_with("fatal: -e option")
+        || stderr.contains("Invalid regular expression")
+        || stderr.contains("invalid regex")
+}
+
 async fn grep_at(
     git_dir: &str,
     pattern: &str,
@@ -2367,10 +2382,7 @@ async fn grep_at(
         .arg(pattern)
         .arg(revision.to_string())
         .arg("--")
-        // A character, not a byte, for `.` and `[...]`: most of the notes are Japanese, and in the
-        // C locale `日.語` cannot match 日本語. C.UTF-8 has no translations, so git's messages, which
-        // the error handling below reads, stay as they are.
-        .env("LC_ALL", "C.UTF-8")
+        .env("LC_ALL", GREP_LOCALE)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true)
@@ -2410,14 +2422,7 @@ async fn grep_at(
         return Ok(Vec::new());
     }
     if !status.success() {
-        let stderr = String::from_utf8_lossy(&stderr);
-        // Git reports every pattern it cannot compile as `fatal: -e option, '<pattern>': <why>`,
-        // and the why is "Unmatched [", "Trailing backslash" and others as often as "Invalid
-        // regular expression".
-        let invalid = stderr.starts_with("fatal: -e option")
-            || stderr.contains("Invalid regular expression")
-            || stderr.contains("invalid regex");
-        if invalid {
+        if is_invalid_pattern(&String::from_utf8_lossy(&stderr)) {
             return Err(GrepError::Invalid);
         }
         return Err(GrepError::Internal(anyhow::anyhow!(
@@ -2611,9 +2616,13 @@ mod tests {
         let repo = Repository::init(directory.path()).unwrap();
         let commit = commit_file(&repo, directory.path(), "日本語のメモ\n", &[]);
         let path = directory.path().to_str().unwrap();
-        for pattern in ["日.語", "^.本", "[本]語", "日\\(本\\|英\\)語"] {
+        // Each fails byte by byte. A bracket of one character is three bytes in C, so `[本]語`
+        // and `日\(本\|英\)語` match there too, by 本's last byte, and test nothing.
+        for pattern in ["日.語", "^.本", "日[本]語"] {
             assert_eq!(grep_at(path, pattern, commit, 10).await.unwrap().len(), 1, "{pattern}");
         }
+        // 日 starts with the same byte as 本.
+        assert!(grep_at(path, "^[本]", commit, 10).await.unwrap().is_empty());
     }
 
     #[tokio::test]
