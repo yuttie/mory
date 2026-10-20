@@ -15,8 +15,10 @@
             <v-icon v-if="item.metadata?.tag_group">
                 {{ mdiTag }}
             </v-icon>
+            <!-- A folder for the subtasks the task holds, not the ones the row shows, which a
+                 search or the statuses shown may leave out. -->
             <v-icon v-else v-bind:color="statusColor(item.metadata?.task?.status?.kind, taskSettings.resolvedStatusColors)">
-                {{ statusIcon(item.metadata?.task?.status?.kind, item.children !== undefined) }}
+                {{ statusIcon(item.metadata?.task?.status?.kind, tasks.childrenOf(item.uuid).length > 0) }}
             </v-icon>
         </template>
         <template v-slot:title="{ item }">
@@ -25,7 +27,19 @@
                 v-bind:class="{ 'text-disabled': !item.metadata?.tag_group && !tasks.ownUrgency(item.uuid).actionable }"
                 v-bind:style="{ textDecorationLine: item.metadata?.task?.status?.kind === 'canceled' ? 'line-through' : 'none' }"
             >
-                {{ item.title }}
+                <template v-if="highlight !== undefined && highlight.length > 0 && found?.has(item.uuid)">
+                    <template
+                        v-for="(segment, index) of highlightTitle(item.title ?? '', highlight)"
+                        v-bind:key="index"
+                    >
+                        <mark
+                            v-if="segment.match"
+                            class="task-tree-match"
+                        >{{ segment.text }}</mark>
+                        <template v-else>{{ segment.text }}</template>
+                    </template>
+                </template>
+                <template v-else>{{ item.title }}</template>
             </span>
         </template>
         <template v-slot:append="{ item }">
@@ -68,6 +82,7 @@ const tasks = useTasksStore();
 const taskSettings = useTaskSettingsStore();
 import type { UUID } from '@/api';
 import type { TaskTreeItem } from '@/task-forest';
+import { highlight as highlightTitle } from '@/task-tree-filter';
 import { statusColor } from '@/status-color';
 import { statusIcon } from '@/status-icon';
 
@@ -87,6 +102,10 @@ defineProps<{
     // Whether a task can be dragged onto another to move it there. Off unless the parent handles
     // `move`, as `showAddChild` is.
     movable?: boolean;
+    // Search terms to mark in the titles of the rows `found` holds, so a row shown for its own
+    // title stands apart from one shown for what is under it, as a tag group always is.
+    highlight?: string[];
+    found?: ReadonlySet<string>;
 }>();
 
 // Emits
@@ -119,3 +138,13 @@ function onDrop(id: UUID, target: string) {
     }
 }
 </script>
+
+<style scoped lang="scss">
+/* A highlighter's yellow, as the theme's primary is all but black. The text keeps its own colour,
+   which says whether the task can be started yet. */
+.task-tree-match {
+    background-color: rgba(var(--v-theme-warning), 0.4);
+    color: inherit;
+    border-radius: 2px;
+}
+</style>

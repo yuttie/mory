@@ -18,7 +18,16 @@ import {
 import { buildPathForest } from '@/path-forest';
 import { render, replaceStatus } from '@/task';
 import type { Status, Task } from '@/task';
-import { TASKS_DIR, buildTaskPath, childTaskPath, taskDirectoryOf, taskPolicy } from '@/task-forest';
+import {
+    TASKS_DIR,
+    buildTaskPath,
+    childTaskPath,
+    isTagGroupId,
+    tagGroupId,
+    tagNameOf,
+    taskDirectoryOf,
+    taskPolicy,
+} from '@/task-forest';
 import type { TaskMetadata, TaskNode, TaskTreeItem } from '@/task-forest';
 import { useEntrySubset } from '@/composables/entrySubset';
 import { useFilesStore } from '@/stores/files';
@@ -34,7 +43,6 @@ import { useFilesStore } from '@/stores/files';
 
 // Root tasks with no children are grouped under a virtual node per tag, so that a flat pile of
 // unrelated tasks reads as a set of lists rather than one long root.
-const TAG_GROUP_PREFIX = 'tag-group-';
 const UNTAGGED = 'Untagged';
 
 // A save that landed, though the listing could not be brought to show it. No failed save: one tried
@@ -50,18 +58,7 @@ export class SavedUnlisted extends Error {
     }
 }
 
-export function isTagGroupId(id: string): boolean {
-    return id.startsWith(TAG_GROUP_PREFIX);
-}
-
-export function tagGroupId(tag: string): string {
-    return TAG_GROUP_PREFIX + tag;
-}
-
-// The tag a group node stands for. Only meaningful for an id `isTagGroupId` accepts.
-export function tagNameOf(id: string): string {
-    return id.slice(TAG_GROUP_PREFIX.length);
-}
+export { isTagGroupId, tagGroupId, tagNameOf };
 
 // The catch-all gathers tasks by the absence of a tag, so its name is not a tag to give a task
 // created from it: written into the frontmatter, "Untagged" would become one.

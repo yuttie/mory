@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import type { RouteRecordRaw } from 'vue-router';
 
 import { canHaveChildNote, childNotePath } from '@/note-forest';
+import { isTagGroupId } from '@/task-forest';
 
 const Home      = () => import('../views/Home.vue');
 const Calendar  = () => import('../views/Calendar.vue');
@@ -73,9 +74,8 @@ const routes: Array<RouteRecordRaw> = [
                 redirect: to => {
                     const { selectedNodeId, viewMode } = to.params;
                     // All tasks and a tag group had an empty editor there, for a new task, and have
-                    // none to open. The prefix is `isTagGroupId`'s, which would bring the task store
-                    // into the router with it.
-                    const empty = selectedNodeId === '_' || String(selectedNodeId).startsWith('tag-group-');
+                    // none to open.
+                    const empty = selectedNodeId === '_' || isTagGroupId(String(selectedNodeId));
                     return {
                         name: 'TasksNextWithParams',
                         params: { selectedNodeId, viewMode },
