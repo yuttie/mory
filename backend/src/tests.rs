@@ -911,6 +911,30 @@ async fn cached_rows_carry_the_blob_id_and_never_a_null_metadata() {
 }
 
 #[tokio::test]
+async fn a_cached_row_the_listing_cannot_read_is_listed_as_an_error() {
+    // As a moried that wrote keys named alike as they came left the row.
+    let mut conn = test_cache_db().await;
+    for (path, metadata) in [("duplicate-key.md", r#"{"1":"a","1":"b"}"#), ("fine.md", r#"{"tags":["x"]}"#)] {
+        sqlx::query("INSERT INTO entry VALUES (?, ?, 0, 'text/markdown', ?, NULL, 0, 0);")
+            .bind(path)
+            .bind(Oid::zero().to_string())
+            .bind(metadata)
+            .execute(&mut conn)
+            .await
+            .unwrap();
+    }
+
+    let listed = sqlx::query("SELECT * FROM entry ORDER BY path;")
+        .map(crate::models::row_to_list_entry)
+        .fetch_all(&mut conn)
+        .await
+        .unwrap();
+    let metadata = |index: usize| serde_json::to_value(&listed[index].metadata).unwrap();
+    assert!(metadata(0).get("error").is_some(), "got {}", metadata(0));
+    assert_eq!(metadata(1), serde_json::json!({"tags": ["x"]}));
+}
+
+#[tokio::test]
 async fn frontmatter_json_cannot_hold_neither_stops_a_sync_nor_a_listing_read() {
     // The first sync runs before moried listens, so one that fails on a note keeps moried from
     // starting; a row the listing cannot read back fails every read of the whole listing.

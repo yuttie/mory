@@ -2720,14 +2720,32 @@ mod models {
         }
     }
 
-    fn row_to_list_entry(row: SqliteRow) -> ListEntry {
+    pub(crate) fn row_to_list_entry(row: SqliteRow) -> ListEntry {
         let tz = FixedOffset::east_opt(row.get("tz_offset")).unwrap();
         let time = tz.timestamp_opt(row.get("time"), 0).unwrap();
+        let path: PathBuf = row.get::<String, _>("path").into();
+        // A row outlives the moried that wrote it, as long as its blob is unchanged, and one an
+        // older moried wrote may not read: one holding keys named alike, such as `1` and `"1"`,
+        // which serde_yaml refuses. A panic here would fail every read of the whole listing.
+        let metadata = match serde_json::from_str(&row.get::<String, _>("metadata")) {
+            Ok(metadata) => metadata,
+            Err(e) => {
+                tracing::warn!(
+                    "Cannot read the cached metadata of {}, listed as an error until the note \
+                     changes or cache.sqlite is deleted: {}",
+                    path.display(),
+                    e,
+                );
+                let mut mapping = serde_yaml::Mapping::new();
+                mapping.insert("error".into(), format!("The cached metadata cannot be read: {}", e).into());
+                Some(serde_yaml::Value::Mapping(mapping))
+            },
+        };
         ListEntry {
-            path: row.get::<String, _>("path").into(),
+            path,
             size: row.get::<i64, _>("size") as usize,
             mime_type: row.get("mime_type"),
-            metadata: serde_json::from_str(&row.get::<String, _>("metadata")).unwrap(),
+            metadata,
             title: row.get("title"),
             time: time,
         }
