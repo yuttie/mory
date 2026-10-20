@@ -3086,8 +3086,11 @@ mod models {
             .ok()
             .filter(|entry| entry.kind() != Some(git2::ObjectType::Tree))
             .map(|entry| entry.id());
+        // A proxy that compresses the read on its way marks the ETag it passes on weak, as nginx
+        // does whenever it gzips one: `W/"<oid>"`. Weak or strong, it names the blob read, whose
+        // ID is the hash of its content, so the version is still known exactly.
         let matches = match current {
-            Some(oid) => expected == format!("\"{oid}\""),
+            Some(oid) => expected.strip_prefix("W/").unwrap_or(expected) == format!("\"{oid}\""),
             None => expected == "absent",
         };
         if !matches {

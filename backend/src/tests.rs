@@ -2987,6 +2987,29 @@ fn commit_save_refuses_a_path_under_a_file_or_on_a_directory() {
     assert_eq!(fixture.blob_at(head_of(&fixture), "note.md").as_deref(), Some("first\n"));
 }
 
+/// nginx gzips a note on its way to the browser and passes its ETag on weak, so the web app reads
+/// `W/"<oid>"` and sends that back to check its save against.
+#[test]
+fn commit_save_checked_takes_the_weak_etag_a_compressing_proxy_passes_on() {
+    use crate::models::{commit_save, commit_save_checked};
+    let fixture = write_fixture();
+    let path = ".tasks/00000000-0000-4000-8000-000000000001.md";
+    commit_save(&fixture.repo, path, b"# Task\n", "Add task").unwrap();
+    let (version, _) = crate::entry_blob(&fixture.repo, path).unwrap();
+    let weak = format!("W/\"{version}\"");
+
+    assert!(commit_save_checked(&fixture.repo, path, b"# Task, edited\n", "Edit task", &weak).unwrap().is_some());
+    assert_eq!(crate::entry_blob(&fixture.repo, path).unwrap().1, b"# Task, edited\n");
+
+    // Still a version: the one read before the edit is stale, weak or not, and `absent` is no
+    // entity tag a proxy could have weakened.
+    let before = head_of(&fixture);
+    assert!(commit_save_checked(&fixture.repo, path, b"# Task\n", "Stale edit", &weak).unwrap().is_none());
+    assert!(commit_save_checked(&fixture.repo, path, b"# Task\n", "Create over it", "W/absent").unwrap().is_none());
+    assert!(commit_save_checked(&fixture.repo, "new.md", b"# New\n", "Create", "W/absent").unwrap().is_none());
+    assert_eq!(head_of(&fixture), before);
+}
+
 /// `absent` used to pass here: HEAD has nothing at `note.md/draft.md`, only a file above it.
 #[test]
 fn commit_save_checked_refuses_a_new_file_under_a_file() {
