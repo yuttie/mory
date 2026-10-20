@@ -644,6 +644,18 @@ describe('remove', () => {
         expect(store.childrenOf(uuid(1)).map((t) => t.title)).toEqual(['Child']);
     });
 
+    // A view left open syncs only as it mounts, so a subtask added since -- through MCP, on another
+    // device -- is not in the listing it holds.
+    it('refuses a task given a subtask since the listing was read', async () => {
+        const { store, repo } = await storeWith(sample);
+        const parent = `.tasks/${uuid(3)}.md`;
+        await apiMocks.addNote(`.tasks/${uuid(3)}/${uuid(9)}.md`, '---\ntask:\n    status:\n        kind: todo\n---\n');
+        expect(store.childrenOf(uuid(3))).toEqual([]);
+
+        await expect(store.remove(parent)).rejects.toThrow('subtasks');
+        expect(repo.paths()).toContain(parent);
+    });
+
     // A move renames the task's file before its subtasks', and in between the forest draws them at
     // the top of the tree: the task looks childless to a delete that does not wait for the move.
     it('refuses a task whose subtasks are still being moved with it', async () => {

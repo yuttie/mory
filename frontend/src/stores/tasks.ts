@@ -388,9 +388,12 @@ export const useTasksStore = defineStore('tasks', () => {
     // Only a task with nothing under it. Its subtasks live in the directory it names, which
     // deleting its file leaves behind: they would be drawn at the top of the tree, with nothing to
     // say what they were part of. Asked once any move is done, as a move renames the task's file
-    // before its subtasks' and the forest draws them at the top in between.
+    // before its subtasks' and the forest draws them at the top in between, and of the listing as
+    // it is now: a view left open syncs only as it mounts, and a subtask added since, through MCP
+    // or on another device, is not in the listing it holds.
     async function remove(path: string): Promise<boolean> {
         await renaming;
+        await subset.refresh();
         const id = idByPath(path);
         if (id !== undefined && childrenOf(id).length > 0) {
             throw new Error('It has subtasks. Delete them, or move them elsewhere, first.');
