@@ -12,6 +12,7 @@ const Files     = () => import('../views/Files.vue');
 const Search    = () => import('../views/Search.vue');
 const Note      = () => import('../views/Note.vue');
 const Media     = () => import('../views/Media.vue');
+const Health    = () => import('../views/Health.vue');
 const About     = () => import('../views/About.vue');
 
 
@@ -124,6 +125,11 @@ const routes: Array<RouteRecordRaw> = [
         path: '/media/:path*',
         name: 'Media',
         component: Media,
+    },
+    {
+        path: '/health',
+        name: 'Health',
+        component: Health,
     },
     {
         path: '/config',

@@ -260,6 +260,7 @@
                                     title="Config"
                                     v-on:click="openConfigDialog"
                                 />
+                                <v-list-item to="/health" v-bind:prepend-icon="mdiHeartPulse" title="Health"></v-list-item>
                                 <v-list-item to="/about" v-bind:prepend-icon="mdiInformationOutline" title="About"></v-list-item>
                                 <v-divider></v-divider>
                                 <v-list-item v-bind:prepend-icon="mdiLogout" title="Logout" v-on:click="appStore.signOut()"></v-list-item>
@@ -487,6 +488,7 @@
                                     title="Config"
                                     v-on:click="openConfigDialog"
                                 />
+                                <v-list-item to="/health" v-bind:prepend-icon="mdiHeartPulse" title="Health"></v-list-item>
                                 <v-list-item to="/about" v-bind:prepend-icon="mdiInformationOutline" title="About"></v-list-item>
                                 <v-divider></v-divider>
                                 <v-list-item v-bind:prepend-icon="mdiLogout" title="Logout" v-on:click="appStore.signOut()"></v-list-item>
@@ -602,6 +604,7 @@ import {
     mdiFolderOutline,
     mdiFormatListChecks,
     mdiForwardburger,
+    mdiHeartPulse,
     mdiHelp,
     mdiHomeOutline,
     mdiInformationOutline,

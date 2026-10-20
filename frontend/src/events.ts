@@ -420,9 +420,11 @@ function buildOccurrence(
         return null;
     }
 
-    const normalizedEnd = normalizeEndTime(time.end ?? parent.end, time.start);
+    const end = time.end ?? parent.end;
+    const normalizedEnd = normalizeEndTime(end, time.start);
     if (normalizedEnd === null) {
-        errors.push(['end', time.end, eventName, entry.path, entry.title]);
+        // The end refused may be the series', which an occurrence inherits rather than writes.
+        errors.push(['end', end, eventName, entry.path, entry.title]);
         return null;
     }
 
