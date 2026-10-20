@@ -116,6 +116,27 @@ test('finds tasks by title and opens the tasks above them', async ({ context, pa
     await expect(tree(page)).toContainText('No tasks match.');
 });
 
+// Each search draws the tree anew, so it waits for typing to pause; clearing is one press. Time
+// stands still from the first search on, so nothing happens that the test does not let happen, and
+// from a search finding nothing, so no branch is left closing when it is cleared.
+test('searches once typing pauses, and gives the tree back at once when cleared', async ({ context, page }) => {
+    await mockBackend(context, NOTES);
+    await page.clock.install();
+    await page.goto('/tasks-next');
+    await search(page).fill('nothing like it');
+    await expect(tree(page)).toContainText('No tasks match.');
+    await page.clock.pauseAt(Date.now() + 60_000);
+
+    await search(page).fill('');
+    await expect(rows(page)).toHaveText(['Launch', 'home']);
+
+    await search(page).pressSequentially('build');
+    await page.clock.runFor(249);
+    await expect(rows(page)).toHaveText(['Launch', 'home']);
+    await page.clock.runFor(1);
+    await expect(rows(page)).toHaveText(['Launch', 'Ship', 'Build the release']);
+});
+
 // A row shown for what is under it is not marked, though its title may hold some of the words, or
 // all of them under a status the tree hides.
 test('marks the titles of the tasks found alone', async ({ context, page }) => {
