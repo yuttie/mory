@@ -505,23 +505,13 @@ async fn resolve_client(state: &OauthState, client_id: &str) -> Result<Registere
     })
 }
 
-async fn fetch_client_id_metadata(state: &OauthState, url: &str) -> Result<RegisteredClient> {
-    if let Some(cached) = state.cimd_cache.lock().unwrap().get(url) {
-        if cached.fetched_at.elapsed() < CIMD_CACHE_TTL {
-            return Ok(cached.client.clone());
-        }
-    }
-
-    let parsed = reqwest::Url::parse(url).context("the client_id is not a URL")?;
-    // The same guard the calendar feeds go through: a client_id is a URL a stranger chose, and
-    // fetching it must not become a way to probe this host's private network. It is fetched with
-    // the feeds' client too, which checks each redirect the same way; the shared one follows any.
-    if !crate::v2::is_fetchable_feed_url(&parsed) {
-        bail!("a client_id URL must be https:// on a public host");
-    }
-
+/// The text of a client_id document, from a URL already checked as the calendar feeds' are.
+///
+/// Fetched with the feeds' client, which checks each redirect the same way: the shared one follows
+/// any, so a document that passed the check could hand the fetch on into this host's network.
+pub(crate) async fn fetch_client_id_document(url: reqwest::Url) -> Result<String> {
     let response = crate::v2::feed_client()
-        .get(parsed)
+        .get(url)
         .header(header::ACCEPT, "application/json")
         .timeout(CIMD_TIMEOUT)
         .send()
@@ -537,6 +527,24 @@ async fn fetch_client_id_metadata(state: &OauthState, url: &str) -> Result<Regis
     if body.len() > MAX_CIMD_BYTES {
         bail!("the client_id document is too large");
     }
+    Ok(body)
+}
+
+async fn fetch_client_id_metadata(state: &OauthState, url: &str) -> Result<RegisteredClient> {
+    if let Some(cached) = state.cimd_cache.lock().unwrap().get(url) {
+        if cached.fetched_at.elapsed() < CIMD_CACHE_TTL {
+            return Ok(cached.client.clone());
+        }
+    }
+
+    let parsed = reqwest::Url::parse(url).context("the client_id is not a URL")?;
+    // The same guard the calendar feeds go through: a client_id is a URL a stranger chose, and
+    // fetching it must not become a way to probe this host's private network.
+    if !crate::v2::is_fetchable_feed_url(&parsed) {
+        bail!("a client_id URL must be https:// on a public host");
+    }
+
+    let body = fetch_client_id_document(parsed).await?;
     let document: ClientIdMetadataDocument =
         serde_json::from_str(&body).context("the client_id document is not valid JSON")?;
 
