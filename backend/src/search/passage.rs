@@ -29,9 +29,7 @@ struct Unit {
 }
 
 pub fn passages(blob_id: &str, source: &str) -> Vec<Passage> {
-    let mut options = markdown::ParseOptions::gfm();
-    options.constructs.frontmatter = true;
-    let Ok(Node::Root(root)) = markdown::to_mdast(source, &options) else {
+    let Some(Node::Root(root)) = crate::markdown_tree(source) else {
         return fallback_passages(blob_id, source);
     };
 
@@ -262,6 +260,14 @@ mod tests {
         assert_eq!(found[0].start_line, 4);
         assert_eq!(found[0].heading, "Search › Index");
         assert!(found[0].text.contains("Second paragraph"));
+    }
+
+    #[test]
+    fn a_note_the_markdown_parser_panics_on_is_searched_as_plain_text() {
+        // An unclosed frontmatter fence ending in a bare `-`, as a note is while being written.
+        let found = passages("blob", "---\ntitle: draft\n\n-");
+        assert_eq!(found.len(), 1);
+        assert!(found[0].text.contains("title: draft"));
     }
 
     #[test]
