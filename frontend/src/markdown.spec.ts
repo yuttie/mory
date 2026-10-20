@@ -33,10 +33,24 @@ describe('renderMarkdown', () => {
             'Join <a href="https://meet.example/x">the call</a><br><b>Bring</b> the [agenda](https://example.com/a).',
             { untrusted: true },
         ));
-        expect(html).toContain('<a href="https://meet.example/x">the call</a>');
+        expect(html).toContain('<a href="https://meet.example/x" referrerpolicy="no-referrer">the call</a>');
         expect(html).toContain('<br>');
         expect(html).toContain('<b>Bring</b>');
-        expect(html).toContain('<a href="https://example.com/a">agenda</a>');
+        expect(html).toContain('<a href="https://example.com/a" referrerpolicy="no-referrer">agenda</a>');
+    });
+
+    // An image loads as the description opens, and sent with the page's address told whoever wrote
+    // it where this mory is.
+    it('sends the address of no page someone else\'s markup is shown in', async () => {
+        const html = String(await renderMarkdown(
+            '<img src="https://attacker.example/p.png"> ![pixel](//attacker.example/q.png) [agenda](https://example.com/a)',
+            { untrusted: true },
+        ));
+        expect(html.match(/<img [^>]*referrerpolicy="no-referrer"/g)).toHaveLength(2);
+        expect(html).toMatch(/<a href="https:\/\/example.com\/a" referrerpolicy="no-referrer">agenda<\/a>/);
+
+        const own = String(await renderMarkdown('![photo](https://example.com/p.png)'));
+        expect(own).not.toContain('referrerpolicy');
     });
 
     it('leaves an untrusted mermaid diagram as the code it was written as', async () => {
