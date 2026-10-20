@@ -24,6 +24,16 @@ export interface HealthProblem {
     path?: string;
 }
 
+/// One thing verified, said as what holds when it passes, so a check without problems reads as a
+/// statement of what was found true.
+export interface HealthCheck {
+    id: string;
+    title: string;
+    /// What is verified and why it matters, for a reader wondering what an OK covers.
+    description: string;
+    problems: HealthProblem[];
+}
+
 const validateMetadata = new Ajv().compile(metadataSchema);
 
 /// Describes a value from the frontmatter as it was written, whatever its type.
@@ -50,15 +60,16 @@ function unreadableReason(metadata: unknown): string | null {
 
 /// Frontmatter that is not YAML, and frontmatter that `metadata-schema.json` refuses: what the note
 /// view shows above one note, for every note.
-export function frontmatterProblems(entries: readonly ListEntry2[]): HealthProblem[] {
-    const problems: HealthProblem[] = [];
+export function frontmatterChecks(entries: readonly ListEntry2[]): HealthCheck[] {
+    const unreadable: HealthProblem[] = [];
+    const invalid: HealthProblem[] = [];
     for (const entry of entries) {
         if (entry.metadata === null) {
             continue;
         }
-        const unreadable = unreadableReason(entry.metadata);
-        if (unreadable !== null) {
-            problems.push({ severity: 'error', message: `The frontmatter cannot be read: ${unreadable}`, path: entry.path });
+        const reason = unreadableReason(entry.metadata);
+        if (reason !== null) {
+            unreadable.push({ severity: 'error', message: reason, path: entry.path });
             continue;
         }
         if (validateMetadata(entry.metadata)) {
@@ -70,30 +81,86 @@ export function frontmatterProblems(entries: readonly ListEntry2[]): HealthProbl
                 continue;
             }
             const detail = error.keyword === 'additionalProperties' ? `: ${error.params.additionalProperty}` : '';
-            problems.push({
+            invalid.push({
                 severity: 'error',
                 message: `${error.instancePath || '/'}: ${error.message ?? 'is invalid'}${detail}`,
                 path: entry.path,
             });
         }
     }
-    return problems;
+    return [
+        {
+            id: 'frontmatter-yaml',
+            title: 'Frontmatter is valid YAML',
+            description: 'A note whose frontmatter cannot be parsed has no tags, events or task as far as the app can tell.',
+            problems: unreadable,
+        },
+        {
+            id: 'frontmatter-schema',
+            title: 'Frontmatter follows metadata-schema.json',
+            description: 'created_at, tags, events and task have the shapes the schema gives them, as the note view checks for one note.',
+            problems: invalid,
+        },
+    ];
 }
+
+// Which check an error from the event derivations belongs to, by the property it names. A task's
+// dates are named by their field.
+const EVENT_CHECKS: { id: string; title: string; description: string; properties: string[] }[] = [
+    {
+        id: 'event-times',
+        title: 'Every event has a start and end the calendar can read',
+        description: 'Each event names a start, a list of instances or both; a start is a date or a datetime, and an end is one too, or a time of day or a duration.',
+        properties: ['start', 'end'],
+    },
+    {
+        id: 'event-repeat',
+        title: 'Recurrence rules can be expanded',
+        description: 'Each repeat: rule is one rrule accepts: a known freq, weekdays as three letters with an optional ordinal, a known tz.',
+        properties: ['repeat'],
+    },
+    {
+        id: 'event-adjustments',
+        title: 'Exclusions and overrides each name an occurrence',
+        description: 'Each exclusion and override matches an occurrence its rule generates. One that matches none is almost always a mistyped date.',
+        properties: ['exclusions', 'overrides', 'at'],
+    },
+    {
+        id: 'event-category',
+        title: 'Event categories are configured',
+        description: 'Each category: names one configured under categories: in .mory/calendars.yaml, its own id and not only a parent\'s.',
+        properties: ['category'],
+    },
+    {
+        id: 'event-alarms',
+        title: 'Alarms follow the alarm grammar',
+        description: 'Each alarm on an event, an override, an instance or a task\'s dates is an offset such as -10m or a time such as -1d 18:00. Anything else is dropped and never rings.',
+        properties: ['alarms'],
+    },
+    {
+        id: 'task-dates',
+        title: 'Task due dates and deadlines are dates',
+        description: 'Each due_by and deadline is a date or a datetime with its offset, so the calendar can draw it and its alarms can ring.',
+        properties: ['due_by', 'deadline'],
+    },
+];
 
 /// The events and task dates the calendar would refuse within `window`. A series is expanded only
 /// over the window, so a mistake that only an occurrence outside it meets is not found.
-export function eventProblems(
+export function eventChecks(
     entries: readonly ListEntry2[],
     window: EventWindow,
     options: { categories?: EventCategories; alarmDefaults?: AlarmDefaults } = {},
-): HealthProblem[] {
+): HealthCheck[] {
     const errors: EventError[] = [
         ...eventsFromEntries(entries, window, options).errors,
         ...taskDatesFromEntries(entries, window, { alarmDefaults: options.alarmDefaults }).errors,
     ];
+    const checks: HealthCheck[] = EVENT_CHECKS.map(({ id, title, description }) => ({ id, title, description, problems: [] }));
+    const checkOf = new Map(EVENT_CHECKS.flatMap(({ properties }, index) =>
+        properties.map((property) => [property, checks[index]] as const)));
     // A bad `end` on a series is met once per occurrence, and is one mistake to fix.
     const seen = new Set<string>();
-    const problems: HealthProblem[] = [];
     for (const [property, value, eventName, path] of errors) {
         const message = `Invalid ${property} "${describeValue(value)}" of "${eventName}"`;
         const key = `${path}\0${message}`;
@@ -101,9 +168,11 @@ export function eventProblems(
             continue;
         }
         seen.add(key);
-        problems.push({ severity: 'error', message, path });
+        // A property no check names yet is still a problem the calendar met, and lands with the
+        // times rather than nowhere.
+        (checkOf.get(property) ?? checks[0]).problems.push({ severity: 'error', message, path });
     }
-    return problems;
+    return checks;
 }
 
 // What the older task model stored, which the task editor drops on its next save.
@@ -111,8 +180,10 @@ const LEGACY_TASK_KEYS = ['urgency', 'progress', 'scheduled_dates', 'start_at'];
 
 /// Files under `.tasks/` the task tree leaves out or places other than where they are, and tasks
 /// still holding the older model's keys.
-export function taskProblems(entries: readonly ListEntry2[]): HealthProblem[] {
-    const problems: HealthProblem[] = [];
+export function taskChecks(entries: readonly ListEntry2[]): HealthCheck[] {
+    const misnamed: HealthProblem[] = [];
+    const orphaned: HealthProblem[] = [];
+    const legacy: HealthProblem[] = [];
     const covered = new Set<string>();
     for (const entry of entries) {
         const directory = taskDirectoryOf(entry.path);
@@ -126,36 +197,100 @@ export function taskProblems(entries: readonly ListEntry2[]): HealthProblem[] {
             continue;
         }
         if (taskUuidOf(entry.path) === null) {
-            problems.push({
-                severity: 'warning',
-                message: 'Not in the task tree: every directory under .tasks/ must be a UUIDv4, and the file name must end with one.',
-                path: entry.path,
-            });
+            misnamed.push({ severity: 'warning', message: 'Not in the task tree.', path: entry.path });
             continue;
         }
         const parent = entry.path.slice(0, entry.path.lastIndexOf('/'));
         if (parent !== '.tasks' && !covered.has(parent)) {
-            problems.push({
+            orphaned.push({
                 severity: 'warning',
-                message: `Its parent task is missing, so it is shown at the top level: no task file covers ${parent}/.`,
+                message: `Shown at the top level: no task file covers ${parent}/.`,
                 path: entry.path,
             });
         }
         const task = entry.metadata?.task;
         if (typeof task === 'object' && task !== null && !Array.isArray(task)) {
             const record = task as Record<string, unknown>;
-            const legacy = LEGACY_TASK_KEYS.filter((key) => Object.hasOwn(record, key));
+            const keys = LEGACY_TASK_KEYS.filter((key) => Object.hasOwn(record, key));
             if (typeof record.importance === 'number') {
-                legacy.push('importance (as a number)');
+                keys.push('importance (as a number)');
             }
-            if (legacy.length > 0) {
-                problems.push({
-                    severity: 'warning',
-                    message: `Holds keys of the older task model, which are ignored and dropped on the next save: ${legacy.join(', ')}.`,
-                    path: entry.path,
-                });
+            if (keys.length > 0) {
+                legacy.push({ severity: 'warning', message: `Holds ${keys.join(', ')}.`, path: entry.path });
             }
         }
     }
-    return problems;
+    return [
+        {
+            id: 'task-names',
+            title: 'Task files are named for the task tree',
+            description: 'Each note under .tasks/ has a file name ending with a UUIDv4, in directories each named by a bare UUIDv4. The tree leaves out any other.',
+            problems: misnamed,
+        },
+        {
+            id: 'task-parents',
+            title: 'Every subtask\'s parent task exists',
+            description: 'A task in .tasks/<uuid>/ has a task file for <uuid> beside that directory. Without one it is shown at the top level instead.',
+            problems: orphaned,
+        },
+        {
+            id: 'task-model',
+            title: 'Tasks hold only the current task model',
+            description: 'No task keeps urgency, progress, scheduled_dates, start_at or a numeric importance. These are ignored, and the task editor drops them on its next save.',
+            problems: legacy,
+        },
+    ];
+}
+
+/// What the stores report of the files under `.mory/`, each file a check of its own.
+export function settingsChecks(reports: {
+    calendarsPath: string;
+    /// The calendar store's errors: those of the file prefixed with its path, those of a feed not.
+    calendarErrors: readonly string[];
+    tasksPath: string;
+    taskSettingsProblems: readonly string[];
+    /// Each unreadable month's error, by `YYYY-MM`.
+    planErrors: Readonly<Record<string, string>>;
+}): HealthCheck[] {
+    const prefix = `${reports.calendarsPath}: `;
+    const calendars: HealthProblem[] = [];
+    const feeds: HealthProblem[] = [];
+    for (const message of reports.calendarErrors) {
+        if (message.startsWith(prefix)) {
+            calendars.push({ severity: 'error', message: message.slice(prefix.length), path: reports.calendarsPath });
+        }
+        else {
+            feeds.push({ severity: 'error', message });
+        }
+    }
+    return [
+        {
+            id: 'calendars-settings',
+            title: `${reports.calendarsPath} reads cleanly`,
+            description: 'Its alarms: defaults and categories: are each what they should be. What is not is ignored, and saving the calendar settings removes it.',
+            problems: calendars,
+        },
+        {
+            id: 'calendar-feeds',
+            title: 'Subscribed calendars load',
+            description: 'Each subscribed feed could be fetched and read, the last time the calendar asked for its events in this session.',
+            problems: feeds,
+        },
+        {
+            id: 'tasks-settings',
+            title: `${reports.tasksPath} reads cleanly`,
+            description: 'default_lead_time, lead_time_by_tag and status_colors are each what they should be, and the file holds no legacy task data.',
+            problems: reports.taskSettingsProblems.map((message) => ({ severity: 'error', message, path: reports.tasksPath })),
+        },
+        {
+            id: 'plans',
+            title: 'Every day plan reads cleanly',
+            description: 'Each month under .mory/plans/ is one the app can read. One that is not is refused whole, and cannot be planned in until fixed.',
+            problems: Object.entries(reports.planErrors).map(([month, message]) => ({
+                severity: 'error',
+                message,
+                path: `.mory/plans/${month}.yaml`,
+            })),
+        },
+    ];
 }

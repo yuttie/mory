@@ -14,71 +14,88 @@
         </AppBarContent>
         <v-sheet class="sheet pa-4">
             <p class="text-body-2 text-medium-emphasis mb-4">
-                Problems found across the whole repository, whichever view would otherwise report them:
-                {{ files.entries.length.toLocaleString() }} files checked.
+                What is verified across the whole repository, whichever view would otherwise report a
+                problem: {{ files.entries.length.toLocaleString() }} files checked.
             </p>
+            <v-alert
+                v-if="listingError !== null"
+                type="error"
+                density="compact"
+                class="mb-4"
+            >
+                The file listing cannot be refreshed, so the checks below cover only the
+                {{ files.entries.length.toLocaleString() }} files listed before: {{ listingError }}
+            </v-alert>
             <section
                 v-for="section of sections"
                 v-bind:key="section.id"
                 class="mb-6"
             >
-                <h2 class="text-h6 d-flex align-center ga-2">
+                <h2 class="text-h6 d-flex align-center ga-2 mb-2">
                     <v-icon
-                        v-bind:icon="iconOf(statusOf(section))"
-                        v-bind:color="colorOf(statusOf(section))"
+                        v-bind:icon="iconOf(statusOf(section.checks))"
+                        v-bind:color="colorOf(statusOf(section.checks))"
                         size="small"
                     />
                     {{ section.title }}
                 </h2>
-                <p class="text-caption text-medium-emphasis mb-2">
-                    {{ section.description }}
-                </p>
-                <p
-                    v-if="checking && section.problems.length === 0"
-                    class="text-body-2 text-medium-emphasis"
+                <div
+                    v-for="item of section.checks"
+                    v-bind:key="item.id"
+                    class="check d-flex mb-3"
                 >
-                    Checking…
-                </p>
-                <p
-                    v-else-if="section.problems.length === 0"
-                    class="text-body-2"
-                >
-                    <span class="text-success font-weight-bold">OK</span> No problems found.
-                </p>
-                <v-list
-                    v-else
-                    density="compact"
-                    class="py-0"
-                >
-                    <v-list-item
-                        v-for="group of groupsOf(section)"
-                        v-bind:key="group.path ?? ''"
-                        v-bind:to="group.path === undefined ? undefined : routeOf(group.path)"
-                        class="px-0 py-1"
-                    >
-                        <v-list-item-title
-                            v-if="group.path !== undefined"
-                            class="font-weight-medium"
-                        >
-                            {{ titleOf(group.path) }}
+                    <span
+                        v-if="checking && item.problems.length === 0"
+                        class="label text-body-2 text-medium-emphasis"
+                    >…</span>
+                    <span
+                        v-else
+                        class="label text-body-2 font-weight-bold"
+                        v-bind:class="`text-${colorOf(statusOf([item]))}`"
+                    >{{ statusOf([item]).toUpperCase() }}</span>
+                    <div class="body">
+                        <div class="text-body-2">
+                            <span class="font-weight-medium">{{ item.title }}</span>
                             <span
-                                v-if="titleOf(group.path) !== group.path"
-                                class="text-caption text-medium-emphasis"
-                            >{{ group.path }}</span>
-                        </v-list-item-title>
-                        <div
-                            v-for="(problem, index) of group.problems"
-                            v-bind:key="index"
-                            class="problem text-body-2"
-                        >
-                            <span
-                                class="font-weight-bold"
-                                v-bind:class="`text-${colorOf(problem.severity)}`"
-                            >{{ problem.severity.toUpperCase() }}</span>
-                            {{ problem.message }}
+                                v-if="item.problems.length > 0"
+                                class="text-medium-emphasis ms-1"
+                            >({{ countOf(item) }})</span>
                         </div>
-                    </v-list-item>
-                </v-list>
+                        <div class="text-caption text-medium-emphasis">
+                            {{ item.description }}
+                        </div>
+                        <v-list
+                            v-if="item.problems.length > 0"
+                            density="compact"
+                            class="py-0"
+                        >
+                            <v-list-item
+                                v-for="group of groupsOf(item)"
+                                v-bind:key="group.path ?? ''"
+                                v-bind:to="group.path === undefined ? undefined : routeOf(group.path)"
+                                class="px-0 py-1"
+                            >
+                                <v-list-item-title
+                                    v-if="group.path !== undefined"
+                                    class="font-weight-medium"
+                                >
+                                    {{ titleOf(group.path) }}
+                                    <span
+                                        v-if="titleOf(group.path) !== group.path"
+                                        class="text-caption text-medium-emphasis"
+                                    >{{ group.path }}</span>
+                                </v-list-item-title>
+                                <div
+                                    v-for="(problem, index) of group.problems"
+                                    v-bind:key="index"
+                                    class="problem text-body-2"
+                                >
+                                    {{ problem.message }}
+                                </div>
+                            </v-list-item>
+                        </v-list>
+                    </div>
+                </div>
             </section>
         </v-sheet>
     </div>
@@ -98,8 +115,8 @@ import dayjs from 'dayjs';
 
 import AppBarContent from '@/components/AppBarContent.vue';
 import { routeForMime } from '@/file-route';
-import { eventProblems, frontmatterProblems, taskProblems } from '@/health';
-import type { HealthProblem, HealthSeverity } from '@/health';
+import { eventChecks, frontmatterChecks, settingsChecks, taskChecks } from '@/health';
+import type { HealthCheck, HealthProblem, HealthSeverity } from '@/health';
 import { CALENDARS_PATH, useCalendarsStore } from '@/stores/calendars';
 import { useFilesStore } from '@/stores/files';
 import { usePlansStore } from '@/stores/plans';
@@ -108,8 +125,7 @@ import { TASK_SETTINGS_PATH, useTaskSettingsStore } from '@/stores/taskSettings'
 interface Section {
     id: string;
     title: string;
-    description: string;
-    problems: HealthProblem[];
+    checks: HealthCheck[];
 }
 
 type Status = HealthSeverity | 'ok';
@@ -121,7 +137,8 @@ const plans = usePlansStore();
 
 const checking = ref(false);
 // What could not be read at all, which no store holds a problem for.
-const failures = ref<HealthProblem[]>([]);
+const listingError = ref<string | null>(null);
+const calendarsReadError = ref<string | null>(null);
 
 // The calendar draws a few months at a time; a year either side covers what anyone is planning
 // around without expanding every series without end.
@@ -133,36 +150,16 @@ const eventWindow = {
 
 const entryOf = computed(() => new Map(files.entries.map((entry) => [entry.path, entry])));
 
-const settingsProblems = computed<HealthProblem[]>(() => {
-    const problems: HealthProblem[] = [...failures.value];
-    const prefix = `${CALENDARS_PATH}: `;
-    for (const message of calendars.errors) {
-        // A subscribed feed that failed is named by its calendar, and has no file to open.
-        problems.push(message.startsWith(prefix)
-            ? { severity: 'error', message: message.slice(prefix.length), path: CALENDARS_PATH }
-            : { severity: 'error', message });
-    }
-    for (const message of taskSettings.problems) {
-        problems.push({ severity: 'error', message, path: TASK_SETTINGS_PATH });
-    }
-    for (const [month, message] of Object.entries(plans.errors)) {
-        problems.push({ severity: 'error', message, path: `.mory/plans/${month}.yaml` });
-    }
-    return problems;
-});
-
 const sections = computed<Section[]>(() => [
     {
         id: 'frontmatter',
         title: 'Frontmatter',
-        description: 'Whether each note\'s frontmatter is YAML that metadata-schema.json accepts.',
-        problems: frontmatterProblems(files.entries),
+        checks: frontmatterChecks(files.entries),
     },
     {
         id: 'events',
-        title: 'Events and task dates',
-        description: `Whether the calendar can draw them, from ${eventWindow.from} to ${eventWindow.to}.`,
-        problems: eventProblems(files.entries, eventWindow, {
+        title: `Events and task dates, ${eventWindow.from} to ${eventWindow.to}`,
+        checks: eventChecks(files.entries, eventWindow, {
             categories: calendars.categoryMap,
             alarmDefaults: calendars.alarmDefaults,
         }),
@@ -170,22 +167,29 @@ const sections = computed<Section[]>(() => [
     {
         id: 'tasks',
         title: 'Tasks',
-        description: 'Whether each file under .tasks/ has its place in the task tree, and holds the current task model.',
-        problems: taskProblems(files.entries),
+        checks: taskChecks(files.entries),
     },
     {
         id: 'settings',
         title: 'Settings and plans',
-        description: 'Whether the files under .mory/ read cleanly.',
-        problems: settingsProblems.value,
+        checks: settingsChecks({
+            calendarsPath: CALENDARS_PATH,
+            calendarErrors: calendarsReadError.value === null
+                ? calendars.errors
+                : [`${CALENDARS_PATH}: It cannot be read: ${calendarsReadError.value}`, ...calendars.errors],
+            tasksPath: TASK_SETTINGS_PATH,
+            taskSettingsProblems: taskSettings.problems,
+            planErrors: plans.errors,
+        }),
     },
 ]);
 
-function statusOf(section: Section): Status {
-    if (section.problems.some((problem) => problem.severity === 'error')) {
+function statusOf(checks: readonly HealthCheck[]): Status {
+    const problems = checks.flatMap((item) => item.problems);
+    if (problems.some((problem) => problem.severity === 'error')) {
         return 'error';
     }
-    return section.problems.length > 0 ? 'warning' : 'ok';
+    return problems.length > 0 ? 'warning' : 'ok';
 }
 
 function iconOf(status: Status): string {
@@ -196,11 +200,16 @@ function colorOf(status: Status): string {
     return { error: 'error', warning: 'warning', ok: 'success' }[status];
 }
 
+function countOf(item: HealthCheck): string {
+    const count = groupsOf(item).length;
+    return count === 1 ? '1 file' : `${count.toLocaleString()} files`;
+}
+
 // One row per file, in the order the files are first met, so a note with several problems is one
 // link rather than several.
-function groupsOf(section: Section): { path?: string; problems: HealthProblem[] }[] {
+function groupsOf(item: HealthCheck): { path?: string; problems: HealthProblem[] }[] {
     const groups = new Map<string | undefined, HealthProblem[]>();
-    for (const problem of section.problems) {
+    for (const problem of item.problems) {
         const group = groups.get(problem.path);
         if (group === undefined) {
             groups.set(problem.path, [problem]);
@@ -223,19 +232,19 @@ function routeOf(path: string) {
 // Each store keeps what it last read, and reading again is what makes a fix show up here.
 async function check(): Promise<void> {
     checking.value = true;
-    const next: HealthProblem[] = [];
+    listingError.value = null;
+    calendarsReadError.value = null;
     await Promise.all([
         files.refresh().catch((error) => {
-            next.push({ severity: 'error', message: `The file listing cannot be refreshed: ${error}` });
+            listingError.value = String(error);
         }),
         calendars.loadConfiguration().catch((error) => {
-            next.push({ severity: 'error', message: `Cannot be read: ${error}`, path: CALENDARS_PATH });
+            calendarsReadError.value = String(error);
         }),
         taskSettings.load(),
         // Each month that fails is in `plans.errors` already.
         plans.loadAll().catch(() => undefined),
     ]);
-    failures.value = next;
     checking.value = false;
 }
 
@@ -252,6 +261,16 @@ onMounted(() => {
 
 .sheet {
     min-height: 100%;
+}
+
+// A column of its own, so a title that wraps stays clear of it, as Neovim indents a check's advice.
+.label {
+    flex: 0 0 5.5em;
+}
+
+.body {
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .problem {
