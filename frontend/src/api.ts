@@ -399,6 +399,9 @@ export async function getTaskData(eTag?: string): Promise<[string, TaskData | nu
     }
     const request = (path: string) => getAxios().get(`/v2/files/${path}`, {
         headers: headers,
+        // As `getFile`: the YAML is parsed below, and axios would hand over one that is also JSON
+        // as an object, which `YAML.parse` throws on.
+        responseType: 'text',
         validateStatus: (status) => (status >= 200 && status < 300) || status === 304,
     });
     const res = await request(TASK_DATA_PATH);
