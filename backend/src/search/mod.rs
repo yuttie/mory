@@ -2616,9 +2616,13 @@ mod tests {
         let repo = Repository::init(directory.path()).unwrap();
         let commit = commit_file(&repo, directory.path(), "日本語のメモ\n", &[]);
         let path = directory.path().to_str().unwrap();
-        for pattern in ["日.語", "^.本", "[本]語", "日\\(本\\|英\\)語"] {
+        // Each fails byte by byte. A bracket of one character is three bytes in C, so `[本]語`
+        // and `日\(本\|英\)語` match there too, by 本's last byte, and test nothing.
+        for pattern in ["日.語", "^.本", "日[本]語"] {
             assert_eq!(grep_at(path, pattern, commit, 10).await.unwrap().len(), 1, "{pattern}");
         }
+        // 日 starts with the same byte as 本.
+        assert!(grep_at(path, "^[本]", commit, 10).await.unwrap().is_empty());
     }
 
     #[tokio::test]
