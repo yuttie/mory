@@ -1666,6 +1666,8 @@ fn build_inputs(
             continue;
         };
         let tags = selected_tags(&entry.metadata);
+        // Names the note in what the parser's guard warns about it, as the sync's span does.
+        let _entry = tracing::warn_span!("entry", path = %entry.path).entered();
         for passage in passage::passages(&entry.blob_id, source) {
             inputs.push(IndexInput {
                 path: entry.path.clone(),
