@@ -250,6 +250,15 @@ export function renameNote(oldPath: string, newPath: string) {
   });
 }
 
+// A file's version as moried names it: its ETag, without the weak mark a proxy compressing the file
+// on its way puts on it, as nginx does whenever it gzips one. The browser's cache, revalidating a
+// file, can pass on moried's own tag instead, and one version must not read as two.
+export function versionOf(etag: string): string;
+export function versionOf(etag: string | undefined): string | undefined;
+export function versionOf(etag: string | undefined): string | undefined {
+    return etag?.replace(/^W\//, '');
+}
+
 export async function getFile(path: string, etag?: string): Promise<{ content: string | null; etag: string }> {
     const response = await getAxios().get(`/v2/files/${encodePath(path)}`, {
         headers: etag ? { 'If-None-Match': etag } : {},
@@ -258,13 +267,13 @@ export async function getFile(path: string, etag?: string): Promise<{ content: s
         responseType: 'text',
         validateStatus: (status) => status === 304 || status >= 200 && status < 300,
     });
-    return { content: response.status === 304 ? null : response.data, etag: response.headers.etag };
+    return { content: response.status === 304 ? null : response.data, etag: versionOf(response.headers.etag) };
 }
 
 // Resolves to the ETag of what it wrote, which moried sends.
 export async function saveFileChecked(path: string, content: string, expectedETag: string): Promise<string | undefined> {
     const response = await getAxios().put(`/notes/${encodePath(path)}`, { Save: { content, message: `Update ${path}`, expected_etag: expectedETag } });
-    return response.headers?.etag;
+    return versionOf(response.headers?.etag);
 }
 
 // Why moried refused a write, as it says it: a path already taken, or one that names no file.
@@ -406,7 +415,7 @@ export async function getTaskData(eTag?: string): Promise<[string, TaskData | nu
     });
     const res = await request(TASK_DATA_PATH);
     if (res.status === 304) {
-        return [res.headers.etag, null];
+        return [versionOf(res.headers.etag), null];
     }
     else {
         const data = YAML.parse(res.data) as TaskData;
@@ -417,7 +426,7 @@ export async function getTaskData(eTag?: string): Promise<[string, TaskData | nu
             tasks.forEach((task) => task.id = task.id ?? crypto.randomUUID());
         }
 
-        return [res.headers.etag, data];
+        return [versionOf(res.headers.etag), data];
     }
 }
 

@@ -2331,6 +2331,16 @@ Write note suggestions in GitHub Flavored Markdown, ready to add to the task's n
         Ok(Json(commit_id.to_string()))
     }
 
+    /// Whether the client holds the version `etag` names already: one of the tags `If-None-Match`
+    /// lists, by the weak comparison RFC 9110 has for that header. Behind a proxy that gzips the
+    /// response, the client only ever has the weak tag the proxy passed on.
+    pub(crate) fn holds_version(headers: &HeaderMap, etag: &str) -> bool {
+        headers
+            .get(header::IF_NONE_MATCH)
+            .and_then(|value| value.to_str().ok())
+            .is_some_and(|value| value.split(',').any(|tag| same_version(tag.trim(), etag)))
+    }
+
     pub(crate) fn attach_oid(mut res: Response, oid: git2::Oid) -> Response {
         // ETag values should be quoted
         let etag_value = format!("\"{}\"", oid);
@@ -2353,15 +2363,13 @@ Write note suggestions in GitHub Flavored Markdown, ready to add to the task's n
         if let Some((oid, content)) = find_entry_blob(&state, &path).await {
             // Check If-None-Match header, and shortcut to 304
             let etag_value = format!("\"{}\"", oid);
-            if let Some(inm) = headers.get(header::IF_NONE_MATCH) {
-                if inm.to_str().unwrap_or("") == etag_value {
-                    return Response::builder()
-                        .status(StatusCode::NOT_MODIFIED)
-                        .header(header::ETAG, etag_value.clone())
-                        .header(header::ACCESS_CONTROL_EXPOSE_HEADERS, "ETag")
-                        .body(Body::empty())
-                        .unwrap();
-                }
+            if holds_version(&headers, &etag_value) {
+                return Response::builder()
+                    .status(StatusCode::NOT_MODIFIED)
+                    .header(header::ETAG, etag_value.clone())
+                    .header(header::ACCESS_CONTROL_EXPOSE_HEADERS, "ETag")
+                    .body(Body::empty())
+                    .unwrap();
             }
 
             let res = match mime_guess::from_path::<&Path>(path.as_ref()).first() {
@@ -2487,15 +2495,13 @@ Write note suggestions in GitHub Flavored Markdown, ready to add to the task's n
 
         // Check If-None-Match header, and shortcut to 304
         let etag_value = format!("\"{}\"", head_commit_id);
-        if let Some(inm) = headers.get(header::IF_NONE_MATCH) {
-            if inm.to_str().unwrap_or("") == etag_value {
-                return Response::builder()
-                    .status(StatusCode::NOT_MODIFIED)
-                    .header(header::ETAG, etag_value.clone())
-                    .header(header::ACCESS_CONTROL_EXPOSE_HEADERS, "ETag")
-                    .body(Body::empty())
-                    .unwrap();
-            }
+        if holds_version(&headers, &etag_value) {
+            return Response::builder()
+                .status(StatusCode::NOT_MODIFIED)
+                .header(header::ETAG, etag_value.clone())
+                .header(header::ACCESS_CONTROL_EXPOSE_HEADERS, "ETag")
+                .body(Body::empty())
+                .unwrap();
         }
 
         match query.format.as_deref() {
@@ -2535,15 +2541,13 @@ Write note suggestions in GitHub Flavored Markdown, ready to add to the task's n
 
         // Check If-None-Match header, and shortcut to 304
         let etag_value = format!("\"{}\"", head_commit_id);
-        if let Some(inm) = headers.get(header::IF_NONE_MATCH) {
-            if inm.to_str().unwrap_or("") == etag_value {
-                return Response::builder()
-                    .status(StatusCode::NOT_MODIFIED)
-                    .header(header::ETAG, etag_value.clone())
-                    .header(header::ACCESS_CONTROL_EXPOSE_HEADERS, "ETag")
-                    .body(Body::empty())
-                    .unwrap();
-            }
+        if holds_version(&headers, &etag_value) {
+            return Response::builder()
+                .status(StatusCode::NOT_MODIFIED)
+                .header(header::ETAG, etag_value.clone())
+                .header(header::ACCESS_CONTROL_EXPOSE_HEADERS, "ETag")
+                .body(Body::empty())
+                .unwrap();
         }
 
         // Normal response
@@ -3066,6 +3070,17 @@ mod models {
         commit_index(repo, &mut index, &head_commit, message)
     }
 
+    /// Whether two entity tags name the same version, either or both marked weak: RFC 9110's weak
+    /// comparison. A proxy that compresses a response on its way marks its ETag weak, as nginx does
+    /// whenever it gzips one, and what moried's tags name, a blob or a commit by the hash of its
+    /// content, is the same either way.
+    pub(crate) fn same_version(a: &str, b: &str) -> bool {
+        fn opaque(tag: &str) -> &str {
+            tag.strip_prefix("W/").unwrap_or(tag)
+        }
+        opaque(a) == opaque(b)
+    }
+
     /// Check the file version and commit under the caller's repository lock.
     pub(crate) fn commit_save_checked(
         repo: &Repository,
@@ -3086,11 +3101,10 @@ mod models {
             .ok()
             .filter(|entry| entry.kind() != Some(git2::ObjectType::Tree))
             .map(|entry| entry.id());
-        // A proxy that compresses the read on its way marks the ETag it passes on weak, as nginx
-        // does whenever it gzips one: `W/"<oid>"`. Weak or strong, it names the blob read, whose
-        // ID is the hash of its content, so the version is still known exactly.
+        // Weak or strong, the tag names the blob read, whose ID is the hash of its content, so the
+        // version is still known exactly.
         let matches = match current {
-            Some(oid) => expected.strip_prefix("W/").unwrap_or(expected) == format!("\"{oid}\""),
+            Some(oid) => same_version(expected, &format!("\"{oid}\"")),
             None => expected == "absent",
         };
         if !matches {

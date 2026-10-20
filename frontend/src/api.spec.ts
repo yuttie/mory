@@ -82,6 +82,22 @@ describe('the requests for a note', () => {
         expect(client.get.mock.calls[0][1]).toMatchObject({ responseType: 'text' });
     });
 
+    // nginx marks the ETag weak when it gzips a file, while a 304 the browser's cache got for it
+    // carries moried's own: one version, held in one spelling.
+    it('holds a version without the weak mark a compressing proxy puts on it', async () => {
+        client.get.mockResolvedValue({ status: 200, data: '# Note\n', headers: { etag: 'W/"v1"' } });
+        expect((await getFile('.mory/task-assessment.md')).etag).toBe('"v1"');
+        client.get.mockResolvedValue({
+            status: 200,
+            data: '---\ntask:\n    status:\n        kind: todo\n---\n\n# Step\n',
+            headers: { etag: 'W/"v1"' },
+        });
+        const [etag, task] = await getTask('.tasks/00000000-0000-4000-8000-000000000001.md');
+        expect([etag, task?.etag]).toEqual(['"v1"', '"v1"']);
+        client.put.mockResolvedValue({ status: 200, data: true, headers: { etag: 'W/"v2"' } });
+        await expect(saveFileChecked('.tasks/a.md', 'text', '"v1"')).resolves.toBe('"v2"');
+    });
+
     it('keeps the slashes of an ordinary path', async () => {
         await getNote('research/programming-learning/codewalker.md');
         expect(client.get.mock.calls[0][0]).toBe('/notes/research/programming-learning/codewalker.md');
