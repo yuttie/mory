@@ -571,7 +571,7 @@ import { useFetchTask } from '@/composables/fetchTask';
 import { useLocalStorage } from '@/composables/localStorage';
 import { useConfigValue } from '@/config';
 import { required } from '@/rules';
-import { useShortcuts } from '@/keyboard';
+import { isSaveKey, useShortcuts } from '@/keyboard';
 import dayjs from 'dayjs';
 import { useCalendarsStore } from '@/stores/calendars';
 
@@ -971,7 +971,7 @@ function onBeforeunload(e: any) {
 // editor, and a date picker or the assessment is drawn outside it. Taken from the browser even with
 // nothing to save, whose Save would only save the page.
 function onKeydown(e: KeyboardEvent): void {
-    if (!e.ctrlKey || e.key !== 's') {
+    if (!isSaveKey(e)) {
         return;
     }
     e.preventDefault();

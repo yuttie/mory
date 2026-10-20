@@ -17,6 +17,12 @@ export function isInOverlay(event: Event): boolean {
     return target instanceof Element && target.closest('.v-overlay__content') !== null;
 }
 
+// Ctrl+S, which the note and the task editor save with. Caps Lock makes the key `S` without Shift;
+// with Shift it is another shortcut, which the browser may have.
+export function isSaveKey(event: KeyboardEvent): boolean {
+    return event.ctrlKey && !event.shiftKey && event.key.toLowerCase() === 's';
+}
+
 // Window focus events have no element target, but a modal still owns the next keystroke.
 export function hasActiveDialog(): boolean {
     return document.querySelector('.v-overlay--active[role="dialog"]') !== null;
@@ -48,6 +54,9 @@ function topDialog(): Element | null {
 // The handler's shortcuts are the view's, or with `within` those of the dialog that element is
 // drawn in, the view's again if it is in none. A menu is no layer: a key typed in one goes to the
 // layer on top, which opened it, and each shortcut there decides whether the key is its own.
+//
+// Ctrl+S is kept from the browser while a layer that saves with it is under the one on top: the
+// browser's would offer to save the page, where the key means to save what that layer holds.
 export function useShortcuts(
     handler: (event: KeyboardEvent) => void,
     within?: () => Element | null | undefined,
@@ -63,6 +72,9 @@ export function useShortcuts(
         }
         if (dialog === topDialog()) {
             handler(event);
+        }
+        else if (isSaveKey(event)) {
+            event.preventDefault();
         }
     }
 

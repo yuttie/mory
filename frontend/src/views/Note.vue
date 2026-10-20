@@ -392,7 +392,7 @@ import type { DefinedError } from 'ajv';
 import AppBarContent from '@/components/AppBarContent.vue';
 import EditableViewer from '@/components/EditableViewer.vue';
 import { refusalOf } from '@/api';
-import { hasActiveDialog, isInOverlay, useShortcuts } from '@/keyboard';
+import { hasActiveDialog, isInOverlay, isSaveKey, useShortcuts } from '@/keyboard';
 import { LAGGING_RETRY_MS, useFilesStore } from '@/stores/files';
 import { useConfigValue } from '@/config';
 import { noteBreadcrumbs } from '@/note-forest';
@@ -1058,7 +1058,7 @@ function handleKeydown(e: KeyboardEvent) {
         toggleViewer();
         e.preventDefault();
     }
-    else if (e.ctrlKey && e.key === 's') {
+    else if (isSaveKey(e)) {
         saveIfNeeded();
         e.preventDefault();
     }
