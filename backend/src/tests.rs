@@ -3524,3 +3524,21 @@ fn an_edited_assessment_prompt_is_not_answered_from_the_cache() {
     assert_eq!(asked("Judge the title only."), asked("Judge the title only."));
     assert_ne!(asked("Judge the title only."), asked("Judge the note only."));
 }
+
+/// The route the web app's Grep box used before `/v2/search` runs `git grep` itself, and kept the
+/// C locale and the one message for a malformed pattern after grep mode left them.
+#[tokio::test]
+async fn the_older_grep_route_greps_as_grep_mode_does() {
+    let fixture = RepoFixture::new();
+    let commit = fixture.commit_at("refs/heads/main", &[], &[("memo.md", Some("日本語のメモ\n"))], 1_700_000_000, 0, "Root");
+    let git_dir = fixture.repo.path().to_str().unwrap();
+
+    for pattern in ["日.語", "日[本]語"] {
+        let found = crate::grep_bare_repo(git_dir, pattern, &commit.to_string()).await;
+        assert!(matches!(found.as_deref(), Ok([_])), "{pattern}");
+    }
+    for malformed in ["[abc", "\\(abc", "a**"] {
+        let refused = crate::grep_bare_repo(git_dir, malformed, &commit.to_string()).await;
+        assert!(matches!(refused, Err(crate::GrepBareError::Invalid)), "{malformed}");
+    }
+}
