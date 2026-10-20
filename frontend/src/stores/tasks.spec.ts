@@ -77,7 +77,7 @@ function repository(specs: Spec[]) {
         }
         return { kind: 'full', commit: `c${served.commit}`, head: `c${commit}`, entries: served.entries };
     });
-    apiMocks.addNote.mockImplementation(async (path: string, content: string) => {
+    const write = (path: string, content: string) => {
         if (lagging > 0) {
             behind = { commit, entries: [...files.values()], left: lagging };
             lagging = 0;
@@ -86,7 +86,15 @@ function repository(specs: Spec[]) {
         // Listed with what the written frontmatter says, as the backend lists it.
         const metadata = YAML.parse(content.split(/^---$/m)[1] ?? '') ?? null;
         files.set(path, { ...(files.get(path) ?? entry({ path })), metadata });
+    };
+    apiMocks.addNote.mockImplementation(async (path: string, content: string) => {
+        write(path, content);
         return { data: null };
+    });
+    // Unchecked, as `addNote` is: a test of the check makes the call refuse by itself.
+    apiMocks.saveFileChecked.mockImplementation(async (path: string, content: string) => {
+        write(path, content);
+        return `"c${commit}"`;
     });
     apiMocks.renameNote.mockImplementation(async (from: string, to: string) => {
         commit += 1;
@@ -437,7 +445,7 @@ describe('save', () => {
         const path = `.tasks/${uuid(7)}.md`;
         await store.save(task(uuid(7)), path);
 
-        expect(apiMocks.addNote).toHaveBeenCalledWith(path, expect.stringContaining('# Written'));
+        expect(apiMocks.saveFileChecked).toHaveBeenCalledWith(path, expect.stringContaining('# Written'), 'absent');
         expect(repo.paths()).toEqual([path]);
         // The forest is derived, so the task is present without any local bookkeeping.
         expect(store.allTasks.map((t) => t.uuid)).toEqual([uuid(7)]);
@@ -446,9 +454,22 @@ describe('save', () => {
     it('renders the frontmatter into the file', async () => {
         const { store } = await storeWith([]);
         await store.save(task(uuid(7)), `.tasks/${uuid(7)}.md`);
-        const [, content] = apiMocks.addNote.mock.calls[0];
+        const [, content] = apiMocks.saveFileChecked.mock.calls[0];
         expect(content).toContain('status:');
         expect(content).toContain('kind: todo');
+    });
+
+    // A read that fails leaves the editor with no task, offering to create one where the note it
+    // could not read is: written unchecked, the form replaced it.
+    it('creates a task only where there is no note', async () => {
+        const { store } = await storeWith(sample);
+        apiMocks.saveFileChecked.mockRejectedValueOnce(Object.assign(new Error('Request failed with status code 412'), {
+            isAxiosError: true,
+            response: { status: 412 },
+        }));
+
+        await expect(store.save(task(uuid(3)), `.tasks/${uuid(3)}.md`)).rejects.toThrow('already there');
+        expect(apiMocks.addNote).not.toHaveBeenCalled();
     });
 });
 

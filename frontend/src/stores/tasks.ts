@@ -314,28 +314,32 @@ export const useTasksStore = defineStore('tasks', () => {
     async function save(task: Task, path: string): Promise<string | undefined> {
         const content = render(task);
         let written: string | undefined;
-        if (task.source === undefined) {
-            // A task not read from a note: a new one, at a path of its own.
-            await files.write(path, content);
+        // Only over the note it was read from. The editor stays open after a save, so the note can
+        // move on while it is -- completed through MCP, its dates set on another device -- and
+        // writing the form over that would undo it unannounced. A note read without an ETag is
+        // refused as one that changed, rather than written over unchecked. A task not read from a
+        // note is a new one, written only where there is none: a read that failed leaves the
+        // editor holding no task, and offering to create one over the note it could not read.
+        try {
+            written = await files.writeChecked(
+                path,
+                content,
+                task.source === undefined ? 'absent' : task.etag ?? 'absent',
+            );
         }
-        else {
-            // Only over the note it was read from. The editor stays open after a save, so the note
-            // can move on while it is -- completed through MCP, its dates set on another device --
-            // and writing the form over that would undo it unannounced. A note read without an
-            // ETag is refused as one that changed, rather than written over unchecked.
-            try {
-                written = await files.writeChecked(path, content, task.etag ?? 'absent');
+        catch (error) {
+            if (axios.isAxiosError(error) && error.response?.status === 412) {
+                throw new Error(
+                    task.source === undefined
+                        ? 'A note is already there, which could not be read, so creating this task '
+                            + 'would replace it. Copy anything you want to keep, then close it and '
+                            + 'open it again.'
+                        : 'The task changed elsewhere since it was opened. Copy anything you want to '
+                            + 'keep, then close it and open it again.',
+                    { cause: error },
+                );
             }
-            catch (error) {
-                if (axios.isAxiosError(error) && error.response?.status === 412) {
-                    throw new Error(
-                        'The task changed elsewhere since it was opened. Copy anything you want to keep, '
-                        + 'then close it and open it again.',
-                        { cause: error },
-                    );
-                }
-                throw error;
-            }
+            throw error;
         }
         try {
             await subset.settle(path, true);
