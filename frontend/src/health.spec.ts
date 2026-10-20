@@ -42,23 +42,31 @@ describe('frontmatterChecks', () => {
         });
     });
 
-    it('reports what the schema refuses, where it is', () => {
-        const [problem] = problemsOf(frontmatterChecks([entry('bad.md', { tags: 'a' })]))['frontmatter-schema'];
-        expect(problem.path).toBe('bad.md');
-        expect(problem.message).toMatch(/^\/tags: /);
+    // Each says what is wrong in one line, where Ajv reports how the value fails every shape it
+    // might have taken.
+    it.each([
+        ['a value of no shape allowed', { tags: 'a' }, ['/tags: must be array']],
+        ['a value no alternative fits', { events: { standup: { start: '2026-10-01', alarms: 5 } } }, ['/events/standup/alarms: must be string or array']],
+        ['an alarm', { events: { standup: { start: '2026-10-01', alarms: ['10m'] } } }, ['/events/standup/alarms/0: is not in the form it should be: "10m"']],
+        ['an event naming no occurrence', { events: { e: { end: '2026-01-01' } } }, ['/events/e: must have one of start, instances, times']],
+        ['a key not allowed', { task: { status: { kind: 'todo' }, foo: 3 } }, ['/task: must not have foo']],
+        ['a status missing what its kind needs', { task: { status: { kind: 'done' } } }, ['/task/status: must have required property \'completed_at\'']],
+        ['a status of no kind', { task: { status: { kind: 'finished' } } }, ['/task/status/kind: must be one of backlog, todo, in_progress, waiting, blocked, on_hold, done, canceled']],
+        ['a status that is not a mapping', { task: { status: 'todo' } }, ['/task/status: must be a mapping with a kind']],
+        ['an importance', { task: { status: { kind: 'todo' }, importance: 'urgent' } }, ['/task/importance: must be one of low, medium, high']],
+    ])('reports %s in one line', (_name, metadata, expected) => {
+        expect(problemsOf(frontmatterChecks([entry('bad.md', metadata)]))['frontmatter-schema']).toEqual(
+            expected.map((message) => ({ path: 'bad.md', message })));
     });
 
-    it('names a key the schema does not allow, and not the alternatives that did not fit', () => {
-        const messages = problemsOf(frontmatterChecks([entry('task.md', { task: { status: { kind: 'todo' }, urgency: 3 } })]))['frontmatter-schema']
+    it('names every property at fault, not only the first', () => {
+        const messages = problemsOf(frontmatterChecks([entry('bad.md', { created_at: 'x', tags: 'a', events: { e: { start: 1 } } })]))['frontmatter-schema']
             .map((problem) => problem.message);
-        expect(messages).toContain('/task: must NOT have additional properties: urgency');
-        expect(messages.some((message) => message.includes('oneOf'))).toBe(false);
-    });
-
-    it('quotes the value a pattern refuses rather than the pattern', () => {
-        const events = { standup: { start: '2026-10-01', alarms: ['10m'] } };
-        const messages = problemsOf(frontmatterChecks([entry('note.md', { events })]))['frontmatter-schema'].map((problem) => problem.message);
-        expect(messages).toContain('/events/standup/alarms/0: is not in the form it should be: "10m"');
+        expect(messages).toEqual([
+            '/created_at: is not in the form it should be: "x"',
+            '/events/e/start: must be string',
+            '/tags: must be array',
+        ]);
     });
 
     it('validates an `error` key beside others as any other key', () => {

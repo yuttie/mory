@@ -35,9 +35,6 @@ export interface HealthCheck {
     problems: HealthProblem[];
 }
 
-// `verbose` hands each error the value it is about, for a message to quote.
-const validateMetadata = new Ajv({ verbose: true }).compile(metadataSchema);
-
 /// Describes a value from the frontmatter as it was written, whatever its type.
 function describeValue(value: unknown): string {
     if (typeof value === 'string') {
@@ -48,6 +45,125 @@ function describeValue(value: unknown): string {
     }
     return JSON.stringify(value) ?? String(value);
 }
+
+// `verbose` hands each error the value it is about, for a message to quote, and `allErrors` names
+// every property at fault rather than the first.
+const ajv = new Ajv({ verbose: true, allErrors: true });
+const validateMetadata = ajv.compile(metadataSchema);
+
+const definitions = metadataSchema.definitions as Record<string, { oneOf?: { $ref: string }[]; properties?: { kind?: { const?: string } } }>;
+
+// Each status kind's own schema. A status is one of eight alternatives, told apart by `kind`, and
+// Ajv reports how the value fails every one of them: a `done` missing `completed_at` came out as
+// nine lines, most about other kinds. Checked against the one its kind names, it is one line.
+const statusValidators = new Map((definitions['task-status'].oneOf ?? []).map(({ $ref }) => [
+    definitions[$ref.slice('#/definitions/'.length)].properties?.kind?.const ?? '',
+    ajv.compile({ definitions, $ref }),
+]));
+
+// A message for a schema error, without the path it is at.
+function schemaMessage(error: DefinedError): string {
+    switch (error.keyword) {
+        // A pattern is a regular expression no reader should have to parse, such as the alarm
+        // grammar's: the value it refused says more.
+        case 'pattern':
+            return `is not in the form it should be: "${describeValue(error.data)}"`;
+        case 'additionalProperties':
+            return `must not have ${error.params.additionalProperty}`;
+        case 'enum':
+            return `must be one of ${error.params.allowedValues.join(', ')}`;
+        default:
+            return error.message ?? 'is invalid';
+    }
+}
+
+function isAtOrUnder(path: string, at: string): boolean {
+    return path === at || path.startsWith(`${at}/`);
+}
+
+// The errors as a reader needs them, by path.
+//
+// Where a value may take one of several shapes, Ajv reports how it fails each: `tags: a` must be
+// null, must be an array. Branches through a `$ref` cannot be traced back to their `oneOf` by schema
+// path, so they are told apart by where they are: a type mismatch at the alternatives' own path is
+// a shape the value did not take, and when some other error sits there or below, the value did take
+// one and that error says what is wrong with it. When only type mismatches are left, they become
+// one line naming the shapes. An `anyOf` of required keys becomes one line naming them. `known`
+// are errors found apart from these, which count as being below an alternative as these do.
+function readableErrors(
+    errors: readonly DefinedError[],
+    known: readonly { at: string }[] = [],
+): { at: string; message: string }[] {
+    const dropped = new Set<DefinedError>();
+    const added: { at: string; message: string }[] = [];
+    for (const alternative of errors) {
+        if (alternative.keyword !== 'oneOf' && alternative.keyword !== 'anyOf') {
+            continue;
+        }
+        dropped.add(alternative);
+        const at = alternative.instancePath;
+        const branches = errors.filter((error) => error.schemaPath.startsWith(`${alternative.schemaPath}/`));
+        if (branches.length > 0 && branches.every((error) => error.keyword === 'required')) {
+            branches.forEach((error) => dropped.add(error));
+            const keys = branches.map((error) => (error.keyword === 'required' ? error.params.missingProperty : ''));
+            added.push({ at, message: `must have one of ${keys.join(', ')}` });
+            continue;
+        }
+        const types = errors.filter((error) => error.keyword === 'type' && error.instancePath === at);
+        types.forEach((error) => dropped.add(error));
+        // What an alternative within this one became counts as well, whichever was met first.
+        const deeper = errors.some((error) => !dropped.has(error) && isAtOrUnder(error.instancePath, at))
+            || [...added, ...known].some((error) => isAtOrUnder(error.at, at));
+        if (!deeper && types.length > 0) {
+            const names = [...new Set(types.map((error) => (error.keyword === 'type' ? String(error.params.type) : '')))];
+            // Null is how an empty value reads, which says nothing about what to write.
+            const shapes = names.length > 1 ? names.filter((name) => name !== 'null') : names;
+            added.push({ at, message: `must be ${shapes.join(' or ')}` });
+        }
+    }
+    return [
+        ...errors.filter((error) => !dropped.has(error)).map((error) => ({ at: error.instancePath, message: schemaMessage(error) })),
+        ...added,
+    ];
+}
+
+// A task's status checked against the schema its kind names, or `null` when there is no status to
+// check: no task, or a task without one, which the whole schema reports as missing.
+function statusErrors(metadata: unknown): { at: string; message: string }[] | null {
+    const task = (metadata as Record<string, unknown>).task;
+    if (typeof task !== 'object' || task === null || Array.isArray(task) || !Object.hasOwn(task, 'status')) {
+        return null;
+    }
+    const status: unknown = (task as Record<string, unknown>).status;
+    const at = '/task/status';
+    if (typeof status !== 'object' || status === null || Array.isArray(status)) {
+        return [{ at, message: 'must be a mapping with a kind' }];
+    }
+    const kind: unknown = (status as Record<string, unknown>).kind;
+    const validate = typeof kind === 'string' ? statusValidators.get(kind) : undefined;
+    if (validate === undefined) {
+        return [{ at: `${at}/kind`, message: `must be one of ${[...statusValidators.keys()].join(', ')}` }];
+    }
+    if (validate(status)) {
+        return [];
+    }
+    return readableErrors(validate.errors as DefinedError[]).map((error) => ({ at: at + error.at, message: error.message }));
+}
+
+/// What `metadata-schema.json` finds wrong with a note's frontmatter, one line per mistake.
+function schemaProblems(metadata: unknown): string[] {
+    if (validateMetadata(metadata)) {
+        return [];
+    }
+    let errors = validateMetadata.errors as DefinedError[];
+    const status = statusErrors(metadata);
+    if (status !== null) {
+        errors = errors.filter((error) => !isAtOrUnder(error.instancePath, '/task/status'));
+    }
+    const lines = [...readableErrors(errors, status ?? []), ...(status ?? [])].map(({ at, message }) => `${at || '/'}: ${message}`);
+    return [...new Set(lines)];
+}
+
 
 // The listing stands a mapping holding `error` alone in for frontmatter moried could not read
 // (`extract_metadata` in `backend/src/main.rs`).
@@ -74,20 +190,8 @@ export function frontmatterChecks(entries: readonly ListEntry2[]): HealthCheck[]
             unreadable.push({ severity: 'error', message: reason, path: entry.path });
             continue;
         }
-        if (validateMetadata(entry.metadata)) {
-            continue;
-        }
-        for (const error of validateMetadata.errors as DefinedError[]) {
-            // Only says that none of the alternatives fit, which the errors of each already say.
-            if (error.keyword === 'oneOf') {
-                continue;
-            }
-            // A pattern is a regular expression no reader should have to parse, such as the alarm
-            // grammar's: the value it refused says more.
-            const message = error.keyword === 'pattern'
-                ? `is not in the form it should be: "${describeValue(error.data)}"`
-                : `${error.message ?? 'is invalid'}${error.keyword === 'additionalProperties' ? `: ${error.params.additionalProperty}` : ''}`;
-            invalid.push({ severity: 'error', message: `${error.instancePath || '/'}: ${message}`, path: entry.path });
+        for (const message of schemaProblems(entry.metadata)) {
+            invalid.push({ severity: 'error', message, path: entry.path });
         }
     }
     return [
