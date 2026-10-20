@@ -9,7 +9,7 @@ const client = vi.hoisted(() => ({
 
 vi.mock('@/axios', () => ({ getAxios: () => client }));
 
-import { addNote, deleteNote, getFile, getNote, getTaskData, noteExists, renameNote, saveFileChecked } from '@/api';
+import { addNote, deleteNote, getFile, getNote, getTaskData, noteExists, refusalOf, renameNote, saveFileChecked } from '@/api';
 import { getTask } from '@/api/task';
 
 // A path with the characters that end a URL's path early when they are not encoded.
@@ -118,5 +118,21 @@ describe('legacy task archive', () => {
         client.get.mockRejectedValue({ isAxiosError: true, response: { status: 401 } });
         await expect(getTaskData()).rejects.toMatchObject({ response: { status: 401 } });
         expect(client.get).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('refusalOf', () => {
+    // A path taken, or one naming no file, is something the user can mend once told which.
+    it('gives the reason moried answers a refused write with', () => {
+        const error = { isAxiosError: true, message: 'Request failed with status code 409', response: { status: 409, data: 'dir is a directory' } };
+        expect(refusalOf(error)).toBe('dir is a directory');
+        expect(refusalOf({ ...error, response: { status: 400, data: '/x has an empty component' } })).toBe('/x has an empty component');
+    });
+
+    it('gives nothing for a failure that is not a refusal', () => {
+        expect(refusalOf({ isAxiosError: true, response: { status: 500, data: 'oops' } })).toBeUndefined();
+        expect(refusalOf({ isAxiosError: true, response: { status: 409, data: '' } })).toBeUndefined();
+        expect(refusalOf({ isAxiosError: true })).toBeUndefined();
+        expect(refusalOf(new Error('offline'))).toBeUndefined();
     });
 });

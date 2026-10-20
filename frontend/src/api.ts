@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { getAxios } from '@/axios';
 import { encodePath } from '@/encode-path';
 import YAML from 'yaml';
@@ -264,6 +265,19 @@ export async function getFile(path: string, etag?: string): Promise<{ content: s
 export async function saveFileChecked(path: string, content: string, expectedETag: string): Promise<string | undefined> {
     const response = await getAxios().put(`/notes/${encodePath(path)}`, { Save: { content, message: `Update ${path}`, expected_etag: expectedETag } });
     return response.headers?.etag;
+}
+
+// Why moried refused a write, as it says it: a path already taken, or one that names no file.
+// Its 409 and 400 carry the reason as text, where the error's own message gives only the status.
+export function refusalOf(error: unknown): string | undefined {
+    if (!axios.isAxiosError(error)) {
+        return undefined;
+    }
+    const { status, data } = error.response ?? {};
+    if ((status === 400 || status === 409) && typeof data === 'string' && data !== '') {
+        return data;
+    }
+    return undefined;
 }
 
 export function getNote(path: string) {
