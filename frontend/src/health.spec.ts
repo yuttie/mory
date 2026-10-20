@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ListEntry2 } from '@/api';
-import { eventChecks, frontmatterChecks, settingsChecks, taskChecks } from '@/health';
+import { eventChecks, frontmatterChecks, guardChecks, settingsChecks, taskChecks } from '@/health';
 import type { HealthCheck } from '@/health';
 
 function entry(path: string, metadata: unknown): ListEntry2 {
@@ -146,5 +146,18 @@ describe('settingsChecks', () => {
             'tasks-settings': [{ path: '.mory/tasks.yaml', message: 'Invalid default_lead_time' }],
             'plans': [{ path: '.mory/plans/2026-10.yaml', message: 'not a mapping' }],
         });
+    });
+});
+
+describe('guardChecks', () => {
+    it('hands on the checks that ran', () => {
+        const checks = taskChecks([]);
+        expect(guardChecks('tasks', 'Tasks can be checked', () => checks)).toBe(checks);
+    });
+
+    it('stands one failed check in for those that threw', () => {
+        expect(problemsOf(guardChecks('tasks', 'Tasks can be checked', () => {
+            throw new TypeError('x is undefined');
+        }))).toEqual({ tasks: [{ message: 'The checks could not run: x is undefined' }] });
     });
 });

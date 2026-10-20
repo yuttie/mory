@@ -295,3 +295,21 @@ export function settingsChecks(reports: {
         },
     ];
 }
+
+/// The checks `run` makes, or one failed check in their place when it throws.
+///
+/// The checks read whatever the files hold, and the page is where a reader learns what is broken:
+/// one check meeting something it did not expect must not take the others, or the page, with it.
+export function guardChecks(id: string, title: string, run: () => HealthCheck[]): HealthCheck[] {
+    try {
+        return run();
+    }
+    catch (error) {
+        return [{
+            id,
+            title,
+            description: 'These checks stopped on an error of their own, so what they verify is unknown.',
+            problems: [{ severity: 'error', message: `The checks could not run: ${error instanceof Error ? error.message : String(error)}` }],
+        }];
+    }
+}

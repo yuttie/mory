@@ -115,7 +115,7 @@ import dayjs from 'dayjs';
 
 import AppBarContent from '@/components/AppBarContent.vue';
 import { routeForMime } from '@/file-route';
-import { eventChecks, frontmatterChecks, settingsChecks, taskChecks } from '@/health';
+import { eventChecks, frontmatterChecks, guardChecks, settingsChecks, taskChecks } from '@/health';
 import type { HealthCheck, HealthProblem, HealthSeverity } from '@/health';
 import { CALENDARS_PATH, useCalendarsStore } from '@/stores/calendars';
 import { useFilesStore } from '@/stores/files';
@@ -154,25 +154,25 @@ const sections = computed<Section[]>(() => [
     {
         id: 'frontmatter',
         title: 'Frontmatter',
-        checks: frontmatterChecks(files.entries),
+        checks: guardChecks('frontmatter', 'Frontmatter can be checked', () => frontmatterChecks(files.entries)),
     },
     {
         id: 'events',
         title: `Events and task dates, ${eventWindow.from} to ${eventWindow.to}`,
-        checks: eventChecks(files.entries, eventWindow, {
+        checks: guardChecks('events', 'Events and task dates can be checked', () => eventChecks(files.entries, eventWindow, {
             categories: calendars.categoryMap,
             alarmDefaults: calendars.alarmDefaults,
-        }),
+        })),
     },
     {
         id: 'tasks',
         title: 'Tasks',
-        checks: taskChecks(files.entries),
+        checks: guardChecks('tasks', 'Tasks can be checked', () => taskChecks(files.entries)),
     },
     {
         id: 'settings',
         title: 'Settings and plans',
-        checks: settingsChecks({
+        checks: guardChecks('settings', 'Settings and plans can be checked', () => settingsChecks({
             calendarsPath: CALENDARS_PATH,
             calendarErrors: calendarsReadError.value === null
                 ? calendars.errors
@@ -180,7 +180,7 @@ const sections = computed<Section[]>(() => [
             tasksPath: TASK_SETTINGS_PATH,
             taskSettingsProblems: taskSettings.problems,
             planErrors: plans.errors,
-        }),
+        })),
     },
 ]);
 
@@ -229,7 +229,9 @@ function routeOf(path: string) {
     return routeForMime(path, entryOf.value.get(path)?.mime_type ?? 'text/markdown');
 }
 
-// Each store keeps what it last read, and reading again is what makes a fix show up here.
+// Each store keeps what it last read, and reading again is what makes a fix show up here. Every
+// read is caught on its own: one that fails leaves the checks on what the others found, and the
+// page says so rather than staying in its checking state.
 async function check(): Promise<void> {
     checking.value = true;
     listingError.value = null;
@@ -241,6 +243,7 @@ async function check(): Promise<void> {
         calendars.loadConfiguration().catch((error) => {
             calendarsReadError.value = String(error);
         }),
+        // Never rejects: the store reports a file it cannot read among its problems.
         taskSettings.load(),
         // Each month that fails is in `plans.errors` already.
         plans.loadAll().catch(() => undefined),
