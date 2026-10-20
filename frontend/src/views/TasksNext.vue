@@ -85,6 +85,8 @@
                         hide-details
                         clearable
                         autocomplete="off"
+                        v-on:compositionstart="onSearchCompositionStart"
+                        v-on:compositionend="onSearchCompositionEnd"
                     />
                     <!-- Counts the statuses left out, so a tree missing tasks says why. Named
                          outright, as the badge would otherwise name the button after itself. -->
@@ -670,9 +672,16 @@ const taskStatuses = computed<Record<StatusKind, TaskNode[]>>(() => {
 
 // Cleared at once: clearing is a single press, and the tree it gives back is the one left before.
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
-watch(treeQuery, (query) => {
+// Set while an input method composes a word. The field takes its reading and each candidate as
+// they come, and a pause to choose one would otherwise search for it.
+let composing = false;
+
+function applySearch(query: string | null) {
     clearTimeout(searchTimer);
     const text = query ?? '';
+    if (composing) {
+        return;
+    }
     if (searchTerms(text).length === 0) {
         treeSearch.value = text;
         return;
@@ -680,8 +689,22 @@ watch(treeQuery, (query) => {
     searchTimer = setTimeout(() => {
         treeSearch.value = text;
     }, 250);
-});
+}
+
+watch(treeQuery, applySearch);
 onUnmounted(() => clearTimeout(searchTimer));
+
+function onSearchCompositionStart() {
+    composing = true;
+    clearTimeout(searchTimer);
+}
+
+// The word the input method gives is searched as typed text is. Whether the input event carrying
+// it comes before this or after differs between browsers, and either way it is searched for.
+function onSearchCompositionEnd() {
+    composing = false;
+    applySearch(treeQuery.value);
+}
 
 const treeTerms = computed<string[]>(() => searchTerms(treeSearch.value));
 

@@ -90,6 +90,24 @@ test('finds tasks by title and opens the tasks above them', async ({ context, pa
     await expect(tree(page)).toContainText('No tasks match.');
 });
 
+// A reading and its candidates are not what is searched for, however long one is dwelt on.
+test('searches for the word an input method gives, not for what it composes', async ({ context, page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'Composes through the DevTools protocol, which only Chromium speaks.');
+    await mockBackend(context, NOTES);
+    await page.goto('/tasks-next');
+    await expect(rows(page)).toHaveText(['Launch', 'home']);
+    await search(page).focus();
+    const devtools = await context.newCDPSession(page);
+    await devtools.send('Input.imeSetComposition', { text: 'build', selectionStart: 5, selectionEnd: 5 });
+    await expect(search(page)).toHaveValue('build');
+    // Well past the pause after which typed text is searched for.
+    await page.waitForTimeout(750);
+    await expect(rows(page)).toHaveText(['Launch', 'home']);
+
+    await devtools.send('Input.insertText', { text: 'build' });
+    await expect(rows(page)).toHaveText(['Launch', 'Ship', 'Build the release']);
+});
+
 test('gives the tree back as it was once the search is cleared', async ({ context, page }) => {
     await mockBackend(context, NOTES);
     await page.goto('/tasks-next');
