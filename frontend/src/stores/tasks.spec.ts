@@ -499,6 +499,19 @@ describe('save over a note', () => {
         await expect(store.save(read(uuid(3)), `.tasks/${uuid(3)}.md`)).rejects.toThrow('changed elsewhere');
         expect(apiMocks.addNote).not.toHaveBeenCalled();
     });
+
+    // Only the listing failed to follow. Taken for a failed save, it left the editor to check its
+    // next one against the version before this, which found this one there and refused.
+    it('keeps the version it wrote when the listing cannot be refreshed', async () => {
+        const { store, SavedUnlisted } = await storeWith(sample);
+        apiMocks.saveFileChecked.mockResolvedValueOnce('"as-written"');
+        apiMocks.getEntries.mockRejectedValue(new Error('offline'));
+
+        const saving = store.save(read(uuid(3)), `.tasks/${uuid(3)}.md`);
+
+        await expect(saving).rejects.toBeInstanceOf(SavedUnlisted);
+        await expect(saving).rejects.toMatchObject({ written: '"as-written"' });
+    });
 });
 
 describe('saveAll', () => {

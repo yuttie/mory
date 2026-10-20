@@ -37,6 +37,19 @@ import { useFilesStore } from '@/stores/files';
 const TAG_GROUP_PREFIX = 'tag-group-';
 const UNTAGGED = 'Untagged';
 
+// A save that landed, though the listing could not be brought to show it. No failed save: one tried
+// again would be checked against the version read before it, find this one there, and be refused
+// as a change made elsewhere. `written` is the ETag the save left, as `save` resolves to.
+export class SavedUnlisted extends Error {
+    constructor(readonly written: string | undefined, cause: unknown) {
+        super(
+            `the task list could not be refreshed: ${cause instanceof Error ? cause.message : String(cause)}`,
+            { cause },
+        );
+        this.name = 'SavedUnlisted';
+    }
+}
+
 export function isTagGroupId(id: string): boolean {
     return id.startsWith(TAG_GROUP_PREFIX);
 }
@@ -297,6 +310,7 @@ export const useTasksStore = defineStore('tasks', () => {
     // --- Mutations. Server first, then wait for the listing to show the result. ---
 
     // Resolves to the ETag of the note it wrote over, for the editor's next save to check against.
+    // Rejects with `SavedUnlisted` when it wrote, but the listing could not be refreshed.
     async function save(task: Task, path: string): Promise<string | undefined> {
         const content = render(task);
         let written: string | undefined;
@@ -323,7 +337,12 @@ export const useTasksStore = defineStore('tasks', () => {
                 throw error;
             }
         }
-        await subset.settle(path, true);
+        try {
+            await subset.settle(path, true);
+        }
+        catch (error) {
+            throw new SavedUnlisted(written, error);
+        }
         return written;
     }
 
