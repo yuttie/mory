@@ -326,6 +326,46 @@ describe('a configuration not read', () => {
     });
 });
 
+describe('saves made together', () => {
+    // The store takes a change once it is written, and each save writes the whole file from the
+    // store: a save started while another was in flight wrote the file without that one's change.
+    it('write each with the changes saved before it', async () => {
+        const store = await storeWith(YAML_FILE);
+        await store.loadConfiguration();
+        let release!: () => void;
+        apiMocks.addNote.mockImplementationOnce(() => new Promise((resolve) => {
+            release = () => resolve({ data: null });
+        }));
+
+        const first = store.saveTaskDateColors({ deadline: '#b71c1c' });
+        const second = store.saveCategories([{ id: 'meeting', color: '#00796b' }]);
+        await vi.waitFor(() => expect(apiMocks.addNote).toHaveBeenCalledOnce());
+        release();
+        await Promise.all([first, second]);
+
+        expect(apiMocks.addNote).toHaveBeenCalledTimes(2);
+        const [, content] = apiMocks.addNote.mock.calls[1];
+        expect(content).toContain('#b71c1c');
+        expect(content).toContain('#00796b');
+        expect(store.taskDateColors).toEqual({ deadline: '#b71c1c' });
+    });
+
+    it('write the next one when one fails', async () => {
+        const store = await storeWith(YAML_FILE);
+        await store.loadConfiguration();
+        apiMocks.addNote.mockRejectedValueOnce(new Error('offline'));
+
+        const first = store.saveTaskDateColors({ deadline: '#b71c1c' });
+        const second = store.saveCategories([{ id: 'meeting', color: '#00796b' }]);
+
+        await expect(first).rejects.toThrow('offline');
+        await second;
+        const [, content] = apiMocks.addNote.mock.calls[1];
+        expect(content).not.toContain('#b71c1c');
+        expect(content).toContain('#00796b');
+    });
+});
+
 describe('loading events', () => {
     it('refetches after a subscription save even when the previous response arrives late', async () => {
         let release!: (value: ImportedEventsResponse) => void;
