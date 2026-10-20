@@ -504,20 +504,31 @@ fn extract_metadata_reports_frontmatter_the_listing_cannot_read_back_as_an_error
 
 #[test]
 fn listable_reports_each_key_it_leaves_out_by_where_it_was() {
-    let value: serde_yaml::Value = serde_yaml::from_str(
-        "~: a\nevents:\n  ? [a, b]\n  : b\n  Meeting:\n    instances:\n      - !tag start: c\nlinks:\n  - .nan: d\n",
-    ).unwrap();
-    let mut left_out = Vec::new();
-    crate::listable(value, "", &mut left_out);
-    assert_eq!(
-        left_out,
-        vec![
-            "a null key at the top level",
-            "a list key in `events`",
-            "`!tag start` in `events.Meeting.instances.0`",
-            "`.nan` in `links.0`",
-        ],
-    );
+    let cases = [
+        (
+            "~: a\nevents:\n  ? [a, b]\n  : b\n  Meeting:\n    instances:\n      - !tag start: c\n\
+             links:\n  - .nan: d\n  - 1: e\n    \"1\": f\n? !tag {a: 1}\n: g\n",
+            vec![
+                "a null key at the top level",
+                "a list key in `events`",
+                "a key tagged `!tag` in `events.Meeting.instances.0`",
+                "`.nan` in `links.0`",
+                "two frontmatter keys named `1` in `links.1`",
+                "a key tagged `!tag` at the top level",
+            ],
+        ),
+        // A top-level list is no mapping, and its items are not at the top level.
+        ("- ~: a\n", vec!["a null key in `0`"]),
+    ];
+    for (frontmatter, expected) in cases {
+        let mut left_out = Vec::new();
+        crate::listable(serde_yaml::from_str(frontmatter).unwrap(), None, &mut left_out);
+        assert_eq!(left_out.len(), expected.len(), "{left_out:#?}");
+        for (warning, expected) in left_out.iter().zip(expected) {
+            assert!(warning.contains(expected), "{warning:?} should say {expected:?}");
+            assert!(!warning.contains('\n'), "{warning:?} should be one line");
+        }
+    }
 }
 
 #[test]

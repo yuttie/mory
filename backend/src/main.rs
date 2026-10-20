@@ -1267,13 +1267,9 @@ fn extract_metadata(blob: &[u8], mime_type: &str) -> (Option<serde_yaml::Value>,
                     Ok(doc) => {
                         tracing::debug!("parsed YAML metadata: {:?}", &doc);
                         let mut left_out = Vec::new();
-                        let doc = listable(doc, "", &mut left_out);
-                        for place in left_out {
-                            tracing::warn!(
-                                "The listing leaves out {}, a frontmatter key JSON cannot hold, \
-                                 with its value: quote or rename the key to keep it",
-                                place,
-                            );
+                        let doc = listable(doc, None, &mut left_out);
+                        for warning in left_out {
+                            tracing::warn!("{}", warning);
                         }
                         // Read back as the listing reads it, so whatever the sync stores the
                         // listing can read: YAML nested 127 deep is within serde_yaml's limit
@@ -1310,38 +1306,54 @@ fn extract_metadata(blob: &[u8], mime_type: &str) -> (Option<serde_yaml::Value>,
 ///
 /// A key is named as serde_json writes it, so frontmatter the cache could already hold is listed
 /// as it was. A key it cannot name -- null (`~:`), a list or mapping, a tagged one, `.nan` -- is
-/// left out with its value and reported in `left_out` by where it was, rather than taking the rest
-/// with it: the note's task, tags and other events stay in the listing, as the web app, which
-/// reads them from the note itself, still shows them. Two keys named alike, such as `1` and `"1"`,
-/// keep the later value, as JavaScript does.
-fn listable(value: serde_yaml::Value, at: &str, left_out: &mut Vec<String>) -> serde_yaml::Value {
+/// left out with its value, rather than taking the rest with it: the note's task, tags and other
+/// events stay in the listing, as the web app, which reads them from the note itself, still shows
+/// them. Of two keys named alike, such as `1` and `"1"`, the later value is kept, as JavaScript
+/// keeps it. Each key left out adds the warning to give about it to `left_out`, saying where it
+/// was: `at` is where `value` is, `None` at the top level.
+fn listable(value: serde_yaml::Value, at: Option<&str>, left_out: &mut Vec<String>) -> serde_yaml::Value {
     use serde_yaml::Value;
 
+    let within = |name: &str| match at {
+        None => name.to_owned(),
+        Some(at) => format!("{at}.{name}"),
+    };
+    let place = match at {
+        None => "at the top level".to_owned(),
+        Some(at) => format!("in `{at}`"),
+    };
     match value {
         Value::Mapping(mapping) => {
             let mut listed = serde_yaml::Mapping::with_capacity(mapping.len());
             for (key, value) in mapping {
                 let name = match &key {
+                    Value::String(name) => Ok(name.clone()),
+                    Value::Bool(flag) => Ok(flag.to_string()),
                     // Not as `Number` displays itself, which is not always serde_json's spelling:
                     // `1e16` is `1e+16` to serde_json.
-                    Value::Number(number) if number.is_finite() => serde_json::to_string(number).ok(),
-                    Value::Number(_) => None,
-                    key => note_events::key_name(key),
+                    Value::Number(number) if number.is_finite() => {
+                        serde_json::to_string(number).map_err(|_| format!("`{number}`"))
+                    },
+                    Value::Number(number) => Err(format!("`{number}`")),
+                    Value::Null => Err("a null key".to_owned()),
+                    Value::Sequence(_) => Err("a list key".to_owned()),
+                    Value::Mapping(_) => Err("a mapping key".to_owned()),
+                    Value::Tagged(tagged) => Err(format!("a key tagged `{}`", tagged.tag)),
                 };
                 match name {
-                    Some(name) => {
-                        let inner = if at.is_empty() { name.clone() } else { format!("{at}.{name}") };
-                        listed.insert(Value::String(name), listable(value, &inner, left_out));
+                    Ok(name) => {
+                        let value = listable(value, Some(&within(&name)), left_out);
+                        if listed.insert(Value::String(name.clone()), value).is_some() {
+                            left_out.push(format!(
+                                "The listing keeps only the later of two frontmatter keys named \
+                                 `{name}` {place}, as JSON holds one: rename one to keep both",
+                            ));
+                        }
                     },
-                    None => {
-                        let key = match &key {
-                            Value::Null => "a null key".to_owned(),
-                            Value::Sequence(_) => "a list key".to_owned(),
-                            Value::Mapping(_) => "a mapping key".to_owned(),
-                            key => format!("`{}`", serde_yaml::to_string(key).unwrap_or_default().trim_end()),
-                        };
-                        left_out.push(if at.is_empty() { format!("{key} at the top level") } else { format!("{key} in `{at}`") });
-                    },
+                    Err(key) => left_out.push(format!(
+                        "The listing leaves out {key} {place}, a frontmatter key JSON cannot hold, \
+                         with its value: quote or rename the key to keep it",
+                    )),
                 }
             }
             Value::Mapping(listed)
@@ -1350,7 +1362,7 @@ fn listable(value: serde_yaml::Value, at: &str, left_out: &mut Vec<String>) -> s
             sequence
                 .into_iter()
                 .enumerate()
-                .map(|(index, item)| listable(item, &format!("{at}.{index}"), left_out))
+                .map(|(index, item)| listable(item, Some(&within(&index.to_string())), left_out))
                 .collect(),
         ),
         Value::Tagged(tagged) => {
