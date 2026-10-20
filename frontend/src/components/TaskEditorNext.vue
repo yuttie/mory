@@ -447,6 +447,7 @@
                         v-if="form.due_by !== ''"
                         v-model="form.due_by_alarms"
                         v-bind:fallback="calendars.effectiveAlarmDefaults.dueBy"
+                        class="under-field"
                     ></InheritableAlarms>
                     <!-- Deadline -->
                     <DateSelector
@@ -463,6 +464,7 @@
                         v-if="form.deadline !== ''"
                         v-model="form.deadline_alarms"
                         v-bind:fallback="calendars.effectiveAlarmDefaults.deadline"
+                        class="under-field"
                     ></InheritableAlarms>
                     <v-alert v-for="problem of Object.values(plans.errors)" v-bind:key="problem" type="warning">{{ problem }}</v-alert>
                     <v-list-subheader>Planned days</v-list-subheader>
@@ -1250,6 +1252,13 @@ defineExpose({
 .props-pane {
     max-width: 350px;
     overflow-y: auto;
+}
+
+// What belongs to the field above it, such as a date's alarms, starts where that field's box does,
+// past its icon, so the column of icons marks where each field begins and the rest reads as part of
+// the field before it.
+.under-field {
+    margin-inline-start: var(--mory-field-prepend-width);
 }
 
 // Sized from zero rather than from its content: the editor's lines and the rendered note are wider
