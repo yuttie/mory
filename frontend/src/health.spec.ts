@@ -54,6 +54,12 @@ describe('frontmatterChecks', () => {
         expect(messages.some((message) => message.includes('oneOf'))).toBe(false);
     });
 
+    it('quotes the value a pattern refuses rather than the pattern', () => {
+        const events = { standup: { start: '2026-10-01', alarms: ['10m'] } };
+        const messages = problemsOf(frontmatterChecks([entry('note.md', { events })]))['frontmatter-schema'].map((problem) => problem.message);
+        expect(messages).toContain('/events/standup/alarms/0: is not in the form it should be: "10m"');
+    });
+
     it('validates an `error` key beside others as any other key', () => {
         expect(frontmatterChecks([entry('note.md', { error: 'x', tags: [] })]).flatMap((check) => check.problems)).toEqual([]);
     });

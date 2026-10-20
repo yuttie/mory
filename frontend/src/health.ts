@@ -34,7 +34,8 @@ export interface HealthCheck {
     problems: HealthProblem[];
 }
 
-const validateMetadata = new Ajv().compile(metadataSchema);
+// `verbose` hands each error the value it is about, for a message to quote.
+const validateMetadata = new Ajv({ verbose: true }).compile(metadataSchema);
 
 /// Describes a value from the frontmatter as it was written, whatever its type.
 function describeValue(value: unknown): string {
@@ -80,12 +81,12 @@ export function frontmatterChecks(entries: readonly ListEntry2[]): HealthCheck[]
             if (error.keyword === 'oneOf') {
                 continue;
             }
-            const detail = error.keyword === 'additionalProperties' ? `: ${error.params.additionalProperty}` : '';
-            invalid.push({
-                severity: 'error',
-                message: `${error.instancePath || '/'}: ${error.message ?? 'is invalid'}${detail}`,
-                path: entry.path,
-            });
+            // A pattern is a regular expression no reader should have to parse, such as the alarm
+            // grammar's: the value it refused says more.
+            const message = error.keyword === 'pattern'
+                ? `is not in the form it should be: "${describeValue(error.data)}"`
+                : `${error.message ?? 'is invalid'}${error.keyword === 'additionalProperties' ? `: ${error.params.additionalProperty}` : ''}`;
+            invalid.push({ severity: 'error', message: `${error.instancePath || '/'}: ${message}`, path: entry.path });
         }
     }
     return [
