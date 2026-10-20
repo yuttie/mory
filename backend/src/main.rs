@@ -1308,13 +1308,12 @@ fn extract_metadata(blob: &[u8], mime_type: &str) -> (Option<serde_yaml::Value>,
 
 /// `value` as the listing can hold it: the cache stores metadata as JSON, whose keys are strings.
 ///
-/// A key is named as `note_events::key_name` names an event, which spells a number or a boolean
-/// as serde_json writes one, so frontmatter the cache could already hold is listed as it was. A
-/// key it cannot name -- null (`~:`), a list or mapping, a tagged one, `.nan` -- is left out with
-/// its value and reported in `left_out` by where it was, rather than taking the rest with it: the
-/// note's task, tags and other events stay in the listing, as the web app, which reads them from
-/// the note itself, still shows them. Two keys named alike, such as `1` and `"1"`, keep the later
-/// value, as JavaScript does.
+/// A key is named as serde_json writes it, so frontmatter the cache could already hold is listed
+/// as it was. A key it cannot name -- null (`~:`), a list or mapping, a tagged one, `.nan` -- is
+/// left out with its value and reported in `left_out` by where it was, rather than taking the rest
+/// with it: the note's task, tags and other events stay in the listing, as the web app, which
+/// reads them from the note itself, still shows them. Two keys named alike, such as `1` and `"1"`,
+/// keep the later value, as JavaScript does.
 fn listable(value: serde_yaml::Value, at: &str, left_out: &mut Vec<String>) -> serde_yaml::Value {
     use serde_yaml::Value;
 
@@ -1323,7 +1322,10 @@ fn listable(value: serde_yaml::Value, at: &str, left_out: &mut Vec<String>) -> s
             let mut listed = serde_yaml::Mapping::with_capacity(mapping.len());
             for (key, value) in mapping {
                 let name = match &key {
-                    Value::Number(number) if !number.is_finite() => None,
+                    // Not as `Number` displays itself, which is not always serde_json's spelling:
+                    // `1e16` is `1e+16` to serde_json.
+                    Value::Number(number) if number.is_finite() => serde_json::to_string(number).ok(),
+                    Value::Number(_) => None,
                     key => note_events::key_name(key),
                 };
                 match name {
