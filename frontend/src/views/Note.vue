@@ -439,6 +439,10 @@ const isLoading = ref(false);
 const isSaving = ref(false);
 const isRenaming = ref(false);
 const notFound = ref(false);
+// The note at this path could not be read. The view then holds nothing of it, and saving is off:
+// it would put whatever the view held over the note it could not read, which on a move from one
+// note to another was the text of the note before.
+const loadFailed = ref(false);
 const showConfirmationDialog = ref(false);
 const error = ref(false);
 const errorText = ref('');
@@ -552,6 +556,9 @@ const upstreamStateSnackbarColor = computed((): string => {
 });
 
 const needSave = computed((): boolean => {
+    if (loadFailed.value) {
+        return false;
+    }
     if (noteHasUpstream.value) {
         if (isModified.value) {
             return true;
@@ -592,6 +599,7 @@ async function loadNoteFromRoute() {
         // whatever note was previously open in this component instance.
         noteHasUpstream.value = false;
         notFound.value = false;
+        loadFailed.value = false;
 
         if (route.query.template) {
             await loadTemplate(route.query.template as string);
@@ -843,6 +851,7 @@ async function load(path: string) {
 
         isLoading.value = false;
         notFound.value = false;
+        loadFailed.value = false;
     }).catch(err => {
         if (err.response) {
             if (err.response.status === 401) {
@@ -856,8 +865,10 @@ async function load(path: string) {
                 // Not Found
                 isLoading.value = false;
                 notFound.value = true;
+                loadFailed.value = false;
             }
             else {
+                failLoad();
                 error.value = true;
                 errorText.value = err.toString();
                 isLoading.value = false;
@@ -865,12 +876,19 @@ async function load(path: string) {
             }
         }
         else {
+            failLoad();
             error.value = true;
             errorText.value = err.toString();
             isLoading.value = false;
             throw err;
         }
     });
+}
+
+function failLoad() {
+    loadFailed.value = true;
+    text.value = '';
+    initialText.value = '';
 }
 
 async function loadTemplate(path: string) {
