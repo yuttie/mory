@@ -37,6 +37,19 @@ import { useFilesStore } from '@/stores/files';
 const TAG_GROUP_PREFIX = 'tag-group-';
 const UNTAGGED = 'Untagged';
 
+// A save that landed, though the listing could not be brought to show it. No failed save: one tried
+// again would be checked against the version read before it, find this one there, and be refused
+// as a change made elsewhere. `written` is the ETag the save left, as `save` resolves to.
+export class SavedUnlisted extends Error {
+    constructor(readonly written: string | undefined, cause: unknown) {
+        super(
+            `the task list could not be refreshed: ${cause instanceof Error ? cause.message : String(cause)}`,
+            { cause },
+        );
+        this.name = 'SavedUnlisted';
+    }
+}
+
 export function isTagGroupId(id: string): boolean {
     return id.startsWith(TAG_GROUP_PREFIX);
 }
@@ -297,33 +310,43 @@ export const useTasksStore = defineStore('tasks', () => {
     // --- Mutations. Server first, then wait for the listing to show the result. ---
 
     // Resolves to the ETag of the note it wrote over, for the editor's next save to check against.
+    // Rejects with `SavedUnlisted` when it wrote, but the listing could not be refreshed.
     async function save(task: Task, path: string): Promise<string | undefined> {
         const content = render(task);
         let written: string | undefined;
-        if (task.source === undefined) {
-            // A task not read from a note: a new one, at a path of its own.
-            await files.write(path, content);
+        // Only over the note it was read from. The editor stays open after a save, so the note can
+        // move on while it is -- completed through MCP, its dates set on another device -- and
+        // writing the form over that would undo it unannounced. A note read without an ETag is
+        // refused as one that changed, rather than written over unchecked. A task not read from a
+        // note is a new one, written only where there is none: a read that failed leaves the
+        // editor holding no task, and offering to create one over the note it could not read.
+        try {
+            written = await files.writeChecked(
+                path,
+                content,
+                task.source === undefined ? 'absent' : task.etag ?? 'absent',
+            );
         }
-        else {
-            // Only over the note it was read from. The editor stays open after a save, so the note
-            // can move on while it is -- completed through MCP, its dates set on another device --
-            // and writing the form over that would undo it unannounced. A note read without an
-            // ETag is refused as one that changed, rather than written over unchecked.
-            try {
-                written = await files.writeChecked(path, content, task.etag ?? 'absent');
+        catch (error) {
+            if (axios.isAxiosError(error) && error.response?.status === 412) {
+                throw new Error(
+                    task.source === undefined
+                        ? 'A note is already there, which could not be read, so creating this task '
+                            + 'would replace it. Copy anything you want to keep, then close it and '
+                            + 'open it again.'
+                        : 'The task changed elsewhere since it was opened. Copy anything you want to '
+                            + 'keep, then close it and open it again.',
+                    { cause: error },
+                );
             }
-            catch (error) {
-                if (axios.isAxiosError(error) && error.response?.status === 412) {
-                    throw new Error(
-                        'The task changed elsewhere since it was opened. Copy anything you want to keep, '
-                        + 'then close it and open it again.',
-                        { cause: error },
-                    );
-                }
-                throw error;
-            }
+            throw error;
         }
-        await subset.settle(path, true);
+        try {
+            await subset.settle(path, true);
+        }
+        catch (error) {
+            throw new SavedUnlisted(written, error);
+        }
         return written;
     }
 
@@ -365,9 +388,12 @@ export const useTasksStore = defineStore('tasks', () => {
     // Only a task with nothing under it. Its subtasks live in the directory it names, which
     // deleting its file leaves behind: they would be drawn at the top of the tree, with nothing to
     // say what they were part of. Asked once any move is done, as a move renames the task's file
-    // before its subtasks' and the forest draws them at the top in between.
+    // before its subtasks' and the forest draws them at the top in between, and of the listing as
+    // it is now: a view left open syncs only as it mounts, and a subtask added since, through MCP
+    // or on another device, is not in the listing it holds.
     async function remove(path: string): Promise<boolean> {
         await renaming;
+        await subset.refresh();
         const id = idByPath(path);
         if (id !== undefined && childrenOf(id).length > 0) {
             throw new Error('It has subtasks. Delete them, or move them elsewhere, first.');

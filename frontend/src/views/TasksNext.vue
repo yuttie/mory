@@ -342,7 +342,7 @@ import {
 
 import { type TaskNode, type TaskTreeItem } from '@/task-forest';
 import { taskRoute, tasksRoute } from '@/task-route';
-import { isTagGroupId, isUntaggedGroupId, tagGroupId, tagNameOf, useTasksStore } from '@/stores/tasks';
+import { SavedUnlisted, isTagGroupId, isUntaggedGroupId, tagGroupId, tagNameOf, useTasksStore } from '@/stores/tasks';
 
 import { type UUID, type Status, type StatusKind, type Task, STATUS_KINDS, STATUS_LABEL } from '@/task';
 import axios from 'axios';
@@ -925,10 +925,15 @@ async function onEditedTaskSave(task: Task) {
         written = await store.save(task, node.path);
     }
     catch (e) {
-        // The editor stays open with what was typed, so it can be tried again.
-        error.value = `Could not save "${task.title}": ${e instanceof Error ? e.message : String(e)}`;
-        saving.value = false;
-        return;
+        if (!(e instanceof SavedUnlisted)) {
+            // The editor stays open with what was typed, so it can be tried again.
+            error.value = `Could not save "${task.title}": ${e instanceof Error ? e.message : String(e)}`;
+            saving.value = false;
+            return;
+        }
+        // Saved all the same, so the editor counts its next change from this write.
+        written = e.written;
+        error.value = `Saved "${task.title}", but ${e.message}`;
     }
     // The editor stays open for the next change, unless Cancel closed it meanwhile, and reads the
     // note again to count that change from. Until then it still holds this one as unsaved.

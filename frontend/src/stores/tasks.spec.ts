@@ -77,7 +77,7 @@ function repository(specs: Spec[]) {
         }
         return { kind: 'full', commit: `c${served.commit}`, head: `c${commit}`, entries: served.entries };
     });
-    apiMocks.addNote.mockImplementation(async (path: string, content: string) => {
+    const write = (path: string, content: string) => {
         if (lagging > 0) {
             behind = { commit, entries: [...files.values()], left: lagging };
             lagging = 0;
@@ -86,7 +86,15 @@ function repository(specs: Spec[]) {
         // Listed with what the written frontmatter says, as the backend lists it.
         const metadata = YAML.parse(content.split(/^---$/m)[1] ?? '') ?? null;
         files.set(path, { ...(files.get(path) ?? entry({ path })), metadata });
+    };
+    apiMocks.addNote.mockImplementation(async (path: string, content: string) => {
+        write(path, content);
         return { data: null };
+    });
+    // Unchecked, as `addNote` is: a test of the check makes the call refuse by itself.
+    apiMocks.saveFileChecked.mockImplementation(async (path: string, content: string) => {
+        write(path, content);
+        return `"c${commit}"`;
     });
     apiMocks.renameNote.mockImplementation(async (from: string, to: string) => {
         commit += 1;
@@ -437,7 +445,7 @@ describe('save', () => {
         const path = `.tasks/${uuid(7)}.md`;
         await store.save(task(uuid(7)), path);
 
-        expect(apiMocks.addNote).toHaveBeenCalledWith(path, expect.stringContaining('# Written'));
+        expect(apiMocks.saveFileChecked).toHaveBeenCalledWith(path, expect.stringContaining('# Written'), 'absent');
         expect(repo.paths()).toEqual([path]);
         // The forest is derived, so the task is present without any local bookkeeping.
         expect(store.allTasks.map((t) => t.uuid)).toEqual([uuid(7)]);
@@ -446,9 +454,22 @@ describe('save', () => {
     it('renders the frontmatter into the file', async () => {
         const { store } = await storeWith([]);
         await store.save(task(uuid(7)), `.tasks/${uuid(7)}.md`);
-        const [, content] = apiMocks.addNote.mock.calls[0];
+        const [, content] = apiMocks.saveFileChecked.mock.calls[0];
         expect(content).toContain('status:');
         expect(content).toContain('kind: todo');
+    });
+
+    // A read that fails leaves the editor with no task, offering to create one where the note it
+    // could not read is: written unchecked, the form replaced it.
+    it('creates a task only where there is no note', async () => {
+        const { store } = await storeWith(sample);
+        apiMocks.saveFileChecked.mockRejectedValueOnce(Object.assign(new Error('Request failed with status code 412'), {
+            isAxiosError: true,
+            response: { status: 412 },
+        }));
+
+        await expect(store.save(task(uuid(3)), `.tasks/${uuid(3)}.md`)).rejects.toThrow('already there');
+        expect(apiMocks.addNote).not.toHaveBeenCalled();
     });
 });
 
@@ -498,6 +519,19 @@ describe('save over a note', () => {
 
         await expect(store.save(read(uuid(3)), `.tasks/${uuid(3)}.md`)).rejects.toThrow('changed elsewhere');
         expect(apiMocks.addNote).not.toHaveBeenCalled();
+    });
+
+    // Only the listing failed to follow. Taken for a failed save, it left the editor to check its
+    // next one against the version before this, which found this one there and refused.
+    it('keeps the version it wrote when the listing cannot be refreshed', async () => {
+        const { store, SavedUnlisted } = await storeWith(sample);
+        apiMocks.saveFileChecked.mockResolvedValueOnce('"as-written"');
+        apiMocks.getEntries.mockRejectedValue(new Error('offline'));
+
+        const saving = store.save(read(uuid(3)), `.tasks/${uuid(3)}.md`);
+
+        await expect(saving).rejects.toBeInstanceOf(SavedUnlisted);
+        await expect(saving).rejects.toMatchObject({ written: '"as-written"' });
     });
 });
 
@@ -608,6 +642,18 @@ describe('remove', () => {
         expect(apiMocks.deleteNote).not.toHaveBeenCalled();
         expect(repo.paths()).toContain(`.tasks/${uuid(1)}.md`);
         expect(store.childrenOf(uuid(1)).map((t) => t.title)).toEqual(['Child']);
+    });
+
+    // A view left open syncs only as it mounts, so a subtask added since -- through MCP, on another
+    // device -- is not in the listing it holds.
+    it('refuses a task given a subtask since the listing was read', async () => {
+        const { store, repo } = await storeWith(sample);
+        const parent = `.tasks/${uuid(3)}.md`;
+        await apiMocks.addNote(`.tasks/${uuid(3)}/${uuid(9)}.md`, '---\ntask:\n    status:\n        kind: todo\n---\n');
+        expect(store.childrenOf(uuid(3))).toEqual([]);
+
+        await expect(store.remove(parent)).rejects.toThrow('subtasks');
+        expect(repo.paths()).toContain(parent);
     });
 
     // A move renames the task's file before its subtasks', and in between the forest draws them at

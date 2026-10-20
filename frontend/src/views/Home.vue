@@ -327,7 +327,7 @@ import {
 import { useFilesStore } from '@/stores/files';
 import { by } from '@/utils';
 import dayjs from 'dayjs';
-import { useTasksStore } from '@/stores/tasks';
+import { SavedUnlisted, useTasksStore } from '@/stores/tasks';
 import { type TaskNode } from '@/task-forest';
 import type { Task } from '@/task';
 import { taskRoute } from '@/task-route';
@@ -676,9 +676,21 @@ async function createQuickTask() {
             note: '',
         };
 
-        await taskStore.save(newTask, taskPath);
+        let unlisted: SavedUnlisted | null = null;
+        try {
+            await taskStore.save(newTask, taskPath);
+        }
+        catch (e) {
+            // Created all the same, and the name cleared below keeps it from being created twice.
+            if (!(e instanceof SavedUnlisted)) {
+                throw e;
+            }
+            unlisted = e;
+        }
 
-        successText.value = `Task "${newTask.title}" created successfully!`;
+        successText.value = unlisted === null
+            ? `Task "${newTask.title}" created successfully!`
+            : `Task "${newTask.title}" created, but ${unlisted.message}`;
         successMessage.value = true;
         createdItemPath.value = taskUuid;
         createdItemType.value = 'task';

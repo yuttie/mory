@@ -76,7 +76,7 @@ import type { VDialog } from 'vuetify/components';
 
 import type { Task, UUID } from '@/task';
 import { taskRoute } from '@/task-route';
-import { useTasksStore } from '@/stores/tasks';
+import { SavedUnlisted, useTasksStore } from '@/stores/tasks';
 
 // Props
 const props = defineProps<{
@@ -149,14 +149,19 @@ async function onSave(task: Task): Promise<void> {
         return;
     }
     saving.add(task.uuid);
+    let unlisted: SavedUnlisted | null = null;
     try {
         await tasks.save(task, taskPath.value);
     }
     catch (e) {
-        // The editor stays open with what was typed, so it can be tried again.
-        errorText.value = `Failed to create task: ${e instanceof Error ? e.message : String(e)}`;
-        error.value = true;
-        return;
+        if (!(e instanceof SavedUnlisted)) {
+            // The editor stays open with what was typed, so it can be tried again.
+            errorText.value = `Failed to create task: ${e instanceof Error ? e.message : String(e)}`;
+            error.value = true;
+            return;
+        }
+        // Created all the same, so it is not offered to be created again.
+        unlisted = e;
     }
     finally {
         saving.delete(task.uuid);
@@ -165,7 +170,9 @@ async function onSave(task: Task): Promise<void> {
     if (taskUuid.value === task.uuid) {
         isOpen.value = false;
     }
-    successText.value = `Task "${task.title}" created successfully!`;
+    successText.value = unlisted === null
+        ? `Task "${task.title}" created successfully!`
+        : `Task "${task.title}" created, but ${unlisted.message}`;
     createdTaskUuid.value = task.uuid;
     successMessage.value = true;
 }
