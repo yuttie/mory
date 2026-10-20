@@ -48,6 +48,32 @@ async function toggle(page: Page, name: string): Promise<void> {
     await row(page, name).locator('.v-list-item__prepend button').click();
 }
 
+// Where `locator` is drawn. Throws rather than let a missing element compare equal to another.
+async function box(locator: Locator): Promise<{ x: number; y: number; width: number; height: number }> {
+    const found = await locator.boundingBox();
+    if (found === null) {
+        throw new Error(`Not drawn: ${locator}`);
+    }
+    return found;
+}
+
+async function moveOver(page: Page, target: Locator): Promise<void> {
+    const { x, y, width, height } = await box(target);
+    await page.mouse.move(x + width / 2, y + height / 2, { steps: 5 });
+}
+
+// Drags `task` onto `target` and lets go, as `task-tree-move.spec.ts` does.
+async function drop(page: Page, task: Locator, target: Locator): Promise<void> {
+    await task.click({ trial: true });
+    await moveOver(page, task);
+    await page.mouse.down();
+    const { x, y } = await box(task);
+    await page.mouse.move(x + 20, y + 30, { steps: 3 });
+    await expect(page.locator('.entry-tree-drag-copy')).toBeVisible();
+    await moveOver(page, target);
+    await page.mouse.up();
+}
+
 function search(page: Page): Locator {
     return page.getByRole('textbox', { name: 'Search tasks' });
 }
@@ -123,6 +149,28 @@ test('gives the tree back as it was once the search is cleared', async ({ contex
     await page.getByRole('button', { name: 'Clear Search tasks' }).click();
     await expect(search(page)).toHaveValue('');
     await expect(rows(page)).toHaveText(['Launch', 'home', 'Water the plants', 'Plan the release party']);
+});
+
+// The drop leaves the same branches holding what was found, so the search would not open them anew.
+test('opens the task a drop moved during a search where it went', async ({ context, page }) => {
+    const repository = await mockBackend(context, NOTES);
+    await page.goto('/tasks-next/_/descendants/status');
+    await search(page).fill('write');
+    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Write release notes']);
+    await toggle(page, 'Ship');
+    await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship']);
+    await expect.poll(() => tree(page).locator('.entry-tree').evaluate((element) => element.getAnimations({ subtree: true }).length)).toBe(0);
+
+    await drop(page, row(page, 'Write the announcement'), row(page, 'Ship'));
+    await expect.poll(() => repository.renames).toEqual([
+        { from: `.tasks/${LAUNCH}/${uuid(2)}.md`, to: `.tasks/${LAUNCH}/${SHIP}/${uuid(2)}.md` },
+    ]);
+    await expect(row(page, 'Ship')).toHaveAttribute('aria-expanded', 'true');
+    await expect(row(page, 'Write the announcement')).toHaveAttribute('aria-level', '3');
+
+    // And in the tree the search gives back.
+    await page.getByRole('button', { name: 'Clear Search tasks' }).click();
+    await expect(row(page, 'Write the announcement')).toHaveAttribute('aria-level', '3');
 });
 
 test('leaves out the tasks of the statuses unticked, and remembers them', async ({ context, page }) => {

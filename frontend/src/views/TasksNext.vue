@@ -939,15 +939,19 @@ onUnmounted(router.afterEach(() => {
     closingEditor = false;
 }));
 
-// Opens the tree down to the task `id`, so that its row is drawn.
+// Opens the tree down to the task `id`, so that its row is drawn: in the tree drawn without a
+// search, and in the one drawn while a search is under way, which opens and closes apart.
 function openUpTo(id: UUID) {
-    const next = new Set(openNodes.value);
+    const above: string[] = [];
     let parent = store.parentOf(id);
     while (parent) {
-        next.add(parent);
+        above.push(parent);
         parent = store.parentOf(parent);
     }
-    openNodes.value = [...next];
+    openNodes.value = [...new Set([...openNodes.value, ...above])];
+    if (treeTerms.value.length > 0) {
+        searchOpenNodes.value = [...new Set([...searchOpenNodes.value, ...above])];
+    }
 }
 
 // Watchers for opening tree nodes when selected node changes
