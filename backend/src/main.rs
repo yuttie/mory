@@ -164,7 +164,7 @@ async fn main() -> Result<()> {
     let protected_api = Router::new()
         .route("/notes", get(get_notes).post(post_notes))
         .route("/notes/*path", get(get_notes_path).put(put_notes_path).delete(delete_notes_path))
-        .route("/files", post(post_files).layer(extract::DefaultBodyLimit::max(16 * 1024 * 1024)))
+        .route("/files", post(post_files).layer(extract::DefaultBodyLimit::max(UPLOAD_LIMIT)))
         .route("/files/*path", get(get_files_path))
         .with_state(state.clone())
         .route_layer(middleware::from_fn(auth));
@@ -1140,6 +1140,22 @@ async fn get_files_path(
     }
 }
 
+/// The most one upload may carry, all its files together.
+const UPLOAD_LIMIT: usize = 16 * 1024 * 1024;
+
+/// An upload that could not be read, answered with the status axum gives it: one too large is a
+/// 413, which a bare 400 left the upload menu to show as "Request failed with status code 400".
+fn unreadable_upload(error: &extract::multipart::MultipartError) -> Response {
+    let status = error.status();
+    let reason = if status == StatusCode::PAYLOAD_TOO_LARGE {
+        format!("The upload is larger than the {} MiB moried takes at once", UPLOAD_LIMIT / 1024 / 1024)
+    }
+    else {
+        error.body_text()
+    };
+    (status, reason).into_response()
+}
+
 async fn post_files(
     extract::State(state): extract::State<AppState>,
     mut multipart: extract::Multipart,
@@ -1154,7 +1170,7 @@ async fn post_files(
             Ok(None) => break,
             Err(e) => {
                 tracing::error!("Failed to read the upload: {:?}", e);
-                return StatusCode::BAD_REQUEST.into_response();
+                return unreadable_upload(&e);
             },
         };
         tracing::debug!("{:?}", field);
@@ -1170,7 +1186,7 @@ async fn post_files(
             Ok(data) => data,
             Err(e) => {
                 tracing::error!("Failed to read the part {}: {:?}", uuid, e);
-                return StatusCode::BAD_REQUEST.into_response();
+                return unreadable_upload(&e);
             },
         };
 
