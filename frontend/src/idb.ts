@@ -5,7 +5,8 @@
 // then fall back to the API, so a broken cache never breaks the app.
 
 const DB_NAME = 'mory';
-const DB_VERSION = 2;
+// 3 drops what 2 held: see `onupgradeneeded`.
+const DB_VERSION = 3;
 const STORE_NAME = 'repository';
 const ENTRY_STORE = 'entries';
 
@@ -32,7 +33,7 @@ function openDatabase(): Promise<IDBDatabase | null> {
             return;
         }
 
-        request.onupgradeneeded = () => {
+        request.onupgradeneeded = (event) => {
             const db = request.result;
             if (!db.objectStoreNames.contains(STORE_NAME)) {
                 db.createObjectStore(STORE_NAME);
@@ -40,14 +41,29 @@ function openDatabase(): Promise<IDBDatabase | null> {
             if (!db.objectStoreNames.contains(ENTRY_STORE)) {
                 db.createObjectStore(ENTRY_STORE, { keyPath: 'path' });
             }
-            // Drop the whole-listing record the row store replaces, so a v1 database does not
-            // keep several hundred kilobytes nothing will ever read again.
             if (request.transaction !== null) {
+                // Drop the whole-listing record the row store replaces, so a v1 database does not
+                // keep several hundred kilobytes nothing will ever read again.
                 try {
                     request.transaction.objectStore(STORE_NAME).delete(LEGACY_LISTING_KEY);
                 }
                 catch (error) {
                     console.warn('Failed to drop the legacy listing record:', error);
+                }
+                // And the rows a v2 database holds. Until `applyEntryDelta` checked its base, a
+                // delta could land on rows another tab had moved on, labelled as the commit it came
+                // from: a row that commit has not -- a note deleted since -- then stayed in every
+                // tab, since each delta after is computed from that commit and never names it. The
+                // label cannot tell such rows from good ones, so all of them go, for one full
+                // listing per browser.
+                if (event.oldVersion > 0 && event.oldVersion < 3) {
+                    try {
+                        request.transaction.objectStore(ENTRY_STORE).clear();
+                        request.transaction.objectStore(STORE_NAME).delete(CACHE_COMMIT_KEY);
+                    }
+                    catch (error) {
+                        console.warn('Failed to drop the listing an older version persisted:', error);
+                    }
                 }
             }
         };

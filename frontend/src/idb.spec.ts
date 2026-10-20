@@ -145,6 +145,41 @@ describe('the entry store', () => {
     });
 });
 
+describe('a database an older version wrote', () => {
+    // Rows a delta landed on after another tab had moved them on, labelled as the commit it came
+    // from: nothing tells them from good ones, and a later delta never names a row its base lacks.
+    it('loses the listing it held, and nothing else', async () => {
+        vi.resetModules();
+        const factory = new IDBFactory();
+        vi.stubGlobal('indexedDB', factory);
+        await new Promise<void>((resolve, reject) => {
+            const request = factory.open('mory', 2);
+            request.onupgradeneeded = () => {
+                request.result.createObjectStore('repository');
+                request.result.createObjectStore('entries', { keyPath: 'path' });
+            };
+            request.onsuccess = () => {
+                const db = request.result;
+                const tx = db.transaction(['repository', 'entries'], 'readwrite');
+                tx.objectStore('entries').put(entry('ghost.md'));
+                tx.objectStore('repository').put('commit-1', 'entriesCommitId');
+                tx.objectStore('repository').put('kept', 'other');
+                tx.oncomplete = () => {
+                    db.close();
+                    resolve();
+                };
+                tx.onerror = () => reject(tx.error);
+            };
+            request.onerror = () => reject(request.error);
+        });
+        const upgraded = await import('@/idb');
+
+        expect(await upgraded.readCacheCommitId()).toBeUndefined();
+        expect(await upgraded.readAllEntries<ListEntry2>()).toEqual([]);
+        expect(await upgraded.readRecord('other')).toBe('kept');
+    });
+});
+
 // A broken or absent cache must never break the app: every operation degrades to null so the
 // caller falls through to the API.
 describe('without IndexedDB', () => {
