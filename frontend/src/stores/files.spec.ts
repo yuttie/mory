@@ -27,7 +27,7 @@ vi.mock('@/idb', () => ({
         await beforeRead();
         return idb.commit === commit ? Array.from(idb.rows.values()) : null;
     },
-    readEntry: async (path: string) => idb.rows.get(path) ?? null,
+    readEntryAt: async (commit: string, path: string) => idb.commit === commit ? idb.rows.get(path) ?? null : null,
     // As idb.ts writes one: only over the commit recorded when it was asked for.
     replaceEntries: async (base: string | null | undefined, commit: string, entries: ListEntry2[]) => {
         idb.held = idb.hold !== null;

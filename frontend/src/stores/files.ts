@@ -15,7 +15,7 @@ import {
     clearEntries,
     readCacheCommitId,
     readEntriesAt,
-    readEntry,
+    readEntryAt,
     replaceEntries,
 } from '@/idb';
 
@@ -319,17 +319,15 @@ export const useFilesStore = defineStore('files', () => {
             return entryMap.get(path);
         }
 
-        const [head, cachedCommitId] = await Promise.all([
-            api.getHeadCommitId().catch(() => null),
-            readCacheCommitId(),
-        ]);
-        if (head !== null && cachedCommitId === head) {
-            const cached = await readEntry<ListEntry2>(path);
+        const head = await api.getHeadCommitId().catch(() => null);
+        if (head !== null) {
+            const cached = await readEntryAt<ListEntry2>(head, path);
             if (cached !== null) {
                 return cached;
             }
             // Absent from a cache that is current means the file does not exist, but fall
-            // through rather than assert it: a cache that failed to open reads the same way.
+            // through rather than assert it: a cache of another commit, or one that failed to
+            // open, reads the same way.
         }
 
         const entries = await list();

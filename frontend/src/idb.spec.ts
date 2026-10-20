@@ -117,7 +117,7 @@ describe('the entry store', () => {
         await idb.replaceEntries(undefined, 'commit-3', listing);
         await idb.applyEntryDelta('commit-1', 'commit-2', [entry('ghost.md')], []);
         expect(await idb.readCacheCommitId()).toBe('commit-3');
-        expect(await idb.readEntry<ListEntry2>('ghost.md')).toBeUndefined();
+        expect(await idb.readEntryAt<ListEntry2>('commit-3', 'ghost.md')).toBeNull();
 
         await idb.clearEntries();
         await idb.applyEntryDelta('commit-3', 'commit-4', [entry('ghost.md')], []);
@@ -133,8 +133,17 @@ describe('the entry store', () => {
 
     it('reads a single row without the listing', async () => {
         await idb.replaceEntries(undefined, 'commit-1', listing);
-        expect((await idb.readEntry<ListEntry2>('.tasks/a.md'))?.path).toBe('.tasks/a.md');
-        expect(await idb.readEntry<ListEntry2>('missing.md')).toBeUndefined();
+        expect((await idb.readEntryAt<ListEntry2>('commit-1', '.tasks/a.md'))?.path).toBe('.tasks/a.md');
+        expect(await idb.readEntryAt<ListEntry2>('commit-1', 'missing.md')).toBeNull();
+    });
+
+    // Read apart from the commit, a row another tab had removed since, or a logout had, was taken
+    // for a file the current commit does not have.
+    it('reads a single row only while the rows describe the commit asked for', async () => {
+        await idb.replaceEntries(undefined, 'commit-1', listing);
+        expect(await idb.readEntryAt<ListEntry2>('commit-2', '.tasks/a.md')).toBeNull();
+        await idb.clearEntries();
+        expect(await idb.readEntryAt<ListEntry2>('commit-1', '.tasks/a.md')).toBeNull();
     });
 
     it('wipes rows and commit id together', async () => {

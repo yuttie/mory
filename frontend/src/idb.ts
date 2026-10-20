@@ -285,10 +285,24 @@ export function readEntriesByPrefix<T>(prefix: string): Promise<T[] | null> {
     return runTransactionOn<T[]>(ENTRY_STORE, 'readonly', (store) => store.getAll(range) as IDBRequest<T[]>);
 }
 
-// One row, without reading the listing. This is what lets a single-entry lookup avoid pulling
-// every entry in the repository.
-export function readEntry<T>(path: string): Promise<T | null> {
-    return runTransactionOn<T>(ENTRY_STORE, 'readonly', (store) => store.get(path) as IDBRequest<T>);
+// One row, without reading the listing, if the rows still describe `commitId`: `null` when they do
+// not, or hold no such row. This is what lets a single-entry lookup avoid pulling every entry in
+// the repository. Read with the commit ID in one transaction, as `readEntriesAt` reads the rows.
+export function readEntryAt<T>(commitId: string, path: string): Promise<T | null> {
+    return runMultiTransaction([ENTRY_STORE, STORE_NAME], 'readonly', (stores) => {
+        const read: { row: T | null } = { row: null };
+        const current = stores[STORE_NAME].get(CACHE_COMMIT_KEY);
+        current.onsuccess = () => {
+            if (current.result !== commitId) {
+                return;
+            }
+            const row = stores[ENTRY_STORE].get(path);
+            row.onsuccess = () => {
+                read.row = (row.result as T | undefined) ?? null;
+            };
+        };
+        return read;
+    }).then((read) => read?.row ?? null);
 }
 
 // The commit the rows describe: `undefined` before any listing was written, and `null` after a
