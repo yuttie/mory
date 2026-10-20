@@ -16,6 +16,24 @@ import { compareInstantsDesc } from '@/utils';
 
 export const TASKS_DIR = '.tasks/';
 
+// The id of the node the task tree gathers childless root tasks under by tag: the tag after a
+// prefix no UUID starts with. Here rather than in the tasks store, so that what tells a group from
+// a task needs no store.
+const TAG_GROUP_PREFIX = 'tag-group-';
+
+export function isTagGroupId(id: string): boolean {
+    return id.startsWith(TAG_GROUP_PREFIX);
+}
+
+export function tagGroupId(tag: string): string {
+    return TAG_GROUP_PREFIX + tag;
+}
+
+// The tag a group node stands for. Only meaningful for an id `isTagGroupId` accepts.
+export function tagNameOf(id: string): string {
+    return id.slice(TAG_GROUP_PREFIX.length);
+}
+
 const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export interface TaskMetadata {
