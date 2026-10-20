@@ -378,10 +378,9 @@
                         </v-select>
                         <v-icon-btn
                             v-bind:icon="statusOptionRestricted ? mdiLock : mdiLockOpenVariant"
-                            variant="text"
+                            v-bind:title="statusOptionRestricted ? 'Show all statuses' : 'Show only the statuses this task can move to'"
+                            v-bind:active="statusOptionRestricted ? undefined : true"
                             v-on:click="statusOptionRestricted = !statusOptionRestricted"
-                            title="Show all statuses"
-                            color="primary"
                         ></v-icon-btn>
                     </div>
                     <!-- Status-specific fields -->
