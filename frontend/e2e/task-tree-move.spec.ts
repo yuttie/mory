@@ -83,8 +83,9 @@ async function openTree(page: Page): Promise<void> {
     }
     await expect(row(page, 'Step')).toBeVisible();
     // Until the branches have grown to their height, Playwright finds the rows in them clipped and
-    // scrolls the tree to show them.
-    await expect.poll(() => tree(page).evaluate((element) => element.getAnimations({ subtree: true }).length)).toBe(0);
+    // scrolls the tree to show them. The tree's own, as the search field above it holds a loader
+    // whose animation is only ever paused.
+    await expect.poll(() => tree(page).locator('.entry-tree').evaluate((element) => element.getAnimations({ subtree: true }).length)).toBe(0);
 }
 
 test('moves a task, and everything under it, under the task it is dropped on', async ({ context, page }) => {

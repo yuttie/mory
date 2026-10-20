@@ -97,14 +97,35 @@
         </AppBarContent>
         <template v-if="store.isLoaded">
             <v-sheet class="d-flex flex-column task-tree-container"><!-- NOTE: Necessary for <TaskTree> to have vertical scrollbar -->
+                <div class="tree-search flex-grow-0">
+                    <v-text-field
+                        v-model="treeQuery"
+                        v-bind:prepend-inner-icon="mdiMagnify"
+                        label="Search tasks"
+                        single-line
+                        density="compact"
+                        variant="outlined"
+                        hide-details
+                        clearable
+                        autocomplete="off"
+                    />
+                </div>
+                <div
+                    v-if="treeTerms.length > 0 && filteredForestWithTags.length === 0"
+                    class="text-medium-emphasis pa-4"
+                >
+                    No tasks match the search.
+                </div>
                 <TaskTree
                     v-bind:items="filteredForestWithTags"
                     v-bind:active="activeNodeId"
                     v-bind:route-for="treeRouteFor"
-                    v-model:open="openNodes"
+                    v-bind:open="treeOpenNodes"
+                    v-bind:highlight="treeTerms"
                     show-add-child
                     show-edit
                     movable
+                    v-on:update:open="treeOpenNodes = $event"
                     v-on:add-child-task="onAddChildTask"
                     v-on:edit-task="onEditTask"
                     v-on:move="onTaskMove"
@@ -335,12 +356,14 @@ import {
     mdiDotsVertical,
     mdiFormatListChecks,
     mdiGridLarge,
+    mdiMagnify,
     mdiPencil,
     mdiPlus,
     mdiTrafficLightOutline,
 } from '@mdi/js';
 
 import { type TaskNode, type TaskTreeItem } from '@/task-forest';
+import { branchIds, filterTaskTree, searchTerms } from '@/task-tree-filter';
 import { taskRoute, tasksRoute } from '@/task-route';
 import { SavedUnlisted, isTagGroupId, isUntaggedGroupId, tagGroupId, tagNameOf, useTasksStore } from '@/stores/tasks';
 
@@ -370,6 +393,15 @@ const taskEditorRef = ref<any>(null);
 const editorDialogRef = ref<InstanceType<typeof VDialog> | null>(null);
 const newTaskDialogRef = ref<InstanceType<typeof NewTaskDialog> | null>(null);
 const openNodes = ref<UUID[]>([]);
+// What the search field holds. Null once cleared, as a clearable field leaves it.
+const treeQuery = ref<string | null>('');
+// What the tree is searched for: the field's text once typing pauses. Each search draws the tree
+// anew, and over the 490 tasks of the real notes a broad one drawing 290 rows took Firefox 0.9 s:
+// on every key, that would stall the typing, and each step an input method takes towards a word.
+const treeSearch = ref('');
+// The branches open while a search is under way, apart from `openNodes`, so clearing the search
+// leaves the tree as it was before it.
+const searchOpenNodes = ref<string[]>([]);
 const newTaskDialogIsVisible = ref(false);
 // Where the next new task starts: from Add, under the selected task or with the selected group's
 // tag; from a row's own button, under that row's task or with its group's tag.
@@ -629,9 +661,49 @@ function filterTreeNodes(nodes: TaskTreeItem[], hideCompleted: boolean): TaskTre
         .filter(node => node !== null); // Remove filtered out nodes
 }
 
+// Cleared at once: clearing is a single press, and the tree it gives back is the one left before.
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
+watch(treeQuery, (query) => {
+    clearTimeout(searchTimer);
+    const text = query ?? '';
+    if (searchTerms(text).length === 0) {
+        treeSearch.value = text;
+        return;
+    }
+    searchTimer = setTimeout(() => {
+        treeSearch.value = text;
+    }, 250);
+});
+onUnmounted(() => clearTimeout(searchTimer));
+
+const treeTerms = computed<string[]>(() => searchTerms(treeSearch.value));
+
 // Computed property for filtered forest with tags
 const filteredForestWithTags = computed(() => {
-    return filterTreeNodes(store.treeWithTagGroups, hideCompletedInTreeView.value);
+    return filterTaskTree(
+        filterTreeNodes(store.treeWithTagGroups, hideCompletedInTreeView.value),
+        { query: treeSearch.value },
+    );
+});
+
+// A search opens every branch it keeps, each being there for a task found under it. Opened again
+// only when the branches change, so a branch closed meanwhile stays closed while what was found
+// stays the same.
+const searchBranches = computed<string[]>(() => treeTerms.value.length > 0 ? branchIds(filteredForestWithTags.value) : []);
+watch(() => searchBranches.value.join('\n'), () => {
+    searchOpenNodes.value = searchBranches.value;
+});
+
+const treeOpenNodes = computed<string[]>({
+    get: () => treeTerms.value.length > 0 ? searchOpenNodes.value : openNodes.value,
+    set: (ids) => {
+        if (treeTerms.value.length > 0) {
+            searchOpenNodes.value = ids;
+        }
+        else {
+            openNodes.value = ids;
+        }
+    },
 });
 
 // Helper function to filter task list based on status
@@ -1144,12 +1216,17 @@ async function load(primed = false) {
     width: 300px;
 }
 
+.tree-search {
+    padding: 8px 8px 4px;
+}
+
 /* Mobile responsive adjustments */
 @media (max-width: 599px) { /* sm breakpoint in Vuetify 2 */
+    /* With the 52px of the search row above the tree, which keeps the room it had without it. */
     .task-tree-container {
         width: 100%;
-        max-height: 200px;
-        min-height: 150px;
+        max-height: 252px;
+        min-height: 202px;
     }
 
     .task-tree {

@@ -1,0 +1,128 @@
+import { describe, expect, it } from 'vitest';
+
+import type { TaskTreeItem } from '@/task-forest';
+import { branchIds, filterTaskTree, highlight, searchTerms, titleMatches } from '@/task-tree-filter';
+
+function task(title: string | null, children?: TaskTreeItem[]): TaskTreeItem {
+    const id = title ?? 'untitled';
+    return {
+        id,
+        parent: null,
+        uuid: id,
+        name: null,
+        path: `.tasks/${id}.md`,
+        size: 0,
+        mime_type: 'text/markdown',
+        metadata: { task: { status: { kind: 'todo' } } },
+        title,
+        mtime: '',
+        ...(children === undefined ? {} : { children }),
+    };
+}
+
+function group(tag: string, members: TaskTreeItem[]): TaskTreeItem {
+    return { ...task(tag, members), uuid: `tag-group-${tag}`, metadata: { tag_group: tag } };
+}
+
+// The tree as titles, children nested under their parent's.
+function titles(items: TaskTreeItem[]): unknown[] {
+    return items.map((item) => item.children === undefined ? item.title : [item.title, titles(item.children)]);
+}
+
+describe('searchTerms', () => {
+    it('splits on any white space, the ideographic space included', () => {
+        expect(searchTerms('  draft\treport　会議 ')).toEqual(['draft', 'report', '会議']);
+        expect(searchTerms('   ')).toEqual([]);
+    });
+});
+
+describe('titleMatches', () => {
+    it('needs every term, in any case and any order', () => {
+        expect(titleMatches('Write the Quarterly Report', ['report', 'QUARTER'])).toBe(true);
+        expect(titleMatches('Write the Quarterly Report', ['report', 'annual'])).toBe(false);
+    });
+
+    it('reads a term as text, not as a pattern', () => {
+        expect(titleMatches('Fix a+b (again)', ['a+b', '(again)'])).toBe(true);
+        expect(titleMatches('Fix aab', ['a+b'])).toBe(false);
+    });
+
+    it('finds nothing in a task with no title', () => {
+        expect(titleMatches(null, ['draft'])).toBe(false);
+    });
+});
+
+describe('highlight', () => {
+    it('marks every occurrence of each term, overlapping ones included', () => {
+        expect(highlight('Banana band', ['ana', 'BAND'])).toEqual([
+            { text: 'B', match: false },
+            { text: 'anana', match: true },
+            { text: ' ', match: false },
+            { text: 'band', match: true },
+        ]);
+    });
+
+    it('merges the occurrences of terms that overlap', () => {
+        expect(highlight('Banana', ['ban', 'nan'])).toEqual([
+            { text: 'Banan', match: true },
+            { text: 'a', match: false },
+        ]);
+    });
+
+    it('marks the title as written where lowercasing would change its length', () => {
+        // `İ` lowercases to two code units, which would shift every position after it.
+        expect(highlight('İstanbul trip', ['trip'])).toEqual([
+            { text: 'İstanbul ', match: false },
+            { text: 'trip', match: true },
+        ]);
+    });
+
+    it('keeps a character outside the Basic Multilingual Plane whole', () => {
+        expect(highlight('🎉 party', ['🎉'])).toEqual([
+            { text: '🎉', match: true },
+            { text: ' party', match: false },
+        ]);
+    });
+});
+
+describe('filterTaskTree', () => {
+    const tree = [
+        task('Launch', [
+            task('Write the announcement'),
+            task('Ship', [
+                task('Build the release'),
+                task('Write release notes'),
+            ]),
+        ]),
+        group('home', [task('Water the plants'), task('Write to the landlord')]),
+        group('work', [task('Expense report')]),
+    ];
+
+    it('hands back the tree it was given when there is nothing to search for', () => {
+        expect(filterTaskTree(tree, { query: ' ' })).toBe(tree);
+    });
+
+    it('keeps the tasks found and everything above them', () => {
+        expect(titles(filterTaskTree(tree, { query: 'write' }))).toEqual([
+            ['Launch', ['Write the announcement', ['Ship', ['Write release notes']]]],
+            ['home', ['Write to the landlord']],
+        ]);
+    });
+
+    it('draws a task found as a leaf when none of its subtasks is', () => {
+        const [launch] = filterTaskTree(tree, { query: 'launch' });
+        expect(launch.title).toBe('Launch');
+        expect(launch).not.toHaveProperty('children');
+    });
+
+    it('never keeps a tag group for its own name', () => {
+        expect(filterTaskTree(tree, { query: 'home' })).toEqual([]);
+    });
+});
+
+describe('branchIds', () => {
+    it('names every row holding others, at any depth', () => {
+        const filtered = filterTaskTree([task('A', [task('B', [task('C')]), task('D')])], { query: 'c' });
+        expect(branchIds(filtered)).toEqual(['A', 'B']);
+    });
+});
