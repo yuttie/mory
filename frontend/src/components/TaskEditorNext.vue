@@ -432,9 +432,12 @@
                             <v-icon>{{ mdiCalendarOutline }}</v-icon>
                         </template>
                     </DateSelector>
-                    <!-- Due date -->
+                    <!-- Due date. Set, it has its alarms under it, so it keeps no empty row for a
+                         message between the two: the alarms would sit nearer the next date than
+                         their own. Empty, the row is the space before the next field. -->
                     <DateSelector
                         v-bind:model-value="form.due_by"
+                        v-bind:hide-details="form.due_by === '' ? false : 'auto'"
                         v-on:update:model-value="form.due_by = $event ?? ''"
                         v-bind:rules="[() => taskDateRule(form.due_by)]"
                         label="Due date (soft target)"
@@ -449,9 +452,10 @@
                         v-bind:fallback="calendars.effectiveAlarmDefaults.dueBy"
                         class="under-field"
                     ></InheritableAlarms>
-                    <!-- Deadline -->
+                    <!-- Deadline, kept as the due date is. -->
                     <DateSelector
                         v-bind:model-value="form.deadline"
+                        v-bind:hide-details="form.deadline === '' ? false : 'auto'"
                         v-on:update:model-value="form.deadline = $event ?? ''"
                         v-bind:rules="[() => taskDateRule(form.deadline)]"
                         label="Deadline (hard cutoff)"
