@@ -17,7 +17,7 @@ Layout of the tracked sources:
 - `backend/src/schedule.rs` — which alarms ring in a span of time, from the listing and the calendar configuration.
 - `backend/src/push.rs` — event alarms sent as Web Push: the VAPID key, the subscription endpoints, and the loop that asks the schedule once a minute and sends what is due.
 - `backend/src/oauth.rs` — the OAuth 2.1 authorization server the MCP endpoint needs.
-- `backend/src/search/` — searching the notes: `run_search` and grep mode in `mod.rs`, the query language (`query.rs`), the local text index (`lexical.rs`), and for semantic search the passages a note is cut into (`passage.rs`), the embedding provider (`provider.rs`) and image descriptions (`image.rs`).
+- `backend/src/search/` — searching the notes: `run_search` and grep mode in `mod.rs`, the query language (`query.rs`), the passages a note is cut into (`passage.rs`) and the descriptions of its images (`image.rs`), which the local text index (`lexical.rs`) is built from as semantic search is, and for semantic search alone the embedding provider (`provider.rs`).
 - `backend/src/mcp/` — the MCP server: `mod.rs` holds the tool router, `frontmatter.rs` the
   in-place frontmatter editor, and the rest the tools grouped by area.
 - `fixtures/calendar/` — iCal feeds and notes both components expand, and the goldens the differential tests compare them against.
