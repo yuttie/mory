@@ -321,6 +321,12 @@ function nameOf(path: string): string {
         width: 100%;
         height: 100%;
         object-fit: contain;
+
+        // Waiting for its turn, which Chromium would draw as a broken image's frame. Hidden rather
+        // than left out, as its box is what tells it is in sight.
+        &:not([src]) {
+            visibility: hidden;
+        }
     }
 }
 

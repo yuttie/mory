@@ -385,8 +385,11 @@ test('fetches a few thumbnails at a time, and only those in sight', async ({ bro
     const last = tiles.last();
     const lastPath = await last.locator('a').getAttribute('title');
     expect(requested.some((path) => path.endsWith(`/${lastPath}`))).toBe(false);
+    // Not drawn as a broken image meanwhile.
+    await expect(last.locator('img')).toBeHidden();
     await last.scrollIntoViewIfNeeded();
     await expect(last.locator('img')).toHaveJSProperty('naturalWidth', 1);
+    await expect(last.locator('img')).toBeVisible();
     expect(most).toBeLessThanOrEqual(4);
 });
 
