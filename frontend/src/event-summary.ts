@@ -2,13 +2,16 @@
 // declares it. Nothing is expanded, so a rule that never ends costs no more than one that does.
 //
 // Frontmatter is whatever the file said, so every value is type-checked rather than trusted, and
-// what cannot be read is left unsaid: the Calendar and the Health view report it.
+// what cannot be read is left unsaid: the Calendar and the Health view report it. A rule is the
+// exception. One the calendar refuses draws nothing, so it is called unreadable rather than
+// described from the parts that could be read, which would say the event happens.
 
 import dayjs from 'dayjs';
 
 import { occurrencesOf } from '@/api';
 import type { MetadataEvent } from '@/api';
 import { toWallClock } from '@/events';
+import { RecurrenceError, readRule, ruleStart } from '@/recurrence';
 
 // A start as the calendar draws it, in the reader's zone, with the instant to sort it by.
 export interface EventStart {
@@ -36,6 +39,9 @@ const WEEKDAYS: Record<string, string> = {
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+// What Repeats says of a rule the calendar refuses.
+const UNREADABLE = 'Unreadable rule';
+
 // As `recurrence.ts` reads one: `wed`, `3wed`, `-1fri`.
 const BYDAY = /^(-?\d+)?(sun|mon|tue|wed|thu|fri|sat)$/;
 
@@ -44,7 +50,13 @@ export function summarizeEvent(detail: unknown): EventSummary {
         return {};
     }
     const event = detail as MetadataEvent;
-    const base = startOf(event.start);
+    // The calendar reads a rule only beside the `start` it is anchored at: an event without one
+    // draws the dates it lists, whatever its rule says. `null` is a rule it refuses, which draws
+    // nothing, its own start included.
+    const rule = event.start === undefined || event.repeat === undefined
+        ? undefined
+        : wordsOf(event.repeat, event.start);
+    const base = rule === null ? undefined : startOf(event.start);
     const listed = occurrencesOf(event).filter(isRecord).map((occurrence) => startOf(occurrence.start));
     let first: EventStart | undefined;
     for (const start of [base, ...listed]) {
@@ -52,9 +64,6 @@ export function summarizeEvent(detail: unknown): EventSummary {
             first = start;
         }
     }
-    // The calendar reads a rule only beside the `start` it is anchored at: an event without one
-    // draws the dates it lists, whatever its rule says.
-    const rule = event.start === undefined ? undefined : describeRepeat(event.repeat);
     // The days it falls on apart from what its rule makes, each once: a morning and an afternoon
     // session are one date. A rule's own start is the first date it makes.
     const days = new Set<string>();
@@ -63,20 +72,43 @@ export function summarizeEvent(detail: unknown): EventSummary {
             days.add(start.text.slice(0, 'YYYY-MM-DD'.length));
         }
     }
-    const repeats = rule === undefined
-        ? (days.size > 1 ? `On ${days.size} dates` : undefined)
-        : (days.size === 0 ? rule : `${rule}, and ${plural(days.size, 'more date')}`);
+    let repeats: string | undefined;
+    if (rule === undefined) {
+        repeats = days.size > 1 ? `On ${days.size} dates` : undefined;
+    }
+    else if (rule === null) {
+        repeats = days.size === 0 ? UNREADABLE : `${UNREADABLE}, and ${plural(days.size, 'date')}`;
+    }
+    else {
+        repeats = days.size === 0 ? rule : `${rule}, and ${plural(days.size, 'more date')}`;
+    }
     return {
         ...(first === undefined ? {} : { start: first }),
         ...(repeats === undefined ? {} : { repeats }),
     };
 }
 
-// A rule in words, or `undefined` for one that is not a rule the calendar expands.
-export function describeRepeat(repeat: unknown): string | undefined {
-    if (!isRecord(repeat) || typeof repeat.freq !== 'string' || !Object.hasOwn(FREQUENCIES, repeat.freq)) {
-        return undefined;
+// A rule in words, anchored at `start`; "Unreadable rule" for one the calendar refuses, and
+// `undefined` for none at all.
+export function describeRepeat(repeat: unknown, start: unknown): string | undefined {
+    return repeat === undefined ? undefined : wordsOf(repeat, start) ?? UNREADABLE;
+}
+
+// A rule in words, or `null` for one the calendar refuses: the same reading `expandRule` starts
+// from, so that what the calendar reports is never described as a rule it draws.
+function wordsOf(value: unknown, start: unknown): string | null {
+    try {
+        // Converting the start meets a zone Intl does not know, as the calendar meets it converting
+        // the first occurrence it draws.
+        ruleStart(readRule(value, start));
     }
+    catch (error) {
+        if (error instanceof RecurrenceError) {
+            return null;
+        }
+        throw error;
+    }
+    const repeat = value as Record<string, unknown> & { freq: keyof typeof FREQUENCIES };
     const [every, unit] = FREQUENCIES[repeat.freq];
     const interval = repeat.interval;
     let text = typeof interval === 'number' && Number.isInteger(interval) && interval > 1

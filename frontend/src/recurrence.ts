@@ -271,6 +271,16 @@ function inReaderZone(wallClock: string, hasTime: boolean, tz: unknown): string 
     return converted.local().format('YYYY-MM-DD HH:mm');
 }
 
+/// Where the calendar puts the start a rule is anchored at, in the reader's zone: its wall clock,
+/// converted as each occurrence is. A start off the rule's own pattern is put there all the same,
+/// though rrule generates nothing there.
+///
+/// A `RecurrenceError` for a zone Intl does not know, which the calendar meets converting the first
+/// occurrence it draws.
+export function ruleStart(rule: RecurrenceRule): string {
+    return inReaderZone(formatAnchor(toAnchor(rule.start), rule.start.hasTime), rule.start.hasTime, rule.tz);
+}
+
 /// The wall-clock occurrences a rule generates that fall within `[from, to]`.
 ///
 /// Returned in the reader's own zone: `repeat.tz` names the zone the rule's wall clock belongs to,
