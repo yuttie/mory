@@ -198,6 +198,57 @@ describe('summarizeEvent', () => {
     });
 });
 
+describe('summarizeEvent for a rule in another zone', () => {
+    // The rule's wall clock is in `tz`; the reader is in Los Angeles.
+    beforeAll(() => {
+        vi.stubEnv('TZ', 'America/Los_Angeles');
+    });
+    afterAll(() => {
+        vi.unstubAllEnvs();
+    });
+
+    // `fixtures/calendar/notes/zones.md`, "Tokyo morning": 09:00 in Tokyo is 16:00 the day before.
+    it('puts its start where the calendar does, in the reader\'s zone', () => {
+        const summary = summarizeEvent({
+            start: '2024-03-04 09:00',
+            repeat: { freq: 'weekly', byday: ['mon'], tz: 'Asia/Tokyo', until: '2024-03-26' },
+        });
+        expect(summary.start).toEqual({ text: '2024-03-03 16:00', instant: dayjs('2024-03-03 16:00').valueOf() });
+        expect(summary.repeats).toBe('Weekly on Mon, until 2024-03-26');
+    });
+
+    // "Until with an offset": 12:00 UTC is 21:00 in Tokyo, the wall clock each occurrence there is
+    // compared with, and 05:00 in Los Angeles.
+    it('reads an until with an offset into the rule\'s zone, and shows it in the reader\'s', () => {
+        expect(describeRepeat({ freq: 'daily', tz: 'Asia/Tokyo', until: '2024-04-04 12:00:00+00:00' }, '2024-04-01 20:00'))
+            .toBe('Daily, until 2024-04-04 05:00');
+    });
+});
+
+describe('summarizeEvent for a rule without a zone', () => {
+    // Read in Tokyo, where an offset of -07:00 moves a time by sixteen hours.
+    beforeAll(() => {
+        vi.stubEnv('TZ', 'Asia/Tokyo');
+    });
+    afterAll(() => {
+        vi.unstubAllEnvs();
+    });
+
+    // A rule repeats the wall clock it is anchored at, and the offset only records which one
+    // applied that day; a one-off start names an instant.
+    it('draws its start\'s wall clock as written, where a one-off is converted', () => {
+        const start = '2024-05-01 10:00:00-07:00';
+        expect(summarizeEvent({ start, repeat: { freq: 'weekly' } }).start?.text).toBe('2024-05-01 10:00');
+        expect(summarizeEvent({ start }).start?.text).toBe('2024-05-02 02:00');
+    });
+
+    // Without a zone to read it into, the calendar compares occurrences with `until`'s wall clock.
+    it('shows an until with an offset as the calendar compares it', () => {
+        expect(describeRepeat({ freq: 'daily', until: '2024-05-03 10:00:00-07:00' }, '2024-05-01 09:00'))
+            .toBe('Daily, until 2024-05-03 10:00');
+    });
+});
+
 describe('summarizeEvent against the calendar\'s fixtures', () => {
     // The notes `note-fixtures.spec.ts` holds the calendar to the backend with, read in the zone
     // both sides read them in.
@@ -208,7 +259,8 @@ describe('summarizeEvent against the calendar\'s fixtures', () => {
         vi.unstubAllEnvs();
     });
 
-    function drawn(path: string, name: string, detail: Record<string, unknown>): number {
+    // The starts the calendar draws for one event, earliest first.
+    function starts(path: string, name: string, detail: Record<string, unknown>): string[] {
         const entry: ListEntry2 = {
             path,
             size: 1,
@@ -217,7 +269,13 @@ describe('summarizeEvent against the calendar\'s fixtures', () => {
             title: null,
             time: '2024-05-01T00:00:00+00:00',
         };
-        return eventsFromEntries([entry], golden.window).events.length;
+        return eventsFromEntries([entry], golden.window).events
+            .map((event) => event.start)
+            .sort((a, b) => dayjs(a).valueOf() - dayjs(b).valueOf());
+    }
+
+    function drawn(path: string, name: string, detail: Record<string, unknown>): number {
+        return starts(path, name, detail).length;
     }
 
     it('calls unreadable exactly the rules the calendar draws nothing from', () => {
@@ -238,6 +296,31 @@ describe('summarizeEvent against the calendar\'s fixtures', () => {
             }
         }
         expect(rules).toBeGreaterThan(40);
+    });
+
+    // A start off its rule's pattern is not drawn, since rrule begins at the first day the rule
+    // meets; Starts still says it, since nothing is expanded, and it comes before that day.
+    it('puts a rule\'s start where the calendar draws the first occurrence, or before it', () => {
+        for (const [path, note] of Object.entries(golden.notes)) {
+            const events = (note.metadata as { events?: Record<string, unknown> } | null)?.events ?? {};
+            for (const [name, detail] of Object.entries(events)) {
+                if (typeof detail !== 'object' || detail === null || !('start' in detail) || !('repeat' in detail)) {
+                    continue;
+                }
+                const { start, repeat } = detail as Record<string, unknown>;
+                const summary = summarizeEvent({ start, repeat });
+                if (summary.start === undefined) {
+                    continue;
+                }
+                const drawn = starts(path, name, { start, repeat });
+                if (drawn.includes(summary.start.text)) {
+                    expect(summary.start.text, `${path}: ${name}`).toBe(drawn[0]);
+                }
+                else {
+                    expect(summary.start.instant, `${path}: ${name}`).toBeLessThan(dayjs(drawn[0]).valueOf());
+                }
+            }
+        }
     });
 
     // The fixtures hold no rule rrule reads otherwise than it is written, so these are held to the

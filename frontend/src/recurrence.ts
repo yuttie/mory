@@ -162,6 +162,9 @@ export interface RecurrenceRule {
     start: WallClock;
     /// The zone that wall clock is in, as written; absent when it is the reader's.
     tz: unknown;
+    /// `until` as each occurrence is compared with it: a wall clock in the rule's own frame. A date
+    /// stays a date here, though the comparison takes in the whole day.
+    until?: WallClock;
 }
 
 /// `repeat` anchored at `start`, or a `RecurrenceError` for a rule the calendar refuses.
@@ -215,6 +218,7 @@ export function readRule(repeat: unknown, start: unknown): RecurrenceRule {
     if (rule.count !== undefined) {
         options.count = rule.count as number;
     }
+    let resolvedUntil: WallClock | undefined;
     if (rule.until !== undefined) {
         const until = parseWallClock(rule.until);
         if (until === null) {
@@ -228,6 +232,7 @@ export function readRule(repeat: unknown, start: unknown): RecurrenceRule {
             ? parseWallClock(wallClockIn(written, rule.tz))
             : until;
         const resolved = bounded ?? until;
+        resolvedUntil = resolved;
         // A date-only `until` includes the whole day.
         options.until = resolved.hasTime
             ? toAnchor(resolved)
@@ -245,7 +250,7 @@ export function readRule(repeat: unknown, start: unknown): RecurrenceRule {
         throw new RecurrenceError(
             error instanceof Error ? error.message : 'the rule could not be built');
     }
-    return { rrule, start: anchorStart, tz: rule.tz };
+    return { rrule, start: anchorStart, tz: rule.tz, ...(resolvedUntil === undefined ? {} : { until: resolvedUntil }) };
 }
 
 // rrule's weekdays in its own order, Monday first.
@@ -362,6 +367,17 @@ function inReaderZone(wallClock: string, hasTime: boolean, tz: unknown): string 
 /// occurrence it draws.
 export function ruleStart(rule: RecurrenceRule): string {
     return inReaderZone(formatAnchor(toAnchor(rule.start), rule.start.hasTime), rule.start.hasTime, rule.tz);
+}
+
+/// Where the calendar puts a rule's `until`, in the reader's zone: the wall clock each occurrence is
+/// compared with, converted as they are. An offset on it is read only into a `tz`; without one,
+/// the wall clock is compared as written. A date stays the date, all of which the rule takes in.
+export function ruleUntil(rule: RecurrenceRule): string | undefined {
+    if (rule.until === undefined) {
+        return undefined;
+    }
+    const text = formatAnchor(toAnchor(rule.until), rule.until.hasTime);
+    return rule.until.hasTime ? inReaderZone(text, rule.start.hasTime, rule.tz) : text;
 }
 
 /// The wall-clock occurrences a rule generates that fall within `[from, to]`.

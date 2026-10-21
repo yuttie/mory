@@ -13,7 +13,7 @@ import dayjs from 'dayjs';
 import { occurrencesOf } from '@/api';
 import type { MetadataEvent } from '@/api';
 import { toWallClock } from '@/events';
-import { RecurrenceError, readRule, ruleStart, termsOf } from '@/recurrence';
+import { RecurrenceError, readRule, ruleStart, ruleUntil, termsOf } from '@/recurrence';
 import type { RuleTerms, WeekdayName } from '@/recurrence';
 
 // A start as the calendar draws it, in the reader's zone, with the instant to sort it by.
@@ -51,12 +51,13 @@ export function summarizeEvent(detail: unknown): EventSummary {
     }
     const event = detail as MetadataEvent;
     // The calendar reads a rule only beside the `start` it is anchored at: an event without one
-    // draws the dates it lists, whatever its rule says. `null` is a rule it refuses, which draws
-    // nothing, its own start included.
-    const rule = event.start === undefined || event.repeat === undefined
+    // draws the dates it lists, whatever its rule says. `null` is a rule it draws nothing from,
+    // its own start included.
+    const series = event.start === undefined || event.repeat === undefined
         ? undefined
-        : wordsOf(event.repeat, event.start);
-    const base = rule === null ? undefined : startOf(event.start);
+        : seriesOf(event.repeat, event.start);
+    // A rule's start is read as the rule reads it, a one-off's as `buildOccurrence` does.
+    const base = series === undefined ? startOf(event.start) : series?.start;
     const listed = occurrencesOf(event).filter(isRecord).map((occurrence) => startOf(occurrence.start));
     let first: EventStart | undefined;
     for (const start of [base, ...listed]) {
@@ -67,20 +68,20 @@ export function summarizeEvent(detail: unknown): EventSummary {
     // The days it falls on apart from what its rule makes, each once: a morning and an afternoon
     // session are one date. A rule's own start is the first date it makes.
     const days = new Set<string>();
-    for (const start of rule === undefined ? [base, ...listed] : listed) {
+    for (const start of series === undefined ? [base, ...listed] : listed) {
         if (start !== undefined) {
             days.add(start.text.slice(0, 'YYYY-MM-DD'.length));
         }
     }
     let repeats: string | undefined;
-    if (rule === undefined) {
+    if (series === undefined) {
         repeats = days.size > 1 ? `On ${days.size} dates` : undefined;
     }
-    else if (rule === null) {
+    else if (series === null) {
         repeats = days.size === 0 ? UNREADABLE : `${UNREADABLE}, and ${plural(days.size, 'date')}`;
     }
     else {
-        repeats = days.size === 0 ? rule : `${rule}, and ${plural(days.size, 'more date')}`;
+        repeats = days.size === 0 ? series.words : `${series.words}, and ${plural(days.size, 'more date')}`;
     }
     return {
         ...(first === undefined ? {} : { start: first }),
@@ -88,22 +89,31 @@ export function summarizeEvent(detail: unknown): EventSummary {
     };
 }
 
-// A rule in words, anchored at `start`; "Unreadable rule" for one the calendar refuses, and
-// `undefined` for none at all.
+// A rule in words, anchored at `start`; "Unreadable rule" for one the calendar draws nothing from,
+// and `undefined` for none at all.
 export function describeRepeat(repeat: unknown, start: unknown): string | undefined {
-    return repeat === undefined ? undefined : wordsOf(repeat, start) ?? UNREADABLE;
+    return repeat === undefined ? undefined : seriesOf(repeat, start)?.words ?? UNREADABLE;
+}
+
+// A rule in words, with its start as the calendar puts it.
+interface Series {
+    words: string;
+    start: EventStart;
 }
 
 // A rule in words, or `null` for one the calendar draws nothing from: one it refuses, by the same
 // reading `expandRule` starts from, or one that names what can never be met. Either is called
 // unreadable, never described as a rule that happens.
-function wordsOf(value: unknown, start: unknown): string | null {
+function seriesOf(value: unknown, start: unknown): Series | null {
+    let first: string;
+    let until: string | undefined;
     let terms: RuleTerms;
     try {
         const rule = readRule(value, start);
-        // Converting the start meets a zone Intl does not know, as the calendar meets it converting
-        // the first occurrence it draws.
-        ruleStart(rule);
+        // Where the calendar would draw the start, which is where it meets a zone Intl does not
+        // know, converting the first occurrence.
+        first = ruleStart(rule);
+        until = ruleUntil(rule);
         terms = termsOf(rule);
     }
     catch (error) {
@@ -136,13 +146,13 @@ function wordsOf(value: unknown, start: unknown): string | null {
         text += ` in ${terms.months.map((month) => MONTHS[month - 1]).join(', ')}`;
     }
 
-    if (typeof repeat.until === 'string' && repeat.until.trim() !== '') {
-        text += `, until ${toWallClock(repeat.until)}`;
+    if (until !== undefined) {
+        text += `, until ${until}`;
     }
     else if (terms.count !== undefined) {
         text += `, ${plural(terms.count, 'time')}`;
     }
-    return text;
+    return { words: text, start: { text: first, instant: dayjs(first).valueOf() } };
 }
 
 function startOf(value: unknown): EventStart | undefined {
