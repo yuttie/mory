@@ -233,10 +233,10 @@ describe('branchIds', () => {
 });
 
 describe('STATUS_PRESETS', () => {
-    it('puts every status but To do in exactly one group', () => {
+    it('puts every status in exactly one group', () => {
         const grouped: string[] = STATUS_PRESETS.flatMap((preset) => preset.kinds);
         expect(new Set(grouped).size).toBe(grouped.length);
-        expect(STATUS_KINDS.filter((kind) => !grouped.includes(kind))).toEqual(['todo']);
+        expect(STATUS_KINDS.filter((kind) => !grouped.includes(kind))).toEqual([]);
     });
 });
 
@@ -256,6 +256,6 @@ describe('togglePreset', () => {
 
     it('shows a group hidden or partly shown, whole', () => {
         expect(togglePreset(['done', 'backlog', 'canceled'], ['done', 'canceled'])).toEqual(['backlog']);
-        expect(togglePreset(['blocked', 'todo'], ['in_progress', 'waiting', 'blocked'])).toEqual(['todo']);
+        expect(togglePreset(['blocked', 'todo'], ['waiting', 'blocked'])).toEqual(['todo']);
     });
 });

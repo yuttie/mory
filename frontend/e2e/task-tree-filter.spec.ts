@@ -82,7 +82,8 @@ function statuses(page: Page): Locator {
     return page.getByRole('button', { name: 'Choose which statuses are shown' });
 }
 
-// A row of the open status menu, by its title alone: "Active" is in "Inactive" too.
+// A row of the open status menu, by its title alone: a group's row names its statuses too, as
+// "Done, Canceled".
 function status(page: Page, name: string): Locator {
     return page.locator('.v-overlay--active .v-list-item').filter({ has: page.getByText(name, { exact: true }) });
 }
@@ -269,29 +270,36 @@ test('shows or hides a group of statuses at once', async ({ context, page }) => 
     await toggle(page, 'Launch');
     await toggle(page, 'Ship');
     await statuses(page).click();
-    const completed = status(page, 'Completed');
+    const closed = status(page, 'Closed');
 
     // Its statuses named as well as drawn.
-    await expect(completed).toContainText('Done, Canceled');
-    await completed.click();
+    await expect(closed).toContainText('Done, Canceled');
+    await closed.click();
     await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Build the release', 'home']);
     await expect(hiddenCount(page)).toHaveText('2');
     await expect(statuses(page)).toHaveAccessibleName('Choose which statuses are shown, 2 statuses hidden');
-    await expect(completed.getByRole('checkbox')).not.toBeChecked();
+    await expect(closed.getByRole('checkbox')).not.toBeChecked();
     await expect(status(page, 'Done').getByRole('checkbox')).not.toBeChecked();
     await expect(status(page, 'Canceled').getByRole('checkbox')).not.toBeChecked();
     // The groups apart.
-    await expect(status(page, 'Active').getByRole('checkbox')).toBeChecked();
-    await expect(status(page, 'Inactive').getByRole('checkbox')).toBeChecked();
+    for (const name of ['Actionable', 'Stalled', 'Parked']) {
+        await expect(status(page, name).getByRole('checkbox')).toBeChecked();
+    }
 
     // Partly shown, a group is half ticked, and shown whole when chosen.
     await status(page, 'Done').click();
-    await expect(completed.getByRole('checkbox')).toHaveAttribute('aria-checked', 'mixed');
-    await completed.click();
-    await expect(completed.getByRole('checkbox')).toBeChecked();
-    await expect(completed.getByRole('checkbox')).not.toHaveAttribute('aria-checked', 'mixed');
+    await expect(closed.getByRole('checkbox')).toHaveAttribute('aria-checked', 'mixed');
+    await closed.click();
+    await expect(closed.getByRole('checkbox')).toBeChecked();
+    await expect(closed.getByRole('checkbox')).not.toHaveAttribute('aria-checked', 'mixed');
     await expect(hiddenCount(page)).toBeHidden();
     await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Build the release', 'Write release notes', 'home']);
+
+    // To do is in a group as every status is, so the groups between them hide every task.
+    await closed.click();
+    await status(page, 'Actionable').click();
+    await expect(tree(page)).toContainText('No tasks match.');
+    await expect(hiddenCount(page)).toHaveText('4');
 });
 
 // The switch it replaced hid Done and Canceled.

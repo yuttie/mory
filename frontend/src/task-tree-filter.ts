@@ -14,11 +14,16 @@ export interface TaskTreeFilter {
     hiddenStatuses: readonly string[];
 }
 
-// Statuses the filter shows or hides together. To do is in none: it is neither started nor set aside.
+// Statuses the filter shows or hides together, each in exactly one group, so that between them the
+// groups can hide any task. The open ones are split by what keeps them from being worked on now:
+// nothing (Actionable), something out of the reader's hands (Stalled), or the reader's own choice
+// (Parked). The groups run from the tasks to work on now to those over with, rather than in the
+// statuses' own order, which would put Backlog first and On hold sixth.
 export const STATUS_PRESETS = [
-    { title: 'Completed', kinds: ['done', 'canceled'] },
-    { title: 'Inactive', kinds: ['backlog', 'on_hold'] },
-    { title: 'Active', kinds: ['in_progress', 'waiting', 'blocked'] },
+    { title: 'Actionable', kinds: ['todo', 'in_progress'] },
+    { title: 'Stalled', kinds: ['waiting', 'blocked'] },
+    { title: 'Parked', kinds: ['backlog', 'on_hold'] },
+    { title: 'Closed', kinds: ['done', 'canceled'] },
 ] as const satisfies readonly { title: string; kinds: readonly StatusKind[] }[];
 
 export type PresetState = 'shown' | 'hidden' | 'mixed';
