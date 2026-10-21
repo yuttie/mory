@@ -78,7 +78,7 @@
                 v-if="kind !== 'events'"
                 v-bind:icon="mdiDelete"
                 icon-color="pink"
-                v-bind:disabled="selected.length === 0"
+                v-bind:disabled="selected.length === 0 || deleting"
                 title="Delete the selected files"
                 aria-label="Delete the selected files"
                 v-on:click="deleteSelected"
@@ -326,6 +326,8 @@ const isLoading = ref(false);
 const error = ref(false);
 const errorText = ref('');
 const selected = ref([] as string[]);
+// While the selection is being deleted, which a second press would ask to delete again.
+const deleting = ref(false);
 const showingTagList = ref(false);
 // Each tab keeps its own sort, as each has columns of its own: one sorted by urgency would sort
 // the notes by nothing.
@@ -804,7 +806,19 @@ function formatFileSize(size: number) {
 // One at a time, and a file deeper in before one further out, so a task selected together with
 // its subtasks is deleted after them rather than refused for having them.
 async function deleteSelected() {
-    const paths = [...selected.value].sort((a, b) => b.split('/').length - a.split('/').length);
+    if (deleting.value) {
+        return;
+    }
+    deleting.value = true;
+    try {
+        await deleteEach([...selected.value].sort((a, b) => b.split('/').length - a.split('/').length));
+    }
+    finally {
+        deleting.value = false;
+    }
+}
+
+async function deleteEach(paths: string[]) {
     for (const path of paths) {
         const id = tasks.idByPath(path);
         try {

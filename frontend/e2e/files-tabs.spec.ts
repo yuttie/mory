@@ -201,6 +201,31 @@ test('lets go of the media selected as thumbnails once they are listed', async (
     await expect(remove).toHaveClass(/v-icon-btn--disabled/);
 });
 
+test('takes no second press to delete while the first is deleting', async ({ context, page }) => {
+    const repository = await mockBackend(context, FILES);
+    let release = () => {};
+    const released = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+    // Registered after `mockBackend`, so it answers first, and hands each delete on once released.
+    await context.route(`${API_URL}notes/**`, async (route) => {
+        if (route.request().method() === 'DELETE') {
+            await released;
+        }
+        await route.fallback();
+    });
+    await page.goto('/files');
+    await row(page, 'Ideas').getByRole('checkbox').check();
+    const remove = page.getByRole('button', { name: 'Delete the selected files' });
+    await remove.click();
+    await expect(remove).toHaveClass(/v-icon-btn--disabled/);
+    await remove.click({ force: true });
+    release();
+    await expect(rows(page)).toHaveCount(13);
+    await expect(remove).toHaveClass(/v-icon-btn--disabled/);
+    expect(repository.deletes).toEqual(['ideas.md']);
+});
+
 test('deletes no file the search hides', async ({ context, page }) => {
     const repository = await mockBackend(context, FILES);
     await page.goto('/files');
