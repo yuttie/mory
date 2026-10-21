@@ -103,11 +103,12 @@ test('gives templates, events, system files and the rest tabs of their own', asy
     const review = rows(page).filter({ hasText: 'Review' });
     await expect(review).toContainText('2026-11-09');
     await expect(review).toContainText('On 2 dates');
-    // The note each is in, beside it.
+    // The note each is in, beside it, and no tags, which are the note's rather than the event's.
     await expect(review.getByRole('link', { name: 'Review' })).toHaveAttribute('href', '/note/ideas/draft.md');
     await expect(review.locator('.note').getByRole('link', { name: 'Draft' })).toHaveAttribute('href', '/note/ideas/draft.md');
     await expect(meeting.locator('.note')).toHaveText('Meeting');
     await expect(page.getByRole('columnheader', { name: 'Note' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Tags' })).toHaveCount(0);
     const starts = page.getByRole('columnheader', { name: 'Starts' });
     await starts.click();
     await expect(starts).toHaveAttribute('aria-sort', 'ascending');

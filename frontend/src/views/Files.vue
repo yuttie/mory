@@ -377,7 +377,7 @@ const headers = computed<DataTableHeader<FileRow>[]>(() => {
         case 'templates':
             return [{ ...title, title: 'Name' }, { title: '', key: 'newNote', sortable: false }, modified, size];
         // An event as its file declares it, however often that makes it happen: when it starts,
-        // rather than when its file last changed.
+        // rather than when its file last changed. Tags are its note's, not its own.
         case 'events':
             return [
                 { ...title, title: 'Event' },
@@ -386,7 +386,6 @@ const headers = computed<DataTableHeader<FileRow>[]>(() => {
                 // A line of its own, as the date beside it has: wrapped, it broke an `until` date at
                 // its hyphen.
                 { title: 'Repeats', key: 'repeats', nowrap: true },
-                tags,
             ];
         case 'system':
             return [{ ...title, title: 'Path' }, { title: 'Used for', key: 'purpose' }, modified, size];
