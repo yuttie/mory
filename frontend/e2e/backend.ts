@@ -22,8 +22,8 @@ export function uuid(n: number): string {
     return `${String(n).padStart(8, '0')}-0000-4000-8000-000000000000`;
 }
 
-// The type moried lists a file as, by its extension: a medium's own, and Markdown for any other, as
-// every note the tests write is one.
+// The type moried lists a file as, by its extension: a medium's own, and Markdown for any other: the
+// tests tell the rest apart by their paths, never by their type.
 const MEDIA_TYPES: Record<string, string> = {
     png: 'image/png',
     jpg: 'image/jpeg',
