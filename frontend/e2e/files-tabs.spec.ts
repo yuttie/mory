@@ -503,3 +503,28 @@ test('keeps each tab to its own sort', async ({ context, page }) => {
     await expect(deadline).toHaveAttribute('aria-sort', 'ascending');
     await expect(page.getByRole('columnheader', { name: 'Modified' })).not.toHaveAttribute('aria-sort', /ascending|descending/);
 });
+
+test('selects and deletes media from the thumbnails', async ({ context, page }) => {
+    const repository = await mockBackend(context, FILES);
+    await page.goto('/files/media');
+    const tiles = page.locator('.media-grid .tile');
+    await expect(tiles).toHaveCount(2);
+    const remove = page.getByRole('button', { name: 'Delete the selected files' });
+    await expect(remove).toHaveClass(/v-icon-btn--disabled/);
+
+    await page.getByRole('checkbox', { name: 'Select paper.pdf' }).check();
+    await expect(tiles.filter({ hasText: 'paper.pdf' })).toHaveClass(/selected/);
+    await expect(tiles.filter({ hasText: 'demo.mp4' })).not.toHaveClass(/selected/);
+    await expect(remove).not.toHaveClass(/v-icon-btn--disabled/);
+    // Part of the page, and then all of it.
+    const wholePage = page.getByRole('checkbox', { name: 'Select the page' });
+    await expect(wholePage).not.toBeChecked();
+    await wholePage.click();
+    await expect(wholePage).toBeChecked();
+    await expect(page.getByRole('checkbox', { name: 'Select demo.mp4' })).toBeChecked();
+
+    await remove.click();
+    await expect(tiles).toHaveCount(0);
+    expect([...repository.deletes].sort()).toEqual(['clips/demo.mp4', 'paper.pdf']);
+    await expect(page.locator('.media-grid')).toContainText('No media files');
+});
