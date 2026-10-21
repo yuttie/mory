@@ -1,2 +1,5 @@
 # Configures compose.yaml, secrets included.
 /.env
+
+# Agents' worktrees; see AGENTS.md.
+/.claude/worktrees/

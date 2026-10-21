@@ -40,12 +40,34 @@ When these instructions do not settle a choice, prefer the option that keeps the
 
 ## Build and test
 
-Run commands in the component's own directory (`backend/` or `frontend/`).
+Run commands in the component's own directory (`backend/` or `frontend/`) of your worktree, as Working in parallel says.
 
 - Frontend: `npm run dev`, `npm run build`, `npm run test` (vitest), `npm run lint`. Type-check with `npx vue-tsc --noEmit`.
 - Backend: `cargo build`, `cargo test`, `cargo clippy`. `bacon` is configured for watch runs.
 - Backend tests live in-module (`#[cfg(test)] mod tests`), not in `tests/` — the crate is a binary, so an integration test could not import it.
 - Neither `npm run lint` nor `vue-tsc` is clean today. Compare the counts before and after your change instead of expecting zero.
+
+## Working in parallel
+
+Several agents and the user work on this repository at once. The main checkout, the directory holding `.claude/worktrees/`, is the user's: they switch it between branches to review them, and their own dev servers run from it — Vite on `localhost:8080`, and moried on `127.0.0.1:3030` against `backend/notes`. An agent editing or building there races the user's `git switch`, so never do either unless the user asks you to.
+
+### Work in a worktree
+
+Before the first edit, create a worktree on a new branch from `main`, say which branch and worktree you created, and do all of the work in it. If you were started in a worktree already, use that one.
+
+```sh
+git worktree add -b <type>/<topic> .claude/worktrees/<topic> main
+```
+
+Give the worktree its own `frontend/node_modules` and `backend/target`, never a symlink to the main checkout's or a shared `CARGO_TARGET_DIR`. A symlinked `node_modules` shares Vite's dependency cache with the user's server and lets `npm install` change the main checkout, and a shared target makes cargo run a binary built from another worktree's sources, because every worktree writes the same `moried-<hash>`. On this btrfs disk a reflink copy is instant, and the copied build makes the first `cargo build` take seconds:
+
+```sh
+main=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
+cp -a --reflink=always "$main/frontend/node_modules" frontend/
+mkdir -p backend/target && cp -a --reflink=always "$main/backend/target/debug" backend/target/
+```
+
+While the worktree holds its branch, nothing else can check the branch out: the user reviews it in the worktree and merges it from `main`. If they want it in the main checkout, free it with `git switch --detach` in the worktree. When they say the branch is merged or dropped, `git worktree remove` it; its target alone grows to tens of GB. Leave worktrees you did not create alone.
 
 ## Coding standards
 
