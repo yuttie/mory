@@ -248,6 +248,89 @@ export function readRule(repeat: unknown, start: unknown): RecurrenceRule {
     return { rrule, start: anchorStart, tz: rule.tz };
 }
 
+// rrule's weekdays in its own order, Monday first.
+const WEEKDAY_NAMES = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+
+export type WeekdayName = typeof WEEKDAY_NAMES[number];
+
+/// What a rule draws on, as rrule reads the values `readRule` lets through.
+///
+/// rrule reads some of them otherwise than they are written, and the schema refuses most of those
+/// while the calendar draws them all the same. A view that describes a rule without expanding it
+/// has to follow rrule rather than the text: `count: '3'` draws three, and `bymonth: [13]` nothing.
+export interface RuleTerms {
+    /// The weekdays it draws on, each with the ordinal it counts if any; empty for any weekday.
+    weekdays: { weekday: WeekdayName; ordinal?: number }[];
+    /// The days of the month it draws on, negative ones counted from its end; empty for any.
+    monthDays: number[];
+    /// `bymonthday` names days, but none rrule keeps. That leaves the rule no day of its own and
+    /// takes none from its start either, so it draws on every day of each period.
+    everyDay: boolean;
+    /// The months it draws in, from 1; empty for any.
+    months: number[];
+    /// How many occurrences it stops after; absent for no limit.
+    count?: number;
+    /// It draws nothing, whatever its start: a value it names can never be met.
+    never: boolean;
+}
+
+export function termsOf(rule: RecurrenceRule): RuleTerms {
+    // What `readRule` handed rrule, before rrule's own reading.
+    const options = rule.rrule.origOptions;
+
+    // rrule counts a `count` down with `--count` and stops when that is falsy: `'3'` is three, one
+    // that is not a number stops after the first occurrence, and one that never steps down to zero
+    // -- negative, fractional, too large to step -- is no limit at all. Zero draws nothing.
+    const written: unknown = options.count;
+    let count: number | undefined;
+    if (written === 0) {
+        count = 0;
+    }
+    else if (written) {
+        const n = Number(written);
+        count = Number.isNaN(n) ? 1 : (Number.isSafeInteger(n) && n >= 1 ? n : undefined);
+    }
+
+    // rrule matches a month or a day of the month by strict equality, so only a whole number of the
+    // right size is ever met: not `'3'`, not 13.
+    const isWhole = (value: unknown, limit: number): value is number =>
+        typeof value === 'number' && Number.isInteger(value) && value !== 0 && Math.abs(value) <= limit;
+    const monthList = options.bymonth as unknown[] | undefined;
+    const months = (monthList ?? []).filter((month) => isWhole(month, 12) && month > 0) as number[];
+    // Of the days of the month, rrule keeps only what compares as positive or negative. Dropping all
+    // of them leaves no restriction, not an empty one.
+    const dayList = options.bymonthday as unknown[] | undefined;
+    const kept = (dayList ?? []).filter((day) => (day as number) > 0 || (day as number) < 0);
+    const monthDays = kept.filter((day) => isWhole(day, 31)) as number[];
+
+    // rrule counts an ordinal within a month, or within the year when a yearly rule names no month,
+    // and drops it under a shorter period: `2mon` under `freq: daily` is every Monday. Naming plain
+    // weekdays as well, a rule draws only the days both name.
+    const counts = options.freq === Frequency.MONTHLY || options.freq === Frequency.YEARLY;
+    const named = ((options.byweekday ?? []) as RRuleWeekday[]).map((day) => ({
+        weekday: WEEKDAY_NAMES[day.weekday],
+        ...(counts && day.n !== undefined ? { ordinal: day.n } : {}),
+    }));
+    const plain = named.filter((day) => day.ordinal === undefined);
+    const ordinals = named.filter((day) => day.ordinal !== undefined);
+    const last = options.freq === Frequency.YEARLY && monthList === undefined ? 53 : 5;
+    const met = ordinals.filter((day) => Math.abs(day.ordinal ?? 0) <= last
+        && (plain.length === 0 || plain.some((each) => each.weekday === day.weekday)));
+    const weekdays = ordinals.length > 0 ? met : plain;
+
+    return {
+        weekdays,
+        monthDays,
+        everyDay: dayList !== undefined && kept.length === 0,
+        months,
+        ...(count === undefined ? {} : { count }),
+        never: count === 0
+            || (named.length > 0 && weekdays.length === 0)
+            || (kept.length > 0 && monthDays.length === 0)
+            || (monthList !== undefined && months.length === 0),
+    };
+}
+
 /// A wall clock the rule generates, in the reader's zone: `tz` names the zone it belongs to, and is
 /// absent when that is already the reader's.
 function inReaderZone(wallClock: string, hasTime: boolean, tz: unknown): string {

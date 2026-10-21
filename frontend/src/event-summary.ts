@@ -3,15 +3,18 @@
 //
 // Frontmatter is whatever the file said, so every value is type-checked rather than trusted, and
 // what cannot be read is left unsaid: the Calendar and the Health view report it. A rule is the
-// exception. One the calendar refuses draws nothing, so it is called unreadable rather than
-// described from the parts that could be read, which would say the event happens.
+// exception. One the calendar refuses, or reads as naming what can never be met, draws nothing, so
+// it is called unreadable rather than described from the parts that could be read, which would
+// say the event happens. The rest are described as the calendar's rrule reads them, which is not
+// always as they are written.
 
 import dayjs from 'dayjs';
 
 import { occurrencesOf } from '@/api';
 import type { MetadataEvent } from '@/api';
 import { toWallClock } from '@/events';
-import { RecurrenceError, readRule, ruleStart } from '@/recurrence';
+import { RecurrenceError, readRule, ruleStart, termsOf } from '@/recurrence';
+import type { RuleTerms, WeekdayName } from '@/recurrence';
 
 // A start as the calendar draws it, in the reader's zone, with the instant to sort it by.
 export interface EventStart {
@@ -33,17 +36,14 @@ const FREQUENCIES: Record<string, [string, string]> = {
     yearly: ['Yearly', 'years'],
 };
 
-const WEEKDAYS: Record<string, string> = {
+const WEEKDAYS: Record<WeekdayName, string> = {
     sun: 'Sun', mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat',
 };
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-// What Repeats says of a rule the calendar refuses.
+// What Repeats says of a rule the calendar refuses, or reads as one that can never be met.
 const UNREADABLE = 'Unreadable rule';
-
-// As `recurrence.ts` reads one: `wed`, `3wed`, `-1fri`.
-const BYDAY = /^(-?\d+)?(sun|mon|tue|wed|thu|fri|sat)$/;
 
 export function summarizeEvent(detail: unknown): EventSummary {
     if (!isRecord(detail)) {
@@ -94,13 +94,17 @@ export function describeRepeat(repeat: unknown, start: unknown): string | undefi
     return repeat === undefined ? undefined : wordsOf(repeat, start) ?? UNREADABLE;
 }
 
-// A rule in words, or `null` for one the calendar refuses: the same reading `expandRule` starts
-// from, so that what the calendar reports is never described as a rule it draws.
+// A rule in words, or `null` for one the calendar draws nothing from: one it refuses, by the same
+// reading `expandRule` starts from, or one that names what can never be met. Either is called
+// unreadable, never described as a rule that happens.
 function wordsOf(value: unknown, start: unknown): string | null {
+    let terms: RuleTerms;
     try {
+        const rule = readRule(value, start);
         // Converting the start meets a zone Intl does not know, as the calendar meets it converting
         // the first occurrence it draws.
-        ruleStart(readRule(value, start));
+        ruleStart(rule);
+        terms = termsOf(rule);
     }
     catch (error) {
         if (error instanceof RecurrenceError) {
@@ -108,37 +112,35 @@ function wordsOf(value: unknown, start: unknown): string | null {
         }
         throw error;
     }
+    if (terms.never) {
+        return null;
+    }
     const repeat = value as Record<string, unknown> & { freq: keyof typeof FREQUENCIES };
     const [every, unit] = FREQUENCIES[repeat.freq];
+    // `readRule` has refused any interval but a whole number from one.
     const interval = repeat.interval;
-    let text = typeof interval === 'number' && Number.isInteger(interval) && interval > 1
-        ? `Every ${interval} ${unit}`
-        : every;
+    let text = typeof interval === 'number' && interval > 1 ? `Every ${interval} ${unit}` : every;
 
-    const days = listOf(repeat.byday)
-        .map((day) => BYDAY.exec(String(day)))
-        .filter((match) => match !== null)
-        .map((match) => match[1] === undefined ? WEEKDAYS[match[2]] : `${ordinal(Number(match[1]))} ${WEEKDAYS[match[2]]}`);
-    const monthDays = listOf(repeat.bymonthday)
-        .filter((day) => typeof day === 'number' && Number.isInteger(day) && day !== 0)
-        .map((day) => ordinal(day as number));
-    const months = listOf(repeat.bymonth)
-        .filter((month) => typeof month === 'number' && Number.isInteger(month) && month >= 1 && month <= 12)
-        .map((month) => MONTHS[(month as number) - 1]);
+    const days = terms.weekdays.map(({ weekday, ordinal: n }) =>
+        n === undefined ? WEEKDAYS[weekday] : `${ordinal(n)} ${WEEKDAYS[weekday]}`);
+    const monthDays = terms.monthDays.map(ordinal);
     // "the 3rd Wed" and "the 1st", but "Mon" alone.
     const on = [...days, ...monthDays];
     if (on.length > 0) {
         text += on.some((day) => /^\d|^last/.test(day)) ? ` on the ${on.join(', ')}` : ` on ${on.join(', ')}`;
     }
-    if (months.length > 0) {
-        text += ` in ${months.join(', ')}`;
+    else if (terms.everyDay && repeat.freq !== 'daily') {
+        text += ' on every day';
+    }
+    if (terms.months.length > 0) {
+        text += ` in ${terms.months.map((month) => MONTHS[month - 1]).join(', ')}`;
     }
 
     if (typeof repeat.until === 'string' && repeat.until.trim() !== '') {
         text += `, until ${toWallClock(repeat.until)}`;
     }
-    else if (typeof repeat.count === 'number' && Number.isInteger(repeat.count) && repeat.count > 0) {
-        text += `, ${plural(repeat.count, 'time')}`;
+    else if (terms.count !== undefined) {
+        text += `, ${plural(terms.count, 'time')}`;
     }
     return text;
 }
@@ -150,14 +152,6 @@ function startOf(value: unknown): EventStart | undefined {
     }
     const text = toWallClock(value);
     return { text, instant: dayjs(text).valueOf() };
-}
-
-// As `recurrence.ts` reads a list in a rule: a single value is a list of one.
-function listOf(value: unknown): unknown[] {
-    if (value === undefined || value === null) {
-        return [];
-    }
-    return Array.isArray(value) ? value : [value];
 }
 
 // `1st`, `22nd`, `13th`; counted from the end, `last` and `2nd last`.

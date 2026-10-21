@@ -57,6 +57,52 @@ describe('describeRepeat', () => {
         expect(describeRepeat({ freq: 'weekly' }, 20260506)).toBe('Unreadable rule');
     });
 
+    // Values the schema refuses but the calendar's rrule reads all the same, as it reads them.
+    it('counts as the calendar counts', () => {
+        expect(describeRepeat({ freq: 'weekly', count: '3' }, start)).toBe('Weekly, 3 times');
+        expect(describeRepeat({ freq: 'weekly', count: ' 2 ' }, start)).toBe('Weekly, 2 times');
+        // One that is not a number stops after the first occurrence...
+        expect(describeRepeat({ freq: 'weekly', count: 'abc' }, start)).toBe('Weekly, 1 time');
+        expect(describeRepeat({ freq: 'weekly', count: true }, start)).toBe('Weekly, 1 time');
+        // ...and one that never steps down to zero never stops.
+        for (const count of [-1, 1.5, '1.5', '0', '', false, null]) {
+            expect(describeRepeat({ freq: 'weekly', count }, start), JSON.stringify(count)).toBe('Weekly');
+        }
+    });
+
+    it('says only the days and months the calendar can meet', () => {
+        expect(describeRepeat({ freq: 'monthly', bymonthday: [1, 32] }, start)).toBe('Monthly on the 1st');
+        expect(describeRepeat({ freq: 'monthly', bymonthday: [0, 15] }, start)).toBe('Monthly on the 15th');
+        expect(describeRepeat({ freq: 'yearly', bymonth: [5, 13, '7'] }, start)).toBe('Yearly in May');
+        // An ordinal counts within a month or a year, and a shorter period drops it.
+        expect(describeRepeat({ freq: 'daily', byday: ['2mon'] }, start)).toBe('Daily on Mon');
+        // Naming plain weekdays too, a rule draws only the days both name.
+        expect(describeRepeat({ freq: 'monthly', byday: ['mon', 'tue', '1mon'] }, start)).toBe('Monthly on the 1st Mon');
+        expect(describeRepeat({ freq: 'yearly', byday: ['20mon'] }, start)).toBe('Yearly on the 20th Mon');
+    });
+
+    // rrule drops a day of the month that is neither positive nor negative, and with all of them
+    // gone, takes no day from the start either.
+    it('says when a rule falls on every day of each period', () => {
+        expect(describeRepeat({ freq: 'monthly', bymonthday: [0] }, start)).toBe('Monthly on every day');
+        expect(describeRepeat({ freq: 'yearly', bymonthday: ['x'], bymonth: [1] }, start)).toBe('Yearly on every day in Jan');
+        expect(describeRepeat({ freq: 'daily', bymonthday: [0] }, start)).toBe('Daily');
+    });
+
+    it('calls a rule that can never be met unreadable', () => {
+        const never: unknown[] = [
+            { freq: 'weekly', count: 0 },
+            { freq: 'monthly', bymonthday: [32] }, { freq: 'monthly', bymonthday: ['15'] },
+            { freq: 'monthly', bymonthday: [1.5] }, { freq: 'yearly', bymonth: [13] },
+            { freq: 'yearly', bymonth: ['3'] }, { freq: 'monthly', byday: ['6wed'] },
+            { freq: 'yearly', byday: ['54wed'] }, { freq: 'yearly', bymonth: [1], byday: ['6mon'] },
+            { freq: 'monthly', byday: ['mon', '1fri'] },
+        ];
+        for (const repeat of never) {
+            expect(describeRepeat(repeat, start), JSON.stringify(repeat)).toBe('Unreadable rule');
+        }
+    });
+
     // A date is never converted between zones, so the calendar draws an all-day rule whatever its
     // zone says.
     it('reads an unknown zone on an all-day rule, as the calendar does', () => {
@@ -123,6 +169,26 @@ describe('summarizeEvent', () => {
         });
     });
 
+    // It runs inside a computed, where one value that throws blanks the whole tab.
+    it('never throws, whatever the frontmatter holds', () => {
+        const values: unknown[] = [
+            undefined, null, true, false, 0, -1, 1.5, 70000, Number.MAX_SAFE_INTEGER, '', ' ', 'x', '3',
+            'WE', '0wed', '-6fri', 'Mars/Olympus', 'constructor', '2024-05-01', '2024-01-32 25:00',
+            '2024-05-01 10:00:00+05:45', [], [null], [{}], [[]], ['15'], [0], [32], ['WE', 'mon'], {},
+        ];
+        const rule = { freq: 'monthly', byday: ['mon'], bymonthday: [1], bymonth: [5], until: '2025-05-01', tz: 'Asia/Tokyo' };
+        for (const key of [...Object.keys(rule), 'interval', 'wkst', 'count', 'start']) {
+            for (const value of values) {
+                const repeat = { ...rule, [key]: value };
+                for (const start of key === 'start' ? [value] : ['2024-05-01 10:00', '2024-05-01']) {
+                    expect(() => summarizeEvent({ start, repeat, instances: [{ start: value }] }), `${key}: ${JSON.stringify(value)}`)
+                        .not.toThrow();
+                }
+            }
+            expect(() => summarizeEvent({ start: '2024-05-01', repeat: values })).not.toThrow();
+        }
+    });
+
     it('reads nothing from what is not an event', () => {
         expect(summarizeEvent(undefined)).toEqual({});
         expect(summarizeEvent(null)).toEqual({});
@@ -172,5 +238,38 @@ describe('summarizeEvent against the calendar\'s fixtures', () => {
             }
         }
         expect(rules).toBeGreaterThan(40);
+    });
+
+    // The fixtures hold no rule rrule reads otherwise than it is written, so these are held to the
+    // calendar here, over eleven years: long enough for a rule to meet any day it can.
+    it('calls unreadable exactly the rules rrule reads as meeting nothing', () => {
+        const window = { from: '2024-01-01', to: '2034-12-31' };
+        const rules: Record<string, unknown>[] = [
+            { freq: 'weekly', count: 0 }, { freq: 'weekly', count: '3' }, { freq: 'weekly', count: -1 },
+            { freq: 'weekly', count: 'abc' }, { freq: 'monthly', bymonthday: [32] },
+            { freq: 'monthly', bymonthday: ['15'] }, { freq: 'monthly', bymonthday: [1, 32] },
+            { freq: 'monthly', bymonthday: [0] }, { freq: 'monthly', bymonthday: [-31] },
+            { freq: 'yearly', bymonth: [13] }, { freq: 'yearly', bymonth: ['3'] }, { freq: 'yearly', bymonth: [5, 13] },
+            { freq: 'monthly', byday: ['5fri'] }, { freq: 'monthly', byday: ['6wed'] }, { freq: 'monthly', byday: ['-5mon'] },
+            { freq: 'yearly', byday: ['53mon'] }, { freq: 'yearly', byday: ['54mon'] },
+            { freq: 'yearly', bymonth: [1], byday: ['5mon'] }, { freq: 'yearly', bymonth: [1], byday: ['6mon'] },
+            { freq: 'monthly', byday: ['mon', '1mon'] }, { freq: 'monthly', byday: ['mon', '1fri'] },
+            { freq: 'daily', byday: ['6mon'], count: 3 },
+        ];
+        for (const repeat of rules) {
+            const entry: ListEntry2 = {
+                path: 'a.md',
+                size: 1,
+                mime_type: 'text/markdown',
+                metadata: { events: { Rule: { start: '2024-05-01 09:00', repeat } } } as unknown as ListEntry2['metadata'],
+                title: null,
+                time: '2024-05-01T00:00:00+00:00',
+            };
+            const drawn = eventsFromEntries([entry], window).events.length;
+            expect(
+                summarizeEvent({ start: '2024-05-01 09:00', repeat }).repeats === 'Unreadable rule',
+                JSON.stringify(repeat),
+            ).toBe(drawn === 0);
+        }
     });
 });
