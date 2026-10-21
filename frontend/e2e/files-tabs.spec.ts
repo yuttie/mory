@@ -22,6 +22,7 @@ const FILES = {
     '.events/meeting.md': '---\nevents:\n    Meeting:\n        start: 2026-04-06 10:00\n        end: +1h\n        repeat: {freq: weekly, byday: [mon]}\n---\n\n# Meeting\n',
     '.events/holiday.md': '---\nevents:\n    Holiday:\n        start: 2026-09-22\n---\n\n# Holiday\n',
     '.mory/custom-note.css': '',
+    '.mory/task-assessment.md': '# Assess the task\n',
     '.mory/plans/2026-10.yaml': '{}\n',
     '.redirects.gollum': '',
     'clips/demo.mp4': '',
@@ -40,7 +41,7 @@ test('lists each kind of file on its own tab', async ({ context, page }) => {
     await mockBackend(context, FILES);
     await page.goto('/files');
     await expect(tab(page, 'All files')).toHaveAttribute('aria-selected', 'true');
-    await expect(rows(page)).toHaveCount(13);
+    await expect(rows(page)).toHaveCount(14);
     // A template by its path, as its heading is placeholders.
     await expect(rows(page).getByRole('link', { name: 'lecture.template', exact: true })).toBeVisible();
 
@@ -113,17 +114,24 @@ test('gives templates, events, system files and the rest tabs of their own', asy
 
     await tab(page, 'System files').click();
     await expect(page).toHaveURL(/\/files\/system$/);
-    await expect(rows(page)).toHaveCount(2);
+    await expect(rows(page)).toHaveCount(3);
     await expect(rows(page).filter({ hasText: '.mory/plans/2026-10.yaml' })).toContainText('Day plans for October 2026');
     await expect(rows(page).filter({ hasText: '.mory/custom-note.css' })).toContainText('Styles for the notes');
+    // By the path the application reads it by, rather than by its heading.
+    await expect(rows(page).getByRole('link', { name: '.mory/task-assessment.md', exact: true })).toBeVisible();
+    await expect(page.locator('.file-table tbody')).not.toContainText('Assess the task');
+    await expect(page.getByRole('columnheader', { name: 'Path', exact: true })).toBeVisible();
 
     // A file under .tasks/ not named as a task is in no tree, and a hidden file in no directory of
     // the application's.
     await tab(page, 'Uncategorized').click();
     await expect(page).toHaveURL(/\/files\/others$/);
     await expect(rows(page)).toHaveCount(2);
-    await expect(rows(page).filter({ hasText: 'Loose notes' })).toBeVisible();
+    // By where each is, which says why no other tab takes it, rather than by a title.
+    await expect(rows(page).getByRole('link', { name: '.tasks/notes.md', exact: true })).toBeVisible();
+    await expect(page.locator('.file-table tbody')).not.toContainText('Loose notes');
     await expect(rows(page).filter({ hasText: '.redirects.gollum' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Path', exact: true })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Type' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Tags' })).toHaveCount(0);
 });

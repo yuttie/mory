@@ -375,10 +375,10 @@ const headers = computed<DataTableHeader<FileRow>[]>(() => {
                 tags,
             ];
         case 'system':
-            return [title, { title: 'Used for', key: 'purpose' }, modified, size];
+            return [{ ...title, title: 'Path' }, { title: 'Used for', key: 'purpose' }, modified, size];
         // Few files no other tab takes are notes, so few have tags.
         case 'others':
-            return [title, modified, size, type];
+            return [{ ...title, title: 'Path' }, modified, size, type];
         default:
             return [title, modified, size, type, tags];
     }
@@ -484,9 +484,11 @@ onMounted(() => {
 useShortcuts(handleKeydown);
 
 // Methods
-// A template by its path, as its heading is often only placeholders to fill in.
+// A file by its path where its title would mislead: a template, as its heading is often only
+// placeholders to fill in, a system file, which the application reads by its path, and a file no
+// other tab takes, which is there for where it is or what it is named.
 function titleOf(entry: ListEntry2): string | null {
-    return isTemplatePath(entry.path) ? null : entry.title;
+    return kind.value === 'system' || kind.value === 'others' || isTemplatePath(entry.path) ? null : entry.title;
 }
 
 // The search goes along, so a query asked of every file can be put to one kind of them.
