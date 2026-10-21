@@ -228,7 +228,7 @@
                                      what the score is, so on a phone the chip fits beside the
                                      progress bar rather than on a row of its own. -->
                                 <span v-if="$vuetify.display.mdAndUp">Assessment:&nbsp;</span>
-                                <span class="assessment-score">{{ assessmentScore }}</span>
+                                <span class="assessment-score"><span>{{ assessmentScore }}</span></span>
                             </v-chip>
                         </template>
                         <v-card
@@ -1325,11 +1325,24 @@ defineExpose({
     padding-inline-start: 0.1em;
 }
 
-// As wide as any score but a perfect one, so the first score takes the room its placeholder held.
+// As wide as any score, so the first score takes the room its placeholder held: a perfect score,
+// laid hidden under it, measures that in whichever font draws it. An em count held a lesser one in
+// Roboto but not in DejaVu Sans, which Firefox draws where Roboto is missing. Nor is a lesser score
+// the measure of the rest: Roboto's tabular 6 and 8 are a font unit wider than its other figures,
+// which Firefox, rounding each glyph to 1/60px, draws 1/60px wider.
 .assessment-score {
-    display: inline-block;
-    min-width: 3em;
+    display: inline-grid;
     font-variant-numeric: tabular-nums;
+
+    > span,
+    &::after {
+        grid-area: 1 / 1;
+    }
+
+    &::after {
+        content: '10.0/10';
+        visibility: hidden;
+    }
 }
 
 .assessment-loading {

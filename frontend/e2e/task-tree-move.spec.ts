@@ -74,18 +74,30 @@ async function pickUp(page: Page, task: Locator): Promise<void> {
     await expect(copy(page)).toBeVisible();
 }
 
+// Until a branch just opened has grown to its height, it clips the rows in it: Playwright scrolls
+// the branch to reach one, and as it grows it scrolls back, moving the row. A press there, on a
+// chevron or on a row to pick it up, can then fall on another row than was measured, or its release
+// can, as in `task-tree-filter.spec.ts` on the workflow's runner. Settled once no transition is
+// under way, which Vue marks from its start, as the animation begins only a frame later, and once
+// the tree's own animations are over: the search field above it holds a loader whose animation is
+// only ever paused.
+async function settled(page: Page): Promise<void> {
+    await expect.poll(() => tree(page).locator('.entry-tree').evaluate((element) => (
+        element.querySelector('[class*="enter-active"], [class*="leave-active"]') === null
+        && element.getAnimations({ subtree: true }).length === 0
+    )), { intervals: [50] }).toBe(true);
+}
+
 // The tree with Project and Phase open, and Other and the tag group closed. Nothing is selected: a
 // selected task opens the tree to itself whenever it moves, which would hide what a drop opens.
 async function openTree(page: Page): Promise<void> {
     await page.goto('/tasks-next/_/descendants/status');
     for (const name of ['Project', 'Phase']) {
+        await settled(page);
         await row(page, name).locator('.v-list-item__prepend button').click();
     }
     await expect(row(page, 'Step')).toBeVisible();
-    // Until the branches have grown to their height, Playwright finds the rows in them clipped and
-    // scrolls the tree to show them. The tree's own, as the search field above it holds a loader
-    // whose animation is only ever paused.
-    await expect.poll(() => tree(page).locator('.entry-tree').evaluate((element) => element.getAnimations({ subtree: true }).length)).toBe(0);
+    await settled(page);
 }
 
 test('moves a task, and everything under it, under the task it is dropped on', async ({ context, page }) => {
@@ -160,6 +172,7 @@ test('refuses its own group to a task already at the top', async ({ context, pag
     await mockBackend(context, NOTES);
     await openTree(page);
     await row(page, 'work').locator('.v-list-item__prepend button').click();
+    await settled(page);
 
     await pickUp(page, row(page, 'Errand'));
     await expect(row(page, 'work')).toHaveCSS('opacity', '0.4');

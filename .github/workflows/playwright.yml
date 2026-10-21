@@ -23,7 +23,10 @@ jobs:
     - name: Install dependencies
       run: npm ci
     - name: Install Playwright Browsers
-      run: npx playwright install --with-deps
+      # The browsers `playwright.config.ts` runs: the whole Chromium, without
+      # the headless shell, and Firefox. The fonts the pages are drawn in come
+      # with `--with-deps` whichever browsers are named.
+      run: npx playwright install --with-deps --no-shell chromium firefox
     - name: Run Playwright tests
       run: npx playwright test
     - uses: actions/upload-artifact@v4
