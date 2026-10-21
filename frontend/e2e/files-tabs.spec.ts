@@ -194,3 +194,25 @@ test('sorts the tasks without a deadline last either way', async ({ context, pag
     await expect(deadline).toHaveAttribute('aria-sort', 'descending');
     await expect.poll(titles).toEqual(['Write the report', 'Review the draft']);
 });
+
+test('sorts a task the tree leaves out last by its urgency or status', async ({ context, page }) => {
+    const errors: Error[] = [];
+    page.on('pageerror', (error) => errors.push(error));
+    // A second file for one UUID, as a copy made by hand would be: the tree takes the first alone,
+    // so the tab lists the copy with nothing the tree works out.
+    await mockBackend(context, { ...FILES, [`.tasks/copy-${REPORT}.md`]: '# Copy of the report\n' });
+    await page.goto('/files/tasks');
+    const titles = () => rows(page).locator('.path a').allTextContents();
+    await expect(rows(page)).toHaveCount(3);
+
+    for (const name of ['Urgency', 'Status']) {
+        const header = page.getByRole('columnheader', { name });
+        await header.click();
+        await expect(header).toHaveAttribute('aria-sort', 'ascending');
+        await expect.poll(async () => (await titles()).at(-1)).toBe('Copy of the report');
+        await header.click();
+        await expect(header).toHaveAttribute('aria-sort', 'descending');
+        await expect.poll(async () => (await titles()).at(-1)).toBe('Copy of the report');
+    }
+    expect(errors).toEqual([]);
+});

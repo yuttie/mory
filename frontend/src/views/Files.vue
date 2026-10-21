@@ -365,11 +365,11 @@ const headers = computed<DataTableHeader<FileRow>[]>(() => {
         case 'tasks':
             return [
                 { ...title, title: 'Title' },
-                { title: 'Status', key: 'status', value: (row: FileRow) => row.statusOrder },
-                { title: 'Due by', key: 'dueBy', value: (row: FileRow) => row.dueBy?.instant, sort: missingLast('dueBy') },
-                { title: 'Deadline', key: 'deadline', value: (row: FileRow) => row.deadline?.instant, sort: missingLast('deadline') },
+                { title: 'Status', key: 'status', value: (row: FileRow) => row.statusOrder, sort: missingLast('status', byNumber) },
+                { title: 'Due by', key: 'dueBy', value: (row: FileRow) => row.dueBy?.instant, sort: missingLast('dueBy', byNumber) },
+                { title: 'Deadline', key: 'deadline', value: (row: FileRow) => row.deadline?.instant, sort: missingLast('deadline', byNumber) },
                 // Ascending from the calmest, as every other column starts from its least.
-                { title: 'Urgency', key: 'urgency', sort: (a: Urgency, b: Urgency) => compareUrgency(b, a) },
+                { title: 'Urgency', key: 'urgency', sort: missingLast('urgency', (a: Urgency, b: Urgency) => compareUrgency(b, a)) },
                 modified,
                 tags,
             ];
@@ -384,7 +384,7 @@ const headers = computed<DataTableHeader<FileRow>[]>(() => {
             return [
                 { ...title, title: 'Event' },
                 { title: 'Note', key: 'note' },
-                { title: 'Starts', key: 'starts', value: (row: FileRow) => row.starts?.instant, sort: missingLast('starts') },
+                { title: 'Starts', key: 'starts', value: (row: FileRow) => row.starts?.instant, sort: missingLast('starts', byNumber) },
                 // A line of its own, as the date beside it has: wrapped, it broke an `until` date at
                 // its hyphen.
                 { title: 'Repeats', key: 'repeats', nowrap: true },
@@ -623,12 +623,13 @@ function dateCell(cues: TaskDateCue[], field: TaskDateField): DateCell | undefin
 }
 
 // Rows without a value go last whichever way the column is sorted: a task with no deadline is
-// neither the most pressing nor the least. Vuetify swaps the two values to sort descending, so the
-// comparison has to know which way it sorts to keep them there.
-function missingLast(key: string) {
-    return (a: number | undefined, b: number | undefined): number => {
+// neither the most pressing nor the least, and a file the task tree left out has no status or
+// urgency at all. Vuetify swaps the two values to sort descending, so the comparison has to know
+// which way it sorts to keep them there.
+function missingLast<T>(key: string, compare: (a: T, b: T) => number) {
+    return (a: T | undefined, b: T | undefined): number => {
         if (a !== undefined && b !== undefined) {
-            return a - b;
+            return compare(a, b);
         }
         if (a === b) {
             return 0;
@@ -636,6 +637,10 @@ function missingLast(key: string) {
         const descending = sortBy.value.some((item) => item.key === key && item.order === 'desc');
         return (a === undefined) !== descending ? 1 : -1;
     };
+}
+
+function byNumber(a: number, b: number): number {
+    return a - b;
 }
 
 function load() {
