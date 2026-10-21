@@ -134,10 +134,17 @@ function seriesOf(value: unknown, start: unknown): Series | null {
     const days = terms.weekdays.map(({ weekday, ordinal: n }) =>
         n === undefined ? WEEKDAYS[weekday] : `${ordinal(n)} ${WEEKDAYS[weekday]}`);
     const monthDays = terms.monthDays.map(ordinal);
-    // "the 3rd Wed" and "the 1st", but "Mon" alone.
-    const on = [...days, ...monthDays];
-    if (on.length > 0) {
-        text += on.some((day) => /^\d|^last/.test(day)) ? ` on the ${on.join(', ')}` : ` on ${on.join(', ')}`;
+    const counted = terms.weekdays.some((day) => day.ordinal !== undefined);
+    if (monthDays.length > 0 && days.length > 0) {
+        // rrule draws the days both name, not either: the 1st when it is a Monday.
+        text += ` on the ${monthDays.join(', ')} if ${counted ? 'the' : 'a'} ${alternatives(days)}`;
+    }
+    else if (monthDays.length > 0) {
+        text += ` on the ${monthDays.join(', ')}`;
+    }
+    else if (days.length > 0) {
+        // "the 3rd Wed", but "Mon" alone.
+        text += counted ? ` on the ${days.join(', ')}` : ` on ${days.join(', ')}`;
     }
     else if (terms.everyDay && repeat.freq !== 'daily') {
         text += ' on every day';
@@ -177,6 +184,11 @@ function ordinal(n: number): string {
     const tens = n % 100;
     const suffix = tens >= 11 && tens <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th';
     return `${n}${suffix}`;
+}
+
+// `Mon`, `Mon or Tue`, `Mon, Tue or Wed`.
+function alternatives(items: string[]): string {
+    return items.length > 1 ? `${items.slice(0, -1).join(', ')} or ${items[items.length - 1]}` : items.join('');
 }
 
 function plural(n: number, noun: string): string {

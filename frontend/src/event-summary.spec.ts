@@ -63,6 +63,17 @@ describe('describeRepeat', () => {
         expect(describeRepeat({ freq: 'weekly' }, 20260506)).toBe('Unreadable rule');
     });
 
+    // rrule draws a day only when it is both, and a reader would take "on the Mon, 1st" for either.
+    it('says the days of the month a rule falls on, and which weekday each must be', () => {
+        expect(describeRepeat({ freq: 'monthly', byday: ['mon'], bymonthday: [1] }, start)).toBe('Monthly on the 1st if a Mon');
+        expect(describeRepeat({ freq: 'monthly', byday: ['mon', 'fri'], bymonthday: [13] }, start))
+            .toBe('Monthly on the 13th if a Mon or Fri');
+        expect(describeRepeat({ freq: 'monthly', byday: ['1mon', '2tue', '-1fri'], bymonthday: [1, 2, -1] }, start))
+            .toBe('Monthly on the 1st, 2nd, last if the 1st Mon, 2nd Tue or last Fri');
+        expect(describeRepeat({ freq: 'yearly', byday: ['fri'], bymonthday: [13], bymonth: [10] }, start))
+            .toBe('Yearly on the 13th if a Fri in Oct');
+    });
+
     // Values the schema refuses but the calendar's rrule reads all the same, as it reads them.
     it('counts as the calendar counts', () => {
         expect(describeRepeat({ freq: 'weekly', count: '3' }, start)).toBe('Weekly, 3 times');
