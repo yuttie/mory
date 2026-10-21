@@ -19,7 +19,8 @@ export interface EventStart {
 export interface EventsSummary {
     // The earliest start the note writes, of a rule or of an occurrence it lists.
     start?: EventStart;
-    // How each event that repeats does, those that do not left out.
+    // How often the events happen: each rule, and how many dates the rest fall on, whether a note
+    // lists a course's sessions as one event or as an event each.
     repeats?: string;
 }
 
@@ -44,35 +45,39 @@ export function summarizeEvents(declared: unknown): EventsSummary {
         return {};
     }
     let first: EventStart | undefined;
-    const repeats: string[] = [];
+    const rules: string[] = [];
+    // The days the events fall on apart from what the rules make, each once: a morning and an
+    // afternoon session are one date.
+    const days = new Set<string>();
     for (const detail of Object.values(declared)) {
         if (!isRecord(detail)) {
             continue;
         }
         const event = detail as MetadataEvent;
-        const listed = occurrencesOf(event).filter(isRecord);
-        for (const value of [event.start, ...listed.map((occurrence) => occurrence.start)]) {
-            const start = startOf(value);
+        const base = startOf(event.start);
+        const listed = occurrencesOf(event).filter(isRecord).map((occurrence) => startOf(occurrence.start));
+        for (const start of [base, ...listed]) {
             if (start !== undefined && (first === undefined || start.instant < first.instant)) {
                 first = start;
             }
         }
-        const dates = listed.filter((occurrence) => startOf(occurrence.start) !== undefined).length;
         const rule = describeRepeat(event.repeat);
         if (rule !== undefined) {
-            repeats.push(dates > 0 ? `${rule}, and ${plural(dates, 'more date')}` : rule);
+            rules.push(rule);
         }
-        else if (dates > 0) {
-            // A list of occurrences is the other way an event happens more than once.
-            const all = dates + (startOf(event.start) === undefined ? 0 : 1);
-            if (all > 1) {
-                repeats.push(`On ${all} dates`);
+        // A rule's own start is the first date it makes.
+        for (const start of rule === undefined ? [base, ...listed] : listed) {
+            if (start !== undefined) {
+                days.add(start.text.slice(0, 'YYYY-MM-DD'.length));
             }
         }
     }
+    const repeats = rules.length === 0
+        ? (days.size > 1 ? `On ${days.size} dates` : undefined)
+        : [...rules, ...(days.size === 0 ? [] : [`on ${plural(days.size, 'other date')}`])].join('; ');
     return {
         ...(first === undefined ? {} : { start: first }),
-        ...(repeats.length === 0 ? {} : { repeats: repeats.join('; ') }),
+        ...(repeats === undefined ? {} : { repeats }),
     };
 }
 

@@ -67,14 +67,34 @@ describe('summarizeEvents', () => {
         expect(summarizeEvents({ Call: { start } }).start?.text).toBe(dayjs(start).format('YYYY-MM-DD HH:mm'));
     });
 
-    it('says how each event repeats', () => {
+    it('says how each rule repeats, and on how many other dates the events fall', () => {
         expect(summarizeEvents({
             Lecture: { start: '2026-04-10 10:00', repeat: { freq: 'weekly', until: '2026-07-31' } },
             Holiday: { start: '2026-09-22' },
             Review: { start: '2026-01-05', repeat: { freq: 'monthly' }, instances: [{ start: '2026-02-20' }] },
             Meeting: { instances: [{ start: '2026-05-01 12:00' }, { start: '2026-05-08 12:00' }] },
             Visit: { start: '2026-03-01', instances: [{ start: '2026-03-08' }] },
-        }).repeats).toBe('Weekly, until 2026-07-31; Monthly, and 1 more date; On 2 dates; On 2 dates');
+        }).repeats).toBe('Weekly, until 2026-07-31; Monthly; on 6 other dates');
+        expect(summarizeEvents({
+            Seminar: { start: '2026-04-06 10:00', repeat: { freq: 'weekly' } },
+            Party: { start: '2026-07-31' },
+        }).repeats).toBe('Weekly; on 1 other date');
+    });
+
+    it('counts the dates of a note\'s events together, each once', () => {
+        expect(summarizeEvents({
+            'Session 1': { start: '2026-04-10 10:00' },
+            'Session 2': { start: '2026-04-17 10:00' },
+            'Session 3': { start: '2026-04-24 10:00' },
+        }).repeats).toBe('On 3 dates');
+        expect(summarizeEvents({
+            Opening: { start: '2026-11-02 09:00' },
+            Workshop: { instances: [{ start: '2026-11-02 13:00' }, { start: '2026-11-03 13:00' }] },
+        }).repeats).toBe('On 2 dates');
+        expect(summarizeEvents({
+            Morning: { start: '2026-11-02 09:00' },
+            Afternoon: { start: '2026-11-02 13:00' },
+        }).repeats).toBeUndefined();
     });
 
     it('says nothing of an event that happens once', () => {

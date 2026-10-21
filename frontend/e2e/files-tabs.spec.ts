@@ -93,7 +93,9 @@ test('gives templates, event notes, system files and the rest tabs of their own'
     await expect(meeting).toContainText('2026-04-06 10:00');
     await expect(meeting).toContainText('Weekly on Mon');
     await expect(meeting.getByText('2026-10-26 10:00')).toHaveAttribute('title', 'in 5 days');
-    await expect(rows(page).filter({ hasText: 'Draft' })).toContainText('2026-11-02');
+    const draft = rows(page).filter({ hasText: 'Draft' });
+    await expect(draft).toContainText('On 2 dates');
+    await expect(draft).toContainText('2026-11-02');
     // The holiday is over, so with nothing next, and last whichever way that is sorted.
     const titles = () => rows(page).locator('a').allTextContents();
     const next = page.getByRole('columnheader', { name: 'Next' });
