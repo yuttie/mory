@@ -14,7 +14,7 @@ const REVIEW = uuid(2);
 // own requests, which is how the grid fetches one.
 const FILES = {
     'ideas.md': '# Ideas\n',
-    'ideas/draft.md': '# Draft\n',
+    'ideas/draft.md': '---\nevents:\n    Submission:\n        start: 2026-11-02\n    Review:\n        start: 2026-11-09\n---\n\n# Draft\n',
     'lecture.template': '# XXX lecture YY\n',
     [`.tasks/${REPORT}.md`]: '---\ntask:\n    status: {kind: todo}\n    deadline: 2026-11-30\n---\n\n# Write the report\n',
     [`.tasks/${REVIEW}.md`]: '---\ntask:\n    status: {kind: in_progress}\n---\n\n# Review the draft\n',
@@ -42,7 +42,8 @@ test('lists each kind of file on its own tab', async ({ context, page }) => {
     await expect(tab(page, 'All types')).toHaveAttribute('aria-selected', 'true');
     await expect(rows(page)).toHaveCount(13);
 
-    // A template is what a note is started from, so it is not one of them.
+    // A template is what a note is started from, so it is not one of them. A note that declares
+    // events still is.
     await tab(page, 'Notes').click();
     await expect(page).toHaveURL(/\/files\/notes$/);
     await expect(rows(page)).toHaveCount(2);
@@ -84,21 +85,23 @@ test('gives templates, event notes, system files and the rest tabs of their own'
     await expect(rows(page).getByRole('link', { name: 'New note' }))
         .toHaveAttribute('href', '/create?from=lecture.template');
 
+    // The notes under .events/, and any other that declares events.
     await tab(page, 'Events').click();
     await expect(page).toHaveURL(/\/files\/events$/);
-    await expect(rows(page)).toHaveCount(2);
+    await expect(rows(page)).toHaveCount(3);
     const meeting = rows(page).filter({ hasText: 'Meeting' });
     await expect(meeting).toContainText('2026-04-06 10:00');
     await expect(meeting).toContainText('Weekly on Mon');
     await expect(meeting.getByText('2026-10-26 10:00')).toHaveAttribute('title', 'in 5 days');
-    // Over, so with nothing next, and after the meeting whichever way that is sorted.
+    await expect(rows(page).filter({ hasText: 'Draft' })).toContainText('2026-11-02');
+    // The holiday is over, so with nothing next, and last whichever way that is sorted.
     const titles = () => rows(page).locator('a').allTextContents();
     const next = page.getByRole('columnheader', { name: 'Next' });
     await next.click();
-    await expect.poll(titles).toEqual(['Meeting', 'Holiday']);
+    await expect.poll(titles).toEqual(['Meeting', 'Draft', 'Holiday']);
     await next.click();
     await expect(next).toHaveAttribute('aria-sort', 'descending');
-    await expect.poll(titles).toEqual(['Meeting', 'Holiday']);
+    await expect.poll(titles).toEqual(['Draft', 'Meeting', 'Holiday']);
 
     await tab(page, 'System files').click();
     await expect(page).toHaveURL(/\/files\/system$/);

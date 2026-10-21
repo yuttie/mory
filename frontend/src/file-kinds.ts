@@ -3,8 +3,8 @@
 // Most list what one of the other views is for, so a file is found under the kind it is opened as:
 // the notes the note tree holds, the tasks the task tree holds, and whatever the media view opens.
 // The rest list what the application keeps in files of its own: the templates the Add menu offers,
-// the event notes under `.events/` and the settings under `.mory/`. "Others" lists every file none
-// of those does, and the tab with no kind every file of all.
+// the notes the calendar draws events from and the settings under `.mory/`. "Others" lists every
+// file none of those does, and the tab with no kind every file of all.
 
 import type { ListEntry2 } from '@/api';
 import { EVENTS_DIR } from '@/event-note';
@@ -34,7 +34,7 @@ export function templateNameOf(path: string): string {
     return path.replace(/\.template$/i, '');
 }
 
-export function isOfKind(entry: Pick<ListEntry2, 'path' | 'mime_type'>, kind: FileKind): boolean {
+export function isOfKind(entry: Pick<ListEntry2, 'path' | 'mime_type' | 'metadata'>, kind: FileKind): boolean {
     switch (kind) {
         // As the note tree has them: the application's own directories hold its storage, not
         // notes. An image beside a note is not one either, though the tree shows it, because the
@@ -49,11 +49,21 @@ export function isOfKind(entry: Pick<ListEntry2, 'path' | 'mime_type'>, kind: Fi
             return isMediaType(entry.mime_type);
         case 'templates':
             return isTemplatePath(entry.path);
+        // Wherever they are, as the calendar draws them, so a note is found by the day it is about
+        // too. One under `.events/` is listed even with none, as the calendar's own.
         case 'events':
-            return entry.path.startsWith(EVENTS_DIR);
+            return entry.path.startsWith(EVENTS_DIR) || declaresEvents(entry.metadata);
         case 'system':
             return entry.path.startsWith(SYSTEM_DIR);
         case 'others':
             return FILE_KINDS.every((other) => other === 'others' || !isOfKind(entry, other));
     }
+}
+
+// As `eventsFromEntries` reads them: an `events:` map holding at least one event. Most notes that
+// have the key leave it empty.
+function declaresEvents(metadata: ListEntry2['metadata']): boolean {
+    const declared = metadata?.events;
+    return typeof declared === 'object' && declared !== null
+        && Object.values(declared).some((detail) => typeof detail === 'object' && detail !== null);
 }
