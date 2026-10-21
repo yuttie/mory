@@ -485,3 +485,21 @@ test('deletes a task only once nothing is under it', async ({ context, page }) =
     await expect(rows(page)).toHaveCount(1);
     expect(repository.deletes).toEqual([subtask, `.tasks/${REPORT}.md`]);
 });
+
+test('keeps each tab to its own sort', async ({ context, page }) => {
+    await mockBackend(context, FILES);
+    await page.goto('/files/tasks');
+    const deadline = page.getByRole('columnheader', { name: 'Deadline' });
+    await deadline.click();
+    await expect(deadline).toHaveAttribute('aria-sort', 'ascending');
+
+    // Where there is no deadline to sort by, as it was.
+    await tab(page, 'Notes').click();
+    await expect(page).toHaveURL(/\/files\/notes$/);
+    await expect(page.getByRole('columnheader', { name: 'Modified' })).toHaveAttribute('aria-sort', 'descending');
+
+    await tab(page, 'Tasks').click();
+    await expect(page).toHaveURL(/\/files\/tasks$/);
+    await expect(deadline).toHaveAttribute('aria-sort', 'ascending');
+    await expect(page.getByRole('columnheader', { name: 'Modified' })).not.toHaveAttribute('aria-sort', /ascending|descending/);
+});
