@@ -459,7 +459,9 @@ const matchedEntries = computed(() => {
 
     for (const entry of kindEntries.value) {
         const entryPath = entry.path.toLowerCase();
-        const entryTitle = titleOf(entry)?.toLowerCase() ?? "";
+        // By the title the file has, whether or not the open tab shows it, so a tab lists what the
+        // same search lists of every file, narrowed to its kind.
+        const entryTitle = entry.title?.toLowerCase() ?? '';
         const entryTags = (() => {
             if (entry.metadata === null) {
                 return [];

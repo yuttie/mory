@@ -243,6 +243,25 @@ test('deletes no file the search hides', async ({ context, page }) => {
     await expect(row(page, 'Ideas').getByRole('checkbox')).not.toBeChecked();
 });
 
+test('narrows the search of every file to the kind of the open tab', async ({ context, page }) => {
+    await mockBackend(context, FILES);
+    await page.goto('/files?q=loose');
+    await expect(rows(page)).toHaveCount(1);
+    await expect(rows(page)).toContainText('Loose notes');
+    // By its title still, though the tab names it by its path.
+    await tab(page, 'Uncategorized').click();
+    await expect(page).toHaveURL(/\/files\/others\?q=loose$/);
+    await expect(rows(page)).toHaveCount(1);
+    await expect(rows(page).getByRole('link', { name: '.tasks/notes.md', exact: true })).toBeVisible();
+
+    // And a template by its heading, though the tab names it as the Add menu does.
+    await page.getByRole('textbox', { name: 'Search' }).fill('xxx');
+    await expect(rows(page).locator('.path')).toHaveCount(0);
+    await tab(page, 'Templates').click();
+    await expect(rows(page)).toHaveCount(1);
+    await expect(rows(page).getByRole('link', { name: 'lecture', exact: true })).toBeVisible();
+});
+
 test('keeps the search box to the address on going back and forth', async ({ context, page }) => {
     await mockBackend(context, FILES);
     await page.goto('/files?q=draft');
