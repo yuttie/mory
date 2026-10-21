@@ -528,3 +528,35 @@ test('selects and deletes media from the thumbnails', async ({ context, page }) 
     expect([...repository.deletes].sort()).toEqual(['clips/demo.mp4', 'paper.pdf']);
     await expect(page.locator('.media-grid')).toContainText('No media files');
 });
+
+test('captions a subtask, and sorts a status or start it cannot read apart', async ({ context, page }) => {
+    await mockBackend(context, {
+        ...FILES,
+        [`.tasks/${REPORT}/${uuid(4)}.md`]: '---\ntask:\n    status: {kind: someday}\n---\n\n# Gather the figures\n',
+        '.events/someday.md': '---\nevents:\n    Someday:\n        start: soon\n---\n\n# Someday\n',
+    });
+    const titles = () => rows(page).locator('.path a').allTextContents();
+    await page.goto('/files/tasks');
+    // The task it is part of, which its own title does not say.
+    const subtask = row(page, 'Gather the figures');
+    await expect(subtask.locator('.caption')).toHaveText('Write the report');
+    // A status that is none of the task view's, as written, and after all of them.
+    await expect(subtask).toContainText('someday');
+    const status = page.getByRole('columnheader', { name: 'Status' });
+    await status.click();
+    await expect(status).toHaveAttribute('aria-sort', 'ascending');
+    await expect.poll(titles).toEqual(['Write the report', 'Review the draft', 'Gather the figures']);
+    await status.click();
+    await expect(status).toHaveAttribute('aria-sort', 'descending');
+    await expect.poll(titles).toEqual(['Gather the figures', 'Review the draft', 'Write the report']);
+
+    // An event without a start to read is neither the first to start nor the last.
+    await tab(page, 'Events').click();
+    const starts = page.getByRole('columnheader', { name: 'Starts' });
+    await starts.click();
+    await expect(starts).toHaveAttribute('aria-sort', 'ascending');
+    await expect.poll(titles).toEqual(['Meeting', 'Holiday', 'Submission', 'Review', 'Someday']);
+    await starts.click();
+    await expect(starts).toHaveAttribute('aria-sort', 'descending');
+    await expect.poll(titles).toEqual(['Review', 'Submission', 'Holiday', 'Meeting', 'Someday']);
+});
