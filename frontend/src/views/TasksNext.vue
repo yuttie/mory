@@ -518,7 +518,7 @@ const descendantsViewMode = computed<'schedule' | 'status' | 'eisenhower'>(() =>
     if (route.name === 'TasksNextWithParams' && route.params.viewMode) {
         return route.params.viewMode as 'schedule' | 'status' | 'eisenhower';
     }
-    return 'status';
+    return 'schedule';
 });
 
 // The task open in the editor over the list, which the address names. A tag group is no task to

@@ -27,7 +27,7 @@ function note(title: string, status: string[], task: string[] = []): string {
 // The status view on a repository of `notes`, once its tasks are drawn.
 async function openStatusView(context: BrowserContext, page: Page, notes: Record<string, string>): Promise<Repository> {
     const repository = await mockBackend(context, notes);
-    await page.goto('/tasks-next');
+    await page.goto('/tasks-next/_/descendants/status');
     await expect(page.locator('.status-view .task-list-item').first()).toBeVisible();
     return repository;
 }

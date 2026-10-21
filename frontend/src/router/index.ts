@@ -58,7 +58,7 @@ const routes: Array<RouteRecordRaw> = [
         redirect: to => {
             return {
                 name: 'TasksNextWithParams',
-                params: { selectedNodeId: '_', viewMode: 'status' },
+                params: { selectedNodeId: '_', viewMode: 'schedule' },
             };
         },
         // Nested for the same reason as the calendar's routes.

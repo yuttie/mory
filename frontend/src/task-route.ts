@@ -9,7 +9,7 @@ export function tasksRoute(selectedNodeId?: string, viewMode?: string, task?: st
         name: 'TasksNextWithParams',
         params: {
             selectedNodeId: selectedNodeId || '_',
-            viewMode: viewMode || 'status',
+            viewMode: viewMode || 'schedule',
         },
         ...(task ? { query: { task } } : {}),
     };
