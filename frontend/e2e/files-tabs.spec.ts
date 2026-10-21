@@ -424,16 +424,21 @@ test('sorts blank cells last either way, and counts by their number', async ({ c
 });
 
 test('sorts the tasks without a deadline last either way', async ({ context, page }) => {
-    await mockBackend(context, FILES);
+    // A second deadline, so the two orders differ.
+    await mockBackend(context, {
+        ...FILES,
+        [`.tasks/${uuid(3)}.md`]: '---\ntask:\n    status: {kind: todo}\n    deadline: 2026-12-15\n---\n\n# Plan the talk\n',
+    });
     await page.goto('/files/tasks');
     const deadline = page.getByRole('columnheader', { name: 'Deadline' });
     const titles = () => rows(page).locator('a').allTextContents();
 
     await deadline.click();
-    await expect.poll(titles).toEqual(['Write the report', 'Review the draft']);
+    await expect(deadline).toHaveAttribute('aria-sort', 'ascending');
+    await expect.poll(titles).toEqual(['Write the report', 'Plan the talk', 'Review the draft']);
     await deadline.click();
     await expect(deadline).toHaveAttribute('aria-sort', 'descending');
-    await expect.poll(titles).toEqual(['Write the report', 'Review the draft']);
+    await expect.poll(titles).toEqual(['Plan the talk', 'Write the report', 'Review the draft']);
 });
 
 test('sorts a task the tree leaves out last by its urgency or status', async ({ context, page }) => {
