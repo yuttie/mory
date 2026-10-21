@@ -91,6 +91,7 @@
                 v-model:selected="selected"
                 v-model:sort-by="sortBy"
                 v-bind:items="matchedEntries"
+                v-bind:searched="isSearching"
                 class="flex-grow-1"
             />
             <v-data-table
@@ -450,6 +451,8 @@ const query = computed(() => {
         any: queryAny,
     };
 });
+
+const isSearching = computed(() => query.value.paths.size + query.value.tags.size + query.value.any.size > 0);
 
 const matchedEntries = computed(() => {
     const matched: FileRow[] = [];

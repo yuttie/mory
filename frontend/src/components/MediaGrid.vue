@@ -82,7 +82,7 @@
         </template>
         <template #no-data>
             <div class="no-data text-medium-emphasis">
-                No media files
+                {{ searched ? 'No media file matches the search' : 'No media files' }}
             </div>
         </template>
         <template #footer>
@@ -143,6 +143,8 @@ const MAX_LOADING = 4;
 // Props
 defineProps<{
     items: MediaItem[];
+    // Whether the items are what a search left, which then says why there are none.
+    searched: boolean;
 }>();
 
 const selected = defineModel<string[]>('selected', { required: true });

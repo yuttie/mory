@@ -316,6 +316,14 @@ test('opens each tab at its first page, scrolled to the top', async ({ context, 
     await expect.poll(() => wrapper.evaluate((element) => element.scrollTop)).toBe(0);
 });
 
+test('says when the search matches no media file', async ({ context, page }) => {
+    await mockBackend(context, FILES);
+    await page.goto('/files/media?q=zzz');
+    await expect(page.locator('.media-grid')).toContainText('No media file matches the search');
+    await page.getByRole('textbox', { name: 'Search' }).fill('');
+    await expect(page.locator('.media-grid .tile')).toHaveCount(2);
+});
+
 test('draws an image as its thumbnail, and a document as what it is', async ({ browserName, context, page }) => {
     test.skip(browserName !== 'chromium', 'Firefox does not route a service worker\'s own requests.');
     await mockBackend(context, { ...FILES, 'photos/cat.png': '' });
