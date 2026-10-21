@@ -39,7 +39,7 @@ function tab(page: Page, name: string) {
 test('lists each kind of file on its own tab', async ({ context, page }) => {
     await mockBackend(context, FILES);
     await page.goto('/files');
-    await expect(tab(page, 'All types')).toHaveAttribute('aria-selected', 'true');
+    await expect(tab(page, 'All files')).toHaveAttribute('aria-selected', 'true');
     await expect(rows(page)).toHaveCount(13);
 
     // A template is what a note is started from, so it is not one of them. A note that declares
@@ -113,7 +113,7 @@ test('gives templates, event notes, system files and the rest tabs of their own'
 
     // A file under .tasks/ not named as a task is in no tree, and a hidden file in no directory of
     // the application's.
-    await tab(page, 'Others').click();
+    await tab(page, 'Uncategorized').click();
     await expect(page).toHaveURL(/\/files\/others$/);
     await expect(rows(page)).toHaveCount(2);
     await expect(rows(page).filter({ hasText: 'Loose notes' })).toBeVisible();

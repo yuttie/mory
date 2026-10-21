@@ -3,8 +3,8 @@
 // Most list what one of the other views is for, so a file is found under the kind it is opened as:
 // the notes the note tree holds, the tasks the task tree holds, and whatever the media view opens.
 // The rest list what the application keeps in files of its own: the templates the Add menu offers,
-// the notes the calendar draws events from and the settings under `.mory/`. "Others" lists every
-// file none of those does, and the tab with no kind every file of all.
+// the notes the calendar draws events from and the settings under `.mory/`. "Uncategorized" lists
+// every file none of those does, and the tab with no kind every file of all.
 
 import type { ListEntry2 } from '@/api';
 import { EVENTS_DIR } from '@/event-note';

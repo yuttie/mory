@@ -231,14 +231,14 @@ import dayjs from 'dayjs';
 
 // The full title is cut short on a phone, where more of them are then in sight at once.
 const TABS: { kind: FileKind | null; value: string; title: string; short: string }[] = [
-    { kind: null, value: 'all', title: 'All types', short: 'All' },
+    { kind: null, value: 'all', title: 'All files', short: 'All' },
     { kind: 'notes', value: 'notes', title: 'Notes', short: 'Notes' },
     { kind: 'tasks', value: 'tasks', title: 'Tasks', short: 'Tasks' },
     { kind: 'media', value: 'media', title: 'Media files', short: 'Media' },
     { kind: 'templates', value: 'templates', title: 'Templates', short: 'Templates' },
     { kind: 'events', value: 'events', title: 'Events', short: 'Events' },
     { kind: 'system', value: 'system', title: 'System files', short: 'System' },
-    { kind: 'others', value: 'others', title: 'Others', short: 'Others' },
+    { kind: 'others', value: 'others', title: 'Uncategorized', short: 'Uncategorized' },
 ];
 
 // A date as its note gives it, in the reader's zone where it has a time, with how far off it is to
