@@ -143,7 +143,6 @@ const canceled = computed<boolean>(() => {
     display: flex;
     align-items: flex-start;
     gap: 4px;
-    font-size: 1.2em;
 }
 /* One line of the title tall, so the icon is centred on the first line however many the title
    wraps onto. */
