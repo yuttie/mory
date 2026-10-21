@@ -132,21 +132,17 @@
                 <template v-slot:item.status="{ item }">
                     <div class="text-no-wrap">{{ item.status }}</div>
                 </template>
-                <template v-slot:item.dueBy="{ item }">
+                <template
+                    v-for="column of DATE_COLUMNS"
+                    v-slot:[`item.${column}`]="{ item }"
+                >
                     <div
-                        v-if="item.dueBy"
+                        v-if="item[column]"
+                        v-bind:key="column"
                         class="text-no-wrap"
-                        v-bind:class="item.dueBy.color ? `text-${item.dueBy.color}` : undefined"
-                        v-bind:title="item.dueBy.hint"
-                    >{{ item.dueBy.text }}</div>
-                </template>
-                <template v-slot:item.deadline="{ item }">
-                    <div
-                        v-if="item.deadline"
-                        class="text-no-wrap"
-                        v-bind:class="item.deadline.color ? `text-${item.deadline.color}` : undefined"
-                        v-bind:title="item.deadline.hint"
-                    >{{ item.deadline.text }}</div>
+                        v-bind:class="item[column].color ? `text-${item[column].color}` : undefined"
+                        v-bind:title="item[column].hint"
+                    >{{ item[column].text }}</div>
                 </template>
                 <template v-slot:item.urgency="{ item }">
                     <v-chip
@@ -213,6 +209,8 @@ import { useTasksStore } from '@/stores/tasks';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
 import { routeForMime } from '@/file-route';
 import { EVENTS_DIR } from '@/event-note';
+import { nextOccurrences, summarizeEvents } from '@/event-summary';
+import type { EventStart } from '@/event-summary';
 import { fileKindOf, isOfKind, isTemplatePath, SYSTEM_DIR, templateNameOf } from '@/file-kinds';
 import type { FileKind } from '@/file-kinds';
 import { systemFilePurpose } from '@/system-files';
@@ -243,14 +241,16 @@ const TABS: { kind: FileKind | null; value: string; title: string; short: string
     { kind: 'others', value: 'others', title: 'Others', short: 'Others' },
 ];
 
-// A task's date as its note gives it, in the reader's zone where it has a time, coloured as the task
-// lists colour it, with how far off it is to hover.
-interface TaskDateCell {
+// A date as its note gives it, in the reader's zone where it has a time, with how far off it is to
+// hover. A task's is coloured as the task lists colour it.
+interface DateCell {
     text: string;
     hint: string;
     color?: string;
     instant?: number;
 }
+
+const DATE_COLUMNS = ['dueBy', 'deadline', 'starts', 'next'] as const;
 
 interface FileRow {
     path: string;
@@ -271,8 +271,12 @@ interface FileRow {
     caption?: string;
     status?: string;
     statusOrder?: number;
-    dueBy?: TaskDateCell;
-    deadline?: TaskDateCell;
+    dueBy?: DateCell;
+    deadline?: DateCell;
+    // An event note's: when its events start, how they repeat, and when one next happens.
+    starts?: DateCell;
+    repeats?: string;
+    next?: DateCell;
     urgency?: Urgency;
 }
 
@@ -320,6 +324,12 @@ const kindEntries = computed<ListEntry2[]>(() => {
     return open === null ? files.entries : files.entries.filter((entry) => isOfKind(entry, open));
 });
 
+// Expanded apart from the rows, so that typing a search does not expand every rule again. The clock
+// is the task lists', which moves on each minute.
+const nextOccurrence = computed(() => kind.value === 'events'
+    ? nextOccurrences(kindEntries.value, tasks.now)
+    : new Map<string, EventStart>());
+
 const sortBy = computed<DataTableSortItem[]>({
     get: () => sortBys[currentTab.value] ?? DEFAULT_SORT,
     set: (value) => {
@@ -355,8 +365,18 @@ const headers = computed<DataTableHeader<FileRow>[]>(() => {
         // What a template is for, next to it, as the Add menu offers it.
         case 'templates':
             return [{ ...title, title: 'Name' }, { title: '', key: 'newNote', sortable: false }, modified, size];
+        // When, rather than how large: an event note is found by the day it is about.
         case 'events':
-            return [title, modified, size, tags];
+            return [
+                title,
+                { title: 'Starts', key: 'starts', value: (row: FileRow) => row.starts?.instant, sort: missingLast('starts') },
+                // A line of its own, as the dates beside it have: wrapped, it broke an `until` date
+                // at its hyphen.
+                { title: 'Repeats', key: 'repeats', nowrap: true },
+                { title: 'Next', key: 'next', value: (row: FileRow) => row.next?.instant, sort: missingLast('next') },
+                modified,
+                tags,
+            ];
         case 'system':
             return [title, { title: 'Used for', key: 'purpose' }, modified, size];
         default:
@@ -471,6 +491,7 @@ const matchedEntries = computed(() => {
             ...(kind.value === 'notes' ? { folder: entry.path.slice(0, Math.max(entry.path.lastIndexOf('/'), 0)) } : {}),
             ...(kind.value === 'tasks' ? taskFields(entry.path) : {}),
             ...(kind.value === 'system' ? { purpose: systemFilePurpose(entry.path) } : {}),
+            ...(kind.value === 'events' ? eventFields(entry) : {}),
             // By the name the Add menu offers it as, rather than by a heading that is often only
             // placeholders to fill in.
             ...(kind.value === 'templates' ? { title: templateNameOf(entry.path), caption: entry.title ?? undefined } : {}),
@@ -522,6 +543,20 @@ function taskFields(path: string): Partial<FileRow> {
     };
 }
 
+function eventFields(entry: ListEntry2): Partial<FileRow> {
+    const summary = summarizeEvents(entry.metadata?.events);
+    const next = nextOccurrence.value.get(entry.path);
+    return {
+        starts: summary.start === undefined ? undefined : eventCell(summary.start),
+        repeats: summary.repeats,
+        next: next === undefined ? undefined : eventCell(next),
+    };
+}
+
+function eventCell(start: EventStart): DateCell {
+    return { text: start.text, hint: dayjs(start.instant).from(tasks.now), instant: start.instant };
+}
+
 // A task whose note gives no status is in the backlog, as the task view files it. One whose status
 // is not a status is shown as written, after all the others.
 function statusOf(statusKind: unknown): { status: string; statusOrder: number } {
@@ -531,7 +566,7 @@ function statusOf(statusKind: unknown): { status: string; statusOrder: number } 
         : { status: STATUS_LABEL[known], statusOrder: STATUS_KINDS.indexOf(known) };
 }
 
-function dateCell(cues: TaskDateCue[], field: TaskDateField): TaskDateCell | undefined {
+function dateCell(cues: TaskDateCue[], field: TaskDateField): DateCell | undefined {
     const cue = cues.find((each) => each.field === field);
     if (cue === undefined) {
         return undefined;
