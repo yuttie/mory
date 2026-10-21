@@ -67,6 +67,12 @@ describe('summarizeEvent', () => {
         expect(summarizeEvent({ start: '2026-03-01', instances: [{ start: '2026-03-08' }] }).repeats).toBe('On 2 dates');
     });
 
+    it('says nothing of a rule without a start, which the calendar draws nothing from', () => {
+        const instances = [{ start: '2026-05-01 12:00' }, { start: '2026-05-08 12:00' }];
+        expect(summarizeEvent({ repeat: { freq: 'weekly' }, instances }).repeats).toBe('On 2 dates');
+        expect(summarizeEvent({ repeat: { freq: 'weekly' }, instances: instances.slice(0, 1) }).repeats).toBeUndefined();
+    });
+
     it('counts a date it lists twice once', () => {
         expect(summarizeEvent({ start: '2026-11-02 09:00', instances: [{ start: '2026-11-02 13:00' }] }).repeats)
             .toBeUndefined();

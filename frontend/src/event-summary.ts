@@ -52,7 +52,9 @@ export function summarizeEvent(detail: unknown): EventSummary {
             first = start;
         }
     }
-    const rule = describeRepeat(event.repeat);
+    // The calendar reads a rule only beside the `start` it is anchored at: an event without one
+    // draws the dates it lists, whatever its rule says.
+    const rule = event.start === undefined ? undefined : describeRepeat(event.repeat);
     // The days it falls on apart from what its rule makes, each once: a morning and an afternoon
     // session are one date. A rule's own start is the first date it makes.
     const days = new Set<string>();
