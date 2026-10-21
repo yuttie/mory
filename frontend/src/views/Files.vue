@@ -81,12 +81,12 @@
                 v-bind:headers="headers"
                 v-bind:items="matchedEntries"
                 v-model="selected"
+                v-model:sort-by="sortBy"
                 v-bind:items-per-page="20"
                 v-bind:items-per-page-options="[20, 50, 100, -1]"
                 items-per-page-text=""
                 v-bind:mobile-breakpoint="0"
                 item-value="path"
-                v-bind:sort-by="[{ key: 'time', order: 'desc' }]"
                 must-sort
                 show-select
                 fixed-header
@@ -95,8 +95,40 @@
                 <template v-slot:item.path="{ item }">
                     <div class="path" v-bind:title="item.title ?? item.path">
                         <v-icon class="mr-1" v-bind:color="item.iconColor">{{ item.icon }}</v-icon>
-                        <router-link v-bind:to="routeForMime(item.path, item.mimeType)" class="truncate">{{ item.title ?? item.path }}</router-link>
+                        <router-link v-bind:to="item.to" class="truncate">{{ item.title ?? item.path }}</router-link>
+                        <div
+                            v-if="item.ancestors"
+                            class="ancestors truncate text-caption text-medium-emphasis"
+                        >{{ item.ancestors }}</div>
                     </div>
+                </template>
+                <template v-slot:item.folder="{ item }">
+                    <div class="folder text-no-wrap">{{ item.folder }}</div>
+                </template>
+                <template v-slot:item.status="{ item }">
+                    <div class="text-no-wrap">{{ item.status }}</div>
+                </template>
+                <template v-slot:item.dueBy="{ item }">
+                    <div
+                        v-if="item.dueBy"
+                        class="text-no-wrap"
+                        v-bind:class="item.dueBy.color ? `text-${item.dueBy.color}` : undefined"
+                        v-bind:title="item.dueBy.hint"
+                    >{{ item.dueBy.text }}</div>
+                </template>
+                <template v-slot:item.deadline="{ item }">
+                    <div
+                        v-if="item.deadline"
+                        class="text-no-wrap"
+                        v-bind:class="item.deadline.color ? `text-${item.deadline.color}` : undefined"
+                        v-bind:title="item.deadline.hint"
+                    >{{ item.deadline.text }}</div>
+                </template>
+                <template v-slot:item.urgency="{ item }">
+                    <v-chip
+                        v-if="item.urgency && item.urgency.level !== 'none'"
+                        size="x-small"
+                    >{{ URGENCY_LABEL[item.urgency.level] }}</v-chip>
                 </template>
                 <template v-slot:item.time="{ item }">
                     <div class="modified text-no-wrap">{{ item.time.format('YYYY-MM-DD HH:mm:ss') }}</div>
@@ -129,9 +161,11 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, reactive, computed, watch, onMounted } from 'vue';
 
 import { useRoute, useRouter } from 'vue-router';
+import type { RouteLocationRaw } from 'vue-router';
+import type { DataTableHeader, DataTableSortItem } from 'vuetify';
 
 import {
     mdiCalendarClock,
@@ -148,9 +182,19 @@ import { compareTags } from '@/api';
 import type { ListEntry2 } from '@/api';
 
 import { useFilesStore } from '@/stores/files';
+import { useTasksStore } from '@/stores/tasks';
+import { useTaskSettingsStore } from '@/stores/taskSettings';
 import { routeForMime } from '@/file-route';
 import { fileKindOf, isOfKind } from '@/file-kinds';
 import type { FileKind } from '@/file-kinds';
+import { STATUS_KINDS, STATUS_LABEL } from '@/task';
+import { statusColor } from '@/status-color';
+import { statusIcon } from '@/status-icon';
+import { taskDateCues } from '@/task-date-cues';
+import type { TaskDateCue, TaskDateField } from '@/task-date-cues';
+import { taskRoute } from '@/task-route';
+import { compareUrgency, taskInstant, URGENCY_LABEL } from '@/urgency';
+import type { Urgency } from '@/urgency';
 import AppBarContent from '@/components/AppBarContent.vue';
 import { isInOverlay, isTyping, useShortcuts } from '@/keyboard';
 
@@ -164,6 +208,38 @@ const TABS: { kind: FileKind | null; value: string; title: string; short: string
     { kind: 'media', value: 'media', title: 'Media files', short: 'Media' },
 ];
 
+// A task's date as its note gives it, in the reader's zone where it has a time, coloured as the task
+// lists colour it, with how far off it is to hover.
+interface TaskDateCell {
+    text: string;
+    hint: string;
+    color?: string;
+    instant?: number;
+}
+
+interface FileRow {
+    path: string;
+    size: number;
+    mimeType: string;
+    tags: string[];
+    title: string | null;
+    time: dayjs.Dayjs;
+    icon: string;
+    iconColor: string | null;
+    to: RouteLocationRaw;
+    // The directory a note is in, which its title does not say.
+    folder?: string;
+    // A task's, from the task tree: a title alone does not say which project a task is part of.
+    ancestors?: string;
+    status?: string;
+    statusOrder?: number;
+    dueBy?: TaskDateCell;
+    deadline?: TaskDateCell;
+    urgency?: Urgency;
+}
+
+const DEFAULT_SORT: DataTableSortItem[] = [{ key: 'time', order: 'desc' }];
+
 // Emits
 const emit = defineEmits<{
     (e: 'tokenExpired', callback: () => void): void;
@@ -173,6 +249,11 @@ const emit = defineEmits<{
 const router = useRouter();
 const route = useRoute();
 const files = useFilesStore();
+const tasks = useTasksStore();
+const taskSettings = useTaskSettingsStore();
+
+// The status colours and lead times the Tasks tab draws with.
+void taskSettings.load();
 
 // Reactive states
 const queryText = ref('');
@@ -181,6 +262,9 @@ const error = ref(false);
 const errorText = ref('');
 const selected = ref([] as string[]);
 const showingTagList = ref(false);
+// Each tab keeps its own sort, as each has columns of its own: one sorted by urgency would sort
+// the notes by nothing.
+const sortBys = reactive<Record<string, DataTableSortItem[]>>({});
 
 // Template Refs
 const queryEl = ref<any>(null);
@@ -196,14 +280,41 @@ const kindEntries = computed<ListEntry2[]>(() => {
     return open === null ? files.entries : files.entries.filter((entry) => isOfKind(entry, open));
 });
 
-const headers = computed(() => {
-    return [
-        { title: 'Title or Path', key: 'path' },
-        { title: 'Modified', key: 'time', sort: (a: any, b: any) => a - b },
-        { title: 'Size', key: 'size' },
-        { title: 'Type', key: 'mimeType' },
-        { title: 'Tags', key: 'tags', sortable: false },
-    ];
+const sortBy = computed<DataTableSortItem[]>({
+    get: () => sortBys[currentTab.value] ?? DEFAULT_SORT,
+    set: (value) => {
+        sortBys[currentTab.value] = value;
+    },
+});
+
+// What each tab's files have to tell apart: a task's progress, which a size or a type does not
+// show, and the type of a medium, where every note and task is one kind of text.
+const headers = computed<DataTableHeader<FileRow>[]>(() => {
+    // Sorted by what it shows, rather than by a path the title hides.
+    const title = { title: 'Title or Path', key: 'path', value: (row: FileRow) => row.title ?? row.path };
+    const modified = { title: 'Modified', key: 'time', value: (row: FileRow) => row.time.valueOf() };
+    const size = { title: 'Size', key: 'size' };
+    const type = { title: 'Type', key: 'mimeType' };
+    const tags = { title: 'Tags', key: 'tags', sortable: false };
+    switch (kind.value) {
+        case 'notes':
+            return [title, { title: 'Folder', key: 'folder' }, modified, size, tags];
+        case 'tasks':
+            return [
+                { ...title, title: 'Title' },
+                { title: 'Status', key: 'status', value: (row: FileRow) => row.statusOrder },
+                { title: 'Due by', key: 'dueBy', value: (row: FileRow) => row.dueBy?.instant, sort: missingLast('dueBy') },
+                { title: 'Deadline', key: 'deadline', value: (row: FileRow) => row.deadline?.instant, sort: missingLast('deadline') },
+                // Ascending from the calmest, as every other column starts from its least.
+                { title: 'Urgency', key: 'urgency', sort: (a: Urgency, b: Urgency) => compareUrgency(b, a) },
+                modified,
+                tags,
+            ];
+        case 'media':
+            return [title, modified, size, type];
+        default:
+            return [title, modified, size, type, tags];
+    }
 });
 
 const tags = computed(() => {
@@ -280,6 +391,7 @@ const matchedEntries = computed(() => {
         }
         // OK, this entry matches all the queries
         matched.push({
+            to: routeForMime(entry.path, entry.mime_type),
             path: entry.path,
             size: entry.size,
             mimeType: entry.mime_type,
@@ -303,6 +415,8 @@ const matchedEntries = computed(() => {
                     return { icon: mdiFileOutline, iconColor: null };
                 }
             })(),
+            ...(kind.value === 'notes' ? { folder: entry.path.slice(0, Math.max(entry.path.lastIndexOf('/'), 0)) } : {}),
+            ...(kind.value === 'tasks' ? taskFields(entry.path) : {}),
         });
     }
 
@@ -326,6 +440,70 @@ useShortcuts(handleKeydown);
 // The search goes along, so a query asked of every file can be put to one kind of them.
 function tabRoute(tabKind: FileKind | null) {
     return { name: 'Files', params: { kind: tabKind }, query: route.query };
+}
+
+// A task as the task lists show it, and opening into its editor there. The listing describes a file
+// the task tree may not have taken in yet, which is then listed as any other file is.
+function taskFields(path: string): Partial<FileRow> {
+    const id = tasks.idByPath(path);
+    const node = id === undefined ? undefined : tasks.node(id);
+    if (id === undefined || node === undefined) {
+        return {};
+    }
+    const task = node.metadata?.task ?? {};
+    const statusKind = task.status?.kind;
+    const cues = taskDateCues(task, node.metadata?.tags ?? [], taskSettings.settings, tasks.now);
+    return {
+        to: taskRoute(id),
+        icon: statusIcon(statusKind, tasks.childrenOf(id).length > 0),
+        iconColor: statusColor(statusKind, taskSettings.resolvedStatusColors) ?? null,
+        ancestors: tasks.ancestorsOf(id).map((ancestor) => ancestor.title || 'Untitled').join(' › '),
+        ...statusOf(statusKind),
+        dueBy: dateCell(cues, 'due_by'),
+        deadline: dateCell(cues, 'deadline'),
+        urgency: tasks.urgency(id),
+    };
+}
+
+// A task whose note gives no status is in the backlog, as the task view files it. One whose status
+// is not a status is shown as written, after all the others.
+function statusOf(statusKind: unknown): { status: string; statusOrder: number } {
+    const known = STATUS_KINDS.find((each) => each === (statusKind ?? 'backlog'));
+    return known === undefined
+        ? { status: String(statusKind), statusOrder: STATUS_KINDS.length }
+        : { status: STATUS_LABEL[known], statusOrder: STATUS_KINDS.indexOf(known) };
+}
+
+function dateCell(cues: TaskDateCue[], field: TaskDateField): TaskDateCell | undefined {
+    const cue = cues.find((each) => each.field === field);
+    if (cue === undefined) {
+        return undefined;
+    }
+    const value = cue.value.trim();
+    const instant = taskInstant(value, dayjs.tz.guess(), true);
+    const isDate = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value);
+    return {
+        text: instant === undefined || isDate ? value : dayjs(instant).format('YYYY-MM-DD HH:mm'),
+        hint: cue.text,
+        color: cue.color,
+        instant,
+    };
+}
+
+// Rows without a value go last whichever way the column is sorted: a task with no deadline is
+// neither the most pressing nor the least. Vuetify swaps the two values to sort descending, so the
+// comparison has to know which way it sorts to keep them there.
+function missingLast(key: string) {
+    return (a: number | undefined, b: number | undefined): number => {
+        if (a !== undefined && b !== undefined) {
+            return a - b;
+        }
+        if (a === b) {
+            return 0;
+        }
+        const descending = sortBy.value.some((item) => item.key === key && item.order === 'desc');
+        return (a === undefined) !== descending ? 1 : -1;
+    };
 }
 
 function load() {
@@ -588,6 +766,10 @@ watch(queryText, (q: string | null) => {
     align-items: center;
     min-width: 20em;
     white-space: nowrap;
+
+    .ancestors {
+        grid-column: 2;
+    }
 
     a {
         color: rgba(0, 0, 0, 0.87);
