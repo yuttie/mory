@@ -453,6 +453,10 @@ const breadcrumbsClippedRight = ref(false);
 // (e.g. after a rename), so the route watcher below doesn't reload the note again.
 let skipNextPathWatch = false;
 
+// Counts the reads that fill the view, so one overtaken by a later read, as on a move from a note
+// still loading to another, leaves the view to the later one rather than putting its text there.
+let latestRead = 0;
+
 // Template Refs
 const editableViewer = ref<InstanceType<typeof EditableViewer> | null>(null);
 const newPathField = ref<{ focus: () => void } | null>(null);
@@ -616,6 +620,9 @@ events:
 
 # ${notePath.value}`;
             initialText.value = text.value;
+            // Overtakes a read still under way, which would put the note before over this one.
+            latestRead += 1;
+            isLoading.value = false;
             editableViewer.value?.focus();
         }
     }
@@ -834,15 +841,22 @@ function checkUpstreamState() {
 }
 
 async function load(path: string) {
+    const read = ++latestRead;
     isLoading.value = true;
     await files.read(path)
     .then(async content => {
+        if (read !== latestRead) {
+            return;
+        }
         text.value = content;
         initialText.value = text.value;
         upstreamState.value = 'same';
         noteHasUpstream.value = true;
 
         await editableViewer.value?.whenRendered();
+        if (read !== latestRead) {
+            return;
+        }
 
         // Jump to a header if specified
         if (route.hash) {
@@ -854,6 +868,9 @@ async function load(path: string) {
         notFound.value = false;
         loadFailed.value = false;
     }).catch(err => {
+        if (read !== latestRead) {
+            return;
+        }
         if (err.response) {
             if (err.response.status === 401) {
                 // Unauthorized
@@ -893,23 +910,33 @@ function failLoad() {
 }
 
 async function loadTemplate(path: string) {
+    const read = ++latestRead;
     isLoading.value = true;
     await files.read(path)
     .then(async content => {
+        if (read !== latestRead) {
+            return;
+        }
         text.value = content;
         initialText.value = text.value;
         editableViewer.value?.focus();
 
         await editableViewer.value?.whenRendered();
+        if (read !== latestRead) {
+            return;
+        }
 
         isLoading.value = false;
         notFound.value = false;
     }).catch(err => {
+        if (read !== latestRead) {
+            return;
+        }
         if (err.response) {
             if (err.response.status === 401) {
                 // Unauthorized
                 emit('tokenExpired', async () => {
-                    await load(path);
+                    await loadTemplate(path);
                     focusOrBlurEditor();
                 });
             }
