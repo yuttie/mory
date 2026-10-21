@@ -809,6 +809,10 @@ function deleteSelected() {
                     error.value = true;
                     errorText.value = `Something wrong happened when deleting ${path}`;
                 }
+                else {
+                    // Gone, so a second press would only ask to delete it again, and be refused.
+                    selected.value = selected.value.filter((each) => each !== path);
+                }
             }).catch(err => {
                 if (err.response) {
                     if (err.response.status === 401) {

@@ -168,6 +168,23 @@ test('keeps the search across tabs, but not the selection', async ({ context, pa
     await expect(remove).toHaveClass(/v-icon-btn--disabled/);
 });
 
+function row(page: Page, title: string) {
+    return rows(page).filter({ has: page.getByRole('link', { name: title, exact: true }) });
+}
+
+test('lets go of a file once it is deleted', async ({ context, page }) => {
+    const repository = await mockBackend(context, FILES);
+    await page.goto('/files');
+    await expect(rows(page)).toHaveCount(14);
+    await row(page, 'Ideas').getByRole('checkbox').check();
+    const remove = page.getByRole('button', { name: 'Delete the selected files' });
+    await remove.click();
+    await expect(rows(page)).toHaveCount(13);
+    expect(repository.deletes).toEqual(['ideas.md']);
+    // Nothing left to delete again, which would only be refused.
+    await expect(remove).toHaveClass(/v-icon-btn--disabled/);
+});
+
 test('keeps the search box to the address on going back and forth', async ({ context, page }) => {
     await mockBackend(context, FILES);
     await page.goto('/files?q=draft');
