@@ -73,7 +73,9 @@
                 class="ml-1"
                 v-on:click="mediaLayout = mediaLayout === 'grid' ? 'list' : 'grid'"
             ></v-icon-btn>
+            <!-- An event's row is not a file to delete, and its file holds other events too. -->
             <v-icon-btn
+                v-if="kind !== 'events'"
                 v-bind:icon="mdiDelete"
                 icon-color="pink"
                 v-bind:disabled="selected.length === 0"
@@ -101,9 +103,9 @@
                 v-bind:items-per-page-options="[20, 50, 100, -1]"
                 items-per-page-text=""
                 v-bind:mobile-breakpoint="0"
-                item-value="path"
+                item-value="key"
                 must-sort
-                show-select
+                v-bind:show-select="kind !== 'events'"
                 fixed-header
                 class="file-table flex-grow-1"
             >
@@ -209,9 +211,9 @@ import { useTasksStore } from '@/stores/tasks';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
 import { routeForMime } from '@/file-route';
 import { EVENTS_DIR } from '@/event-note';
-import { nextOccurrences, summarizeEvents } from '@/event-summary';
+import { summarizeEvent } from '@/event-summary';
 import type { EventStart } from '@/event-summary';
-import { fileKindOf, isOfKind, isTemplatePath, SYSTEM_DIR, templateNameOf } from '@/file-kinds';
+import { declaredEvents, fileKindOf, isOfKind, isTemplatePath, SYSTEM_DIR, templateNameOf } from '@/file-kinds';
 import type { FileKind } from '@/file-kinds';
 import { systemFilePurpose } from '@/system-files';
 import { STATUS_KINDS, STATUS_LABEL } from '@/task';
@@ -250,9 +252,11 @@ interface DateCell {
     instant?: number;
 }
 
-const DATE_COLUMNS = ['dueBy', 'deadline', 'starts', 'next'] as const;
+const DATE_COLUMNS = ['dueBy', 'deadline', 'starts'] as const;
 
 interface FileRow {
+    // A file's path, or for one of the events it declares, the path and the event's name.
+    key: string;
     path: string;
     size: number;
     mimeType: string;
@@ -272,14 +276,15 @@ interface FileRow {
     statusOrder?: number;
     dueBy?: DateCell;
     deadline?: DateCell;
-    // An event note's: when its events start, how they repeat, and when one next happens.
+    // An event's: when it starts, and how it repeats.
     starts?: DateCell;
     repeats?: string;
-    next?: DateCell;
     urgency?: Urgency;
 }
 
+// The latest first: the files last changed, and the events last to start.
 const DEFAULT_SORT: DataTableSortItem[] = [{ key: 'time', order: 'desc' }];
+const EVENTS_SORT: DataTableSortItem[] = [{ key: 'starts', order: 'desc' }];
 
 // Emits
 const emit = defineEmits<{
@@ -323,14 +328,8 @@ const kindEntries = computed<ListEntry2[]>(() => {
     return open === null ? files.entries : files.entries.filter((entry) => isOfKind(entry, open));
 });
 
-// Expanded apart from the rows, so that typing a search does not expand every rule again. The clock
-// is the task lists', which moves on each minute.
-const nextOccurrence = computed(() => kind.value === 'events'
-    ? nextOccurrences(kindEntries.value, tasks.now)
-    : new Map<string, EventStart>());
-
 const sortBy = computed<DataTableSortItem[]>({
-    get: () => sortBys[currentTab.value] ?? DEFAULT_SORT,
+    get: () => sortBys[currentTab.value] ?? (kind.value === 'events' ? EVENTS_SORT : DEFAULT_SORT),
     set: (value) => {
         sortBys[currentTab.value] = value;
     },
@@ -364,16 +363,15 @@ const headers = computed<DataTableHeader<FileRow>[]>(() => {
         // What a template is for, next to it, as the Add menu offers it.
         case 'templates':
             return [{ ...title, title: 'Name' }, { title: '', key: 'newNote', sortable: false }, modified, size];
-        // When, rather than how large: an event note is found by the day it is about.
+        // An event as its file declares it, however often that makes it happen: when it starts,
+        // rather than when its file last changed.
         case 'events':
             return [
-                title,
+                { ...title, title: 'Event' },
                 { title: 'Starts', key: 'starts', value: (row: FileRow) => row.starts?.instant, sort: missingLast('starts') },
-                // A line of its own, as the dates beside it have: wrapped, it broke an `until` date
-                // at its hyphen.
+                // A line of its own, as the date beside it has: wrapped, it broke an `until` date at
+                // its hyphen.
                 { title: 'Repeats', key: 'repeats', nowrap: true },
-                { title: 'Next', key: 'next', value: (row: FileRow) => row.next?.instant, sort: missingLast('next') },
-                modified,
                 tags,
             ];
         case 'system':
@@ -422,7 +420,7 @@ const query = computed(() => {
 });
 
 const matchedEntries = computed(() => {
-    const matched = [];
+    const matched: FileRow[] = [];
 
     const queryPaths: string[] = [...query.value.paths].map(x => x.toLowerCase());
     const queryTags: string[] = [...query.value.tags].map(x => x.toLowerCase());
@@ -452,48 +450,18 @@ const matchedEntries = computed(() => {
         if (queryTags.some(tag => !entryTags.some(entryTag => entryTag.includes(tag)))) {
             continue;
         }
-        if (queryAny.some(kw => !entryPath.includes(kw) && !entryTags.some(entryTag => entryTag.includes(kw)) && !entryTitle.includes(kw))) {
-            continue;
+        // The rest may be anywhere in the file's path, tags or title, or in an event's name, so a
+        // file can match by some of its events alone.
+        const matchesAny = (...own: string[]) => queryAny.every(kw => entryPath.includes(kw)
+            || entryTags.some(entryTag => entryTag.includes(kw))
+            || entryTitle.includes(kw)
+            || own.some(text => text.includes(kw)));
+        if (kind.value === 'events') {
+            matched.push(...eventRows(entry).filter(row => matchesAny(row.title?.toLowerCase() ?? '')));
         }
-        // OK, this entry matches all the queries
-        matched.push({
-            to: routeForMime(entry.path, entry.mime_type),
-            path: entry.path,
-            size: entry.size,
-            mimeType: entry.mime_type,
-            tags: ((entry.metadata || {}).tags || []).map(String).sort(compareTags),
-            title: titleOf(entry),
-            time: dayjs(entry.time),
-            ...(() => {
-                if (entry.path.startsWith(".tasks/")) {
-                    return { icon: mdiCheckboxMarkedOutline, iconColor: "#ffa600" };
-                }
-                else if (entry.path.startsWith(EVENTS_DIR)) {
-                    return { icon: mdiCalendarClock, iconColor: "#b95050" };
-                }
-                else if (entry.path.startsWith(SYSTEM_DIR)) {
-                    return { icon: mdiCogOutline, iconColor: "#757575" };
-                }
-                else if (isTemplatePath(entry.path)) {
-                    return { icon: mdiFileDocumentOutline, iconColor: "#5fa3c4" };
-                }
-                else if (entry.mime_type.startsWith("image/")) {
-                    return { icon: mdiImageOutline, iconColor: "#62b950" };
-                }
-                else if (entry.mime_type.startsWith("text/")) {
-                    return { icon: mdiFileDocumentOutline, iconColor: "#5fa3c4" };
-                }
-                else {
-                    return { icon: mdiFileOutline, iconColor: null };
-                }
-            })(),
-            ...(kind.value === 'notes' ? { folder: entry.path.slice(0, Math.max(entry.path.lastIndexOf('/'), 0)) } : {}),
-            ...(kind.value === 'tasks' ? taskFields(entry.path) : {}),
-            ...(kind.value === 'system' ? { purpose: systemFilePurpose(entry.path) } : {}),
-            ...(kind.value === 'events' ? eventFields(entry) : {}),
-            // By the name the Add menu offers it as.
-            ...(kind.value === 'templates' ? { title: templateNameOf(entry.path) } : {}),
-        });
+        else if (matchesAny()) {
+            matched.push(fileRow(entry));
+        }
     }
 
     return matched;
@@ -546,14 +514,65 @@ function taskFields(path: string): Partial<FileRow> {
     };
 }
 
-function eventFields(entry: ListEntry2): Partial<FileRow> {
-    const summary = summarizeEvents(entry.metadata?.events);
-    const next = nextOccurrence.value.get(entry.path);
+function fileRow(entry: ListEntry2): FileRow {
     return {
-        starts: summary.start === undefined ? undefined : eventCell(summary.start),
-        repeats: summary.repeats,
-        next: next === undefined ? undefined : eventCell(next),
+        key: entry.path,
+        to: routeForMime(entry.path, entry.mime_type),
+        path: entry.path,
+        size: entry.size,
+        mimeType: entry.mime_type,
+        tags: ((entry.metadata || {}).tags || []).map(String).sort(compareTags),
+        title: titleOf(entry),
+        time: dayjs(entry.time),
+        ...(() => {
+            if (entry.path.startsWith(".tasks/")) {
+                return { icon: mdiCheckboxMarkedOutline, iconColor: "#ffa600" };
+            }
+            else if (entry.path.startsWith(EVENTS_DIR)) {
+                return { icon: mdiCalendarClock, iconColor: "#b95050" };
+            }
+            else if (entry.path.startsWith(SYSTEM_DIR)) {
+                return { icon: mdiCogOutline, iconColor: "#757575" };
+            }
+            else if (isTemplatePath(entry.path)) {
+                return { icon: mdiFileDocumentOutline, iconColor: "#5fa3c4" };
+            }
+            else if (entry.mime_type.startsWith("image/")) {
+                return { icon: mdiImageOutline, iconColor: "#62b950" };
+            }
+            else if (entry.mime_type.startsWith("text/")) {
+                return { icon: mdiFileDocumentOutline, iconColor: "#5fa3c4" };
+            }
+            else {
+                return { icon: mdiFileOutline, iconColor: null };
+            }
+        })(),
+        ...(kind.value === 'notes' ? { folder: entry.path.slice(0, Math.max(entry.path.lastIndexOf('/'), 0)) } : {}),
+        ...(kind.value === 'tasks' ? taskFields(entry.path) : {}),
+        ...(kind.value === 'system' ? { purpose: systemFilePurpose(entry.path) } : {}),
+        // By the name the Add menu offers it as.
+        ...(kind.value === 'templates' ? { title: templateNameOf(entry.path) } : {}),
     };
+}
+
+// One row for each event a file declares, however often it happens, opening the file. The file's
+// title goes beneath, unless it would only say the name again, as a note of one event's often does.
+function eventRows(entry: ListEntry2): FileRow[] {
+    const file = fileRow(entry);
+    const where = file.title ?? entry.path;
+    return declaredEvents(entry.metadata).map(([name, detail]) => {
+        const summary = summarizeEvent(detail);
+        return {
+            ...file,
+            key: JSON.stringify([entry.path, name]),
+            title: name,
+            icon: mdiCalendarClock,
+            iconColor: '#b95050',
+            caption: where === name ? undefined : where,
+            starts: summary.start === undefined ? undefined : eventCell(summary.start),
+            repeats: summary.repeats,
+        };
+    });
 }
 
 function eventCell(start: EventStart): DateCell {

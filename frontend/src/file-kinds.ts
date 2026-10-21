@@ -3,11 +3,10 @@
 // Most list what one of the other views is for, so a file is found under the kind it is opened as:
 // the notes the note tree holds, the tasks the task tree holds, and whatever the media view opens.
 // The rest list what the application keeps in files of its own: the templates the Add menu offers,
-// the notes the calendar draws events from and the settings under `.mory/`. "Uncategorized" lists
-// every file none of those does, and the tab with no kind every file of all.
+// the events the calendar draws, by the files that declare them, and the settings under `.mory/`.
+// "Uncategorized" lists every file none of those does, and the tab with no kind every file of all.
 
 import type { ListEntry2 } from '@/api';
-import { EVENTS_DIR } from '@/event-note';
 import { isMediaType } from '@/file-route';
 import { isHiddenPath } from '@/note-forest';
 import { taskUuidOf } from '@/task-forest';
@@ -49,10 +48,10 @@ export function isOfKind(entry: Pick<ListEntry2, 'path' | 'mime_type' | 'metadat
             return isMediaType(entry.mime_type);
         case 'templates':
             return isTemplatePath(entry.path);
-        // Wherever they are, as the calendar draws them, so a note is found by the day it is about
-        // too. One under `.events/` is listed even with none, as the calendar's own.
+        // Wherever they are, as the calendar draws them. A file under `.events/` that declares none
+        // has nothing to list there.
         case 'events':
-            return entry.path.startsWith(EVENTS_DIR) || declaresEvents(entry.metadata);
+            return declaredEvents(entry.metadata).length > 0;
         case 'system':
             return entry.path.startsWith(SYSTEM_DIR);
         case 'others':
@@ -60,10 +59,12 @@ export function isOfKind(entry: Pick<ListEntry2, 'path' | 'mime_type' | 'metadat
     }
 }
 
-// As `eventsFromEntries` reads them: an `events:` map holding at least one event. Most notes that
-// have the key leave it empty.
-function declaresEvents(metadata: ListEntry2['metadata']): boolean {
+// The events a file declares, by name, as `eventsFromEntries` reads them. Most notes that have the
+// `events:` key leave it empty.
+export function declaredEvents(metadata: ListEntry2['metadata']): [string, object][] {
     const declared = metadata?.events;
-    return typeof declared === 'object' && declared !== null
-        && Object.values(declared).some((detail) => typeof detail === 'object' && detail !== null);
+    if (typeof declared !== 'object' || declared === null) {
+        return [];
+    }
+    return Object.entries(declared).filter((pair): pair is [string, object] => typeof pair[1] === 'object' && pair[1] !== null);
 }

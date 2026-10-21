@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ListEntry2 } from '@/api';
-import { FILE_KINDS, fileKindOf, isOfKind, templateNameOf } from '@/file-kinds';
+import { declaredEvents, FILE_KINDS, fileKindOf, isOfKind, templateNameOf } from '@/file-kinds';
 import type { FileKind } from '@/file-kinds';
 
 const TASK = '.tasks/0b5bd9c4-6a3e-4a8f-9d0e-2f4c7a1b3e5d.md';
@@ -49,7 +49,8 @@ describe('isOfKind', () => {
     it('lists the application\'s settings and event notes apart from the notes', () => {
         expect(kindsOf('.mory/calendars.yaml', 'application/yaml')).toEqual(['system']);
         expect(kindsOf('.mory/plans/2026-10.yaml', 'application/yaml')).toEqual(['system']);
-        expect(kindsOf('.events/meeting.md', 'text/markdown')).toEqual(['events']);
+        expect(kindsOf('.events/meeting.md', 'text/markdown', withEvents({ Meeting: { start: '2026-10-21' } })))
+            .toEqual(['events']);
     });
 
     it('lists every file the calendar draws events from as an event note too', () => {
@@ -59,13 +60,13 @@ describe('isOfKind', () => {
         expect(kindsOf('.tasks/notes.md', 'text/markdown', lecture)).toEqual(['events']);
     });
 
-    it('lists no note as an event note for an empty or unreadable `events:`', () => {
+    it('lists no file for an empty or unreadable `events:`', () => {
         expect(kindsOf('ideas.md', 'text/markdown', withEvents({}))).toEqual(['notes']);
         expect(kindsOf('ideas.md', 'text/markdown', withEvents(null))).toEqual(['notes']);
         expect(kindsOf('ideas.md', 'text/markdown', withEvents({ Broken: null, Number: 3 }))).toEqual(['notes']);
         expect(kindsOf('ideas.md', 'text/markdown', { tags: [] })).toEqual(['notes']);
-        // Under `.events/`, it is the calendar's own whatever it holds.
-        expect(kindsOf('.events/draft.md', 'text/markdown', withEvents({}))).toEqual(['events']);
+        // Under `.events/` too, where no other tab takes it.
+        expect(kindsOf('.events/draft.md', 'text/markdown', withEvents({}))).toEqual(['others']);
     });
 
     it('lists the templates the Add menu offers, wherever they are', () => {
@@ -87,6 +88,15 @@ describe('isOfKind', () => {
         expect(kindsOf('paper.pdf', 'application/pdf')).toEqual(['media']);
         expect(kindsOf('.tasks/0b5bd9c4-6a3e-4a8f-9d0e-2f4c7a1b3e5d/receipt.png', 'image/png')).toEqual(['media']);
         expect(kindsOf('.mory/background.jpg', 'image/jpeg')).toEqual(['media', 'system']);
+    });
+});
+
+describe('declaredEvents', () => {
+    it('reads the events a file declares by name, and nothing else', () => {
+        const lecture = { start: '2026-04-10 10:00' };
+        expect(declaredEvents(withEvents({ Lecture: lecture, Broken: null, Number: 3 }))).toEqual([['Lecture', lecture]]);
+        expect(declaredEvents(withEvents('Lecture'))).toEqual([]);
+        expect(declaredEvents(null)).toEqual([]);
     });
 });
 

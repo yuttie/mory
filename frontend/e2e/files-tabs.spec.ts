@@ -14,7 +14,7 @@ const REVIEW = uuid(2);
 // own requests, which is how the grid fetches one.
 const FILES = {
     'ideas.md': '# Ideas\n',
-    'ideas/draft.md': '---\nevents:\n    Submission:\n        start: 2026-11-02\n    Review:\n        start: 2026-11-09\n---\n\n# Draft\n',
+    'ideas/draft.md': '---\nevents:\n    Submission:\n        start: 2026-11-02\n    Review:\n        instances: [{start: 2026-11-09}, {start: 2026-11-16}]\n---\n\n# Draft\n',
     'lecture.template': '# XXX lecture YY\n',
     [`.tasks/${REPORT}.md`]: '---\ntask:\n    status: {kind: todo}\n    deadline: 2026-11-30\n---\n\n# Write the report\n',
     [`.tasks/${REVIEW}.md`]: '---\ntask:\n    status: {kind: in_progress}\n---\n\n# Review the draft\n',
@@ -74,7 +74,7 @@ test('lists each kind of file on its own tab', async ({ context, page }) => {
     await expect(tiles).toHaveCount(2);
 });
 
-test('gives templates, event notes, system files and the rest tabs of their own', async ({ context, page }) => {
+test('gives templates, events, system files and the rest tabs of their own', async ({ context, page }) => {
     // A Wednesday, in every zone the suite runs in.
     await page.clock.setFixedTime(new Date('2026-10-21T03:00:00Z'));
     await mockBackend(context, FILES);
@@ -87,25 +87,29 @@ test('gives templates, event notes, system files and the rest tabs of their own'
     await expect(rows(page).getByRole('link', { name: 'New note' }))
         .toHaveAttribute('href', '/create?from=lecture.template');
 
-    // The notes under .events/, and any other that declares events.
+    // Each event once, wherever it is declared and however often it happens, the last to start
+    // first. None is a file to select or delete.
     await tab(page, 'Events').click();
     await expect(page).toHaveURL(/\/files\/events$/);
-    await expect(rows(page)).toHaveCount(3);
+    const titles = () => rows(page).locator('a').allTextContents();
+    await expect.poll(titles).toEqual(['Review', 'Submission', 'Holiday', 'Meeting']);
+    await expect(page.locator('.file-table').getByRole('checkbox')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Delete the selected files' })).toHaveCount(0);
+    // Not expanded: a rule is said in words, and the dates an event lists are counted.
     const meeting = rows(page).filter({ hasText: 'Meeting' });
     await expect(meeting).toContainText('2026-04-06 10:00');
     await expect(meeting).toContainText('Weekly on Mon');
-    await expect(meeting.getByText('2026-10-26 10:00')).toHaveAttribute('title', 'in 5 days');
-    const draft = rows(page).filter({ hasText: 'Draft' });
-    await expect(draft).toContainText('On 2 dates');
-    await expect(draft).toContainText('2026-11-02');
-    // The holiday is over, so with nothing next, and last whichever way that is sorted.
-    const titles = () => rows(page).locator('a').allTextContents();
-    const next = page.getByRole('columnheader', { name: 'Next' });
-    await next.click();
-    await expect.poll(titles).toEqual(['Meeting', 'Draft', 'Holiday']);
-    await next.click();
-    await expect(next).toHaveAttribute('aria-sort', 'descending');
-    await expect.poll(titles).toEqual(['Draft', 'Meeting', 'Holiday']);
+    const review = rows(page).filter({ hasText: 'Review' });
+    await expect(review).toContainText('2026-11-09');
+    await expect(review).toContainText('On 2 dates');
+    // Under its name, the note it is in, which the meeting's would only name again.
+    await expect(review.getByRole('link', { name: 'Review' })).toHaveAttribute('href', '/note/ideas/draft.md');
+    await expect(review.locator('.caption')).toHaveText('Draft');
+    await expect(meeting.locator('.caption')).toHaveCount(0);
+    const starts = page.getByRole('columnheader', { name: 'Starts' });
+    await starts.click();
+    await expect(starts).toHaveAttribute('aria-sort', 'ascending');
+    await expect.poll(titles).toEqual(['Meeting', 'Holiday', 'Submission', 'Review']);
 
     await tab(page, 'System files').click();
     await expect(page).toHaveURL(/\/files\/system$/);
@@ -120,6 +124,15 @@ test('gives templates, event notes, system files and the rest tabs of their own'
     await expect(rows(page)).toHaveCount(2);
     await expect(rows(page).filter({ hasText: 'Loose notes' })).toBeVisible();
     await expect(rows(page).filter({ hasText: '.redirects.gollum' })).toBeVisible();
+});
+
+test('finds an event by its name, or by the note it is in', async ({ context, page }) => {
+    await mockBackend(context, FILES);
+    await page.goto('/files/events?q=review');
+    const titles = () => rows(page).locator('a').allTextContents();
+    await expect.poll(titles).toEqual(['Review']);
+    await page.getByRole('textbox', { name: 'Search' }).fill('draft');
+    await expect.poll(titles).toEqual(['Review', 'Submission']);
 });
 
 test('keeps the search across tabs, but not the selection', async ({ context, page }) => {

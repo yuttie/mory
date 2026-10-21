@@ -1,5 +1,5 @@
-// What the Files view's Events tab says of an event note: when its events start, how they repeat,
-// and when one of them next happens.
+// What the Files view's Events tab says of an event: when it starts and how it repeats, as the note
+// declares it. Nothing is expanded, so a rule that never ends costs no more than one that does.
 //
 // Frontmatter is whatever the file said, so every value is type-checked rather than trusted, and
 // what cannot be read is left unsaid: the Calendar and the Health view report it.
@@ -7,8 +7,8 @@
 import dayjs from 'dayjs';
 
 import { occurrencesOf } from '@/api';
-import type { ListEntry2, MetadataEvent } from '@/api';
-import { eventEndsAt, eventsFromEntries, toWallClock } from '@/events';
+import type { MetadataEvent } from '@/api';
+import { toWallClock } from '@/events';
 
 // A start as the calendar draws it, in the reader's zone, with the instant to sort it by.
 export interface EventStart {
@@ -16,11 +16,10 @@ export interface EventStart {
     instant: number;
 }
 
-export interface EventsSummary {
-    // The earliest start the note writes, of a rule or of an occurrence it lists.
+export interface EventSummary {
+    // The earliest start it writes, its own or that of an occurrence it lists.
     start?: EventStart;
-    // How often the events happen: each rule, and how many dates the rest fall on, whether a note
-    // lists a course's sessions as one event or as an event each.
+    // How it happens more than once: by its rule, and on how many dates it lists.
     repeats?: string;
 }
 
@@ -40,41 +39,31 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 // As `recurrence.ts` reads one: `wed`, `3wed`, `-1fri`.
 const BYDAY = /^(-?\d+)?(sun|mon|tue|wed|thu|fri|sat)$/;
 
-export function summarizeEvents(declared: unknown): EventsSummary {
-    if (!isRecord(declared)) {
+export function summarizeEvent(detail: unknown): EventSummary {
+    if (!isRecord(detail)) {
         return {};
     }
+    const event = detail as MetadataEvent;
+    const base = startOf(event.start);
+    const listed = occurrencesOf(event).filter(isRecord).map((occurrence) => startOf(occurrence.start));
     let first: EventStart | undefined;
-    const rules: string[] = [];
-    // The days the events fall on apart from what the rules make, each once: a morning and an
-    // afternoon session are one date.
-    const days = new Set<string>();
-    for (const detail of Object.values(declared)) {
-        if (!isRecord(detail)) {
-            continue;
-        }
-        const event = detail as MetadataEvent;
-        const base = startOf(event.start);
-        const listed = occurrencesOf(event).filter(isRecord).map((occurrence) => startOf(occurrence.start));
-        for (const start of [base, ...listed]) {
-            if (start !== undefined && (first === undefined || start.instant < first.instant)) {
-                first = start;
-            }
-        }
-        const rule = describeRepeat(event.repeat);
-        if (rule !== undefined) {
-            rules.push(rule);
-        }
-        // A rule's own start is the first date it makes.
-        for (const start of rule === undefined ? [base, ...listed] : listed) {
-            if (start !== undefined) {
-                days.add(start.text.slice(0, 'YYYY-MM-DD'.length));
-            }
+    for (const start of [base, ...listed]) {
+        if (start !== undefined && (first === undefined || start.instant < first.instant)) {
+            first = start;
         }
     }
-    const repeats = rules.length === 0
+    const rule = describeRepeat(event.repeat);
+    // The days it falls on apart from what its rule makes, each once: a morning and an afternoon
+    // session are one date. A rule's own start is the first date it makes.
+    const days = new Set<string>();
+    for (const start of rule === undefined ? [base, ...listed] : listed) {
+        if (start !== undefined) {
+            days.add(start.text.slice(0, 'YYYY-MM-DD'.length));
+        }
+    }
+    const repeats = rule === undefined
         ? (days.size > 1 ? `On ${days.size} dates` : undefined)
-        : [...rules, ...(days.size === 0 ? [] : [`on ${plural(days.size, 'other date')}`])].join('; ');
+        : (days.size === 0 ? rule : `${rule}, and ${plural(days.size, 'more date')}`);
     return {
         ...(first === undefined ? {} : { start: first }),
         ...(repeats === undefined ? {} : { repeats }),
@@ -118,29 +107,6 @@ export function describeRepeat(repeat: unknown): string | undefined {
         text += `, ${plural(repeat.count, 'time')}`;
     }
     return text;
-}
-
-// When each note's events next happen, by its path: the earliest occurrence not over yet, one under
-// way included. A rule is expanded over the year ahead alone, as it may never end; a date the note
-// lists is taken however far ahead it is.
-export function nextOccurrences(entries: readonly ListEntry2[], now: number): Map<string, EventStart> {
-    const today = dayjs(now);
-    const { events } = eventsFromEntries(entries, {
-        from: today.format('YYYY-MM-DD'),
-        to: today.add(1, 'year').format('YYYY-MM-DD'),
-    });
-    const next = new Map<string, EventStart>();
-    for (const event of events) {
-        if (event.notePath === undefined || eventEndsAt(event).valueOf() < now) {
-            continue;
-        }
-        const instant = dayjs(event.start).valueOf();
-        const known = next.get(event.notePath);
-        if (known === undefined || instant < known.instant) {
-            next.set(event.notePath, { text: event.start, instant });
-        }
-    }
-    return next;
 }
 
 function startOf(value: unknown): EventStart | undefined {
