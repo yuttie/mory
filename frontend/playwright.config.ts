@@ -27,7 +27,10 @@ export default defineConfig({
     projects: [
         {
             name: 'chromium',
-            use: { ...devices['Desktop Chrome'] },
+            // The whole browser, headless, rather than the Chrome Headless Shell a headless run
+            // gets by default. The shell says notifications are denied whatever was granted, and
+            // refuses to show one, so no alarm could be subscribed to or shown.
+            use: { ...devices['Desktop Chrome'], channel: 'chromium' },
         },
         {
             name: 'firefox',
