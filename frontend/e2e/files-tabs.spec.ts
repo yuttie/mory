@@ -311,3 +311,26 @@ test('sorts a task the tree leaves out last by its urgency or status', async ({ 
     }
     expect(errors).toEqual([]);
 });
+
+test('deletes a task only once nothing is under it', async ({ context, page }) => {
+    const subtask = `.tasks/${REPORT}/${uuid(4)}.md`;
+    const repository = await mockBackend(context, {
+        ...FILES,
+        [subtask]: '---\ntask:\n    status: {kind: todo}\n---\n\n# Gather the figures\n',
+    });
+    await page.goto('/files/tasks');
+    await expect(rows(page)).toHaveCount(3);
+    const remove = page.getByRole('button', { name: 'Delete the selected files' });
+    await row(page, 'Write the report').getByRole('checkbox').check();
+    await remove.click();
+    // As the task view refuses it: deleting its file would leave what is under it at the top of
+    // the tree.
+    await expect(page.locator('.v-snackbar')).toContainText('Could not delete "Write the report": It has subtasks.');
+    expect(repository.deletes).toEqual([]);
+
+    // Together with what is under it, which goes first.
+    await row(page, 'Gather the figures').getByRole('checkbox').check();
+    await remove.click();
+    await expect(rows(page)).toHaveCount(1);
+    expect(repository.deletes).toEqual([subtask, `.tasks/${REPORT}.md`]);
+});

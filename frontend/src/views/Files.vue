@@ -243,6 +243,7 @@ import MediaGrid from '@/components/MediaGrid.vue';
 import { useLocalStorage } from '@/composables/localStorage';
 import { isInOverlay, isTyping, useShortcuts } from '@/keyboard';
 
+import axios from 'axios';
 import dayjs from 'dayjs';
 
 // Each by what it lists alone, as the view's own name says they are files. What is written comes
@@ -800,39 +801,37 @@ function formatFileSize(size: number) {
     }
 }
 
-function deleteSelected() {
-    for (const path of selected.value) {
-        // The store drops the entry from the shared list and invalidates its cache.
-        files.remove(path)
-            .then(deleted => {
-                if (!deleted) {
-                    error.value = true;
-                    errorText.value = `Something wrong happened when deleting ${path}`;
-                }
-                else {
-                    // Gone, so a second press would only ask to delete it again, and be refused.
-                    selected.value = selected.value.filter((each) => each !== path);
-                }
-            }).catch(err => {
-                if (err.response) {
-                    if (err.response.status === 401) {
-                        // Unauthorized
-                        emit('tokenExpired', () => deleteSelected());
-                    }
-                    else {
-                        error.value = true;
-                        errorText.value = err.toString();
-                        isLoading.value = false;
-                        throw err;
-                    }
-                }
-                else {
-                    error.value = true;
-                    errorText.value = err.toString();
-                    isLoading.value = false;
-                    throw err;
-                }
-            });
+// One at a time, and a file deeper in before one further out, so a task selected together with
+// its subtasks is deleted after them rather than refused for having them.
+async function deleteSelected() {
+    const paths = [...selected.value].sort((a, b) => b.split('/').length - a.split('/').length);
+    for (const path of paths) {
+        const id = tasks.idByPath(path);
+        try {
+            // A task as the task view deletes it, which refuses one with subtasks: they are in the
+            // directory it names, which deleting its file would leave at the top of the tree.
+            // Either store drops the entry from the shared list and invalidates its cache.
+            const deleted = await (id === undefined ? files.remove(path) : tasks.remove(path));
+            if (!deleted) {
+                error.value = true;
+                errorText.value = `Something wrong happened when deleting ${path}`;
+            }
+            else {
+                // Gone, so a second press would only ask to delete it again, and be refused.
+                selected.value = selected.value.filter((each) => each !== path);
+            }
+        }
+        catch (err) {
+            if (axios.isAxiosError(err) && err.response?.status === 401) {
+                // Unauthorized. What is left is still selected, for the retry to delete.
+                emit('tokenExpired', () => deleteSelected());
+                return;
+            }
+            error.value = true;
+            errorText.value = id === undefined
+                ? String(err)
+                : `Could not delete "${tasks.node(id)?.title || 'Untitled'}": ${err instanceof Error ? err.message : String(err)}`;
+        }
     }
 }
 
