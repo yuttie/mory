@@ -215,6 +215,7 @@ import { routeForMime } from '@/file-route';
 import { EVENTS_DIR } from '@/event-note';
 import { fileKindOf, isOfKind, isTemplatePath, SYSTEM_DIR, templateNameOf } from '@/file-kinds';
 import type { FileKind } from '@/file-kinds';
+import { systemFilePurpose } from '@/system-files';
 import { STATUS_KINDS, STATUS_LABEL } from '@/task';
 import { statusColor } from '@/status-color';
 import { statusIcon } from '@/status-icon';
@@ -263,6 +264,8 @@ interface FileRow {
     to: RouteLocationRaw;
     // The directory a note is in, which its title does not say.
     folder?: string;
+    // What the application reads a system file for.
+    purpose?: string;
     // What the title alone does not say: the project a task is part of, from the task tree, or the
     // heading a template's notes start with.
     caption?: string;
@@ -355,7 +358,7 @@ const headers = computed<DataTableHeader<FileRow>[]>(() => {
         case 'events':
             return [title, modified, size, tags];
         case 'system':
-            return [title, modified, size];
+            return [title, { title: 'Used for', key: 'purpose' }, modified, size];
         default:
             return [title, modified, size, type, tags];
     }
@@ -467,6 +470,7 @@ const matchedEntries = computed(() => {
             })(),
             ...(kind.value === 'notes' ? { folder: entry.path.slice(0, Math.max(entry.path.lastIndexOf('/'), 0)) } : {}),
             ...(kind.value === 'tasks' ? taskFields(entry.path) : {}),
+            ...(kind.value === 'system' ? { purpose: systemFilePurpose(entry.path) } : {}),
             // By the name the Add menu offers it as, rather than by a heading that is often only
             // placeholders to fill in.
             ...(kind.value === 'templates' ? { title: templateNameOf(entry.path), caption: entry.title ?? undefined } : {}),
