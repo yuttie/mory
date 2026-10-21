@@ -46,14 +46,14 @@ describe('isOfKind', () => {
         expect(kindsOf(SUBTASK, 'text/markdown')).toEqual(['tasks']);
     });
 
-    it('lists the application\'s settings and event notes apart from the notes', () => {
+    it('lists the application\'s settings, and the files that declare events, apart from the notes', () => {
         expect(kindsOf('.mory/calendars.yaml', 'application/yaml')).toEqual(['system']);
         expect(kindsOf('.mory/plans/2026-10.yaml', 'application/yaml')).toEqual(['system']);
         expect(kindsOf('.events/meeting.md', 'text/markdown', withEvents({ Meeting: { start: '2026-10-21' } })))
             .toEqual(['events']);
     });
 
-    it('lists every file the calendar draws events from as an event note too', () => {
+    it('lists every file that declares events under Events too', () => {
         const lecture = withEvents({ Lecture: { start: '2026-04-10 10:00', repeat: { freq: 'weekly' } } });
         expect(kindsOf('teaching/lecture.md', 'text/markdown', lecture)).toEqual(['notes', 'events']);
         expect(kindsOf(TASK, 'text/markdown', lecture)).toEqual(['tasks', 'events']);
@@ -75,7 +75,7 @@ describe('isOfKind', () => {
         expect(kindsOf('.mory/report.template', 'application/octet-stream')).toEqual(['templates', 'system']);
     });
 
-    it('lists what no other tab does as the others', () => {
+    it('lists what no other tab does as Uncategorized', () => {
         expect(kindsOf('.tasks/notes.md', 'text/markdown')).toEqual(['others']);
         expect(kindsOf('.redirects.gollum', 'application/octet-stream')).toEqual(['others']);
         expect(kindsOf('ideas/.gitkeep', 'application/octet-stream')).toEqual(['others']);
