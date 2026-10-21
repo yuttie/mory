@@ -92,7 +92,7 @@ test('gives templates, events, system files and the rest tabs of their own', asy
     // first. None is a file to select or delete.
     await tab(page, 'Events').click();
     await expect(page).toHaveURL(/\/files\/events$/);
-    const titles = () => rows(page).locator('a').allTextContents();
+    const titles = () => rows(page).locator('.path a').allTextContents();
     await expect.poll(titles).toEqual(['Review', 'Submission', 'Holiday', 'Meeting']);
     await expect(page.locator('.file-table').getByRole('checkbox')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Delete the selected files' })).toHaveCount(0);
@@ -103,10 +103,11 @@ test('gives templates, events, system files and the rest tabs of their own', asy
     const review = rows(page).filter({ hasText: 'Review' });
     await expect(review).toContainText('2026-11-09');
     await expect(review).toContainText('On 2 dates');
-    // Under its name, the note it is in, which the meeting's would only name again.
+    // The note each is in, beside it.
     await expect(review.getByRole('link', { name: 'Review' })).toHaveAttribute('href', '/note/ideas/draft.md');
-    await expect(review.locator('.caption')).toHaveText('Draft');
-    await expect(meeting.locator('.caption')).toHaveCount(0);
+    await expect(review.locator('.note').getByRole('link', { name: 'Draft' })).toHaveAttribute('href', '/note/ideas/draft.md');
+    await expect(meeting.locator('.note')).toHaveText('Meeting');
+    await expect(page.getByRole('columnheader', { name: 'Note' })).toBeVisible();
     const starts = page.getByRole('columnheader', { name: 'Starts' });
     await starts.click();
     await expect(starts).toHaveAttribute('aria-sort', 'ascending');
@@ -139,7 +140,7 @@ test('gives templates, events, system files and the rest tabs of their own', asy
 test('finds an event by its name, or by the note it is in', async ({ context, page }) => {
     await mockBackend(context, FILES);
     await page.goto('/files/events?q=review');
-    const titles = () => rows(page).locator('a').allTextContents();
+    const titles = () => rows(page).locator('.path a').allTextContents();
     await expect.poll(titles).toEqual(['Review']);
     await page.getByRole('textbox', { name: 'Search' }).fill('draft');
     await expect.poll(titles).toEqual(['Review', 'Submission']);

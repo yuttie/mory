@@ -119,6 +119,17 @@
                         >{{ item.caption }}</div>
                     </div>
                 </template>
+                <template v-slot:item.note="{ item }">
+                    <div
+                        class="note"
+                        v-bind:title="item.path"
+                    >
+                        <router-link
+                            v-bind:to="item.to"
+                            class="truncate"
+                        >{{ item.note }}</router-link>
+                    </div>
+                </template>
                 <template v-slot:item.newNote="{ item }">
                     <v-btn
                         v-bind:to="{ name: 'Create', query: { from: item.path } }"
@@ -276,7 +287,9 @@ interface FileRow {
     statusOrder?: number;
     dueBy?: DateCell;
     deadline?: DateCell;
-    // An event's: when it starts, and how it repeats.
+    // An event's: the note it is declared in, by its title or else its path, when it starts, and
+    // how it repeats.
+    note?: string;
     starts?: DateCell;
     repeats?: string;
     urgency?: Urgency;
@@ -368,6 +381,7 @@ const headers = computed<DataTableHeader<FileRow>[]>(() => {
         case 'events':
             return [
                 { ...title, title: 'Event' },
+                { title: 'Note', key: 'note' },
                 { title: 'Starts', key: 'starts', value: (row: FileRow) => row.starts?.instant, sort: missingLast('starts') },
                 // A line of its own, as the date beside it has: wrapped, it broke an `until` date at
                 // its hyphen.
@@ -560,11 +574,9 @@ function fileRow(entry: ListEntry2): FileRow {
     };
 }
 
-// One row for each event a file declares, however often it happens, opening the file. The file's
-// title goes beneath, unless it would only say the name again, as a note of one event's often does.
+// One row for each event a file declares, however often it happens, opening the file.
 function eventRows(entry: ListEntry2): FileRow[] {
     const file = fileRow(entry);
-    const where = file.title ?? entry.path;
     return declaredEvents(entry.metadata).map(([name, detail]) => {
         const summary = summarizeEvent(detail);
         return {
@@ -573,7 +585,7 @@ function eventRows(entry: ListEntry2): FileRow[] {
             title: name,
             icon: mdiCalendarClock,
             iconColor: '#b95050',
-            caption: where === name ? undefined : where,
+            note: file.title ?? entry.path,
             starts: summary.start === undefined ? undefined : eventCell(summary.start),
             repeats: summary.repeats,
         };
@@ -869,6 +881,7 @@ watch(queryText, (q: string | null) => {
 }
 
 .path,
+.note,
 .modified,
 .size,
 .mime-type {
@@ -890,7 +903,18 @@ watch(queryText, (q: string | null) => {
     .caption {
         grid-column: 2;
     }
+}
 
+// An event's note, cut as a title is, to a lower floor: the event's name beside it says more.
+.note {
+    display: grid;
+    grid-template-columns: minmax(0, max-content);
+    min-width: 10em;
+    white-space: nowrap;
+}
+
+.path,
+.note {
     a {
         color: rgba(0, 0, 0, 0.87);
         text-decoration: none;
