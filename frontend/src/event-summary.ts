@@ -1,6 +1,11 @@
 // What the Files view's Events tab says of an event: when it starts and how it repeats, as the note
 // declares it. Nothing is expanded, so a rule that never ends costs no more than one that does.
 //
+// Starts is therefore the earliest start the note writes, placed where the calendar would draw it,
+// and not always the first occurrence the calendar draws: rrule begins a rule at the first day it
+// meets, so a rule whose start falls off its own pattern -- the third Wednesday, anchored on the
+// first -- draws nothing at that start.
+//
 // Frontmatter is whatever the file said, so every value is type-checked rather than trusted, and
 // what cannot be read is left unsaid: the Calendar and the Health view report it. A rule is the
 // exception. One the calendar refuses, or reads as naming what can never be met, draws nothing, so
@@ -16,14 +21,15 @@ import { toWallClock } from '@/events';
 import { RecurrenceError, readRule, ruleStart, ruleUntil, termsOf } from '@/recurrence';
 import type { RuleTerms, WeekdayName } from '@/recurrence';
 
-// A start as the calendar draws it, in the reader's zone, with the instant to sort it by.
+// A start where the calendar would draw it, in the reader's zone, with the instant to sort it by.
 export interface EventStart {
     text: string;
     instant: number;
 }
 
 export interface EventSummary {
-    // The earliest start it writes, its own or that of an occurrence it lists.
+    // The earliest start it writes, its own or that of an occurrence it lists, which a rule
+    // anchored off its own pattern does not draw.
     start?: EventStart;
     // How it happens more than once: by its rule, and on how many dates it lists.
     repeats?: string;
@@ -66,7 +72,8 @@ export function summarizeEvent(detail: unknown): EventSummary {
         }
     }
     // The days it falls on apart from what its rule makes, each once: a morning and an afternoon
-    // session are one date. A rule's own start is the first date it makes.
+    // session are one date. A rule's own start is the rule's, not a date apart, and the rule may
+    // not even draw it.
     const days = new Set<string>();
     for (const start of series === undefined ? [base, ...listed] : listed) {
         if (start !== undefined) {
