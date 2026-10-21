@@ -185,6 +185,23 @@ test('lets go of a file once it is deleted', async ({ context, page }) => {
     await expect(remove).toHaveClass(/v-icon-btn--disabled/);
 });
 
+test('deletes no file the search hides', async ({ context, page }) => {
+    const repository = await mockBackend(context, FILES);
+    await page.goto('/files');
+    await row(page, 'Ideas').getByRole('checkbox').check();
+    const search = page.getByRole('textbox', { name: 'Search' });
+    await search.fill('draft');
+    await expect(rows(page)).toHaveCount(2);
+    await row(page, 'Draft').getByRole('checkbox').check();
+    await page.getByRole('button', { name: 'Delete the selected files' }).click();
+    await expect(rows(page)).toHaveCount(1);
+
+    await search.fill('');
+    await expect(rows(page)).toHaveCount(13);
+    expect(repository.deletes).toEqual(['ideas/draft.md']);
+    await expect(row(page, 'Ideas').getByRole('checkbox')).not.toBeChecked();
+});
+
 test('keeps the search box to the address on going back and forth', async ({ context, page }) => {
     await mockBackend(context, FILES);
     await page.goto('/files?q=draft');

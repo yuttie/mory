@@ -844,6 +844,14 @@ watch(kind, () => {
     tableEl.value?.$el.querySelector('.v-table__wrapper')?.scrollTo(0, 0);
 });
 
+// So would a file the search hides, which found again would come back selected.
+watch(matchedEntries, (matched) => {
+    const shown = new Set(matched.map((row) => row.key));
+    if (selected.value.some((key) => !shown.has(key))) {
+        selected.value = selected.value.filter((key) => shown.has(key));
+    }
+});
+
 // The search is in the address, so going back or forth to another one brings that search back,
 // rather than leaving the box and the rows to the last one typed. Whatever the box is set to here
 // is what the address already says, so the watcher below writes nothing back, even for the address
