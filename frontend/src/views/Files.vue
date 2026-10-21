@@ -271,6 +271,9 @@ interface DateCell {
 
 const DATE_COLUMNS = ['dueBy', 'deadline', 'starts'] as const;
 
+// Text by the numbers in it as numbers, so "On 2 dates" comes before "On 10 dates".
+const TEXT_ORDER = new Intl.Collator(undefined, { numeric: true, sensitivity: 'accent' });
+
 interface FileRow {
     // A file's path, or for one of the events it declares, the path and the event's name.
     key: string;
@@ -397,10 +400,10 @@ const headers = computed<DataTableHeader<FileRow>[]>(() => {
                 { title: 'Starts', key: 'starts', value: (row: FileRow) => row.starts?.instant, sort: missingLast('starts', byNumber) },
                 // A line of its own, as the date beside it has: wrapped, it broke an `until` date at
                 // its hyphen.
-                { title: 'Repeats', key: 'repeats', nowrap: true },
+                { title: 'Repeats', key: 'repeats', nowrap: true, sort: missingLast('repeats', byText) },
             ];
         case 'system':
-            return [{ ...title, title: 'Path' }, { title: 'Used for', key: 'purpose' }, modified, size];
+            return [{ ...title, title: 'Path' }, { title: 'Used for', key: 'purpose', sort: missingLast('purpose', byText) }, modified, size];
         // Few files no other tab takes are notes, so few have tags.
         case 'others':
             return [{ ...title, title: 'Path' }, modified, size, type];
@@ -647,6 +650,10 @@ function missingLast<T>(key: string, compare: (a: T, b: T) => number) {
 
 function byNumber(a: number, b: number): number {
     return a - b;
+}
+
+function byText(a: string, b: string): number {
+    return TEXT_ORDER.compare(a, b);
 }
 
 // An address with no search, or a malformed one, searches for nothing.

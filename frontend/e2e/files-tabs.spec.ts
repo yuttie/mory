@@ -334,6 +334,37 @@ test('fetches a few thumbnails at a time, and only those in sight', async ({ bro
     expect(most).toBeLessThanOrEqual(4);
 });
 
+test('sorts blank cells last either way, and counts by their number', async ({ context, page }) => {
+    const dates = Array.from({ length: 10 }, (_, i) => `{start: 2026-12-${String(i + 1).padStart(2, '0')}}`);
+    await mockBackend(context, {
+        ...FILES,
+        '.events/classes.md': `---\nevents:\n    Classes:\n        instances: [${dates.join(', ')}]\n---\n\n# Classes\n`,
+        '.mory/scratch.md': '# Scratch\n',
+    });
+    const titles = () => rows(page).locator('.path a').allTextContents();
+
+    await page.goto('/files/events');
+    await expect(rows(page)).toHaveCount(5);
+    await expect(rows(page).filter({ hasText: 'Classes' })).toContainText('On 10 dates');
+    const repeats = page.getByRole('columnheader', { name: 'Repeats' });
+    await repeats.click();
+    await expect(repeats).toHaveAttribute('aria-sort', 'ascending');
+    await expect.poll(async () => (await titles()).slice(0, 3)).toEqual(['Review', 'Classes', 'Meeting']);
+    await repeats.click();
+    await expect(repeats).toHaveAttribute('aria-sort', 'descending');
+    await expect.poll(async () => (await titles()).slice(0, 3)).toEqual(['Meeting', 'Classes', 'Review']);
+
+    await tab(page, 'System').click();
+    await expect(rows(page)).toHaveCount(4);
+    const purpose = page.getByRole('columnheader', { name: 'Used for' });
+    await purpose.click();
+    await expect(purpose).toHaveAttribute('aria-sort', 'ascending');
+    await expect.poll(titles).toEqual(['.mory/plans/2026-10.yaml', '.mory/custom-note.css', '.mory/task-assessment.md', '.mory/scratch.md']);
+    await purpose.click();
+    await expect(purpose).toHaveAttribute('aria-sort', 'descending');
+    await expect.poll(titles).toEqual(['.mory/task-assessment.md', '.mory/custom-note.css', '.mory/plans/2026-10.yaml', '.mory/scratch.md']);
+});
+
 test('sorts the tasks without a deadline last either way', async ({ context, page }) => {
     await mockBackend(context, FILES);
     await page.goto('/files/tasks');
