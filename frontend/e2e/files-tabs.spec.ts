@@ -79,8 +79,6 @@ test('lists each kind of file on its own tab', async ({ context, page }) => {
 });
 
 test('gives templates, events, system files and the rest tabs of their own', async ({ context, page }) => {
-    // A Wednesday, in every zone the suite runs in.
-    await page.clock.setFixedTime(new Date('2026-10-21T03:00:00Z'));
     await mockBackend(context, FILES);
     await page.goto('/files/templates');
     await expect(rows(page)).toHaveCount(1);
