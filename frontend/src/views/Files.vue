@@ -67,6 +67,14 @@
                 >{{ $vuetify.display.xs ? tab.short : tab.title }}</v-tab>
             </v-tabs>
             <v-icon-btn
+                v-if="kind === 'media'"
+                v-bind:icon="mediaLayout === 'grid' ? mdiViewListOutline : mdiViewGridOutline"
+                v-bind:title="mediaLayout === 'grid' ? 'Show as a list' : 'Show as thumbnails'"
+                v-bind:aria-label="mediaLayout === 'grid' ? 'Show as a list' : 'Show as thumbnails'"
+                class="ml-1"
+                v-on:click="mediaLayout = mediaLayout === 'grid' ? 'list' : 'grid'"
+            ></v-icon-btn>
+            <v-icon-btn
                 v-bind:icon="mdiDelete"
                 icon-color="pink"
                 v-bind:disabled="selected.length === 0"
@@ -77,7 +85,15 @@
             ></v-icon-btn>
         </div>
         <v-defaults-provider v-bind:defaults="{ VPagination: { size: 'small' } }">
+            <MediaGrid
+                v-if="kind === 'media' && mediaLayout === 'grid'"
+                v-model:selected="selected"
+                v-model:sort-by="sortBy"
+                v-bind:items="matchedEntries"
+                class="flex-grow-1"
+            />
             <v-data-table
+                v-else
                 v-bind:headers="headers"
                 v-bind:items="matchedEntries"
                 v-model="selected"
@@ -176,6 +192,8 @@ import {
     mdiImageOutline,
     mdiMagnify,
     mdiTag,
+    mdiViewGridOutline,
+    mdiViewListOutline,
 } from '@mdi/js';
 
 import { compareTags } from '@/api';
@@ -196,6 +214,8 @@ import { taskRoute } from '@/task-route';
 import { compareUrgency, taskInstant, URGENCY_LABEL } from '@/urgency';
 import type { Urgency } from '@/urgency';
 import AppBarContent from '@/components/AppBarContent.vue';
+import MediaGrid from '@/components/MediaGrid.vue';
+import { useLocalStorage } from '@/composables/localStorage';
 import { isInOverlay, isTyping, useShortcuts } from '@/keyboard';
 
 import dayjs from 'dayjs';
@@ -265,6 +285,8 @@ const showingTagList = ref(false);
 // Each tab keeps its own sort, as each has columns of its own: one sorted by urgency would sort
 // the notes by nothing.
 const sortBys = reactive<Record<string, DataTableSortItem[]>>({});
+// Thumbnails unless asked otherwise, as what tells one image from another is what it shows.
+const mediaLayout = useLocalStorage<'grid' | 'list'>('files-media-layout', 'grid');
 
 // Template Refs
 const queryEl = ref<any>(null);
@@ -723,7 +745,8 @@ watch(queryText, (q: string | null) => {
 
 // A flex item does not shrink below its contents by default. Letting the table shrink leaves the
 // rows to its own scrolling wrapper, so the toolbar above and the pagination footer below stay put.
-.file-table {
+.file-table,
+.media-grid {
     min-height: 0;
 
     // On a 360 px phone the footer wrapped, taking a second row from the list. The small buttons
