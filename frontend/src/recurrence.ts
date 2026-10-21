@@ -132,6 +132,20 @@ function listOf(value: unknown): unknown[] | undefined {
     return list.length === 0 ? undefined : list;
 }
 
+/// The wall clock in `tz` at the instant `value` names, which carries its offset.
+///
+/// The zone is read as `dayjs.tz` reads it for each occurrence: a blank one is the reader's own,
+/// and one Intl does not know is refused. Intl throws a `RangeError` for it, which out of here
+/// would blank the calendar rather than report one rule.
+function wallClockIn(value: string, tz: unknown): string {
+    try {
+        return dayjs(value).tz((tz || undefined) as string | undefined).format('YYYY-MM-DD HH:mm:ss');
+    }
+    catch {
+        throw new RecurrenceError(`Unknown timezone "${String(tz)}"`);
+    }
+}
+
 // What `backend/src/note_events.rs` holds an interval in, which the two must agree on.
 const MAX_INTERVAL = 65535;
 
@@ -202,7 +216,7 @@ export function expandRule(
         // read rather than ignored -- unlike `start`, whose offset only records which one applied.
         // Both are the same wall clock here once the offset has been resolved into `tz`.
         const bounded = repeat.tz !== undefined && until.hasTime && HAS_OFFSET.test(repeat.until)
-            ? parseWallClock(dayjs(repeat.until).tz(repeat.tz).format('YYYY-MM-DD HH:mm:ss'))
+            ? parseWallClock(wallClockIn(repeat.until, repeat.tz))
             : until;
         const resolved = bounded ?? until;
         // A date-only `until` includes the whole day.

@@ -147,6 +147,36 @@ describe('expandRule', () => {
     });
 });
 
+describe('expandRule reading until in the rule\'s zone', () => {
+    // 00:30 UTC is 09:30 in Tokyo, which lets a 09:00 occurrence on the 3rd in; read as written,
+    // without its offset, it would not.
+    beforeAll(() => { vi.stubEnv('TZ', 'Asia/Tokyo'); });
+    afterAll(() => { vi.unstubAllEnvs(); });
+
+    const until = '2024-05-03 00:30:00+00:00';
+
+    it('reads a blank zone as the reader\'s, as each occurrence does', () => {
+        for (const tz of [null, '']) {
+            expect(expandRule(
+                { freq: 'daily', tz, until } as unknown as EventRepeat, '2024-05-01 09:00', '2024-05-01', '2024-05-31',
+            ), JSON.stringify(tz)).toEqual(['2024-05-01 09:00', '2024-05-02 09:00', '2024-05-03 09:00']);
+        }
+    });
+
+    // Intl throws a RangeError for a zone it does not know, which used to escape and blank the
+    // calendar, all-day series included.
+    it('refuses an unknown zone rather than throwing out of the calendar', () => {
+        for (const start of ['2024-05-01 09:00', '2024-05-01']) {
+            expect(() => expandRule(
+                { freq: 'daily', tz: 'Mars/Olympus', until }, start, '2024-05-01', '2024-05-31',
+            ), start).toThrow(RecurrenceError);
+        }
+        expect(() => expandRule(
+            { freq: 'daily', tz: 0, until } as unknown as EventRepeat, '2024-05-01 09:00', '2024-05-01', '2024-05-31',
+        )).not.toThrow();
+    });
+});
+
 describe('expandRule across a daylight-saving boundary', () => {
     // The case that made `repeat.tz` necessary: America/Los_Angeles is -07:00 in June and -08:00
     // in January, so a wall clock of 10:00 is two different instants. Read from a fixed-offset
