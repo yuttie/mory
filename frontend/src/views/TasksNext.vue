@@ -297,21 +297,21 @@
                 <v-alert v-if="planHistoryError" type="warning">{{ planHistoryError }}</v-alert>
                 <v-alert v-for="problem of taskSettings.problems" v-bind:key="problem" type="warning">{{ problem }}</v-alert>
                 <div class="view-container flex-grow-1">
+                    <!-- Schedule view -->
+                    <TaskScheduleView
+                        v-if="descendantsViewMode === 'schedule'"
+                        v-bind:candidates="filteredSelectedNodeDescendants"
+                        v-bind:route-for="listRouteFor"
+                        v-bind:list-root="listRoot"
+                    />
                     <!-- Status view -->
                     <TaskStatusView
-                        v-if="descendantsViewMode === 'status'"
+                        v-else-if="descendantsViewMode === 'status'"
                         v-bind:task-statuses="taskStatuses"
                         v-bind:known-contacts="store.knownContacts"
                         v-bind:route-for="listRouteFor"
                         v-bind:list-root="listRoot"
                         v-on:status-change="onTaskStatusChange"
-                    />
-                    <!-- Schedule view -->
-                    <TaskScheduleView
-                        v-else-if="descendantsViewMode === 'schedule'"
-                        v-bind:candidates="filteredSelectedNodeDescendants"
-                        v-bind:route-for="listRouteFor"
-                        v-bind:list-root="listRoot"
                     />
                     <!-- Eisenhower Matrix view -->
                     <TaskEisenhowerView
@@ -514,11 +514,11 @@ const selectedNode = computed<TaskNode | undefined>(() => {
     return undefined;
 });
 
-const descendantsViewMode = computed<'status' | 'schedule' | 'eisenhower'>(() => {
+const descendantsViewMode = computed<'schedule' | 'status' | 'eisenhower'>(() => {
     if (route.name === 'TasksNextWithParams' && route.params.viewMode) {
-        return route.params.viewMode as 'status' | 'schedule' | 'eisenhower';
+        return route.params.viewMode as 'schedule' | 'status' | 'eisenhower';
     }
-    return 'status';
+    return 'schedule';
 });
 
 // The task open in the editor over the list, which the address names. A tag group is no task to
@@ -845,8 +845,8 @@ const eisenhowerQuadrants = computed(() => {
 });
 
 const viewModeOptions = computed(() => [
-    { text: 'Status', icon: mdiTrafficLightOutline, value: 'status' },
     { text: 'Schedule', icon: mdiCalendarMultiselectOutline, value: 'schedule' },
+    { text: 'Status', icon: mdiTrafficLightOutline, value: 'status' },
     { text: 'Eisenhower Matrix', icon: mdiGridLarge, value: 'eisenhower' },
 ]);
 

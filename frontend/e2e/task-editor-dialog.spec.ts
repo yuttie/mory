@@ -574,7 +574,7 @@ test('keeps an unsaved edit open on Back to another view', async ({ context, pag
 
     await page.evaluate(() => history.back());
     await page.waitForTimeout(1000);
-    await expect(page).toHaveURL(url(ERRAND, 'status', ERRAND));
+    await expect(page).toHaveURL(url(ERRAND, 'schedule', ERRAND));
     await expect(title(page)).toHaveValue('Errand run');
 });
 
@@ -591,7 +591,7 @@ test('keeps an unsaved new task open on Back to another view', async ({ context,
 
     await page.evaluate(() => history.back());
     await page.waitForTimeout(1000);
-    await expect(page).toHaveURL(url(ERRAND, 'status'));
+    await expect(page).toHaveURL(url(ERRAND, 'schedule'));
     await expect(title(page)).toHaveValue('Draft');
 });
 
@@ -601,12 +601,12 @@ test('opens a task from another view, and closes it in place', async ({ context,
     await mockBackend(context, NOTES);
     await page.goto('/');
     await page.locator('.tasks-section .task-item', { hasText: 'Errand' }).click();
-    await expect(page).toHaveURL(url(ERRAND, 'status', ERRAND));
+    await expect(page).toHaveURL(url(ERRAND, 'schedule', ERRAND));
     await expect(title(page)).toHaveValue('Errand');
 
     await dialog(page).getByRole('button', { name: 'Cancel', exact: true }).click();
     await expect(dialog(page)).toBeHidden();
-    await expect(page).toHaveURL(url(ERRAND, 'status'));
+    await expect(page).toHaveURL(url(ERRAND, 'schedule'));
     await expect(page.locator('.app-bar-current')).toHaveText('Errand');
 
     await page.goBack();
