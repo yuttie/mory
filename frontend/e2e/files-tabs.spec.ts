@@ -316,6 +316,28 @@ test('opens each tab at its first page, scrolled to the top', async ({ context, 
     await expect.poll(() => wrapper.evaluate((element) => element.scrollTop)).toBe(0);
 });
 
+test('sorts the thumbnails, and says how', async ({ context, page }) => {
+    await mockBackend(context, FILES);
+    await page.goto('/files/media');
+    const names = () => page.locator('.media-grid .tile .name').allTextContents();
+    const path = page.getByRole('button', { name: /^Path\b|by Path$/ });
+    const modified = page.getByRole('button', { name: /^Modified\b|by Modified$/ });
+    // As the table is, the last changed first.
+    await expect(modified).toHaveAttribute('aria-pressed', 'true');
+    await expect(modified).toHaveAccessibleName('Modified, sorted descending');
+    await expect(path).toHaveAttribute('aria-pressed', 'false');
+    await expect(path).toHaveAccessibleName('Sort by Path');
+
+    await path.click();
+    await expect(path).toHaveAttribute('aria-pressed', 'true');
+    await expect(path).toHaveAccessibleName('Path, sorted ascending');
+    await expect(modified).toHaveAttribute('aria-pressed', 'false');
+    await expect.poll(names).toEqual(['demo.mp4', 'paper.pdf']);
+    await path.click();
+    await expect(path).toHaveAccessibleName('Path, sorted descending');
+    await expect.poll(names).toEqual(['paper.pdf', 'demo.mp4']);
+});
+
 test('says when the search matches no media file', async ({ context, page }) => {
     await mockBackend(context, FILES);
     await page.goto('/files/media?q=zzz');

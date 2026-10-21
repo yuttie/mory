@@ -22,11 +22,14 @@
                     class="flex-grow-0 ml-1"
                     v-on:update:model-value="selectAll(!isSelected([...pageItems]))"
                 />
+                <!-- Which way it sorts, for a screen reader too, as a column's header says it. -->
                 <v-btn
                     v-for="column of SORTABLE"
                     v-bind:key="column.key"
                     v-bind:append-icon="sortIcon(column.key)"
-                    v-bind:active="sortIcon(column.key) !== undefined"
+                    v-bind:active="sortOrderOf(column.key) !== undefined"
+                    v-bind:aria-pressed="sortOrderOf(column.key) !== undefined"
+                    v-bind:aria-label="sortLabel(column.key, column.title)"
                     variant="text"
                     class="text-none px-2"
                     v-on:click="toggleSort(column)"
@@ -217,9 +220,19 @@ function finish(path: string) {
     }
 }
 
-function sortIcon(key: string): string | undefined {
+function sortOrderOf(key: string): 'asc' | 'desc' | undefined {
     const order = sortBy.value.find((item) => item.key === key)?.order;
+    return order === 'asc' || order === 'desc' ? order : undefined;
+}
+
+function sortIcon(key: string): string | undefined {
+    const order = sortOrderOf(key);
     return order === 'asc' ? mdiArrowUp : order === 'desc' ? mdiArrowDown : undefined;
+}
+
+function sortLabel(key: string, title: string): string {
+    const order = sortOrderOf(key);
+    return order === undefined ? `Sort by ${title}` : `${title}, sorted ${order === 'asc' ? 'ascending' : 'descending'}`;
 }
 
 function isImage(item: MediaItem): boolean {
