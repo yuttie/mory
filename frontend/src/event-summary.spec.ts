@@ -139,9 +139,15 @@ describe('summarizeEvent', () => {
         expect(summarizeEvent({ times: [{ start: '2026-03-08' }] }).start?.text).toBe('2026-03-08');
     });
 
+    // +05:45 is Nepal's alone, so the reader's zone, wherever the suite runs, is another: the
+    // wall clock as written would be the wrong answer.
     it('shows a start that carries an offset in the reader\'s zone', () => {
-        const start = '2026-10-21 10:00:00+09:00';
-        expect(summarizeEvent({ start }).start?.text).toBe(dayjs(start).format('YYYY-MM-DD HH:mm'));
+        for (const start of ['2026-10-21 10:00:00+05:45', '2026-10-21 10:00+05:45']) {
+            const text = summarizeEvent({ start }).start?.text;
+            expect(text, start).toBe(dayjs(start).format('YYYY-MM-DD HH:mm'));
+            expect(text, start).not.toBe('2026-10-21 10:00');
+            expect(summarizeEvent({ instances: [{ start }] }).start?.text, start).toBe(text);
+        }
     });
 
     it('says how it repeats, by its rule and the dates it lists', () => {
