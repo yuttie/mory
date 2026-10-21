@@ -29,6 +29,11 @@ export function isTemplatePath(path: string): boolean {
     return /\.template$/i.test(path);
 }
 
+// A template as the Add menu lists it.
+export function templateNameOf(path: string): string {
+    return path.replace(/\.template$/i, '');
+}
+
 export function isOfKind(entry: Pick<ListEntry2, 'path' | 'mime_type'>, kind: FileKind): boolean {
     switch (kind) {
         // As the note tree has them: the application's own directories hold its storage, not

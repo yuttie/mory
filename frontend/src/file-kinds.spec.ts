@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { FILE_KINDS, fileKindOf, isOfKind } from '@/file-kinds';
+import { FILE_KINDS, fileKindOf, isOfKind, templateNameOf } from '@/file-kinds';
 import type { FileKind } from '@/file-kinds';
 
 const TASK = '.tasks/0b5bd9c4-6a3e-4a8f-9d0e-2f4c7a1b3e5d.md';
@@ -66,5 +66,12 @@ describe('isOfKind', () => {
         expect(kindsOf('paper.pdf', 'application/pdf')).toEqual(['media']);
         expect(kindsOf('.tasks/0b5bd9c4-6a3e-4a8f-9d0e-2f4c7a1b3e5d/receipt.png', 'image/png')).toEqual(['media']);
         expect(kindsOf('.mory/background.jpg', 'image/jpeg')).toEqual(['media', 'system']);
+    });
+});
+
+describe('templateNameOf', () => {
+    it('names a template as the Add menu lists it', () => {
+        expect(templateNameOf('lecture.template')).toBe('lecture');
+        expect(templateNameOf('research/Meeting.TEMPLATE')).toBe('research/Meeting');
     });
 });

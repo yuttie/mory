@@ -112,9 +112,9 @@
                         <v-icon class="mr-1" v-bind:color="item.iconColor">{{ item.icon }}</v-icon>
                         <router-link v-bind:to="item.to" class="truncate">{{ item.title ?? item.path }}</router-link>
                         <div
-                            v-if="item.ancestors"
-                            class="ancestors truncate text-caption text-medium-emphasis"
-                        >{{ item.ancestors }}</div>
+                            v-if="item.caption"
+                            class="caption truncate text-caption text-medium-emphasis"
+                        >{{ item.caption }}</div>
                     </div>
                 </template>
                 <template v-slot:item.folder="{ item }">
@@ -204,7 +204,7 @@ import { useTasksStore } from '@/stores/tasks';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
 import { routeForMime } from '@/file-route';
 import { EVENTS_DIR } from '@/event-note';
-import { fileKindOf, isOfKind, isTemplatePath, SYSTEM_DIR } from '@/file-kinds';
+import { fileKindOf, isOfKind, isTemplatePath, SYSTEM_DIR, templateNameOf } from '@/file-kinds';
 import type { FileKind } from '@/file-kinds';
 import { STATUS_KINDS, STATUS_LABEL } from '@/task';
 import { statusColor } from '@/status-color';
@@ -254,8 +254,9 @@ interface FileRow {
     to: RouteLocationRaw;
     // The directory a note is in, which its title does not say.
     folder?: string;
-    // A task's, from the task tree: a title alone does not say which project a task is part of.
-    ancestors?: string;
+    // What the title alone does not say: the project a task is part of, from the task tree, or the
+    // heading a template's notes start with.
+    caption?: string;
     status?: string;
     statusOrder?: number;
     dueBy?: TaskDateCell;
@@ -340,7 +341,7 @@ const headers = computed<DataTableHeader<FileRow>[]>(() => {
         case 'media':
             return [title, modified, size, type];
         case 'templates':
-            return [title, modified, size];
+            return [{ ...title, title: 'Name' }, modified, size];
         case 'events':
             return [title, modified, size, tags];
         case 'system':
@@ -456,6 +457,9 @@ const matchedEntries = computed(() => {
             })(),
             ...(kind.value === 'notes' ? { folder: entry.path.slice(0, Math.max(entry.path.lastIndexOf('/'), 0)) } : {}),
             ...(kind.value === 'tasks' ? taskFields(entry.path) : {}),
+            // By the name the Add menu offers it as, rather than by a heading that is often only
+            // placeholders to fill in.
+            ...(kind.value === 'templates' ? { title: templateNameOf(entry.path), caption: entry.title ?? undefined } : {}),
         });
     }
 
@@ -496,7 +500,7 @@ function taskFields(path: string): Partial<FileRow> {
         to: taskRoute(id),
         icon: statusIcon(statusKind, tasks.childrenOf(id).length > 0),
         iconColor: statusColor(statusKind, taskSettings.resolvedStatusColors) ?? null,
-        ancestors: tasks.ancestorsOf(id).map((ancestor) => ancestor.title || 'Untitled').join(' › '),
+        caption: tasks.ancestorsOf(id).map((ancestor) => ancestor.title || 'Untitled').join(' › '),
         ...statusOf(statusKind),
         dueBy: dateCell(cues, 'due_by'),
         deadline: dateCell(cues, 'deadline'),
@@ -807,7 +811,7 @@ watch(queryText, (q: string | null) => {
     min-width: 20em;
     white-space: nowrap;
 
-    .ancestors {
+    .caption {
         grid-column: 2;
     }
 
