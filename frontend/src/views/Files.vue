@@ -376,6 +376,9 @@ const headers = computed<DataTableHeader<FileRow>[]>(() => {
             ];
         case 'system':
             return [title, { title: 'Used for', key: 'purpose' }, modified, size];
+        // Few files no other tab takes are notes, so few have tags.
+        case 'others':
+            return [title, modified, size, type];
         default:
             return [title, modified, size, type, tags];
     }

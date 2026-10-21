@@ -124,6 +124,8 @@ test('gives templates, events, system files and the rest tabs of their own', asy
     await expect(rows(page)).toHaveCount(2);
     await expect(rows(page).filter({ hasText: 'Loose notes' })).toBeVisible();
     await expect(rows(page).filter({ hasText: '.redirects.gollum' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Type' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Tags' })).toHaveCount(0);
 });
 
 test('finds an event by its name, or by the note it is in', async ({ context, page }) => {
