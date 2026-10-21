@@ -984,9 +984,9 @@ watch(queryText, (q: string | null) => {
     white-space: nowrap;
 }
 
-// Lower for an event, whose table has no tags to widen it, and is wider than the screen only on a
-// phone. There the title's floor, and the note's at 10em, left a 360 px screen only the event and
-// its note, and when it starts, which the tab sorts by, a sideways scroll away.
+// Lower for an event, whose table has no tags to widen it and so is wider than the screen only on
+// a phone. There this floor and the note's leave room in 360 px for when the event starts, which
+// the tab sorts by: the title's own would leave the event and its note alone in sight.
 .event-table .path {
     min-width: 8em;
 }
