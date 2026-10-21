@@ -242,14 +242,16 @@ import { isInOverlay, isTyping, useShortcuts } from '@/keyboard';
 
 import dayjs from 'dayjs';
 
-// Each by what it lists alone, as the view's own name says they are files.
+// Each by what it lists alone, as the view's own name says they are files. What is written comes
+// first, as the app's other views show it, then the files that serve it, and last those of the
+// application and the rest, which a phone reaches only by scrolling.
 const TABS: { kind: FileKind | null; value: string; title: string }[] = [
     { kind: null, value: 'all', title: 'All' },
     { kind: 'notes', value: 'notes', title: 'Notes' },
     { kind: 'tasks', value: 'tasks', title: 'Tasks' },
+    { kind: 'events', value: 'events', title: 'Events' },
     { kind: 'media', value: 'media', title: 'Media' },
     { kind: 'templates', value: 'templates', title: 'Templates' },
-    { kind: 'events', value: 'events', title: 'Events' },
     { kind: 'system', value: 'system', title: 'System' },
     { kind: 'others', value: 'others', title: 'Uncategorized' },
 ];

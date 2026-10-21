@@ -40,6 +40,9 @@ function tab(page: Page, name: string) {
 test('lists each kind of file on its own tab', async ({ context, page }) => {
     await mockBackend(context, FILES);
     await page.goto('/files');
+    await expect(page.getByRole('tab')).toHaveText(
+        ['All', 'Notes', 'Tasks', 'Events', 'Media', 'Templates', 'System', 'Uncategorized'],
+    );
     await expect(tab(page, 'All')).toHaveAttribute('aria-selected', 'true');
     await expect(rows(page)).toHaveCount(14);
     // A template by its path, as its heading is placeholders.
