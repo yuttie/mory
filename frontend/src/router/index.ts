@@ -107,7 +107,9 @@ const routes: Array<RouteRecordRaw> = [
         },
     },
     {
-        path: '/files',
+        // A tab of the view, by the kind of file it lists, or every file for `/files` itself. One
+        // record for all of them, so the sidebar's link to `/files` stays active on each tab.
+        path: '/files/:kind(notes|tasks|media)?',
         name: 'Files',
         component: Files,
     },

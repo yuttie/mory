@@ -57,7 +57,7 @@ test('says so when a file cannot be deleted', async ({ context, page }) => {
     await page.goto('/files');
 
     await page.getByRole('row').filter({ hasText: 'Note' }).getByRole('checkbox').check();
-    await page.locator('.file-table .v-toolbar button').click();
+    await page.getByRole('button', { name: 'Delete the selected files' }).click();
 
     await reported(page);
     expect(repository.deletes).toEqual([]);

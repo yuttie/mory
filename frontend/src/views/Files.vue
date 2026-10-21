@@ -46,6 +46,36 @@
                 </template>
             </v-text-field>
         </AppBarContent>
+        <div class="files-bar d-flex align-center">
+            <!-- `exact`: every tab is the one route, and only the tab whose kind is the address's
+                 own is current. -->
+            <v-tabs
+                v-bind:model-value="currentTab"
+                v-bind:grow="$vuetify.display.xs"
+                color="primary"
+                class="flex-grow-1"
+            >
+                <!-- On a phone, the width a tab is given at least would put the last tab out of
+                     sight even with the short titles. -->
+                <v-tab
+                    v-for="tab of TABS"
+                    v-bind:key="tab.value"
+                    v-bind:value="tab.value"
+                    v-bind:to="tabRoute(tab.kind)"
+                    v-bind:min-width="$vuetify.display.xs ? 0 : undefined"
+                    exact
+                >{{ $vuetify.display.xs ? tab.short : tab.title }}</v-tab>
+            </v-tabs>
+            <v-icon-btn
+                v-bind:icon="mdiDelete"
+                icon-color="pink"
+                v-bind:disabled="selected.length === 0"
+                title="Delete the selected files"
+                aria-label="Delete the selected files"
+                v-on:click="deleteSelected"
+                class="mx-1"
+            ></v-icon-btn>
+        </div>
         <v-defaults-provider v-bind:defaults="{ VPagination: { size: 'small' } }">
             <v-data-table
                 v-bind:headers="headers"
@@ -62,18 +92,6 @@
                 fixed-header
                 class="file-table flex-grow-1"
             >
-                <template v-slot:top>
-                    <v-toolbar flat color="transparent" style="border-bottom: thin solid rgba(0, 0, 0, 0.12);">
-                        <v-icon-btn
-                            v-bind:icon="mdiDelete"
-                            icon-color="pink"
-                            v-bind:disabled="selected.length === 0"
-                            v-on:click="deleteSelected"
-                            class="ml-1"
-                        ></v-icon-btn>
-                        <v-spacer></v-spacer>
-                    </v-toolbar>
-                </template>
                 <template v-slot:item.path="{ item }">
                     <div class="path" v-bind:title="item.title ?? item.path">
                         <v-icon class="mr-1" v-bind:color="item.iconColor">{{ item.icon }}</v-icon>
@@ -127,13 +145,24 @@ import {
 } from '@mdi/js';
 
 import { compareTags } from '@/api';
+import type { ListEntry2 } from '@/api';
 
 import { useFilesStore } from '@/stores/files';
 import { routeForMime } from '@/file-route';
+import { fileKindOf, isOfKind } from '@/file-kinds';
+import type { FileKind } from '@/file-kinds';
 import AppBarContent from '@/components/AppBarContent.vue';
 import { isInOverlay, isTyping, useShortcuts } from '@/keyboard';
 
 import dayjs from 'dayjs';
+
+// The full title is cut short on a phone, where four of them would not fit beside the button.
+const TABS: { kind: FileKind | null; value: string; title: string; short: string }[] = [
+    { kind: null, value: 'all', title: 'All types', short: 'All' },
+    { kind: 'notes', value: 'notes', title: 'Notes', short: 'Notes' },
+    { kind: 'tasks', value: 'tasks', title: 'Tasks', short: 'Tasks' },
+    { kind: 'media', value: 'media', title: 'Media files', short: 'Media' },
+];
 
 // Emits
 const emit = defineEmits<{
@@ -157,6 +186,16 @@ const showingTagList = ref(false);
 const queryEl = ref<any>(null);
 
 // Computed properties
+const kind = computed(() => fileKindOf(route.params.kind));
+
+const currentTab = computed(() => kind.value ?? 'all');
+
+// The files the open tab lists, before the query narrows them.
+const kindEntries = computed<ListEntry2[]>(() => {
+    const open = kind.value;
+    return open === null ? files.entries : files.entries.filter((entry) => isOfKind(entry, open));
+});
+
 const headers = computed(() => {
     return [
         { title: 'Title or Path', key: 'path' },
@@ -169,7 +208,7 @@ const headers = computed(() => {
 
 const tags = computed(() => {
     const tags = new Set();
-    for (const entry of files.entries) {
+    for (const entry of kindEntries.value) {
         if (entry.metadata !== null) {
             if (Object.hasOwn(entry.metadata, 'tags') && Array.isArray(entry.metadata.tags)) {
                 for (const tag of entry.metadata.tags.map(String)) {
@@ -212,7 +251,7 @@ const matchedEntries = computed(() => {
     const queryTags: string[] = [...query.value.tags].map(x => x.toLowerCase());
     const queryAny: string[] = [...query.value.any].map(x => x.toLowerCase());
 
-    for (const entry of files.entries) {
+    for (const entry of kindEntries.value) {
         const entryPath = entry.path.toLowerCase();
         const entryTitle = entry.title?.toLowerCase() ?? "";
         const entryTags = (() => {
@@ -284,6 +323,11 @@ onMounted(() => {
 useShortcuts(handleKeydown);
 
 // Methods
+// The search goes along, so a query asked of every file can be put to one kind of them.
+function tabRoute(tabKind: FileKind | null) {
+    return { name: 'Files', params: { kind: tabKind }, query: route.query };
+}
+
 function load() {
     isLoading.value = true;
     files.refresh()
@@ -466,6 +510,11 @@ function deleteSelected() {
 }
 
 // Watchers
+// Files selected on one tab and out of sight on the next would be deleted unseen.
+watch(kind, () => {
+    selected.value = [];
+});
+
 watch(queryText, (q: string | null) => {
     if (q === null) {
         q = '';
@@ -488,6 +537,10 @@ watch(queryText, (q: string | null) => {
     // The window less the layout's bars, as in the Calendar view: `height: 100%` resolves against
     // `v-main`, which grows with its contents, so a hundred rows scrolled the whole app.
     height: calc(100dvh - var(--v-layout-top, 0px) - var(--v-layout-bottom, 0px));
+}
+
+.files-bar {
+    border-bottom: thin solid rgba(0, 0, 0, 0.12);
 }
 
 // A flex item does not shrink below its contents by default. Letting the table shrink leaves the
