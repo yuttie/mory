@@ -117,6 +117,15 @@
                         >{{ item.caption }}</div>
                     </div>
                 </template>
+                <template v-slot:item.newNote="{ item }">
+                    <v-btn
+                        v-bind:to="{ name: 'Create', query: { from: item.path } }"
+                        v-bind:prepend-icon="mdiFileOutline"
+                        variant="text"
+                        size="small"
+                        class="text-none"
+                    >New note</v-btn>
+                </template>
                 <template v-slot:item.folder="{ item }">
                     <div class="folder text-no-wrap">{{ item.folder }}</div>
                 </template>
@@ -340,8 +349,9 @@ const headers = computed<DataTableHeader<FileRow>[]>(() => {
             ];
         case 'media':
             return [title, modified, size, type];
+        // What a template is for, next to it, as the Add menu offers it.
         case 'templates':
-            return [{ ...title, title: 'Name' }, modified, size];
+            return [{ ...title, title: 'Name' }, { title: '', key: 'newNote', sortable: false }, modified, size];
         case 'events':
             return [title, modified, size, tags];
         case 'system':
