@@ -49,14 +49,16 @@
                         class="tile-link"
                     >
                         <div class="thumbnail">
-                            <!-- From where the media view shows it, and only once in sight. -->
+                            <!-- From where the media view shows it, once in sight and given a
+                                 turn. -->
                             <img
                                 v-if="isImage(item.raw) && !failed.has(item.raw.path)"
-                                v-bind:src="apiFilesUrl + encodePath(item.raw.path)"
+                                v-thumbnail="item.raw.path"
+                                v-bind:src="admitted.has(item.raw.path) ? apiFilesUrl + encodePath(item.raw.path) : undefined"
                                 alt=""
-                                loading="lazy"
                                 decoding="async"
-                                v-on:error="failed.add(item.raw.path)"
+                                v-on:load="finish(item.raw.path)"
+                                v-on:error="finish(item.raw.path); failed.add(item.raw.path)"
                             >
                             <v-icon
                                 v-else
@@ -93,7 +95,8 @@
 </template>
 
 <script lang="ts" setup>
-import { reactive } from 'vue';
+import { onBeforeUnmount, reactive } from 'vue';
+import type { Directive } from 'vue';
 import type { RouteLocationRaw } from 'vue-router';
 import type { DataTableSortItem } from 'vuetify';
 
@@ -132,6 +135,11 @@ const CUSTOM_KEY_SORT = {
     time: (a: Dayjs, b: Dayjs) => a.valueOf() - b.valueOf(),
 };
 
+// How many thumbnails are fetched at once. moried converts each image it has not served before in an
+// ImageMagick process of its own, so the 15 to 25 thumbnails a window shows would otherwise start as
+// many at once, on the small server it runs on in production.
+const MAX_LOADING = 4;
+
 // Props
 defineProps<{
     items: MediaItem[];
@@ -143,8 +151,70 @@ const sortBy = defineModel<DataTableSortItem[]>('sortBy', { required: true });
 // Reactive states
 // The images that could not be loaded, drawn as broken rather than as an empty square.
 const failed = reactive(new Set<string>());
+// The images given their turn to load, which keep it once loaded.
+const admitted = reactive(new Set<string>());
+
+// The images in sight waiting for a turn, first come first served, and those loading in theirs.
+const waiting = new Set<string>();
+const loading = new Set<string>();
+
+// A thumbnail is fetched once in sight. `loading="lazy"` leaves that to the browser, which deems a
+// whole page of thumbnails close enough to sight to fetch at once.
+const observer = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+        const path = (entry.target as HTMLElement).dataset.path;
+        if (path === undefined || admitted.has(path)) {
+            continue;
+        }
+        if (entry.isIntersecting) {
+            waiting.add(path);
+        }
+        else {
+            waiting.delete(path);
+        }
+    }
+    admit();
+});
+
+// An image's turn ends with its load or its failure, or with its tile, as a new page or sort
+// takes the tile away: one gone half loaded asks again if it comes back.
+const vThumbnail: Directive<HTMLImageElement, string> = {
+    mounted(element, { value }) {
+        element.dataset.path = value;
+        observer.observe(element);
+    },
+    unmounted(element, { value }) {
+        observer.unobserve(element);
+        waiting.delete(value);
+        if (loading.has(value)) {
+            admitted.delete(value);
+            finish(value);
+        }
+    },
+};
+
+onBeforeUnmount(() => {
+    observer.disconnect();
+});
 
 // Methods
+function admit() {
+    for (const path of waiting) {
+        if (loading.size >= MAX_LOADING) {
+            break;
+        }
+        waiting.delete(path);
+        loading.add(path);
+        admitted.add(path);
+    }
+}
+
+function finish(path: string) {
+    if (loading.delete(path)) {
+        admit();
+    }
+}
+
 function sortIcon(key: string): string | undefined {
     const order = sortBy.value.find((item) => item.key === key)?.order;
     return order === 'asc' ? mdiArrowUp : order === 'desc' ? mdiArrowDown : undefined;

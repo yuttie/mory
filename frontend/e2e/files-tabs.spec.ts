@@ -302,6 +302,38 @@ test('draws an image as its thumbnail, and a document as what it is', async ({ b
     await expect(tiles.filter({ hasText: 'demo.mp4' }).locator('img')).toHaveCount(0);
 });
 
+test('fetches a few thumbnails at a time, and only those in sight', async ({ browserName, context, page }) => {
+    test.skip(browserName !== 'chromium', 'Firefox does not route a service worker\'s own requests.');
+    // A page of thumbnails, more than the window shows.
+    const photos = Object.fromEntries(Array.from({ length: 50 }, (_, i) => [`photos/${i}.png`, '']));
+    await mockBackend(context, photos);
+    // Each image a while in coming, as one moried has to convert first is.
+    const requested: string[] = [];
+    let pending = 0;
+    let most = 0;
+    await context.route(`${API_URL}files/**`, async (route) => {
+        requested.push(decodeURIComponent(new URL(route.request().url()).pathname));
+        pending += 1;
+        most = Math.max(most, pending);
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        pending -= 1;
+        await route.fulfill({ body: PIXEL, contentType: 'image/png' });
+    });
+    await page.goto('/files/media');
+    const tiles = page.locator('.media-grid .tile');
+    await expect(tiles).toHaveCount(50);
+    // The second row, in sight once the first has loaded.
+    await expect(tiles.nth(12).locator('img')).toHaveJSProperty('naturalWidth', 1);
+    expect(most).toBeLessThanOrEqual(4);
+
+    const last = tiles.last();
+    const lastPath = await last.locator('a').getAttribute('title');
+    expect(requested.some((path) => path.endsWith(`/${lastPath}`))).toBe(false);
+    await last.scrollIntoViewIfNeeded();
+    await expect(last.locator('img')).toHaveJSProperty('naturalWidth', 1);
+    expect(most).toBeLessThanOrEqual(4);
+});
+
 test('sorts the tasks without a deadline last either way', async ({ context, page }) => {
     await mockBackend(context, FILES);
     await page.goto('/files/tasks');
