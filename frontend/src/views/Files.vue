@@ -200,7 +200,7 @@ import { ref, reactive, computed, watch, onMounted } from 'vue';
 import type { ComponentPublicInstance } from 'vue';
 
 import { useRoute, useRouter } from 'vue-router';
-import type { RouteLocationRaw } from 'vue-router';
+import type { LocationQuery, RouteLocationRaw } from 'vue-router';
 import type { DataTableHeader, DataTableSortItem } from 'vuetify';
 
 import {
@@ -497,10 +497,6 @@ onMounted(() => {
     document.title = `Files | ${import.meta.env.VITE_APP_NAME}`;
 
     load();
-
-    if (route.query.q) {
-        queryText.value = route.query.q as string;
-    }
 });
 
 useShortcuts(handleKeydown);
@@ -648,6 +644,11 @@ function missingLast<T>(key: string, compare: (a: T, b: T) => number) {
 
 function byNumber(a: number, b: number): number {
     return a - b;
+}
+
+// An address with no search, or a malformed one, searches for nothing.
+function queryTextOf(q: LocationQuery[string] | undefined): string {
+    return typeof q === 'string' ? q : '';
 }
 
 function load() {
@@ -839,13 +840,24 @@ watch(kind, () => {
     tableEl.value?.$el.querySelector('.v-table__wrapper')?.scrollTo(0, 0);
 });
 
+// The search is in the address, so going back or forth to another one brings that search back,
+// rather than leaving the box and the rows to the last one typed. Whatever the box is set to here
+// is what the address already says, so the watcher below writes nothing back, even for the address
+// of a view this one is leaving for.
+watch(() => route.query.q, (q) => {
+    const routeText = queryTextOf(q);
+    if (routeText !== queryText.value) {
+        queryText.value = routeText;
+    }
+}, { immediate: true });
+
 watch(queryText, (q: string | null) => {
     if (q === null) {
         q = '';
         // Workaround: 'clearable' <v-text-field> sets its model to null
         queryText.value = '';
     }
-    if (q !== route.query.q) {
+    if (q !== queryTextOf(route.query.q)) {
         router.replace({
             query: {
                 ...route.query,

@@ -168,6 +168,33 @@ test('keeps the search across tabs, but not the selection', async ({ context, pa
     await expect(remove).toHaveClass(/v-icon-btn--disabled/);
 });
 
+test('keeps the search box to the address on going back and forth', async ({ context, page }) => {
+    await mockBackend(context, FILES);
+    await page.goto('/files?q=draft');
+    const search = page.getByRole('textbox', { name: 'Search' });
+    await expect(rows(page)).toHaveCount(2);
+    await tab(page, 'Notes').click();
+    await expect(page).toHaveURL(/\/files\/notes\?q=draft$/);
+    await search.fill('ideas');
+    await expect(page).toHaveURL(/\/files\/notes\?q=ideas$/);
+
+    await page.goBack();
+    await expect(page).toHaveURL(/\/files\?q=draft$/);
+    await expect(search).toHaveValue('draft');
+    await expect(rows(page)).toHaveCount(2);
+    await expect(tab(page, 'Notes')).toHaveAttribute('href', '/files/notes?q=draft');
+
+    await page.goForward();
+    await expect(page).toHaveURL(/\/files\/notes\?q=ideas$/);
+    await expect(search).toHaveValue('ideas');
+    await expect(rows(page)).toHaveCount(2);
+
+    // A note's address has no search, which is no search to bring back to the box.
+    await rows(page).getByRole('link', { name: 'Ideas', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Ideas' })).toBeVisible();
+    expect(page.url()).toMatch(/\/note\/ideas\.md$/);
+});
+
 test('opens each tab at its first page, scrolled to the top', async ({ context, page }) => {
     const notes = Object.fromEntries(Array.from({ length: 50 }, (_, i) => [`notes/${i}.md`, `# Note ${i}\n`]));
     await mockBackend(context, { ...FILES, ...notes });
