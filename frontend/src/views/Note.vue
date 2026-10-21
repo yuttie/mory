@@ -909,7 +909,7 @@ async function loadTemplate(path: string) {
             if (err.response.status === 401) {
                 // Unauthorized
                 emit('tokenExpired', async () => {
-                    await load(path);
+                    await loadTemplate(path);
                     focusOrBlurEditor();
                 });
             }
