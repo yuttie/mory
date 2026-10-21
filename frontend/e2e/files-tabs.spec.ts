@@ -185,6 +185,22 @@ test('lets go of a file once it is deleted', async ({ context, page }) => {
     await expect(remove).toHaveClass(/v-icon-btn--disabled/);
 });
 
+test('lets go of the media selected as thumbnails once they are listed', async ({ context, page }) => {
+    // More than a page of the list, and less than one of thumbnails. Documents, as they tile
+    // without an image to fetch.
+    const papers = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [`papers/${i}.pdf`, '']));
+    await mockBackend(context, { ...FILES, ...papers });
+    await page.goto('/files/media');
+    await expect(page.locator('.media-grid .tile')).toHaveCount(32);
+    await page.getByRole('checkbox', { name: 'Select the page' }).check();
+    const remove = page.getByRole('button', { name: 'Delete the selected files' });
+    await expect(remove).not.toHaveClass(/v-icon-btn--disabled/);
+
+    await page.getByRole('button', { name: 'Show as a list' }).click();
+    await expect(rows(page)).toHaveCount(20);
+    await expect(remove).toHaveClass(/v-icon-btn--disabled/);
+});
+
 test('deletes no file the search hides', async ({ context, page }) => {
     const repository = await mockBackend(context, FILES);
     await page.goto('/files');

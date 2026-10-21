@@ -844,6 +844,12 @@ watch(kind, () => {
     tableEl.value?.$el.querySelector('.v-table__wrapper')?.scrollTo(0, 0);
 });
 
+// So would media selected in one layout and shown in the other, which pages them by a different
+// number: a page of thumbnails selected holds 30 files more than the first page of the list shows.
+watch(mediaLayout, () => {
+    selected.value = [];
+});
+
 // So would a file the search hides, which found again would come back selected.
 watch(matchedEntries, (matched) => {
     const shown = new Set(matched.map((row) => row.key));
