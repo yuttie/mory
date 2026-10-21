@@ -168,6 +168,24 @@ test('keeps the search across tabs, but not the selection', async ({ context, pa
     await expect(remove).toHaveClass(/v-icon-btn--disabled/);
 });
 
+test('opens each tab at its first page, scrolled to the top', async ({ context, page }) => {
+    const notes = Object.fromEntries(Array.from({ length: 50 }, (_, i) => [`notes/${i}.md`, `# Note ${i}\n`]));
+    await mockBackend(context, { ...FILES, ...notes });
+    await page.goto('/files');
+    const info = page.locator('.v-data-table-footer__info');
+    const wrapper = page.locator('.file-table .v-table__wrapper');
+    await expect(info).toHaveText('1-20 of 64');
+    await page.getByRole('button', { name: 'Next page' }).click();
+    await page.getByRole('button', { name: 'Next page' }).click();
+    await expect(info).toHaveText('41-60 of 64');
+    await wrapper.evaluate((element) => element.scrollTo(0, element.scrollHeight));
+    await expect.poll(() => wrapper.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+
+    await tab(page, 'Notes').click();
+    await expect(info).toHaveText('1-20 of 52');
+    await expect.poll(() => wrapper.evaluate((element) => element.scrollTop)).toBe(0);
+});
+
 test('draws an image as its thumbnail, and a document as what it is', async ({ browserName, context, page }) => {
     test.skip(browserName !== 'chromium', 'Firefox does not route a service worker\'s own requests.');
     await mockBackend(context, { ...FILES, 'photos/cat.png': '' });

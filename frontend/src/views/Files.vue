@@ -95,10 +95,12 @@
             />
             <v-data-table
                 v-else
+                ref="tableEl"
                 v-bind:headers="headers"
                 v-bind:items="matchedEntries"
                 v-model="selected"
                 v-model:sort-by="sortBy"
+                v-model:page="page"
                 v-bind:items-per-page="20"
                 v-bind:items-per-page-options="[20, 50, 100, -1]"
                 items-per-page-text=""
@@ -195,6 +197,7 @@
 
 <script lang="ts" setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue';
+import type { ComponentPublicInstance } from 'vue';
 
 import { useRoute, useRouter } from 'vue-router';
 import type { RouteLocationRaw } from 'vue-router';
@@ -326,11 +329,15 @@ const showingTagList = ref(false);
 // Each tab keeps its own sort, as each has columns of its own: one sorted by urgency would sort
 // the notes by nothing.
 const sortBys = reactive<Record<string, DataTableSortItem[]>>({});
+// One table serves every tab, so the page and the scroll it is at would carry over to the next,
+// where row 41 of one list has nothing to do with row 41 of another.
+const page = ref(1);
 // Thumbnails unless asked otherwise, as what tells one image from another is what it shows.
 const mediaLayout = useLocalStorage<'grid' | 'list'>('files-media-layout', 'grid');
 
 // Template Refs
 const queryEl = ref<any>(null);
+const tableEl = ref<ComponentPublicInstance | null>(null);
 
 // Computed properties
 const kind = computed(() => fileKindOf(route.params.kind));
@@ -828,6 +835,8 @@ function deleteSelected() {
 // Files selected on one tab and out of sight on the next would be deleted unseen.
 watch(kind, () => {
     selected.value = [];
+    page.value = 1;
+    tableEl.value?.$el.querySelector('.v-table__wrapper')?.scrollTo(0, 0);
 });
 
 watch(queryText, (q: string | null) => {
