@@ -44,7 +44,22 @@ function rows(page: Page): Locator {
     return tree(page).getByRole('treeitem').locator('.v-list-item-title');
 }
 
+// Until a branch just opened has grown to its height, it clips the rows in it: Playwright scrolls
+// the branch to reach one, and as it grows it scrolls back, moving the row. A press there and its
+// release can then fall on different rows, and click neither: Firefox on the workflow's runner took
+// about 100ms to 160ms to click, in which the row moved by up to 31px. Settled once no transition
+// is under way, which Vue marks from its start, as the animation begins only a frame later, and
+// once the tree's own animations are over: the search field above it holds a loader whose
+// animation is only ever paused.
+async function settled(page: Page): Promise<void> {
+    await expect.poll(() => tree(page).locator('.entry-tree').evaluate((element) => (
+        element.querySelector('[class*="enter-active"], [class*="leave-active"]') === null
+        && element.getAnimations({ subtree: true }).length === 0
+    )), { intervals: [50] }).toBe(true);
+}
+
 async function toggle(page: Page, name: string): Promise<void> {
+    await settled(page);
     await row(page, name).locator('.v-list-item__prepend button').click();
 }
 
@@ -222,7 +237,7 @@ test('opens the task a drop moved during a search where it went', async ({ conte
     await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship', 'Write release notes']);
     await toggle(page, 'Ship');
     await expect(rows(page)).toHaveText(['Launch', 'Write the announcement', 'Ship']);
-    await expect.poll(() => tree(page).locator('.entry-tree').evaluate((element) => element.getAnimations({ subtree: true }).length)).toBe(0);
+    await settled(page);
 
     await drop(page, row(page, 'Write the announcement'), row(page, 'Ship'));
     await expect.poll(() => repository.renames).toEqual([
