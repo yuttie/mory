@@ -266,8 +266,7 @@ interface FileRow {
     folder?: string;
     // What the application reads a system file for.
     purpose?: string;
-    // What the title alone does not say: the project a task is part of, from the task tree, or the
-    // heading a template's notes start with.
+    // What the title alone does not say: the project a task is part of, from the task tree.
     caption?: string;
     status?: string;
     statusOrder?: number;
@@ -431,7 +430,7 @@ const matchedEntries = computed(() => {
 
     for (const entry of kindEntries.value) {
         const entryPath = entry.path.toLowerCase();
-        const entryTitle = entry.title?.toLowerCase() ?? "";
+        const entryTitle = titleOf(entry)?.toLowerCase() ?? "";
         const entryTags = (() => {
             if (entry.metadata === null) {
                 return [];
@@ -463,7 +462,7 @@ const matchedEntries = computed(() => {
             size: entry.size,
             mimeType: entry.mime_type,
             tags: ((entry.metadata || {}).tags || []).map(String).sort(compareTags),
-            title: entry.title,
+            title: titleOf(entry),
             time: dayjs(entry.time),
             ...(() => {
                 if (entry.path.startsWith(".tasks/")) {
@@ -492,9 +491,8 @@ const matchedEntries = computed(() => {
             ...(kind.value === 'tasks' ? taskFields(entry.path) : {}),
             ...(kind.value === 'system' ? { purpose: systemFilePurpose(entry.path) } : {}),
             ...(kind.value === 'events' ? eventFields(entry) : {}),
-            // By the name the Add menu offers it as, rather than by a heading that is often only
-            // placeholders to fill in.
-            ...(kind.value === 'templates' ? { title: templateNameOf(entry.path), caption: entry.title ?? undefined } : {}),
+            // By the name the Add menu offers it as.
+            ...(kind.value === 'templates' ? { title: templateNameOf(entry.path) } : {}),
         });
     }
 
@@ -515,6 +513,11 @@ onMounted(() => {
 useShortcuts(handleKeydown);
 
 // Methods
+// A template by its path, as its heading is often only placeholders to fill in.
+function titleOf(entry: ListEntry2): string | null {
+    return isTemplatePath(entry.path) ? null : entry.title;
+}
+
 // The search goes along, so a query asked of every file can be put to one kind of them.
 function tabRoute(tabKind: FileKind | null) {
     return { name: 'Files', params: { kind: tabKind }, query: route.query };

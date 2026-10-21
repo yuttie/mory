@@ -41,6 +41,8 @@ test('lists each kind of file on its own tab', async ({ context, page }) => {
     await page.goto('/files');
     await expect(tab(page, 'All files')).toHaveAttribute('aria-selected', 'true');
     await expect(rows(page)).toHaveCount(13);
+    // A template by its path, as its heading is placeholders.
+    await expect(rows(page).getByRole('link', { name: 'lecture.template', exact: true })).toBeVisible();
 
     // A template is what a note is started from, so it is not one of them. A note that declares
     // events still is.
@@ -78,10 +80,10 @@ test('gives templates, event notes, system files and the rest tabs of their own'
     await mockBackend(context, FILES);
     await page.goto('/files/templates');
     await expect(rows(page)).toHaveCount(1);
-    // By the name the Add menu offers it as, with its heading beneath.
+    // By the name the Add menu offers it as, rather than its heading of placeholders.
     await expect(rows(page).getByRole('link', { name: 'lecture', exact: true }))
         .toHaveAttribute('href', '/note/lecture.template');
-    await expect(rows(page)).toContainText('XXX lecture YY');
+    await expect(rows(page)).not.toContainText('XXX lecture YY');
     await expect(rows(page).getByRole('link', { name: 'New note' }))
         .toHaveAttribute('href', '/create?from=lecture.template');
 
