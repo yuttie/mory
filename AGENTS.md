@@ -67,7 +67,33 @@ cp -a --reflink=always "$main/frontend/node_modules" frontend/
 mkdir -p backend/target && cp -a --reflink=always "$main/backend/target/debug" backend/target/
 ```
 
-While the worktree holds its branch, nothing else can check the branch out: the user reviews it in the worktree and merges it from `main`. If they want it in the main checkout, free it with `git switch --detach` in the worktree. When they say the branch is merged or dropped, `git worktree remove` it; its target alone grows to tens of GB. Leave worktrees you did not create alone.
+While the worktree holds its branch, nothing else can check the branch out: the user reviews it in the worktree or on its test server and merges it from `main`. If they want it in the main checkout, free it with `git switch --detach` in the worktree. When they say the branch is merged or dropped, stop its test server and `git worktree remove` it; its target alone grows to tens of GB. Leave worktrees you did not create alone.
+
+### Leave a test server running
+
+When you finish a change to `frontend/` or `backend/`, start a test server from the worktree before you report, and leave it running, so the user can try the branch and give feedback while their own servers keep running. It is a pair: the worktree's moried, on a throwaway clone of `backend/notes`, and a Vite dev server pointed at it. The user's moried allows one origin, so it cannot serve a second frontend.
+
+- Pick an `NN` with both ports free (`ss -ltn`): `31NN` for moried and `81NN` for Vite.
+- Everything the server writes goes in the worktree's `.test-server/`, which git ignores and `git worktree remove` takes with it.
+- moried runs there with `.env` linked to the main checkout's `backend/.env`, so the user logs in with their usual dev credentials. What must differ is set on the command line; values already in the environment win over `.env`.
+- Semantic search stays off: on a fresh cache, moried would embed every note again through OpenAI. Turn it on only for a change to semantic search, and ask the user first.
+
+```sh
+mkdir -p .test-server
+git clone -q --bare "$main/backend/notes" .test-server/notes
+ln -s "$main/backend/.env" .test-server/.env
+(cd backend && cargo build)
+(cd .test-server && MORIED_LISTEN=127.0.0.1:31NN MORIED_ORIGIN_ALLOWED=http://localhost:81NN \
+    MORIED_GIT_DIR=notes MORIED_IMAGE_CACHE_DIR=cache MORIED_SEARCH_INDEX_DIR=search-index \
+    MORIED_SEMANTIC_SEARCH_ENABLED=false RUST_LOG=moried=debug \
+    setsid nohup ../backend/target/debug/moried > moried.log 2>&1 < /dev/null &)
+(cd frontend && VITE_APP_API_URL=http://localhost:31NN/api/ VITE_APP_APPLICATION_ROOT=/ \
+    setsid nohup node_modules/.bin/vite --port 81NN --strictPort > ../.test-server/vite.log 2>&1 < /dev/null &)
+```
+
+`setsid` lets the servers outlive your session. moried binds its port only after its first cache sync, about a minute on the dev notes. Check that both ports answer, then report `http://localhost:81NN/` with the branch and what to try; the user logs in once on the new origin.
+
+Note the PIDs `ss -ltnp` shows for the two ports, and stop the servers by those numbers: `$!` names a wrapper, and a `pkill -f` pattern matches the command running it. Keep the same pair through the user's feedback: Vite picks up frontend edits, and after a backend change you rebuild and restart moried on the same port and clone. Stop the servers you started once the user is done with them, since Vite fails with `EMFILE` at around four dev servers on this machine, and never stop one you did not start.
 
 ## Coding standards
 

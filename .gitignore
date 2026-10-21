@@ -1,5 +1,6 @@
 # Configures compose.yaml, secrets included.
 /.env
 
-# Agents' worktrees; see AGENTS.md.
+# Agents' worktrees, and the test server each leaves running in its own; see AGENTS.md.
 /.claude/worktrees/
+/.test-server/
