@@ -40,7 +40,7 @@ function tab(page: Page, name: string) {
 test('lists each kind of file on its own tab', async ({ context, page }) => {
     await mockBackend(context, FILES);
     await page.goto('/files');
-    await expect(tab(page, 'All files')).toHaveAttribute('aria-selected', 'true');
+    await expect(tab(page, 'All')).toHaveAttribute('aria-selected', 'true');
     await expect(rows(page)).toHaveCount(14);
     // A template by its path, as its heading is placeholders.
     await expect(rows(page).getByRole('link', { name: 'lecture.template', exact: true })).toBeVisible();
@@ -62,7 +62,7 @@ test('lists each kind of file on its own tab', async ({ context, page }) => {
     await expect(report.getByRole('link', { name: 'Write the report' }))
         .toHaveAttribute('href', `/tasks-next/${REPORT}/descendants/schedule?task=${REPORT}`);
 
-    await tab(page, 'Media files').click();
+    await tab(page, 'Media').click();
     await expect(page).toHaveURL(/\/files\/media$/);
     const tiles = page.locator('.media-grid .tile');
     await expect(tiles).toHaveCount(2);
@@ -114,7 +114,7 @@ test('gives templates, events, system files and the rest tabs of their own', asy
     await expect(starts).toHaveAttribute('aria-sort', 'ascending');
     await expect.poll(titles).toEqual(['Meeting', 'Holiday', 'Submission', 'Review']);
 
-    await tab(page, 'System files').click();
+    await tab(page, 'System').click();
     await expect(page).toHaveURL(/\/files\/system$/);
     await expect(rows(page)).toHaveCount(3);
     await expect(rows(page).filter({ hasText: '.mory/plans/2026-10.yaml' })).toContainText('Day plans for October 2026');

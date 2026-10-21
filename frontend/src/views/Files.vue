@@ -63,7 +63,7 @@
                     v-bind:to="tabRoute(tab.kind)"
                     v-bind:min-width="$vuetify.display.xs ? 0 : undefined"
                     exact
-                >{{ $vuetify.display.xs ? tab.short : tab.title }}</v-tab>
+                >{{ tab.title }}</v-tab>
             </v-tabs>
             <v-icon-btn
                 v-if="kind === 'media'"
@@ -242,16 +242,16 @@ import { isInOverlay, isTyping, useShortcuts } from '@/keyboard';
 
 import dayjs from 'dayjs';
 
-// The full title is cut short on a phone, where more of them are then in sight at once.
-const TABS: { kind: FileKind | null; value: string; title: string; short: string }[] = [
-    { kind: null, value: 'all', title: 'All files', short: 'All' },
-    { kind: 'notes', value: 'notes', title: 'Notes', short: 'Notes' },
-    { kind: 'tasks', value: 'tasks', title: 'Tasks', short: 'Tasks' },
-    { kind: 'media', value: 'media', title: 'Media files', short: 'Media' },
-    { kind: 'templates', value: 'templates', title: 'Templates', short: 'Templates' },
-    { kind: 'events', value: 'events', title: 'Events', short: 'Events' },
-    { kind: 'system', value: 'system', title: 'System files', short: 'System' },
-    { kind: 'others', value: 'others', title: 'Uncategorized', short: 'Uncategorized' },
+// Each by what it lists alone, as the view's own name says they are files.
+const TABS: { kind: FileKind | null; value: string; title: string }[] = [
+    { kind: null, value: 'all', title: 'All' },
+    { kind: 'notes', value: 'notes', title: 'Notes' },
+    { kind: 'tasks', value: 'tasks', title: 'Tasks' },
+    { kind: 'media', value: 'media', title: 'Media' },
+    { kind: 'templates', value: 'templates', title: 'Templates' },
+    { kind: 'events', value: 'events', title: 'Events' },
+    { kind: 'system', value: 'system', title: 'System' },
+    { kind: 'others', value: 'others', title: 'Uncategorized' },
 ];
 
 // A date as its note gives it, in the reader's zone where it has a time, with how far off it is to
