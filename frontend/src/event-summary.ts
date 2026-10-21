@@ -146,11 +146,13 @@ function seriesOf(value: unknown, start: unknown): Series | null {
         text += ` in ${terms.months.map((month) => MONTHS[month - 1]).join(', ')}`;
     }
 
+    // The schema allows one of `until` and `count`, but the calendar stops at whichever comes
+    // first, and says so here rather than leave one out.
     if (until !== undefined) {
         text += `, until ${until}`;
     }
-    else if (terms.count !== undefined) {
-        text += `, ${plural(terms.count, 'time')}`;
+    if (terms.count !== undefined) {
+        text += until === undefined ? `, ${plural(terms.count, 'time')}` : `, at most ${plural(terms.count, 'time')}`;
     }
     return { words: text, start: { text: first, instant: dayjs(first).valueOf() } };
 }

@@ -33,6 +33,12 @@ describe('describeRepeat', () => {
         expect(describeRepeat({ freq: 'weekly', count: 1 }, start)).toBe('Weekly, 1 time');
     });
 
+    // The calendar stops at whichever comes first.
+    it('says both when it stops at a date and after a count', () => {
+        expect(describeRepeat({ freq: 'weekly', until: '2026-07-31', count: 5 }, start))
+            .toBe('Weekly, until 2026-07-31, at most 5 times');
+    });
+
     it('says nothing of no rule', () => {
         expect(describeRepeat(undefined, start)).toBeUndefined();
     });
