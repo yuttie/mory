@@ -141,6 +141,15 @@ test('gives templates, events, system files and the rest tabs of their own', asy
     await expect(page.getByRole('columnheader', { name: 'Tags' })).toHaveCount(0);
 });
 
+test('shows when each event starts on a phone', async ({ context, page }) => {
+    await page.setViewportSize({ width: 360, height: 740 });
+    await mockBackend(context, FILES);
+    await page.goto('/files/events');
+    // The column the tab sorts by, without a sideways scroll to it.
+    await expect(page.getByRole('columnheader', { name: 'Starts' })).toBeInViewport({ ratio: 1 });
+    await expect(rows(page).filter({ hasText: 'Meeting' }).getByText('2026-04-06 10:00')).toBeInViewport({ ratio: 1 });
+});
+
 test('finds an event by its name, or by the note it is in', async ({ context, page }) => {
     await mockBackend(context, FILES);
     await page.goto('/files/events?q=review');

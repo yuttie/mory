@@ -110,6 +110,7 @@
                 v-bind:show-select="kind !== 'events'"
                 fixed-header
                 class="file-table flex-grow-1"
+                v-bind:class="{ 'event-table': kind === 'events' }"
             >
                 <template v-slot:item.path="{ item }">
                     <div class="path" v-bind:title="item.title ?? item.path">
@@ -976,8 +977,15 @@ watch(queryText, (q: string | null) => {
 .note {
     display: grid;
     grid-template-columns: minmax(0, max-content);
-    min-width: 10em;
+    min-width: 5em;
     white-space: nowrap;
+}
+
+// Lower for an event, whose table has no tags to widen it, and is wider than the screen only on a
+// phone. There the title's floor, and the note's at 10em, left a 360 px screen only the event and
+// its note, and when it starts, which the tab sorts by, a sideways scroll away.
+.event-table .path {
+    min-width: 8em;
 }
 
 .path,
