@@ -48,15 +48,14 @@
         </AppBarContent>
         <div class="files-bar d-flex align-center">
             <!-- `exact`: every tab is the one route, and only the tab whose kind is the address's
-                 own is current. -->
+                 own is current. Where they do not all fit, they scroll, and the current one is
+                 brought into sight. -->
             <v-tabs
                 v-bind:model-value="currentTab"
-                v-bind:grow="$vuetify.display.xs"
                 color="primary"
                 class="flex-grow-1"
             >
-                <!-- On a phone, the width a tab is given at least would put the last tab out of
-                     sight even with the short titles. -->
+                <!-- On a phone, the width a tab is given at least would leave room for three. -->
                 <v-tab
                     v-for="tab of TABS"
                     v-bind:key="tab.value"
@@ -186,6 +185,7 @@ import type { DataTableHeader, DataTableSortItem } from 'vuetify';
 import {
     mdiCalendarClock,
     mdiCheckboxMarkedOutline,
+    mdiCogOutline,
     mdiDelete,
     mdiFileDocumentOutline,
     mdiFileOutline,
@@ -203,7 +203,8 @@ import { useFilesStore } from '@/stores/files';
 import { useTasksStore } from '@/stores/tasks';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
 import { routeForMime } from '@/file-route';
-import { fileKindOf, isOfKind } from '@/file-kinds';
+import { EVENTS_DIR } from '@/event-note';
+import { fileKindOf, isOfKind, isTemplatePath, SYSTEM_DIR } from '@/file-kinds';
 import type { FileKind } from '@/file-kinds';
 import { STATUS_KINDS, STATUS_LABEL } from '@/task';
 import { statusColor } from '@/status-color';
@@ -220,12 +221,16 @@ import { isInOverlay, isTyping, useShortcuts } from '@/keyboard';
 
 import dayjs from 'dayjs';
 
-// The full title is cut short on a phone, where four of them would not fit beside the button.
+// The full title is cut short on a phone, where more of them are then in sight at once.
 const TABS: { kind: FileKind | null; value: string; title: string; short: string }[] = [
     { kind: null, value: 'all', title: 'All types', short: 'All' },
     { kind: 'notes', value: 'notes', title: 'Notes', short: 'Notes' },
     { kind: 'tasks', value: 'tasks', title: 'Tasks', short: 'Tasks' },
     { kind: 'media', value: 'media', title: 'Media files', short: 'Media' },
+    { kind: 'templates', value: 'templates', title: 'Templates', short: 'Templates' },
+    { kind: 'events', value: 'events', title: 'Events', short: 'Events' },
+    { kind: 'system', value: 'system', title: 'System files', short: 'System' },
+    { kind: 'others', value: 'others', title: 'Others', short: 'Others' },
 ];
 
 // A task's date as its note gives it, in the reader's zone where it has a time, coloured as the task
@@ -334,6 +339,12 @@ const headers = computed<DataTableHeader<FileRow>[]>(() => {
             ];
         case 'media':
             return [title, modified, size, type];
+        case 'templates':
+            return [title, modified, size];
+        case 'events':
+            return [title, modified, size, tags];
+        case 'system':
+            return [title, modified, size];
         default:
             return [title, modified, size, type, tags];
     }
@@ -424,8 +435,14 @@ const matchedEntries = computed(() => {
                 if (entry.path.startsWith(".tasks/")) {
                     return { icon: mdiCheckboxMarkedOutline, iconColor: "#ffa600" };
                 }
-                else if (entry.path.startsWith(".events/")) {
+                else if (entry.path.startsWith(EVENTS_DIR)) {
                     return { icon: mdiCalendarClock, iconColor: "#b95050" };
+                }
+                else if (entry.path.startsWith(SYSTEM_DIR)) {
+                    return { icon: mdiCogOutline, iconColor: "#757575" };
+                }
+                else if (isTemplatePath(entry.path)) {
+                    return { icon: mdiFileDocumentOutline, iconColor: "#5fa3c4" };
                 }
                 else if (entry.mime_type.startsWith("image/")) {
                     return { icon: mdiImageOutline, iconColor: "#62b950" };

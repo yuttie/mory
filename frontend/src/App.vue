@@ -627,6 +627,7 @@ import NewTaskDialog from '@/components/NewTaskDialog.vue';
 import QuickAddTasksDialog from '@/components/QuickAddTasksDialog.vue';
 import TemplateMenuItem from '@/components/TemplateMenuItem.vue';
 import { requestEventAlarms } from '@/event-alarms';
+import { isTemplatePath } from '@/file-kinds';
 import { canHaveChildNote } from '@/note-forest';
 import { useFilesStore } from '@/stores/files';
 import { jwtDecode } from 'jwt-decode';
@@ -896,7 +897,7 @@ function loadTemplates() {
         .then(entries => {
             templates.value = entries
                 .map((entry: ListEntry2) => entry.path)
-                .filter((path: string) => path.match(/\.template$/i));
+                .filter(isTemplatePath);
         }).catch(error => {
             if (error.response) {
                 if (error.response.status === 401) {

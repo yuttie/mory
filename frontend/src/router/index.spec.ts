@@ -16,6 +16,7 @@ vi.mock('@/views/Note.vue', () => ({ default: {} }));
 vi.mock('@/views/Files.vue', () => ({ default: {} }));
 
 import { RouterLink } from 'vue-router';
+import { FILE_KINDS } from '@/file-kinds';
 import router from '@/router';
 import { taskRoute, tasksRoute } from '@/task-route';
 
@@ -64,8 +65,14 @@ describe('the Files view', () => {
         expect(isLinkActive('/files')).toBe(true);
     });
 
+    it('has a tab for every kind of file', () => {
+        for (const kind of FILE_KINDS) {
+            expect(router.resolve(`/files/${kind}`).params.kind).toBe(kind);
+        }
+    });
+
     it('has no tab for any other kind', () => {
-        expect(router.resolve('/files/events').matched).toEqual([]);
+        expect(router.resolve('/files/settings').matched).toEqual([]);
     });
 });
 
