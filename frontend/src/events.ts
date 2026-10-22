@@ -982,9 +982,15 @@ function taskDateEvent(
     const own = taskAlarmOf((task as { alarms?: unknown }).alarms, field);
     checkAlarms(own, name, entry, errors);
 
+    // Refused as an event's start is, which `<v-calendar>` would throw on.
+    const start = toWallClock(value);
+    if (!CALENDAR_PARSE.test(start)) {
+        errors.push([field, value, name, entry.path, entry.title]);
+        return;
+    }
+
     // Compared as dates, not as instants: the window's ends are bare dates, so an instant
     // comparison would drop a date late on its last day.
-    const start = toWallClock(value);
     const day = start.slice(0, 10);
     if (day < window.from || day > window.to) {
         return;

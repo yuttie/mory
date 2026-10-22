@@ -197,6 +197,12 @@ describe.each(Object.keys(tasks))('%s', (name) => {
     it('has the dates the MCP tool returns for it, finished as the tool says', () => {
         expect(drawnTaskDates(name, tasks[name])).toEqual(returnedTaskDates(tasks[name]));
     });
+
+    it('hands the calendar only dates it reads', () => {
+        for (const event of taskDatesFromEntries([taskEntryOf(name, tasks[name])], window).events) {
+            expect(() => parseEvent(event, 0, 'start', 'end'), event.start).not.toThrow();
+        }
+    });
 });
 
 it('compares some dates, and some of them finished', () => {

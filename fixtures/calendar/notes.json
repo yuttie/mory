@@ -3101,6 +3101,21 @@
         "due_by  2024-08-19 09:00:00-07:00  todo"
       ]
     },
+    "tasks/unreadable-dates-6f1d3c2e-8a4b-4c57-9d1e-2b7a5f0f4c31.md": {
+      "alarms": [],
+      "alarmsWithDefaults": [],
+      "metadata": {
+        "task": {
+          "deadline": "August 20, 2024",
+          "due_by": "2024/08/13 11:00",
+          "progress": 0,
+          "status": {
+            "kind": "todo"
+          }
+        }
+      },
+      "windowDates": []
+    },
     "tasks/unset-6f1d3c2e-8a4b-4c57-9d1e-2b7a5f0edc31.md": {
       "alarms": [
         "2024-08-26  due_by  none"

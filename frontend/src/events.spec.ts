@@ -1253,6 +1253,19 @@ describe('taskDatesFromEntries', () => {
             ['due_by', 'sometime', 'Submit the paper', `.tasks/${UUID_A}.md`, 'Submit the paper'],
         ]);
     });
+
+    // `dayjs` reads both, and `<v-calendar>` throws on either, blanking the calendar.
+    it('reports a task date the calendar cannot read rather than drawing it', () => {
+        const { events, errors } = taskDates([
+            taskEntry(UUID_A, { status: { kind: 'todo' }, due_by: '2026/03/01 11:00', deadline: 'March 4, 2026' }),
+        ]);
+
+        expect(events).toEqual([]);
+        expect(errors.map((e) => [e[0], e[1]])).toEqual([
+            ['due_by', '2026/03/01 11:00'],
+            ['deadline', 'March 4, 2026'],
+        ]);
+    });
     it('draws a task date in the colour the configuration names', () => {
         const { events } = taskDatesFromEntries([
             taskEntry(UUID_A, {
