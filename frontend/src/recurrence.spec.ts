@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { EventRepeat } from '@/api';
-import { RecurrenceError, expandRule, parseWallClock, readRule } from '@/recurrence';
+import { RecurrenceError, expandRule, parseWallClock, readDatetime, readRule } from '@/recurrence';
 
 describe('parseWallClock', () => {
     it('reads a date, a datetime, and seconds', () => {
@@ -20,6 +20,83 @@ describe('parseWallClock', () => {
     it('rejects what it cannot read', () => {
         expect(parseWallClock('not a time')).toBeNull();
         expect(parseWallClock('25/06/2015')).toBeNull();
+    });
+});
+
+describe('a day none of a rule\'s months has', () => {
+    // rrule.js looked for one until the year 9999, seconds a time for a daily rule.
+    it('is refused at once, from either end of the month', () => {
+        for (const bymonthday of [[30], [31, -30], [-31]]) {
+            const began = performance.now();
+            expect(() => expandRule(
+                { freq: 'daily', bymonth: [2], bymonthday } as EventRepeat, '2024-01-01 09:00', '2026-01-01', '2026-12-31',
+            ), JSON.stringify(bymonthday)).toThrow(RecurrenceError);
+            expect(performance.now() - began).toBeLessThan(100);
+        }
+        expect(() => expandRule(
+            { freq: 'yearly', bymonth: [4, 6, 9, 11], bymonthday: [31] } as EventRepeat, '2024-01-01 09:00', '2026-01-01', '2026-12-31',
+        )).toThrow(RecurrenceError);
+    });
+
+    it('is no reason to refuse a day another of them has', () => {
+        expect(expandRule(
+            { freq: 'yearly', bymonth: [2, 4], bymonthday: [30, 31] } as EventRepeat, '2024-01-01 09:00', '2024-01-01', '2025-12-31',
+        )).toEqual(['2024-04-30 09:00', '2025-04-30 09:00']);
+        expect(expandRule(
+            { freq: 'yearly', bymonth: [2], bymonthday: [29] } as EventRepeat, '2024-01-01 09:00', '2024-01-01', '2028-12-31',
+        )).toEqual(['2024-02-29 09:00', '2028-02-29 09:00']);
+    });
+});
+
+describe('readDatetime', () => {
+    const iso = (value: unknown) => readDatetime(value)?.toISOString() ?? null;
+
+    it('reads what dayjs reads itself, in the reader\'s zone', () => {
+        vi.stubEnv('TZ', 'Asia/Tokyo');
+        try {
+            expect(iso('2024-05-01 10:00')).toBe('2024-05-01T01:00:00.000Z');
+            expect(iso('2024-5-1')).toBe('2024-04-30T15:00:00.000Z');
+            expect(iso('2024/08/13 11:00')).toBe('2024-08-13T02:00:00.000Z');
+            // `dayjs` rolls a day past its month's end over.
+            expect(iso('2024-02-30 10:00')).toBe('2024-03-01T01:00:00.000Z');
+        }
+        finally {
+            vi.unstubAllEnvs();
+        }
+    });
+
+    it('reads an ISO datetime with its offset as V8 does, in any engine', () => {
+        expect(iso('2024-05-01T10:00:00+09:00')).toBe('2024-05-01T01:00:00.000Z');
+        expect(iso('2024-05-01 10:00 -0700')).toBe('2024-05-01T17:00:00.000Z');
+        expect(iso('2024-05-01T10:00:00.1234Z')).toBe('2024-05-01T10:00:00.123Z');
+        expect(iso('2024-05-13Z')).toBe('2024-05-13T00:00:00.000Z');
+        // A day to 31 rolls over, as `dayjs` rolls its own; an hour of 24 is the day's end.
+        expect(iso('2024-02-30T10:00+09:00')).toBe('2024-03-01T01:00:00.000Z');
+        expect(iso('2024-05-14 24:00+09:00')).toBe('2024-05-14T15:00:00.000Z');
+        expect(iso('0099-01-01T00:00Z')).toBe('0099-01-01T00:00:00.000Z');
+    });
+
+    it('refuses what V8 refuses of one', () => {
+        for (const value of [
+            '2024-01-32T10:00+09:00', '2024-13-01T10:00Z', '2024-02-00T10:00Z',
+            '2024-05-14 24:01+09:00', '2024-05-14 10:60Z', '2024-05-14 10:00:60Z',
+            // A bare date only before `Z`.
+            '2024-05-12+09:00',
+        ]) {
+            expect(readDatetime(value), value).toBeNull();
+        }
+    });
+
+    // Each engine's `Date` reads its own set of these, and moried none.
+    it('refuses what only `Date` would read', () => {
+        for (const value of ['August 12, 2024 10:00', '9/19/2024 11:00', '11', '2024-09-26 10:00 ', 'Thu, 01 May 2024 10:00:00 GMT']) {
+            expect(readDatetime(value), value).toBeNull();
+        }
+    });
+
+    it('refuses what is not text, which `dayjs` would take for an epoch', () => {
+        expect(readDatetime(20240501)).toBeNull();
+        expect(readDatetime(null)).toBeNull();
     });
 });
 
@@ -228,9 +305,21 @@ describe('expandRule reading until in the rule\'s zone', () => {
                 { freq: 'daily', tz: 'Mars/Olympus', until }, start, '2024-05-01', '2024-05-31',
             ), start).toThrow(RecurrenceError);
         }
-        expect(() => expandRule(
-            { freq: 'daily', tz: 0, until } as unknown as EventRepeat, '2024-05-01 09:00', '2024-05-01', '2024-05-31',
-        )).not.toThrow();
+    });
+
+    // moried reads only a zone's name, and Intl reads more, each browser its own set; `||` read
+    // `0` and `false` as the reader's zone.
+    it('refuses what is not a zone moried knows, though Intl may', () => {
+        for (const tz of [0, false, ['Asia/Tokyo'], 'JST', 'BST', '+09:00', 'GMT+9']) {
+            expect(() => expandRule(
+                { freq: 'daily', tz, until } as unknown as EventRepeat, '2024-05-01 09:00', '2024-05-01', '2024-05-31',
+            ), JSON.stringify(tz)).toThrow(RecurrenceError);
+        }
+        for (const tz of ['EST', 'Japan', 'asia/TOKYO', 'Etc/GMT-9']) {
+            expect(expandRule(
+                { freq: 'daily', tz, count: 1 } as unknown as EventRepeat, '2024-05-01 09:00', '2024-05-01', '2024-05-31',
+            ), tz).toHaveLength(1);
+        }
     });
 });
 

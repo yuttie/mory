@@ -17,8 +17,8 @@ import dayjs from 'dayjs';
 
 import { occurrencesOf } from '@/api';
 import type { MetadataEvent } from '@/api';
-import { toWallClock } from '@/events';
-import { RecurrenceError, readRule, ruleStart, ruleUntil, termsOf } from '@/recurrence';
+import { isCalendarReadable, toWallClock } from '@/events';
+import { RecurrenceError, readDatetime, readRule, ruleStart, ruleUntil, termsOf } from '@/recurrence';
 import type { RuleTerms, WeekdayName } from '@/recurrence';
 
 // A start where the calendar would draw it, in the reader's zone, with the instant to sort it by.
@@ -153,9 +153,6 @@ function seriesOf(value: unknown, start: unknown): Series | null {
         // "the 3rd Wed", but "Mon" alone.
         text += counted ? ` on the ${days.join(', ')}` : ` on ${days.join(', ')}`;
     }
-    else if (terms.everyDay && repeat.freq !== 'daily') {
-        text += ' on every day';
-    }
     if (terms.months.length > 0) {
         text += ` in ${terms.months.map((month) => MONTHS[month - 1]).join(', ')}`;
     }
@@ -172,11 +169,15 @@ function seriesOf(value: unknown, start: unknown): Series | null {
 }
 
 function startOf(value: unknown): EventStart | undefined {
-    // `typeof` first: `dayjs(20240501)` is a valid epoch, as `buildOccurrence` says.
-    if (typeof value !== 'string' || !dayjs(value).isValid()) {
+    // As the calendar reads it, and not as `Date` might.
+    if (typeof value !== 'string' || readDatetime(value) === null) {
         return undefined;
     }
+    // `2026/10/13` is a date to `dayjs` and none to `<v-calendar>`, so the calendar refuses it.
     const text = toWallClock(value);
+    if (!isCalendarReadable(text)) {
+        return undefined;
+    }
     return { text, instant: dayjs(text).valueOf() };
 }
 

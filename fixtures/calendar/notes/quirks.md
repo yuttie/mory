@@ -93,6 +93,61 @@ events:
             byday: [sun, mon]
             wkst: toString
             count: 4
+    Start the calendar cannot read:
+        start: 2024/08/13 11:00
+    Start only Date reads:
+        start: August 12, 2024 10:00
+    End only Date reads:
+        start: 2024-09-17 10:00
+        end: September 17, 2024 11:00
+    End in American order:
+        start: 2024-09-19 10:00
+        end: 9/19/2024 11:00
+    End the calendar cannot read:
+        start: 2024-09-20 10:00
+        end: 2024/09/20 11:00
+    True as an end:
+        start: 2024-09-21 10:00
+        end: true
+    Number as an end:
+        start: 2024-09-22 10:00
+        end: 90
+    Duration without a number:
+        start: 2024-09-23 10:00
+        end: +.h
+    Time of day with a fraction:
+        start: 2024-09-24 10:00
+        end: '11:30.5'
+    Time of day Date reads as a year:
+        start: 2024-09-25 10:00
+        end: '11'
+    Start with a space after it:
+        start: '2024-09-26 10:00 '
+    Exclusions only Date reads:
+        start: 2024-10-21 10:00
+        repeat:
+            freq: daily
+            count: 6
+        exclusions:
+            - October 22, 2024 10:00
+            - 10/26/2024 10:00
+            - 2024-10-23 10:00
+    Override only Date reads:
+        start: 2024-10-28 10:00
+        repeat:
+            freq: daily
+            count: 2
+        overrides:
+            - at: October 29, 2024 10:00
+              start: 2024-10-29 15:00
+    Day past its month's end with an offset:
+        start: 2024-02-30 10:00+09:00
+    Day past its month's end:
+        start: 2024-02-30 11:00
+    Midnight written as the day's end:
+        start: 2024-08-03 24:00
+    Date past its month's end:
+        start: 2024-04-31
 ---
 
 # Quirks

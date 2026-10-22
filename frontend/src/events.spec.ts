@@ -80,6 +80,21 @@ describe('normalizeEndTime', () => {
     it('reports an unusable end as null', () => {
         expect(normalizeEndTime('not a time', '2024-05-01 10:00')).toBeNull();
     });
+
+    it('refuses an end that is not text, which YAML makes of a bare number', () => {
+        expect(normalizeEndTime(90, '2024-05-01 10:00')).toBeNull();
+        expect(normalizeEndTime(true, '2024-05-01 10:00')).toBeNull();
+        expect(normalizeEndTime(null, '2024-05-01 10:00')).toBeNull();
+    });
+
+    it('refuses a duration with no number in it', () => {
+        expect(normalizeEndTime('+.h', '2024-05-01 10:00')).toBeNull();
+    });
+
+    it('spells out a time of day the calendar could not read as written', () => {
+        expect(normalizeEndTime('11:30.5', '2024-05-01 10:00')).toBe('2024-05-01 11:30');
+        expect(normalizeEndTime('9:05', '2024-05-01 08:00')).toBe('2024-05-01 09:05');
+    });
 });
 
 describe('eventEndsAt', () => {
@@ -506,6 +521,14 @@ describe('toWallClock', () => {
         expect(toWallClock('2024-05-01')).toBe('2024-05-01');
     });
 
+    // As `dayjs` reads it, and so as moried rings it: the calendar has no cell for February 30.
+    it('rolls a part past its range over into the next', () => {
+        expect(toWallClock('2024-02-30 11:00')).toBe('2024-03-01 11:00');
+        expect(toWallClock('2024-08-03 24:00')).toBe('2024-08-04 00:00');
+        expect(toWallClock('2024-04-31')).toBe('2024-05-01');
+        expect(toWallClock('2024-12-31 23:59:60')).toBe('2025-01-01 00:00');
+    });
+
     it('returns anything it cannot read untouched, for the error path to report', () => {
         expect(toWallClock('not a time')).toBe('not a time');
     });
@@ -644,6 +667,8 @@ describe('malformed frontmatter', () => {
         ['a half-typed date', { start: 2024 }],
         ['a repeat that is not a mapping', { start: '2024-05-01 09:00', repeat: 'daily' }],
         ['an unknown frequency', { start: '2024-05-01 09:00', repeat: { freq: 'fortnightly' } }],
+        ['a frequency in a list', { start: '2024-05-01 09:00', repeat: { freq: ['daily'] } }],
+        ['a frequency every object has', { start: '2024-05-01 09:00', repeat: { freq: 'toString' } }],
         // Schema-valid: the weekday pattern admits a zero ordinal, but rrule refuses it.
         ['a zero ordinal', { start: '2024-05-01', repeat: { freq: 'monthly', byday: ['0wed'] } }],
         ['an ordinal under freq: weekly', {
@@ -682,6 +707,44 @@ describe('malformed frontmatter', () => {
         for (const event of events) {
             expect(typeof event.start).toBe('string');
         }
+    });
+
+    // `<v-calendar>` throws on what its own regex does not match, blanking the calendar.
+    it('reports a start or an end the calendar cannot read rather than drawing it', () => {
+        const { events, errors } = derive([
+            entry('a.md', {
+                Slashes: { start: '2024/08/13 11:00' },
+                Words: { start: 'August 12, 2024 10:00' },
+                'Slashed end': { start: '2024-09-20 10:00', end: '2024/09/20 11:00' },
+                'Numeric end': { start: '2024-09-22 10:00', end: 90 as never },
+                Fine: { start: '2024-09-23 10:00', end: '11:30.5' },
+            }),
+        ]);
+
+        expect(events.map((e) => [e.name, e.start, e.end])).toEqual([['Fine', '2024-09-23 10:00', '2024-09-23 11:30']]);
+        expect(errors.map((e) => [e[2], e[0], e[1]])).toEqual([
+            ['Slashes', 'start', '2024/08/13 11:00'],
+            ['Words', 'start', 'August 12, 2024 10:00'],
+            ['Slashed end', 'end', '2024/09/20 11:00'],
+            ['Numeric end', 'end', 90],
+        ]);
+    });
+
+    // `Date` reads it, in its own way in each engine, and moried does not, so excluding it would
+    // leave an alarm for an occurrence the calendar does not show.
+    it('reports an exclusion only Date reads, and excludes nothing by it', () => {
+        const { events, errors } = derive([
+            entry('a.md', {
+                Daily: {
+                    start: '2024-10-21 10:00',
+                    repeat: { freq: 'daily', count: 3 },
+                    exclusions: ['October 22, 2024 10:00'],
+                },
+            }),
+        ]);
+
+        expect(events.map((e) => e.start)).toEqual(['2024-10-21 10:00', '2024-10-22 10:00', '2024-10-23 10:00']);
+        expect(errors.map((e) => [e[0], e[1]])).toEqual([['exclusions', 'October 22, 2024 10:00']]);
     });
 });
 
@@ -1217,6 +1280,19 @@ describe('taskDatesFromEntries', () => {
             ['due_by', 'sometime', 'Submit the paper', `.tasks/${UUID_A}.md`, 'Submit the paper'],
         ]);
     });
+
+    // `dayjs` reads both, and `<v-calendar>` throws on either, blanking the calendar.
+    it('reports a task date the calendar cannot read rather than drawing it', () => {
+        const { events, errors } = taskDates([
+            taskEntry(UUID_A, { status: { kind: 'todo' }, due_by: '2026/03/01 11:00', deadline: 'March 4, 2026' }),
+        ]);
+
+        expect(events).toEqual([]);
+        expect(errors.map((e) => [e[0], e[1]])).toEqual([
+            ['due_by', '2026/03/01 11:00'],
+            ['deadline', 'March 4, 2026'],
+        ]);
+    });
     it('draws a task date in the colour the configuration names', () => {
         const { events } = taskDatesFromEntries([
             taskEntry(UUID_A, {
@@ -1537,6 +1613,46 @@ describe('a repeat interval written by hand', () => {
             expect(derived.errors, JSON.stringify(interval)).toHaveLength(1);
             expect(derived.errors[0][0]).toBe('repeat');
             expect(String(derived.errors[0][1])).toContain('interval must be a whole number');
+        }
+    });
+});
+
+describe('a repeat frequency written by hand', () => {
+    // JavaScript makes the key `daily` of `[daily]`, so the calendar drew it daily, and moried,
+    // refusing it, rang for none of it.
+    it('refuses anything but a frequency\'s own name, with a reason', () => {
+        for (const freq of [['daily'], [['daily']], 'Daily', 'toString', '__proto__', 3, null, undefined]) {
+            const derived = eventsFromEntries([entry('a.md', {
+                Review: { start: '2024-05-06 09:00', repeat: { freq: freq as never, count: 2 } },
+            })], ANY_WINDOW);
+            expect(derived.events, JSON.stringify(freq)).toEqual([]);
+            expect(derived.errors.map((error) => error[1]), JSON.stringify(freq)).toEqual([`Unknown frequency ${JSON.stringify(freq)}`]);
+        }
+    });
+});
+
+describe('a repeat count written by hand', () => {
+    // rrule.js read `'3'` as three, `three` as one and a negative or fractional count as no limit,
+    // and moried, refusing each, rang for none of what the calendar drew.
+    const yearly = (count: unknown) => eventsFromEntries([entry('a.md', {
+        Review: {
+            start: '2024-05-06 09:00',
+            repeat: { freq: 'yearly', count: count as number },
+        },
+    })], { from: '2024-01-01', to: '2030-12-31' });
+
+    it('takes a blank count as no limit, and a whole number from one up', () => {
+        expect(yearly(null).events).toHaveLength(7);
+        expect(yearly(2).events.map((event) => event.start)).toEqual(['2024-05-06 09:00', '2025-05-06 09:00']);
+        expect(yearly(4294967295).events).toHaveLength(7);
+    });
+
+    it('refuses any other, with a reason, and draws nothing from the rule', () => {
+        for (const count of [0, -1, 2.5, 4294967296, '3', 'three', true, false, '', [3], { n: 3 }]) {
+            const derived = yearly(count);
+            expect(derived.events, JSON.stringify(count)).toEqual([]);
+            expect(derived.errors, JSON.stringify(count)).toHaveLength(1);
+            expect(String(derived.errors[0][1])).toContain('count must be a whole number');
         }
     });
 });

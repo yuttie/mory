@@ -21,6 +21,7 @@ import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
 
 import type { EventRepeat } from '@/api';
+import TIME_ZONES from '@/time-zones.json';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -64,8 +65,58 @@ export function parseWallClock(value: unknown): WallClock | null {
     };
 }
 
+// `dayjs`'s own pattern, which it tries before handing a string to `Date`.
+const DAYJS_PARSE =
+    /^(\d{4})[-/]?(\d{1,2})?[-/]?(\d{0,2})[Tt\s]*(\d{1,2})?:?(\d{1,2})?:?(\d{1,2})?[.:]?(\d+)?$/;
+
+// What a note leaves to `Date`: an ISO datetime with its offset, or a date before `Z`.
+const WITH_OFFSET =
+    /^\s*(\d{4})-(\d{2})-(\d{2})(?:[Tt ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?)?\s*(?:([Zz])|([+-])(\d{2}):?(\d{2}))\s*$/;
+
+/// A datetime a note wrote, as `dayjs` reads it, or `null` where it does not.
+///
+/// What `dayjs` leaves to `Date` is read here instead, as V8 reads it, and only an ISO datetime
+/// with its offset at that: `Date` reads `August 12, 2024` and `9/19/2024` as well, and each engine
+/// a set of its own. `dayjs_parse` in `backend/src/note_events.rs` reads the same, so moried rings
+/// for what the calendar draws, in any browser.
+export function readDatetime(value: unknown): dayjs.Dayjs | null {
+    // `unknown`: `dayjs(20240501)` is a valid epoch, and a YAML integer would pass for one.
+    if (typeof value !== 'string') {
+        return null;
+    }
+    if (!/z$/i.test(value) && DAYJS_PARSE.test(value)) {
+        const parsed = dayjs(value);
+        return parsed.isValid() ? parsed : null;
+    }
+    const m = WITH_OFFSET.exec(value);
+    // V8 takes a bare date only before `Z`.
+    if (m === null || (m[4] === undefined && m[8] === undefined)) {
+        return null;
+    }
+    const [year, month, day, hour, minute, second] = [1, 2, 3, 4, 5, 6].map((i) => Number(m[i] ?? 0));
+    const ms = Number((m[7] ?? '0').slice(0, 3).padEnd(3, '0'));
+    // V8 holds a day to 31 in any month and rolls the rest over, as `dayjs` does its own; an hour
+    // of 24 is only the day's end.
+    const endOfDay = hour === 24 && minute === 0 && second === 0 && ms === 0;
+    if (month < 1 || month > 12 || day < 1 || day > 31 || (hour > 23 && !endOfDay) || minute > 59 || second > 59) {
+        return null;
+    }
+    const offset = m[8] !== undefined ? 0 : (m[9] === '-' ? -1 : 1) * (Number(m[10]) * 60 + Number(m[11]));
+    // `setUTCFullYear` rather than `Date.UTC`, which takes a year below 100 as one in the 1900s.
+    const at = new Date(0);
+    at.setUTCFullYear(year, month - 1, day);
+    at.setUTCHours(hour, minute - offset, second, ms);
+    return dayjs(at);
+}
+
 function toAnchor(w: WallClock): Date {
     return new Date(Date.UTC(w.year, w.month - 1, w.day, w.hour, w.minute, w.second));
+}
+
+/// A wall clock spelt as the calendar reads it, a part past its range rolled over into the next
+/// larger one, as rrule rolls a rule's start: `2024-02-30` is March 1, and `24:00` the next day.
+export function formatWallClock(w: WallClock): string {
+    return formatAnchor(toAnchor(w), w.hasTime);
 }
 
 function formatAnchor(anchor: Date, hasTime: boolean): string {
@@ -98,10 +149,27 @@ const HAS_OFFSET = /(?:Z|[+-]\d{2}:?\d{2})$/;
 
 export class RecurrenceError extends Error {}
 
-function toWeekday(value: string): RRuleWeekday {
-    const m = BYDAY.exec(value);
+// The ordinals moried's `rrule` crate takes in a month and in a year, the last and the first it
+// can count, having divided 31 and 366 days by 7. RFC 5545 allows `-5fri` in a month, and rrule.js
+// draws it, but moried refuses the rule.
+const ORDINALS: Record<string, [number, number]> = { monthly: [-4, 5], yearly: [-52, 53] };
+
+// The most days each month can have, February's in a leap year.
+const LONGEST_MONTHS = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+/// A whole number from `first` to `last`, never 0, or a `RecurrenceError` naming `what` it is not.
+function wholeIn(value: unknown, first: number, last: number, what: string): number {
+    if (typeof value !== 'number' || !Number.isInteger(value) || value === 0 || value < first || value > last) {
+        throw new RecurrenceError(`${JSON.stringify(value)} is no ${what}`);
+    }
+    return value;
+}
+
+function toWeekday(value: unknown, freq: string): RRuleWeekday {
+    // Only text: `String([['mon']])` is `mon`, and moried takes no list for a weekday.
+    const m = typeof value === 'string' ? BYDAY.exec(value) : null;
     if (m === null) {
-        throw new RecurrenceError(`Unknown weekday "${value}"`);
+        throw new RecurrenceError(`Unknown weekday ${JSON.stringify(value)}`);
     }
     const weekday = WEEKDAYS[m[2]];
     if (m[1] === undefined) {
@@ -112,12 +180,16 @@ function toWeekday(value: string): RRuleWeekday {
         // rrule throws on a zero ordinal, and the schema's pattern admits `0wed`.
         throw new RecurrenceError(`"${value}" needs a non-zero ordinal`);
     }
+    // "the third Wednesday" needs a month or a year to count within: rrule.js drops the ordinal
+    // under a day, drawing every Monday for `2mon`, where moried drew every day.
+    if (!Object.hasOwn(ORDINALS, freq)) {
+        throw new RecurrenceError(`An ordinal weekday means nothing under freq: ${freq}`);
+    }
+    const [first, last] = ORDINALS[freq];
+    if (ordinal < first || ordinal > last) {
+        throw new RecurrenceError(`"${value}" counts past what freq: ${freq} counts, ${first} to ${last}`);
+    }
     return weekday.nth(ordinal);
-}
-
-function hasOrdinal(value: string): boolean {
-    const m = BYDAY.exec(value);
-    return m !== null && m[1] !== undefined;
 }
 
 /// A list in a rule as the dialect means it, whatever the frontmatter held: a single value is a
@@ -132,22 +204,46 @@ function listOf(value: unknown): unknown[] | undefined {
     return list.length === 0 ? undefined : list;
 }
 
+// The zones moried's `chrono-tz` knows, by name in any case, as Intl takes one. Intl knows more,
+// each browser its own set: ICU's `JST`, and its `BST`, which is Dhaka's, and offsets such as
+// `+09:00`. moried rings in none of them, and the calendar drew in each.
+const ZONES = new Map(TIME_ZONES.map((name) => [name.toLowerCase(), name]));
+
+/// The zone a rule's `tz` names, as moried reads it: `null` and `''` are the reader's own, and
+/// anything else must be a zone's name, or a `RecurrenceError`. JavaScript's `||` read `0` and
+/// `false` as the reader's as well.
+function zoneOf(tz: unknown): string | undefined {
+    if (tz === null || tz === '') {
+        return undefined;
+    }
+    const name = typeof tz === 'string' ? ZONES.get(tz.toLowerCase()) : undefined;
+    if (name === undefined) {
+        throw new RecurrenceError(`Unknown timezone ${JSON.stringify(tz)}`);
+    }
+    return name;
+}
+
 /// The wall clock in `tz` at the instant `value` names, which carries its offset.
 ///
-/// The zone is read as `dayjs.tz` reads it for each occurrence: a blank one is the reader's own,
-/// and one Intl does not know is refused. Intl throws a `RangeError` for it, which out of here
-/// would blank the calendar rather than report one rule.
+/// The zone is read as `zoneOf` reads it for each occurrence. One Intl does not know, if a browser
+/// lacks one moried knows, throws a `RangeError`, which out of here would blank the calendar
+/// rather than report one rule.
 function wallClockIn(value: string, tz: unknown): string {
+    const zone = zoneOf(tz);
+    // One it cannot read formats as `Invalid Date`, which is no wall clock, and is compared as
+    // written.
+    const at = readDatetime(value) ?? dayjs(NaN);
     try {
-        return dayjs(value).tz((tz || undefined) as string | undefined).format('YYYY-MM-DD HH:mm:ss');
+        return at.tz(zone).format('YYYY-MM-DD HH:mm:ss');
     }
     catch {
-        throw new RecurrenceError(`Unknown timezone "${String(tz)}"`);
+        throw new RecurrenceError(`Unknown timezone ${JSON.stringify(tz)}`);
     }
 }
 
-// What `backend/src/note_events.rs` holds an interval in, which the two must agree on.
+// What `backend/src/note_events.rs` holds an interval and a count in, which the two must agree on.
 const MAX_INTERVAL = 65535;
+const MAX_COUNT = 4294967295;
 
 /// A rule as the calendar reads it, before any window is asked of it.
 ///
@@ -184,11 +280,11 @@ export function readRule(repeat: unknown, start: unknown): RecurrenceRule {
     const bymonthday = listOf(rule.bymonthday);
     const bymonth = listOf(rule.bymonth);
 
-    if (byday !== undefined && rule.freq === 'weekly' && byday.some((day) => hasOrdinal(String(day)))) {
-        // "the third Wednesday" needs a period longer than a week to count within.
-        throw new RecurrenceError('An ordinal weekday means nothing under freq: weekly');
+    // Only text, and only a frequency's own name: JavaScript makes the key `daily` of `[daily]`,
+    // and moried refuses it.
+    if (typeof rule.freq !== 'string' || !Object.hasOwn(FREQUENCIES, rule.freq)) {
+        throw new RecurrenceError(`Unknown frequency ${JSON.stringify(rule.freq)}`);
     }
-
     const options: ConstructorParameters<typeof RRule>[0] = {
         freq: FREQUENCIES[rule.freq as EventRepeat['freq']],
         dtstart: toAnchor(anchorStart),
@@ -204,13 +300,29 @@ export function readRule(repeat: unknown, start: unknown): RecurrenceRule {
         options.interval = interval;
     }
     if (byday !== undefined) {
-        options.byweekday = byday.map((day) => toWeekday(String(day)));
+        options.byweekday = byday.map((day) => toWeekday(day, rule.freq as string));
     }
-    if (bymonthday !== undefined) {
-        options.bymonthday = bymonthday as number[];
+    // Each a whole number in range, as moried requires: rrule.js matched each by strict equality,
+    // drawing `[15, 32]` on the 15th and `[3, 13]` in March, and dropped a day of 0, drawing every
+    // day where moried drew the start's.
+    const monthDays = bymonthday?.map((day) => wholeIn(day, -31, 31, 'day of the month'));
+    const months = bymonth?.map((month) => wholeIn(month, 1, 12, 'month'));
+    if (monthDays !== undefined) {
+        // RFC 5545 forbids it, and moried's `rrule` crate refuses it.
+        if (rule.freq === 'weekly') {
+            throw new RecurrenceError('A day of the month means nothing under freq: weekly');
+        }
+        // A day none of its months has, such as February 30, is never met, and rrule.js looks for
+        // one until the year 9999: seconds each time the calendar draws a daily rule, which is on
+        // every change to any note. moried's crate looks through 100,000 periods, every minute.
+        if (months !== undefined
+            && !monthDays.some((day) => months.some((month) => Math.abs(day) <= LONGEST_MONTHS[month - 1]))) {
+            throw new RecurrenceError('No month it names has a day it names');
+        }
+        options.bymonthday = monthDays;
     }
-    if (bymonth !== undefined) {
-        options.bymonth = bymonth as number[];
+    if (months !== undefined) {
+        options.bymonth = months;
     }
     // A name that is no weekday is ignored, as moried ignores it, and so are the names every object
     // answers to: `toString` handed rrule.js a function as the week's start, which it never finished
@@ -218,8 +330,15 @@ export function readRule(repeat: unknown, start: unknown): RecurrenceRule {
     if (typeof rule.wkst === 'string' && Object.hasOwn(WEEKDAYS, rule.wkst)) {
         options.wkst = WEEKDAYS[rule.wkst];
     }
-    if (rule.count !== undefined) {
-        options.count = rule.count as number;
+    // Blank is no limit, as for the other fields. Anything else that is not a whole number from one
+    // to what the backend's `u32` holds is not a rule: rrule.js read `'3'` as three, `three` as
+    // one, and a negative or fractional count as no limit at all, and moried rang for none.
+    const count = rule.count;
+    if (count !== undefined && count !== null) {
+        if (typeof count !== 'number' || !Number.isInteger(count) || count < 1 || count > MAX_COUNT) {
+            throw new RecurrenceError(`count must be a whole number from 1 to ${MAX_COUNT}, not ${JSON.stringify(count)}`);
+        }
+        options.count = count;
     }
     let resolvedUntil: WallClock | undefined;
     if (rule.until !== undefined) {
@@ -242,9 +361,8 @@ export function readRule(repeat: unknown, start: unknown): RecurrenceRule {
             : toAnchor({ ...resolved, hour: 23, minute: 59, second: 59, hasTime: true });
     }
 
-    // rrule throws plain `Error`s for a rule it will not build -- an unknown frequency. Those are a
-    // note's mistake, so they are reported like any other, never allowed out of the derivation to
-    // blank the view.
+    // rrule throws plain `Error`s for a rule it will not build. Those are a note's mistake, so they
+    // are reported like any other, never allowed out of the derivation to blank the view.
     let rrule: RRule;
     try {
         rrule = new RRule(options);
@@ -263,17 +381,14 @@ export type WeekdayName = typeof WEEKDAY_NAMES[number];
 
 /// What a rule draws on, as rrule reads the values `readRule` lets through.
 ///
-/// rrule reads some of them otherwise than they are written, and the schema refuses most of those
-/// while the calendar draws them all the same. A view that describes a rule without expanding it
-/// has to follow rrule rather than the text: `count: '3'` draws three, and `bymonth: [13]` nothing.
+/// A view that describes a rule without expanding it has to follow rrule rather than the text
+/// where the two part: an ordinal past what its month holds, which `yearly` lets through with a
+/// month named, is never met, and neither is one beside plain weekdays that do not name its own.
 export interface RuleTerms {
     /// The weekdays it draws on, each with the ordinal it counts if any; empty for any weekday.
     weekdays: { weekday: WeekdayName; ordinal?: number }[];
     /// The days of the month it draws on, negative ones counted from its end; empty for any.
     monthDays: number[];
-    /// `bymonthday` names days, but none rrule keeps. That leaves the rule no day of its own and
-    /// takes none from its start either, so it draws on every day of each period.
-    everyDay: boolean;
     /// The months it draws in, from 1; empty for any.
     months: number[];
     /// How many occurrences it stops after; absent for no limit.
@@ -286,38 +401,20 @@ export function termsOf(rule: RecurrenceRule): RuleTerms {
     // What `readRule` handed rrule, before rrule's own reading.
     const options = rule.rrule.origOptions;
 
-    // rrule counts a `count` down with `--count` and stops when that is falsy: `'3'` is three, one
-    // that is not a number stops after the first occurrence, and one that never steps down to zero
-    // -- negative, fractional, too large to step -- is no limit at all. Zero draws nothing.
-    const written: unknown = options.count;
-    let count: number | undefined;
-    if (written === 0) {
-        count = 0;
-    }
-    else if (written) {
-        const n = Number(written);
-        count = Number.isNaN(n) ? 1 : (Number.isSafeInteger(n) && n >= 1 ? n : undefined);
-    }
+    // `readRule` lets through only a whole number from one.
+    const count = options.count ?? undefined;
 
-    // rrule matches a month or a day of the month by strict equality, so only a whole number of the
-    // right size is ever met: not `'3'`, not 13.
-    const isWhole = (value: unknown, limit: number): value is number =>
-        typeof value === 'number' && Number.isInteger(value) && value !== 0 && Math.abs(value) <= limit;
-    const monthList = options.bymonth as unknown[] | undefined;
-    const months = (monthList ?? []).filter((month) => isWhole(month, 12) && month > 0) as number[];
-    // Of the days of the month, rrule keeps only what compares as positive or negative. Dropping all
-    // of them leaves no restriction, not an empty one.
-    const dayList = options.bymonthday as unknown[] | undefined;
-    const kept = (dayList ?? []).filter((day) => (day as number) > 0 || (day as number) < 0);
-    const monthDays = kept.filter((day) => isWhole(day, 31)) as number[];
+    // `readRule` lets through only days and months that exist.
+    const monthList = options.bymonth as number[] | undefined;
+    const months = monthList ?? [];
+    const monthDays = (options.bymonthday ?? []) as number[];
 
-    // rrule counts an ordinal within a month, or within the year when a yearly rule names no month,
-    // and drops it under a shorter period: `2mon` under `freq: daily` is every Monday. Naming plain
-    // weekdays as well, a rule draws only the days both name.
-    const counts = options.freq === Frequency.MONTHLY || options.freq === Frequency.YEARLY;
+    // rrule counts an ordinal within a month, or within the year when a yearly rule names no month;
+    // `readRule` lets one through under no shorter period. Naming plain weekdays as well, a rule
+    // draws only the days both name.
     const named = ((options.byweekday ?? []) as RRuleWeekday[]).map((day) => ({
         weekday: WEEKDAY_NAMES[day.weekday],
-        ...(counts && day.n !== undefined ? { ordinal: day.n } : {}),
+        ...(day.n !== undefined ? { ordinal: day.n } : {}),
     }));
     const plain = named.filter((day) => day.ordinal === undefined);
     const ordinals = named.filter((day) => day.ordinal !== undefined);
@@ -329,13 +426,9 @@ export function termsOf(rule: RecurrenceRule): RuleTerms {
     return {
         weekdays,
         monthDays,
-        everyDay: dayList !== undefined && kept.length === 0,
         months,
         ...(count === undefined ? {} : { count }),
-        never: count === 0
-            || (named.length > 0 && weekdays.length === 0)
-            || (kept.length > 0 && monthDays.length === 0)
-            || (monthList !== undefined && months.length === 0),
+        never: named.length > 0 && weekdays.length === 0,
     };
 }
 
@@ -347,17 +440,18 @@ function inReaderZone(wallClock: string, hasTime: boolean, tz: unknown): string 
     if (tz === undefined || !hasTime) {
         return wallClock;
     }
-    // An unknown zone reaches Intl and throws a RangeError rather than producing an invalid
+    // A zone a browser's Intl does not know throws a RangeError rather than producing an invalid
     // dayjs, so the failure has to be caught rather than tested for.
+    const zone = zoneOf(tz);
     let converted;
     try {
-        converted = dayjs.tz(wallClock, tz as string);
+        converted = dayjs.tz(wallClock, zone);
     }
     catch {
-        throw new RecurrenceError(`Unknown timezone "${String(tz)}"`);
+        throw new RecurrenceError(`Unknown timezone ${JSON.stringify(tz)}`);
     }
     if (!converted.isValid()) {
-        throw new RecurrenceError(`Unknown timezone "${String(tz)}"`);
+        throw new RecurrenceError(`Unknown timezone ${JSON.stringify(tz)}`);
     }
     return converted.local().format('YYYY-MM-DD HH:mm');
 }

@@ -191,8 +191,9 @@ static DAYJS_PARSE: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 // What `Date` is left to parse when `dayjs` gives up: in a note, an ISO datetime with an offset.
-// V8 reads a good deal more than this, none of which a note holds. The fields are checked in
-// `dayjs_parse`, as V8 refuses what is out of range rather than rolling it over.
+// V8 reads a good deal more than this, and so does every other engine, each its own; the
+// calendar reads only this (`readDatetime`). The fields are checked in `dayjs_parse`, as V8
+// checks them.
 static WITH_OFFSET: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"^\s*([0-9]{4})-([0-9]{2})-([0-9]{2})(?:[Tt ]([0-9]{2}):([0-9]{2})(?::([0-9]{2})(?:\.([0-9]+))?)?)?\s*(?:([Zz])|([+-])([0-9]{2}):?([0-9]{2}))\s*$",
@@ -324,17 +325,24 @@ fn dayjs_parse(text: &str, zone: Zone) -> Option<DateTime<Utc>> {
     if parts.get(4).is_none() && parts.get(8).is_none() {
         return None;
     }
-    let field = |i: usize| u32::try_from(group(&parts, i).unwrap_or(0)).ok();
+    let field = |i: usize| group(&parts, i).unwrap_or(0);
     let fraction = parts.get(7).map_or("0", |part| part.as_str());
-    let millis = format!("{:0<3}", &fraction[..fraction.len().min(3)]).parse::<u32>().ok()?;
-    let date = NaiveDate::from_ymd_opt(i32::try_from(group(&parts, 1)?).ok()?, field(2)?, field(3)?)?;
-    let (hour, minute, second) = (field(4)?, field(5)?, field(6)?);
-    let wall = if (hour, minute, second, millis) == (24, 0, 0, 0) {
-        // The end of the day, which ISO allows.
-        date.succ_opt()?.and_time(NaiveTime::MIN)
-    } else {
-        date.and_time(NaiveTime::from_hms_milli_opt(hour, minute, second, millis)?)
-    };
+    let millis = format!("{:0<3}", &fraction[..fraction.len().min(3)]).parse::<i64>().ok()?;
+    let (month, day, hour, minute, second) = (field(2), field(3), field(4), field(5), field(6));
+    // V8 holds a day to 31 in any month and rolls the rest over, as `dayjs` does its own; an hour
+    // of 24 is only the end of the day, which ISO allows.
+    let end_of_day = (hour, minute, second, millis) == (24, 0, 0, 0);
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) || (hour > 23 && !end_of_day) || minute > 59 || second > 59 {
+        return None;
+    }
+    let first = NaiveDate::from_ymd_opt(i32::try_from(group(&parts, 1)?).ok()?, u32::try_from(month).ok()?, 1)?;
+    let wall = first.and_time(NaiveTime::MIN).checked_add_signed(
+        Duration::try_days(day - 1)?
+            + Duration::try_hours(hour)?
+            + Duration::try_minutes(minute)?
+            + Duration::try_seconds(second)?
+            + Duration::try_milliseconds(millis)?,
+    )?;
     let number = |i: usize| group(&parts, i).unwrap_or(0);
     let offset = match parts.get(8) {
         Some(_) => 0,
@@ -404,43 +412,30 @@ fn calendar_start(text: &str) -> Option<Start> {
     Some(Start::Time(date.and_hms_opt(field(6)?, field(8)?, 0)?))
 }
 
-/// The value as JavaScript's `String()` would spell it, for the regexes that coerce their input.
-fn as_js_string(value: &Value) -> Option<String> {
-    match value {
-        Value::String(text) => Some(text.clone()),
-        Value::Sequence(list) => list
-            .iter()
-            .map(|item| match item {
-                Value::Null => Some(String::new()),
-                other => as_js_string(other),
-            })
-            .collect::<Option<Vec<_>>>()
-            .map(|parts| parts.join(",")),
-        Value::Number(number) => Some(number.to_string()),
-        Value::Bool(flag) => Some(flag.to_string()),
-        Value::Null | Value::Mapping(_) | Value::Tagged(_) => None,
-    }
-}
-
-/// Whether `normalizeEndTime` accepts `end`. The occurrence is dropped when it does not.
+/// Whether `normalizeEndTime` accepts `end`, and the calendar reads what it makes of it. The
+/// occurrence is dropped when either does not.
 fn end_is_usable(end: Option<&Value>, zone: Zone) -> bool {
     let text = match end {
         None => return true,
-        // `null` is not `undefined`: the frontend tries to read it, fails, and drops the
-        // occurrence. That is what `end:` left empty does to an event's instances.
-        Some(Value::Null) => return false,
-        // Taken, and later stringified into an end nobody reads.
-        Some(Value::Bool(_) | Value::Number(_)) => return true,
-        Some(other) => match as_js_string(other) {
-            Some(text) => text,
-            None => return false,
-        },
+        Some(Value::String(text)) => text,
+        // `null` is not `undefined`: the frontend refuses it, as anything else that is not text.
+        // That is what `end:` left empty does to an event's instances.
+        Some(_) => return false,
     };
-    DURATION_SHORT.is_match(&text)
-        || DURATION_LONG.is_match(&text)
-        || dayjs_parse(&text, zone).is_some()
-        // A bare time of day belongs to the start's date, which is always a date `dayjs` reads.
-        || dayjs_parse(&format!("2000-01-01 {text}"), zone).is_some()
+    if let Some(parts) = DURATION_SHORT.captures(text).or_else(|| DURATION_LONG.captures(text)) {
+        // `parseFloat` of `[0-9.]+` reads a number wherever one begins it: `1.2.3` is 1.2, and
+        // `.` none.
+        let amount = parts[1].trim_start_matches('.');
+        return amount.starts_with(|c: char| c.is_ascii_digit())
+            && parts[1].len() - amount.len() <= 1;
+    }
+    if dayjs_parse(text, zone).is_some() {
+        // Kept as written, so the calendar reads it as `toWallClock` hands it on.
+        return parse_wall_clock(text).is_some() || CALENDAR_PARSE.is_match(text);
+    }
+    // A bare time of day belongs to the start's date, which is always a date `dayjs` reads, and
+    // is spelt out on it.
+    dayjs_parse(&format!("2000-01-01 {text}"), zone).is_some()
 }
 
 // --- events -----------------------------------------------------------------------------------
@@ -684,8 +679,18 @@ fn zone_named(name: &str) -> Option<Zone> {
     })
 }
 
+/// The most days each month can have, February's in a leap year.
+const LONGEST_MONTHS: [u32; 12] = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+/// A whole number, however it was written: `3.0` reaches the frontend as 3, JSON having one kind
+/// of number, and is 3 here as well.
 fn integer<T: TryFrom<i64>>(value: &Value) -> Option<T> {
-    value.as_i64().and_then(|n| T::try_from(n).ok())
+    let n = match value.as_i64() {
+        Some(n) => n,
+        // Within 2^53, past which the frontend no longer holds every whole number apart.
+        None => value.as_f64().filter(|n| n.fract() == 0.0 && n.abs() <= 9_007_199_254_740_992.0)? as i64,
+    };
+    T::try_from(n).ok()
 }
 
 /// `expandRule`: the wall clock of every occurrence a rule generates within the days `[from, to]`,
@@ -727,8 +732,9 @@ fn expand_rule(
                 None => NWeekday::Every(day),
                 Some(ordinal) => {
                     let ordinal = ordinal.as_str().parse::<i16>().ok().filter(|n| *n != 0)?;
-                    // "the third Wednesday" needs a period longer than a week to count within.
-                    if freq == Frequency::Weekly {
+                    // "the third Wednesday" needs a month or a year to count within. The crate
+                    // holds it to what either can count when the rule is built.
+                    if !matches!(freq, Frequency::Monthly | Frequency::Yearly) {
                         return None;
                     }
                     NWeekday::Nth(ordinal, day)
@@ -742,22 +748,39 @@ fn expand_rule(
     if let Some(interval) = present(repeat.get("interval")) {
         rule = rule.interval(integer::<u16>(interval).filter(|n| *n > 0)?);
     }
-    if let Some(days) = present(repeat.get("bymonthday")) {
-        rule = rule.by_month_day(list(days).iter().map(integer::<i8>).collect::<Option<_>>()?);
-    }
-    if let Some(months) = present(repeat.get("bymonth")) {
-        let months = list(months)
+    // The crate drops a day of 0 and then takes the start's, where the frontend refuses the rule.
+    let days: Vec<i8> = match present(repeat.get("bymonthday")) {
+        Some(days) => list(days).iter().map(|day| integer::<i8>(day).filter(|n| *n != 0)).collect::<Option<_>>()?,
+        None => Vec::new(),
+    };
+    let months: Vec<chrono::Month> = match present(repeat.get("bymonth")) {
+        Some(months) => list(months)
             .iter()
             .map(|month| integer::<u8>(month).and_then(|n| chrono::Month::try_from(n).ok()))
-            .collect::<Option<Vec<_>>>()?;
+            .collect::<Option<_>>()?,
+        None => Vec::new(),
+    };
+    // A day none of its months has, such as February 30, is never met, and the crate looks for one
+    // through 100,000 periods first, every minute. Refused, as `expandRule` refuses it.
+    let has = |month: &chrono::Month, day: &i8| {
+        u32::from(day.unsigned_abs()) <= LONGEST_MONTHS[month.number_from_month() as usize - 1]
+    };
+    if !months.is_empty() && !days.is_empty() && !days.iter().any(|day| months.iter().any(|month| has(month, day))) {
+        return None;
+    }
+    if !days.is_empty() {
+        rule = rule.by_month_day(days);
+    }
+    if !months.is_empty() {
         rule = rule.by_month(&months);
     }
     // rrule.js falls back to Monday for a name it does not know, as `rrule` does for none.
     if let Some(day) = repeat.get("wkst").and_then(Value::as_str).and_then(weekday) {
         rule = rule.week_start(day);
     }
+    // Blank is no limit; anything else must be a whole number from one, as `expandRule` requires.
     if let Some(count) = present(repeat.get("count")) {
-        rule = rule.count(integer::<u32>(count)?);
+        rule = rule.count(integer::<u32>(count).filter(|n| *n > 0)?);
     }
 
     // Read only where something is converted with it, as the frontend reads it: an all-day rule
@@ -1026,6 +1049,38 @@ events:
             "2024-05-01 10:00  B",
             "2024-05-01 11:00  C",
         ]);
+    }
+
+    /// The zones the calendar takes in `repeat.tz`, which must be the ones `zone_named` knows: Intl
+    /// knows more, and each browser its own set. Regenerate with
+    /// `UPDATE_TIME_ZONES=1 cargo test zone_names` when `chrono-tz` changes.
+    #[test]
+    fn the_calendar_takes_the_zone_names_moried_does() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../frontend/src/time-zones.json");
+        let names: Vec<&str> = chrono_tz::TZ_VARIANTS.iter().map(|zone| zone.name()).collect();
+        let listed = serde_json::to_string_pretty(&names).expect("serialisable") + "\n";
+        if std::env::var("UPDATE_TIME_ZONES").is_ok() {
+            std::fs::write(&path, listed).expect("the list should be writable");
+            return;
+        }
+        assert_eq!(
+            std::fs::read_to_string(&path).expect("the list should exist"),
+            listed,
+            "chrono-tz's zones changed; regenerate with UPDATE_TIME_ZONES=1 cargo test zone_names",
+        );
+    }
+
+    #[test]
+    fn a_whole_number_may_be_written_with_a_fraction() {
+        let number = |yaml: &str| serde_yaml::from_str::<Value>(yaml).unwrap();
+        assert_eq!(integer::<u16>(&number("2")), Some(2));
+        assert_eq!(integer::<u16>(&number("2.0")), Some(2));
+        assert_eq!(integer::<i8>(&number("-1.0")), Some(-1));
+        assert_eq!(integer::<u16>(&number("1.5")), None);
+        assert_eq!(integer::<u16>(&number("70000.0")), None);
+        assert_eq!(integer::<u32>(&number("1.0e20")), None);
+        assert_eq!(integer::<u32>(&number(".nan")), None);
+        assert_eq!(integer::<u32>(&number("'2'")), None);
     }
 
     #[test]

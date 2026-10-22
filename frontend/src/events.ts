@@ -38,7 +38,7 @@ import {
     taskAlarmOf,
     withBuiltInAlarms,
 } from '@/alarms';
-import { RecurrenceError, expandRule, parseWallClock } from '@/recurrence';
+import { RecurrenceError, expandRule, formatWallClock, parseWallClock, readDatetime } from '@/recurrence';
 import { taskUuidOf } from '@/task-forest';
 import dayjs from 'dayjs';
 
@@ -272,33 +272,33 @@ function formatDateTime(datetime: dayjs.Dayjs): string {
 }
 
 /// `undefined` when there is no end, `null` when the value is unusable.
+///
+/// `end` is whatever the frontmatter held: `end: 90` is a YAML number, and `end:` left empty null.
 export function normalizeEndTime(
-    end: string | undefined,
+    end: unknown,
     start: string,
 ): string | undefined | null {
     if (end === undefined) {
         return undefined;
     }
+    if (typeof end !== 'string') {
+        return null;
+    }
 
     const match = DURATION_SHORT.exec(end) || DURATION_LONG.exec(end);
     if (match === null) {
         // Not a duration.
-        if (dayjs(end).isValid()) {
+        if (readDatetime(end) !== null) {
             // Already a datetime this parses; keep the author's spelling.
             return end;
         }
         else {
             // A bare time of day belongs to the start's date -- or the next one, when taking it
-            // literally would put the end before the start.
-            const prefixedEnd = dayjs(start).format('YYYY-MM-DD') + ' ' + end;
-            const parsedEnd = dayjs(prefixedEnd);
-            if (parsedEnd.isValid()) {
-                if (parsedEnd.isAfter(start)) {
-                    return prefixedEnd;
-                }
-                else {
-                    return formatDateTime(parsedEnd.add(1, 'day'));
-                }
+            // literally would put the end before the start. Spelt out, since the time is spelt as
+            // the author wrote it, and `1130` is a time to `dayjs` and none to the calendar.
+            const parsedEnd = readDatetime(dayjs(start).format('YYYY-MM-DD') + ' ' + end);
+            if (parsedEnd !== null) {
+                return formatDateTime(parsedEnd.isAfter(start) ? parsedEnd : parsedEnd.add(1, 'day'));
             }
             else {
                 return null;
@@ -306,7 +306,11 @@ export function normalizeEndTime(
         }
     }
     else {
+        // `[\d.]` admits `+.h`, which `parseFloat` reads as no number at all.
         const amount = parseFloat(match[1]);
+        if (Number.isNaN(amount)) {
+            return null;
+        }
         const unit = match[2] as dayjs.ManipulateType;
         const end = dayjs(start).add(amount, unit);
         // A whole-day event stays whole days: giving its end a midnight would make the same data
@@ -352,6 +356,12 @@ interface EventCategoryRef {
 // is timed only with both an hour and a minute. Seconds are ignored, a missing day is the first, and
 // a start it does not match is not drawn at all -- so one that matches nothing is never all-day here.
 const CALENDAR_PARSE = /^(\d{4})-(\d{1,2})(-(\d{1,2}))?([^\d]+(\d{1,2}))?(:(\d{1,2}))?(:(\d{1,2}))?$/;
+
+/// Whether `<v-calendar>` reads a start or an end: it throws on one it does not, and one throw
+/// blanks the calendar.
+export function isCalendarReadable(text: string): boolean {
+    return CALENDAR_PARSE.test(text);
+}
 
 /// Whether the calendar draws a start as a whole day, which is what decides the alarms an event
 /// rings at when nothing sets them.
@@ -413,9 +423,7 @@ function buildOccurrence(
     entry: ListEntry2,
     { errors, alarmDefaults }: Derivation,
 ): CalendarEvent | null {
-    // `typeof` first: `dayjs(20240501)` is a valid epoch, so a YAML integer would pass the
-    // validity check and then fail as a string later, inside the view.
-    if (typeof time.start !== 'string' || !dayjs(time.start).isValid()) {
+    if (typeof time.start !== 'string' || readDatetime(time.start) === null) {
         errors.push(['start', time.start, eventName, entry.path, entry.title]);
         return null;
     }
@@ -428,14 +436,26 @@ function buildOccurrence(
         return null;
     }
 
+    // `<v-calendar>` throws on a start or end it cannot read, and one throw blanks the calendar. What
+    // `dayjs` reads is wider: `2024/08/13`, `20240813`, and what `Date` makes of the rest.
+    const start = toWallClock(time.start);
+    if (!isCalendarReadable(start)) {
+        errors.push(['start', time.start, eventName, entry.path, entry.title]);
+        return null;
+    }
+    const drawnEnd = normalizedEnd === undefined ? undefined : toWallClock(normalizedEnd);
+    if (drawnEnd !== undefined && !isCalendarReadable(drawnEnd)) {
+        errors.push(['end', end, eventName, entry.path, entry.title]);
+        return null;
+    }
+
     // The template wraps the name as resolved, so a renamed occurrence keeps its category's prefix.
     // A non-string name is handed on untouched, for `validateEvent` to refuse as before.
     const name = time.name || eventName;
-    const start = toWallClock(time.start);
     const event: CalendarEvent = {
         name: typeof name === 'string' ? applyNameTemplate(category?.defaults?.name, name) : name,
         start,
-        end: normalizedEnd === undefined ? undefined : toWallClock(normalizedEnd),
+        end: drawnEnd,
         finished: time.finished,
         color: time.color || parent.color || category?.defaults?.color || DEFAULT_EVENT_COLOR,
         note: time.note || parent.note,
@@ -473,11 +493,7 @@ function asArray<T>(value: T[] | undefined): T[] {
 /// importer will not spell an exclusion the way a hand-edited note does. Comparing the strings
 /// would report a mismatch that is not there.
 function instantOf(value: unknown): number | null {
-    if (typeof value !== 'string') {
-        return null;
-    }
-    const parsed = dayjs(value);
-    return parsed.isValid() ? parsed.valueOf() : null;
+    return readDatetime(value)?.valueOf() ?? null;
 }
 
 /// The first and last instants of a window, in the reader's zone. A bare date as `to` is that
@@ -798,23 +814,18 @@ export function toWallClock(value: unknown): string {
         return typeof value === 'string' ? value : String(value ?? '');
     }
     const text = value as string;
-    const p = (n: number) => String(n).padStart(2, '0');
-    const date = `${parsed.year}-${p(parsed.month)}-${p(parsed.day)}`;
-    if (!parsed.hasTime) {
-        return date;
-    }
     // An offset means the value names an instant, so it is shown in the reader's own zone; a bare
-    // wall clock is already local and is left exactly as written.
-    if (HAS_OFFSET.test(text)) {
-        const local = dayjs(text);
-        if (local.isValid()) {
+    // wall clock is already local and is left as written, though a part past its range rolls over
+    // as `dayjs` reads it, and so as moried rings it.
+    if (parsed.hasTime && HAS_OFFSET.test(text)) {
+        const local = readDatetime(text);
+        if (local !== null) {
             return local.second() === 0
                 ? local.format('YYYY-MM-DD HH:mm')
                 : local.format('YYYY-MM-DD HH:mm:ss');
         }
     }
-    const time = `${p(parsed.hour)}:${p(parsed.minute)}`;
-    return parsed.second === 0 ? `${date} ${time}` : `${date} ${time}:${p(parsed.second)}`;
+    return formatWallClock(parsed);
 }
 
 const HAS_OFFSET = /(?:Z|[+-]\d{2}:?\d{2})$/;
@@ -954,9 +965,7 @@ function taskDateEvent(
     }
 
     const name = entry.title ?? entry.path;
-    // `typeof` first, for the same reason `buildOccurrence` checks it: a YAML integer is a valid
-    // epoch to dayjs and would only fail later, inside the view.
-    if (typeof value !== 'string' || !dayjs(value).isValid()) {
+    if (typeof value !== 'string' || readDatetime(value) === null) {
         errors.push([field, value, name, entry.path, entry.title]);
         return;
     }
@@ -966,9 +975,15 @@ function taskDateEvent(
     const own = taskAlarmOf((task as { alarms?: unknown }).alarms, field);
     checkAlarms(own, name, entry, errors);
 
+    // Refused as an event's start is, which `<v-calendar>` would throw on.
+    const start = toWallClock(value);
+    if (!isCalendarReadable(start)) {
+        errors.push([field, value, name, entry.path, entry.title]);
+        return;
+    }
+
     // Compared as dates, not as instants: the window's ends are bare dates, so an instant
     // comparison would drop a date late on its last day.
-    const start = toWallClock(value);
     const day = start.slice(0, 10);
     if (day < window.from || day > window.to) {
         return;

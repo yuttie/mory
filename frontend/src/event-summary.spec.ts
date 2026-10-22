@@ -74,36 +74,46 @@ describe('describeRepeat', () => {
             .toBe('Yearly on the 13th if a Fri in Oct');
     });
 
-    // Values the schema refuses but the calendar's rrule reads all the same, as it reads them.
-    it('counts as the calendar counts', () => {
-        expect(describeRepeat({ freq: 'weekly', count: '3' }, start)).toBe('Weekly, 3 times');
-        expect(describeRepeat({ freq: 'weekly', count: ' 2 ' }, start)).toBe('Weekly, 2 times');
-        // One that is not a number stops after the first occurrence...
-        expect(describeRepeat({ freq: 'weekly', count: 'abc' }, start)).toBe('Weekly, 1 time');
-        expect(describeRepeat({ freq: 'weekly', count: true }, start)).toBe('Weekly, 1 time');
-        // ...and one that never steps down to zero never stops.
-        for (const count of [-1, 1.5, '1.5', '0', '', false, null]) {
-            expect(describeRepeat({ freq: 'weekly', count }, start), JSON.stringify(count)).toBe('Weekly');
+    // As the calendar refuses them, and moried with it.
+    it('calls a rule unreadable whose count is not a whole number from one', () => {
+        for (const count of ['3', ' 2 ', 'abc', true, -1, 1.5, '1.5', '0', '', false, 0, [3], 4294967296]) {
+            expect(describeRepeat({ freq: 'weekly', count }, start), JSON.stringify(count)).toBe('Unreadable rule');
         }
+        expect(describeRepeat({ freq: 'weekly', count: null }, start)).toBe('Weekly');
+        expect(describeRepeat({ freq: 'weekly', count: 4294967295 }, start)).toBe('Weekly, 4294967295 times');
     });
 
-    it('says only the days and months the calendar can meet', () => {
-        expect(describeRepeat({ freq: 'monthly', bymonthday: [1, 32] }, start)).toBe('Monthly on the 1st');
-        expect(describeRepeat({ freq: 'monthly', bymonthday: [0, 15] }, start)).toBe('Monthly on the 15th');
-        expect(describeRepeat({ freq: 'yearly', bymonth: [5, 13, '7'] }, start)).toBe('Yearly in May');
-        // An ordinal counts within a month or a year, and a shorter period drops it.
-        expect(describeRepeat({ freq: 'daily', byday: ['2mon'] }, start)).toBe('Daily on Mon');
+    it('says only the weekdays the calendar can meet', () => {
         // Naming plain weekdays too, a rule draws only the days both name.
         expect(describeRepeat({ freq: 'monthly', byday: ['mon', 'tue', '1mon'] }, start)).toBe('Monthly on the 1st Mon');
         expect(describeRepeat({ freq: 'yearly', byday: ['20mon'] }, start)).toBe('Yearly on the 20th Mon');
     });
 
-    // rrule drops a day of the month that is neither positive nor negative, and with all of them
-    // gone, takes no day from the start either.
-    it('says when a rule falls on every day of each period', () => {
-        expect(describeRepeat({ freq: 'monthly', bymonthday: [0] }, start)).toBe('Monthly on every day');
-        expect(describeRepeat({ freq: 'yearly', bymonthday: ['x'], bymonth: [1] }, start)).toBe('Yearly on every day in Jan');
-        expect(describeRepeat({ freq: 'daily', bymonthday: [0] }, start)).toBe('Daily');
+    // As the calendar refuses them, and moried with it.
+    it('calls a rule unreadable that counts a weekday where moried cannot', () => {
+        for (const repeat of [
+            { freq: 'daily', byday: ['2mon'] }, { freq: 'weekly', byday: ['2mon'] },
+            { freq: 'monthly', byday: ['-5fri'] }, { freq: 'yearly', byday: ['-53mon'] },
+            { freq: 'weekly', byday: [['mon']] }, { freq: 'weekly', byday: 1 },
+        ]) {
+            expect(describeRepeat(repeat, start), JSON.stringify(repeat)).toBe('Unreadable rule');
+        }
+        expect(describeRepeat({ freq: 'monthly', byday: ['5fri'] }, start)).toBe('Monthly on the 5th Fri');
+        expect(describeRepeat({ freq: 'yearly', byday: ['-52mon'] }, start)).toBe('Yearly on the 52nd last Mon');
+    });
+
+    // As the calendar refuses them, and moried with it.
+    it('calls a rule unreadable that names a day or a month that does not exist', () => {
+        for (const repeat of [
+            { freq: 'monthly', bymonthday: [1, 32] }, { freq: 'monthly', bymonthday: [0, 15] },
+            { freq: 'monthly', bymonthday: [0] }, { freq: 'yearly', bymonthday: ['x'], bymonth: [1] },
+            { freq: 'yearly', bymonth: [5, 13, 7] }, { freq: 'yearly', bymonth: ['7'] },
+            { freq: 'monthly', bymonthday: false }, { freq: 'weekly', bymonthday: [15] },
+        ]) {
+            expect(describeRepeat(repeat, start), JSON.stringify(repeat)).toBe('Unreadable rule');
+        }
+        expect(describeRepeat({ freq: 'monthly', bymonthday: [-31, 31] }, start)).toBe('Monthly on the 31st last, 31st');
+        expect(describeRepeat({ freq: 'yearly', bymonth: [1, 12] }, start)).toBe('Yearly in Jan, Dec');
     });
 
     it('calls a rule that can never be met unreadable', () => {
@@ -179,6 +189,14 @@ describe('summarizeEvent', () => {
         });
         // `repeat:` with nothing after it is null, which the calendar refuses too.
         expect(summarizeEvent({ start: '2026-04-01 10:00', repeat: null })).toEqual({ repeats: 'Unreadable rule' });
+    });
+
+    // As the calendar refuses it: `dayjs` reads it, and `<v-calendar>` would throw on it.
+    it('leaves out a start the calendar cannot read', () => {
+        expect(summarizeEvent({ start: '2026/10/13 11:00' })).toEqual({});
+        expect(summarizeEvent({ start: 'October 14, 2026 10:00' })).toEqual({});
+        expect(summarizeEvent({ instances: [{ start: '2026/10/13 11:00' }, { start: '2026-10-14 10:00' }] }).start)
+            .toEqual({ text: '2026-10-14 10:00', instant: dayjs('2026-10-14 10:00').valueOf() });
     });
 
     it('counts a date it lists twice once', () => {

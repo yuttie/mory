@@ -170,6 +170,198 @@ events:
             freq: daily
             interval: 65535
             count: 2
+    An interval written with a fraction:
+        start: 2024-10-16 09:00
+        repeat:
+            freq: weekly
+            interval: 2.0
+            count: 3
+    A count written with a fraction:
+        start: 2020-06-04 09:00
+        repeat:
+            freq: yearly
+            count: 3.0
+    A month written with a fraction:
+        start: 2020-01-05 09:00
+        repeat:
+            freq: yearly
+            bymonth: 3.0
+            count: 2
+    Days of the month written with a fraction:
+        start: 2024-02-10 09:00
+        repeat:
+            freq: monthly
+            bymonthday: [15.0, -1.0]
+            count: 4
+    A blank count is no limit:
+        start: 2020-06-01 08:00
+        repeat:
+            freq: yearly
+            count:
+    A count that is text is no rule:
+        start: 2020-06-01 09:00
+        repeat:
+            freq: yearly
+            count: '3'
+    A count that is a word is no rule:
+        start: 2020-06-01 10:00
+        repeat:
+            freq: yearly
+            count: three
+    A count that is negative is no rule:
+        start: 2020-06-01 11:00
+        repeat:
+            freq: yearly
+            count: -1
+    A count that is not whole is no rule:
+        start: 2020-06-01 12:00
+        repeat:
+            freq: yearly
+            count: 2.5
+    A count that is true is no rule:
+        start: 2020-06-01 13:00
+        repeat:
+            freq: yearly
+            count: true
+    A count in a list is no rule:
+        start: 2020-06-01 14:00
+        repeat:
+            freq: yearly
+            count: [3]
+    A count of zero is no rule:
+        start: 2020-06-01 15:00
+        repeat:
+            freq: yearly
+            count: 0
+    A count too large is no rule:
+        start: 2020-06-01 16:00
+        repeat:
+            freq: yearly
+            count: 4294967296
+    The largest count:
+        start: 2020-06-01 17:00
+        repeat:
+            freq: yearly
+            count: 4294967295
+    A frequency in a list is no rule:
+        start: 2021-03-03 09:00
+        repeat:
+            freq: [daily]
+            count: 2
+    A frequency every object has is no rule:
+        start: 2021-03-08 09:00
+        repeat:
+            freq: toString
+            count: 2
+    A weekday in a nested list is no rule:
+        start: 2021-05-05 09:00
+        repeat:
+            freq: weekly
+            byday: [[mon]]
+            count: 3
+    A weekday that is a number is no rule:
+        start: 2021-05-05 10:00
+        repeat:
+            freq: weekly
+            byday: 1
+            count: 3
+    An ordinal under daily is no rule:
+        start: 2021-05-05 11:00
+        repeat:
+            freq: daily
+            byday: [2mon]
+            count: 3
+    The fifth Friday from a month's end is no rule:
+        start: 2024-03-01 09:00
+        repeat:
+            freq: monthly
+            byday: [-5fri]
+            count: 3
+    The 53rd Monday from a year's end is no rule:
+        start: 2018-01-01 09:00
+        repeat:
+            freq: yearly
+            byday: [-53mon]
+            count: 2
+    The fifth Friday of a month:
+        start: 2024-03-29 09:00
+        repeat:
+            freq: monthly
+            byday: [5fri]
+            count: 3
+    The 53rd Monday of a year:
+        start: 2018-12-31 09:00
+        repeat:
+            freq: yearly
+            byday: [53mon]
+            count: 2
+    The 52nd Monday from a year's end:
+        start: 2018-01-08 09:00
+        repeat:
+            freq: yearly
+            byday: [-52mon]
+            count: 2
+    A day of the month of 0 is no rule:
+        start: 2024-02-10 10:00
+        repeat:
+            freq: monthly
+            bymonthday: [0]
+            count: 3
+    A day of the month of 0 beside another is no rule:
+        start: 2024-02-10 11:00
+        repeat:
+            freq: monthly
+            bymonthday: [0, 15]
+            count: 3
+    A day of the month past 31 is no rule:
+        start: 2024-02-10 12:00
+        repeat:
+            freq: monthly
+            bymonthday: [15, 32]
+            count: 3
+    A day of the month that is false is no rule:
+        start: 2024-02-10 13:00
+        repeat:
+            freq: monthly
+            bymonthday: false
+            count: 3
+    A day of the month under weekly is no rule:
+        start: 2024-02-10 14:00
+        repeat:
+            freq: weekly
+            bymonthday: [15]
+            count: 3
+    A month past 12 is no rule:
+        start: 2020-01-05 10:00
+        repeat:
+            freq: yearly
+            bymonth: [3, 13]
+            count: 2
+    A month of 0 is no rule:
+        start: 2020-01-05 11:00
+        repeat:
+            freq: yearly
+            bymonth: [0, 3]
+            count: 2
+    February 30 is no rule:
+        start: 2024-01-01 09:00
+        repeat:
+            freq: daily
+            bymonth: [2]
+            bymonthday: [30, -30]
+    The 30th or 31st of February or April:
+        start: 2024-01-01 10:00
+        repeat:
+            freq: yearly
+            bymonth: [2, 4]
+            bymonthday: [30, 31]
+            count: 2
+    The first and the last day of a month:
+        start: 2024-02-01 09:00
+        repeat:
+            freq: monthly
+            bymonthday: [1, -1]
+            count: 4
 ---
 
 # Rules

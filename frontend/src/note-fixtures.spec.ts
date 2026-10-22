@@ -5,6 +5,7 @@
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import dayjs from 'dayjs';
+import { parseEvent } from 'vuetify/lib/components/VCalendar/util/events.js';
 
 import type { AlarmDefaults } from '@/alarms';
 import { formatAlarm, parseAlarm, readAlarmDefaults } from '@/alarms';
@@ -167,6 +168,14 @@ describe.each(Object.keys(notes))('%s', (path) => {
         expect(drawn(path, notes[path])).toEqual(notes[path].drawn);
     });
 
+    // The two sides can agree on an occurrence the calendar then throws on, which blanks it: only
+    // the strings are compared above, and `<v-calendar>` reads them with a regex of its own.
+    it('hands the calendar only starts and ends it reads', () => {
+        for (const event of eventsFromEntries([entryOf(path, notes[path])], window).events) {
+            expect(() => parseEvent(event, 0, 'start', 'end'), `${event.start} to ${event.end}`).not.toThrow();
+        }
+    });
+
     it('rings at what the backend rings at, with only the built-in default and categories', () => {
         expect(alarmsOf(path, notes[path])).toEqual(notes[path].alarms);
     });
@@ -187,6 +196,12 @@ describe.each(Object.keys(tasks))('%s', (name) => {
 
     it('has the dates the MCP tool returns for it, finished as the tool says', () => {
         expect(drawnTaskDates(name, tasks[name])).toEqual(returnedTaskDates(tasks[name]));
+    });
+
+    it('hands the calendar only dates it reads', () => {
+        for (const event of taskDatesFromEntries([taskEntryOf(name, tasks[name])], window).events) {
+            expect(() => parseEvent(event, 0, 'start', 'end'), event.start).not.toThrow();
+        }
     });
 });
 
