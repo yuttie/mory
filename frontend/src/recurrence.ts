@@ -243,6 +243,11 @@ export function readRule(repeat: unknown, start: unknown): RecurrenceRule {
         throw new RecurrenceError('An ordinal weekday means nothing under freq: weekly');
     }
 
+    // Only text, and only a frequency's own name: JavaScript makes the key `daily` of `[daily]`,
+    // and moried refuses it.
+    if (typeof rule.freq !== 'string' || !Object.hasOwn(FREQUENCIES, rule.freq)) {
+        throw new RecurrenceError(`Unknown frequency ${JSON.stringify(rule.freq)}`);
+    }
     const options: ConstructorParameters<typeof RRule>[0] = {
         freq: FREQUENCIES[rule.freq as EventRepeat['freq']],
         dtstart: toAnchor(anchorStart),
@@ -303,9 +308,8 @@ export function readRule(repeat: unknown, start: unknown): RecurrenceRule {
             : toAnchor({ ...resolved, hour: 23, minute: 59, second: 59, hasTime: true });
     }
 
-    // rrule throws plain `Error`s for a rule it will not build -- an unknown frequency. Those are a
-    // note's mistake, so they are reported like any other, never allowed out of the derivation to
-    // blank the view.
+    // rrule throws plain `Error`s for a rule it will not build. Those are a note's mistake, so they
+    // are reported like any other, never allowed out of the derivation to blank the view.
     let rrule: RRule;
     try {
         rrule = new RRule(options);

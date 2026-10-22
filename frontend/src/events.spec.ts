@@ -667,6 +667,8 @@ describe('malformed frontmatter', () => {
         ['a half-typed date', { start: 2024 }],
         ['a repeat that is not a mapping', { start: '2024-05-01 09:00', repeat: 'daily' }],
         ['an unknown frequency', { start: '2024-05-01 09:00', repeat: { freq: 'fortnightly' } }],
+        ['a frequency in a list', { start: '2024-05-01 09:00', repeat: { freq: ['daily'] } }],
+        ['a frequency every object has', { start: '2024-05-01 09:00', repeat: { freq: 'toString' } }],
         // Schema-valid: the weekday pattern admits a zero ordinal, but rrule refuses it.
         ['a zero ordinal', { start: '2024-05-01', repeat: { freq: 'monthly', byday: ['0wed'] } }],
         ['an ordinal under freq: weekly', {
@@ -1611,6 +1613,20 @@ describe('a repeat interval written by hand', () => {
             expect(derived.errors, JSON.stringify(interval)).toHaveLength(1);
             expect(derived.errors[0][0]).toBe('repeat');
             expect(String(derived.errors[0][1])).toContain('interval must be a whole number');
+        }
+    });
+});
+
+describe('a repeat frequency written by hand', () => {
+    // JavaScript makes the key `daily` of `[daily]`, so the calendar drew it daily, and moried,
+    // refusing it, rang for none of it.
+    it('refuses anything but a frequency\'s own name, with a reason', () => {
+        for (const freq of [['daily'], [['daily']], 'Daily', 'toString', '__proto__', 3, null, undefined]) {
+            const derived = eventsFromEntries([entry('a.md', {
+                Review: { start: '2024-05-06 09:00', repeat: { freq: freq as never, count: 2 } },
+            })], ANY_WINDOW);
+            expect(derived.events, JSON.stringify(freq)).toEqual([]);
+            expect(derived.errors.map((error) => error[1]), JSON.stringify(freq)).toEqual([`Unknown frequency ${JSON.stringify(freq)}`]);
         }
     });
 });

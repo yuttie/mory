@@ -2551,6 +2551,22 @@
             },
             "start": "2020-06-04 09:00"
           },
+          "A frequency every object has is no rule": {
+            "repeat": {
+              "count": 2,
+              "freq": "toString"
+            },
+            "start": "2021-03-08 09:00"
+          },
+          "A frequency in a list is no rule": {
+            "repeat": {
+              "count": 2,
+              "freq": [
+                "daily"
+              ]
+            },
+            "start": "2021-03-03 09:00"
+          },
           "A month day, not a list": {
             "repeat": {
               "bymonthday": 15,

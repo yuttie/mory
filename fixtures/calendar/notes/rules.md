@@ -243,6 +243,16 @@ events:
         repeat:
             freq: yearly
             count: 4294967295
+    A frequency in a list is no rule:
+        start: 2021-03-03 09:00
+        repeat:
+            freq: [daily]
+            count: 2
+    A frequency every object has is no rule:
+        start: 2021-03-08 09:00
+        repeat:
+            freq: toString
+            count: 2
 ---
 
 # Rules
