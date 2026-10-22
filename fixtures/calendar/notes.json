@@ -2152,11 +2152,16 @@
     },
     "notes/rules.md": {
       "alarms": [
+        "2020-03-05 09:00  A month written with a fraction  +0m",
         "2020-03-15 10:00  Twice a year  +0m",
+        "2020-06-04 09:00  A count written with a fraction  +0m",
         "2020-09-15 10:00  Twice a year  +0m",
+        "2021-03-05 09:00  A month written with a fraction  +0m",
         "2021-03-15 10:00  Twice a year  +0m",
+        "2021-06-04 09:00  A count written with a fraction  +0m",
         "2021-09-15 10:00  Twice a year  +0m",
         "2022-03-15 10:00  Twice a year  +0m",
+        "2022-06-04 09:00  A count written with a fraction  +0m",
         "2022-09-15 10:00  Twice a year  +0m",
         "2023-03-15 10:00  Twice a year  +0m",
         "2023-09-15 10:00  Twice a year  +0m",
@@ -2171,17 +2176,21 @@
         "2024-01-31 08:00  The 31st  +0m",
         "2024-02-01 18:00  Every other Tuesday and Thursday  +0m",
         "2024-02-13 18:00  Every other Tuesday and Thursday  +0m",
+        "2024-02-15 09:00  Days of the month written with a fraction  +0m",
         "2024-02-15 18:00  Every other Tuesday and Thursday  +0m",
         "2024-02-21 12:00  Third Wednesday  +0m",
         "2024-02-23 17:00  Last Friday  +0m",
         "2024-02-27 18:00  Every other Tuesday and Thursday  +0m",
         "2024-02-29 08:00  Last day of the month  +0m",
+        "2024-02-29 09:00  Days of the month written with a fraction  +0m",
         "2024-02-29 18:00  Every other Tuesday and Thursday  +0m",
+        "2024-03-15 09:00  Days of the month written with a fraction  +0m",
         "2024-03-15 10:00  Twice a year  +0m",
         "2024-03-20 12:00  Third Wednesday  +0m",
         "2024-03-29 17:00  Last Friday  +0m",
         "2024-03-31 08:00  Last day of the month  +0m",
         "2024-03-31 08:00  The 31st  +0m",
+        "2024-03-31 09:00  Days of the month written with a fraction  +0m",
         "2024-04-17 12:00  Third Wednesday  +0m",
         "2024-04-26 17:00  Last Friday  +0m",
         "2024-04-30 08:00  Last day of the month  +0m",
@@ -2216,13 +2225,16 @@
         "2024-10-15 09:00  An interval of one  +0m",
         "2024-10-15 15:00  The largest interval  +0m",
         "2024-10-16 08:00  A weekday, not a list  +0m",
+        "2024-10-16 09:00  An interval written with a fraction  +0m",
         "2024-10-16 09:00  An ordinal weekday, not a list  +0m",
         "2024-10-21 10:00  A null weekday list  +0m",
         "2024-10-22 08:00  A blank interval is none  +0m",
         "2024-10-22 09:00  An interval of one  +0m",
         "2024-10-23 08:00  A weekday, not a list  +0m",
+        "2024-10-30 09:00  An interval written with a fraction  +0m",
         "2024-11-06 08:00  An empty weekday list  +0m",
         "2024-11-07 08:00  An empty month day list  +0m",
+        "2024-11-13 09:00  An interval written with a fraction  +0m",
         "2024-11-20 09:00  An ordinal weekday, not a list  +0m",
         "2024-12-06 08:00  An empty weekday list  +0m",
         "2024-12-07 08:00  An empty month day list  +0m",
@@ -2232,11 +2244,16 @@
         "2025-10-08 08:00  An empty month list  +0m"
       ],
       "alarmsWithDefaults": [
+        "2020-03-05 09:00  A month written with a fraction  -5m",
         "2020-03-15 10:00  Twice a year  -5m",
+        "2020-06-04 09:00  A count written with a fraction  -5m",
         "2020-09-15 10:00  Twice a year  -5m",
+        "2021-03-05 09:00  A month written with a fraction  -5m",
         "2021-03-15 10:00  Twice a year  -5m",
+        "2021-06-04 09:00  A count written with a fraction  -5m",
         "2021-09-15 10:00  Twice a year  -5m",
         "2022-03-15 10:00  Twice a year  -5m",
+        "2022-06-04 09:00  A count written with a fraction  -5m",
         "2022-09-15 10:00  Twice a year  -5m",
         "2023-03-15 10:00  Twice a year  -5m",
         "2023-09-15 10:00  Twice a year  -5m",
@@ -2251,17 +2268,21 @@
         "2024-01-31 08:00  The 31st  -5m",
         "2024-02-01 18:00  Every other Tuesday and Thursday  -5m",
         "2024-02-13 18:00  Every other Tuesday and Thursday  -5m",
+        "2024-02-15 09:00  Days of the month written with a fraction  -5m",
         "2024-02-15 18:00  Every other Tuesday and Thursday  -5m",
         "2024-02-21 12:00  Third Wednesday  -5m",
         "2024-02-23 17:00  Last Friday  -5m",
         "2024-02-27 18:00  Every other Tuesday and Thursday  -5m",
         "2024-02-29 08:00  Last day of the month  -5m",
+        "2024-02-29 09:00  Days of the month written with a fraction  -5m",
         "2024-02-29 18:00  Every other Tuesday and Thursday  -5m",
+        "2024-03-15 09:00  Days of the month written with a fraction  -5m",
         "2024-03-15 10:00  Twice a year  -5m",
         "2024-03-20 12:00  Third Wednesday  -5m",
         "2024-03-29 17:00  Last Friday  -5m",
         "2024-03-31 08:00  Last day of the month  -5m",
         "2024-03-31 08:00  The 31st  -5m",
+        "2024-03-31 09:00  Days of the month written with a fraction  -5m",
         "2024-04-17 12:00  Third Wednesday  -5m",
         "2024-04-26 17:00  Last Friday  -5m",
         "2024-04-30 08:00  Last day of the month  -5m",
@@ -2296,13 +2317,16 @@
         "2024-10-15 09:00  An interval of one  -5m",
         "2024-10-15 15:00  The largest interval  -5m",
         "2024-10-16 08:00  A weekday, not a list  -5m",
+        "2024-10-16 09:00  An interval written with a fraction  -5m",
         "2024-10-16 09:00  An ordinal weekday, not a list  -5m",
         "2024-10-21 10:00  A null weekday list  -5m",
         "2024-10-22 08:00  A blank interval is none  -5m",
         "2024-10-22 09:00  An interval of one  -5m",
         "2024-10-23 08:00  A weekday, not a list  -5m",
+        "2024-10-30 09:00  An interval written with a fraction  -5m",
         "2024-11-06 08:00  An empty weekday list  -5m",
         "2024-11-07 08:00  An empty month day list  -5m",
+        "2024-11-13 09:00  An interval written with a fraction  -5m",
         "2024-11-20 09:00  An ordinal weekday, not a list  -5m",
         "2024-12-06 08:00  An empty weekday list  -5m",
         "2024-12-07 08:00  An empty month day list  -5m",
@@ -2312,11 +2336,16 @@
         "2025-10-08 08:00  An empty month list  -5m"
       ],
       "drawn": [
+        "2020-03-05 09:00  A month written with a fraction",
         "2020-03-15 10:00  Twice a year",
+        "2020-06-04 09:00  A count written with a fraction",
         "2020-09-15 10:00  Twice a year",
+        "2021-03-05 09:00  A month written with a fraction",
         "2021-03-15 10:00  Twice a year",
+        "2021-06-04 09:00  A count written with a fraction",
         "2021-09-15 10:00  Twice a year",
         "2022-03-15 10:00  Twice a year",
+        "2022-06-04 09:00  A count written with a fraction",
         "2022-09-15 10:00  Twice a year",
         "2023-03-15 10:00  Twice a year",
         "2023-09-15 10:00  Twice a year",
@@ -2331,17 +2360,21 @@
         "2024-01-31 08:00  The 31st",
         "2024-02-01 18:00  Every other Tuesday and Thursday",
         "2024-02-13 18:00  Every other Tuesday and Thursday",
+        "2024-02-15 09:00  Days of the month written with a fraction",
         "2024-02-15 18:00  Every other Tuesday and Thursday",
         "2024-02-21 12:00  Third Wednesday",
         "2024-02-23 17:00  Last Friday",
         "2024-02-27 18:00  Every other Tuesday and Thursday",
         "2024-02-29 08:00  Last day of the month",
+        "2024-02-29 09:00  Days of the month written with a fraction",
         "2024-02-29 18:00  Every other Tuesday and Thursday",
+        "2024-03-15 09:00  Days of the month written with a fraction",
         "2024-03-15 10:00  Twice a year",
         "2024-03-20 12:00  Third Wednesday",
         "2024-03-29 17:00  Last Friday",
         "2024-03-31 08:00  Last day of the month",
         "2024-03-31 08:00  The 31st",
+        "2024-03-31 09:00  Days of the month written with a fraction",
         "2024-04-17 12:00  Third Wednesday",
         "2024-04-26 17:00  Last Friday",
         "2024-04-30 08:00  Last day of the month",
@@ -2376,13 +2409,16 @@
         "2024-10-15 09:00  An interval of one",
         "2024-10-15 15:00  The largest interval",
         "2024-10-16 08:00  A weekday, not a list",
+        "2024-10-16 09:00  An interval written with a fraction",
         "2024-10-16 09:00  An ordinal weekday, not a list",
         "2024-10-21 10:00  A null weekday list",
         "2024-10-22 08:00  A blank interval is none",
         "2024-10-22 09:00  An interval of one",
         "2024-10-23 08:00  A weekday, not a list",
+        "2024-10-30 09:00  An interval written with a fraction",
         "2024-11-06 08:00  An empty weekday list",
         "2024-11-07 08:00  An empty month day list",
+        "2024-11-13 09:00  An interval written with a fraction",
         "2024-11-20 09:00  An ordinal weekday, not a list",
         "2024-12-06 08:00  An empty weekday list",
         "2024-12-07 08:00  An empty month day list",
@@ -2401,6 +2437,13 @@
             },
             "start": "2024-10-15 08:00"
           },
+          "A count written with a fraction": {
+            "repeat": {
+              "count": 3.0,
+              "freq": "yearly"
+            },
+            "start": "2020-06-04 09:00"
+          },
           "A month day, not a list": {
             "repeat": {
               "bymonthday": 15,
@@ -2408,6 +2451,14 @@
               "freq": "monthly"
             },
             "start": "2024-07-15 08:00"
+          },
+          "A month written with a fraction": {
+            "repeat": {
+              "bymonth": 3.0,
+              "count": 2,
+              "freq": "yearly"
+            },
+            "start": "2020-01-05 09:00"
           },
           "A month, not a list": {
             "repeat": {
@@ -2505,6 +2556,14 @@
             },
             "start": "2024-10-15 14:00"
           },
+          "An interval written with a fraction": {
+            "repeat": {
+              "count": 3,
+              "freq": "weekly",
+              "interval": 2.0
+            },
+            "start": "2024-10-16 09:00"
+          },
           "An ordinal weekday, not a list": {
             "repeat": {
               "byday": "3wed",
@@ -2534,6 +2593,17 @@
               "freq": "daily"
             },
             "start": "2024-05-06 09:00"
+          },
+          "Days of the month written with a fraction": {
+            "repeat": {
+              "bymonthday": [
+                15.0,
+                -1.0
+              ],
+              "count": 4,
+              "freq": "monthly"
+            },
+            "start": "2024-02-10 09:00"
           },
           "Every other Tuesday and Thursday": {
             "repeat": {

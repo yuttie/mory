@@ -679,8 +679,15 @@ fn zone_named(name: &str) -> Option<Zone> {
     })
 }
 
+/// A whole number, however it was written: `3.0` reaches the frontend as 3, JSON having one kind
+/// of number, and is 3 here as well.
 fn integer<T: TryFrom<i64>>(value: &Value) -> Option<T> {
-    value.as_i64().and_then(|n| T::try_from(n).ok())
+    let n = match value.as_i64() {
+        Some(n) => n,
+        // Within 2^53, past which the frontend no longer holds every whole number apart.
+        None => value.as_f64().filter(|n| n.fract() == 0.0 && n.abs() <= 9_007_199_254_740_992.0)? as i64,
+    };
+    T::try_from(n).ok()
 }
 
 /// `expandRule`: the wall clock of every occurrence a rule generates within the days `[from, to]`,
@@ -1021,6 +1028,19 @@ events:
             "2024-05-01 10:00  B",
             "2024-05-01 11:00  C",
         ]);
+    }
+
+    #[test]
+    fn a_whole_number_may_be_written_with_a_fraction() {
+        let number = |yaml: &str| serde_yaml::from_str::<Value>(yaml).unwrap();
+        assert_eq!(integer::<u16>(&number("2")), Some(2));
+        assert_eq!(integer::<u16>(&number("2.0")), Some(2));
+        assert_eq!(integer::<i8>(&number("-1.0")), Some(-1));
+        assert_eq!(integer::<u16>(&number("1.5")), None);
+        assert_eq!(integer::<u16>(&number("70000.0")), None);
+        assert_eq!(integer::<u32>(&number("1.0e20")), None);
+        assert_eq!(integer::<u32>(&number(".nan")), None);
+        assert_eq!(integer::<u32>(&number("'2'")), None);
     }
 
     #[test]

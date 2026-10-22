@@ -170,6 +170,29 @@ events:
             freq: daily
             interval: 65535
             count: 2
+    An interval written with a fraction:
+        start: 2024-10-16 09:00
+        repeat:
+            freq: weekly
+            interval: 2.0
+            count: 3
+    A count written with a fraction:
+        start: 2020-06-04 09:00
+        repeat:
+            freq: yearly
+            count: 3.0
+    A month written with a fraction:
+        start: 2020-01-05 09:00
+        repeat:
+            freq: yearly
+            bymonth: 3.0
+            count: 2
+    Days of the month written with a fraction:
+        start: 2024-02-10 09:00
+        repeat:
+            freq: monthly
+            bymonthday: [15.0, -1.0]
+            count: 4
 ---
 
 # Rules
