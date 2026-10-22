@@ -17,7 +17,10 @@
                 <template v-slot:prepend-inner>
                     <v-icon>{{ mdiMagnify }}</v-icon>
                 </template>
-                <template v-slot:append>
+                <template
+                    v-if="showsTags"
+                    v-slot:append
+                >
                     <v-menu
                         v-model="showingTagList"
                         v-bind:close-on-content-click="false"
@@ -454,54 +457,34 @@ const query = computed(() => {
 
 const isSearching = computed(() => query.value.paths.size + query.value.tags.size + query.value.any.size > 0);
 
-const matchedEntries = computed(() => {
-    const matched: FileRow[] = [];
+// A tab without the column shows no tags, so has none to search or to offer.
+const showsTags = computed(() => headers.value.some((header) => header.key === 'tags'));
 
+const matchedEntries = computed(() => {
     const queryPaths: string[] = [...query.value.paths].map(x => x.toLowerCase());
     const queryTags: string[] = [...query.value.tags].map(x => x.toLowerCase());
     const queryAny: string[] = [...query.value.any].map(x => x.toLowerCase());
 
-    for (const entry of kindEntries.value) {
-        const entryPath = entry.path.toLowerCase();
-        // By the title the file has, whether or not the open tab shows it, so a tab lists what the
-        // same search lists of every file, narrowed to its kind.
-        const entryTitle = entry.title?.toLowerCase() ?? '';
-        const entryTags = (() => {
-            if (entry.metadata === null) {
-                return [];
-            }
-            else if (!Object.hasOwn(entry.metadata, 'tags')) {
-                return [];
-            }
-            else if (!Array.isArray(entry.metadata.tags)) {
-                return [];
-            }
-            else {
-                return entry.metadata.tags.map((tag: any) => String(tag).toLowerCase());
-            }
-        })();
-        // Check if all conditions are met or not
-        if (queryPaths.some(kw => !entryPath.includes(kw))) {
-            continue;
+    const rows = kindEntries.value.flatMap((entry) => (kind.value === 'events' ? eventRows(entry) : [fileRow(entry)]));
+    return rows.filter((row) => {
+        // A path is asked for by name, so it is searched whether or not the row shows it.
+        const rowPath = row.path.toLowerCase();
+        if (queryPaths.some(kw => !rowPath.includes(kw))) {
+            return false;
         }
-        if (queryTags.some(tag => !entryTags.some(entryTag => entryTag.includes(tag)))) {
-            continue;
+        const rowTags = showsTags.value ? row.tags.map((tag) => tag.toLowerCase()) : [];
+        if (queryTags.some(tag => !rowTags.some(rowTag => rowTag.includes(tag)))) {
+            return false;
         }
-        // The rest may be anywhere in the file's path, tags or title, or in an event's name, so a
-        // file can match by some of its events alone.
-        const matchesAny = (...own: string[]) => queryAny.every(kw => entryPath.includes(kw)
-            || entryTags.some(entryTag => entryTag.includes(kw))
-            || entryTitle.includes(kw)
-            || own.some(text => text.includes(kw)));
-        if (kind.value === 'events') {
-            matched.push(...eventRows(entry).filter(row => matchesAny(row.title?.toLowerCase() ?? '')));
-        }
-        else if (matchesAny()) {
-            matched.push(fileRow(entry));
-        }
-    }
-
-    return matched;
+        // The rest only in the words the row shows, so nothing is listed for a title, a path or a
+        // tag the tab hides: a template's heading, the path of a note shown by its title, or the
+        // tags of the note an event is in.
+        const shown = [row.title ?? row.path, row.caption, row.folder, row.note, row.purpose, row.repeats]
+            .filter((text): text is string => text !== undefined)
+            .map((text) => text.toLowerCase())
+            .concat(rowTags);
+        return queryAny.every(kw => shown.some(text => text.includes(kw)));
+    });
 });
 
 // Lifecycle hooks

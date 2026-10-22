@@ -14,7 +14,7 @@ const REVIEW = uuid(2);
 // own requests, which is how the grid fetches one.
 const FILES = {
     'ideas.md': '# Ideas\n',
-    'ideas/draft.md': '---\nevents:\n    Submission:\n        start: 2026-11-02\n    Review:\n        instances: [{start: 2026-11-09}, {start: 2026-11-16}]\n---\n\n# Draft\n',
+    'ideas/draft.md': '---\ntags: [thesis]\nevents:\n    Submission:\n        start: 2026-11-02\n    Review:\n        instances: [{start: 2026-11-09}, {start: 2026-11-16}]\n---\n\n# Draft\n',
     'lecture.template': '# XXX lecture YY\n',
     [`.tasks/${REPORT}.md`]: '---\ntask:\n    status: {kind: todo}\n    deadline: 2026-11-30\n---\n\n# Write the report\n',
     [`.tasks/${REVIEW}.md`]: '---\ntask:\n    status: {kind: in_progress}\n---\n\n# Review the draft\n',
@@ -148,13 +148,16 @@ test('shows when each event starts on a phone', async ({ context, page }) => {
     await expect(rows(page).filter({ hasText: 'Meeting' }).getByText('2026-04-06 10:00')).toBeInViewport({ ratio: 1 });
 });
 
-test('finds an event by its name, or by the note it is in', async ({ context, page }) => {
+test('finds an event by its name, the note it is in, or how it repeats', async ({ context, page }) => {
     await mockBackend(context, FILES);
     await page.goto('/files/events?q=review');
     const titles = () => rows(page).locator('.path a').allTextContents();
     await expect.poll(titles).toEqual(['Review']);
-    await page.getByRole('textbox', { name: 'Search' }).fill('draft');
+    const search = page.getByRole('textbox', { name: 'Search' });
+    await search.fill('draft');
     await expect.poll(titles).toEqual(['Review', 'Submission']);
+    await search.fill('weekly');
+    await expect.poll(titles).toEqual(['Meeting']);
 });
 
 test('keeps the search across tabs, but not the selection', async ({ context, page }) => {
@@ -250,23 +253,44 @@ test('deletes no file the search hides', async ({ context, page }) => {
     await expect(row(page, 'Ideas').getByRole('checkbox')).not.toBeChecked();
 });
 
-test('narrows the search of every file to the kind of the open tab', async ({ context, page }) => {
+test('searches only what the open tab shows', async ({ context, page }) => {
     await mockBackend(context, FILES);
     await page.goto('/files?q=loose');
     await expect(rows(page)).toHaveCount(1);
     await expect(rows(page)).toContainText('Loose notes');
-    // By its title still, though the tab names it by its path.
+    // Not by the title the tab hides, naming the file by its path.
     await tab(page, 'Uncategorized').click();
     await expect(page).toHaveURL(/\/files\/others\?q=loose$/);
-    await expect(rows(page)).toHaveCount(1);
-    await expect(rows(page).getByRole('link', { name: '.tasks/notes.md', exact: true })).toBeVisible();
-
-    // And a template by its heading, though the tab names it as the Add menu does.
-    await page.getByRole('textbox', { name: 'Search' }).fill('xxx');
     await expect(rows(page).locator('.path')).toHaveCount(0);
+
+    // Nor a template by its heading of placeholders, but by its name.
+    const search = page.getByRole('textbox', { name: 'Search' });
     await tab(page, 'Templates').click();
+    await expect(page).toHaveURL(/\/files\/templates\?q=loose$/);
+    await search.fill('xxx');
+    await expect(rows(page).locator('.path')).toHaveCount(0);
+    await search.fill('lecture');
     await expect(rows(page)).toHaveCount(1);
-    await expect(rows(page).getByRole('link', { name: 'lecture', exact: true })).toBeVisible();
+
+    // Nor an event by the tags of its note, which the tab does not show, nor offers to search.
+    await tab(page, 'All').click();
+    await expect(page).toHaveURL(/\/files\?q=lecture$/);
+    await search.fill('thesis');
+    await expect(rows(page)).toHaveCount(1);
+    await expect(rows(page)).toContainText('Draft');
+    const tagList = page.locator('.v-input', { has: search }).locator('.v-input__append');
+    await expect(tagList).toHaveCount(1);
+    await tab(page, 'Events').click();
+    await expect(page).toHaveURL(/\/files\/events\?q=thesis$/);
+    await expect(rows(page).locator('.path')).toHaveCount(0);
+    await expect(tagList).toHaveCount(0);
+
+    // A path is asked for by name, so it is found though the title stands in for it.
+    await tab(page, 'Notes').click();
+    await expect(page).toHaveURL(/\/files\/notes\?q=thesis$/);
+    await search.fill('/draft.md');
+    await expect(rows(page)).toHaveCount(1);
+    await expect(rows(page)).toContainText('Draft');
 });
 
 // Frontmatter is whatever the file says, and one file's tags must not cost the view every other file.
