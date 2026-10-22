@@ -148,10 +148,16 @@ const HAS_OFFSET = /(?:Z|[+-]\d{2}:?\d{2})$/;
 
 export class RecurrenceError extends Error {}
 
-function toWeekday(value: string): RRuleWeekday {
-    const m = BYDAY.exec(value);
+// The ordinals moried's `rrule` crate takes in a month and in a year, the last and the first it
+// can count, having divided 31 and 366 days by 7. RFC 5545 allows `-5fri` in a month, and rrule.js
+// draws it, but moried refuses the rule.
+const ORDINALS: Record<string, [number, number]> = { monthly: [-4, 5], yearly: [-52, 53] };
+
+function toWeekday(value: unknown, freq: string): RRuleWeekday {
+    // Only text: `String([['mon']])` is `mon`, and moried takes no list for a weekday.
+    const m = typeof value === 'string' ? BYDAY.exec(value) : null;
     if (m === null) {
-        throw new RecurrenceError(`Unknown weekday "${value}"`);
+        throw new RecurrenceError(`Unknown weekday ${JSON.stringify(value)}`);
     }
     const weekday = WEEKDAYS[m[2]];
     if (m[1] === undefined) {
@@ -162,12 +168,16 @@ function toWeekday(value: string): RRuleWeekday {
         // rrule throws on a zero ordinal, and the schema's pattern admits `0wed`.
         throw new RecurrenceError(`"${value}" needs a non-zero ordinal`);
     }
+    // "the third Wednesday" needs a month or a year to count within: rrule.js drops the ordinal
+    // under a day, drawing every Monday for `2mon`, where moried drew every day.
+    if (!Object.hasOwn(ORDINALS, freq)) {
+        throw new RecurrenceError(`An ordinal weekday means nothing under freq: ${freq}`);
+    }
+    const [first, last] = ORDINALS[freq];
+    if (ordinal < first || ordinal > last) {
+        throw new RecurrenceError(`"${value}" counts past what freq: ${freq} counts, ${first} to ${last}`);
+    }
     return weekday.nth(ordinal);
-}
-
-function hasOrdinal(value: string): boolean {
-    const m = BYDAY.exec(value);
-    return m !== null && m[1] !== undefined;
 }
 
 /// A list in a rule as the dialect means it, whatever the frontmatter held: a single value is a
@@ -238,11 +248,6 @@ export function readRule(repeat: unknown, start: unknown): RecurrenceRule {
     const bymonthday = listOf(rule.bymonthday);
     const bymonth = listOf(rule.bymonth);
 
-    if (byday !== undefined && rule.freq === 'weekly' && byday.some((day) => hasOrdinal(String(day)))) {
-        // "the third Wednesday" needs a period longer than a week to count within.
-        throw new RecurrenceError('An ordinal weekday means nothing under freq: weekly');
-    }
-
     // Only text, and only a frequency's own name: JavaScript makes the key `daily` of `[daily]`,
     // and moried refuses it.
     if (typeof rule.freq !== 'string' || !Object.hasOwn(FREQUENCIES, rule.freq)) {
@@ -263,7 +268,7 @@ export function readRule(repeat: unknown, start: unknown): RecurrenceRule {
         options.interval = interval;
     }
     if (byday !== undefined) {
-        options.byweekday = byday.map((day) => toWeekday(String(day)));
+        options.byweekday = byday.map((day) => toWeekday(day, rule.freq as string));
     }
     if (bymonthday !== undefined) {
         options.bymonthday = bymonthday as number[];
@@ -366,13 +371,12 @@ export function termsOf(rule: RecurrenceRule): RuleTerms {
     const kept = (dayList ?? []).filter((day) => (day as number) > 0 || (day as number) < 0);
     const monthDays = kept.filter((day) => isWhole(day, 31)) as number[];
 
-    // rrule counts an ordinal within a month, or within the year when a yearly rule names no month,
-    // and drops it under a shorter period: `2mon` under `freq: daily` is every Monday. Naming plain
-    // weekdays as well, a rule draws only the days both name.
-    const counts = options.freq === Frequency.MONTHLY || options.freq === Frequency.YEARLY;
+    // rrule counts an ordinal within a month, or within the year when a yearly rule names no month;
+    // `readRule` lets one through under no shorter period. Naming plain weekdays as well, a rule
+    // draws only the days both name.
     const named = ((options.byweekday ?? []) as RRuleWeekday[]).map((day) => ({
         weekday: WEEKDAY_NAMES[day.weekday],
-        ...(counts && day.n !== undefined ? { ordinal: day.n } : {}),
+        ...(day.n !== undefined ? { ordinal: day.n } : {}),
     }));
     const plain = named.filter((day) => day.ordinal === undefined);
     const ordinals = named.filter((day) => day.ordinal !== undefined);

@@ -729,8 +729,9 @@ fn expand_rule(
                 None => NWeekday::Every(day),
                 Some(ordinal) => {
                     let ordinal = ordinal.as_str().parse::<i16>().ok().filter(|n| *n != 0)?;
-                    // "the third Wednesday" needs a period longer than a week to count within.
-                    if freq == Frequency::Weekly {
+                    // "the third Wednesday" needs a month or a year to count within. The crate
+                    // holds it to what either can count when the rule is built.
+                    if !matches!(freq, Frequency::Monthly | Frequency::Yearly) {
                         return None;
                     }
                     NWeekday::Nth(ordinal, day)

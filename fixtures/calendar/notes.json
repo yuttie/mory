@@ -2152,6 +2152,9 @@
     },
     "notes/rules.md": {
       "alarms": [
+        "2018-01-08 09:00  The 52nd Monday from a year's end  +0m",
+        "2018-12-31 09:00  The 53rd Monday of a year  +0m",
+        "2019-01-07 09:00  The 52nd Monday from a year's end  +0m",
         "2020-03-05 09:00  A month written with a fraction  +0m",
         "2020-03-15 10:00  Twice a year  +0m",
         "2020-06-01 08:00  A blank count is no limit  +0m",
@@ -2195,6 +2198,7 @@
         "2024-03-15 09:00  Days of the month written with a fraction  +0m",
         "2024-03-15 10:00  Twice a year  +0m",
         "2024-03-20 12:00  Third Wednesday  +0m",
+        "2024-03-29 09:00  The fifth Friday of a month  +0m",
         "2024-03-29 17:00  Last Friday  +0m",
         "2024-03-31 08:00  Last day of the month  +0m",
         "2024-03-31 08:00  The 31st  +0m",
@@ -2208,6 +2212,7 @@
         "2024-05-15 12:00  Third Wednesday  +0m",
         "2024-05-31 08:00  Last day of the month  +0m",
         "2024-05-31 08:00  The 31st  +0m",
+        "2024-05-31 09:00  The fifth Friday of a month  +0m",
         "2024-05-31 17:00  Last Friday  +0m",
         "2024-06-01 08:00  A blank count is no limit  +0m",
         "2024-06-01 17:00  The largest count  +0m",
@@ -2224,6 +2229,7 @@
         "2024-08-05 09:00  Start off the rule  +0m",
         "2024-08-12 09:00  Start off the rule  +0m",
         "2024-08-15 08:00  A month day, not a list  +0m",
+        "2024-08-30 09:00  The fifth Friday of a month  +0m",
         "2024-09-01 07:00  Null parts  +0m",
         "2024-09-15 08:00  A month day, not a list  +0m",
         "2024-09-15 10:00  Twice a year  +0m",
@@ -2248,6 +2254,7 @@
         "2024-11-20 09:00  An ordinal weekday, not a list  +0m",
         "2024-12-06 08:00  An empty weekday list  +0m",
         "2024-12-07 08:00  An empty month day list  +0m",
+        "2024-12-30 09:00  The 53rd Monday of a year  +0m",
         "2025-03-15 10:00  Twice a year  +0m",
         "2025-06-01 08:00  A blank count is no limit  +0m",
         "2025-06-01 17:00  The largest count  +0m",
@@ -2258,6 +2265,9 @@
         "2026-06-01 17:00  The largest count  +0m"
       ],
       "alarmsWithDefaults": [
+        "2018-01-08 09:00  The 52nd Monday from a year's end  -5m",
+        "2018-12-31 09:00  The 53rd Monday of a year  -5m",
+        "2019-01-07 09:00  The 52nd Monday from a year's end  -5m",
         "2020-03-05 09:00  A month written with a fraction  -5m",
         "2020-03-15 10:00  Twice a year  -5m",
         "2020-06-01 08:00  A blank count is no limit  -5m",
@@ -2301,6 +2311,7 @@
         "2024-03-15 09:00  Days of the month written with a fraction  -5m",
         "2024-03-15 10:00  Twice a year  -5m",
         "2024-03-20 12:00  Third Wednesday  -5m",
+        "2024-03-29 09:00  The fifth Friday of a month  -5m",
         "2024-03-29 17:00  Last Friday  -5m",
         "2024-03-31 08:00  Last day of the month  -5m",
         "2024-03-31 08:00  The 31st  -5m",
@@ -2314,6 +2325,7 @@
         "2024-05-15 12:00  Third Wednesday  -5m",
         "2024-05-31 08:00  Last day of the month  -5m",
         "2024-05-31 08:00  The 31st  -5m",
+        "2024-05-31 09:00  The fifth Friday of a month  -5m",
         "2024-05-31 17:00  Last Friday  -5m",
         "2024-06-01 08:00  A blank count is no limit  -5m",
         "2024-06-01 17:00  The largest count  -5m",
@@ -2330,6 +2342,7 @@
         "2024-08-05 09:00  Start off the rule  -5m",
         "2024-08-12 09:00  Start off the rule  -5m",
         "2024-08-15 08:00  A month day, not a list  -5m",
+        "2024-08-30 09:00  The fifth Friday of a month  -5m",
         "2024-09-01 07:00  Null parts  -5m",
         "2024-09-15 08:00  A month day, not a list  -5m",
         "2024-09-15 10:00  Twice a year  -5m",
@@ -2354,6 +2367,7 @@
         "2024-11-20 09:00  An ordinal weekday, not a list  -5m",
         "2024-12-06 08:00  An empty weekday list  -5m",
         "2024-12-07 08:00  An empty month day list  -5m",
+        "2024-12-30 09:00  The 53rd Monday of a year  -5m",
         "2025-03-15 10:00  Twice a year  -5m",
         "2025-06-01 08:00  A blank count is no limit  -5m",
         "2025-06-01 17:00  The largest count  -5m",
@@ -2364,6 +2378,9 @@
         "2026-06-01 17:00  The largest count  -5m"
       ],
       "drawn": [
+        "2018-01-08 09:00  The 52nd Monday from a year's end",
+        "2018-12-31 09:00  The 53rd Monday of a year",
+        "2019-01-07 09:00  The 52nd Monday from a year's end",
         "2020-03-05 09:00  A month written with a fraction",
         "2020-03-15 10:00  Twice a year",
         "2020-06-01 08:00  A blank count is no limit",
@@ -2407,6 +2424,7 @@
         "2024-03-15 09:00  Days of the month written with a fraction",
         "2024-03-15 10:00  Twice a year",
         "2024-03-20 12:00  Third Wednesday",
+        "2024-03-29 09:00  The fifth Friday of a month",
         "2024-03-29 17:00  Last Friday",
         "2024-03-31 08:00  Last day of the month",
         "2024-03-31 08:00  The 31st",
@@ -2420,6 +2438,7 @@
         "2024-05-15 12:00  Third Wednesday",
         "2024-05-31 08:00  Last day of the month",
         "2024-05-31 08:00  The 31st",
+        "2024-05-31 09:00  The fifth Friday of a month",
         "2024-05-31 17:00  Last Friday",
         "2024-06-01 08:00  A blank count is no limit",
         "2024-06-01 17:00  The largest count",
@@ -2436,6 +2455,7 @@
         "2024-08-05 09:00  Start off the rule",
         "2024-08-12 09:00  Start off the rule",
         "2024-08-15 08:00  A month day, not a list",
+        "2024-08-30 09:00  The fifth Friday of a month",
         "2024-09-01 07:00  Null parts",
         "2024-09-15 08:00  A month day, not a list",
         "2024-09-15 10:00  Twice a year",
@@ -2460,6 +2480,7 @@
         "2024-11-20 09:00  An ordinal weekday, not a list",
         "2024-12-06 08:00  An empty weekday list",
         "2024-12-07 08:00  An empty month day list",
+        "2024-12-30 09:00  The 53rd Monday of a year",
         "2025-03-15 10:00  Twice a year",
         "2025-06-01 08:00  A blank count is no limit",
         "2025-06-01 17:00  The largest count",
@@ -2599,6 +2620,26 @@
             },
             "start": "2024-10-14 10:00"
           },
+          "A weekday in a nested list is no rule": {
+            "repeat": {
+              "byday": [
+                [
+                  "mon"
+                ]
+              ],
+              "count": 3,
+              "freq": "weekly"
+            },
+            "start": "2021-05-05 09:00"
+          },
+          "A weekday that is a number is no rule": {
+            "repeat": {
+              "byday": 1,
+              "count": 3,
+              "freq": "weekly"
+            },
+            "start": "2021-05-05 10:00"
+          },
           "A weekday, not a list": {
             "repeat": {
               "byday": "wed",
@@ -2686,6 +2727,16 @@
               "interval": 2.0
             },
             "start": "2024-10-16 09:00"
+          },
+          "An ordinal under daily is no rule": {
+            "repeat": {
+              "byday": [
+                "2mon"
+              ],
+              "count": 3,
+              "freq": "daily"
+            },
+            "start": "2021-05-05 11:00"
           },
           "An ordinal weekday, not a list": {
             "repeat": {
@@ -2803,6 +2854,56 @@
               "freq": "monthly"
             },
             "start": "2024-01-31 08:00"
+          },
+          "The 52nd Monday from a year's end": {
+            "repeat": {
+              "byday": [
+                "-52mon"
+              ],
+              "count": 2,
+              "freq": "yearly"
+            },
+            "start": "2018-01-08 09:00"
+          },
+          "The 53rd Monday from a year's end is no rule": {
+            "repeat": {
+              "byday": [
+                "-53mon"
+              ],
+              "count": 2,
+              "freq": "yearly"
+            },
+            "start": "2018-01-01 09:00"
+          },
+          "The 53rd Monday of a year": {
+            "repeat": {
+              "byday": [
+                "53mon"
+              ],
+              "count": 2,
+              "freq": "yearly"
+            },
+            "start": "2018-12-31 09:00"
+          },
+          "The fifth Friday from a month's end is no rule": {
+            "repeat": {
+              "byday": [
+                "-5fri"
+              ],
+              "count": 3,
+              "freq": "monthly"
+            },
+            "start": "2024-03-01 09:00"
+          },
+          "The fifth Friday of a month": {
+            "repeat": {
+              "byday": [
+                "5fri"
+              ],
+              "count": 3,
+              "freq": "monthly"
+            },
+            "start": "2024-03-29 09:00"
           },
           "The largest count": {
             "repeat": {

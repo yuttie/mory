@@ -253,6 +253,54 @@ events:
         repeat:
             freq: toString
             count: 2
+    A weekday in a nested list is no rule:
+        start: 2021-05-05 09:00
+        repeat:
+            freq: weekly
+            byday: [[mon]]
+            count: 3
+    A weekday that is a number is no rule:
+        start: 2021-05-05 10:00
+        repeat:
+            freq: weekly
+            byday: 1
+            count: 3
+    An ordinal under daily is no rule:
+        start: 2021-05-05 11:00
+        repeat:
+            freq: daily
+            byday: [2mon]
+            count: 3
+    The fifth Friday from a month's end is no rule:
+        start: 2024-03-01 09:00
+        repeat:
+            freq: monthly
+            byday: [-5fri]
+            count: 3
+    The 53rd Monday from a year's end is no rule:
+        start: 2018-01-01 09:00
+        repeat:
+            freq: yearly
+            byday: [-53mon]
+            count: 2
+    The fifth Friday of a month:
+        start: 2024-03-29 09:00
+        repeat:
+            freq: monthly
+            byday: [5fri]
+            count: 3
+    The 53rd Monday of a year:
+        start: 2018-12-31 09:00
+        repeat:
+            freq: yearly
+            byday: [53mon]
+            count: 2
+    The 52nd Monday from a year's end:
+        start: 2018-01-08 09:00
+        repeat:
+            freq: yearly
+            byday: [-52mon]
+            count: 2
 ---
 
 # Rules

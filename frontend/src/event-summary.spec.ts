@@ -87,11 +87,22 @@ describe('describeRepeat', () => {
         expect(describeRepeat({ freq: 'monthly', bymonthday: [1, 32] }, start)).toBe('Monthly on the 1st');
         expect(describeRepeat({ freq: 'monthly', bymonthday: [0, 15] }, start)).toBe('Monthly on the 15th');
         expect(describeRepeat({ freq: 'yearly', bymonth: [5, 13, '7'] }, start)).toBe('Yearly in May');
-        // An ordinal counts within a month or a year, and a shorter period drops it.
-        expect(describeRepeat({ freq: 'daily', byday: ['2mon'] }, start)).toBe('Daily on Mon');
         // Naming plain weekdays too, a rule draws only the days both name.
         expect(describeRepeat({ freq: 'monthly', byday: ['mon', 'tue', '1mon'] }, start)).toBe('Monthly on the 1st Mon');
         expect(describeRepeat({ freq: 'yearly', byday: ['20mon'] }, start)).toBe('Yearly on the 20th Mon');
+    });
+
+    // As the calendar refuses them, and moried with it.
+    it('calls a rule unreadable that counts a weekday where moried cannot', () => {
+        for (const repeat of [
+            { freq: 'daily', byday: ['2mon'] }, { freq: 'weekly', byday: ['2mon'] },
+            { freq: 'monthly', byday: ['-5fri'] }, { freq: 'yearly', byday: ['-53mon'] },
+            { freq: 'weekly', byday: [['mon']] }, { freq: 'weekly', byday: 1 },
+        ]) {
+            expect(describeRepeat(repeat, start), JSON.stringify(repeat)).toBe('Unreadable rule');
+        }
+        expect(describeRepeat({ freq: 'monthly', byday: ['5fri'] }, start)).toBe('Monthly on the 5th Fri');
+        expect(describeRepeat({ freq: 'yearly', byday: ['-52mon'] }, start)).toBe('Yearly on the 52nd last Mon');
     });
 
     // rrule drops a day of the month that is neither positive nor negative, and with all of them
