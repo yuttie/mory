@@ -2,7 +2,7 @@
     <v-list-item
         link
         v-bind:prepend-icon="mdiFileDocumentOutline"
-        v-bind:title="path.replace(/\.template$/i, '')"
+        v-bind:title="templateNameOf(path)"
         v-on:click.stop="submenuIsVisible = true"
     >
         <template v-slot:append>
@@ -46,6 +46,8 @@ import {
     mdiPencil,
     mdiSubdirectoryArrowRight,
 } from '@mdi/js';
+
+import { templateNameOf } from '@/file-kinds';
 
 // Reactive states
 //

@@ -285,8 +285,8 @@ fn mcp_routes(oauth_state: oauth::OauthState) -> Router {
 /// Bumping this drops and refills the `entry` table on the next start. A row outlives the moried
 /// that wrote it for as long as its blob is unchanged, so this moves whenever what a row holds for
 /// a blob does, as well as when its columns do: 3 refilled the rows written before keys JSON cannot
-/// hold were left out of the listing one by one.
-const ENTRY_SCHEMA_VERSION: i64 = 3;
+/// hold were left out of the listing one by one, and 4 added whether a file is text.
+const ENTRY_SCHEMA_VERSION: i64 = 4;
 
 async fn init_cache_database(
     conn: &mut SqliteConnection,
@@ -428,7 +428,8 @@ async fn init_cache_database(
                 metadata   TEXT NOT NULL,
                 title      TEXT,
                 time       INTEGER NOT NULL,
-                tz_offset  INTEGER NOT NULL
+                tz_offset  INTEGER NOT NULL,
+                binary     INTEGER NOT NULL
             ) STRICT;
         ")
         .execute(&mut *conn)
@@ -847,14 +848,14 @@ async fn sync_cache_to(
     let mut rows = Vec::with_capacity(delta.changed.len());
     for (path, blob_id) in &delta.changed {
         let mime_type = guess_mime_from_path(path);
-        let (size, metadata, title) = {
+        let (size, metadata, title, binary) = {
             let repo = repo.lock().unwrap();
             let blob = repo.find_blob(*blob_id)?;
             let size = blob.size();
             // Names the note in what `extract_metadata` warns about it, which it cannot itself.
             let _entry = tracing::warn_span!("entry", path = %path.display()).entered();
             let (metadata, title) = extract_metadata(blob.content(), &mime_type);
-            (size, metadata, title)
+            (size, metadata, title, std::str::from_utf8(blob.content()).is_err())
         };
         // Every changed path should have been attributed; fall back to HEAD's own time rather
         // than dropping the entry from the listing if some path was not.
@@ -862,7 +863,7 @@ async fn sync_cache_to(
             tracing::warn!("No commit attributed {:?}; using HEAD's time.", path);
             head_time
         });
-        rows.push((path.clone(), *blob_id, size, mime_type, metadata, title, when));
+        rows.push((path.clone(), *blob_id, size, mime_type, metadata, title, when, binary));
     }
 
     let mut tx = conn.begin().await?;
@@ -873,9 +874,9 @@ async fn sync_cache_to(
             .await
             .context("Failed to delete an entry")?;
     }
-    for (path, blob_id, size, mime_type, metadata, title, when) in rows {
+    for (path, blob_id, size, mime_type, metadata, title, when, binary) in rows {
         sqlx::query("
-                INSERT INTO entry VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO entry VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(path) DO UPDATE SET
                         blob_id = excluded.blob_id,
                         size = excluded.size,
@@ -883,7 +884,8 @@ async fn sync_cache_to(
                         metadata = excluded.metadata,
                         title = excluded.title,
                         time = excluded.time,
-                        tz_offset = excluded.tz_offset;
+                        tz_offset = excluded.tz_offset,
+                        binary = excluded.binary;
             ")
             .bind(path.to_str())
             .bind(blob_id.to_string())
@@ -893,6 +895,7 @@ async fn sync_cache_to(
             .bind(title)
             .bind(when.seconds())
             .bind(when.offset_minutes() * 60)
+            .bind(binary)
             .execute(&mut *tx)
             .await
             .context("Failed to upsert an entry")?;
@@ -2591,6 +2594,11 @@ mod models {
         pub metadata: Option<Metadata>,
         pub title: Option<String>,
         pub time: DateTime<FixedOffset>,
+        /// Whether the file is anything but UTF-8 text, which its name does not say: no extension
+        /// tells an archive from a note, and `mime_guess` takes `.org` for Lotus Organizer. Left
+        /// out for text, the most of the listing.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        pub binary: bool,
     }
 
     #[cfg(test)]
@@ -2605,6 +2613,7 @@ mod models {
                 metadata: Some(serde_yaml::from_str(frontmatter).expect("valid YAML")),
                 title: None,
                 time: "2024-01-01T00:00:00+00:00".parse().expect("a valid time"),
+                binary: false,
             }
         }
     }
@@ -2861,6 +2870,7 @@ mod models {
             metadata,
             title: row.get("title"),
             time: time,
+            binary: row.get("binary"),
         }
     }
 

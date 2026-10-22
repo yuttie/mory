@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { EventRepeat } from '@/api';
-import { RecurrenceError, expandRule, parseWallClock } from '@/recurrence';
+import { RecurrenceError, expandRule, parseWallClock, readRule } from '@/recurrence';
 
 describe('parseWallClock', () => {
     it('reads a date, a datetime, and seconds', () => {
@@ -144,6 +144,83 @@ describe('expandRule', () => {
         expect(() => expandRule(
             { freq: 'daily', tz: 'Mars/Olympus' }, '2024-05-01 09:00', '2024-05-01', '2024-05-02',
         )).toThrow(RecurrenceError);
+    });
+});
+
+describe('readRule', () => {
+    function refuses(read: () => unknown): boolean {
+        try {
+            read();
+            return false;
+        }
+        catch (error) {
+            if (error instanceof RecurrenceError) {
+                return true;
+            }
+            throw error;
+        }
+    }
+
+    // A view that describes a rule from this alone has to refuse what the calendar refuses. An
+    // unknown zone is the one exception, met only by converting an occurrence: on dates, as here,
+    // nothing is converted.
+    it('refuses what expandRule refuses', () => {
+        const rules: unknown[] = [
+            undefined, null, 'weekly', ['weekly'], {}, { freq: 'hourly' }, { freq: 'constructor' },
+            { freq: 'weekly' }, { freq: 'weekly', byday: ['WE'] }, { freq: 'weekly', byday: ['wed', 'WED'] },
+            { freq: 'weekly', byday: ['2mon'] }, { freq: 'monthly', byday: ['0wed'] }, { freq: 'monthly', byday: '3wed' },
+            { freq: 'weekly', byday: 5 }, { freq: 'weekly', byday: [{}] }, { freq: 'daily', byday: ['2mon'] },
+            { freq: 'weekly', interval: 0 }, { freq: 'weekly', interval: -1 }, { freq: 'weekly', interval: 1.5 },
+            { freq: 'weekly', interval: 'twice' }, { freq: 'weekly', interval: 70000 }, { freq: 'weekly', interval: null },
+            { freq: 'weekly', until: 'next year' }, { freq: 'weekly', until: null, count: 2 }, { freq: 'weekly', until: '' },
+            { freq: 'weekly', until: 20240601 }, { freq: 'weekly', until: '2024-05-31' },
+            { freq: 'daily', tz: 'Mars/Olympus', until: '2024-05-03 10:00:00+09:00' },
+            { freq: 'daily', tz: 'Mars/Olympus', count: 2 }, { freq: 'weekly', count: 0 }, { freq: 'weekly', count: '3' },
+            { freq: 'monthly', bymonthday: [32] }, { freq: 'monthly', bymonthday: ['15'] }, { freq: 'yearly', bymonth: [13] },
+        ];
+        for (const repeat of rules) {
+            for (const start of ['2024-05-01', 'nonsense', 20240501]) {
+                expect(
+                    refuses(() => readRule(repeat, start)),
+                    `${JSON.stringify(repeat)} at ${start}`,
+                ).toBe(refuses(() => expandRule(repeat as EventRepeat, start as string, '2024-05-01', '2024-06-30')));
+            }
+        }
+    });
+
+    it('reads the start the rule is anchored at as written, without its offset', () => {
+        expect(readRule({ freq: 'weekly' }, '2024-05-01 10:00:00-07:00').start)
+            .toMatchObject({ year: 2024, month: 5, day: 1, hour: 10, hasTime: true });
+    });
+});
+
+describe('expandRule reading until in the rule\'s zone', () => {
+    // 00:30 UTC is 09:30 in Tokyo, which lets a 09:00 occurrence on the 3rd in; read as written,
+    // without its offset, it would not.
+    beforeAll(() => { vi.stubEnv('TZ', 'Asia/Tokyo'); });
+    afterAll(() => { vi.unstubAllEnvs(); });
+
+    const until = '2024-05-03 00:30:00+00:00';
+
+    it('reads a blank zone as the reader\'s, as each occurrence does', () => {
+        for (const tz of [null, '']) {
+            expect(expandRule(
+                { freq: 'daily', tz, until } as unknown as EventRepeat, '2024-05-01 09:00', '2024-05-01', '2024-05-31',
+            ), JSON.stringify(tz)).toEqual(['2024-05-01 09:00', '2024-05-02 09:00', '2024-05-03 09:00']);
+        }
+    });
+
+    // Intl throws a RangeError for a zone it does not know, which used to escape and blank the
+    // calendar, all-day series included.
+    it('refuses an unknown zone rather than throwing out of the calendar', () => {
+        for (const start of ['2024-05-01 09:00', '2024-05-01']) {
+            expect(() => expandRule(
+                { freq: 'daily', tz: 'Mars/Olympus', until }, start, '2024-05-01', '2024-05-31',
+            ), start).toThrow(RecurrenceError);
+        }
+        expect(() => expandRule(
+            { freq: 'daily', tz: 0, until } as unknown as EventRepeat, '2024-05-01 09:00', '2024-05-01', '2024-05-31',
+        )).not.toThrow();
     });
 });
 

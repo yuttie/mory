@@ -132,46 +132,71 @@ function listOf(value: unknown): unknown[] | undefined {
     return list.length === 0 ? undefined : list;
 }
 
+/// The wall clock in `tz` at the instant `value` names, which carries its offset.
+///
+/// The zone is read as `dayjs.tz` reads it for each occurrence: a blank one is the reader's own,
+/// and one Intl does not know is refused. Intl throws a `RangeError` for it, which out of here
+/// would blank the calendar rather than report one rule.
+function wallClockIn(value: string, tz: unknown): string {
+    try {
+        return dayjs(value).tz((tz || undefined) as string | undefined).format('YYYY-MM-DD HH:mm:ss');
+    }
+    catch {
+        throw new RecurrenceError(`Unknown timezone "${String(tz)}"`);
+    }
+}
+
 // What `backend/src/note_events.rs` holds an interval in, which the two must agree on.
 const MAX_INTERVAL = 65535;
 
-/// The wall-clock occurrences a rule generates that fall within `[from, to]`.
+/// A rule as the calendar reads it, before any window is asked of it.
 ///
-/// Returned in the reader's own zone: `repeat.tz` names the zone the rule's wall clock belongs to,
-/// and is absent when that is already the reader's.
-export function expandRule(
-    repeat: EventRepeat,
-    start: string,
-    from: string,
-    to: string,
-): string[] {
+/// `expandRule` starts from this, so a view that only describes a rule -- the Files view, which
+/// expands nothing -- can refuse exactly what the calendar refuses. One mistake is met later, in
+/// the calendar as anywhere: a `tz` that Intl does not know, which only converting an occurrence
+/// with it finds (`inReaderZone`).
+export interface RecurrenceRule {
+    /// The rule, built, to ask for occurrences.
+    rrule: RRule;
+    /// The wall clock the rule is anchored at: `start` as written, any offset dropped.
+    start: WallClock;
+    /// The zone that wall clock is in, as written; absent when it is the reader's.
+    tz: unknown;
+    /// `until` as each occurrence is compared with it: a wall clock in the rule's own frame. A date
+    /// stays a date here, though the comparison takes in the whole day.
+    until?: WallClock;
+}
+
+/// `repeat` anchored at `start`, or a `RecurrenceError` for a rule the calendar refuses.
+export function readRule(repeat: unknown, start: unknown): RecurrenceRule {
     if (typeof repeat !== 'object' || repeat === null) {
         throw new RecurrenceError('repeat must be a mapping of rule fields');
     }
+    const rule = repeat as { [K in keyof EventRepeat]?: unknown };
     const anchorStart = parseWallClock(start);
     if (anchorStart === null) {
-        throw new RecurrenceError(`Unusable start "${start}"`);
+        throw new RecurrenceError(`Unusable start "${String(start)}"`);
     }
 
     // Frontmatter is whatever the file said, so the lists are read rather than trusted: a
     // `TypeError` out of here would blank the whole calendar.
-    const byday = listOf(repeat.byday);
-    const bymonthday = listOf(repeat.bymonthday);
-    const bymonth = listOf(repeat.bymonth);
+    const byday = listOf(rule.byday);
+    const bymonthday = listOf(rule.bymonthday);
+    const bymonth = listOf(rule.bymonth);
 
-    if (byday !== undefined && repeat.freq === 'weekly' && byday.some((day) => hasOrdinal(String(day)))) {
+    if (byday !== undefined && rule.freq === 'weekly' && byday.some((day) => hasOrdinal(String(day)))) {
         // "the third Wednesday" needs a period longer than a week to count within.
         throw new RecurrenceError('An ordinal weekday means nothing under freq: weekly');
     }
 
     const options: ConstructorParameters<typeof RRule>[0] = {
-        freq: FREQUENCIES[repeat.freq],
+        freq: FREQUENCIES[rule.freq as EventRepeat['freq']],
         dtstart: toAnchor(anchorStart),
     };
     // Blank is no interval, as it is for the other fields. Anything else that is not a whole number
     // from one to what the backend's `u16` holds is not a rule: rrule.js never finishes expanding
     // one, and a loop here freezes the page where a throw would only blank the calendar.
-    const interval: unknown = repeat.interval;
+    const interval = rule.interval;
     if (interval !== undefined && interval !== null) {
         if (typeof interval !== 'number' || !Number.isInteger(interval) || interval < 1 || interval > MAX_INTERVAL) {
             throw new RecurrenceError(`interval must be a whole number from 1 to ${MAX_INTERVAL}, not ${JSON.stringify(interval)}`);
@@ -187,29 +212,185 @@ export function expandRule(
     if (bymonth !== undefined) {
         options.bymonth = bymonth as number[];
     }
-    if (repeat.wkst !== undefined) {
-        options.wkst = WEEKDAYS[repeat.wkst];
+    if (rule.wkst !== undefined) {
+        options.wkst = WEEKDAYS[rule.wkst as string];
     }
-    if (repeat.count !== undefined) {
-        options.count = repeat.count;
+    if (rule.count !== undefined) {
+        options.count = rule.count as number;
     }
-    if (repeat.until !== undefined) {
-        const until = parseWallClock(repeat.until);
+    let resolvedUntil: WallClock | undefined;
+    if (rule.until !== undefined) {
+        const until = parseWallClock(rule.until);
         if (until === null) {
-            throw new RecurrenceError(`Unusable until "${repeat.until}"`);
+            throw new RecurrenceError(`Unusable until "${String(rule.until)}"`);
         }
         // `until` is compared against occurrences in the rule's own frame, so an offset on it is
         // read rather than ignored -- unlike `start`, whose offset only records which one applied.
         // Both are the same wall clock here once the offset has been resolved into `tz`.
-        const bounded = repeat.tz !== undefined && until.hasTime && HAS_OFFSET.test(repeat.until)
-            ? parseWallClock(dayjs(repeat.until).tz(repeat.tz).format('YYYY-MM-DD HH:mm:ss'))
+        const written = rule.until as string;
+        const bounded = rule.tz !== undefined && until.hasTime && HAS_OFFSET.test(written)
+            ? parseWallClock(wallClockIn(written, rule.tz))
             : until;
         const resolved = bounded ?? until;
+        resolvedUntil = resolved;
         // A date-only `until` includes the whole day.
         options.until = resolved.hasTime
             ? toAnchor(resolved)
             : toAnchor({ ...resolved, hour: 23, minute: 59, second: 59, hasTime: true });
     }
+
+    // rrule throws plain `Error`s for a rule it will not build -- an unknown frequency. Those are a
+    // note's mistake, so they are reported like any other, never allowed out of the derivation to
+    // blank the view.
+    let rrule: RRule;
+    try {
+        rrule = new RRule(options);
+    }
+    catch (error) {
+        throw new RecurrenceError(
+            error instanceof Error ? error.message : 'the rule could not be built');
+    }
+    return { rrule, start: anchorStart, tz: rule.tz, ...(resolvedUntil === undefined ? {} : { until: resolvedUntil }) };
+}
+
+// rrule's weekdays in its own order, Monday first.
+const WEEKDAY_NAMES = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+
+export type WeekdayName = typeof WEEKDAY_NAMES[number];
+
+/// What a rule draws on, as rrule reads the values `readRule` lets through.
+///
+/// rrule reads some of them otherwise than they are written, and the schema refuses most of those
+/// while the calendar draws them all the same. A view that describes a rule without expanding it
+/// has to follow rrule rather than the text: `count: '3'` draws three, and `bymonth: [13]` nothing.
+export interface RuleTerms {
+    /// The weekdays it draws on, each with the ordinal it counts if any; empty for any weekday.
+    weekdays: { weekday: WeekdayName; ordinal?: number }[];
+    /// The days of the month it draws on, negative ones counted from its end; empty for any.
+    monthDays: number[];
+    /// `bymonthday` names days, but none rrule keeps. That leaves the rule no day of its own and
+    /// takes none from its start either, so it draws on every day of each period.
+    everyDay: boolean;
+    /// The months it draws in, from 1; empty for any.
+    months: number[];
+    /// How many occurrences it stops after; absent for no limit.
+    count?: number;
+    /// It draws nothing, whatever its start: a value it names can never be met.
+    never: boolean;
+}
+
+export function termsOf(rule: RecurrenceRule): RuleTerms {
+    // What `readRule` handed rrule, before rrule's own reading.
+    const options = rule.rrule.origOptions;
+
+    // rrule counts a `count` down with `--count` and stops when that is falsy: `'3'` is three, one
+    // that is not a number stops after the first occurrence, and one that never steps down to zero
+    // -- negative, fractional, too large to step -- is no limit at all. Zero draws nothing.
+    const written: unknown = options.count;
+    let count: number | undefined;
+    if (written === 0) {
+        count = 0;
+    }
+    else if (written) {
+        const n = Number(written);
+        count = Number.isNaN(n) ? 1 : (Number.isSafeInteger(n) && n >= 1 ? n : undefined);
+    }
+
+    // rrule matches a month or a day of the month by strict equality, so only a whole number of the
+    // right size is ever met: not `'3'`, not 13.
+    const isWhole = (value: unknown, limit: number): value is number =>
+        typeof value === 'number' && Number.isInteger(value) && value !== 0 && Math.abs(value) <= limit;
+    const monthList = options.bymonth as unknown[] | undefined;
+    const months = (monthList ?? []).filter((month) => isWhole(month, 12) && month > 0) as number[];
+    // Of the days of the month, rrule keeps only what compares as positive or negative. Dropping all
+    // of them leaves no restriction, not an empty one.
+    const dayList = options.bymonthday as unknown[] | undefined;
+    const kept = (dayList ?? []).filter((day) => (day as number) > 0 || (day as number) < 0);
+    const monthDays = kept.filter((day) => isWhole(day, 31)) as number[];
+
+    // rrule counts an ordinal within a month, or within the year when a yearly rule names no month,
+    // and drops it under a shorter period: `2mon` under `freq: daily` is every Monday. Naming plain
+    // weekdays as well, a rule draws only the days both name.
+    const counts = options.freq === Frequency.MONTHLY || options.freq === Frequency.YEARLY;
+    const named = ((options.byweekday ?? []) as RRuleWeekday[]).map((day) => ({
+        weekday: WEEKDAY_NAMES[day.weekday],
+        ...(counts && day.n !== undefined ? { ordinal: day.n } : {}),
+    }));
+    const plain = named.filter((day) => day.ordinal === undefined);
+    const ordinals = named.filter((day) => day.ordinal !== undefined);
+    const last = options.freq === Frequency.YEARLY && monthList === undefined ? 53 : 5;
+    const met = ordinals.filter((day) => Math.abs(day.ordinal ?? 0) <= last
+        && (plain.length === 0 || plain.some((each) => each.weekday === day.weekday)));
+    const weekdays = ordinals.length > 0 ? met : plain;
+
+    return {
+        weekdays,
+        monthDays,
+        everyDay: dayList !== undefined && kept.length === 0,
+        months,
+        ...(count === undefined ? {} : { count }),
+        never: count === 0
+            || (named.length > 0 && weekdays.length === 0)
+            || (kept.length > 0 && monthDays.length === 0)
+            || (monthList !== undefined && months.length === 0),
+    };
+}
+
+/// A wall clock the rule generates, in the reader's zone: `tz` names the zone it belongs to, and is
+/// absent when that is already the reader's.
+function inReaderZone(wallClock: string, hasTime: boolean, tz: unknown): string {
+    // A date is not an instant: converting midnight-in-a-zone into the reader's moves the date.
+    // The backend no longer writes `tz` for an all-day series, but a hand-written note may.
+    if (tz === undefined || !hasTime) {
+        return wallClock;
+    }
+    // An unknown zone reaches Intl and throws a RangeError rather than producing an invalid
+    // dayjs, so the failure has to be caught rather than tested for.
+    let converted;
+    try {
+        converted = dayjs.tz(wallClock, tz as string);
+    }
+    catch {
+        throw new RecurrenceError(`Unknown timezone "${String(tz)}"`);
+    }
+    if (!converted.isValid()) {
+        throw new RecurrenceError(`Unknown timezone "${String(tz)}"`);
+    }
+    return converted.local().format('YYYY-MM-DD HH:mm');
+}
+
+/// Where the calendar puts the start a rule is anchored at, in the reader's zone: its wall clock,
+/// converted as each occurrence is. A start off the rule's own pattern is put there all the same,
+/// though rrule generates nothing there.
+///
+/// A `RecurrenceError` for a zone Intl does not know, which the calendar meets converting the first
+/// occurrence it draws.
+export function ruleStart(rule: RecurrenceRule): string {
+    return inReaderZone(formatAnchor(toAnchor(rule.start), rule.start.hasTime), rule.start.hasTime, rule.tz);
+}
+
+/// Where the calendar puts a rule's `until`, in the reader's zone: the wall clock each occurrence is
+/// compared with, converted as they are. An offset on it is read only into a `tz`; without one,
+/// the wall clock is compared as written. A date stays the date, all of which the rule takes in.
+export function ruleUntil(rule: RecurrenceRule): string | undefined {
+    if (rule.until === undefined) {
+        return undefined;
+    }
+    const text = formatAnchor(toAnchor(rule.until), rule.until.hasTime);
+    return rule.until.hasTime ? inReaderZone(text, rule.start.hasTime, rule.tz) : text;
+}
+
+/// The wall-clock occurrences a rule generates that fall within `[from, to]`.
+///
+/// Returned in the reader's own zone: `repeat.tz` names the zone the rule's wall clock belongs to,
+/// and is absent when that is already the reader's.
+export function expandRule(
+    repeat: EventRepeat,
+    start: string,
+    from: string,
+    to: string,
+): string[] {
+    const rule = readRule(repeat, start);
 
     const windowFrom = parseWallClock(from);
     const windowToRead = parseWallClock(to);
@@ -223,41 +404,17 @@ export function expandRule(
         : { ...windowToRead, hour: 23, minute: 59, second: 59, hasTime: true };
 
     // `between` is inclusive at both ends here, and `count` is still honoured from the series
-    // start, which is the reason the rule is never re-anchored to the window.
-    // rrule throws plain `Error`s for a rule it will not build -- an unknown frequency, a
-    // contradictory combination. Those are a note's mistake, so they are reported like any other,
-    // never allowed out of the derivation to blank the view.
+    // start, which is the reason the rule is never re-anchored to the window. What rrule throws
+    // while expanding is the note's mistake too, and reported as one.
     let occurrences: string[];
     try {
-        occurrences = new RRule(options)
+        occurrences = rule.rrule
             .between(toAnchor(windowFrom), toAnchor(windowTo), true)
-            .map((anchor) => formatAnchor(anchor, anchorStart.hasTime));
+            .map((anchor) => formatAnchor(anchor, rule.start.hasTime));
     }
     catch (error) {
         throw new RecurrenceError(
             error instanceof Error ? error.message : 'the rule could not be expanded');
     }
-
-    // A date is not an instant: converting midnight-in-a-zone into the reader's moves the date.
-    // The backend no longer writes `tz` for an all-day series, but a hand-written note may.
-    if (repeat.tz === undefined || !anchorStart.hasTime) {
-        return occurrences;
-    }
-    return occurrences.map((wallClock) => {
-        // An unknown zone reaches Intl and throws a RangeError rather than producing an invalid
-        // dayjs, so the failure has to be caught rather than tested for.
-        let converted;
-        try {
-            converted = dayjs.tz(wallClock, repeat.tz);
-        }
-        catch {
-            throw new RecurrenceError(`Unknown timezone "${repeat.tz}"`);
-        }
-        if (!converted.isValid()) {
-            throw new RecurrenceError(`Unknown timezone "${repeat.tz}"`);
-        }
-        return anchorStart.hasTime
-            ? converted.local().format('YYYY-MM-DD HH:mm')
-            : converted.local().format('YYYY-MM-DD');
-    });
+    return occurrences.map((wallClock) => inReaderZone(wallClock, rule.start.hasTime, rule.tz));
 }

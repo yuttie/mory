@@ -49,6 +49,21 @@ impl RepoFixture {
         offset_minutes: i32,
         message: &str,
     ) -> Oid {
+        let changes: Vec<(&str, Option<&[u8]>)> =
+            changes.iter().map(|(path, content)| (*path, content.map(str::as_bytes))).collect();
+        self.commit_bytes_at(ref_name, parents, &changes, secs, offset_minutes, message)
+    }
+
+    /// `commit_at` with content no `&str` can hold, for a file that is not UTF-8 text.
+    pub fn commit_bytes_at(
+        &self,
+        ref_name: &str,
+        parents: &[Oid],
+        changes: &[(&str, Option<&[u8]>)],
+        secs: i64,
+        offset_minutes: i32,
+        message: &str,
+    ) -> Oid {
         let parent_commits: Vec<_> = parents
             .iter()
             .map(|oid| self.repo.find_commit(*oid).expect("unknown parent commit"))
@@ -65,7 +80,7 @@ impl RepoFixture {
                 Some(content) => {
                     let blob_oid = self
                         .repo
-                        .blob(content.as_bytes())
+                        .blob(content)
                         .expect("failed to write a blob");
                     let entry = IndexEntry {
                         ctime: IndexTime::new(0, 0),
@@ -1023,11 +1038,44 @@ async fn a_note_the_markdown_parser_panics_on_does_not_stop_a_sync() {
 }
 
 #[tokio::test]
+async fn a_file_that_is_not_utf8_text_is_listed_as_binary() {
+    // By what it holds, as its name cannot say: a file with no extension may be either, and
+    // `mime_guess` takes an Org note for Lotus Organizer.
+    let fixture = RepoFixture::new();
+    let head = fixture.commit_bytes_at(
+        "refs/heads/main",
+        &[],
+        &[
+            ("archive", Some(&b"PK\x03\x04\x14\x00\x00\x00\x08\x00\xb7"[..])),
+            ("ideas.org", Some(&b"* Ideas\n"[..])),
+            ("latin-1.txt", Some(&b"caf\xe9\n"[..])),
+        ],
+        1_000,
+        0,
+        "base",
+    );
+    fixture.set_head("refs/heads/main");
+    let mut conn = test_cache_db().await;
+    sync_to(&mut conn, &fixture, head).await.unwrap();
+
+    let listed = sqlx::query("SELECT * FROM entry ORDER BY path;")
+        .map(crate::models::row_to_list_entry)
+        .fetch_all(&mut conn)
+        .await
+        .unwrap();
+    let binary: Vec<(&str, bool)> = listed.iter().map(|entry| (entry.path.to_str().unwrap(), entry.binary)).collect();
+    assert_eq!(binary, vec![("archive", true), ("ideas.org", false), ("latin-1.txt", true)]);
+    // Said only of what is binary, as most of the listing is not.
+    assert_eq!(serde_json::to_value(&listed[0]).unwrap()["binary"], true);
+    assert_eq!(serde_json::to_value(&listed[1]).unwrap().get("binary"), None);
+}
+
+#[tokio::test]
 async fn a_cached_row_the_listing_cannot_read_is_listed_as_an_error() {
     // As a moried that wrote keys named alike as they came left the row.
     let mut conn = test_cache_db().await;
     for (path, metadata) in [("duplicate-key.md", r#"{"1":"a","1":"b"}"#), ("fine.md", r#"{"tags":["x"]}"#)] {
-        sqlx::query("INSERT INTO entry VALUES (?, ?, 0, 'text/markdown', ?, NULL, 0, 0);")
+        sqlx::query("INSERT INTO entry VALUES (?, ?, 0, 'text/markdown', ?, NULL, 0, 0, 0);")
             .bind(path)
             .bind(Oid::zero().to_string())
             .bind(metadata)
@@ -1323,7 +1371,7 @@ async fn a_cold_sync_drops_rows_that_are_no_longer_in_head() {
 
     // A row for a path that HEAD does not contain, as a force-push to an older state would leave.
     sqlx::query(
-        "INSERT INTO entry VALUES ('stale.md', 'deadbeef', 1, 'text/markdown', 'null', NULL, 1, 0);",
+        "INSERT INTO entry VALUES ('stale.md', 'deadbeef', 1, 'text/markdown', 'null', NULL, 1, 0, 0);",
     )
     .execute(&mut conn)
     .await
@@ -2482,6 +2530,7 @@ fn listed_note(path: impl Into<std::path::PathBuf>, blob: &[u8]) -> crate::model
         metadata,
         title,
         time: "2024-05-01T00:00:00+00:00".parse().expect("a valid time"),
+        binary: false,
     }
 }
 

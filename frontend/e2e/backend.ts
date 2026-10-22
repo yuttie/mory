@@ -22,6 +22,19 @@ export function uuid(n: number): string {
     return `${String(n).padStart(8, '0')}-0000-4000-8000-000000000000`;
 }
 
+// The type moried lists a file as, by its extension: a medium's own, and Markdown for any other: the
+// tests tell the rest apart by their paths, never by their type.
+const MEDIA_TYPES: Record<string, string> = {
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    mp4: 'video/mp4',
+    pdf: 'application/pdf',
+};
+
+function mimeTypeOf(path: string): string {
+    return MEDIA_TYPES[path.slice(path.lastIndexOf('.') + 1).toLowerCase()] ?? 'text/markdown';
+}
+
 export interface Repository {
     writes: { path: string; content: string }[];
     renames: { from: string; to: string }[];
@@ -52,7 +65,7 @@ export async function mockBackend(context: BrowserContext, notes: Record<string,
                 return {
                     path: notePath,
                     size: content.length,
-                    mime_type: 'text/markdown',
+                    mime_type: mimeTypeOf(notePath),
                     metadata: document && document.errors.length === 0 ? document.toJSON() : null,
                     title: /^# (.*)$/m.exec(body)?.[1] ?? null,
                     time: '2026-09-01T12:00:00+00:00',

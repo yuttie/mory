@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { routeForMime } from '@/file-route';
+import { isMediaType, routeForMime } from '@/file-route';
 
 describe('routeForMime', () => {
     it('sends media to the media view', () => {
@@ -22,5 +22,19 @@ describe('routeForMime', () => {
             name: 'Note',
             params: { path: ['notes', 'name#draft?100%.md'] },
         });
+    });
+});
+
+describe('isMediaType', () => {
+    it('takes images, videos and PDFs', () => {
+        expect(isMediaType('image/webp')).toBe(true);
+        expect(isMediaType('video/webm')).toBe(true);
+        expect(isMediaType('application/pdf')).toBe(true);
+    });
+
+    it('leaves text and other documents to the note view', () => {
+        expect(isMediaType('text/markdown')).toBe(false);
+        expect(isMediaType('application/json')).toBe(false);
+        expect(isMediaType('application/octet-stream')).toBe(false);
     });
 });
