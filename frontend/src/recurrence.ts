@@ -112,6 +112,12 @@ function toAnchor(w: WallClock): Date {
     return new Date(Date.UTC(w.year, w.month - 1, w.day, w.hour, w.minute, w.second));
 }
 
+/// A wall clock spelt as the calendar reads it, a part past its range rolled over into the next
+/// larger one, as rrule rolls a rule's start: `2024-02-30` is March 1, and `24:00` the next day.
+export function formatWallClock(w: WallClock): string {
+    return formatAnchor(toAnchor(w), w.hasTime);
+}
+
 function formatAnchor(anchor: Date, hasTime: boolean): string {
     const p = (n: number) => String(n).padStart(2, '0');
     const date =

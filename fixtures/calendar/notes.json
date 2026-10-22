@@ -1825,9 +1825,11 @@
     "notes/quirks.md": {
       "alarms": [
         "2024-02-29 17:00  Day past its month's end with an offset  +0m",
+        "2024-03-01 11:00  Day past its month's end  +0m",
         "2024-04-28 04:00  Until that does not parse  +0m",
         "2024-04-29 04:00  Until that does not parse  +0m",
         "2024-04-30 04:00  Until that does not parse  +0m",
+        "2024-05-01  Date past its month's end  none",
         "2024-05-01 04:00  Until that does not parse  +0m",
         "2024-05-01 09:00  Empty end on a start  +0m",
         "2024-05-04 10:00  Blank name  +0m",
@@ -1846,6 +1848,7 @@
         "2024-05-14 08:00  End of the day with an offset  +0m",
         "2024-05-19 09:00  Week start named as no weekday  +0m",
         "2024-05-27 09:00  Week start named as no weekday  +0m",
+        "2024-08-04 00:00  Midnight written as the day's end  +0m",
         "2024-09-24 10:00  Time of day with a fraction  +0m",
         "2024-09-25 10:00  Time of day Date reads as a year  +0m",
         "2024-10-21 10:00  Exclusions only Date reads  +0m",
@@ -1858,9 +1861,11 @@
       ],
       "alarmsWithDefaults": [
         "2024-02-29 17:00  Day past its month's end with an offset  -5m",
+        "2024-03-01 11:00  Day past its month's end  -5m",
         "2024-04-28 04:00  Until that does not parse  -5m",
         "2024-04-29 04:00  Until that does not parse  -5m",
         "2024-04-30 04:00  Until that does not parse  -5m",
+        "2024-05-01  Date past its month's end  -1d 18:00",
         "2024-05-01 04:00  Until that does not parse  -5m",
         "2024-05-01 09:00  Empty end on a start  -5m",
         "2024-05-04 10:00  Blank name  -5m",
@@ -1879,6 +1884,7 @@
         "2024-05-14 08:00  End of the day with an offset  -5m",
         "2024-05-19 09:00  Week start named as no weekday  -5m",
         "2024-05-27 09:00  Week start named as no weekday  -5m",
+        "2024-08-04 00:00  Midnight written as the day's end  -5m",
         "2024-09-24 10:00  Time of day with a fraction  -5m",
         "2024-09-25 10:00  Time of day Date reads as a year  -5m",
         "2024-10-21 10:00  Exclusions only Date reads  -5m",
@@ -1891,9 +1897,11 @@
       ],
       "drawn": [
         "2024-02-29 17:00  Day past its month's end with an offset",
+        "2024-03-01 11:00  Day past its month's end",
         "2024-04-28 04:00  Until that does not parse",
         "2024-04-29 04:00  Until that does not parse",
         "2024-04-30 04:00  Until that does not parse",
+        "2024-05-01  Date past its month's end",
         "2024-05-01 04:00  Until that does not parse",
         "2024-05-01 09:00  Empty end on a start",
         "2024-05-04 10:00  Blank name",
@@ -1912,6 +1920,7 @@
         "2024-05-14 08:00  End of the day with an offset",
         "2024-05-19 09:00  Week start named as no weekday",
         "2024-05-27 09:00  Week start named as no weekday",
+        "2024-08-04 00:00  Midnight written as the day's end",
         "2024-09-24 10:00  Time of day with a fraction",
         "2024-09-25 10:00  Time of day Date reads as a year",
         "2024-10-21 10:00  Exclusions only Date reads",
@@ -1936,6 +1945,9 @@
             "name": "",
             "start": "2024-05-04 10:00"
           },
+          "Date past its month's end": {
+            "start": "2024-04-31"
+          },
           "Date with Z": {
             "start": "2024-05-13Z"
           },
@@ -1944,6 +1956,9 @@
           },
           "Day out of range with an offset": {
             "start": "2024-01-32 10:00+09:00"
+          },
+          "Day past its month's end": {
+            "start": "2024-02-30 11:00"
           },
           "Day past its month's end with an offset": {
             "start": "2024-02-30 10:00+09:00"
@@ -2018,6 +2033,9 @@
           "Long duration": {
             "end": "+2 hours",
             "start": "2024-05-05 10:00"
+          },
+          "Midnight written as the day's end": {
+            "start": "2024-08-03 24:00"
           },
           "Number as an end": {
             "end": 90,

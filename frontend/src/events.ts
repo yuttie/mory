@@ -38,7 +38,7 @@ import {
     taskAlarmOf,
     withBuiltInAlarms,
 } from '@/alarms';
-import { RecurrenceError, expandRule, parseWallClock, readDatetime } from '@/recurrence';
+import { RecurrenceError, expandRule, formatWallClock, parseWallClock, readDatetime } from '@/recurrence';
 import { taskUuidOf } from '@/task-forest';
 import dayjs from 'dayjs';
 
@@ -808,14 +808,10 @@ export function toWallClock(value: unknown): string {
         return typeof value === 'string' ? value : String(value ?? '');
     }
     const text = value as string;
-    const p = (n: number) => String(n).padStart(2, '0');
-    const date = `${parsed.year}-${p(parsed.month)}-${p(parsed.day)}`;
-    if (!parsed.hasTime) {
-        return date;
-    }
     // An offset means the value names an instant, so it is shown in the reader's own zone; a bare
-    // wall clock is already local and is left exactly as written.
-    if (HAS_OFFSET.test(text)) {
+    // wall clock is already local and is left as written, though a part past its range rolls over
+    // as `dayjs` reads it, and so as moried rings it.
+    if (parsed.hasTime && HAS_OFFSET.test(text)) {
         const local = readDatetime(text);
         if (local !== null) {
             return local.second() === 0
@@ -823,8 +819,7 @@ export function toWallClock(value: unknown): string {
                 : local.format('YYYY-MM-DD HH:mm:ss');
         }
     }
-    const time = `${p(parsed.hour)}:${p(parsed.minute)}`;
-    return parsed.second === 0 ? `${date} ${time}` : `${date} ${time}:${p(parsed.second)}`;
+    return formatWallClock(parsed);
 }
 
 const HAS_OFFSET = /(?:Z|[+-]\d{2}:?\d{2})$/;

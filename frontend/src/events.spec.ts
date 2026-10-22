@@ -521,6 +521,14 @@ describe('toWallClock', () => {
         expect(toWallClock('2024-05-01')).toBe('2024-05-01');
     });
 
+    // As `dayjs` reads it, and so as moried rings it: the calendar has no cell for February 30.
+    it('rolls a part past its range over into the next', () => {
+        expect(toWallClock('2024-02-30 11:00')).toBe('2024-03-01 11:00');
+        expect(toWallClock('2024-08-03 24:00')).toBe('2024-08-04 00:00');
+        expect(toWallClock('2024-04-31')).toBe('2024-05-01');
+        expect(toWallClock('2024-12-31 23:59:60')).toBe('2025-01-01 00:00');
+    });
+
     it('returns anything it cannot read untouched, for the error path to report', () => {
         expect(toWallClock('not a time')).toBe('not a time');
     });

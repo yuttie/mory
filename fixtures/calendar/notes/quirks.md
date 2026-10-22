@@ -142,6 +142,12 @@ events:
               start: 2024-10-29 15:00
     Day past its month's end with an offset:
         start: 2024-02-30 10:00+09:00
+    Day past its month's end:
+        start: 2024-02-30 11:00
+    Midnight written as the day's end:
+        start: 2024-08-03 24:00
+    Date past its month's end:
+        start: 2024-04-31
 ---
 
 # Quirks
