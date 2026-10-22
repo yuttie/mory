@@ -199,8 +199,9 @@ function wallClockIn(value: string, tz: unknown): string {
     }
 }
 
-// What `backend/src/note_events.rs` holds an interval in, which the two must agree on.
+// What `backend/src/note_events.rs` holds an interval and a count in, which the two must agree on.
 const MAX_INTERVAL = 65535;
+const MAX_COUNT = 4294967295;
 
 /// A rule as the calendar reads it, before any window is asked of it.
 ///
@@ -271,8 +272,15 @@ export function readRule(repeat: unknown, start: unknown): RecurrenceRule {
     if (typeof rule.wkst === 'string' && Object.hasOwn(WEEKDAYS, rule.wkst)) {
         options.wkst = WEEKDAYS[rule.wkst];
     }
-    if (rule.count !== undefined) {
-        options.count = rule.count as number;
+    // Blank is no limit, as for the other fields. Anything else that is not a whole number from one
+    // to what the backend's `u32` holds is not a rule: rrule.js read `'3'` as three, `three` as
+    // one, and a negative or fractional count as no limit at all, and moried rang for none.
+    const count = rule.count;
+    if (count !== undefined && count !== null) {
+        if (typeof count !== 'number' || !Number.isInteger(count) || count < 1 || count > MAX_COUNT) {
+            throw new RecurrenceError(`count must be a whole number from 1 to ${MAX_COUNT}, not ${JSON.stringify(count)}`);
+        }
+        options.count = count;
     }
     let resolvedUntil: WallClock | undefined;
     if (rule.until !== undefined) {
@@ -318,7 +326,7 @@ export type WeekdayName = typeof WEEKDAY_NAMES[number];
 ///
 /// rrule reads some of them otherwise than they are written, and the schema refuses most of those
 /// while the calendar draws them all the same. A view that describes a rule without expanding it
-/// has to follow rrule rather than the text: `count: '3'` draws three, and `bymonth: [13]` nothing.
+/// has to follow rrule rather than the text: `bymonth: [13]` draws nothing.
 export interface RuleTerms {
     /// The weekdays it draws on, each with the ordinal it counts if any; empty for any weekday.
     weekdays: { weekday: WeekdayName; ordinal?: number }[];
@@ -339,18 +347,8 @@ export function termsOf(rule: RecurrenceRule): RuleTerms {
     // What `readRule` handed rrule, before rrule's own reading.
     const options = rule.rrule.origOptions;
 
-    // rrule counts a `count` down with `--count` and stops when that is falsy: `'3'` is three, one
-    // that is not a number stops after the first occurrence, and one that never steps down to zero
-    // -- negative, fractional, too large to step -- is no limit at all. Zero draws nothing.
-    const written: unknown = options.count;
-    let count: number | undefined;
-    if (written === 0) {
-        count = 0;
-    }
-    else if (written) {
-        const n = Number(written);
-        count = Number.isNaN(n) ? 1 : (Number.isSafeInteger(n) && n >= 1 ? n : undefined);
-    }
+    // `readRule` lets through only a whole number from one.
+    const count = options.count ?? undefined;
 
     // rrule matches a month or a day of the month by strict equality, so only a whole number of the
     // right size is ever met: not `'3'`, not 13.
@@ -385,8 +383,7 @@ export function termsOf(rule: RecurrenceRule): RuleTerms {
         everyDay: dayList !== undefined && kept.length === 0,
         months,
         ...(count === undefined ? {} : { count }),
-        never: count === 0
-            || (named.length > 0 && weekdays.length === 0)
+        never: (named.length > 0 && weekdays.length === 0)
             || (kept.length > 0 && monthDays.length === 0)
             || (monthList !== undefined && months.length === 0),
     };

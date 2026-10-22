@@ -2154,16 +2154,24 @@
       "alarms": [
         "2020-03-05 09:00  A month written with a fraction  +0m",
         "2020-03-15 10:00  Twice a year  +0m",
+        "2020-06-01 08:00  A blank count is no limit  +0m",
+        "2020-06-01 17:00  The largest count  +0m",
         "2020-06-04 09:00  A count written with a fraction  +0m",
         "2020-09-15 10:00  Twice a year  +0m",
         "2021-03-05 09:00  A month written with a fraction  +0m",
         "2021-03-15 10:00  Twice a year  +0m",
+        "2021-06-01 08:00  A blank count is no limit  +0m",
+        "2021-06-01 17:00  The largest count  +0m",
         "2021-06-04 09:00  A count written with a fraction  +0m",
         "2021-09-15 10:00  Twice a year  +0m",
         "2022-03-15 10:00  Twice a year  +0m",
+        "2022-06-01 08:00  A blank count is no limit  +0m",
+        "2022-06-01 17:00  The largest count  +0m",
         "2022-06-04 09:00  A count written with a fraction  +0m",
         "2022-09-15 10:00  Twice a year  +0m",
         "2023-03-15 10:00  Twice a year  +0m",
+        "2023-06-01 08:00  A blank count is no limit  +0m",
+        "2023-06-01 17:00  The largest count  +0m",
         "2023-09-15 10:00  Twice a year  +0m",
         "2024-01-02 18:00  Every other Tuesday and Thursday  +0m",
         "2024-01-04 18:00  Every other Tuesday and Thursday  +0m",
@@ -2201,6 +2209,8 @@
         "2024-05-31 08:00  Last day of the month  +0m",
         "2024-05-31 08:00  The 31st  +0m",
         "2024-05-31 17:00  Last Friday  +0m",
+        "2024-06-01 08:00  A blank count is no limit  +0m",
+        "2024-06-01 17:00  The largest count  +0m",
         "2024-06-03 10:00  Moved across a week  +0m",
         "2024-06-15 16:00  Moved across a week  +0m",
         "2024-06-17 10:00  Moved across a week  +0m",
@@ -2239,23 +2249,35 @@
         "2024-12-06 08:00  An empty weekday list  +0m",
         "2024-12-07 08:00  An empty month day list  +0m",
         "2025-03-15 10:00  Twice a year  +0m",
+        "2025-06-01 08:00  A blank count is no limit  +0m",
+        "2025-06-01 17:00  The largest count  +0m",
         "2025-07-04 08:00  A month, not a list  +0m",
         "2025-09-15 10:00  Twice a year  +0m",
-        "2025-10-08 08:00  An empty month list  +0m"
+        "2025-10-08 08:00  An empty month list  +0m",
+        "2026-06-01 08:00  A blank count is no limit  +0m",
+        "2026-06-01 17:00  The largest count  +0m"
       ],
       "alarmsWithDefaults": [
         "2020-03-05 09:00  A month written with a fraction  -5m",
         "2020-03-15 10:00  Twice a year  -5m",
+        "2020-06-01 08:00  A blank count is no limit  -5m",
+        "2020-06-01 17:00  The largest count  -5m",
         "2020-06-04 09:00  A count written with a fraction  -5m",
         "2020-09-15 10:00  Twice a year  -5m",
         "2021-03-05 09:00  A month written with a fraction  -5m",
         "2021-03-15 10:00  Twice a year  -5m",
+        "2021-06-01 08:00  A blank count is no limit  -5m",
+        "2021-06-01 17:00  The largest count  -5m",
         "2021-06-04 09:00  A count written with a fraction  -5m",
         "2021-09-15 10:00  Twice a year  -5m",
         "2022-03-15 10:00  Twice a year  -5m",
+        "2022-06-01 08:00  A blank count is no limit  -5m",
+        "2022-06-01 17:00  The largest count  -5m",
         "2022-06-04 09:00  A count written with a fraction  -5m",
         "2022-09-15 10:00  Twice a year  -5m",
         "2023-03-15 10:00  Twice a year  -5m",
+        "2023-06-01 08:00  A blank count is no limit  -5m",
+        "2023-06-01 17:00  The largest count  -5m",
         "2023-09-15 10:00  Twice a year  -5m",
         "2024-01-02 18:00  Every other Tuesday and Thursday  -5m",
         "2024-01-04 18:00  Every other Tuesday and Thursday  -5m",
@@ -2293,6 +2315,8 @@
         "2024-05-31 08:00  Last day of the month  -5m",
         "2024-05-31 08:00  The 31st  -5m",
         "2024-05-31 17:00  Last Friday  -5m",
+        "2024-06-01 08:00  A blank count is no limit  -5m",
+        "2024-06-01 17:00  The largest count  -5m",
         "2024-06-03 10:00  Moved across a week  -5m",
         "2024-06-15 16:00  Moved across a week  -5m",
         "2024-06-17 10:00  Moved across a week  -5m",
@@ -2331,23 +2355,35 @@
         "2024-12-06 08:00  An empty weekday list  -5m",
         "2024-12-07 08:00  An empty month day list  -5m",
         "2025-03-15 10:00  Twice a year  -5m",
+        "2025-06-01 08:00  A blank count is no limit  -5m",
+        "2025-06-01 17:00  The largest count  -5m",
         "2025-07-04 08:00  A month, not a list  -5m",
         "2025-09-15 10:00  Twice a year  -5m",
-        "2025-10-08 08:00  An empty month list  -5m"
+        "2025-10-08 08:00  An empty month list  -5m",
+        "2026-06-01 08:00  A blank count is no limit  -5m",
+        "2026-06-01 17:00  The largest count  -5m"
       ],
       "drawn": [
         "2020-03-05 09:00  A month written with a fraction",
         "2020-03-15 10:00  Twice a year",
+        "2020-06-01 08:00  A blank count is no limit",
+        "2020-06-01 17:00  The largest count",
         "2020-06-04 09:00  A count written with a fraction",
         "2020-09-15 10:00  Twice a year",
         "2021-03-05 09:00  A month written with a fraction",
         "2021-03-15 10:00  Twice a year",
+        "2021-06-01 08:00  A blank count is no limit",
+        "2021-06-01 17:00  The largest count",
         "2021-06-04 09:00  A count written with a fraction",
         "2021-09-15 10:00  Twice a year",
         "2022-03-15 10:00  Twice a year",
+        "2022-06-01 08:00  A blank count is no limit",
+        "2022-06-01 17:00  The largest count",
         "2022-06-04 09:00  A count written with a fraction",
         "2022-09-15 10:00  Twice a year",
         "2023-03-15 10:00  Twice a year",
+        "2023-06-01 08:00  A blank count is no limit",
+        "2023-06-01 17:00  The largest count",
         "2023-09-15 10:00  Twice a year",
         "2024-01-02 18:00  Every other Tuesday and Thursday",
         "2024-01-04 18:00  Every other Tuesday and Thursday",
@@ -2385,6 +2421,8 @@
         "2024-05-31 08:00  Last day of the month",
         "2024-05-31 08:00  The 31st",
         "2024-05-31 17:00  Last Friday",
+        "2024-06-01 08:00  A blank count is no limit",
+        "2024-06-01 17:00  The largest count",
         "2024-06-03 10:00  Moved across a week",
         "2024-06-15 16:00  Moved across a week",
         "2024-06-17 10:00  Moved across a week",
@@ -2423,12 +2461,23 @@
         "2024-12-06 08:00  An empty weekday list",
         "2024-12-07 08:00  An empty month day list",
         "2025-03-15 10:00  Twice a year",
+        "2025-06-01 08:00  A blank count is no limit",
+        "2025-06-01 17:00  The largest count",
         "2025-07-04 08:00  A month, not a list",
         "2025-09-15 10:00  Twice a year",
-        "2025-10-08 08:00  An empty month list"
+        "2025-10-08 08:00  An empty month list",
+        "2026-06-01 08:00  A blank count is no limit",
+        "2026-06-01 17:00  The largest count"
       ],
       "metadata": {
         "events": {
+          "A blank count is no limit": {
+            "repeat": {
+              "count": null,
+              "freq": "yearly"
+            },
+            "start": "2020-06-01 08:00"
+          },
           "A blank interval is none": {
             "repeat": {
               "count": 2,
@@ -2436,6 +2485,64 @@
               "interval": null
             },
             "start": "2024-10-15 08:00"
+          },
+          "A count in a list is no rule": {
+            "repeat": {
+              "count": [
+                3
+              ],
+              "freq": "yearly"
+            },
+            "start": "2020-06-01 14:00"
+          },
+          "A count of zero is no rule": {
+            "repeat": {
+              "count": 0,
+              "freq": "yearly"
+            },
+            "start": "2020-06-01 15:00"
+          },
+          "A count that is a word is no rule": {
+            "repeat": {
+              "count": "three",
+              "freq": "yearly"
+            },
+            "start": "2020-06-01 10:00"
+          },
+          "A count that is negative is no rule": {
+            "repeat": {
+              "count": -1,
+              "freq": "yearly"
+            },
+            "start": "2020-06-01 11:00"
+          },
+          "A count that is not whole is no rule": {
+            "repeat": {
+              "count": 2.5,
+              "freq": "yearly"
+            },
+            "start": "2020-06-01 12:00"
+          },
+          "A count that is text is no rule": {
+            "repeat": {
+              "count": "3",
+              "freq": "yearly"
+            },
+            "start": "2020-06-01 09:00"
+          },
+          "A count that is true is no rule": {
+            "repeat": {
+              "count": true,
+              "freq": "yearly"
+            },
+            "start": "2020-06-01 13:00"
+          },
+          "A count too large is no rule": {
+            "repeat": {
+              "count": 4294967296,
+              "freq": "yearly"
+            },
+            "start": "2020-06-01 16:00"
           },
           "A count written with a fraction": {
             "repeat": {
@@ -2680,6 +2787,13 @@
               "freq": "monthly"
             },
             "start": "2024-01-31 08:00"
+          },
+          "The largest count": {
+            "repeat": {
+              "count": 4294967295,
+              "freq": "yearly"
+            },
+            "start": "2020-06-01 17:00"
           },
           "The largest interval": {
             "repeat": {

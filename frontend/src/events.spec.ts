@@ -1615,6 +1615,32 @@ describe('a repeat interval written by hand', () => {
     });
 });
 
+describe('a repeat count written by hand', () => {
+    // rrule.js read `'3'` as three, `three` as one and a negative or fractional count as no limit,
+    // and moried, refusing each, rang for none of what the calendar drew.
+    const yearly = (count: unknown) => eventsFromEntries([entry('a.md', {
+        Review: {
+            start: '2024-05-06 09:00',
+            repeat: { freq: 'yearly', count: count as number },
+        },
+    })], { from: '2024-01-01', to: '2030-12-31' });
+
+    it('takes a blank count as no limit, and a whole number from one up', () => {
+        expect(yearly(null).events).toHaveLength(7);
+        expect(yearly(2).events.map((event) => event.start)).toEqual(['2024-05-06 09:00', '2025-05-06 09:00']);
+        expect(yearly(4294967295).events).toHaveLength(7);
+    });
+
+    it('refuses any other, with a reason, and draws nothing from the rule', () => {
+        for (const count of [0, -1, 2.5, 4294967296, '3', 'three', true, false, '', [3], { n: 3 }]) {
+            const derived = yearly(count);
+            expect(derived.events, JSON.stringify(count)).toEqual([]);
+            expect(derived.errors, JSON.stringify(count)).toHaveLength(1);
+            expect(String(derived.errors[0][1])).toContain('count must be a whole number');
+        }
+    });
+});
+
 describe('an ical key written by hand', () => {
     // `ical:` with nothing after it is null, which the provenance read as a mapping and threw on.
     it('is no provenance when it is blank or not a mapping, and the event is drawn as any other', () => {

@@ -74,17 +74,13 @@ describe('describeRepeat', () => {
             .toBe('Yearly on the 13th if a Fri in Oct');
     });
 
-    // Values the schema refuses but the calendar's rrule reads all the same, as it reads them.
-    it('counts as the calendar counts', () => {
-        expect(describeRepeat({ freq: 'weekly', count: '3' }, start)).toBe('Weekly, 3 times');
-        expect(describeRepeat({ freq: 'weekly', count: ' 2 ' }, start)).toBe('Weekly, 2 times');
-        // One that is not a number stops after the first occurrence...
-        expect(describeRepeat({ freq: 'weekly', count: 'abc' }, start)).toBe('Weekly, 1 time');
-        expect(describeRepeat({ freq: 'weekly', count: true }, start)).toBe('Weekly, 1 time');
-        // ...and one that never steps down to zero never stops.
-        for (const count of [-1, 1.5, '1.5', '0', '', false, null]) {
-            expect(describeRepeat({ freq: 'weekly', count }, start), JSON.stringify(count)).toBe('Weekly');
+    // As the calendar refuses them, and moried with it.
+    it('calls a rule unreadable whose count is not a whole number from one', () => {
+        for (const count of ['3', ' 2 ', 'abc', true, -1, 1.5, '1.5', '0', '', false, 0, [3], 4294967296]) {
+            expect(describeRepeat({ freq: 'weekly', count }, start), JSON.stringify(count)).toBe('Unreadable rule');
         }
+        expect(describeRepeat({ freq: 'weekly', count: null }, start)).toBe('Weekly');
+        expect(describeRepeat({ freq: 'weekly', count: 4294967295 }, start)).toBe('Weekly, 4294967295 times');
     });
 
     it('says only the days and months the calendar can meet', () => {

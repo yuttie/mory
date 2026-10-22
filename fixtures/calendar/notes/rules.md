@@ -193,6 +193,56 @@ events:
             freq: monthly
             bymonthday: [15.0, -1.0]
             count: 4
+    A blank count is no limit:
+        start: 2020-06-01 08:00
+        repeat:
+            freq: yearly
+            count:
+    A count that is text is no rule:
+        start: 2020-06-01 09:00
+        repeat:
+            freq: yearly
+            count: '3'
+    A count that is a word is no rule:
+        start: 2020-06-01 10:00
+        repeat:
+            freq: yearly
+            count: three
+    A count that is negative is no rule:
+        start: 2020-06-01 11:00
+        repeat:
+            freq: yearly
+            count: -1
+    A count that is not whole is no rule:
+        start: 2020-06-01 12:00
+        repeat:
+            freq: yearly
+            count: 2.5
+    A count that is true is no rule:
+        start: 2020-06-01 13:00
+        repeat:
+            freq: yearly
+            count: true
+    A count in a list is no rule:
+        start: 2020-06-01 14:00
+        repeat:
+            freq: yearly
+            count: [3]
+    A count of zero is no rule:
+        start: 2020-06-01 15:00
+        repeat:
+            freq: yearly
+            count: 0
+    A count too large is no rule:
+        start: 2020-06-01 16:00
+        repeat:
+            freq: yearly
+            count: 4294967296
+    The largest count:
+        start: 2020-06-01 17:00
+        repeat:
+            freq: yearly
+            count: 4294967295
 ---
 
 # Rules

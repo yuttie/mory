@@ -758,8 +758,9 @@ fn expand_rule(
     if let Some(day) = repeat.get("wkst").and_then(Value::as_str).and_then(weekday) {
         rule = rule.week_start(day);
     }
+    // Blank is no limit; anything else must be a whole number from one, as `expandRule` requires.
     if let Some(count) = present(repeat.get("count")) {
-        rule = rule.count(integer::<u32>(count)?);
+        rule = rule.count(integer::<u32>(count).filter(|n| *n > 0)?);
     }
 
     // Read only where something is converted with it, as the frontend reads it: an all-day rule
