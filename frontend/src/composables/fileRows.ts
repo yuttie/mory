@@ -36,7 +36,8 @@ import { taskRoute } from '@/task-route';
 import { taskInstant } from '@/urgency';
 import type { Urgency } from '@/urgency';
 
-// The files the Files view lists, a row each, and those its search leaves of them.
+// The files the Files view lists, a row each, and those its search leaves of them. The search
+// dialog lists the same rows, so a file is found there by the words that find it in the view.
 
 // Each by what it lists alone, as the view's own name says they are files. What is written comes
 // first, as the app's other views show it, then the files that serve it, and last those of the

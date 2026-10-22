@@ -541,6 +541,7 @@
             v-model="configDialogIsVisible"
             v-on:after-leave="focusConfigActivator"
         />
+        <FileSearchDialog v-if="appStore.hasToken" />
 
         <div v-if="!appStore.hasToken" class="login-overlay">
             <div class="form">
@@ -622,6 +623,7 @@ import { useAppStore } from '@/stores/app';
 import { loadConfigValue, saveConfigValue } from '@/config';
 import type { Claim, IndexingStop, ListEntry2, UploadEntry } from '@/api';
 import ConfigDialog from '@/components/ConfigDialog.vue';
+import FileSearchDialog from '@/components/FileSearchDialog.vue';
 import IndexingStopsItem from '@/components/IndexingStopsItem.vue';
 import NewTaskDialog from '@/components/NewTaskDialog.vue';
 import QuickAddTasksDialog from '@/components/QuickAddTasksDialog.vue';

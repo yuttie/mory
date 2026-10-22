@@ -41,9 +41,19 @@ export interface Repository {
     deletes: string[];
 }
 
+// When each file named was last changed, for a test of what is listed by it. Every other file was
+// changed at one moment, the same for all.
+export interface MockOptions {
+    times?: Record<string, string>;
+}
+
 // A repository of notes, listed with the metadata their frontmatter holds, so a write shows up in
 // the listing the way the backend would show it.
-export async function mockBackend(context: BrowserContext, notes: Record<string, string>): Promise<Repository> {
+export async function mockBackend(
+    context: BrowserContext,
+    notes: Record<string, string>,
+    options: MockOptions = {},
+): Promise<Repository> {
     const files = new Map(Object.entries(notes));
     const repository: Repository = { writes: [], renames: [], deletes: [] };
     let commit = 1;
@@ -68,7 +78,7 @@ export async function mockBackend(context: BrowserContext, notes: Record<string,
                     mime_type: mimeTypeOf(notePath),
                     metadata: document && document.errors.length === 0 ? document.toJSON() : null,
                     title: /^# (.*)$/m.exec(body)?.[1] ?? null,
-                    time: '2026-09-01T12:00:00+00:00',
+                    time: options.times?.[notePath] ?? '2026-09-01T12:00:00+00:00',
                 };
             });
             await route.fulfill({ json: { kind: 'full', commit: commitId(), head: commitId(), entries } });
