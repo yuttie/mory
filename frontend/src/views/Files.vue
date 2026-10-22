@@ -60,7 +60,7 @@
             >
                 <!-- On a phone, the width a tab is given at least would leave room for three. -->
                 <v-tab
-                    v-for="tab of TABS"
+                    v-for="tab of FILE_TABS"
                     v-bind:key="tab.value"
                     v-bind:value="tab.value"
                     v-bind:to="tabRoute(tab.kind)"
@@ -205,17 +205,12 @@ import { ref, reactive, computed, watch, onMounted } from 'vue';
 import type { ComponentPublicInstance } from 'vue';
 
 import { useRoute, useRouter } from 'vue-router';
-import type { LocationQuery, RouteLocationRaw } from 'vue-router';
+import type { LocationQuery } from 'vue-router';
 import type { DataTableHeader, DataTableSortItem } from 'vuetify';
 
 import {
-    mdiCalendarClock,
-    mdiCheckboxMarkedOutline,
-    mdiCogOutline,
     mdiDelete,
-    mdiFileDocumentOutline,
     mdiFileOutline,
-    mdiImageOutline,
     mdiMagnify,
     mdiTag,
     mdiViewGridOutline,
@@ -223,91 +218,27 @@ import {
 } from '@mdi/js';
 
 import { compareTags } from '@/api';
-import type { ListEntry2 } from '@/api';
 
 import { useFilesStore } from '@/stores/files';
 import { useTasksStore } from '@/stores/tasks';
 import { useTaskSettingsStore } from '@/stores/taskSettings';
-import { routeForMime } from '@/file-route';
-import { EVENTS_DIR } from '@/event-note';
-import { summarizeEvent } from '@/event-summary';
-import type { EventStart } from '@/event-summary';
-import { declaredEvents, fileKindOf, isOfKind, isTemplatePath, SYSTEM_DIR, templateNameOf } from '@/file-kinds';
+import { fileKindOf } from '@/file-kinds';
 import type { FileKind } from '@/file-kinds';
-import { systemFilePurpose } from '@/system-files';
-import { STATUS_KINDS, STATUS_LABEL } from '@/task';
-import { statusColor } from '@/status-color';
-import { statusIcon } from '@/status-icon';
-import { taskDateCues } from '@/task-date-cues';
-import type { TaskDateCue, TaskDateField } from '@/task-date-cues';
-import { taskRoute } from '@/task-route';
-import { compareUrgency, taskInstant, URGENCY_LABEL } from '@/urgency';
+import { compareUrgency, URGENCY_LABEL } from '@/urgency';
 import type { Urgency } from '@/urgency';
 import AppBarContent from '@/components/AppBarContent.vue';
 import MediaGrid from '@/components/MediaGrid.vue';
+import { FILE_TABS, tabShowsTags, useFileRows } from '@/composables/fileRows';
+import type { FileRow } from '@/composables/fileRows';
 import { useLocalStorage } from '@/composables/localStorage';
 import { isInOverlay, isTyping, useShortcuts } from '@/keyboard';
 
 import axios from 'axios';
-import dayjs from 'dayjs';
-
-// Each by what it lists alone, as the view's own name says they are files. What is written comes
-// first, as the app's other views show it, then the files that serve it, and last those of the
-// application and the rest, which a phone reaches only by scrolling.
-const TABS: { kind: FileKind | null; value: string; title: string }[] = [
-    { kind: null, value: 'all', title: 'All' },
-    { kind: 'notes', value: 'notes', title: 'Notes' },
-    { kind: 'tasks', value: 'tasks', title: 'Tasks' },
-    { kind: 'events', value: 'events', title: 'Events' },
-    { kind: 'media', value: 'media', title: 'Media' },
-    { kind: 'templates', value: 'templates', title: 'Templates' },
-    { kind: 'system', value: 'system', title: 'System' },
-    { kind: 'others', value: 'others', title: 'Uncategorized' },
-];
-
-// A date as its note gives it, in the reader's zone where it has a time, with how far off it is to
-// hover. A task's is coloured as the task lists colour it.
-interface DateCell {
-    text: string;
-    hint: string;
-    color?: string;
-    instant?: number;
-}
 
 const DATE_COLUMNS = ['dueBy', 'deadline', 'starts'] as const;
 
 // Text by the numbers in it as numbers, so "On 2 dates" comes before "On 10 dates".
 const TEXT_ORDER = new Intl.Collator(undefined, { numeric: true, sensitivity: 'accent' });
-
-interface FileRow {
-    // A file's path, or for one of the events it declares, the path and the event's name.
-    key: string;
-    path: string;
-    size: number;
-    mimeType: string;
-    tags: string[];
-    title: string | null;
-    time: dayjs.Dayjs;
-    icon: string;
-    iconColor: string | null;
-    to: RouteLocationRaw;
-    // The directory a note is in, which its title does not say.
-    folder?: string;
-    // What the application reads a system file for.
-    purpose?: string;
-    // What the title alone does not say: the project a task is part of, from the task tree.
-    caption?: string;
-    status?: string;
-    statusOrder?: number;
-    dueBy?: DateCell;
-    deadline?: DateCell;
-    // An event's: the note it is declared in, by its title or else its path, when it starts, and
-    // how it repeats.
-    note?: string;
-    starts?: DateCell;
-    repeats?: string;
-    urgency?: Urgency;
-}
 
 // The latest first: the files last changed, and the events last to start.
 const DEFAULT_SORT: DataTableSortItem[] = [{ key: 'time', order: 'desc' }];
@@ -355,11 +286,7 @@ const kind = computed(() => fileKindOf(route.params.kind));
 
 const currentTab = computed(() => kind.value ?? 'all');
 
-// The files the open tab lists, before the query narrows them.
-const kindEntries = computed<ListEntry2[]>(() => {
-    const open = kind.value;
-    return open === null ? files.entries : files.entries.filter((entry) => isOfKind(entry, open));
-});
+const { kindEntries, query, isSearching, matchedRows: matchedEntries } = useFileRows(kind, queryText);
 
 const sortBy = computed<DataTableSortItem[]>({
     get: () => sortBys[currentTab.value] ?? (kind.value === 'events' ? EVENTS_SORT : DEFAULT_SORT),
@@ -368,18 +295,26 @@ const sortBy = computed<DataTableSortItem[]>({
     },
 });
 
+// The tag list as well as the column: on another tab, the search finds no row by its tags.
+const showsTags = computed(() => tabShowsTags(kind.value));
+
 // What each tab's files have to tell apart: a task's progress, which a size or a type does not
-// show, and the type of a medium, where every note and task is one kind of text.
+// show, and the type of a medium, where every note and task is one kind of text. Tags come last,
+// on the tabs that show them.
 const headers = computed<DataTableHeader<FileRow>[]>(() => {
+    const columns = kindColumns();
+    return showsTags.value ? [...columns, { title: 'Tags', key: 'tags', sortable: false }] : columns;
+});
+
+function kindColumns(): DataTableHeader<FileRow>[] {
     // Sorted by what it shows, rather than by a path the title hides.
     const title = { title: 'Title or Path', key: 'path', value: (row: FileRow) => row.title ?? row.path };
     const modified = { title: 'Modified', key: 'time', value: (row: FileRow) => row.time.valueOf() };
     const size = { title: 'Size', key: 'size' };
     const type = { title: 'Type', key: 'mimeType' };
-    const tags = { title: 'Tags', key: 'tags', sortable: false };
     switch (kind.value) {
         case 'notes':
-            return [title, { title: 'Folder', key: 'folder' }, modified, size, tags];
+            return [title, { title: 'Folder', key: 'folder' }, modified, size];
         case 'tasks':
             return [
                 { ...title, title: 'Title' },
@@ -389,7 +324,6 @@ const headers = computed<DataTableHeader<FileRow>[]>(() => {
                 // Ascending from the calmest, as every other column starts from its least.
                 { title: 'Urgency', key: 'urgency', sort: missingLast('urgency', (a: Urgency, b: Urgency) => compareUrgency(b, a)) },
                 modified,
-                tags,
             ];
         case 'media':
             return [title, modified, size, type];
@@ -397,7 +331,7 @@ const headers = computed<DataTableHeader<FileRow>[]>(() => {
         case 'templates':
             return [{ ...title, title: 'Name' }, { title: '', key: 'newNote', sortable: false }, modified, size];
         // An event as its file declares it, however often that makes it happen: when it starts,
-        // rather than when its file last changed. Tags are its note's, not its own.
+        // rather than when its file last changed.
         case 'events':
             return [
                 { ...title, title: 'Event' },
@@ -409,13 +343,12 @@ const headers = computed<DataTableHeader<FileRow>[]>(() => {
             ];
         case 'system':
             return [{ ...title, title: 'Path' }, { title: 'Used for', key: 'purpose', sort: missingLast('purpose', byText) }, modified, size];
-        // Few files no other tab takes are notes, so few have tags.
         case 'others':
             return [{ ...title, title: 'Path' }, modified, size, type];
         default:
-            return [title, modified, size, type, tags];
+            return [title, modified, size, type];
     }
-});
+}
 
 const tags = computed(() => {
     const tags = new Set();
@@ -431,62 +364,6 @@ const tags = computed(() => {
     return Array.from(tags).sort(compareTags as (a: any, b: any) => number) as string[];
 });
 
-const query = computed(() => {
-    const queryPaths = new Set();
-    const queryTags = new Set();
-    const queryAny = new Set();
-    for (const match of queryText.value.matchAll(/"([^"]+)"|([^\s]+)/g)) {
-        const text = match[1] || match[2];
-        if (text.startsWith('#')) {
-            queryTags.add(text.slice(1));
-        }
-        else if (text.startsWith('/')) {
-            queryPaths.add(text.slice(1));
-        }
-        else {
-            queryAny.add(text);
-        }
-    }
-
-    return {
-        paths: queryPaths,
-        tags: queryTags,
-        any: queryAny,
-    };
-});
-
-const isSearching = computed(() => query.value.paths.size + query.value.tags.size + query.value.any.size > 0);
-
-// A tab without the column shows no tags, so has none to search or to offer.
-const showsTags = computed(() => headers.value.some((header) => header.key === 'tags'));
-
-const matchedEntries = computed(() => {
-    const queryPaths: string[] = [...query.value.paths].map(x => x.toLowerCase());
-    const queryTags: string[] = [...query.value.tags].map(x => x.toLowerCase());
-    const queryAny: string[] = [...query.value.any].map(x => x.toLowerCase());
-
-    const rows = kindEntries.value.flatMap((entry) => (kind.value === 'events' ? eventRows(entry) : [fileRow(entry)]));
-    return rows.filter((row) => {
-        // A path is asked for by name, so it is searched whether or not the row shows it.
-        const rowPath = row.path.toLowerCase();
-        if (queryPaths.some(kw => !rowPath.includes(kw))) {
-            return false;
-        }
-        const rowTags = showsTags.value ? row.tags.map((tag) => tag.toLowerCase()) : [];
-        if (queryTags.some(tag => !rowTags.some(rowTag => rowTag.includes(tag)))) {
-            return false;
-        }
-        // The rest only in the words the row shows, so nothing is listed for a title, a path or a
-        // tag the tab hides: a template's heading, the path of a note shown by its title, or the
-        // tags of the note an event is in.
-        const shown = [row.title ?? row.path, row.caption, row.folder, row.note, row.purpose, row.repeats]
-            .filter((text): text is string => text !== undefined)
-            .map((text) => text.toLowerCase())
-            .concat(rowTags);
-        return queryAny.every(kw => shown.some(text => text.includes(kw)));
-    });
-});
-
 // Lifecycle hooks
 onMounted(() => {
     document.title = `Files | ${import.meta.env.VITE_APP_NAME}`;
@@ -497,134 +374,9 @@ onMounted(() => {
 useShortcuts(handleKeydown);
 
 // Methods
-// A file by its path where its title would mislead: a template, as its heading is often only
-// placeholders to fill in, a system file, which the application reads by its path, and a file no
-// other tab takes, which is there for where it is or what it is named.
-function titleOf(entry: ListEntry2): string | null {
-    return kind.value === 'system' || kind.value === 'others' || isTemplatePath(entry.path) ? null : entry.title;
-}
-
 // The search goes along, so a query asked of every file can be put to one kind of them.
 function tabRoute(tabKind: FileKind | null) {
     return { name: 'Files', params: { kind: tabKind }, query: route.query };
-}
-
-// A task as the task lists show it, and opening into its editor there. The listing describes a file
-// the task tree may not have taken in yet, which is then listed as any other file is.
-function taskFields(path: string): Partial<FileRow> {
-    const id = tasks.idByPath(path);
-    const node = id === undefined ? undefined : tasks.node(id);
-    if (id === undefined || node === undefined) {
-        return {};
-    }
-    const task = node.metadata?.task ?? {};
-    const statusKind = task.status?.kind;
-    const cues = taskDateCues(task, node.metadata?.tags ?? [], taskSettings.settings, tasks.now);
-    return {
-        to: taskRoute(id),
-        icon: statusIcon(statusKind, tasks.childrenOf(id).length > 0),
-        iconColor: statusColor(statusKind, taskSettings.resolvedStatusColors) ?? null,
-        caption: tasks.ancestorsOf(id).map((ancestor) => ancestor.title || 'Untitled').join(' › '),
-        ...statusOf(statusKind),
-        dueBy: dateCell(cues, 'due_by'),
-        deadline: dateCell(cues, 'deadline'),
-        urgency: tasks.urgency(id),
-    };
-}
-
-function fileRow(entry: ListEntry2): FileRow {
-    return {
-        key: entry.path,
-        to: routeForMime(entry.path, entry.mime_type),
-        path: entry.path,
-        size: entry.size,
-        mimeType: entry.mime_type,
-        tags: tagsOf(entry),
-        title: titleOf(entry),
-        time: dayjs(entry.time),
-        ...(() => {
-            if (entry.path.startsWith(".tasks/")) {
-                return { icon: mdiCheckboxMarkedOutline, iconColor: "#ffa600" };
-            }
-            else if (entry.path.startsWith(EVENTS_DIR)) {
-                return { icon: mdiCalendarClock, iconColor: "#b95050" };
-            }
-            else if (entry.path.startsWith(SYSTEM_DIR)) {
-                return { icon: mdiCogOutline, iconColor: "#757575" };
-            }
-            else if (isTemplatePath(entry.path)) {
-                return { icon: mdiFileDocumentOutline, iconColor: "#5fa3c4" };
-            }
-            else if (entry.mime_type.startsWith("image/")) {
-                return { icon: mdiImageOutline, iconColor: "#62b950" };
-            }
-            else if (entry.mime_type.startsWith("text/")) {
-                return { icon: mdiFileDocumentOutline, iconColor: "#5fa3c4" };
-            }
-            else {
-                return { icon: mdiFileOutline, iconColor: null };
-            }
-        })(),
-        ...(kind.value === 'notes' ? { folder: entry.path.slice(0, Math.max(entry.path.lastIndexOf('/'), 0)) } : {}),
-        ...(kind.value === 'tasks' ? taskFields(entry.path) : {}),
-        ...(kind.value === 'system' ? { purpose: systemFilePurpose(entry.path) } : {}),
-        // By the name the Add menu offers it as.
-        ...(kind.value === 'templates' ? { title: templateNameOf(entry.path) } : {}),
-    };
-}
-
-// Tags given as anything but a list are none, as the tag list has them: frontmatter is whatever the
-// file says.
-function tagsOf(entry: ListEntry2): string[] {
-    const tags: unknown = entry.metadata?.tags;
-    return Array.isArray(tags) ? tags.map(String).sort(compareTags) : [];
-}
-
-// One row for each event a file declares, however often it happens, opening the file.
-function eventRows(entry: ListEntry2): FileRow[] {
-    const file = fileRow(entry);
-    return declaredEvents(entry.metadata).map(([name, detail]) => {
-        const summary = summarizeEvent(detail);
-        return {
-            ...file,
-            key: JSON.stringify([entry.path, name]),
-            title: name,
-            icon: mdiCalendarClock,
-            iconColor: '#b95050',
-            note: file.title ?? entry.path,
-            starts: summary.start === undefined ? undefined : eventCell(summary.start),
-            repeats: summary.repeats,
-        };
-    });
-}
-
-function eventCell(start: EventStart): DateCell {
-    return { text: start.text, hint: dayjs(start.instant).from(tasks.now), instant: start.instant };
-}
-
-// A task whose note gives no status is in the backlog, as the task view files it. One whose status
-// is not a status is shown as written, after all the others.
-function statusOf(statusKind: unknown): { status: string; statusOrder: number } {
-    const known = STATUS_KINDS.find((each) => each === (statusKind ?? 'backlog'));
-    return known === undefined
-        ? { status: String(statusKind), statusOrder: STATUS_KINDS.length }
-        : { status: STATUS_LABEL[known], statusOrder: STATUS_KINDS.indexOf(known) };
-}
-
-function dateCell(cues: TaskDateCue[], field: TaskDateField): DateCell | undefined {
-    const cue = cues.find((each) => each.field === field);
-    if (cue === undefined) {
-        return undefined;
-    }
-    const value = cue.value.trim();
-    const instant = taskInstant(value, dayjs.tz.guess(), true);
-    const isDate = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value);
-    return {
-        text: instant === undefined || isDate ? value : dayjs(instant).format('YYYY-MM-DD HH:mm'),
-        hint: cue.text,
-        color: cue.color,
-        instant,
-    };
 }
 
 // Rows without a value go last whichever way the column is sorted: a task with no deadline is
