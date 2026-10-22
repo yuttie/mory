@@ -1831,6 +1831,7 @@
         "2024-05-01 09:00  Empty end on a start  +0m",
         "2024-05-04 10:00  Blank name  +0m",
         "2024-05-05 09:00  Durations  +0m",
+        "2024-05-05 09:00  Week start named as no weekday  +0m",
         "2024-05-05 10:00  Long duration  +0m",
         "2024-05-05 11:00  Time of day  +0m",
         "2024-05-06 09:00  Absolute end on a rule  +0m",
@@ -1840,7 +1841,10 @@
         "2024-05-10 09:00  Renamed overrides keep no series name  +0m",
         "2024-05-11 09:00  Renamed overrides keep no series name  +0m",
         "2024-05-13  Date with Z  none",
-        "2024-05-14 08:00  End of the day with an offset  +0m"
+        "2024-05-13 09:00  Week start named as no weekday  +0m",
+        "2024-05-14 08:00  End of the day with an offset  +0m",
+        "2024-05-19 09:00  Week start named as no weekday  +0m",
+        "2024-05-27 09:00  Week start named as no weekday  +0m"
       ],
       "alarmsWithDefaults": [
         "2024-04-28 04:00  Until that does not parse  -5m",
@@ -1850,6 +1854,7 @@
         "2024-05-01 09:00  Empty end on a start  -5m",
         "2024-05-04 10:00  Blank name  -5m",
         "2024-05-05 09:00  Durations  -5m",
+        "2024-05-05 09:00  Week start named as no weekday  -5m",
         "2024-05-05 10:00  Long duration  -5m",
         "2024-05-05 11:00  Time of day  -5m",
         "2024-05-06 09:00  Absolute end on a rule  -5m",
@@ -1859,7 +1864,10 @@
         "2024-05-10 09:00  Renamed overrides keep no series name  -5m",
         "2024-05-11 09:00  Renamed overrides keep no series name  -5m",
         "2024-05-13  Date with Z  -1d 18:00",
-        "2024-05-14 08:00  End of the day with an offset  -5m"
+        "2024-05-13 09:00  Week start named as no weekday  -5m",
+        "2024-05-14 08:00  End of the day with an offset  -5m",
+        "2024-05-19 09:00  Week start named as no weekday  -5m",
+        "2024-05-27 09:00  Week start named as no weekday  -5m"
       ],
       "drawn": [
         "2024-04-28 04:00  Until that does not parse",
@@ -1869,6 +1877,7 @@
         "2024-05-01 09:00  Empty end on a start",
         "2024-05-04 10:00  Blank name",
         "2024-05-05 09:00  Durations",
+        "2024-05-05 09:00  Week start named as no weekday",
         "2024-05-05 10:00  Long duration",
         "2024-05-05 11:00  Time of day",
         "2024-05-06 09:00  Absolute end on a rule",
@@ -1878,7 +1887,10 @@
         "2024-05-10 09:00  Renamed overrides keep no series name",
         "2024-05-11 09:00  Renamed overrides keep no series name",
         "2024-05-13  Date with Z",
-        "2024-05-14 08:00  End of the day with an offset"
+        "2024-05-13 09:00  Week start named as no weekday",
+        "2024-05-14 08:00  End of the day with an offset",
+        "2024-05-19 09:00  Week start named as no weekday",
+        "2024-05-27 09:00  Week start named as no weekday"
       ],
       "metadata": {
         "events": {
@@ -2004,6 +2016,19 @@
               "until": "2024-04-32 12:00:00+00:00"
             },
             "start": "2024-04-28 20:00"
+          },
+          "Week start named as no weekday": {
+            "repeat": {
+              "byday": [
+                "sun",
+                "mon"
+              ],
+              "count": 4,
+              "freq": "weekly",
+              "interval": 2,
+              "wkst": "toString"
+            },
+            "start": "2024-05-05 09:00"
           }
         }
       }

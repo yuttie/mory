@@ -85,6 +85,14 @@ events:
             freq: daily
             tz: Asia/Tokyo
             until: 2024-04-32 12:00:00+00:00
+    Week start named as no weekday:
+        start: 2024-05-05 09:00
+        repeat:
+            freq: weekly
+            interval: 2
+            byday: [sun, mon]
+            wkst: toString
+            count: 4
 ---
 
 # Quirks

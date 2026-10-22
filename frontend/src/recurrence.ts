@@ -212,8 +212,11 @@ export function readRule(repeat: unknown, start: unknown): RecurrenceRule {
     if (bymonth !== undefined) {
         options.bymonth = bymonth as number[];
     }
-    if (rule.wkst !== undefined) {
-        options.wkst = WEEKDAYS[rule.wkst as string];
+    // A name that is no weekday is ignored, as moried ignores it, and so are the names every object
+    // answers to: `toString` handed rrule.js a function as the week's start, which it never finished
+    // expanding, freezing the page.
+    if (typeof rule.wkst === 'string' && Object.hasOwn(WEEKDAYS, rule.wkst)) {
+        options.wkst = WEEKDAYS[rule.wkst];
     }
     if (rule.count !== undefined) {
         options.count = rule.count as number;

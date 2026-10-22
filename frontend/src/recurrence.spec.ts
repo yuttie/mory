@@ -92,6 +92,16 @@ describe('expandRule', () => {
         expect(monday).not.toEqual(sunday);
     });
 
+    it('ignores a wkst that names no weekday, whatever it names', () => {
+        const rule: EventRepeat = { freq: 'weekly', interval: 2, byday: ['sun', 'mon'] };
+        const unset = expandRule(rule, '2024-05-05', '2024-05-05', '2024-05-21');
+        // `toString` and `constructor` are names every object answers to.
+        for (const wkst of ['toString', 'constructor', 'WE', 'foo', 3]) {
+            expect(expandRule({ ...rule, wkst } as unknown as EventRepeat, '2024-05-05', '2024-05-05', '2024-05-21'))
+                .toEqual(unset);
+        }
+    });
+
     it('selects days of the month, counting negatives from its end', () => {
         expect(expandRule(
             { freq: 'monthly', bymonthday: [1, -1] }, '2024-05-01', '2024-05-01', '2024-06-30',
