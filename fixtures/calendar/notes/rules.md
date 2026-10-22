@@ -343,6 +343,19 @@ events:
             freq: yearly
             bymonth: [0, 3]
             count: 2
+    February 30 is no rule:
+        start: 2024-01-01 09:00
+        repeat:
+            freq: daily
+            bymonth: [2]
+            bymonthday: [30, -30]
+    The 30th or 31st of February or April:
+        start: 2024-01-01 10:00
+        repeat:
+            freq: yearly
+            bymonth: [2, 4]
+            bymonthday: [30, 31]
+            count: 2
     The first and the last day of a month:
         start: 2024-02-01 09:00
         repeat:

@@ -679,6 +679,9 @@ fn zone_named(name: &str) -> Option<Zone> {
     })
 }
 
+/// The most days each month can have, February's in a leap year.
+const LONGEST_MONTHS: [u32; 12] = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
 /// A whole number, however it was written: `3.0` reaches the frontend as 3, JSON having one kind
 /// of number, and is 3 here as well.
 fn integer<T: TryFrom<i64>>(value: &Value) -> Option<T> {
@@ -746,15 +749,29 @@ fn expand_rule(
         rule = rule.interval(integer::<u16>(interval).filter(|n| *n > 0)?);
     }
     // The crate drops a day of 0 and then takes the start's, where the frontend refuses the rule.
-    if let Some(days) = present(repeat.get("bymonthday")) {
-        let days = list(days).iter().map(|day| integer::<i8>(day).filter(|n| *n != 0)).collect::<Option<_>>()?;
-        rule = rule.by_month_day(days);
-    }
-    if let Some(months) = present(repeat.get("bymonth")) {
-        let months = list(months)
+    let days: Vec<i8> = match present(repeat.get("bymonthday")) {
+        Some(days) => list(days).iter().map(|day| integer::<i8>(day).filter(|n| *n != 0)).collect::<Option<_>>()?,
+        None => Vec::new(),
+    };
+    let months: Vec<chrono::Month> = match present(repeat.get("bymonth")) {
+        Some(months) => list(months)
             .iter()
             .map(|month| integer::<u8>(month).and_then(|n| chrono::Month::try_from(n).ok()))
-            .collect::<Option<Vec<_>>>()?;
+            .collect::<Option<_>>()?,
+        None => Vec::new(),
+    };
+    // A day none of its months has, such as February 30, is never met, and the crate looks for one
+    // through 100,000 periods first, every minute. Refused, as `expandRule` refuses it.
+    let has = |month: &chrono::Month, day: &i8| {
+        u32::from(day.unsigned_abs()) <= LONGEST_MONTHS[month.number_from_month() as usize - 1]
+    };
+    if !months.is_empty() && !days.is_empty() && !days.iter().any(|day| months.iter().any(|month| has(month, day))) {
+        return None;
+    }
+    if !days.is_empty() {
+        rule = rule.by_month_day(days);
+    }
+    if !months.is_empty() {
         rule = rule.by_month(&months);
     }
     // rrule.js falls back to Monday for a name it does not know, as `rrule` does for none.

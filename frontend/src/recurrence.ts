@@ -154,6 +154,9 @@ export class RecurrenceError extends Error {}
 // draws it, but moried refuses the rule.
 const ORDINALS: Record<string, [number, number]> = { monthly: [-4, 5], yearly: [-52, 53] };
 
+// The most days each month can have, February's in a leap year.
+const LONGEST_MONTHS = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
 /// A whole number from `first` to `last`, never 0, or a `RecurrenceError` naming `what` it is not.
 function wholeIn(value: unknown, first: number, last: number, what: string): number {
     if (typeof value !== 'number' || !Number.isInteger(value) || value === 0 || value < first || value > last) {
@@ -302,15 +305,24 @@ export function readRule(repeat: unknown, start: unknown): RecurrenceRule {
     // Each a whole number in range, as moried requires: rrule.js matched each by strict equality,
     // drawing `[15, 32]` on the 15th and `[3, 13]` in March, and dropped a day of 0, drawing every
     // day where moried drew the start's.
-    if (bymonthday !== undefined) {
+    const monthDays = bymonthday?.map((day) => wholeIn(day, -31, 31, 'day of the month'));
+    const months = bymonth?.map((month) => wholeIn(month, 1, 12, 'month'));
+    if (monthDays !== undefined) {
         // RFC 5545 forbids it, and moried's `rrule` crate refuses it.
         if (rule.freq === 'weekly') {
             throw new RecurrenceError('A day of the month means nothing under freq: weekly');
         }
-        options.bymonthday = bymonthday.map((day) => wholeIn(day, -31, 31, 'day of the month'));
+        // A day none of its months has, such as February 30, is never met, and rrule.js looks for
+        // one until the year 9999: seconds each time the calendar draws a daily rule, which is on
+        // every change to any note. moried's crate looks through 100,000 periods, every minute.
+        if (months !== undefined
+            && !monthDays.some((day) => months.some((month) => Math.abs(day) <= LONGEST_MONTHS[month - 1]))) {
+            throw new RecurrenceError('No month it names has a day it names');
+        }
+        options.bymonthday = monthDays;
     }
-    if (bymonth !== undefined) {
-        options.bymonth = bymonth.map((month) => wholeIn(month, 1, 12, 'month'));
+    if (months !== undefined) {
+        options.bymonth = months;
     }
     // A name that is no weekday is ignored, as moried ignores it, and so are the names every object
     // answers to: `toString` handed rrule.js a function as the week's start, which it never finished

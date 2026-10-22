@@ -23,6 +23,31 @@ describe('parseWallClock', () => {
     });
 });
 
+describe('a day none of a rule\'s months has', () => {
+    // rrule.js looked for one until the year 9999, seconds a time for a daily rule.
+    it('is refused at once, from either end of the month', () => {
+        for (const bymonthday of [[30], [31, -30], [-31]]) {
+            const began = performance.now();
+            expect(() => expandRule(
+                { freq: 'daily', bymonth: [2], bymonthday } as EventRepeat, '2024-01-01 09:00', '2026-01-01', '2026-12-31',
+            ), JSON.stringify(bymonthday)).toThrow(RecurrenceError);
+            expect(performance.now() - began).toBeLessThan(100);
+        }
+        expect(() => expandRule(
+            { freq: 'yearly', bymonth: [4, 6, 9, 11], bymonthday: [31] } as EventRepeat, '2024-01-01 09:00', '2026-01-01', '2026-12-31',
+        )).toThrow(RecurrenceError);
+    });
+
+    it('is no reason to refuse a day another of them has', () => {
+        expect(expandRule(
+            { freq: 'yearly', bymonth: [2, 4], bymonthday: [30, 31] } as EventRepeat, '2024-01-01 09:00', '2024-01-01', '2025-12-31',
+        )).toEqual(['2024-04-30 09:00', '2025-04-30 09:00']);
+        expect(expandRule(
+            { freq: 'yearly', bymonth: [2], bymonthday: [29] } as EventRepeat, '2024-01-01 09:00', '2024-01-01', '2028-12-31',
+        )).toEqual(['2024-02-29 09:00', '2028-02-29 09:00']);
+    });
+});
+
 describe('readDatetime', () => {
     const iso = (value: unknown) => readDatetime(value)?.toISOString() ?? null;
 

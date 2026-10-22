@@ -2210,6 +2210,7 @@
         "2024-04-17 12:00  Third Wednesday  +0m",
         "2024-04-26 17:00  Last Friday  +0m",
         "2024-04-30 08:00  Last day of the month  +0m",
+        "2024-04-30 10:00  The 30th or 31st of February or April  +0m",
         "2024-05-06 09:00  Daily with count  +0m",
         "2024-05-09 11:30  Moved and renamed  +0m",
         "2024-05-10 09:00  Daily with count  +0m",
@@ -2260,6 +2261,7 @@
         "2024-12-07 08:00  An empty month day list  +0m",
         "2024-12-30 09:00  The 53rd Monday of a year  +0m",
         "2025-03-15 10:00  Twice a year  +0m",
+        "2025-04-30 10:00  The 30th or 31st of February or April  +0m",
         "2025-06-01 08:00  A blank count is no limit  +0m",
         "2025-06-01 17:00  The largest count  +0m",
         "2025-07-04 08:00  A month, not a list  +0m",
@@ -2327,6 +2329,7 @@
         "2024-04-17 12:00  Third Wednesday  -5m",
         "2024-04-26 17:00  Last Friday  -5m",
         "2024-04-30 08:00  Last day of the month  -5m",
+        "2024-04-30 10:00  The 30th or 31st of February or April  -5m",
         "2024-05-06 09:00  Daily with count  -5m",
         "2024-05-09 11:30  Moved and renamed  -5m",
         "2024-05-10 09:00  Daily with count  -5m",
@@ -2377,6 +2380,7 @@
         "2024-12-07 08:00  An empty month day list  -5m",
         "2024-12-30 09:00  The 53rd Monday of a year  -5m",
         "2025-03-15 10:00  Twice a year  -5m",
+        "2025-04-30 10:00  The 30th or 31st of February or April  -5m",
         "2025-06-01 08:00  A blank count is no limit  -5m",
         "2025-06-01 17:00  The largest count  -5m",
         "2025-07-04 08:00  A month, not a list  -5m",
@@ -2444,6 +2448,7 @@
         "2024-04-17 12:00  Third Wednesday",
         "2024-04-26 17:00  Last Friday",
         "2024-04-30 08:00  Last day of the month",
+        "2024-04-30 10:00  The 30th or 31st of February or April",
         "2024-05-06 09:00  Daily with count",
         "2024-05-09 11:30  Moved and renamed",
         "2024-05-10 09:00  Daily with count",
@@ -2494,6 +2499,7 @@
         "2024-12-07 08:00  An empty month day list",
         "2024-12-30 09:00  The 53rd Monday of a year",
         "2025-03-15 10:00  Twice a year",
+        "2025-04-30 10:00  The 30th or 31st of February or April",
         "2025-06-01 08:00  A blank count is no limit",
         "2025-06-01 17:00  The largest count",
         "2025-07-04 08:00  A month, not a list",
@@ -2876,6 +2882,19 @@
             },
             "start": "2024-01-02 18:00"
           },
+          "February 30 is no rule": {
+            "repeat": {
+              "bymonth": [
+                2
+              ],
+              "bymonthday": [
+                30,
+                -30
+              ],
+              "freq": "daily"
+            },
+            "start": "2024-01-01 09:00"
+          },
           "Last Friday": {
             "repeat": {
               "byday": [
@@ -2928,6 +2947,21 @@
               "freq": "weekly"
             },
             "start": "2024-08-01 09:00"
+          },
+          "The 30th or 31st of February or April": {
+            "repeat": {
+              "bymonth": [
+                2,
+                4
+              ],
+              "bymonthday": [
+                30,
+                31
+              ],
+              "count": 2,
+              "freq": "yearly"
+            },
+            "start": "2024-01-01 10:00"
           },
           "The 31st": {
             "repeat": {
