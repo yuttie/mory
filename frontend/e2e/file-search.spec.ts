@@ -122,6 +122,25 @@ test('opens from any view with Ctrl+K, and opens the file the arrows choose', as
     await expect(palette(page)).toBeHidden();
 });
 
+test('moves down and up with Ctrl+N and Ctrl+P too', async ({ context, page }) => {
+    await mockBackend(context, FILES, { times: TIMES });
+    await page.goto('/');
+    await open(page);
+    await search(page).pressSequentially('th');
+    await expect(titles(page)).toHaveText(['Draft chapter', 'Write the report', 'Thesis', 'Show all 3 in Files']);
+    await page.keyboard.press('Control+n');
+    await page.keyboard.press('Control+n');
+    await expect(selected(page)).toContainText('Thesis');
+    await page.keyboard.press('Control+p');
+    await expect(selected(page)).toContainText('Write the report');
+    // Round from the first to the last, as the arrows go.
+    await page.keyboard.press('Control+p');
+    await page.keyboard.press('Control+p');
+    await expect(selected(page)).toContainText('Show all 3 in Files');
+    await expect(search(page)).toHaveValue('th');
+    await expect(palette(page)).toBeVisible();
+});
+
 test('moves between the kinds of file with Tab, as the Files view has them', async ({ context, page }) => {
     await mockBackend(context, FILES, { times: TIMES });
     await page.goto('/');

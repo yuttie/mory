@@ -290,6 +290,17 @@ function onKeydown(event: KeyboardEvent): void {
         moveTab(event.shiftKey ? -1 : 1);
         return;
     }
+    // Down and up, as Emacs and a shell's history move with them. Taken from the browser, whose
+    // Ctrl+P would print the page; Firefox and Chrome keep Ctrl+N for a new window, and open one
+    // before a page in a tab sees the key.
+    if (event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey) {
+        const key = event.key.toLowerCase();
+        if (key === 'n' || key === 'p') {
+            event.preventDefault();
+            moveTo(wrap(activeIndex.value + (key === 'n' ? 1 : -1)));
+        }
+        return;
+    }
     if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) {
         return;
     }
