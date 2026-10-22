@@ -175,6 +175,10 @@ export interface ListEntry2 {
   metadata: { tags: string[], events?: { [key: string]: MetadataEvent }, task?: unknown } | null;
   title: string | null;
   time: string;
+  // Whether the file is anything but UTF-8 text, as moried reads it from what the file holds: its
+  // name cannot say, for a file without an extension, or one `mime_guess` takes for another type.
+  // Absent for text.
+  binary?: boolean;
 }
 
 export function compareTags(a: string, b: string): number {

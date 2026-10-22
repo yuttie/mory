@@ -81,6 +81,16 @@ describe('isOfKind', () => {
         expect(kindsOf('ideas/.gitkeep', 'application/octet-stream')).toEqual(['others']);
     });
 
+    it('lists a file that is not text as Uncategorized, whatever its name', () => {
+        const kindsOfBinary = (path: string, mime_type: string) =>
+            FILE_KINDS.filter((kind) => isOfKind({ path, mime_type, metadata: null, binary: true }, kind));
+        expect(kindsOfBinary('song.mp3', 'audio/mpeg')).toEqual(['others']);
+        expect(kindsOfBinary('ideas/archive.zip', 'application/zip')).toEqual(['others']);
+        expect(kindsOfBinary('ideas/scan', 'application/octet-stream')).toEqual(['others']);
+        // Media by its type, as the media view opens it, most of it binary.
+        expect(kindsOfBinary('photo.jpg', 'image/jpeg')).toEqual(['media']);
+    });
+
     it('lists whatever the media view opens, wherever it is', () => {
         expect(kindsOf('photo.jpg', 'image/jpeg')).toEqual(['media']);
         expect(kindsOf('ideas/sketch.png', 'image/png')).toEqual(['media']);

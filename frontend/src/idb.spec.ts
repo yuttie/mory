@@ -191,14 +191,16 @@ describe('the entry store', () => {
 });
 
 describe('a database an older version wrote', () => {
-    // Rows a delta landed on after another tab had moved them on, labelled as the commit it came
-    // from: nothing tells them from good ones, and a later delta never names a row its base lacks.
-    it('loses the listing it held, and nothing else', async () => {
+    // 2 held rows a delta landed on after another tab had moved them on, labelled as the commit it
+    // came from: nothing tells them from good ones, and a later delta never names a row its base
+    // lacks. 3 held rows from before a row said whether its file is text, which a delta never
+    // adds to a row whose file has not changed.
+    it.each([2, 3])('loses the listing version %i held, and nothing else', async (version) => {
         vi.resetModules();
         const factory = new IDBFactory();
         vi.stubGlobal('indexedDB', factory);
         await new Promise<void>((resolve, reject) => {
-            const request = factory.open('mory', 2);
+            const request = factory.open('mory', version);
             request.onupgradeneeded = () => {
                 request.result.createObjectStore('repository');
                 request.result.createObjectStore('entries', { keyPath: 'path' });

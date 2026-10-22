@@ -5,8 +5,8 @@
 // then fall back to the API, so a broken cache never breaks the app.
 
 const DB_NAME = 'mory';
-// 3 drops what 2 held: see `onupgradeneeded`.
-const DB_VERSION = 3;
+// 3 and 4 drop what the version before held: see `onupgradeneeded`.
+const DB_VERSION = 4;
 const STORE_NAME = 'repository';
 const ENTRY_STORE = 'entries';
 
@@ -55,8 +55,9 @@ function openDatabase(): Promise<IDBDatabase | null> {
                 // from: a row that commit has not -- a note deleted since -- then stayed in every
                 // tab, since each delta after is computed from that commit and never names it. The
                 // label cannot tell such rows from good ones, so all of them go, for one full
-                // listing per browser.
-                if (event.oldVersion > 0 && event.oldVersion < 3) {
+                // listing per browser. 4 drops the rows listed before a row said whether its file
+                // is text: a delta names only the files that changed, so the rest would never say.
+                if (event.oldVersion > 0 && event.oldVersion < 4) {
                     try {
                         request.transaction.objectStore(ENTRY_STORE).clear();
                         request.transaction.objectStore(STORE_NAME).delete(CACHE_COMMIT_KEY);

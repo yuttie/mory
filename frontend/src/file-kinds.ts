@@ -1,7 +1,8 @@
 // The kinds of file the Files view has a tab for, and which files each tab lists.
 //
 // Most list what one of the other views is for, so a file is found under the kind it is opened as:
-// the notes the note tree holds, the tasks the task tree holds, and whatever the media view opens.
+// the notes of the note tree that are text, the tasks the task tree holds, and whatever the media
+// view opens.
 // The rest list what the application keeps in files of its own: the templates the Add menu offers,
 // the events the calendar draws, by the files that declare them, and the settings under `.mory/`.
 // "Uncategorized" lists every file none of those does, and the tab with no kind every file of all.
@@ -33,13 +34,17 @@ export function templateNameOf(path: string): string {
     return path.replace(/\.template$/i, '');
 }
 
-export function isOfKind(entry: Pick<ListEntry2, 'path' | 'mime_type' | 'metadata'>, kind: FileKind): boolean {
+export function isOfKind(entry: Pick<ListEntry2, 'path' | 'mime_type' | 'metadata' | 'binary'>, kind: FileKind): boolean {
     switch (kind) {
         // As the note tree has them: the application's own directories hold its storage, not
         // notes. An image beside a note is not one either, though the tree shows it, because the
-        // note view cannot open it, and a template is what a note is started from.
+        // note view cannot open it, nor an archive or a sound, which it would show as gibberish,
+        // and a template is what a note is started from.
         case 'notes':
-            return !isHiddenPath(entry.path) && !isMediaType(entry.mime_type) && !isTemplatePath(entry.path);
+            return !isHiddenPath(entry.path)
+                && !isMediaType(entry.mime_type)
+                && entry.binary !== true
+                && !isTemplatePath(entry.path);
         // As the task tree has them, which leaves out a file under `.tasks/` named otherwise.
         case 'tasks':
             return taskUuidOf(entry.path) !== null;
