@@ -556,7 +556,7 @@ function fileRow(entry: ListEntry2): FileRow {
         path: entry.path,
         size: entry.size,
         mimeType: entry.mime_type,
-        tags: ((entry.metadata || {}).tags || []).map(String).sort(compareTags),
+        tags: tagsOf(entry),
         title: titleOf(entry),
         time: dayjs(entry.time),
         ...(() => {
@@ -588,6 +588,13 @@ function fileRow(entry: ListEntry2): FileRow {
         // By the name the Add menu offers it as.
         ...(kind.value === 'templates' ? { title: templateNameOf(entry.path) } : {}),
     };
+}
+
+// Tags given as anything but a list are none, as the tag list has them: frontmatter is whatever the
+// file says.
+function tagsOf(entry: ListEntry2): string[] {
+    const tags: unknown = entry.metadata?.tags;
+    return Array.isArray(tags) ? tags.map(String).sort(compareTags) : [];
 }
 
 // One row for each event a file declares, however often it happens, opening the file.

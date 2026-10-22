@@ -269,6 +269,14 @@ test('narrows the search of every file to the kind of the open tab', async ({ co
     await expect(rows(page).getByRole('link', { name: 'lecture', exact: true })).toBeVisible();
 });
 
+// Frontmatter is whatever the file says, and one file's tags must not cost the view every other file.
+test('lists a note whose tags are not a list', async ({ context, page }) => {
+    await mockBackend(context, { ...FILES, 'loose-tags.md': '---\ntags: thesis\n---\n\n# Loose tags\n' });
+    await page.goto('/files?q=loose');
+    await expect(rows(page)).toHaveCount(2);
+    await expect(rows(page).filter({ hasText: 'Loose tags' })).not.toContainText('thesis');
+});
+
 test('keeps the search box to the address on going back and forth', async ({ context, page }) => {
     await mockBackend(context, FILES);
     await page.goto('/files?q=draft');
