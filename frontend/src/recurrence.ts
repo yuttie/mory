@@ -21,6 +21,7 @@ import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
 
 import type { EventRepeat } from '@/api';
+import TIME_ZONES from '@/time-zones.json';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -200,20 +201,40 @@ function listOf(value: unknown): unknown[] | undefined {
     return list.length === 0 ? undefined : list;
 }
 
+// The zones moried's `chrono-tz` knows, by name in any case, as Intl takes one. Intl knows more,
+// each browser its own set: ICU's `JST`, and its `BST`, which is Dhaka's, and offsets such as
+// `+09:00`. moried rings in none of them, and the calendar drew in each.
+const ZONES = new Map(TIME_ZONES.map((name) => [name.toLowerCase(), name]));
+
+/// The zone a rule's `tz` names, as moried reads it: `null` and `''` are the reader's own, and
+/// anything else must be a zone's name, or a `RecurrenceError`. JavaScript's `||` read `0` and
+/// `false` as the reader's as well.
+function zoneOf(tz: unknown): string | undefined {
+    if (tz === null || tz === '') {
+        return undefined;
+    }
+    const name = typeof tz === 'string' ? ZONES.get(tz.toLowerCase()) : undefined;
+    if (name === undefined) {
+        throw new RecurrenceError(`Unknown timezone ${JSON.stringify(tz)}`);
+    }
+    return name;
+}
+
 /// The wall clock in `tz` at the instant `value` names, which carries its offset.
 ///
-/// The zone is read as `dayjs.tz` reads it for each occurrence: a blank one is the reader's own,
-/// and one Intl does not know is refused. Intl throws a `RangeError` for it, which out of here
-/// would blank the calendar rather than report one rule.
+/// The zone is read as `zoneOf` reads it for each occurrence. One Intl does not know, if a browser
+/// lacks one moried knows, throws a `RangeError`, which out of here would blank the calendar
+/// rather than report one rule.
 function wallClockIn(value: string, tz: unknown): string {
+    const zone = zoneOf(tz);
     // One it cannot read formats as `Invalid Date`, which is no wall clock, and is compared as
     // written.
     const at = readDatetime(value) ?? dayjs(NaN);
     try {
-        return at.tz((tz || undefined) as string | undefined).format('YYYY-MM-DD HH:mm:ss');
+        return at.tz(zone).format('YYYY-MM-DD HH:mm:ss');
     }
     catch {
-        throw new RecurrenceError(`Unknown timezone "${String(tz)}"`);
+        throw new RecurrenceError(`Unknown timezone ${JSON.stringify(tz)}`);
     }
 }
 
@@ -407,17 +428,18 @@ function inReaderZone(wallClock: string, hasTime: boolean, tz: unknown): string 
     if (tz === undefined || !hasTime) {
         return wallClock;
     }
-    // An unknown zone reaches Intl and throws a RangeError rather than producing an invalid
+    // A zone a browser's Intl does not know throws a RangeError rather than producing an invalid
     // dayjs, so the failure has to be caught rather than tested for.
+    const zone = zoneOf(tz);
     let converted;
     try {
-        converted = dayjs.tz(wallClock, tz as string);
+        converted = dayjs.tz(wallClock, zone);
     }
     catch {
-        throw new RecurrenceError(`Unknown timezone "${String(tz)}"`);
+        throw new RecurrenceError(`Unknown timezone ${JSON.stringify(tz)}`);
     }
     if (!converted.isValid()) {
-        throw new RecurrenceError(`Unknown timezone "${String(tz)}"`);
+        throw new RecurrenceError(`Unknown timezone ${JSON.stringify(tz)}`);
     }
     return converted.local().format('YYYY-MM-DD HH:mm');
 }

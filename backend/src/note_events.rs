@@ -1034,6 +1034,25 @@ events:
         ]);
     }
 
+    /// The zones the calendar takes in `repeat.tz`, which must be the ones `zone_named` knows: Intl
+    /// knows more, and each browser its own set. Regenerate with
+    /// `UPDATE_TIME_ZONES=1 cargo test zone_names` when `chrono-tz` changes.
+    #[test]
+    fn the_calendar_takes_the_zone_names_moried_does() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../frontend/src/time-zones.json");
+        let names: Vec<&str> = chrono_tz::TZ_VARIANTS.iter().map(|zone| zone.name()).collect();
+        let listed = serde_json::to_string_pretty(&names).expect("serialisable") + "\n";
+        if std::env::var("UPDATE_TIME_ZONES").is_ok() {
+            std::fs::write(&path, listed).expect("the list should be writable");
+            return;
+        }
+        assert_eq!(
+            std::fs::read_to_string(&path).expect("the list should exist"),
+            listed,
+            "chrono-tz's zones changed; regenerate with UPDATE_TIME_ZONES=1 cargo test zone_names",
+        );
+    }
+
     #[test]
     fn a_whole_number_may_be_written_with_a_fraction() {
         let number = |yaml: &str| serde_yaml::from_str::<Value>(yaml).unwrap();

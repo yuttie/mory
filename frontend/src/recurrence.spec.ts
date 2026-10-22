@@ -280,9 +280,21 @@ describe('expandRule reading until in the rule\'s zone', () => {
                 { freq: 'daily', tz: 'Mars/Olympus', until }, start, '2024-05-01', '2024-05-31',
             ), start).toThrow(RecurrenceError);
         }
-        expect(() => expandRule(
-            { freq: 'daily', tz: 0, until } as unknown as EventRepeat, '2024-05-01 09:00', '2024-05-01', '2024-05-31',
-        )).not.toThrow();
+    });
+
+    // moried reads only a zone's name, and Intl reads more, each browser its own set; `||` read
+    // `0` and `false` as the reader's zone.
+    it('refuses what is not a zone moried knows, though Intl may', () => {
+        for (const tz of [0, false, ['Asia/Tokyo'], 'JST', 'BST', '+09:00', 'GMT+9']) {
+            expect(() => expandRule(
+                { freq: 'daily', tz, until } as unknown as EventRepeat, '2024-05-01 09:00', '2024-05-01', '2024-05-31',
+            ), JSON.stringify(tz)).toThrow(RecurrenceError);
+        }
+        for (const tz of ['EST', 'Japan', 'asia/TOKYO', 'Etc/GMT-9']) {
+            expect(expandRule(
+                { freq: 'daily', tz, count: 1 } as unknown as EventRepeat, '2024-05-01 09:00', '2024-05-01', '2024-05-31',
+            ), tz).toHaveLength(1);
+        }
     });
 });
 

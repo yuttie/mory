@@ -3161,6 +3161,10 @@
         "2024-06-06 09:00  Empty zone  +0m",
         "2024-06-07  Unknown zone on dates  none",
         "2024-06-08  Unknown zone on dates  none",
+        "2024-06-09 12:00  Zone the database abbreviates  +0m",
+        "2024-06-10 12:00  Zone the database abbreviates  +0m",
+        "2024-06-13  Zone that is zero on dates  none",
+        "2024-06-14  Zone that is zero on dates  none",
         "2024-10-25 07:00  London across autumn  +0m",
         "2024-10-26 07:00  London across autumn  +0m",
         "2024-10-27 08:00  London across autumn  +0m",
@@ -3194,6 +3198,10 @@
         "2024-06-06 09:00  Empty zone  -5m",
         "2024-06-07  Unknown zone on dates  -1d 18:00",
         "2024-06-08  Unknown zone on dates  -1d 18:00",
+        "2024-06-09 12:00  Zone the database abbreviates  -5m",
+        "2024-06-10 12:00  Zone the database abbreviates  -5m",
+        "2024-06-13  Zone that is zero on dates  -1d 18:00",
+        "2024-06-14  Zone that is zero on dates  -1d 18:00",
         "2024-10-25 07:00  London across autumn  -5m",
         "2024-10-26 07:00  London across autumn  -5m",
         "2024-10-27 08:00  London across autumn  -5m",
@@ -3227,6 +3235,10 @@
         "2024-06-06 09:00  Empty zone",
         "2024-06-07  Unknown zone on dates",
         "2024-06-08  Unknown zone on dates",
+        "2024-06-09 12:00  Zone the database abbreviates",
+        "2024-06-10 12:00  Zone the database abbreviates",
+        "2024-06-13  Zone that is zero on dates",
+        "2024-06-14  Zone that is zero on dates",
         "2024-10-25 07:00  London across autumn",
         "2024-10-26 07:00  London across autumn",
         "2024-10-27 08:00  London across autumn",
@@ -3313,6 +3325,24 @@
             },
             "start": "2024-03-08 02:30"
           },
+          "Zone as an offset": {
+            "repeat": {
+              "count": 2,
+              "freq": "daily",
+              "tz": "+09:00"
+            },
+            "start": "2024-06-09 13:00"
+          },
+          "Zone in a list": {
+            "repeat": {
+              "count": 2,
+              "freq": "daily",
+              "tz": [
+                "Asia/Tokyo"
+              ]
+            },
+            "start": "2024-06-09 11:00"
+          },
           "Zone in lower case": {
             "repeat": {
               "count": 2,
@@ -3320,6 +3350,54 @@
               "tz": "asia/tokyo"
             },
             "start": "2024-06-03 09:00"
+          },
+          "Zone only ICU knows": {
+            "repeat": {
+              "count": 2,
+              "freq": "daily",
+              "tz": "JST"
+            },
+            "start": "2024-06-09 12:00"
+          },
+          "Zone that is false": {
+            "repeat": {
+              "count": 2,
+              "freq": "daily",
+              "tz": false
+            },
+            "start": "2024-06-09 10:00"
+          },
+          "Zone that is zero": {
+            "repeat": {
+              "count": 2,
+              "freq": "daily",
+              "tz": 0
+            },
+            "start": "2024-06-09 09:00"
+          },
+          "Zone that is zero on dates": {
+            "repeat": {
+              "count": 2,
+              "freq": "daily",
+              "tz": 0
+            },
+            "start": "2024-06-13"
+          },
+          "Zone that is zero on dates, until an instant": {
+            "repeat": {
+              "freq": "daily",
+              "tz": 0,
+              "until": "2024-06-12 23:00:00+00:00"
+            },
+            "start": "2024-06-11"
+          },
+          "Zone the database abbreviates": {
+            "repeat": {
+              "count": 2,
+              "freq": "daily",
+              "tz": "EST"
+            },
+            "start": "2024-06-09 14:00"
           }
         }
       }
