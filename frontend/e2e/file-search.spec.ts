@@ -122,12 +122,13 @@ test('opens from any view with Ctrl+K, and opens the file the arrows choose', as
     await expect(palette(page)).toBeHidden();
 });
 
-test('moves down and up with Ctrl+N and Ctrl+P too', async ({ context, page }) => {
+test('moves down and up with Ctrl+N and Ctrl+P too, and opens with Ctrl+M', async ({ context, page }) => {
     await mockBackend(context, FILES, { times: TIMES });
     await page.goto('/');
     await open(page);
     await search(page).pressSequentially('th');
     await expect(titles(page)).toHaveText(['Draft chapter', 'Write the report', 'Thesis', 'Show all 3 in Files']);
+    const keys = await recordKeys(page);
     await page.keyboard.press('Control+n');
     await page.keyboard.press('Control+n');
     await expect(selected(page)).toContainText('Thesis');
@@ -139,6 +140,23 @@ test('moves down and up with Ctrl+N and Ctrl+P too', async ({ context, page }) =
     await expect(selected(page)).toContainText('Show all 3 in Files');
     await expect(search(page)).toHaveValue('th');
     await expect(palette(page)).toBeVisible();
+
+    // And opens the one chosen with Ctrl+M, as with Enter.
+    await page.keyboard.press('Control+n');
+    await expect(selected(page)).toContainText('Draft chapter');
+    await page.keyboard.press('Control+m');
+    await expect(page).toHaveURL('/note/ideas/draft.md');
+    await expect(palette(page)).toBeHidden();
+    // Each kept from the browser, which would print the page with Ctrl+P and mute it with Ctrl+M.
+    expect(await keys()).toEqual([
+        'Control+n: taken',
+        'Control+n: taken',
+        'Control+p: taken',
+        'Control+p: taken',
+        'Control+p: taken',
+        'Control+n: taken',
+        'Control+m: taken',
+    ]);
 });
 
 test('moves between the kinds of file with Tab, as the Files view has them', async ({ context, page }) => {

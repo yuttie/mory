@@ -290,15 +290,25 @@ function onKeydown(event: KeyboardEvent): void {
         moveTab(event.shiftKey ? -1 : 1);
         return;
     }
-    // Down and up, as Emacs and a shell's history move with them. Taken from the browser, whose
-    // Ctrl+P would print the page; Firefox and Chrome keep Ctrl+N for a new window, and open one
-    // before a page in a tab sees the key.
+    // Down and up, as Emacs and a shell's history move with them, and Ctrl+M as Enter, which a
+    // terminal reads it as. Taken from the browser, whose Ctrl+P would print the page and Firefox's
+    // Ctrl+M mute it; Firefox and Chrome keep Ctrl+N for a new window, and open one before a page in
+    // a tab sees the key.
     if (event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey) {
-        const key = event.key.toLowerCase();
-        if (key === 'n' || key === 'p') {
-            event.preventDefault();
-            moveTo(wrap(activeIndex.value + (key === 'n' ? 1 : -1)));
+        switch (event.key.toLowerCase()) {
+            case 'n':
+                moveTo(wrap(activeIndex.value + 1));
+                break;
+            case 'p':
+                moveTo(wrap(activeIndex.value - 1));
+                break;
+            case 'm':
+                chooseActive();
+                break;
+            default:
+                return;
         }
+        event.preventDefault();
         return;
     }
     if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) {
@@ -318,14 +328,18 @@ function onKeydown(event: KeyboardEvent): void {
             moveTo(Math.max(activeIndex.value - pageSize(), 0));
             break;
         case 'Enter':
-            if (activeOption.value !== undefined) {
-                emit('choose', activeOption.value.to);
-            }
+            chooseActive();
             break;
         default:
             return;
     }
     event.preventDefault();
+}
+
+function chooseActive(): void {
+    if (activeOption.value !== undefined) {
+        emit('choose', activeOption.value.to);
+    }
 }
 
 // Round from the last to the first and back, as a palette's list does.
