@@ -272,12 +272,17 @@ function formatDateTime(datetime: dayjs.Dayjs): string {
 }
 
 /// `undefined` when there is no end, `null` when the value is unusable.
+///
+/// `end` is whatever the frontmatter held: `end: 90` is a YAML number, and `end:` left empty null.
 export function normalizeEndTime(
-    end: string | undefined,
+    end: unknown,
     start: string,
 ): string | undefined | null {
     if (end === undefined) {
         return undefined;
+    }
+    if (typeof end !== 'string') {
+        return null;
     }
 
     const match = DURATION_SHORT.exec(end) || DURATION_LONG.exec(end);
@@ -289,16 +294,11 @@ export function normalizeEndTime(
         }
         else {
             // A bare time of day belongs to the start's date -- or the next one, when taking it
-            // literally would put the end before the start.
-            const prefixedEnd = dayjs(start).format('YYYY-MM-DD') + ' ' + end;
-            const parsedEnd = dayjs(prefixedEnd);
+            // literally would put the end before the start. Spelt out, since the time is spelt as
+            // the author wrote it, and `1130` is a time to `dayjs` and none to the calendar.
+            const parsedEnd = dayjs(dayjs(start).format('YYYY-MM-DD') + ' ' + end);
             if (parsedEnd.isValid()) {
-                if (parsedEnd.isAfter(start)) {
-                    return prefixedEnd;
-                }
-                else {
-                    return formatDateTime(parsedEnd.add(1, 'day'));
-                }
+                return formatDateTime(parsedEnd.isAfter(start) ? parsedEnd : parsedEnd.add(1, 'day'));
             }
             else {
                 return null;
@@ -306,7 +306,11 @@ export function normalizeEndTime(
         }
     }
     else {
+        // `[\d.]` admits `+.h`, which `parseFloat` reads as no number at all.
         const amount = parseFloat(match[1]);
+        if (Number.isNaN(amount)) {
+            return null;
+        }
         const unit = match[2] as dayjs.ManipulateType;
         const end = dayjs(start).add(amount, unit);
         // A whole-day event stays whole days: giving its end a midnight would make the same data
@@ -428,14 +432,26 @@ function buildOccurrence(
         return null;
     }
 
+    // `<v-calendar>` throws on a start or end it cannot read, and one throw blanks the calendar. What
+    // `dayjs` reads is wider: `2024/08/13`, `20240813`, and what `Date` makes of the rest.
+    const start = toWallClock(time.start);
+    if (!CALENDAR_PARSE.test(start)) {
+        errors.push(['start', time.start, eventName, entry.path, entry.title]);
+        return null;
+    }
+    const drawnEnd = normalizedEnd === undefined ? undefined : toWallClock(normalizedEnd);
+    if (drawnEnd !== undefined && !CALENDAR_PARSE.test(drawnEnd)) {
+        errors.push(['end', end, eventName, entry.path, entry.title]);
+        return null;
+    }
+
     // The template wraps the name as resolved, so a renamed occurrence keeps its category's prefix.
     // A non-string name is handed on untouched, for `validateEvent` to refuse as before.
     const name = time.name || eventName;
-    const start = toWallClock(time.start);
     const event: CalendarEvent = {
         name: typeof name === 'string' ? applyNameTemplate(category?.defaults?.name, name) : name,
         start,
-        end: normalizedEnd === undefined ? undefined : toWallClock(normalizedEnd),
+        end: drawnEnd,
         finished: time.finished,
         color: time.color || parent.color || category?.defaults?.color || DEFAULT_EVENT_COLOR,
         note: time.note || parent.note,

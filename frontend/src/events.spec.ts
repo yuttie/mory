@@ -80,6 +80,21 @@ describe('normalizeEndTime', () => {
     it('reports an unusable end as null', () => {
         expect(normalizeEndTime('not a time', '2024-05-01 10:00')).toBeNull();
     });
+
+    it('refuses an end that is not text, which YAML makes of a bare number', () => {
+        expect(normalizeEndTime(90, '2024-05-01 10:00')).toBeNull();
+        expect(normalizeEndTime(true, '2024-05-01 10:00')).toBeNull();
+        expect(normalizeEndTime(null, '2024-05-01 10:00')).toBeNull();
+    });
+
+    it('refuses a duration with no number in it', () => {
+        expect(normalizeEndTime('+.h', '2024-05-01 10:00')).toBeNull();
+    });
+
+    it('spells out a time of day the calendar could not read as written', () => {
+        expect(normalizeEndTime('11:30.5', '2024-05-01 10:00')).toBe('2024-05-01 11:30');
+        expect(normalizeEndTime('9:05', '2024-05-01 08:00')).toBe('2024-05-01 09:05');
+    });
 });
 
 describe('eventEndsAt', () => {
@@ -682,6 +697,27 @@ describe('malformed frontmatter', () => {
         for (const event of events) {
             expect(typeof event.start).toBe('string');
         }
+    });
+
+    // `<v-calendar>` throws on what its own regex does not match, blanking the calendar.
+    it('reports a start or an end the calendar cannot read rather than drawing it', () => {
+        const { events, errors } = derive([
+            entry('a.md', {
+                Slashes: { start: '2024/08/13 11:00' },
+                Words: { start: 'August 12, 2024 10:00' },
+                'Slashed end': { start: '2024-09-20 10:00', end: '2024/09/20 11:00' },
+                'Numeric end': { start: '2024-09-22 10:00', end: 90 as never },
+                Fine: { start: '2024-09-23 10:00', end: '11:30.5' },
+            }),
+        ]);
+
+        expect(events.map((e) => [e.name, e.start, e.end])).toEqual([['Fine', '2024-09-23 10:00', '2024-09-23 11:30']]);
+        expect(errors.map((e) => [e[2], e[0], e[1]])).toEqual([
+            ['Slashes', 'start', '2024/08/13 11:00'],
+            ['Words', 'start', 'August 12, 2024 10:00'],
+            ['Slashed end', 'end', '2024/09/20 11:00'],
+            ['Numeric end', 'end', 90],
+        ]);
     });
 });
 

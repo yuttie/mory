@@ -1844,7 +1844,8 @@
         "2024-05-13 09:00  Week start named as no weekday  +0m",
         "2024-05-14 08:00  End of the day with an offset  +0m",
         "2024-05-19 09:00  Week start named as no weekday  +0m",
-        "2024-05-27 09:00  Week start named as no weekday  +0m"
+        "2024-05-27 09:00  Week start named as no weekday  +0m",
+        "2024-09-24 10:00  Time of day with a fraction  +0m"
       ],
       "alarmsWithDefaults": [
         "2024-04-28 04:00  Until that does not parse  -5m",
@@ -1867,7 +1868,8 @@
         "2024-05-13 09:00  Week start named as no weekday  -5m",
         "2024-05-14 08:00  End of the day with an offset  -5m",
         "2024-05-19 09:00  Week start named as no weekday  -5m",
-        "2024-05-27 09:00  Week start named as no weekday  -5m"
+        "2024-05-27 09:00  Week start named as no weekday  -5m",
+        "2024-09-24 10:00  Time of day with a fraction  -5m"
       ],
       "drawn": [
         "2024-04-28 04:00  Until that does not parse",
@@ -1890,7 +1892,8 @@
         "2024-05-13 09:00  Week start named as no weekday",
         "2024-05-14 08:00  End of the day with an offset",
         "2024-05-19 09:00  Week start named as no weekday",
-        "2024-05-27 09:00  Week start named as no weekday"
+        "2024-05-27 09:00  Week start named as no weekday",
+        "2024-09-24 10:00  Time of day with a fraction"
       ],
       "metadata": {
         "events": {
@@ -1914,6 +1917,10 @@
           },
           "Day out of range with an offset": {
             "start": "2024-01-32 10:00+09:00"
+          },
+          "Duration without a number": {
+            "end": "+.h",
+            "start": "2024-09-23 10:00"
           },
           "Durations": {
             "end": "+90m",
@@ -1939,8 +1946,20 @@
               }
             ]
           },
+          "End in American order": {
+            "end": "9/19/2024 11:00",
+            "start": "2024-09-19 10:00"
+          },
           "End of the day with an offset": {
             "start": "2024-05-14 24:00+09:00"
+          },
+          "End only Date reads": {
+            "end": "September 17, 2024 11:00",
+            "start": "2024-09-17 10:00"
+          },
+          "End the calendar cannot read": {
+            "end": "2024/09/20 11:00",
+            "start": "2024-09-20 10:00"
           },
           "Finished": {
             "finished": true,
@@ -1957,6 +1976,10 @@
           "Long duration": {
             "end": "+2 hours",
             "start": "2024-05-05 10:00"
+          },
+          "Number as an end": {
+            "end": 90,
+            "start": "2024-09-22 10:00"
           },
           "Numeric colour": {
             "color": 5,
@@ -1987,9 +2010,23 @@
             "repeat": null,
             "start": "2024-05-07 09:00"
           },
+          "Start only Date reads": {
+            "start": "August 12, 2024 10:00"
+          },
+          "Start the calendar cannot read": {
+            "start": "2024/08/13 11:00"
+          },
           "Time of day": {
             "end": "12:00",
             "start": "2024-05-05 11:00"
+          },
+          "Time of day with a fraction": {
+            "end": "11:30.5",
+            "start": "2024-09-24 10:00"
+          },
+          "True as an end": {
+            "end": true,
+            "start": "2024-09-21 10:00"
           },
           "Unknown frequency": {
             "repeat": {

@@ -404,43 +404,30 @@ fn calendar_start(text: &str) -> Option<Start> {
     Some(Start::Time(date.and_hms_opt(field(6)?, field(8)?, 0)?))
 }
 
-/// The value as JavaScript's `String()` would spell it, for the regexes that coerce their input.
-fn as_js_string(value: &Value) -> Option<String> {
-    match value {
-        Value::String(text) => Some(text.clone()),
-        Value::Sequence(list) => list
-            .iter()
-            .map(|item| match item {
-                Value::Null => Some(String::new()),
-                other => as_js_string(other),
-            })
-            .collect::<Option<Vec<_>>>()
-            .map(|parts| parts.join(",")),
-        Value::Number(number) => Some(number.to_string()),
-        Value::Bool(flag) => Some(flag.to_string()),
-        Value::Null | Value::Mapping(_) | Value::Tagged(_) => None,
-    }
-}
-
-/// Whether `normalizeEndTime` accepts `end`. The occurrence is dropped when it does not.
+/// Whether `normalizeEndTime` accepts `end`, and the calendar reads what it makes of it. The
+/// occurrence is dropped when either does not.
 fn end_is_usable(end: Option<&Value>, zone: Zone) -> bool {
     let text = match end {
         None => return true,
-        // `null` is not `undefined`: the frontend tries to read it, fails, and drops the
-        // occurrence. That is what `end:` left empty does to an event's instances.
-        Some(Value::Null) => return false,
-        // Taken, and later stringified into an end nobody reads.
-        Some(Value::Bool(_) | Value::Number(_)) => return true,
-        Some(other) => match as_js_string(other) {
-            Some(text) => text,
-            None => return false,
-        },
+        Some(Value::String(text)) => text,
+        // `null` is not `undefined`: the frontend refuses it, as anything else that is not text.
+        // That is what `end:` left empty does to an event's instances.
+        Some(_) => return false,
     };
-    DURATION_SHORT.is_match(&text)
-        || DURATION_LONG.is_match(&text)
-        || dayjs_parse(&text, zone).is_some()
-        // A bare time of day belongs to the start's date, which is always a date `dayjs` reads.
-        || dayjs_parse(&format!("2000-01-01 {text}"), zone).is_some()
+    if let Some(parts) = DURATION_SHORT.captures(text).or_else(|| DURATION_LONG.captures(text)) {
+        // `parseFloat` of `[0-9.]+` reads a number wherever one begins it: `1.2.3` is 1.2, and
+        // `.` none.
+        let amount = parts[1].trim_start_matches('.');
+        return amount.starts_with(|c: char| c.is_ascii_digit())
+            && parts[1].len() - amount.len() <= 1;
+    }
+    if dayjs_parse(text, zone).is_some() {
+        // Kept as written, so the calendar reads it as `toWallClock` hands it on.
+        return parse_wall_clock(text).is_some() || CALENDAR_PARSE.is_match(text);
+    }
+    // A bare time of day belongs to the start's date, which is always a date `dayjs` reads, and
+    // is spelt out on it.
+    dayjs_parse(&format!("2000-01-01 {text}"), zone).is_some()
 }
 
 // --- events -----------------------------------------------------------------------------------

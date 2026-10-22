@@ -93,6 +93,31 @@ events:
             byday: [sun, mon]
             wkst: toString
             count: 4
+    Start the calendar cannot read:
+        start: 2024/08/13 11:00
+    Start only Date reads:
+        start: August 12, 2024 10:00
+    End only Date reads:
+        start: 2024-09-17 10:00
+        end: September 17, 2024 11:00
+    End in American order:
+        start: 2024-09-19 10:00
+        end: 9/19/2024 11:00
+    End the calendar cannot read:
+        start: 2024-09-20 10:00
+        end: 2024/09/20 11:00
+    True as an end:
+        start: 2024-09-21 10:00
+        end: true
+    Number as an end:
+        start: 2024-09-22 10:00
+        end: 90
+    Duration without a number:
+        start: 2024-09-23 10:00
+        end: +.h
+    Time of day with a fraction:
+        start: 2024-09-24 10:00
+        end: '11:30.5'
 ---
 
 # Quirks
