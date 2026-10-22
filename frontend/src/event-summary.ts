@@ -153,9 +153,6 @@ function seriesOf(value: unknown, start: unknown): Series | null {
         // "the 3rd Wed", but "Mon" alone.
         text += counted ? ` on the ${days.join(', ')}` : ` on ${days.join(', ')}`;
     }
-    else if (terms.everyDay && repeat.freq !== 'daily') {
-        text += ' on every day';
-    }
     if (terms.months.length > 0) {
         text += ` in ${terms.months.map((month) => MONTHS[month - 1]).join(', ')}`;
     }

@@ -301,6 +301,54 @@ events:
             freq: yearly
             byday: [-52mon]
             count: 2
+    A day of the month of 0 is no rule:
+        start: 2024-02-10 10:00
+        repeat:
+            freq: monthly
+            bymonthday: [0]
+            count: 3
+    A day of the month of 0 beside another is no rule:
+        start: 2024-02-10 11:00
+        repeat:
+            freq: monthly
+            bymonthday: [0, 15]
+            count: 3
+    A day of the month past 31 is no rule:
+        start: 2024-02-10 12:00
+        repeat:
+            freq: monthly
+            bymonthday: [15, 32]
+            count: 3
+    A day of the month that is false is no rule:
+        start: 2024-02-10 13:00
+        repeat:
+            freq: monthly
+            bymonthday: false
+            count: 3
+    A day of the month under weekly is no rule:
+        start: 2024-02-10 14:00
+        repeat:
+            freq: weekly
+            bymonthday: [15]
+            count: 3
+    A month past 12 is no rule:
+        start: 2020-01-05 10:00
+        repeat:
+            freq: yearly
+            bymonth: [3, 13]
+            count: 2
+    A month of 0 is no rule:
+        start: 2020-01-05 11:00
+        repeat:
+            freq: yearly
+            bymonth: [0, 3]
+            count: 2
+    The first and the last day of a month:
+        start: 2024-02-01 09:00
+        repeat:
+            freq: monthly
+            bymonthday: [1, -1]
+            count: 4
 ---
 
 # Rules

@@ -745,8 +745,10 @@ fn expand_rule(
     if let Some(interval) = present(repeat.get("interval")) {
         rule = rule.interval(integer::<u16>(interval).filter(|n| *n > 0)?);
     }
+    // The crate drops a day of 0 and then takes the start's, where the frontend refuses the rule.
     if let Some(days) = present(repeat.get("bymonthday")) {
-        rule = rule.by_month_day(list(days).iter().map(integer::<i8>).collect::<Option<_>>()?);
+        let days = list(days).iter().map(|day| integer::<i8>(day).filter(|n| *n != 0)).collect::<Option<_>>()?;
+        rule = rule.by_month_day(days);
     }
     if let Some(months) = present(repeat.get("bymonth")) {
         let months = list(months)

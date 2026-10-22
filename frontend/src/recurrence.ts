@@ -153,6 +153,14 @@ export class RecurrenceError extends Error {}
 // draws it, but moried refuses the rule.
 const ORDINALS: Record<string, [number, number]> = { monthly: [-4, 5], yearly: [-52, 53] };
 
+/// A whole number from `first` to `last`, never 0, or a `RecurrenceError` naming `what` it is not.
+function wholeIn(value: unknown, first: number, last: number, what: string): number {
+    if (typeof value !== 'number' || !Number.isInteger(value) || value === 0 || value < first || value > last) {
+        throw new RecurrenceError(`${JSON.stringify(value)} is no ${what}`);
+    }
+    return value;
+}
+
 function toWeekday(value: unknown, freq: string): RRuleWeekday {
     // Only text: `String([['mon']])` is `mon`, and moried takes no list for a weekday.
     const m = typeof value === 'string' ? BYDAY.exec(value) : null;
@@ -270,11 +278,18 @@ export function readRule(repeat: unknown, start: unknown): RecurrenceRule {
     if (byday !== undefined) {
         options.byweekday = byday.map((day) => toWeekday(day, rule.freq as string));
     }
+    // Each a whole number in range, as moried requires: rrule.js matched each by strict equality,
+    // drawing `[15, 32]` on the 15th and `[3, 13]` in March, and dropped a day of 0, drawing every
+    // day where moried drew the start's.
     if (bymonthday !== undefined) {
-        options.bymonthday = bymonthday as number[];
+        // RFC 5545 forbids it, and moried's `rrule` crate refuses it.
+        if (rule.freq === 'weekly') {
+            throw new RecurrenceError('A day of the month means nothing under freq: weekly');
+        }
+        options.bymonthday = bymonthday.map((day) => wholeIn(day, -31, 31, 'day of the month'));
     }
     if (bymonth !== undefined) {
-        options.bymonth = bymonth as number[];
+        options.bymonth = bymonth.map((month) => wholeIn(month, 1, 12, 'month'));
     }
     // A name that is no weekday is ignored, as moried ignores it, and so are the names every object
     // answers to: `toString` handed rrule.js a function as the week's start, which it never finished
@@ -333,17 +348,14 @@ export type WeekdayName = typeof WEEKDAY_NAMES[number];
 
 /// What a rule draws on, as rrule reads the values `readRule` lets through.
 ///
-/// rrule reads some of them otherwise than they are written, and the schema refuses most of those
-/// while the calendar draws them all the same. A view that describes a rule without expanding it
-/// has to follow rrule rather than the text: `bymonth: [13]` draws nothing.
+/// A view that describes a rule without expanding it has to follow rrule rather than the text
+/// where the two part: an ordinal past what its month holds, which `yearly` lets through with a
+/// month named, is never met, and neither is one beside plain weekdays that do not name its own.
 export interface RuleTerms {
     /// The weekdays it draws on, each with the ordinal it counts if any; empty for any weekday.
     weekdays: { weekday: WeekdayName; ordinal?: number }[];
     /// The days of the month it draws on, negative ones counted from its end; empty for any.
     monthDays: number[];
-    /// `bymonthday` names days, but none rrule keeps. That leaves the rule no day of its own and
-    /// takes none from its start either, so it draws on every day of each period.
-    everyDay: boolean;
     /// The months it draws in, from 1; empty for any.
     months: number[];
     /// How many occurrences it stops after; absent for no limit.
@@ -359,17 +371,10 @@ export function termsOf(rule: RecurrenceRule): RuleTerms {
     // `readRule` lets through only a whole number from one.
     const count = options.count ?? undefined;
 
-    // rrule matches a month or a day of the month by strict equality, so only a whole number of the
-    // right size is ever met: not `'3'`, not 13.
-    const isWhole = (value: unknown, limit: number): value is number =>
-        typeof value === 'number' && Number.isInteger(value) && value !== 0 && Math.abs(value) <= limit;
-    const monthList = options.bymonth as unknown[] | undefined;
-    const months = (monthList ?? []).filter((month) => isWhole(month, 12) && month > 0) as number[];
-    // Of the days of the month, rrule keeps only what compares as positive or negative. Dropping all
-    // of them leaves no restriction, not an empty one.
-    const dayList = options.bymonthday as unknown[] | undefined;
-    const kept = (dayList ?? []).filter((day) => (day as number) > 0 || (day as number) < 0);
-    const monthDays = kept.filter((day) => isWhole(day, 31)) as number[];
+    // `readRule` lets through only days and months that exist.
+    const monthList = options.bymonth as number[] | undefined;
+    const months = monthList ?? [];
+    const monthDays = (options.bymonthday ?? []) as number[];
 
     // rrule counts an ordinal within a month, or within the year when a yearly rule names no month;
     // `readRule` lets one through under no shorter period. Naming plain weekdays as well, a rule
@@ -388,12 +393,9 @@ export function termsOf(rule: RecurrenceRule): RuleTerms {
     return {
         weekdays,
         monthDays,
-        everyDay: dayList !== undefined && kept.length === 0,
         months,
         ...(count === undefined ? {} : { count }),
-        never: (named.length > 0 && weekdays.length === 0)
-            || (kept.length > 0 && monthDays.length === 0)
-            || (monthList !== undefined && months.length === 0),
+        never: named.length > 0 && weekdays.length === 0,
     };
 }
 

@@ -83,10 +83,7 @@ describe('describeRepeat', () => {
         expect(describeRepeat({ freq: 'weekly', count: 4294967295 }, start)).toBe('Weekly, 4294967295 times');
     });
 
-    it('says only the days and months the calendar can meet', () => {
-        expect(describeRepeat({ freq: 'monthly', bymonthday: [1, 32] }, start)).toBe('Monthly on the 1st');
-        expect(describeRepeat({ freq: 'monthly', bymonthday: [0, 15] }, start)).toBe('Monthly on the 15th');
-        expect(describeRepeat({ freq: 'yearly', bymonth: [5, 13, '7'] }, start)).toBe('Yearly in May');
+    it('says only the weekdays the calendar can meet', () => {
         // Naming plain weekdays too, a rule draws only the days both name.
         expect(describeRepeat({ freq: 'monthly', byday: ['mon', 'tue', '1mon'] }, start)).toBe('Monthly on the 1st Mon');
         expect(describeRepeat({ freq: 'yearly', byday: ['20mon'] }, start)).toBe('Yearly on the 20th Mon');
@@ -105,12 +102,18 @@ describe('describeRepeat', () => {
         expect(describeRepeat({ freq: 'yearly', byday: ['-52mon'] }, start)).toBe('Yearly on the 52nd last Mon');
     });
 
-    // rrule drops a day of the month that is neither positive nor negative, and with all of them
-    // gone, takes no day from the start either.
-    it('says when a rule falls on every day of each period', () => {
-        expect(describeRepeat({ freq: 'monthly', bymonthday: [0] }, start)).toBe('Monthly on every day');
-        expect(describeRepeat({ freq: 'yearly', bymonthday: ['x'], bymonth: [1] }, start)).toBe('Yearly on every day in Jan');
-        expect(describeRepeat({ freq: 'daily', bymonthday: [0] }, start)).toBe('Daily');
+    // As the calendar refuses them, and moried with it.
+    it('calls a rule unreadable that names a day or a month that does not exist', () => {
+        for (const repeat of [
+            { freq: 'monthly', bymonthday: [1, 32] }, { freq: 'monthly', bymonthday: [0, 15] },
+            { freq: 'monthly', bymonthday: [0] }, { freq: 'yearly', bymonthday: ['x'], bymonth: [1] },
+            { freq: 'yearly', bymonth: [5, 13, 7] }, { freq: 'yearly', bymonth: ['7'] },
+            { freq: 'monthly', bymonthday: false }, { freq: 'weekly', bymonthday: [15] },
+        ]) {
+            expect(describeRepeat(repeat, start), JSON.stringify(repeat)).toBe('Unreadable rule');
+        }
+        expect(describeRepeat({ freq: 'monthly', bymonthday: [-31, 31] }, start)).toBe('Monthly on the 31st last, 31st');
+        expect(describeRepeat({ freq: 'yearly', bymonth: [1, 12] }, start)).toBe('Yearly in Jan, Dec');
     });
 
     it('calls a rule that can never be met unreadable', () => {
