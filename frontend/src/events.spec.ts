@@ -719,6 +719,23 @@ describe('malformed frontmatter', () => {
             ['Numeric end', 'end', 90],
         ]);
     });
+
+    // `Date` reads it, in its own way in each engine, and moried does not, so excluding it would
+    // leave an alarm for an occurrence the calendar does not show.
+    it('reports an exclusion only Date reads, and excludes nothing by it', () => {
+        const { events, errors } = derive([
+            entry('a.md', {
+                Daily: {
+                    start: '2024-10-21 10:00',
+                    repeat: { freq: 'daily', count: 3 },
+                    exclusions: ['October 22, 2024 10:00'],
+                },
+            }),
+        ]);
+
+        expect(events.map((e) => e.start)).toEqual(['2024-10-21 10:00', '2024-10-22 10:00', '2024-10-23 10:00']);
+        expect(errors.map((e) => [e[0], e[1]])).toEqual([['exclusions', 'October 22, 2024 10:00']]);
+    });
 });
 
 describe('mergeImported with what the wire may actually carry', () => {

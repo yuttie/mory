@@ -118,6 +118,30 @@ events:
     Time of day with a fraction:
         start: 2024-09-24 10:00
         end: '11:30.5'
+    Time of day Date reads as a year:
+        start: 2024-09-25 10:00
+        end: '11'
+    Start with a space after it:
+        start: '2024-09-26 10:00 '
+    Exclusions only Date reads:
+        start: 2024-10-21 10:00
+        repeat:
+            freq: daily
+            count: 6
+        exclusions:
+            - October 22, 2024 10:00
+            - 10/26/2024 10:00
+            - 2024-10-23 10:00
+    Override only Date reads:
+        start: 2024-10-28 10:00
+        repeat:
+            freq: daily
+            count: 2
+        overrides:
+            - at: October 29, 2024 10:00
+              start: 2024-10-29 15:00
+    Day past its month's end with an offset:
+        start: 2024-02-30 10:00+09:00
 ---
 
 # Quirks

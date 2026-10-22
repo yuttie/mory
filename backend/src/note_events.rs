@@ -191,8 +191,9 @@ static DAYJS_PARSE: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 // What `Date` is left to parse when `dayjs` gives up: in a note, an ISO datetime with an offset.
-// V8 reads a good deal more than this, none of which a note holds. The fields are checked in
-// `dayjs_parse`, as V8 refuses what is out of range rather than rolling it over.
+// V8 reads a good deal more than this, and so does every other engine, each its own; the
+// calendar reads only this (`readDatetime`). The fields are checked in `dayjs_parse`, as V8
+// checks them.
 static WITH_OFFSET: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"^\s*([0-9]{4})-([0-9]{2})-([0-9]{2})(?:[Tt ]([0-9]{2}):([0-9]{2})(?::([0-9]{2})(?:\.([0-9]+))?)?)?\s*(?:([Zz])|([+-])([0-9]{2}):?([0-9]{2}))\s*$",
@@ -324,17 +325,24 @@ fn dayjs_parse(text: &str, zone: Zone) -> Option<DateTime<Utc>> {
     if parts.get(4).is_none() && parts.get(8).is_none() {
         return None;
     }
-    let field = |i: usize| u32::try_from(group(&parts, i).unwrap_or(0)).ok();
+    let field = |i: usize| group(&parts, i).unwrap_or(0);
     let fraction = parts.get(7).map_or("0", |part| part.as_str());
-    let millis = format!("{:0<3}", &fraction[..fraction.len().min(3)]).parse::<u32>().ok()?;
-    let date = NaiveDate::from_ymd_opt(i32::try_from(group(&parts, 1)?).ok()?, field(2)?, field(3)?)?;
-    let (hour, minute, second) = (field(4)?, field(5)?, field(6)?);
-    let wall = if (hour, minute, second, millis) == (24, 0, 0, 0) {
-        // The end of the day, which ISO allows.
-        date.succ_opt()?.and_time(NaiveTime::MIN)
-    } else {
-        date.and_time(NaiveTime::from_hms_milli_opt(hour, minute, second, millis)?)
-    };
+    let millis = format!("{:0<3}", &fraction[..fraction.len().min(3)]).parse::<i64>().ok()?;
+    let (month, day, hour, minute, second) = (field(2), field(3), field(4), field(5), field(6));
+    // V8 holds a day to 31 in any month and rolls the rest over, as `dayjs` does its own; an hour
+    // of 24 is only the end of the day, which ISO allows.
+    let end_of_day = (hour, minute, second, millis) == (24, 0, 0, 0);
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) || (hour > 23 && !end_of_day) || minute > 59 || second > 59 {
+        return None;
+    }
+    let first = NaiveDate::from_ymd_opt(i32::try_from(group(&parts, 1)?).ok()?, u32::try_from(month).ok()?, 1)?;
+    let wall = first.and_time(NaiveTime::MIN).checked_add_signed(
+        Duration::try_days(day - 1)?
+            + Duration::try_hours(hour)?
+            + Duration::try_minutes(minute)?
+            + Duration::try_seconds(second)?
+            + Duration::try_milliseconds(millis)?,
+    )?;
     let number = |i: usize| group(&parts, i).unwrap_or(0);
     let offset = match parts.get(8) {
         Some(_) => 0,

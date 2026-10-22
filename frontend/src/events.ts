@@ -38,7 +38,7 @@ import {
     taskAlarmOf,
     withBuiltInAlarms,
 } from '@/alarms';
-import { RecurrenceError, expandRule, parseWallClock } from '@/recurrence';
+import { RecurrenceError, expandRule, parseWallClock, readDatetime } from '@/recurrence';
 import { taskUuidOf } from '@/task-forest';
 import dayjs from 'dayjs';
 
@@ -288,7 +288,7 @@ export function normalizeEndTime(
     const match = DURATION_SHORT.exec(end) || DURATION_LONG.exec(end);
     if (match === null) {
         // Not a duration.
-        if (dayjs(end).isValid()) {
+        if (readDatetime(end) !== null) {
             // Already a datetime this parses; keep the author's spelling.
             return end;
         }
@@ -296,8 +296,8 @@ export function normalizeEndTime(
             // A bare time of day belongs to the start's date -- or the next one, when taking it
             // literally would put the end before the start. Spelt out, since the time is spelt as
             // the author wrote it, and `1130` is a time to `dayjs` and none to the calendar.
-            const parsedEnd = dayjs(dayjs(start).format('YYYY-MM-DD') + ' ' + end);
-            if (parsedEnd.isValid()) {
+            const parsedEnd = readDatetime(dayjs(start).format('YYYY-MM-DD') + ' ' + end);
+            if (parsedEnd !== null) {
                 return formatDateTime(parsedEnd.isAfter(start) ? parsedEnd : parsedEnd.add(1, 'day'));
             }
             else {
@@ -417,9 +417,7 @@ function buildOccurrence(
     entry: ListEntry2,
     { errors, alarmDefaults }: Derivation,
 ): CalendarEvent | null {
-    // `typeof` first: `dayjs(20240501)` is a valid epoch, so a YAML integer would pass the
-    // validity check and then fail as a string later, inside the view.
-    if (typeof time.start !== 'string' || !dayjs(time.start).isValid()) {
+    if (typeof time.start !== 'string' || readDatetime(time.start) === null) {
         errors.push(['start', time.start, eventName, entry.path, entry.title]);
         return null;
     }
@@ -489,11 +487,7 @@ function asArray<T>(value: T[] | undefined): T[] {
 /// importer will not spell an exclusion the way a hand-edited note does. Comparing the strings
 /// would report a mismatch that is not there.
 function instantOf(value: unknown): number | null {
-    if (typeof value !== 'string') {
-        return null;
-    }
-    const parsed = dayjs(value);
-    return parsed.isValid() ? parsed.valueOf() : null;
+    return readDatetime(value)?.valueOf() ?? null;
 }
 
 /// The first and last instants of a window, in the reader's zone. A bare date as `to` is that
@@ -822,8 +816,8 @@ export function toWallClock(value: unknown): string {
     // An offset means the value names an instant, so it is shown in the reader's own zone; a bare
     // wall clock is already local and is left exactly as written.
     if (HAS_OFFSET.test(text)) {
-        const local = dayjs(text);
-        if (local.isValid()) {
+        const local = readDatetime(text);
+        if (local !== null) {
             return local.second() === 0
                 ? local.format('YYYY-MM-DD HH:mm')
                 : local.format('YYYY-MM-DD HH:mm:ss');
@@ -970,9 +964,7 @@ function taskDateEvent(
     }
 
     const name = entry.title ?? entry.path;
-    // `typeof` first, for the same reason `buildOccurrence` checks it: a YAML integer is a valid
-    // epoch to dayjs and would only fail later, inside the view.
-    if (typeof value !== 'string' || !dayjs(value).isValid()) {
+    if (typeof value !== 'string' || readDatetime(value) === null) {
         errors.push([field, value, name, entry.path, entry.title]);
         return;
     }

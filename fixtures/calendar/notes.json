@@ -1824,6 +1824,7 @@
     },
     "notes/quirks.md": {
       "alarms": [
+        "2024-02-29 17:00  Day past its month's end with an offset  +0m",
         "2024-04-28 04:00  Until that does not parse  +0m",
         "2024-04-29 04:00  Until that does not parse  +0m",
         "2024-04-30 04:00  Until that does not parse  +0m",
@@ -1845,9 +1846,18 @@
         "2024-05-14 08:00  End of the day with an offset  +0m",
         "2024-05-19 09:00  Week start named as no weekday  +0m",
         "2024-05-27 09:00  Week start named as no weekday  +0m",
-        "2024-09-24 10:00  Time of day with a fraction  +0m"
+        "2024-09-24 10:00  Time of day with a fraction  +0m",
+        "2024-09-25 10:00  Time of day Date reads as a year  +0m",
+        "2024-10-21 10:00  Exclusions only Date reads  +0m",
+        "2024-10-22 10:00  Exclusions only Date reads  +0m",
+        "2024-10-24 10:00  Exclusions only Date reads  +0m",
+        "2024-10-25 10:00  Exclusions only Date reads  +0m",
+        "2024-10-26 10:00  Exclusions only Date reads  +0m",
+        "2024-10-28 10:00  Override only Date reads  +0m",
+        "2024-10-29 10:00  Override only Date reads  +0m"
       ],
       "alarmsWithDefaults": [
+        "2024-02-29 17:00  Day past its month's end with an offset  -5m",
         "2024-04-28 04:00  Until that does not parse  -5m",
         "2024-04-29 04:00  Until that does not parse  -5m",
         "2024-04-30 04:00  Until that does not parse  -5m",
@@ -1869,9 +1879,18 @@
         "2024-05-14 08:00  End of the day with an offset  -5m",
         "2024-05-19 09:00  Week start named as no weekday  -5m",
         "2024-05-27 09:00  Week start named as no weekday  -5m",
-        "2024-09-24 10:00  Time of day with a fraction  -5m"
+        "2024-09-24 10:00  Time of day with a fraction  -5m",
+        "2024-09-25 10:00  Time of day Date reads as a year  -5m",
+        "2024-10-21 10:00  Exclusions only Date reads  -5m",
+        "2024-10-22 10:00  Exclusions only Date reads  -5m",
+        "2024-10-24 10:00  Exclusions only Date reads  -5m",
+        "2024-10-25 10:00  Exclusions only Date reads  -5m",
+        "2024-10-26 10:00  Exclusions only Date reads  -5m",
+        "2024-10-28 10:00  Override only Date reads  -5m",
+        "2024-10-29 10:00  Override only Date reads  -5m"
       ],
       "drawn": [
+        "2024-02-29 17:00  Day past its month's end with an offset",
         "2024-04-28 04:00  Until that does not parse",
         "2024-04-29 04:00  Until that does not parse",
         "2024-04-30 04:00  Until that does not parse",
@@ -1893,7 +1912,15 @@
         "2024-05-14 08:00  End of the day with an offset",
         "2024-05-19 09:00  Week start named as no weekday",
         "2024-05-27 09:00  Week start named as no weekday",
-        "2024-09-24 10:00  Time of day with a fraction"
+        "2024-09-24 10:00  Time of day with a fraction",
+        "2024-09-25 10:00  Time of day Date reads as a year",
+        "2024-10-21 10:00  Exclusions only Date reads",
+        "2024-10-22 10:00  Exclusions only Date reads",
+        "2024-10-24 10:00  Exclusions only Date reads",
+        "2024-10-25 10:00  Exclusions only Date reads",
+        "2024-10-26 10:00  Exclusions only Date reads",
+        "2024-10-28 10:00  Override only Date reads",
+        "2024-10-29 10:00  Override only Date reads"
       ],
       "metadata": {
         "events": {
@@ -1917,6 +1944,9 @@
           },
           "Day out of range with an offset": {
             "start": "2024-01-32 10:00+09:00"
+          },
+          "Day past its month's end with an offset": {
+            "start": "2024-02-30 10:00+09:00"
           },
           "Duration without a number": {
             "end": "+.h",
@@ -1961,6 +1991,18 @@
             "end": "2024/09/20 11:00",
             "start": "2024-09-20 10:00"
           },
+          "Exclusions only Date reads": {
+            "exclusions": [
+              "October 22, 2024 10:00",
+              "10/26/2024 10:00",
+              "2024-10-23 10:00"
+            ],
+            "repeat": {
+              "count": 6,
+              "freq": "daily"
+            },
+            "start": "2024-10-21 10:00"
+          },
           "Finished": {
             "finished": true,
             "start": "2024-05-09 09:00"
@@ -1998,6 +2040,19 @@
             },
             "start": "2024-05-07 11:00"
           },
+          "Override only Date reads": {
+            "overrides": [
+              {
+                "at": "October 29, 2024 10:00",
+                "start": "2024-10-29 15:00"
+              }
+            ],
+            "repeat": {
+              "count": 2,
+              "freq": "daily"
+            },
+            "start": "2024-10-28 10:00"
+          },
           "Renamed overrides keep no series name": {
             "name": "Ignored on a rule",
             "repeat": {
@@ -2016,9 +2071,16 @@
           "Start the calendar cannot read": {
             "start": "2024/08/13 11:00"
           },
+          "Start with a space after it": {
+            "start": "2024-09-26 10:00 "
+          },
           "Time of day": {
             "end": "12:00",
             "start": "2024-05-05 11:00"
+          },
+          "Time of day Date reads as a year": {
+            "end": "11",
+            "start": "2024-09-25 10:00"
           },
           "Time of day with a fraction": {
             "end": "11:30.5",

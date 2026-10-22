@@ -64,6 +64,50 @@ export function parseWallClock(value: unknown): WallClock | null {
     };
 }
 
+// `dayjs`'s own pattern, which it tries before handing a string to `Date`.
+const DAYJS_PARSE =
+    /^(\d{4})[-/]?(\d{1,2})?[-/]?(\d{0,2})[Tt\s]*(\d{1,2})?:?(\d{1,2})?:?(\d{1,2})?[.:]?(\d+)?$/;
+
+// What a note leaves to `Date`: an ISO datetime with its offset, or a date before `Z`.
+const WITH_OFFSET =
+    /^\s*(\d{4})-(\d{2})-(\d{2})(?:[Tt ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?)?\s*(?:([Zz])|([+-])(\d{2}):?(\d{2}))\s*$/;
+
+/// A datetime a note wrote, as `dayjs` reads it, or `null` where it does not.
+///
+/// What `dayjs` leaves to `Date` is read here instead, as V8 reads it, and only an ISO datetime
+/// with its offset at that: `Date` reads `August 12, 2024` and `9/19/2024` as well, and each engine
+/// a set of its own. `dayjs_parse` in `backend/src/note_events.rs` reads the same, so moried rings
+/// for what the calendar draws, in any browser.
+export function readDatetime(value: unknown): dayjs.Dayjs | null {
+    // `unknown`: `dayjs(20240501)` is a valid epoch, and a YAML integer would pass for one.
+    if (typeof value !== 'string') {
+        return null;
+    }
+    if (!/z$/i.test(value) && DAYJS_PARSE.test(value)) {
+        const parsed = dayjs(value);
+        return parsed.isValid() ? parsed : null;
+    }
+    const m = WITH_OFFSET.exec(value);
+    // V8 takes a bare date only before `Z`.
+    if (m === null || (m[4] === undefined && m[8] === undefined)) {
+        return null;
+    }
+    const [year, month, day, hour, minute, second] = [1, 2, 3, 4, 5, 6].map((i) => Number(m[i] ?? 0));
+    const ms = Number((m[7] ?? '0').slice(0, 3).padEnd(3, '0'));
+    // V8 holds a day to 31 in any month and rolls the rest over, as `dayjs` does its own; an hour
+    // of 24 is only the day's end.
+    const endOfDay = hour === 24 && minute === 0 && second === 0 && ms === 0;
+    if (month < 1 || month > 12 || day < 1 || day > 31 || (hour > 23 && !endOfDay) || minute > 59 || second > 59) {
+        return null;
+    }
+    const offset = m[8] !== undefined ? 0 : (m[9] === '-' ? -1 : 1) * (Number(m[10]) * 60 + Number(m[11]));
+    // `setUTCFullYear` rather than `Date.UTC`, which takes a year below 100 as one in the 1900s.
+    const at = new Date(0);
+    at.setUTCFullYear(year, month - 1, day);
+    at.setUTCHours(hour, minute - offset, second, ms);
+    return dayjs(at);
+}
+
 function toAnchor(w: WallClock): Date {
     return new Date(Date.UTC(w.year, w.month - 1, w.day, w.hour, w.minute, w.second));
 }
@@ -138,8 +182,11 @@ function listOf(value: unknown): unknown[] | undefined {
 /// and one Intl does not know is refused. Intl throws a `RangeError` for it, which out of here
 /// would blank the calendar rather than report one rule.
 function wallClockIn(value: string, tz: unknown): string {
+    // One it cannot read formats as `Invalid Date`, which is no wall clock, and is compared as
+    // written.
+    const at = readDatetime(value) ?? dayjs(NaN);
     try {
-        return dayjs(value).tz((tz || undefined) as string | undefined).format('YYYY-MM-DD HH:mm:ss');
+        return at.tz((tz || undefined) as string | undefined).format('YYYY-MM-DD HH:mm:ss');
     }
     catch {
         throw new RecurrenceError(`Unknown timezone "${String(tz)}"`);

@@ -18,7 +18,7 @@ import dayjs from 'dayjs';
 import { occurrencesOf } from '@/api';
 import type { MetadataEvent } from '@/api';
 import { toWallClock } from '@/events';
-import { RecurrenceError, readRule, ruleStart, ruleUntil, termsOf } from '@/recurrence';
+import { RecurrenceError, readDatetime, readRule, ruleStart, ruleUntil, termsOf } from '@/recurrence';
 import type { RuleTerms, WeekdayName } from '@/recurrence';
 
 // A start where the calendar would draw it, in the reader's zone, with the instant to sort it by.
@@ -172,8 +172,8 @@ function seriesOf(value: unknown, start: unknown): Series | null {
 }
 
 function startOf(value: unknown): EventStart | undefined {
-    // `typeof` first: `dayjs(20240501)` is a valid epoch, as `buildOccurrence` says.
-    if (typeof value !== 'string' || !dayjs(value).isValid()) {
+    // As the calendar reads it, and not as `Date` might.
+    if (typeof value !== 'string' || readDatetime(value) === null) {
         return undefined;
     }
     const text = toWallClock(value);
