@@ -357,6 +357,12 @@ interface EventCategoryRef {
 // a start it does not match is not drawn at all -- so one that matches nothing is never all-day here.
 const CALENDAR_PARSE = /^(\d{4})-(\d{1,2})(-(\d{1,2}))?([^\d]+(\d{1,2}))?(:(\d{1,2}))?(:(\d{1,2}))?$/;
 
+/// Whether `<v-calendar>` reads a start or an end: it throws on one it does not, and one throw
+/// blanks the calendar.
+export function isCalendarReadable(text: string): boolean {
+    return CALENDAR_PARSE.test(text);
+}
+
 /// Whether the calendar draws a start as a whole day, which is what decides the alarms an event
 /// rings at when nothing sets them.
 export function isAllDay(start: string): boolean {
@@ -433,12 +439,12 @@ function buildOccurrence(
     // `<v-calendar>` throws on a start or end it cannot read, and one throw blanks the calendar. What
     // `dayjs` reads is wider: `2024/08/13`, `20240813`, and what `Date` makes of the rest.
     const start = toWallClock(time.start);
-    if (!CALENDAR_PARSE.test(start)) {
+    if (!isCalendarReadable(start)) {
         errors.push(['start', time.start, eventName, entry.path, entry.title]);
         return null;
     }
     const drawnEnd = normalizedEnd === undefined ? undefined : toWallClock(normalizedEnd);
-    if (drawnEnd !== undefined && !CALENDAR_PARSE.test(drawnEnd)) {
+    if (drawnEnd !== undefined && !isCalendarReadable(drawnEnd)) {
         errors.push(['end', end, eventName, entry.path, entry.title]);
         return null;
     }
@@ -971,7 +977,7 @@ function taskDateEvent(
 
     // Refused as an event's start is, which `<v-calendar>` would throw on.
     const start = toWallClock(value);
-    if (!CALENDAR_PARSE.test(start)) {
+    if (!isCalendarReadable(start)) {
         errors.push([field, value, name, entry.path, entry.title]);
         return;
     }

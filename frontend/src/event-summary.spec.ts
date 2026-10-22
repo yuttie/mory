@@ -191,6 +191,14 @@ describe('summarizeEvent', () => {
         expect(summarizeEvent({ start: '2026-04-01 10:00', repeat: null })).toEqual({ repeats: 'Unreadable rule' });
     });
 
+    // As the calendar refuses it: `dayjs` reads it, and `<v-calendar>` would throw on it.
+    it('leaves out a start the calendar cannot read', () => {
+        expect(summarizeEvent({ start: '2026/10/13 11:00' })).toEqual({});
+        expect(summarizeEvent({ start: 'October 14, 2026 10:00' })).toEqual({});
+        expect(summarizeEvent({ instances: [{ start: '2026/10/13 11:00' }, { start: '2026-10-14 10:00' }] }).start)
+            .toEqual({ text: '2026-10-14 10:00', instant: dayjs('2026-10-14 10:00').valueOf() });
+    });
+
     it('counts a date it lists twice once', () => {
         expect(summarizeEvent({ start: '2026-11-02 09:00', instances: [{ start: '2026-11-02 13:00' }] }).repeats)
             .toBeUndefined();

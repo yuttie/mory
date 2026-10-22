@@ -17,7 +17,7 @@ import dayjs from 'dayjs';
 
 import { occurrencesOf } from '@/api';
 import type { MetadataEvent } from '@/api';
-import { toWallClock } from '@/events';
+import { isCalendarReadable, toWallClock } from '@/events';
 import { RecurrenceError, readDatetime, readRule, ruleStart, ruleUntil, termsOf } from '@/recurrence';
 import type { RuleTerms, WeekdayName } from '@/recurrence';
 
@@ -173,7 +173,11 @@ function startOf(value: unknown): EventStart | undefined {
     if (typeof value !== 'string' || readDatetime(value) === null) {
         return undefined;
     }
+    // `2026/10/13` is a date to `dayjs` and none to `<v-calendar>`, so the calendar refuses it.
     const text = toWallClock(value);
+    if (!isCalendarReadable(text)) {
+        return undefined;
+    }
     return { text, instant: dayjs(text).valueOf() };
 }
 
