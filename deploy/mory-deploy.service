@@ -1,0 +1,11 @@
+[Unit]
+Description=Bring mory up to date with the images built from main
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+# The directory holding compose.yaml and .env.
+WorkingDirectory=/srv/mory
+ExecStart=/usr/local/bin/mory-deploy
+StateDirectory=mory-deploy
