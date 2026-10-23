@@ -586,6 +586,25 @@
             }
         },
         {
+            "name": "lead reaching the first day a Date holds",
+            "task": {
+                "deadline": "2026-10-31 01:00:00+09:00",
+                "available_from": "2026-10-01",
+                "lead_time": "100020757d"
+            },
+            "now": "2026-10-04T00:00:00Z",
+            "tags": [],
+            "settings": {},
+            "zone": "Asia/Tokyo",
+            "expected": {
+                "level": "urgent",
+                "slack_ratio": 2.6661132615369696e-7,
+                "reference": "2026-10-30T16:00:00.000Z",
+                "actionable": true,
+                "short_window": true
+            }
+        },
+        {
             "name": "DST gap at urgency window",
             "task": {
                 "deadline": "2026-03-15 02:30:00-04:00",
