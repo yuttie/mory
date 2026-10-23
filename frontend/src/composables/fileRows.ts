@@ -172,13 +172,13 @@ function statusOf(statusKind: unknown): { status: string; statusOrder: number } 
         : { status: STATUS_LABEL[known], statusOrder: STATUS_KINDS.indexOf(known) };
 }
 
-function dateCell(cues: TaskDateCue[], field: TaskDateField): DateCell | undefined {
+function dateCell(cues: TaskDateCue[], field: TaskDateField, zone: string): DateCell | undefined {
     const cue = cues.find((each) => each.field === field);
     if (cue === undefined) {
         return undefined;
     }
     const value = cue.value.trim();
-    const instant = taskInstant(value, dayjs.tz.guess(), true);
+    const instant = taskInstant(value, zone, true);
     const isDate = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value);
     return {
         text: instant === undefined || isDate ? value : dayjs(instant).format('YYYY-MM-DD HH:mm'),
@@ -201,9 +201,15 @@ export function useFileRows(kind: Readonly<Ref<FileKind | null>>, queryText: Rea
         return open === null ? files.entries : files.entries.filter((entry) => isOfKind(entry, open));
     });
 
-    const rows = computed<FileRow[]>(() => kindEntries.value.flatMap(
-        (entry) => (kind.value === 'events' ? eventRows(entry) : [fileRow(entry)]),
-    ));
+    const rows = computed<FileRow[]>(() => {
+        // The reader's zone, guessed once for all the rows rather than for each date of each task:
+        // each guess builds an `Intl.DateTimeFormat`, and with 700 tasks the guesses took a quarter
+        // of the time Firefox took to open the Tasks tab.
+        const zone = dayjs.tz.guess();
+        return kindEntries.value.flatMap(
+            (entry) => (kind.value === 'events' ? eventRows(entry, zone) : [fileRow(entry, zone)]),
+        );
+    });
 
     const query = computed(() => parseFileQuery(queryText.value));
 
@@ -224,7 +230,7 @@ export function useFileRows(kind: Readonly<Ref<FileKind | null>>, queryText: Rea
 
     // A task as the task lists show it, and opening into its editor there. The listing describes a
     // file the task tree may not have taken in yet, which is then listed as any other file is.
-    function taskFields(path: string): Partial<FileRow> {
+    function taskFields(path: string, zone: string): Partial<FileRow> {
         const id = tasks.idByPath(path);
         const node = id === undefined ? undefined : tasks.node(id);
         if (id === undefined || node === undefined) {
@@ -232,20 +238,20 @@ export function useFileRows(kind: Readonly<Ref<FileKind | null>>, queryText: Rea
         }
         const task = node.metadata?.task ?? {};
         const statusKind = task.status?.kind;
-        const cues = taskDateCues(task, node.metadata?.tags ?? [], taskSettings.settings, tasks.now);
+        const cues = taskDateCues(task, node.metadata?.tags ?? [], taskSettings.settings, tasks.now, zone);
         return {
             to: taskRoute(id),
             icon: statusIcon(statusKind, tasks.childrenOf(id).length > 0),
             iconColor: statusColor(statusKind, taskSettings.resolvedStatusColors) ?? null,
             caption: tasks.ancestorsOf(id).map((ancestor) => ancestor.title || 'Untitled').join(' › '),
             ...statusOf(statusKind),
-            dueBy: dateCell(cues, 'due_by'),
-            deadline: dateCell(cues, 'deadline'),
+            dueBy: dateCell(cues, 'due_by', zone),
+            deadline: dateCell(cues, 'deadline', zone),
             urgency: tasks.urgency(id),
         };
     }
 
-    function fileRow(entry: ListEntry2): FileRow {
+    function fileRow(entry: ListEntry2, zone: string): FileRow {
         return {
             key: entry.path,
             to: routeForMime(entry.path, entry.mime_type),
@@ -279,7 +285,7 @@ export function useFileRows(kind: Readonly<Ref<FileKind | null>>, queryText: Rea
                 }
             })(),
             ...(kind.value === 'notes' ? { folder: entry.path.slice(0, Math.max(entry.path.lastIndexOf('/'), 0)) } : {}),
-            ...(kind.value === 'tasks' ? taskFields(entry.path) : {}),
+            ...(kind.value === 'tasks' ? taskFields(entry.path, zone) : {}),
             ...(kind.value === 'system' ? { purpose: systemFilePurpose(entry.path) } : {}),
             // By the name the Add menu offers it as.
             ...(kind.value === 'templates' ? { title: templateNameOf(entry.path) } : {}),
@@ -287,8 +293,8 @@ export function useFileRows(kind: Readonly<Ref<FileKind | null>>, queryText: Rea
     }
 
     // One row for each event a file declares, however often it happens, opening the file.
-    function eventRows(entry: ListEntry2): FileRow[] {
-        const file = fileRow(entry);
+    function eventRows(entry: ListEntry2, zone: string): FileRow[] {
+        const file = fileRow(entry, zone);
         return declaredEvents(entry.metadata).map(([name, detail]) => {
             const summary = summarizeEvent(detail);
             return {
