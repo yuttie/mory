@@ -101,7 +101,7 @@ export function resolvedLeadTime(task: UrgencyTask, tags: readonly string[], set
 }
 
 // Date-only limits last through their local day; availability starts at midnight.
-function localInstant(wall: string, zone: string): number {
+export function localInstant(wall: string, zone: string): number {
     const local = dayjs.utc(wall).valueOf();
     const offsets = [...new Set([-2, 0, 2].map((days) => dayjs(local + days * 86_400_000).tz(zone).utcOffset()))];
     const matches = offsets.map((offset) => local - offset * 60_000).filter((instant) => dayjs(instant).tz(zone).format('YYYY-MM-DD HH:mm:ss.SSS') === wall);
