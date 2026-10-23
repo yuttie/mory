@@ -1,18 +1,27 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import fixtures from '../../fixtures/urgency/cases.json';
 import { leadTimeDays, localInstant, readTaskSettings, taskInstant, urgencyOf, readImportance, mostUrgent } from '@/urgency';
 
 describe('shared urgency fixtures', () => {
     for (const test of fixtures.cases) {
         it(test.name, () => {
-            const { settings } = readTaskSettings(test.settings);
-            const result = urgencyOf(test.task, test.tags, settings, Date.parse(test.now), test.zone);
-            expect({ ...result, slack_ratio: null }).toEqual({ ...test.expected, slack_ratio: null });
-            if (test.expected.slack_ratio === null) {
-                expect(JSON.parse(JSON.stringify(result)).slack_ratio).toBeNull();
+            // With the process in the case's zone too, as the reader's browser is: a conversion that
+            // leans on the process's own zone goes wrong only there, as dayjs's `tz()` read the end of
+            // a day in Recife an hour off only when it ran in Recife.
+            vi.stubEnv('TZ', test.zone);
+            try {
+                const { settings } = readTaskSettings(test.settings);
+                const result = urgencyOf(test.task, test.tags, settings, Date.parse(test.now), test.zone);
+                expect({ ...result, slack_ratio: null }).toEqual({ ...test.expected, slack_ratio: null });
+                if (test.expected.slack_ratio === null) {
+                    expect(JSON.parse(JSON.stringify(result)).slack_ratio).toBeNull();
+                }
+                else {
+                    expect(result.slack_ratio).toBeCloseTo(test.expected.slack_ratio, 9);
+                }
             }
-            else {
-                expect(result.slack_ratio).toBeCloseTo(test.expected.slack_ratio, 9);
+            finally {
+                vi.unstubAllEnvs();
             }
         });
     }

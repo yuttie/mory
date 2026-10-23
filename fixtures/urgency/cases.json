@@ -641,6 +641,25 @@
             }
         },
         {
+            "name": "Date-only limits in a week of daylight saving from midnight",
+            "task": {
+                "due_by": "2000-10-08",
+                "available_from": "2000-10-08",
+                "lead_time": "1w"
+            },
+            "tags": [],
+            "settings": {},
+            "now": "2000-10-05T12:00:00Z",
+            "zone": "America/Recife",
+            "expected": {
+                "level": "urgent",
+                "slack_ratio": 0.5119047602513228,
+                "reference": "2000-10-09T01:59:59.999Z",
+                "actionable": false,
+                "short_window": true
+            }
+        },
+        {
             "name": "Repeated clock at urgency window",
             "task": {
                 "deadline": "2026-11-08 01:30:00-05:00",
