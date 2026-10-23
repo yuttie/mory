@@ -30,6 +30,7 @@ import type { ConfiguredCategory, EventCategories, TaskDateColors } from '@/even
 import { stringifyWithFlowAlarms } from '@/frontmatter';
 import { categoryMapOf, readCategories } from '@/events';
 import { useFilesStore } from '@/stores/files';
+import { keepEqual } from '@/keep';
 
 export const CALENDARS_PATH = '.mory/calendars.yaml';
 
@@ -196,30 +197,33 @@ export const useCalendarsStore = defineStore('calendars', () => {
             const { content: text, etag } = await files.readVersion(CALENDARS_PATH);
             const parsed = YAML.parse(text ?? '');
             const list = Array.isArray(parsed?.calendars) ? parsed.calendars : [];
-            subscriptions.value = list.map((entry: Record<string, unknown>) => ({
+            // Every view that shows the file asks for it again as it opens, and nearly always finds
+            // it as it was: kept, what it holds draws nothing anew, Home's and the Calendar's
+            // events among it.
+            keepEqual(subscriptions, list.map((entry: Record<string, unknown>) => ({
                 id: String(entry.id ?? ''),
                 name: String(entry.name ?? entry.id ?? ''),
                 url: String(entry.url ?? ''),
                 color: entry.color === undefined ? undefined : String(entry.color),
                 enabled: entry.enabled !== false,
-            }));
-            taskDateColors.value = readTaskDateColors(parsed?.task_dates);
+            })));
+            keepEqual(taskDateColors, readTaskDateColors(parsed?.task_dates));
             const problems: string[] = [];
-            alarmDefaults.value = readAlarmDefaults(parsed?.alarms, problems);
-            categories.value = readCategories(parsed?.categories, problems);
-            configurationProblems.value = problems.map((problem) =>
-                `${CALENDARS_PATH}: ${problem}. It is ignored, and saving the settings removes it.`);
+            keepEqual(alarmDefaults, readAlarmDefaults(parsed?.alarms, problems));
+            keepEqual(categories, readCategories(parsed?.categories, problems));
+            keepEqual(configurationProblems, problems.map((problem) =>
+                `${CALENDARS_PATH}: ${problem}. It is ignored, and saving the settings removes it.`));
             unreadable = null;
             version = etag;
         }
         catch (error) {
             // No file means no calendars, which is the normal state before any are added -- the
             // same reading `ai-actions.ts` gives a 404 on its own config.
-            subscriptions.value = [];
-            taskDateColors.value = {};
-            alarmDefaults.value = {};
-            configurationProblems.value = [];
-            categories.value = isMissing(error) ? [] : null;
+            keepEqual(subscriptions, []);
+            keepEqual(taskDateColors, {});
+            keepEqual(alarmDefaults, {});
+            keepEqual(configurationProblems, []);
+            keepEqual(categories, isMissing(error) ? [] : null);
             if (!isMissing(error)) {
                 unreadable = error;
                 version = null;
