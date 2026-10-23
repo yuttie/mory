@@ -23,6 +23,12 @@ export function isSaveKey(event: KeyboardEvent): boolean {
     return event.ctrlKey && !event.shiftKey && event.key.toLowerCase() === 's';
 }
 
+// Ctrl+K, which opens the search dialog from any view and closes it again, as a command palette's
+// key does. Caps Lock makes the key `K` without Shift.
+export function isSearchKey(event: KeyboardEvent): boolean {
+    return event.ctrlKey && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'k';
+}
+
 // Window focus events have no element target, but a modal still owns the next keystroke.
 export function hasActiveDialog(): boolean {
     return document.querySelector('.v-overlay--active[role="dialog"]') !== null;
