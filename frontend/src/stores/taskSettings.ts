@@ -5,6 +5,7 @@ import YAML from 'yaml';
 import { readTaskSettings, type TaskSettings } from '@/urgency';
 import { readStatusColors, resolveStatusColors, writeStatusColors, type StatusColorEdits, type StatusColors } from '@/status-color';
 import { useFilesStore } from '@/stores/files';
+import { keepEqual } from '@/keep';
 
 export const TASK_SETTINGS_PATH = '.mory/tasks.yaml';
 export const useTaskSettingsStore = defineStore('task-settings', () => {
@@ -30,14 +31,16 @@ export const useTaskSettingsStore = defineStore('task-settings', () => {
                         const value = YAML.parse(await files.read(TASK_SETTINGS_PATH));
                         const parsed = readTaskSettings(value);
                         const colors = readStatusColors(value);
-                        settings.value = parsed.settings;
-                        statusColors.value = colors.colors;
-                        problems.value = [...parsed.problems, ...colors.problems];
+                        // Each task's urgency is worked out from `settings`, so the same settings
+                        // read again must not stand in for them.
+                        keepEqual(settings, parsed.settings);
+                        keepEqual(statusColors, colors.colors);
+                        keepEqual(problems, [...parsed.problems, ...colors.problems]);
                     }
                     catch (error) {
-                        settings.value = {};
-                        statusColors.value = {};
-                        problems.value = isMissing(error) ? [] : [String(error)];
+                        keepEqual(settings, {});
+                        keepEqual(statusColors, {});
+                        keepEqual(problems, isMissing(error) ? [] : [String(error)]);
                     }
                 }
             }
