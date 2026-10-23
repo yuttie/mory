@@ -287,3 +287,25 @@ test('does not ask when renaming a note with unsaved edits', async ({ context, p
     await expect(leaveDialog(page)).toHaveCount(0);
     await expect(editor(page)).toContainText('Unsaved line.');
 });
+
+// Chosen from the search dialog and declined, the focus goes back to the note being written.
+test('gives the focus back to the note when a file chosen in the search is declined', async ({ context, page }) => {
+    await mockBackend(context, NOTES);
+    await openAndEdit(page);
+
+    await page.keyboard.press('Control+k');
+    const search = page.getByRole('dialog').getByRole('combobox', { name: 'Search' });
+    await expect(search).toBeFocused();
+    await search.pressSequentially('Other');
+    await expect(page.getByRole('option', { selected: true })).toContainText('Other');
+    await page.keyboard.press('Enter');
+
+    await asked(page);
+    await page.keyboard.press('Enter');
+    await expect(leaveDialog(page)).toBeHidden();
+    await settle(page);
+
+    await expect(page).toHaveURL(/\/note\/projects\/plan\.md$/);
+    await expect(editor(page)).toBeFocused();
+    await expect(editor(page)).toContainText('Unsaved line.');
+});

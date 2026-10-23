@@ -23,7 +23,7 @@
 <script lang="ts" setup>
 import { nextTick, ref, watch } from 'vue';
 
-import { useRoute, useRouter } from 'vue-router';
+import { isNavigationFailure, NavigationFailureType, useRoute, useRouter } from 'vue-router';
 import type { RouteLocationRaw } from 'vue-router';
 
 import FileSearchPalette from '@/components/FileSearchPalette.vue';
@@ -57,13 +57,22 @@ useShortcuts((event) => {
 
 // The page already shown is no navigation, so choosing it closes the dialog as Escape does, giving
 // the focus back: to the note being written, say, when that is the one chosen. Where on the page
-// the address points, its hash, does not make it another.
-function choose(to: RouteLocationRaw): void {
-    if (pageOf(router.resolve(to).fullPath) !== pageOf(route.fullPath)) {
-        returnFocusTo = null;
-        void router.push(to);
+// the address points, its hash, does not make it another. A navigation the page refuses, as a note
+// with unsaved edits may once the reader chooses to stay, leaves them where they were, and the
+// focus goes back there too rather than to nothing.
+async function choose(to: RouteLocationRaw): Promise<void> {
+    if (pageOf(router.resolve(to).fullPath) === pageOf(route.fullPath)) {
+        isOpen.value = false;
+        return;
     }
+    const from = returnFocusTo;
+    returnFocusTo = null;
     isOpen.value = false;
+    // Aborted only: one cancelled by a later navigation has left for somewhere else.
+    const failure = await router.push(to);
+    if (isNavigationFailure(failure, NavigationFailureType.aborted) && from?.isConnected) {
+        from.focus({ preventScroll: true });
+    }
 }
 
 // A `#` within the path or the query is escaped, so the first is the hash's.
