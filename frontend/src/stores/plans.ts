@@ -32,7 +32,12 @@ export const usePlansStore = defineStore('plans', () => {
         }
         catch (error) {
             if (axios.isAxiosError(error) && error.response?.status === 404) {
-                months.value[month] = {};
+                // A month with no file is read again at each commit and nearly always still has
+                // none. The empty plan held for it is kept then, as a month whose file is unchanged
+                // keeps its plan, or `days` and all drawn from it would be worked out anew.
+                if (etags.get(month) !== 'absent' || !(month in months.value)) {
+                    months.value[month] = {};
+                }
                 etags.set(month, 'absent');
                 delete errors.value[month];
             }
