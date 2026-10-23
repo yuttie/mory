@@ -199,13 +199,10 @@ onMounted(() => {
     listFiles();
 });
 
-// The listing in memory, which the views sync as they open, synced first only when it is not known
-// to be current, as after a save. Not synced again regardless, as the Files view does as it opens:
-// a sync replaces the listing even when nothing has changed, and the view under the dialog then
-// works out all it shows again, which over Home with 700 tasks held the page for 0.7 s in Chromium
-// and 1.7 s in Firefox at each opening.
+// Synced as it opens, as the Files view is, so a commit made elsewhere is listed. A sync that finds
+// nothing changed keeps the listing, so the view under the dialog has nothing to work out again.
 function listFiles(): void {
-    files.list().then(() => {
+    files.refresh().then(() => {
         errorText.value = null;
     }).catch((error) => {
         if (axios.isAxiosError(error) && error.response?.status === 401) {

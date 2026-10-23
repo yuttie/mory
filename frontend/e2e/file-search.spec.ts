@@ -356,27 +356,68 @@ test('opens and closes once for each press of Ctrl+K, however long it is held', 
     await expect(palette(page)).toBeHidden();
 });
 
-// From the listing every view keeps, as it is current: syncing it again would replace it although
-// nothing has changed, and the view under the dialog would work out all it shows again.
-test('lists the files from memory when they are known to be current', async ({ context, page }) => {
+// Synced as it opens, so a commit made elsewhere since the view synced is listed.
+test('lists a commit made elsewhere as it opens', async ({ context, page }) => {
     await mockBackend(context, FILES, { times: TIMES });
-    const listings: string[] = [];
-    page.on('request', (request) => {
-        if (new URL(request.url()).pathname === '/api/v2/entries') {
-            listings.push(request.url());
-        }
-    });
     await page.goto('/');
-    await expect.poll(() => listings.length).toBeGreaterThan(0);
+    await expect(page.getByText('Upcoming Due Dates')).toBeVisible();
     await page.waitForLoadState('networkidle');
-    const synced = listings.length;
 
+    await page.route(`${API_URL}v2/entries**`, (route) => route.fulfill({
+        json: listing({ ...FILES, 'news.md': '# Latest news\n' }, 2),
+    }));
+    await open(page);
+    await expect(titles(page)).toHaveText(
+        ['Latest news', 'Draft chapter', 'Monday', 'Write the report', 'Thesis', 'lecture.template', 'Ideas', 'Show all 7 in Files'],
+    );
+});
+
+// Synced as it opens, but a sync that finds nothing changed keeps the listing every view derives
+// from, so the view under the dialog has nothing to work out again.
+test('keeps the listing the views derive from when the sync finds nothing changed', async ({ context, page }) => {
+    await mockBackend(context, FILES, { times: TIMES });
+    await page.goto('/');
+    await expect(page.getByText('Upcoming Due Dates')).toBeVisible();
+    await page.waitForLoadState('networkidle');
+
+    const asked: (string | null)[] = [];
+    await page.route(`${API_URL}v2/entries**`, (route) => {
+        const since = new URL(route.request().url()).searchParams.get('since');
+        asked.push(since);
+        return route.fulfill({ json: { kind: 'delta', commit: since, head: since, base: since, changed: [], deleted: [] } });
+    });
+    // The files store as the views read it, and the listing it held before the dialog opened.
+    await page.evaluate(() => {
+        const app = (document.querySelector('#app') as unknown as { __vue_app__: VueApp }).__vue_app__;
+        const held = window as unknown as HeldListing;
+        held.files = app.config.globalProperties.$pinia._s.get('files')!;
+        held.listed = held.files.entries;
+    });
     await open(page);
     await expect(titles(page)).toHaveText(
         ['Draft chapter', 'Monday', 'Write the report', 'Thesis', 'lecture.template', 'Ideas', 'Show all 6 in Files'],
     );
-    expect(listings).toHaveLength(synced);
+    await expect.poll(() => asked).toEqual([expect.stringMatching(/^0+1$/)]);
+    await expect.poll(() => page.evaluate(() => (window as unknown as HeldListing).files.isLoading)).toBe(false);
+    expect(await page.evaluate(() => {
+        const held = window as unknown as HeldListing;
+        return held.files.entries === held.listed;
+    })).toBe(true);
 });
+
+interface FilesStore {
+    entries: unknown;
+    isLoading: boolean;
+}
+
+interface VueApp {
+    config: { globalProperties: { $pinia: { _s: Map<string, FilesStore> } } };
+}
+
+interface HeldListing {
+    files: FilesStore;
+    listed: unknown;
+}
 
 // Choosing the page already shown goes nowhere, so the dialog closes as with Escape.
 test('closes over the page chosen if it is the one shown, giving the focus back', async ({ context, page }) => {
