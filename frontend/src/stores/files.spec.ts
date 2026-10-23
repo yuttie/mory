@@ -128,6 +128,54 @@ beforeEach(() => {
 });
 
 describe('the files store', () => {
+    // Every consumer derives from the one array, so a new array of the same entries makes all of
+    // them work everything out again: over Home, that froze the page at each sync.
+    it('keeps the listing it holds when a sync brings no change', async () => {
+        const tab = newTab();
+        const listed = await tab.list();
+
+        expect(await tab.refresh()).toBe(listed);
+        expect(tab.entries).toBe(listed);
+        expect(tab.commitId).toBe(head);
+    });
+
+    // A commit that changes no file still moves the base the next sync asks from.
+    it('keeps the listing across a commit that changes no file', async () => {
+        const tab = newTab();
+        const listed = await tab.list();
+
+        commit(() => undefined);
+        expect(await tab.refresh()).toBe(listed);
+        expect(tab.commitId).toBe(head);
+        expect(idb.commit).toBe(head);
+    });
+
+    it('publishes a sync that brings a change', async () => {
+        const tab = newTab();
+        const listed = await tab.list();
+
+        commit((files) => files.set('c.md', entry('c.md')));
+        const refreshed = await tab.refresh();
+        expect(refreshed).not.toBe(listed);
+        expect(tab.entries).toBe(refreshed);
+        expect(paths(refreshed)).toEqual(['a.md', 'c.md']);
+        expect(paths(listed)).toEqual(['a.md']);
+    });
+
+    // The rows of another tab's sync describe a commit this tab's listing never reached, so they
+    // are published even when nothing changed after them.
+    it('publishes what another tab synced though nothing changed since', async () => {
+        const tabA = newTab();
+        const tabB = newTab();
+        const listed = await tabB.list();
+        await tabA.write('b.md', '# B');
+        await tabA.list();
+
+        const refreshed = await tabB.refresh();
+        expect(refreshed).not.toBe(listed);
+        expect(paths(refreshed)).toEqual(['a.md', 'b.md']);
+    });
+
     // Another tab's sync moves the shared rows on to a commit this tab's listing never reached. A
     // delta from there applied to this tab's own listing loses whatever happened in between.
     it('takes in what another tab synced before it', async () => {

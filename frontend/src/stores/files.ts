@@ -63,8 +63,16 @@ export const useFilesStore = defineStore('files', () => {
     // backend finishes a rebuild.
     let laggingUntil = 0;
 
+    // The map `entriesRef` was last built from. A sync that brought no change keeps `entryMap`, and
+    // so the published array: a new array of the same entries would make every consumer work out
+    // all it derives again, and over Home's task lists that held the page for most of a second.
+    let publishedMap = entryMap;
+
     function publish(): ListEntry2[] {
-        entriesRef.value = Array.from(entryMap.values());
+        if (publishedMap !== entryMap) {
+            entriesRef.value = Array.from(entryMap.values());
+            publishedMap = entryMap;
+        }
         return entriesRef.value;
     }
 
@@ -118,7 +126,10 @@ export const useFilesStore = defineStore('files', () => {
             // never to a map an optimistic patch has already touched, which would compound the
             // patch rather than replace it, nor to one another tab's sync has left behind.
             if (mapCommit === base) {
-                next = new Map(entryMap);
+                // Nothing changed is the usual answer, and keeping the map then keeps the listing
+                // every consumer derives from.
+                const unchanged = response.changed.length === 0 && response.deleted.length === 0;
+                next = unchanged ? entryMap : new Map(entryMap);
             }
             else {
                 const rows = typeof base === 'string' ? await readEntriesAt<ListEntry2>(base) : null;
@@ -255,7 +266,7 @@ export const useFilesStore = defineStore('files', () => {
     async function clear(): Promise<void> {
         entryMap = new Map();
         mapCommit = null;
-        entriesRef.value = [];
+        publish();
         errorRef.value = null;
         invalidate();
         // Rows and commit ID together: the listing describes a private repository and must not
