@@ -30,12 +30,14 @@ export default ts.config(
             globals: globals.serviceworker,
         },
     },
-    // Enable TypeScript parser in *.vue files
+    // Enable TypeScript parser in *.vue files. The parser object rather than its package name:
+    // vue-eslint-parser requires a name from its own directory, where pnpm links only its own
+    // dependencies, so a name would resolve only through pnpm's hidden hoisting.
     {
         files: ['*.vue', '**/*.vue'],
         languageOptions: {
             parserOptions: {
-                parser: '@typescript-eslint/parser',
+                parser: ts.parser,
             },
         },
     },
