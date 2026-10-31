@@ -100,13 +100,71 @@ export function resolvedLeadTime(task: UrgencyTask, tags: readonly string[], set
     return tagged.length > 0 ? Math.max(...tagged) : leadTimeDays(settings.default_lead_time) ?? 7;
 }
 
+const DAY = 86_400_000;
+
+// One formatter a zone, kept. dayjs's `tz()` formats through `toLocaleString`, which builds a
+// formatter on every call: 15-23 µs each in Firefox and Chromium, against 1.5 µs to format with
+// one kept, and the Tasks tab of the Files view converted over a thousand dates at each opening.
+const zoneFormatters = new Map<string, Intl.DateTimeFormat>();
+
+function zoneFormatter(zone: string): Intl.DateTimeFormat {
+    let formatter = zoneFormatters.get(zone);
+    if (formatter === undefined) {
+        formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: zone,
+            era: 'short',
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric',
+            second: 'numeric',
+            hourCycle: 'h23',
+        });
+        zoneFormatters.set(zone, formatter);
+    }
+    return formatter;
+}
+
+// The zone's wall clock at an instant, as the milliseconds since the epoch that clock reads in UTC.
+function wallClockOf(instant: number, zone: string): number {
+    // Past the instants a `Date` holds, the formatter throws, and this runs inside computeds.
+    if (!(Math.abs(instant) <= 8.64e15)) {
+        return NaN;
+    }
+    const fields: Record<string, number> = {};
+    let bc = false;
+    for (const part of zoneFormatter(zone).formatToParts(instant)) {
+        if (part.type === 'era') {
+            bc = part.value.startsWith('B');
+        }
+        else if (part.type !== 'literal') {
+            fields[part.type] = Number(part.value);
+        }
+    }
+    // `setUTCFullYear` rather than `Date.UTC`, which reads the years 0-99 as 1900-1999.
+    const clock = new Date(0);
+    clock.setUTCFullYear(bc ? 1 - fields.year : fields.year, fields.month - 1, fields.day);
+    clock.setUTCHours(fields.hour, fields.minute, fields.second, ((instant % 1000) + 1000) % 1000);
+    return clock.valueOf();
+}
+
+// How far the zone's wall clock is ahead of UTC at an instant, in milliseconds.
+function zoneOffset(instant: number, zone: string): number {
+    return wallClockOf(instant, zone) - instant;
+}
+
 // Date-only limits last through their local day; availability starts at midnight.
-function localInstant(wall: string, zone: string): number {
-    const local = dayjs.utc(wall).valueOf();
-    const offsets = [...new Set([-2, 0, 2].map((days) => dayjs(local + days * 86_400_000).tz(zone).utcOffset()))];
-    const matches = offsets.map((offset) => local - offset * 60_000).filter((instant) => dayjs(instant).tz(zone).format('YYYY-MM-DD HH:mm:ss.SSS') === wall);
+export function localInstant(wall: string, zone: string): number {
+    return instantOfWallClock(dayjs.utc(wall).valueOf(), zone);
+}
+
+// The instant a wall clock, given as `wallClockOf` gives it, reads in the zone.
+function instantOfWallClock(local: number, zone: string): number {
+    const offsets = [...new Set([-2, 0, 2].map((days) => zoneOffset(local + days * DAY, zone)))];
+    const matches = offsets.map((offset) => local - offset).filter((instant) => wallClockOf(instant, zone) === local);
     // Pick the first repeated clock time; a missing time moves forward by the gap.
-    return matches.length > 0 ? Math.min(...matches) : local - dayjs(local - 86_400_000).tz(zone).utcOffset() * 60_000;
+    return matches.length > 0 ? Math.min(...matches) : local - zoneOffset(local - DAY, zone);
 }
 
 export function taskInstant(value: unknown, zone: string, endOfDay = false): number | undefined {
@@ -160,9 +218,10 @@ export function urgencyOf(task: UrgencyTask, tags: readonly string[] = [], setti
     result.slack_ratio = ratio;
     result.reference = new Date(reference).toISOString();
     // Subtract calendar days while retaining the reference's local wall clock across DST.
-    const localReference = dayjs(windowReference).tz(zone);
-    const shifted = dayjs.utc(localReference.format('YYYY-MM-DD HH:mm:ss.SSS')).subtract(lead, 'day');
-    const begins = shifted.isValid() ? localInstant(shifted.format('YYYY-MM-DD HH:mm:ss.SSS'), zone) : -Infinity;
+    const shifted = wallClockOf(windowReference, zone) - lead * DAY;
+    // Beyond the dates a `Date` holds, the window is open from the start, as it is in the Rust twin.
+    // That includes the two days inside them that `instantOfWallClock` would look past.
+    const begins = Math.abs(shifted) <= 8.64e15 - 2 * DAY ? instantOfWallClock(shifted, zone) : -Infinity;
     result.short_window = available !== undefined && available > begins;
     return result;
 }
