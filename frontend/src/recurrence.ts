@@ -18,13 +18,12 @@
 import { Frequency, RRule, Weekday as RRuleWeekday } from 'rrule';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
-import timezone from 'dayjs/plugin/timezone';
 
 import type { EventRepeat } from '@/api';
 import TIME_ZONES from '@/time-zones.json';
+import { wallClockOf } from '@/zone';
 
 dayjs.extend(utc);
-dayjs.extend(timezone);
 
 // A datetime as the author wrote it: date, optional time, optional trailing offset.
 //
@@ -230,15 +229,47 @@ function zoneOf(tz: unknown): string | undefined {
 /// rather than report one rule.
 function wallClockIn(value: string, tz: unknown): string {
     const zone = zoneOf(tz);
-    // One it cannot read formats as `Invalid Date`, which is no wall clock, and is compared as
-    // written.
-    const at = readDatetime(value) ?? dayjs(NaN);
+    // One it cannot read is `Invalid Date`, as dayjs formats it, which is no wall clock, and is
+    // compared as written.
+    const at = readDatetime(value);
+    if (at === null) {
+        return 'Invalid Date';
+    }
+    let wallClock;
     try {
-        return at.tz(zone).format('YYYY-MM-DD HH:mm:ss');
+        wallClock = wallClockOf(at.valueOf(), zone);
     }
     catch {
         throw new RecurrenceError(`Unknown timezone ${JSON.stringify(tz)}`);
     }
+    return dayjs.utc(wallClock).format('YYYY-MM-DD HH:mm:ss');
+}
+
+/// The zone's offset at an instant in minutes, as dayjs's timezone plugin reads it: the wall clock
+/// to the second, less the instant with its milliseconds dropped toward zero.
+function offsetMinutes(instant: number, zone: string | undefined): number {
+    const wallClock = wallClockOf(instant, zone) - (((instant % 1000) + 1000) % 1000);
+    return (wallClock - (instant - (instant % 1000))) / 60_000;
+}
+
+/// `dayjs.tz(wallClock, zone)`: the instant a wall clock in `zone` names, given as milliseconds it
+/// reads in UTC. A port of the plugin's `fixOffset`, as `resolve_in_zone` in
+/// `backend/src/note_events.rs` is: its first guess, `o0`, is the offset the zone has now, which
+/// decides which of two repeated hours it returns, and a time in a gap keeps its wall clock and
+/// takes the later offset. Read through the formatter `zone.ts` keeps, and converted to the
+/// reader's zone by `Date` alone, where dayjs shifted its clock by the offset and back.
+function instantInZone(local: number, zone: string | undefined, o0: number): number {
+    let guess = local - o0 * 60_000;
+    const o2 = offsetMinutes(guess, zone);
+    if (o0 === o2) {
+        return guess;
+    }
+    guess -= (o2 - o0) * 60_000;
+    const o3 = offsetMinutes(guess, zone);
+    if (o2 === o3) {
+        return guess;
+    }
+    return local - Math.min(o2, o3) * 60_000;
 }
 
 // What `backend/src/note_events.rs` holds an interval and a count in, which the two must agree on.
@@ -433,27 +464,38 @@ export function termsOf(rule: RecurrenceRule): RuleTerms {
 }
 
 /// A wall clock the rule generates, in the reader's zone: `tz` names the zone it belongs to, and is
-/// absent when that is already the reader's.
-function inReaderZone(wallClock: string, hasTime: boolean, tz: unknown): string {
+/// absent when that is already the reader's. `now` keeps the zone's offset now for the next wall
+/// clock of the same expansion.
+function inReaderZone(
+    wallClock: string,
+    hasTime: boolean,
+    tz: unknown,
+    now: { offset?: number } = {},
+): string {
     // A date is not an instant: converting midnight-in-a-zone into the reader's moves the date.
     // The backend no longer writes `tz` for an all-day series, but a hand-written note may.
     if (tz === undefined || !hasTime) {
         return wallClock;
     }
-    // A zone a browser's Intl does not know throws a RangeError rather than producing an invalid
-    // dayjs, so the failure has to be caught rather than tested for.
+    // A zone a browser's Intl does not know throws a RangeError, so the failure has to be caught
+    // rather than tested for.
     const zone = zoneOf(tz);
-    let converted;
+    let instant;
     try {
-        converted = dayjs.tz(wallClock, zone);
+        // The offset now is read first, as `dayjs.tz` read it, so an unknown zone is reported
+        // whatever the wall clock. Once for all the occurrences of one expansion, as moried reads
+        // them all at one `now`, where `dayjs.tz` read it again for each.
+        now.offset ??= offsetMinutes(Date.now(), zone);
+        const local = dayjs.utc(wallClock).valueOf();
+        instant = Number.isNaN(local) ? NaN : instantInZone(local, zone, now.offset);
     }
     catch {
         throw new RecurrenceError(`Unknown timezone ${JSON.stringify(tz)}`);
     }
-    if (!converted.isValid()) {
+    if (!Number.isFinite(instant)) {
         throw new RecurrenceError(`Unknown timezone ${JSON.stringify(tz)}`);
     }
-    return converted.local().format('YYYY-MM-DD HH:mm');
+    return dayjs(instant).format('YYYY-MM-DD HH:mm');
 }
 
 /// Where the calendar puts the start a rule is anchored at, in the reader's zone: its wall clock,
@@ -513,5 +555,6 @@ export function expandRule(
         throw new RecurrenceError(
             error instanceof Error ? error.message : 'the rule could not be expanded');
     }
-    return occurrences.map((wallClock) => inReaderZone(wallClock, rule.start.hasTime, rule.tz));
+    const now = {};
+    return occurrences.map((wallClock) => inReaderZone(wallClock, rule.start.hasTime, rule.tz, now));
 }

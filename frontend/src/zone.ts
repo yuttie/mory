@@ -4,10 +4,13 @@
 // formatter on every call: 15-23 µs each in Firefox and Chromium, against 1.5 µs to format with
 // one kept, and the Tasks tab of the Files view converted over a thousand dates at each opening.
 // A zone Intl does not know throws a `RangeError` here, as it did from `tz()`.
+//
+// No zone is the reader's own, which is read afresh each time rather than kept, as `tz()` read it:
+// the reader's may change while the page is open.
 const zoneFormatters = new Map<string, Intl.DateTimeFormat>();
 
-function zoneFormatter(zone: string): Intl.DateTimeFormat {
-    let formatter = zoneFormatters.get(zone);
+function zoneFormatter(zone: string | undefined): Intl.DateTimeFormat {
+    let formatter = zone === undefined ? undefined : zoneFormatters.get(zone);
     if (formatter === undefined) {
         formatter = new Intl.DateTimeFormat('en-US', {
             timeZone: zone,
@@ -20,13 +23,15 @@ function zoneFormatter(zone: string): Intl.DateTimeFormat {
             second: 'numeric',
             hourCycle: 'h23',
         });
-        zoneFormatters.set(zone, formatter);
+        if (zone !== undefined) {
+            zoneFormatters.set(zone, formatter);
+        }
     }
     return formatter;
 }
 
 // The zone's wall clock at an instant, as the milliseconds since the epoch that clock reads in UTC.
-export function wallClockOf(instant: number, zone: string): number {
+export function wallClockOf(instant: number, zone: string | undefined): number {
     // Past the instants a `Date` holds, the formatter throws, and this runs inside computeds.
     if (!(Math.abs(instant) <= 8.64e15)) {
         return NaN;
@@ -49,6 +54,6 @@ export function wallClockOf(instant: number, zone: string): number {
 }
 
 // How far the zone's wall clock is ahead of UTC at an instant, in milliseconds.
-export function zoneOffset(instant: number, zone: string): number {
+export function zoneOffset(instant: number, zone: string | undefined): number {
     return wallClockOf(instant, zone) - instant;
 }
