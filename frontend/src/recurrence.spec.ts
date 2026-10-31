@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { EventRepeat } from '@/api';
-import { RecurrenceError, expandRule, parseWallClock, readDatetime, readRule } from '@/recurrence';
+import { RecurrenceError, expandRule, parseWallClock, readDatetime, readRule, ruleStart, ruleUntil } from '@/recurrence';
 
 describe('parseWallClock', () => {
     it('reads a date, a datetime, and seconds', () => {
@@ -347,5 +347,111 @@ describe('expandRule across a daylight-saving boundary', () => {
         expect(expandRule(
             { freq: 'weekly', byday: ['thu'] }, '2015-06-25 10:00', '2015-06-25', '2015-06-25',
         )).toEqual(['2015-06-25 10:00']);
+    });
+});
+
+// How a rule's wall clock in its `tz` reaches the reader's zone, as `dayjs.tz` took it there and
+// `resolve_in_zone` in `backend/src/note_events.rs` ports it: from the offset the zone has now, so
+// in the hour that happens twice which of the two is drawn depends on the season the reader is in,
+// and a time in a gap moves forward by it.
+describe('expandRule in a named zone, read in another', () => {
+    const NY = 'America/New_York';
+    const WINTER = '2024-01-15T00:00:00Z';
+    const SUMMER = '2024-07-15T00:00:00Z';
+
+    beforeAll(() => { vi.stubEnv('TZ', 'Asia/Tokyo'); });
+    afterAll(() => {
+        vi.useRealTimers();
+        vi.unstubAllEnvs();
+    });
+
+    function at<T>(now: string, read: () => T): T {
+        vi.useFakeTimers({ now: Date.parse(now), toFake: ['Date'] });
+        try {
+            return read();
+        }
+        finally {
+            vi.useRealTimers();
+        }
+    }
+
+    it('converts an ordinary wall clock, whatever the season', () => {
+        for (const now of [WINTER, SUMMER]) {
+            expect(at(now, () => expandRule({ freq: 'daily', tz: NY }, '2024-06-01 09:00', '2024-06-03', '2024-06-03'))).toEqual(['2024-06-03 22:00']);
+            expect(at(now, () => expandRule({ freq: 'daily', tz: 'UTC' }, '2024-06-01 09:00', '2024-06-03', '2024-06-03'))).toEqual(['2024-06-03 18:00']);
+        }
+    });
+
+    it('moves a time in a gap forward by it', () => {
+        for (const now of [WINTER, SUMMER]) {
+            expect(at(now, () => expandRule({ freq: 'daily', tz: NY }, '2024-03-01 02:30', '2024-03-09', '2024-03-11')))
+                .toEqual(['2024-03-09 16:30', '2024-03-10 16:30', '2024-03-11 15:30']);
+        }
+        expect(at(WINTER, () => expandRule({ freq: 'daily', tz: 'Pacific/Apia' }, '2011-12-28 12:00', '2011-12-29', '2011-12-31')))
+            .toEqual(['2011-12-30 07:00', '2011-12-31 07:00', '2011-12-31 07:00']);
+    });
+
+    it('picks between two repeated hours by the season the reader is in', () => {
+        expect(at(WINTER, () => expandRule({ freq: 'daily', tz: NY }, '2024-10-01 01:30', '2024-11-02', '2024-11-04')))
+            .toEqual(['2024-11-02 14:30', '2024-11-03 15:30', '2024-11-04 15:30']);
+        expect(at(SUMMER, () => expandRule({ freq: 'daily', tz: NY }, '2024-10-01 01:30', '2024-11-02', '2024-11-04')))
+            .toEqual(['2024-11-02 14:30', '2024-11-03 14:30', '2024-11-04 15:30']);
+        expect(at(WINTER, () => expandRule({ freq: 'daily', tz: 'Australia/Lord_Howe' }, '2024-03-01 01:45', '2024-04-06', '2024-04-08')))
+            .toEqual(['2024-04-05 23:45', '2024-04-06 23:45', '2024-04-08 00:15']);
+        expect(at(SUMMER, () => expandRule({ freq: 'daily', tz: 'Australia/Lord_Howe' }, '2024-03-01 01:45', '2024-04-06', '2024-04-08')))
+            .toEqual(['2024-04-05 23:45', '2024-04-07 00:15', '2024-04-08 00:15']);
+    });
+
+    it('puts the start and the until where it puts the occurrences', () => {
+        const rule = () => readRule({ freq: 'daily', tz: NY, until: '2024-11-03 01:30:00-05:00' }, '2024-11-03 01:30');
+        expect(at(WINTER, () => [ruleStart(rule()), ruleUntil(rule())])).toEqual(['2024-11-03 15:30', '2024-11-03 15:30']);
+        expect(at(SUMMER, () => [ruleStart(rule()), ruleUntil(rule())])).toEqual(['2024-11-03 14:30', '2024-11-03 14:30']);
+    });
+
+    it('reads an until with an offset as the wall clock it is in the rule\'s zone', () => {
+        for (const until of ['2024-11-03 01:30:00-05:00', '2024-11-03 01:30:00-04:00']) {
+            expect(at(WINTER, () => expandRule({ freq: 'daily', tz: NY, until }, '2024-10-01 01:30', '2024-11-01', '2024-11-05')))
+                .toEqual(['2024-11-01 14:30', '2024-11-02 14:30', '2024-11-03 15:30']);
+        }
+        expect(at(WINTER, () => expandRule({ freq: 'daily', tz: 'Asia/Kolkata', until: '2024-05-03T03:30:00Z' }, '2024-05-01 09:00', '2024-04-30', '2024-05-06')))
+            .toEqual(['2024-05-01 12:30', '2024-05-02 12:30', '2024-05-03 12:30']);
+        // One it cannot read is compared as written.
+        expect(at(WINTER, () => expandRule({ freq: 'daily', tz: NY, until: '2024-05-03 25:00:00+09:00' }, '2024-05-01 09:00', '2024-04-30', '2024-05-06')))
+            .toEqual(['2024-05-01 22:00', '2024-05-02 22:00', '2024-05-03 22:00']);
+    });
+
+    // dayjs drew these an hour or two off, as `utcOffset` takes a reader's offset of 0 for none and
+    // reads the offset its shifted clock has instead: within hours of London's own change, every
+    // rule in another zone. `resolve_in_zone` and `wall_clock_at` read them as here.
+    it('converts into a reader\'s zone across its own change, from an offset of 0', () => {
+        vi.stubEnv('TZ', 'Europe/London');
+        try {
+            expect(at(WINTER, () => expandRule({ freq: 'daily', tz: NY }, '2024-10-26 21:00', '2024-10-26', '2024-10-26'))).toEqual(['2024-10-27 01:00']);
+            expect(at(WINTER, () => expandRule({ freq: 'daily', tz: 'Asia/Tokyo' }, '2024-03-31 09:00', '2024-03-31', '2024-03-31'))).toEqual(['2024-03-31 00:00']);
+            expect(at(WINTER, () => expandRule({ freq: 'daily', tz: 'Europe/Paris' }, '2024-03-31 01:00', '2024-03-31', '2024-03-31'))).toEqual(['2024-03-31 00:00']);
+        }
+        finally {
+            vi.stubEnv('TZ', 'Asia/Tokyo');
+        }
+    });
+
+    // dayjs's `tz()` formatted the until's wall clock in the rule's zone and read it back in the
+    // reader's, which moved one the reader's own clock skips an hour later: read in New York, this
+    // rule drew a third occurrence that moried, reading the until with `wall_clock_at`, never rang.
+    it('reads an until the reader\'s own clock skips as the wall clock it is in the rule\'s zone', () => {
+        vi.stubEnv('TZ', NY);
+        try {
+            const repeat = { freq: 'daily' as const, tz: 'Asia/Tokyo', until: '2024-03-10 02:30:00+09:00' };
+            expect(at(WINTER, () => expandRule(repeat, '2024-03-08 03:00', '2024-03-07', '2024-03-11')))
+                .toEqual(['2024-03-07 13:00', '2024-03-08 13:00']);
+            expect(at(WINTER, () => ruleUntil(readRule(repeat, '2024-03-08 03:00')))).toBe('2024-03-09 12:30');
+        }
+        finally {
+            vi.stubEnv('TZ', 'Asia/Tokyo');
+        }
+    });
+
+    it('leaves a date where it is', () => {
+        expect(at(WINTER, () => expandRule({ freq: 'daily', tz: NY }, '2024-06-01', '2024-06-03', '2024-06-03'))).toEqual(['2024-06-03']);
     });
 });

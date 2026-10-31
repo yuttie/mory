@@ -21,9 +21,10 @@
 //!   * `dayjs(text)` reads a string with no offset as the reader's wall clock, through `Date`,
 //!     which moves a time in a daylight-saving gap forward by the gap and reads an hour that
 //!     happens twice as the first of the two. See `resolve_local`.
-//!   * `dayjs.tz(text, zone)`, which a rule with `tz` goes through, starts from the offset the
-//!     zone has *now*, so which of two repeated hours it picks depends on the season the reader
-//!     is in. See `resolve_in_zone`, and `Reader::now`.
+//!   * A rule with `tz` reaches the reader's zone through `instantInZone`, a port of
+//!     `dayjs.tz(text, zone)`, which starts from the offset the zone has *now*, so which of two
+//!     repeated hours it picks depends on the season the reader is in. See `resolve_in_zone`, and
+//!     `Reader::now`.
 //!   * Every value is whatever the file said, and the frontend's `??` and `||` treat a `null`, an
 //!     empty string and a zero each in their own way. `end:` left empty hides every instance and
 //!     every generated occurrence of its event, and so it does here.
@@ -47,7 +48,7 @@ use crate::models::ListEntry;
 #[derive(Debug, Clone, Copy)]
 pub struct Reader {
     pub zone: Zone,
-    /// When the reading happens. Only `dayjs.tz` looks at it, to pick between two repeated hours.
+    /// When the reading happens. Only a rule's `tz` reads it, to pick between two repeated hours.
     pub now: DateTime<Utc>,
 }
 
@@ -785,7 +786,7 @@ fn expand_rule(
 
     // Read only where something is converted with it, as the frontend reads it: an all-day rule
     // never is, so an unknown zone on one hides nothing. In any case, as `Intl` takes a name; `null`
-    // and `''` reach `dayjs.tz` as no zone at all, which is the reader's.
+    // and `''` reach `instantInZone` as no zone at all, which is the reader's.
     let zone: Option<Option<Zone>> = match repeat.get("tz") {
         None => None,
         Some(Value::Null) => Some(Some(reader.zone)),

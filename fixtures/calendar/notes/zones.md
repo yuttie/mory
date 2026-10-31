@@ -25,6 +25,12 @@ events:
             freq: daily
             tz: Asia/Tokyo
             until: 2024-04-04 12:00:00+00:00
+    Until the reader's clock skips:
+        start: 2024-03-08 03:00
+        repeat:
+            freq: daily
+            tz: Asia/Tokyo
+            until: 2024-03-10 02:30:00+09:00
     Wall clock in the spring gap:
         start: 2024-03-08 02:30
         repeat:
