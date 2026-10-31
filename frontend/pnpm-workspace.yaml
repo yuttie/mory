@@ -1,0 +1,5 @@
+allowBuilds:
+  # Its install script compiles the watcher only when asked to build from
+  # source; otherwise it does nothing, and the prebuilt binary for the
+  # platform comes as an optional dependency.
+  '@parcel/watcher': false
