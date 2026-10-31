@@ -405,9 +405,76 @@ test('keeps the listing the views derive from when the sync finds nothing change
     })).toBe(true);
 });
 
+// It syncs as it opens, so a sync starting and ending must not draw its rows again: that drew every
+// one twice, a frame lost at each opening.
+test('draws none of its rows again as the files sync', async ({ context, page }) => {
+    await mockBackend(context, FILES, { times: TIMES });
+    await page.goto('/');
+    await expect(page.getByText('Upcoming Due Dates')).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    await page.route(`${API_URL}v2/entries**`, (route) => {
+        const since = new URL(route.request().url()).searchParams.get('since');
+        return route.fulfill({ json: { kind: 'delta', commit: since, head: since, base: since, changed: [], deleted: [] } });
+    });
+    await open(page);
+    await expect(titles(page)).toHaveText(
+        ['Draft chapter', 'Monday', 'Write the report', 'Thesis', 'lecture.template', 'Ideas', 'Show all 6 in Files'],
+    );
+    await expect(palette(page).getByRole('progressbar')).toBeHidden();
+
+    const drawn = await page.evaluate(async () => {
+        // Every component in the palette, its renders counted. A row is drawn by whichever of them
+        // renders the slot it is in, so the palette's own render alone would not show it.
+        const element = document.querySelector('.file-search') as unknown as { __vueParentComponent: Instance };
+        let palette = element.__vueParentComponent;
+        while (palette.type.__name !== 'FileSearchPalette') {
+            palette = palette.parent!;
+        }
+        let rows = 0;
+        const visit = (vnode: VNode | null | undefined): void => {
+            if (vnode === null || typeof vnode !== 'object') {
+                return;
+            }
+            const instance = vnode.component;
+            if (instance) {
+                const render = instance.effect.fn;
+                instance.effect.fn = function (this: unknown, ...args: unknown[]) {
+                    if (instance.type.name === 'VListItem') {
+                        rows += 1;
+                    }
+                    return render.apply(this, args);
+                };
+                visit(instance.subTree);
+            }
+            if (Array.isArray(vnode.children)) {
+                vnode.children.forEach(visit);
+            }
+        };
+        visit(palette.subTree);
+        const app = (document.querySelector('#app') as unknown as { __vue_app__: VueApp }).__vue_app__;
+        await app.config.globalProperties.$pinia._s.get('files')!.refresh();
+        await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+        return rows;
+    });
+    expect(drawn).toBe(0);
+});
+
 interface FilesStore {
     entries: unknown;
     isLoading: boolean;
+    refresh(): Promise<unknown>;
+}
+
+interface Instance {
+    type: { name?: string; __name?: string };
+    parent: Instance | null;
+    subTree: VNode;
+    effect: { fn: (...args: unknown[]) => unknown };
+}
+
+interface VNode {
+    component: Instance | null;
+    children: unknown;
 }
 
 interface VueApp {

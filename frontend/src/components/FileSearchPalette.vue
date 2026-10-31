@@ -25,12 +25,7 @@
             class="flex-grow-0"
             v-on:keydown="onKeydown"
         ></v-text-field>
-        <v-progress-linear
-            v-bind:active="files.isLoading"
-            indeterminate
-            color="primary"
-            height="2"
-        ></v-progress-linear>
+        <FilesSyncProgress />
         <!-- Tab moves between them, so none takes the focus from the field. Each as wide as its
              title, so that on a computer's screen all of them are in sight at once. -->
         <v-tabs
@@ -122,6 +117,7 @@ import type { VList, VTextField } from 'vuetify/components';
 import { mdiFolderOutline, mdiMagnify } from '@mdi/js';
 import axios from 'axios';
 
+import FilesSyncProgress from '@/components/FilesSyncProgress.vue';
 import { useAppStore } from '@/stores/app';
 import { useFilesStore } from '@/stores/files';
 import { FILE_TABS, tabShowsTags, useFileRows } from '@/composables/fileRows';
