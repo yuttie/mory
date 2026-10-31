@@ -42,10 +42,10 @@ When these instructions do not settle a choice, prefer the option that keeps the
 
 Run commands in the component's own directory (`backend/` or `frontend/`) of your worktree, as Working in parallel says.
 
-- Frontend: `npm run dev`, `npm run build`, `npm run test` (vitest), `npm run lint`. Type-check with `npx vue-tsc --noEmit`.
+- Frontend: `pnpm install`, `pnpm run dev`, `pnpm run build`, `pnpm run test` (vitest), `pnpm run lint`. Type-check with `pnpm exec vue-tsc --noEmit`.
 - Backend: `cargo build`, `cargo test`, `cargo clippy`. `bacon` is configured for watch runs.
 - Backend tests live in-module (`#[cfg(test)] mod tests`), not in `tests/` — the crate is a binary, so an integration test could not import it.
-- Neither `npm run lint` nor `vue-tsc` is clean today. Compare the counts before and after your change instead of expecting zero.
+- Neither `pnpm run lint` nor `vue-tsc` is clean today. Compare the counts before and after your change instead of expecting zero.
 
 ## Working in parallel
 
@@ -59,11 +59,11 @@ Before the first edit, create a worktree on a new branch from `main`, say which 
 git worktree add -b <type>/<topic> .claude/worktrees/<topic> main
 ```
 
-Give the worktree its own `frontend/node_modules` and `backend/target`, never a symlink to the main checkout's or a shared `CARGO_TARGET_DIR`. A symlinked `node_modules` shares Vite's dependency cache with the user's server and lets `npm install` change the main checkout, and a shared target makes cargo run a binary built from another worktree's sources, because every worktree writes the same `moried-<hash>`. On this btrfs disk a reflink copy is instant, and the copied build makes the first `cargo build` take seconds:
+Give the worktree its own `frontend/node_modules` and `backend/target`, never a symlink to the main checkout's or a shared `CARGO_TARGET_DIR`. A symlinked `node_modules` shares Vite's dependency cache with the user's server and lets `pnpm install` change the main checkout, and a shared target makes cargo run a binary built from another worktree's sources, because every worktree writes the same `moried-<hash>`. pnpm installs from the store every worktree shares, so a worktree's install takes seconds, and a reflink copy of the main checkout's build makes the first `cargo build` take seconds too:
 
 ```sh
 main=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
-cp -a --reflink=always "$main/frontend/node_modules" frontend/
+(cd frontend && pnpm install --frozen-lockfile)
 mkdir -p backend/target && cp -a --reflink=always "$main/backend/target/debug" backend/target/
 ```
 
