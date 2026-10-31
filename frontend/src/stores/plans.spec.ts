@@ -53,6 +53,17 @@ describe('monthly plan store', () => {
         shared.commitId = 'external';
         await vi.waitFor(() => expect(store.plannedDays(A)).toEqual(['2026-11-05']));
     });
+    it('keeps what it holds of months a commit leaves as they were', async () => {
+        repository.set('.mory/plans/2026-10.yaml', { content: YAML.stringify({ '2026-10-05': [{ task: A, origin: 'planned' }] }), etag: 'october' });
+        const store = usePlansStore();
+        await store.loadMonths(['2026-10', '2026-11']);
+        const { days } = store;
+        const [october, november] = [store.months['2026-10'], store.months['2026-11']];
+        await store.loadMonths(['2026-10', '2026-11']);
+        expect(store.months['2026-10']).toBe(october);
+        expect(store.months['2026-11']).toBe(november);
+        expect(store.days).toBe(days);
+    });
     it('serializes additions, ordering and effort records with one month per change', async () => {
         const store = usePlansStore();
         await Promise.all([store.planTask('2026-10-05', A), store.planTask('2026-10-05', B, 'interruption')]);

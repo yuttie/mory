@@ -145,6 +145,36 @@ describe('loading the configuration', () => {
         expect(apiMocks.getNote).toHaveBeenCalledTimes(2);
     });
 
+    // Home and the Calendar draw their events from what the file holds, and each reads it again as
+    // it opens: the same configuration read again must not draw them anew.
+    it('keeps what it holds when the file is read again as it was', async () => {
+        const file = `${YAML_FILE}task_dates:
+    due_by: teal
+alarms:
+    timed: -10m
+categories:
+    meeting:
+        color: indigo
+`;
+        apiMocks.getNote.mockResolvedValue({ data: file });
+        const store = await freshStore();
+        await store.loadConfiguration();
+        const { subscriptions, taskDateColors, alarmDefaults, categories, categoryMap } = store;
+
+        await store.loadConfiguration();
+        expect(store.subscriptions).toBe(subscriptions);
+        expect(store.taskDateColors).toBe(taskDateColors);
+        expect(store.alarmDefaults).toBe(alarmDefaults);
+        expect(store.categories).toBe(categories);
+        expect(store.categoryMap).toBe(categoryMap);
+
+        apiMocks.getNote.mockResolvedValue({ data: file.replace('indigo', 'teal') });
+        await store.loadConfiguration();
+        expect(store.subscriptions).toBe(subscriptions);
+        expect(store.categories).not.toBe(categories);
+        expect(store.categoryMap?.get('meeting')?.color).toBe('teal');
+    });
+
     it('is loaded for good once it has been read, and ensureLoaded reads it only until then', async () => {
         apiMocks.getNote.mockResolvedValue({ data: YAML_FILE });
         const store = await freshStore();

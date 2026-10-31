@@ -25,12 +25,7 @@
             class="flex-grow-0"
             v-on:keydown="onKeydown"
         ></v-text-field>
-        <v-progress-linear
-            v-bind:active="files.isLoading"
-            indeterminate
-            color="primary"
-            height="2"
-        ></v-progress-linear>
+        <FilesSyncProgress />
         <!-- Tab moves between them, so none takes the focus from the field. Each as wide as its
              title, so that on a computer's screen all of them are in sight at once. -->
         <v-tabs
@@ -122,6 +117,7 @@ import type { VList, VTextField } from 'vuetify/components';
 import { mdiFolderOutline, mdiMagnify } from '@mdi/js';
 import axios from 'axios';
 
+import FilesSyncProgress from '@/components/FilesSyncProgress.vue';
 import { useAppStore } from '@/stores/app';
 import { useFilesStore } from '@/stores/files';
 import { FILE_TABS, tabShowsTags, useFileRows } from '@/composables/fileRows';
@@ -199,13 +195,10 @@ onMounted(() => {
     listFiles();
 });
 
-// The listing in memory, which the views sync as they open, synced first only when it is not known
-// to be current, as after a save. Not synced again regardless, as the Files view does as it opens:
-// a sync replaces the listing even when nothing has changed, and the view under the dialog then
-// works out all it shows again, which over Home with 700 tasks held the page for 0.7 s in Chromium
-// and 1.7 s in Firefox at each opening.
+// Synced as it opens, as the Files view is, so a commit made elsewhere is listed. A sync that finds
+// nothing changed keeps the listing, so the view under the dialog has nothing to work out again.
 function listFiles(): void {
-    files.list().then(() => {
+    files.refresh().then(() => {
         errorText.value = null;
     }).catch((error) => {
         if (axios.isAxiosError(error) && error.response?.status === 401) {

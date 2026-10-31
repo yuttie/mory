@@ -34,6 +34,19 @@ describe('task settings freshness', () => {
         shared.commitId = 'same-second-edit';
         await vi.waitFor(() => expect(store.settings.default_lead_time).toBe('30d'));
     });
+    // Every task's urgency is worked out from them, so an equal value read again must not replace them.
+    it('keeps what it holds when a commit leaves the file as it was', async () => {
+        files.read.mockResolvedValue('default_lead_time: 7d\nstatus_colors:\n    done: light-green\n');
+        const store = useTaskSettingsStore();
+        await store.load();
+        const { settings, statusColors, problems } = store;
+        reactive(files).commitId = 'unrelated-edit';
+        await vi.waitFor(() => expect(files.read).toHaveBeenCalledTimes(2));
+        await store.load();
+        expect(store.settings).toBe(settings);
+        expect(store.statusColors).toBe(statusColors);
+        expect(store.problems).toBe(problems);
+    });
     it('reads the newer commit after an older response finishes', async () => {
         let finishOld!: (content: string) => void;
         files.read.mockImplementationOnce(() => new Promise<string>((resolve) => { finishOld = resolve; }));
