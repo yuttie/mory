@@ -8,27 +8,32 @@ jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
-    # The npm project is the frontend; only `run` steps inherit this, so paths
+    # The pnpm project is the frontend; only `run` steps inherit this, so paths
     # handed to actions below stay relative to the repository root.
     defaults:
       run:
         working-directory: frontend
     steps:
     - uses: actions/checkout@v4
+    # Installs the pnpm `packageManager` names, and must come before
+    # setup-node, whose pnpm cache asks pnpm where its store is.
+    - uses: pnpm/action-setup@v4
+      with:
+        package_json_file: frontend/package.json
     - uses: actions/setup-node@v4
       with:
         node-version: lts/*
-        cache: npm
-        cache-dependency-path: frontend/package-lock.json
+        cache: pnpm
+        cache-dependency-path: frontend/pnpm-lock.yaml
     - name: Install dependencies
-      run: npm ci
+      run: pnpm install --frozen-lockfile
     - name: Install Playwright Browsers
       # The browsers `playwright.config.ts` runs: the whole Chromium, without
       # the headless shell, and Firefox. The fonts the pages are drawn in come
       # with `--with-deps` whichever browsers are named.
-      run: npx playwright install --with-deps --no-shell chromium firefox
+      run: pnpm exec playwright install --with-deps --no-shell chromium firefox
     - name: Run Playwright tests
-      run: npx playwright test
+      run: pnpm exec playwright test
     - uses: actions/upload-artifact@v4
       if: ${{ !cancelled() }}
       with:
