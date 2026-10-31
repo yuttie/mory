@@ -69,9 +69,9 @@ the same day either way. They do not agree on a day that is not in its month, su
 or on an unpadded month or day, such as `2024-8-9`: `dayjs` reads both, the calendar draws them, and
 the tool leaves them out. Neither is a fixture.
 
-`dayjs.tz` resolves an hour that happens twice by the season the reader is in *now*, so a rule
-with `tz` whose occurrences fall in such an hour would make the comparison depend on the date it
-runs. Keep them out of the fixtures.
+A rule's `tz` resolves an hour that happens twice by the season the reader is in *now*, as
+`dayjs.tz` did, so a rule with `tz` whose occurrences fall in such an hour would make the
+comparison depend on the date it runs. Keep them out of the fixtures.
 
 ## The alarm grammar
 

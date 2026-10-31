@@ -2497,7 +2497,7 @@ use crate::note_events::{self, Start};
 fn note_reader() -> note_events::Reader {
     note_events::Reader {
         zone: NOTE_READER_ZONE,
-        // Only `dayjs.tz` reads it, in an hour that happens twice, and the fixtures hold none.
+        // Only a rule's `tz` reads it, in an hour that happens twice, and the fixtures hold none.
         now: "2024-01-15T00:00:00Z".parse().expect("a valid instant"),
     }
 }
