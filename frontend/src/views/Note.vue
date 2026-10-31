@@ -348,6 +348,45 @@
                 <v-progress-circular indeterminate color="blue-grey-lighten-3" size="64"></v-progress-circular>
             </v-overlay>
         </template>
+        <!-- Outside the note's own template, as the view for a path with no note still answers a
+             navigation away. Stay comes first and takes the focus, so Enter or Escape keeps the
+             edit and only a choice made on purpose throws it away. Back goes to the guard,
+             which refuses it and stays, and not to Vuetify, which would close it as Stay too
+             but put the two addresses back at once, the second from where the first had not yet
+             landed. -->
+        <v-dialog
+            v-model="leaveDialogIsVisible"
+            max-width="25em"
+            v-bind:close-on-back="false"
+            v-on:after-leave="returnFocusAfterLeaveDialog"
+        >
+            <v-card>
+                <v-card-title class="text-h5">
+                    Leave without saving?
+                </v-card-title>
+                <v-card-text>
+                    This note has changes that are not saved.
+                    They will be lost if you leave.
+                </v-card-text>
+                <v-card-actions>
+                    <v-spacer />
+                    <v-btn
+                        ref="stayButton"
+                        variant="text"
+                        v-on:click="answerLeave(false)"
+                    >
+                        Stay
+                    </v-btn>
+                    <v-btn
+                        color="error"
+                        variant="text"
+                        v-on:click="answerLeave(true)"
+                    >
+                        Leave
+                    </v-btn>
+                </v-card-actions>
+            </v-card>
+        </v-dialog>
         <v-snackbar location="top" timeout="1000" v-model="showUpstreamState" v-bind:color="upstreamStateSnackbarColor">
             <template v-if="upstreamState === 'different'">
                 Upstream has been modified since it was loaded.
@@ -383,7 +422,8 @@ import {
     mdiRenameBox,
 } from '@mdi/js';
 
-import { useRoute, useRouter } from 'vue-router';
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router';
+import type { RouteLocationNormalized } from 'vue-router';
 
 import metadataSchema from '@/metadata-schema.json';
 
@@ -411,10 +451,12 @@ const route = useRoute();
 const files = useFilesStore();
 
 // The repeatable :path* route parameter is an array of path segments in Vue Router 4
-const notePath = computed<string>(() => {
-    const path = route.params.path;
+function notePathOf(location: RouteLocationNormalized): string {
+    const path = location.params.path;
     return Array.isArray(path) ? path.join('/') : (path ?? '');
-});
+}
+
+const notePath = computed<string>(() => notePathOf(route));
 
 // Reactive states
 const text = ref('');
@@ -444,6 +486,7 @@ const notFound = ref(false);
 // note to another was the text of the note before.
 const loadFailed = ref(false);
 const showConfirmationDialog = ref(false);
+const leaveDialogIsVisible = ref(false);
 const error = ref(false);
 const errorText = ref('');
 const breadcrumbsClippedLeft = ref(false);
@@ -453,6 +496,19 @@ const breadcrumbsClippedRight = ref(false);
 // (e.g. after a rename), so the route watcher below doesn't reload the note again.
 let skipNextPathWatch = false;
 
+// Set while the view moves itself, as a rename or a first save does, which takes the edit along
+// rather than leaving it behind, so the guard below lets it through unasked.
+let ownNavigation = false;
+
+// The answer the navigation waiting on the leave dialog is given, and where the focus was when it
+// asked, to give back if the reader stays: Vuetify gives it back only to a dialog's activator.
+let leaveAnswer: ((leave: boolean) => void) | null = null;
+let focusBeforeLeaveDialog: HTMLElement | null = null;
+// The browser's entry the address was at when the question was asked, as vue-router numbers them,
+// and how to stop waiting for the address to come back to it.
+let positionAsked: unknown = undefined;
+let stopWaitingToStay: (() => void) | null = null;
+
 // Counts the reads that fill the view, so one overtaken by a later read, as on a move from a note
 // still loading to another, leaves the view to the later one rather than putting its text there.
 let latestRead = 0;
@@ -460,6 +516,7 @@ let latestRead = 0;
 // Template Refs
 const editableViewer = ref<InstanceType<typeof EditableViewer> | null>(null);
 const newPathField = ref<{ focus: () => void } | null>(null);
+const stayButton = ref<{ $el: HTMLElement } | null>(null);
 const tocEl = ref<HTMLElement | null>(null);
 const breadcrumbScroller = ref<HTMLElement | null>(null);
 const breadcrumbResizeObserver = new ResizeObserver(() => {
@@ -1072,6 +1129,82 @@ function onBeforeunload(e: any) {
     }
 }
 
+// A move within the app drops the view's text as a reload would, but the browser asks only before
+// the page itself goes, so the view asks here.
+function confirmLeave(to: RouteLocationNormalized, from: RouteLocationNormalized): boolean | Promise<boolean> {
+    if (ownNavigation) {
+        return true;
+    }
+    // One question at a time: a move made while it is open, as a second Back, is refused, and the
+    // reader stays as with Stay. vue-router finishes only the latest navigation, so the move asked
+    // about could no longer land, and Back and Forward have each moved the address already: handed
+    // the question, the later move would leave the address on one page and the view on another.
+    if (leaveAnswer !== null) {
+        const removeHook = router.afterEach(() => {
+            removeHook();
+            stayOnceBack();
+        });
+        return false;
+    }
+    // The view is reused for another note, and a change to the query or the hash alone keeps the
+    // text: only a move to another path loads anew over it. A path with no note shows no text to
+    // lose.
+    if ((to.name === 'Note' && notePathOf(to) === notePathOf(from)) || !isModified.value || notFound.value) {
+        return true;
+    }
+    focusBeforeLeaveDialog = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    positionAsked = window.history.state?.position;
+    leaveDialogIsVisible.value = true;
+    void nextTick(() => {
+        stayButton.value?.$el.focus();
+    });
+    return new Promise((resolve) => {
+        leaveAnswer = resolve;
+    });
+}
+
+// Once the address a refused move took has been put back where it was when the question was asked,
+// before the one asked about is put back in its turn: a browser takes a move from the entry it is
+// on when the move is made, so the second, made before the first had landed, could run off the end
+// of the history and go nowhere.
+function stayOnceBack(): void {
+    if (window.history.state?.position === positionAsked) {
+        answerLeave(false);
+        return;
+    }
+    const onPopstate = (): void => {
+        if (window.history.state?.position === positionAsked) {
+            answerLeave(false);
+        }
+    };
+    window.addEventListener('popstate', onPopstate);
+    stopWaitingToStay = () => {
+        window.removeEventListener('popstate', onPopstate);
+    };
+}
+
+function answerLeave(leave: boolean): void {
+    stopWaitingToStay?.();
+    stopWaitingToStay = null;
+    const answer = leaveAnswer;
+    leaveAnswer = null;
+    leaveDialogIsVisible.value = false;
+    answer?.(leave);
+}
+
+// Unless something else has taken the focus meanwhile, as the search dialog does for the field it
+// was opened from.
+function returnFocusAfterLeaveDialog(): void {
+    const element = focusBeforeLeaveDialog;
+    focusBeforeLeaveDialog = null;
+    if (element?.isConnected && (document.activeElement === null || document.activeElement === document.body)) {
+        element.focus({ preventScroll: true });
+    }
+}
+
+onBeforeRouteLeave(confirmLeave);
+onBeforeRouteUpdate(confirmLeave);
+
 function handleKeydown(e: KeyboardEvent) {
     // Not `isTyping`: the shortcuts are for the note's own editor too, which Ctrl+S saves from.
     if (isInOverlay(e)) {
@@ -1170,7 +1303,13 @@ function save(): void {
             const newQuery = { ...route.query };
             delete newQuery.mode;
             delete newQuery.template;
-            void router.replace({ query: newQuery });
+            // Let through even while the reader is asked about leaving, as they are if they moved
+            // while this save was under way: refused, the address would go on saying the note is
+            // still to be made, and a reload would start it afresh.
+            ownNavigation = true;
+            void router.replace({ query: newQuery }).finally(() => {
+                ownNavigation = false;
+            });
         }
     }).catch((failure) => {
         if (failure.response?.status === 401) {
@@ -1220,10 +1359,13 @@ function rename() {
             renamedTo,
         ).then(() => {
                 skipNextPathWatch = true;
+                ownNavigation = true;
                 // Segments rather than a `/note/...` string, which would end the path at a `#` or a `?`.
-                router.replace({
+                void router.replace({
                     name: 'Note',
                     params: { path: renamedTo.split('/') },
+                }).finally(() => {
+                    ownNavigation = false;
                 });
                 isRenaming.value = false;
             }).catch(err => {
@@ -1276,6 +1418,13 @@ watch(renameDialogIsVisible, async (isVisible: boolean) => {
         // not survive that, and the dialog's own `after-enter` never fires.
         await nextTick();
         newPathField.value?.focus();
+    }
+});
+
+// Escape or a click beside it closes it without an answer, which keeps the edit.
+watch(leaveDialogIsVisible, (isVisible) => {
+    if (!isVisible) {
+        answerLeave(false);
     }
 });
 
