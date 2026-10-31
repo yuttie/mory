@@ -152,14 +152,15 @@ test('creates the task under the parent chosen for it', async ({ context, page }
 
 // A date picked is still in its picker, which is drawn outside the dialog, over it. Here rather than
 // beside the editor's other Ctrl+S tests, whose fixed clock keeps the picker from opening: the day
-// is the 10th of whatever month it opens on.
+// is the 10th of whatever month it opens on. The first one: the six weeks it draws can run on to
+// the next month's 10th, as November 2026's do, but never reach back to the month before's.
 test('creates a task with Ctrl+S from a date picker', async ({ context, page }) => {
     const repository = await mockBackend(context, NOTES);
     await page.goto('/');
     await openNewTask(page);
     await title(page).fill('Write the review');
     await dialog(page).getByRole('textbox', { name: 'Due date (soft target)', exact: true }).click();
-    const day = page.locator('.v-date-picker').getByRole('button', { name: / 10, \d{4}$/ });
+    const day = page.locator('.v-date-picker').getByRole('button', { name: / 10, \d{4}$/ }).first();
     await day.click();
     await expect(day).toBeFocused();
     await page.keyboard.press('Control+s');
