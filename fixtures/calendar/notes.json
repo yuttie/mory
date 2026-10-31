@@ -3172,8 +3172,10 @@
     "notes/zones.md": {
       "alarms": [
         "2024-03-03 16:00  Tokyo morning  +0m",
+        "2024-03-07 10:00  Until the reader's clock skips  +0m",
         "2024-03-08 02:30  Wall clock in the spring gap  +0m",
         "2024-03-08 07:00  New York across spring forward  +0m",
+        "2024-03-08 10:00  Until the reader's clock skips  +0m",
         "2024-03-09 02:30  Wall clock in the spring gap  +0m",
         "2024-03-09 07:00  New York across spring forward  +0m",
         "2024-03-10 02:30  Wall clock in the spring gap  +0m",
@@ -3209,8 +3211,10 @@
       ],
       "alarmsWithDefaults": [
         "2024-03-03 16:00  Tokyo morning  -5m",
+        "2024-03-07 10:00  Until the reader's clock skips  -5m",
         "2024-03-08 02:30  Wall clock in the spring gap  -5m",
         "2024-03-08 07:00  New York across spring forward  -5m",
+        "2024-03-08 10:00  Until the reader's clock skips  -5m",
         "2024-03-09 02:30  Wall clock in the spring gap  -5m",
         "2024-03-09 07:00  New York across spring forward  -5m",
         "2024-03-10 02:30  Wall clock in the spring gap  -5m",
@@ -3246,8 +3250,10 @@
       ],
       "drawn": [
         "2024-03-03 16:00  Tokyo morning",
+        "2024-03-07 10:00  Until the reader's clock skips",
         "2024-03-08 02:30  Wall clock in the spring gap",
         "2024-03-08 07:00  New York across spring forward",
+        "2024-03-08 10:00  Until the reader's clock skips",
         "2024-03-09 02:30  Wall clock in the spring gap",
         "2024-03-09 07:00  New York across spring forward",
         "2024-03-10 02:30  Wall clock in the spring gap",
@@ -3336,6 +3342,14 @@
               "tz": "Mars/Olympus_Mons"
             },
             "start": "2024-06-07"
+          },
+          "Until the reader's clock skips": {
+            "repeat": {
+              "freq": "daily",
+              "tz": "Asia/Tokyo",
+              "until": "2024-03-10 02:30:00+09:00"
+            },
+            "start": "2024-03-08 03:00"
           },
           "Until with an offset": {
             "repeat": {
