@@ -114,7 +114,7 @@ async fn main() -> Result<()> {
         }
     };
 
-    let (refresh_tx, refresh_rx) = watch::channel(CacheState::Fresh(Oid::zero()));
+    let (refresh_tx, refresh_rx) = watch::channel(CacheState::Fresh(Oid::ZERO_SHA1));
     let (done_tx, done_rx) = watch::channel(None);
 
     let search = search::SearchManager::new(
@@ -3302,7 +3302,7 @@ mod models {
                 .fetch_optional(&mut *txn)
                 .await?
                 .and_then(|value| Oid::from_str(&value).ok())
-                .unwrap_or_else(Oid::zero);
+                .unwrap_or(Oid::ZERO_SHA1);
 
             // Return the latest version of cached entries
             let query = if let Some(pattern) = pattern_opt {
@@ -3389,7 +3389,7 @@ mod models {
                 .fetch_optional(&mut *txn)
                 .await?
                 .and_then(|value| Oid::from_str(&value).ok())
-                .unwrap_or_else(Oid::zero);
+                .unwrap_or(Oid::ZERO_SHA1);
 
             let mut entries = Vec::with_capacity(paths.len());
             for path in paths {
