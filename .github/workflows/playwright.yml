@@ -16,8 +16,10 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     # Installs the pnpm `packageManager` names, and must come before
-    # setup-node, whose pnpm cache asks pnpm where its store is.
-    - uses: pnpm/action-setup@v4
+    # setup-node, whose pnpm cache asks pnpm where its store is. 6.1.0 is
+    # the first release that supports pnpm 12, and the floating v6 tag has
+    # not reached it yet.
+    - uses: pnpm/action-setup@v6.1.0
       with:
         package_json_file: frontend/package.json
     - uses: actions/setup-node@v4
