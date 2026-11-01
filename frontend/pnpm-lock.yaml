@@ -162,6 +162,8 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+packageExtensionsChecksum: sha256-/+6UqSK5wq6WMDpyj4JHrWeJNhGgxYHJXd8Va/v/Xj0=
+
 importers:
 
   .:
@@ -5000,7 +5002,7 @@ snapshots:
       mdast-util-from-markdown: 2.0.2(supports-color@8.1.1)
       mdast-util-to-hast: 13.2.1
       mdast-util-to-markdown: 2.1.2
-      micromark-extension-definition-list: 2.0.1
+      micromark-extension-definition-list: 2.0.1(supports-color@8.1.1)
       unist-builder: 4.0.0
     transitivePeerDependencies:
       - supports-color
@@ -5193,8 +5195,10 @@ snapshots:
       micromark-util-symbol: 2.0.1
       micromark-util-types: 2.0.2
 
-  micromark-extension-definition-list@2.0.1:
+  micromark-extension-definition-list@2.0.1(supports-color@8.1.1):
     dependencies:
+      debug: 4.4.3(supports-color@8.1.1)
+      devlop: 1.1.0
       micromark-core-commonmark: 2.0.3
       micromark-factory-space: 2.0.1
       micromark-util-character: 2.1.1
@@ -5202,6 +5206,8 @@ snapshots:
       micromark-util-symbol: 2.0.1
       micromark-util-types: 2.0.2
       ts-dedent: 2.2.0
+    transitivePeerDependencies:
+      - supports-color
 
   micromark-extension-frontmatter@2.0.0:
     dependencies:
@@ -5652,7 +5658,7 @@ snapshots:
     dependencies:
       hast-util-definition-list: 2.1.0(supports-color@8.1.1)
       mdast-util-definition-list: 2.0.0(supports-color@8.1.1)
-      micromark-extension-definition-list: 2.0.1
+      micromark-extension-definition-list: 2.0.1(supports-color@8.1.1)
     transitivePeerDependencies:
       - supports-color
 

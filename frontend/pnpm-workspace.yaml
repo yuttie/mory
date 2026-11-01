@@ -3,3 +3,14 @@ allowBuilds:
   # source; otherwise it does nothing, and the prebuilt binary for the
   # platform comes as an optional dependency.
   '@parcel/watcher': false
+# Without the hidden hoisting into node_modules/.pnpm/node_modules, a
+# package finds only what it declares, so an import nothing declares fails
+# at once rather than resolving to whatever version happens to be there.
+hoist: false
+packageExtensions:
+  # Its development build, which Vite's dev server and Vitest load,
+  # imports these without declaring them.
+  micromark-extension-definition-list@2:
+    dependencies:
+      debug: ^4.0.0
+      devlop: ^1.0.0
