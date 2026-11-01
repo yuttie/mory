@@ -87,5 +87,5 @@ which only a parser can tell, since the pattern cannot say how far from its star
 From the repository's root, in this order, since each step reads what the one before wrote:
 
     (cd backend && UPDATE_CALENDAR_GOLDEN=1 cargo test calendar_fixtures)
-    (cd frontend && npx vitest run -u src/differential.spec.ts)
+    (cd frontend && pnpm exec vitest run -u src/differential.spec.ts)
     (cd backend && UPDATE_CALENDAR_GOLDEN=1 cargo test note_fixtures)

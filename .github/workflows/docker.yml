@@ -163,8 +163,8 @@ jobs:
             setup-qemu: true
             cache: true
             cache-scope: mory
-            # `npm ci` runs in the build stage, which `min` would leave out of
-            # the cache.
+            # `pnpm install` runs in the build stage, which `min` would leave
+            # out of the cache.
             cache-mode: max
             meta-images: yuttie/mory
             meta-tags: |

@@ -40,7 +40,7 @@ export default defineConfig({
     webServer: {
         // Bind the port the tests wait on, and fail loudly rather than let Vite fall
         // back to another port that nothing is watching.
-        command: `npm run dev -- --host 127.0.0.1 --port ${new URL(APP_URL).port} --strictPort`,
+        command: `pnpm run dev --host 127.0.0.1 --port ${new URL(APP_URL).port} --strictPort`,
         // Vite reads VITE_* from the environment over `.env`, which is untracked.
         env: { VITE_APP_API_URL: API_URL },
         url: APP_URL,

@@ -1,12 +1,15 @@
 # build stage (always runs natively on the build machine)
 FROM --platform=$BUILDPLATFORM node:22-alpine AS build-stage
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
+# The Node image ships Corepack, which installs the pnpm packageManager names.
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+RUN corepack enable pnpm
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
 COPY . .
 RUN VITE_APP_APPLICATION_ROOT="VITE_APP_APPLICATION_ROOT_VALUE_TO_BE_REPLACED_LATER" \
     VITE_APP_API_URL="VITE_APP_API_URL_VALUE_TO_BE_REPLACED_LATER" \
-    npm run build
+    pnpm run build
 
 # production stage (per-target-architecture)
 FROM nginx:stable-alpine AS production-stage
