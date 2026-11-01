@@ -722,13 +722,15 @@ watch(queryText, (q: string | null) => {
 .note {
     display: grid;
     grid-template-columns: minmax(0, max-content);
-    min-width: 5em;
+    min-width: 4em;
     white-space: nowrap;
 }
 
 // Lower for an event, whose table has no tags to widen it and so is wider than the screen only on
 // a phone. There this floor and the note's leave room in 360 px for when the event starts, which
-// the tab sorts by: the title's own would leave the event and its note alone in sight.
+// the tab sorts by: the title's own would leave the event and its note alone in sight. The app
+// ships no font, so the room is measured in DejaVu Sans, as wide as a fallback for Roboto gets:
+// with the note at 5em, its date ran 6 px past the screen's edge in it.
 .event-table .path {
     min-width: 8em;
 }
