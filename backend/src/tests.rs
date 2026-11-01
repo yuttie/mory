@@ -1077,7 +1077,7 @@ async fn a_cached_row_the_listing_cannot_read_is_listed_as_an_error() {
     for (path, metadata) in [("duplicate-key.md", r#"{"1":"a","1":"b"}"#), ("fine.md", r#"{"tags":["x"]}"#)] {
         sqlx::query("INSERT INTO entry VALUES (?, ?, 0, 'text/markdown', ?, NULL, 0, 0, 0);")
             .bind(path)
-            .bind(Oid::zero().to_string())
+            .bind(Oid::ZERO_SHA1.to_string())
             .bind(metadata)
             .execute(&mut conn)
             .await

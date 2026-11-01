@@ -116,7 +116,7 @@ impl SearchSnapshot {
         .fetch_optional(&mut *transaction)
         .await?
         .and_then(|value| Oid::from_str(&value).ok())
-        .unwrap_or_else(Oid::zero);
+        .unwrap_or(Oid::ZERO_SHA1);
         let entries = sqlx::query("SELECT path, blob_id, mime_type, title, metadata FROM entry;")
             .map(|row: SqliteRow| SnapshotEntry {
                 path: row.get("path"),
@@ -2931,7 +2931,7 @@ mod tests {
         let long = repo.blob(b"# Long\n\nBody").unwrap();
         let mime = repo.blob(b"# Mime\n\nBody").unwrap();
         let snapshot = SearchSnapshot {
-            commit: Oid::zero(),
+            commit: Oid::ZERO_SHA1,
             entries: vec![
                 SnapshotEntry {
                     path: "Upper.MD".to_owned(),
@@ -3206,7 +3206,7 @@ mod tests {
         let rebuild = Notify::new();
 
         assert!(waits(Wake::Never, &mut listing, &rebuild).await);
-        sender.send(Some(Oid::zero())).unwrap();
+        sender.send(Some(Oid::ZERO_SHA1)).unwrap();
         assert!(!waits(Wake::Never, &mut listing, &rebuild).await);
         assert!(waits(Wake::Never, &mut listing, &rebuild).await);
         rebuild.notify_one();
