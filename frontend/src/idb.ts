@@ -58,8 +58,9 @@ function openDatabase(): Promise<IDBDatabase | null> {
                 // listing per browser. 4 drops the rows listed before a row said whether its file
                 // is text: a delta names only the files that changed, so the rest would never say.
                 // 5 drops the times dated by a commit marked `Mory-Migration:` or
-                // `Mory-Maintenance:`, which moried has since passed over: a delta names only the
-                // files whose content changed, so it would never send the times it fixed.
+                // `Mory-Maintenance:`, or by one that only moved a file, which moried has since
+                // passed over: a delta names only the files whose content changed, so it would
+                // never send the times it fixed.
                 if (event.oldVersion > 0 && event.oldVersion < 5) {
                     try {
                         request.transaction.objectStore(ENTRY_STORE).clear();
