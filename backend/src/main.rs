@@ -2738,7 +2738,7 @@ Write note suggestions in GitHub Flavored Markdown, ready to add to the task's n
         },
     }
 
-    /// `GET /v2/entries[?since=<oid>]`
+    /// `GET /v2/entries[?since=<oid>&schema=<n>]`
     ///
     /// `commit` is the commit the returned rows actually describe; `head` is where the repository
     /// actually is. They differ only while a sync is still running, and reporting both means the
