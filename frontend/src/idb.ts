@@ -14,6 +14,8 @@ const ENTRY_STORE = 'entries';
 // one row per file in `entries`, keyed by path, so a change can touch only the rows it affects.
 const LEGACY_LISTING_KEY = 'entries';
 const CACHE_COMMIT_KEY = 'entriesCommitId';
+// The `schema` of the full listing the rows began as, which moried must see again to serve a delta.
+const CACHE_SCHEMA_KEY = 'entriesSchema';
 
 let dbPromise: Promise<IDBDatabase | null> | null = null;
 
@@ -198,12 +200,17 @@ function runMultiTransaction<T>(
 }
 
 // Replace the whole listing: clear the rows, write the new ones, record their commit -- if the
-// commit recorded is still `base`, what `readCacheCommitId` gave as the listing was asked for. A
+// commit recorded is still `base`, what `readCacheBase` gave as the listing was asked for. A
 // logout records `null`, which no store that has never held a listing reads, so a listing a tab
 // had asked for before one is not written after it: the listing describes a private repository
 // and must not outlive the session. One another tab wrote meanwhile is kept, as it describes its
 // commit as well as this one would.
-export function replaceEntries(base: string | null | undefined, commitId: string, entries: unknown[]): Promise<void> {
+export function replaceEntries(
+    base: string | null | undefined,
+    commitId: string,
+    entries: unknown[],
+    schema?: number,
+): Promise<void> {
     return runMultiTransaction([ENTRY_STORE, STORE_NAME], 'readwrite', (stores) => {
         const current = stores[STORE_NAME].get(CACHE_COMMIT_KEY);
         current.onsuccess = () => {
@@ -215,6 +222,7 @@ export function replaceEntries(base: string | null | undefined, commitId: string
                 stores[ENTRY_STORE].put(entry);
             }
             stores[STORE_NAME].put(commitId, CACHE_COMMIT_KEY);
+            stores[STORE_NAME].put(schema ?? null, CACHE_SCHEMA_KEY);
         };
     }).then(() => undefined);
 }
@@ -224,11 +232,17 @@ export function replaceEntries(base: string | null | undefined, commitId: string
 // sync may have moved them on since they were read, or a logout cleared them; the delta applied
 // to either would leave rows of no commit labelled as one, and later deltas would build on that.
 // Checked in the transaction that writes, which no other can come between.
+//
+// `schema` is the one the delta says it was listed under. That is the rows' own whenever moried
+// says one, but a moried too old to say one, as a deploy may roll back to, answers `since` whatever
+// schema comes with it: the rows such a delta names are then not of the schema the rest are, so
+// the schema is forgotten, for the next listing to be taken whole.
 export function applyEntryDelta(
     base: string,
     commitId: string,
     changed: unknown[],
     deleted: string[],
+    schema?: number,
 ): Promise<void> {
     return runMultiTransaction([ENTRY_STORE, STORE_NAME], 'readwrite', (stores) => {
         const current = stores[STORE_NAME].get(CACHE_COMMIT_KEY);
@@ -243,6 +257,12 @@ export function applyEntryDelta(
                 stores[ENTRY_STORE].put(entry);
             }
             stores[STORE_NAME].put(commitId, CACHE_COMMIT_KEY);
+            const held = stores[STORE_NAME].get(CACHE_SCHEMA_KEY);
+            held.onsuccess = () => {
+                if (held.result !== schema) {
+                    stores[STORE_NAME].put(null, CACHE_SCHEMA_KEY);
+                }
+            };
         };
     }).then(() => undefined);
 }
@@ -312,10 +332,32 @@ export function readCacheCommitId(): Promise<string | null | undefined> {
     return readRecord<string>(CACHE_COMMIT_KEY);
 }
 
+// The commit the rows describe, as `readCacheCommitId` reads it, with the schema they were listed
+// under, or `undefined` for rows a moried listed before it said one. Read in one transaction, so
+// another tab's sync cannot pair one listing's commit with another's schema.
+export function readCacheBase(): Promise<{ commit: string | null | undefined; schema: number | undefined }> {
+    return runMultiTransaction([STORE_NAME], 'readonly', (stores) => {
+        const read: { commit: string | null | undefined; schema: number | undefined } = {
+            commit: undefined,
+            schema: undefined,
+        };
+        const commit = stores[STORE_NAME].get(CACHE_COMMIT_KEY);
+        commit.onsuccess = () => {
+            read.commit = commit.result as string | null | undefined;
+        };
+        const schema = stores[STORE_NAME].get(CACHE_SCHEMA_KEY);
+        schema.onsuccess = () => {
+            read.schema = typeof schema.result === 'number' ? schema.result : undefined;
+        };
+        return read;
+    }).then((read) => read ?? { commit: null, schema: undefined });
+}
+
 // Wipe rows and commit ID together. Used on logout: the listing describes a private repository.
 export function clearEntries(): Promise<void> {
     return runMultiTransaction([ENTRY_STORE, STORE_NAME], 'readwrite', (stores) => {
         stores[ENTRY_STORE].clear();
         stores[STORE_NAME].put(null, CACHE_COMMIT_KEY);
+        stores[STORE_NAME].delete(CACHE_SCHEMA_KEY);
     }).then(() => undefined);
 }

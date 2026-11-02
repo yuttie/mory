@@ -13,7 +13,7 @@ import type {
 import {
     applyEntryDelta,
     clearEntries,
-    readCacheCommitId,
+    readCacheBase,
     readEntriesAt,
     readEntryAt,
     replaceEntries,
@@ -58,6 +58,10 @@ export const useFilesStore = defineStore('files', () => {
     // while this map stays where it was, and a delta from their commit would then skip whatever
     // happened in between.
     let mapCommit: string | null = null;
+    // The schema `entryMap` was listed under, which a delta's base must match as its commit must:
+    // another tab may have listed the same commit again under a newer schema, which says something
+    // new of files a delta never names.
+    let mapSchema: number | undefined;
 
     // When the last sync returned a commit older than HEAD, so `list()` does not spin while the
     // backend finishes a rebuild.
@@ -103,11 +107,11 @@ export const useFilesStore = defineStore('files', () => {
     async function syncOnce(): Promise<ListEntry2[]> {
         const startEpoch = epoch;
 
-        // Only the commit ID is needed to ask; the rows themselves are read only if a delta
-        // actually comes back. A cache that fails to open yields no base, and the backend then
-        // answers with a full listing.
-        const base = await readCacheCommitId();
-        const response = await api.getEntries(base ?? undefined);
+        // Only the commit ID and its schema are needed to ask; the rows themselves are read only
+        // if a delta actually comes back. A cache that fails to open yields no base, and the
+        // backend then answers with a full listing.
+        const { commit: base, schema } = await readCacheBase();
+        const response = await api.getEntries(base ?? undefined, schema);
 
         if (epoch !== startEpoch) {
             // A mutation invalidated the cache while this ran. Its optimistic patch to the
@@ -119,13 +123,13 @@ export const useFilesStore = defineStore('files', () => {
         let next: Map<string, ListEntry2>;
         if (response.kind === 'full') {
             next = new Map(response.entries.map((entry) => [entry.path, entry]));
-            await replaceEntries(base, response.commit, response.entries);
+            await replaceEntries(base, response.commit, response.entries, response.schema);
         }
         else {
             // A delta is computed against the persisted rows, so it has to be applied to them --
             // never to a map an optimistic patch has already touched, which would compound the
             // patch rather than replace it, nor to one another tab's sync has left behind.
-            if (mapCommit === base) {
+            if (mapCommit === base && mapSchema === schema) {
                 // Nothing changed is the usual answer, and keeping the map then keeps the listing
                 // every consumer derives from.
                 const unchanged = response.changed.length === 0 && response.deleted.length === 0;
@@ -155,7 +159,13 @@ export const useFilesStore = defineStore('files', () => {
             for (const entry of response.changed) {
                 next.set(entry.path, entry);
             }
-            await applyEntryDelta(response.base, response.commit, response.changed, response.deleted);
+            await applyEntryDelta(
+                response.base,
+                response.commit,
+                response.changed,
+                response.deleted,
+                response.schema,
+            );
         }
 
         if (epoch !== startEpoch) {
@@ -166,6 +176,9 @@ export const useFilesStore = defineStore('files', () => {
         }
         entryMap = next;
         mapCommit = response.commit;
+        // As `applyEntryDelta` records it: a delta listed under another schema than its base's
+        // leaves rows of neither.
+        mapSchema = response.kind === 'full' || response.schema === schema ? response.schema : undefined;
 
         if (response.commit === response.head) {
             validatedCommitIdRef.value = response.commit;
