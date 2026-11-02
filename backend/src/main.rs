@@ -287,8 +287,8 @@ fn mcp_routes(oauth_state: oauth::OauthState) -> Router {
 /// a blob does, as well as when its columns do: 3 refilled the rows written before keys JSON cannot
 /// hold were left out of the listing one by one, 4 added whether a file is text, and 5 dated the
 /// rows again once `attribute_times` passed over bulk commits and moves, since a blob it had dated
-/// by one keeps that time otherwise.
-const ENTRY_SCHEMA_VERSION: i64 = 5;
+/// by one keeps that time otherwise, and 6 recorded whether only bulk commits wrote a file.
+const ENTRY_SCHEMA_VERSION: i64 = 6;
 
 async fn init_cache_database(
     conn: &mut SqliteConnection,
@@ -431,7 +431,8 @@ async fn init_cache_database(
                 title      TEXT,
                 time       INTEGER NOT NULL,
                 tz_offset  INTEGER NOT NULL,
-                binary     INTEGER NOT NULL
+                binary     INTEGER NOT NULL,
+                bulk_only  INTEGER NOT NULL
             ) STRICT;
         ")
         .execute(&mut *conn)
@@ -657,8 +658,8 @@ fn attribute_times(
     head: Oid,
     wanted: &HashSet<PathBuf>,
     recorded: Option<(Oid, &RecordedRows)>,
-) -> Result<HashMap<PathBuf, git2::Time>> {
-    let mut times: HashMap<PathBuf, git2::Time> = HashMap::with_capacity(wanted.len());
+) -> Result<HashMap<PathBuf, FileTime>> {
+    let mut times: HashMap<PathBuf, FileTime> = HashMap::with_capacity(wanted.len());
 
     let started = time::Instant::now();
     // What the walk still looks for: under each name, the content it must find written there, and
@@ -826,10 +827,11 @@ fn attribute_times(
                         // owns it, unless a newer bulk commit already claimed it.
                         for wanted_path in standing_for {
                             let when = match bulk {
-                                true => {
-                                    *bulk_times.entry(wanted_path.clone()).or_insert(commit.time())
+                                true => FileTime {
+                                    time: *bulk_times.entry(wanted_path.clone()).or_insert(commit.time()),
+                                    bulk_only: true,
                                 },
-                                false => commit.time(),
+                                false => FileTime { time: commit.time(), bulk_only: false },
                             };
                             times.insert(wanted_path, when);
                         }
@@ -847,17 +849,23 @@ fn attribute_times(
         };
         remaining.retain(|name, by_content| {
             by_content.retain(|content, standing_for| {
-                let Some((recorded_content, when)) = rows.get(name) else {
+                let Some((recorded_content, recorded)) = rows.get(name) else {
                     return true;
                 };
-                // A bulk commit in the range claimed it, and owns it if only bulk commits wrote it
-                // before, which a row does not say: walk on to find out.
-                let claimed = standing_for.iter().any(|path| bulk_times.contains_key(path));
-                if recorded_content != content || claimed {
+                if recorded_content != content {
                     return true;
                 }
                 for wanted_path in standing_for.drain(..) {
-                    times.insert(wanted_path, *when);
+                    // A bulk commit in the range wrote it after the row was dated. A real edit
+                    // dated the row, and still owns it; or only bulk commits ever wrote it, and the
+                    // newest of them, the one in the range, does. The row says which, so the walk
+                    // never has to go back past it to find out: when it did, every push of a
+                    // migration held the repository for 12 to 20 s on the real history.
+                    let when = match bulk_times.get(&wanted_path) {
+                        Some(bulk) if recorded.bulk_only => FileTime { time: *bulk, bulk_only: true },
+                        _ => *recorded,
+                    };
+                    times.insert(wanted_path, when);
                 }
                 false
             });
@@ -874,10 +882,12 @@ fn attribute_times(
     // added it and the walk should have found it. Should one slip through anyway, the newest such
     // commit is still a truer time than HEAD's, which is all the caller could fall back to.
     for wanted_path in remaining.into_values().flat_map(HashMap::into_values).flatten() {
-        let when = bulk_times.get(&wanted_path).or_else(|| moved_times.get(&wanted_path));
-        if let Some(when) = when {
-            times.insert(wanted_path, *when);
-        }
+        let when = match (bulk_times.get(&wanted_path), moved_times.get(&wanted_path)) {
+            (Some(bulk), _) => FileTime { time: *bulk, bulk_only: true },
+            (None, Some(moved)) => FileTime { time: *moved, bulk_only: false },
+            (None, None) => continue,
+        };
+        times.insert(wanted_path, when);
     }
 
     tracing::info!(
@@ -1076,7 +1086,7 @@ async fn sync_cache_to(
         // than dropping the entry from the listing if some path was not.
         let when = times.get(path).copied().unwrap_or_else(|| {
             tracing::warn!("No commit attributed {:?}; using HEAD's time.", path);
-            head_time
+            FileTime { time: head_time, bulk_only: false }
         });
         rows.push((path.clone(), *blob_id, size, mime_type, metadata, title, when, binary));
     }
@@ -1091,7 +1101,7 @@ async fn sync_cache_to(
     }
     for (path, blob_id, size, mime_type, metadata, title, when, binary) in rows {
         sqlx::query("
-                INSERT INTO entry VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO entry VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(path) DO UPDATE SET
                         blob_id = excluded.blob_id,
                         size = excluded.size,
@@ -1100,7 +1110,8 @@ async fn sync_cache_to(
                         title = excluded.title,
                         time = excluded.time,
                         tz_offset = excluded.tz_offset,
-                        binary = excluded.binary;
+                        binary = excluded.binary,
+                        bulk_only = excluded.bulk_only;
             ")
             .bind(path.to_str())
             .bind(blob_id.to_string())
@@ -1108,9 +1119,10 @@ async fn sync_cache_to(
             .bind(mime_type)
             .bind(serde_json::to_string(&metadata).expect("extract_metadata keeps only what JSON can hold"))
             .bind(title)
-            .bind(when.seconds())
-            .bind(when.offset_minutes() * 60)
+            .bind(when.time.seconds())
+            .bind(when.time.offset_minutes() * 60)
             .bind(binary)
+            .bind(when.bulk_only)
             .execute(&mut *tx)
             .await
             .context("Failed to upsert an entry")?;
@@ -1134,8 +1146,17 @@ async fn sync_cache_to(
     Ok(())
 }
 
+/// When a file was last written, as the listing dates it.
+#[derive(Clone, Copy, Debug)]
+struct FileTime {
+    time: git2::Time,
+    /// Only commits `is_bulk_commit` marks ever wrote it, so `time` is the newest of them: a later
+    /// bulk commit takes its place, where a real edit's time would stand.
+    bulk_only: bool,
+}
+
 /// The blob and time the cache holds for a path, by path.
-type RecordedRows = HashMap<PathBuf, (Oid, git2::Time)>;
+type RecordedRows = HashMap<PathBuf, (Oid, FileTime)>;
 
 /// The blob and time the cache holds for each of `paths` it has a row for.
 async fn recorded_rows(
@@ -1147,15 +1168,16 @@ async fn recorded_rows(
         let Some(name) = path.to_str() else {
             continue;
         };
-        let row: Option<(String, i64, i64)> =
-            sqlx::query_as("SELECT blob_id, time, tz_offset FROM entry WHERE path = ?;")
+        let row: Option<(String, i64, i64, bool)> =
+            sqlx::query_as("SELECT blob_id, time, tz_offset, bulk_only FROM entry WHERE path = ?;")
                 .bind(name)
                 .fetch_optional(&mut *conn)
                 .await
                 .context("Failed to read a recorded entry")?;
-        if let Some((blob_id, seconds, offset)) = row {
+        if let Some((blob_id, seconds, offset, bulk_only)) = row {
             if let Ok(blob_id) = Oid::from_str(&blob_id) {
-                rows.insert(path, (blob_id, git2::Time::new(seconds, (offset / 60) as i32)));
+                let time = git2::Time::new(seconds, (offset / 60) as i32);
+                rows.insert(path, (blob_id, FileTime { time, bulk_only }));
             }
         }
     }

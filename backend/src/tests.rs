@@ -1075,7 +1075,7 @@ async fn a_cached_row_the_listing_cannot_read_is_listed_as_an_error() {
     // As a moried that wrote keys named alike as they came left the row.
     let mut conn = test_cache_db().await;
     for (path, metadata) in [("duplicate-key.md", r#"{"1":"a","1":"b"}"#), ("fine.md", r#"{"tags":["x"]}"#)] {
-        sqlx::query("INSERT INTO entry VALUES (?, ?, 0, 'text/markdown', ?, NULL, 0, 0, 0);")
+        sqlx::query("INSERT INTO entry VALUES (?, ?, 0, 'text/markdown', ?, NULL, 0, 0, 0, 0);")
             .bind(path)
             .bind(Oid::ZERO_SHA1.to_string())
             .bind(metadata)
@@ -1371,7 +1371,7 @@ async fn a_cold_sync_drops_rows_that_are_no_longer_in_head() {
 
     // A row for a path that HEAD does not contain, as a force-push to an older state would leave.
     sqlx::query(
-        "INSERT INTO entry VALUES ('stale.md', 'deadbeef', 1, 'text/markdown', 'null', NULL, 1, 0, 0);",
+        "INSERT INTO entry VALUES ('stale.md', 'deadbeef', 1, 'text/markdown', 'null', NULL, 1, 0, 0, 0);",
     )
     .execute(&mut conn)
     .await
@@ -1843,7 +1843,7 @@ async fn an_incremental_sync_dates_a_moved_file_by_what_the_cache_recorded() {
 #[tokio::test]
 async fn an_incremental_sync_over_a_second_bulk_rewrite_dates_as_a_cold_one() {
     // The cache recorded the first bulk commit's time for a file only bulk commits wrote. The
-    // second one owns it now, which the row cannot say, so the walk must go on past the row.
+    // second one owns it now, which the row says by `bulk_only`.
     let fixture = RepoFixture::new();
     let root = fixture.commit_at("refs/heads/main", &[], &[("x.md", Some("x"))], 1_000, 0, "root");
     let created = fixture.commit_at(
@@ -1870,6 +1870,52 @@ async fn an_incremental_sync_over_a_second_bulk_rewrite_dates_as_a_cold_one() {
     sync_to(&mut conn, &fixture, rewritten).await.unwrap();
 
     assert_eq!(time_of(&mut conn, "generated.md").await, 3_000);
+}
+
+/// Overwrite the time the cache recorded for `path`, and whether only bulk commits wrote it.
+async fn set_recorded_time(conn: &mut SqliteConnection, path: &str, time: i64, bulk_only: bool) {
+    sqlx::query("UPDATE entry SET time = ?, bulk_only = ? WHERE path = ?;")
+        .bind(time)
+        .bind(bulk_only)
+        .bind(path)
+        .execute(&mut *conn)
+        .await
+        .expect("failed to overwrite a recorded time");
+}
+
+#[tokio::test]
+async fn an_incremental_sync_over_a_migration_takes_the_recorded_rows() {
+    // A migration rewrites files whose last real edit is far back. The rows the cache holds say
+    // when that was, and whether a real edit made it, so the walk stops at the cache's commit
+    // rather than going back through the history again for each file. Times no commit in the
+    // history carries show that the rows are what answered.
+    let fixture = RepoFixture::new();
+    let first = fixture.commit_at(
+        "refs/heads/main",
+        &[],
+        &[("edited.md", Some("e0")), ("generated.md", Some("g0"))],
+        1_000,
+        0,
+        "add",
+    );
+    fixture.set_head("refs/heads/main");
+    let mut conn = test_cache_db().await;
+    sync_to(&mut conn, &fixture, first).await.unwrap();
+    set_recorded_time(&mut conn, "edited.md", 111, false).await;
+    set_recorded_time(&mut conn, "generated.md", 222, true).await;
+
+    let migrated = fixture.commit_at(
+        "refs/heads/main",
+        &[first],
+        &[("edited.md", Some("e1")), ("generated.md", Some("g1"))],
+        3_000,
+        0,
+        "Migrate\n\nMory-Migration: x\n",
+    );
+    sync_to(&mut conn, &fixture, migrated).await.unwrap();
+
+    assert_eq!(time_of(&mut conn, "edited.md").await, 111, "a real edit's time stands");
+    assert_eq!(time_of(&mut conn, "generated.md").await, 3_000, "the newest bulk commit owns it");
 }
 
 #[tokio::test]
