@@ -608,8 +608,10 @@ fn paths_touched_since(repo: &Repository, base: Oid, head: Oid) -> Result<HashSe
 ///   images or re-encoding text.
 ///
 /// Trailers rather than a subject prefix, because `message_trailers_strs` matches a key exactly
-/// where a prefix could match a note's own title, and because plain Git can filter on them:
-/// `git log --invert-grep --grep='^Mory-Migration:'`.
+/// where a prefix could match a note's own title, and because plain Git reads them as this does:
+/// `git log --format='%h %s %(trailers:key=Mory-Migration,key=Mory-Maintenance)'`. A `--grep`
+/// for the key is not the same filter: it also matches the key in prose above the trailers, and
+/// misses it spelt in another case.
 const BULK_TRAILERS: [&str; 2] = ["Mory-Migration", "Mory-Maintenance"];
 
 /// Whether `commit` carries one of `BULK_TRAILERS`. Git compares trailer keys without regard to
