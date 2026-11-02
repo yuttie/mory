@@ -5,8 +5,8 @@
 // then fall back to the API, so a broken cache never breaks the app.
 
 const DB_NAME = 'mory';
-// 3 and 4 drop what the version before held: see `onupgradeneeded`.
-const DB_VERSION = 4;
+// 3, 4 and 5 drop what the version before held: see `onupgradeneeded`.
+const DB_VERSION = 5;
 const STORE_NAME = 'repository';
 const ENTRY_STORE = 'entries';
 
@@ -57,7 +57,10 @@ function openDatabase(): Promise<IDBDatabase | null> {
                 // label cannot tell such rows from good ones, so all of them go, for one full
                 // listing per browser. 4 drops the rows listed before a row said whether its file
                 // is text: a delta names only the files that changed, so the rest would never say.
-                if (event.oldVersion > 0 && event.oldVersion < 4) {
+                // 5 drops the times dated by a commit marked `Mory-Migration:` or
+                // `Mory-Maintenance:`, which moried has since passed over: a delta names only the
+                // files whose content changed, so it would never send the times it fixed.
+                if (event.oldVersion > 0 && event.oldVersion < 5) {
                     try {
                         request.transaction.objectStore(ENTRY_STORE).clear();
                         request.transaction.objectStore(STORE_NAME).delete(CACHE_COMMIT_KEY);
