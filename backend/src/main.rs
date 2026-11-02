@@ -286,8 +286,8 @@ fn mcp_routes(oauth_state: oauth::OauthState) -> Router {
 /// that wrote it for as long as its blob is unchanged, so this moves whenever what a row holds for
 /// a blob does, as well as when its columns do: 3 refilled the rows written before keys JSON cannot
 /// hold were left out of the listing one by one, 4 added whether a file is text, and 5 dated the
-/// rows again once `attribute_times` passed over bulk commits, since a blob it had dated by one
-/// keeps that time otherwise.
+/// rows again once `attribute_times` passed over bulk commits and moves, since a blob it had dated
+/// by one keeps that time otherwise.
 const ENTRY_SCHEMA_VERSION: i64 = 5;
 
 async fn init_cache_database(
@@ -639,6 +639,10 @@ fn is_bulk_commit(commit: &git2::Commit) -> bool {
 /// what it was the first to write, as a file it created, or one whose earlier history only other
 /// bulk commits wrote, since there is no older edit to give the time to.
 ///
+/// No commit authors a file it only moved, its content unchanged: the walk follows it back to its
+/// old name too, so renaming a note, or moving a task under another, leaves it where it was among
+/// the recently changed.
+///
 /// The walk stops as soon as every wanted path is attributed, so an ordinary save costs a commit
 /// or two. Only a cold cache, where every path is wanted, pays for the whole history.
 fn attribute_times(
@@ -658,6 +662,8 @@ fn attribute_times(
         wanted.iter().map(|path| (path.clone(), vec![path.clone()])).collect();
     // The newest bulk commit that wrote each wanted path, which owns it if no older commit did.
     let mut bulk_times: HashMap<PathBuf, git2::Time> = HashMap::new();
+    // The newest commit that moved each wanted path, for a name the walk never finds written.
+    let mut moved_times: HashMap<PathBuf, git2::Time> = HashMap::new();
     let mut commits_scanned = 0usize;
     let mut bulk_commits = 0usize;
 
@@ -700,6 +706,21 @@ fn attribute_times(
             // also cost the cold walk a similarity pass per commit.
             diff.find_similar(Some(git2::DiffFindOptions::new().renames(true)))?;
         }
+        // Elsewhere only a move is followed: a file added with the very blob a deleted one had.
+        // Matching blob IDs is all the similarity pass an exact rename needs, and costs nothing
+        // in a commit that deletes nothing, which almost every save is. A rename that also
+        // changed the content wrote that content, and keeps the new name's time.
+        let moved_from: HashMap<Oid, PathBuf> = match bulk {
+            true => HashMap::new(),
+            false => diff
+                .deltas()
+                .filter(|delta| delta.status() == git2::Delta::Deleted)
+                .filter_map(|delta| {
+                    let old = delta.old_file();
+                    old.path().map(|path| (old.id(), path.to_owned()))
+                })
+                .collect(),
+        };
         for delta in diff.deltas() {
             use git2::Delta;
             match delta.status() {
@@ -732,6 +753,16 @@ fn attribute_times(
                             continue;
                         }
                     }
+                    else if let Some(older) = moved_from.get(&file.id()) {
+                        // Moving a file is not editing it, whoever moved it: the walk looks for
+                        // what last wrote the content under its old name.
+                        let standing_for = remaining.remove(path).unwrap();
+                        for wanted_path in &standing_for {
+                            moved_times.entry(wanted_path.clone()).or_insert(commit.time());
+                        }
+                        remaining.entry(older.clone()).or_default().extend(standing_for);
+                        continue;
+                    }
                     // A plain commit wrote it, or a bulk commit created it with no older name to
                     // follow. Either way nothing older wrote this content, so this commit owns
                     // it, unless a newer bulk commit already claimed it.
@@ -751,11 +782,12 @@ fn attribute_times(
         }
     }
 
-    // Every name a bulk commit hands back existed in its parent, so some older commit added it
-    // and the walk should have found it. Should one slip through anyway, the bulk commit is still
-    // a truer time than HEAD's, which is all the caller could fall back to.
+    // Every name a bulk commit or a move hands back existed in its parent, so some older commit
+    // added it and the walk should have found it. Should one slip through anyway, the newest such
+    // commit is still a truer time than HEAD's, which is all the caller could fall back to.
     for wanted_path in remaining.into_values().flatten() {
-        if let Some(when) = bulk_times.get(&wanted_path) {
+        let when = bulk_times.get(&wanted_path).or_else(|| moved_times.get(&wanted_path));
+        if let Some(when) = when {
             times.insert(wanted_path, *when);
         }
     }

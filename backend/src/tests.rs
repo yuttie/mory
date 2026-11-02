@@ -1654,6 +1654,108 @@ async fn a_file_only_bulk_commits_wrote_takes_the_newest_of_them() {
     assert_eq!(time_of(&mut conn, "y.md").await, 4_000);
 }
 
+#[tokio::test]
+async fn a_moved_file_keeps_the_time_of_its_last_edit() {
+    // As the web app renames a note, or moves a task under another: one commit deletes the old
+    // path and adds the new one with the same blob.
+    let fixture = RepoFixture::new();
+    let first =
+        fixture.commit_at("refs/heads/main", &[], &[("old.md", Some("body"))], 1_000, 0, "add");
+    let moved = fixture.commit_at(
+        "refs/heads/main",
+        &[first],
+        &[("old.md", None), ("dir/new.md", Some("body"))],
+        2_000,
+        0,
+        "Rename old.md to dir/new.md",
+    );
+    fixture.set_head("refs/heads/main");
+
+    let mut conn = test_cache_db().await;
+    cold_sync(&mut conn, &fixture, moved).await;
+    assert_eq!(time_of(&mut conn, "dir/new.md").await, 1_000);
+}
+
+#[tokio::test]
+async fn an_incremental_sync_over_a_move_keeps_the_old_time() {
+    let fixture = RepoFixture::new();
+    let first = fixture.commit_at(
+        "refs/heads/main",
+        &[],
+        &[("a.md", Some("a")), ("b.md", Some("b"))],
+        1_000,
+        0,
+        "add",
+    );
+    fixture.set_head("refs/heads/main");
+    let mut conn = test_cache_db().await;
+    sync_to(&mut conn, &fixture, first).await.unwrap();
+
+    let edited =
+        fixture.commit_at("refs/heads/main", &[first], &[("a.md", Some("a1"))], 2_000, 0, "edit a");
+    let moved = fixture.commit_at(
+        "refs/heads/main",
+        &[edited],
+        &[("a.md", None), ("x/a.md", Some("a1")), ("b.md", None), ("x/b.md", Some("b"))],
+        3_000,
+        0,
+        "Move both under x/",
+    );
+    sync_to(&mut conn, &fixture, moved).await.unwrap();
+
+    assert_eq!(time_of(&mut conn, "x/a.md").await, 2_000);
+    assert_eq!(time_of(&mut conn, "x/b.md").await, 1_000);
+}
+
+#[tokio::test]
+async fn a_rename_that_changes_the_content_is_an_edit() {
+    let fixture = RepoFixture::new();
+    let first =
+        fixture.commit_at("refs/heads/main", &[], &[("old.md", Some("body"))], 1_000, 0, "add");
+    let renamed = fixture.commit_at(
+        "refs/heads/main",
+        &[first],
+        &[("old.md", None), ("new.md", Some("body, edited"))],
+        2_000,
+        0,
+        "rename and edit",
+    );
+    fixture.set_head("refs/heads/main");
+
+    let mut conn = test_cache_db().await;
+    cold_sync(&mut conn, &fixture, renamed).await;
+    assert_eq!(time_of(&mut conn, "new.md").await, 2_000);
+}
+
+#[tokio::test]
+async fn a_moved_file_a_migration_wrote_keeps_the_migration_s_time() {
+    // The move hands the file back to its old name, whose last writer was a migration: that
+    // migration's time is the truest there is, not the move's.
+    let fixture = RepoFixture::new();
+    let root = fixture.commit_at("refs/heads/main", &[], &[("x.md", Some("x"))], 1_000, 0, "root");
+    let generated = fixture.commit_at(
+        "refs/heads/main",
+        &[root],
+        &[("plan.md", Some("p")), ("x.md", Some("x1"))],
+        2_000,
+        0,
+        "Generate\n\nMory-Migration: plans\n",
+    );
+    let moved = fixture.commit_at(
+        "refs/heads/main",
+        &[generated],
+        &[("plan.md", None), ("plans/plan.md", Some("p"))],
+        3_000,
+        0,
+        "move",
+    );
+    fixture.set_head("refs/heads/main");
+
+    let mut conn = test_cache_db().await;
+    cold_sync(&mut conn, &fixture, moved).await;
+    assert_eq!(time_of(&mut conn, "plans/plan.md").await, 2_000);
+}
+
 // ---------------------------------------------------------------------------
 // T7 — iCalendar parsing and expansion
 //
