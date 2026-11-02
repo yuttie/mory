@@ -1535,6 +1535,23 @@ async fn maintenance_is_skipped_like_a_migration_whatever_the_key_case() {
 }
 
 #[tokio::test]
+async fn a_marker_among_other_trailers_still_marks_the_commit() {
+    // The trailer block is the message's last paragraph, in any order: the key need not be its
+    // last line, nor the only trailer there.
+    let fixture = RepoFixture::new();
+    let head = history_with_a_bulk_rewrite(
+        &fixture,
+        "fix: correct the tags\n\nMory-Maintenance: tags-as-strings\nAssisted-by: Claude\n",
+    );
+
+    let mut conn = test_cache_db().await;
+    cold_sync(&mut conn, &fixture, head).await;
+
+    assert_eq!(time_of(&mut conn, "a.md").await, 1_000);
+    assert_eq!(time_of(&mut conn, "b.md").await, 2_000);
+}
+
+#[tokio::test]
 async fn a_trailer_key_mentioned_outside_the_trailers_marks_nothing() {
     // The key in the body's middle paragraph is prose, not a trailer: the commit is the user's.
     let fixture = RepoFixture::new();
