@@ -222,7 +222,6 @@ export function replaceEntries(
                 stores[ENTRY_STORE].put(entry);
             }
             stores[STORE_NAME].put(commitId, CACHE_COMMIT_KEY);
-            // A delta only ever comes to rows of the schema they hold, so it leaves this alone.
             stores[STORE_NAME].put(schema ?? null, CACHE_SCHEMA_KEY);
         };
     }).then(() => undefined);
@@ -233,11 +232,17 @@ export function replaceEntries(
 // sync may have moved them on since they were read, or a logout cleared them; the delta applied
 // to either would leave rows of no commit labelled as one, and later deltas would build on that.
 // Checked in the transaction that writes, which no other can come between.
+//
+// `schema` is the one the delta says it was listed under. That is the rows' own whenever moried
+// says one, but a moried too old to say one, as a deploy may roll back to, answers `since` whatever
+// schema comes with it: the rows such a delta names are then not of the schema the rest are, so
+// the schema is forgotten, for the next listing to be taken whole.
 export function applyEntryDelta(
     base: string,
     commitId: string,
     changed: unknown[],
     deleted: string[],
+    schema?: number,
 ): Promise<void> {
     return runMultiTransaction([ENTRY_STORE, STORE_NAME], 'readwrite', (stores) => {
         const current = stores[STORE_NAME].get(CACHE_COMMIT_KEY);
@@ -252,6 +257,12 @@ export function applyEntryDelta(
                 stores[ENTRY_STORE].put(entry);
             }
             stores[STORE_NAME].put(commitId, CACHE_COMMIT_KEY);
+            const held = stores[STORE_NAME].get(CACHE_SCHEMA_KEY);
+            held.onsuccess = () => {
+                if (held.result !== schema) {
+                    stores[STORE_NAME].put(null, CACHE_SCHEMA_KEY);
+                }
+            };
         };
     }).then(() => undefined);
 }

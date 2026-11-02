@@ -197,8 +197,20 @@ describe('the schema of the listing', () => {
         await idb.replaceEntries(undefined, 'commit-1', listing, 5);
         expect(await idb.readCacheBase()).toEqual({ commit: 'commit-1', schema: 5 });
 
-        await idb.applyEntryDelta('commit-1', 'commit-2', [entry('new.md')], []);
+        await idb.applyEntryDelta('commit-1', 'commit-2', [entry('new.md')], [], 5);
         expect(await idb.readCacheBase()).toEqual({ commit: 'commit-2', schema: 5 });
+    });
+
+    // A moried too old to say its schema answers `since` whatever comes with it, as one a deploy
+    // rolled back to does: the rows it names are then not of the schema the rest are.
+    it('is forgotten by a delta listed under another', async () => {
+        await idb.replaceEntries(undefined, 'commit-1', listing, 5);
+        await idb.applyEntryDelta('commit-1', 'commit-2', [entry('new.md')], []);
+        expect(await idb.readCacheBase()).toEqual({ commit: 'commit-2', schema: undefined });
+
+        await idb.replaceEntries('commit-2', 'commit-3', listing, 5);
+        await idb.applyEntryDelta('commit-3', 'commit-4', [entry('new.md')], [], 6);
+        expect(await idb.readCacheBase()).toEqual({ commit: 'commit-4', schema: undefined });
     });
 
     // A listing from a moried too old to say its schema must not keep the schema of the one

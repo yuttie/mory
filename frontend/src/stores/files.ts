@@ -159,7 +159,13 @@ export const useFilesStore = defineStore('files', () => {
             for (const entry of response.changed) {
                 next.set(entry.path, entry);
             }
-            await applyEntryDelta(response.base, response.commit, response.changed, response.deleted);
+            await applyEntryDelta(
+                response.base,
+                response.commit,
+                response.changed,
+                response.deleted,
+                response.schema,
+            );
         }
 
         if (epoch !== startEpoch) {
@@ -170,7 +176,9 @@ export const useFilesStore = defineStore('files', () => {
         }
         entryMap = next;
         mapCommit = response.commit;
-        mapSchema = response.kind === 'full' ? response.schema : schema;
+        // As `applyEntryDelta` records it: a delta listed under another schema than its base's
+        // leaves rows of neither.
+        mapSchema = response.kind === 'full' || response.schema === schema ? response.schema : undefined;
 
         if (response.commit === response.head) {
             validatedCommitIdRef.value = response.commit;

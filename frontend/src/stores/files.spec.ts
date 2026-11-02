@@ -45,8 +45,15 @@ vi.mock('@/idb', () => ({
         idb.commit = commit;
         idb.schema = schema;
     },
-    // As idb.ts writes one: only onto the rows of the commit it was computed from.
-    applyEntryDelta: async (base: string, commit: string, changed: ListEntry2[], deleted: string[]) => {
+    // As idb.ts writes one: only onto the rows of the commit it was computed from, forgetting
+    // their schema if the delta was listed under another.
+    applyEntryDelta: async (
+        base: string,
+        commit: string,
+        changed: ListEntry2[],
+        deleted: string[],
+        schema?: number,
+    ) => {
         idb.held = idb.hold !== null;
         await idb.hold;
         if (idb.commit !== base) {
@@ -59,6 +66,9 @@ vi.mock('@/idb', () => ({
             idb.rows.set(entry.path, entry);
         }
         idb.commit = commit;
+        if (idb.schema !== schema) {
+            idb.schema = undefined;
+        }
     },
     clearEntries: async () => {
         idb.rows.clear();
@@ -68,7 +78,8 @@ vi.mock('@/idb', () => ({
 }));
 
 // The backend: every commit's listing, answering `since` with what changed as moried does, but
-// only to a listing of its own schema. `undefined` is a moried too old to say one.
+// only to a listing of its own schema. `undefined` is a moried too old to say one, which answers
+// `since` whatever schema comes with it.
 const history = new Map<string, Map<string, ListEntry2>>();
 let head = '';
 let servedSchema: number | undefined = 5;
@@ -94,7 +105,7 @@ function commit(change: (files: Map<string, ListEntry2>) => void): void {
 vi.mock('@/api', () => ({
     getEntries: async (since?: string, schema?: number) => {
         const now = history.get(head)!;
-        const deltaServed = servedSchema !== undefined && schema === servedSchema;
+        const deltaServed = servedSchema === undefined || schema === servedSchema;
         const before = since === undefined || !deltaServed ? undefined : history.get(since);
         if (before === undefined) {
             return { kind: 'full', commit: head, head, schema: servedSchema, entries: Array.from(now.values()) };
@@ -184,6 +195,26 @@ describe('the files store', () => {
         expect(listed.find((candidate) => candidate.path === 'a.md')?.time)
             .toBe('2026-01-01T00:00:00+00:00');
         expect(paths(listed)).toEqual(['a.md', 'c.md']);
+    });
+
+    // A deploy rolled back to a moried from before the schema, which patched the rows with what
+    // it says of the files it named. The moried after it says otherwise of them, and no delta of
+    // its own would name them again.
+    it('replaces a listing a moried too old to say its schema patched', async () => {
+        const tab = newTab();
+        await tab.list();
+        expect(idb.schema).toBe(5);
+
+        servedSchema = undefined;
+        commit((files) => files.set('c.md', { ...entry('c.md'), time: '2020-01-01T00:00:00+00:00' }));
+        expect(paths(await tab.refresh())).toEqual(['a.md', 'c.md']);
+
+        servedSchema = 5;
+        history.set(head, new Map([...history.get(head)!, ['c.md', entry('c.md')]]));
+        expect((await tab.refresh()).find((candidate) => candidate.path === 'c.md')?.time)
+            .toBe('2026-01-01T00:00:00+00:00');
+        expect(idb.rows.get('c.md')?.time).toBe('2026-01-01T00:00:00+00:00');
+        expect(idb.schema).toBe(5);
     });
 
     // Every consumer derives from the one array, so a new array of the same entries makes all of
