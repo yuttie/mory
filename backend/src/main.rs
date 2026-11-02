@@ -2663,22 +2663,45 @@ Write note suggestions in GitHub Flavored Markdown, ready to add to the task's n
     pub struct EntriesQuery {
         /// The commit the client's cached listing describes, if it has one.
         pub since: Option<String>,
+        /// The `schema` of the response that listing came from, if it said one.
+        pub schema: Option<i64>,
+    }
+
+    /// The commit to serve a delta from, if the client's listing can take one.
+    ///
+    /// A delta names only the files whose content changed since `since`, so it can bring a
+    /// listing up to date only if that listing says what this moried would have said of every
+    /// other file. A listing taken under another `ENTRY_SCHEMA_VERSION` may not: the version moves
+    /// when a row says something new of the same blob, and then the client must start again from a
+    /// full listing. So must one from a moried too old to say its version, as a page loaded while a
+    /// deploy is still replacing it may hold, which would otherwise keep that moried's rows for
+    /// good.
+    pub fn delta_base(query: &EntriesQuery) -> Option<Oid> {
+        if query.schema != Some(ENTRY_SCHEMA_VERSION) {
+            return None;
+        }
+        query.since.as_deref().and_then(|since| Oid::from_str(since).ok())
     }
 
     /// The file listing, or just what changed since a commit the client already has.
     ///
     /// One tagged shape so a client handles either uniformly.
+    ///
+    /// `schema` is `ENTRY_SCHEMA_VERSION`, which a client keeps with the listing and sends back
+    /// beside `since`: see `delta_base`.
     #[derive(Serialize)]
     #[serde(tag = "kind", rename_all = "lowercase")]
     pub enum EntriesResponse {
         Full {
             commit: String,
             head: String,
+            schema: i64,
             entries: Vec<ListEntry>,
         },
         Delta {
             commit: String,
             head: String,
+            schema: i64,
             base: String,
             changed: Vec<ListEntry>,
             deleted: Vec<PathBuf>,
@@ -2703,7 +2726,7 @@ Write note suggestions in GitHub Flavored Markdown, ready to add to the task's n
         // Ancestry is deliberately not required: a client whose commit was force-pushed away
         // still gets a delta rather than a 660 KB refetch, because a tree diff is valid between
         // any two commits.
-        if let Some(since) = query.since.as_deref().and_then(|s| Oid::from_str(s).ok()) {
+        if let Some(since) = delta_base(&query) {
             if let Some((base, changed_paths, deleted)) = state.entry_delta_since(since)? {
                 let (commit, changed) = state.read_entries_at(&changed_paths).await?;
                 // Past roughly a quarter of the listing a full response is cheaper than a large
@@ -2713,6 +2736,7 @@ Write note suggestions in GitHub Flavored Markdown, ready to add to the task's n
                     return Ok(Json(EntriesResponse::Delta {
                         commit: commit.to_string(),
                         head,
+                        schema: ENTRY_SCHEMA_VERSION,
                         base: base.to_string(),
                         changed,
                         deleted,
@@ -2725,6 +2749,7 @@ Write note suggestions in GitHub Flavored Markdown, ready to add to the task's n
         Ok(Json(EntriesResponse::Full {
             commit: commit.to_string(),
             head,
+            schema: ENTRY_SCHEMA_VERSION,
             entries,
         }))
     }

@@ -1904,6 +1904,25 @@ async fn a_stale_base_does_not_lend_the_walk_rows_of_a_later_commit() {
     assert_eq!(time_of(&mut conn, "new.md").await, 1_000);
 }
 
+#[test]
+fn a_delta_is_served_only_to_a_listing_of_this_schema() {
+    use crate::v2::{delta_base, EntriesQuery};
+    let commit = "0123456789abcdef0123456789abcdef01234567";
+    let query = |since: Option<&str>, schema: Option<i64>| EntriesQuery {
+        since: since.map(str::to_owned),
+        schema,
+    };
+
+    assert_eq!(
+        delta_base(&query(Some(commit), Some(crate::ENTRY_SCHEMA_VERSION))),
+        Some(Oid::from_str(commit).unwrap()),
+    );
+    // A listing an older moried served, or one that never said its schema, starts again.
+    assert_eq!(delta_base(&query(Some(commit), Some(crate::ENTRY_SCHEMA_VERSION - 1))), None);
+    assert_eq!(delta_base(&query(Some(commit), None)), None);
+    assert_eq!(delta_base(&query(None, Some(crate::ENTRY_SCHEMA_VERSION))), None);
+}
+
 // ---------------------------------------------------------------------------
 // T7 — iCalendar parsing and expansion
 //
