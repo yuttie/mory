@@ -209,12 +209,18 @@ export function login(user: string, password: string) {
 // `commit` is what the returned rows describe; `head` is where the repository actually is. They
 // differ only while the backend is still syncing, and reporting both means the client can tell
 // without spending a second request on `/v2/commits/head`.
+//
+// `schema` says what moried lists of a file, and moves when that changes for files whose content
+// has not. A client keeps it with the listing and sends it back beside `since`: moried serves a
+// delta only to a listing of its own schema, so one taken under another, or from a moried too old
+// to say one, is replaced whole.
 export type EntriesResponse =
-  | { kind: 'full'; commit: string; head: string; entries: ListEntry2[] }
+  | { kind: 'full'; commit: string; head: string; schema?: number; entries: ListEntry2[] }
   | {
       kind: 'delta';
       commit: string;
       head: string;
+      schema?: number;
       base: string;
       changed: ListEntry2[];
       deleted: string[];
@@ -223,8 +229,8 @@ export type EntriesResponse =
 // Pass `since` to receive only what changed since that commit. The backend falls back to a full
 // listing whenever a delta cannot be computed or would not pay, so a caller never has to handle
 // a rejection -- only the two shapes above.
-export async function getEntries(since?: string): Promise<EntriesResponse> {
-  const params = since === undefined ? undefined : { since };
+export async function getEntries(since?: string, schema?: number): Promise<EntriesResponse> {
+  const params = since === undefined ? undefined : { since, schema };
   const res = await getAxios().get('/v2/entries', { params });
   return res.data as EntriesResponse;
 }

@@ -13,7 +13,7 @@ import type {
 import {
     applyEntryDelta,
     clearEntries,
-    readCacheCommitId,
+    readCacheBase,
     readEntriesAt,
     readEntryAt,
     replaceEntries,
@@ -103,11 +103,11 @@ export const useFilesStore = defineStore('files', () => {
     async function syncOnce(): Promise<ListEntry2[]> {
         const startEpoch = epoch;
 
-        // Only the commit ID is needed to ask; the rows themselves are read only if a delta
-        // actually comes back. A cache that fails to open yields no base, and the backend then
+        // Only the commit ID and its schema are needed to ask; the rows themselves are read only
+        // if a delta actually comes back. A cache that fails to open yields no base, and the backend then
         // answers with a full listing.
-        const base = await readCacheCommitId();
-        const response = await api.getEntries(base ?? undefined);
+        const { commit: base, schema } = await readCacheBase();
+        const response = await api.getEntries(base ?? undefined, schema);
 
         if (epoch !== startEpoch) {
             // A mutation invalidated the cache while this ran. Its optimistic patch to the
@@ -119,7 +119,7 @@ export const useFilesStore = defineStore('files', () => {
         let next: Map<string, ListEntry2>;
         if (response.kind === 'full') {
             next = new Map(response.entries.map((entry) => [entry.path, entry]));
-            await replaceEntries(base, response.commit, response.entries);
+            await replaceEntries(base, response.commit, response.entries, response.schema);
         }
         else {
             // A delta is computed against the persisted rows, so it has to be applied to them --

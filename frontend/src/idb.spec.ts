@@ -190,6 +190,30 @@ describe('the entry store', () => {
     });
 });
 
+describe('the schema of the listing', () => {
+    it('is kept with the rows a full listing wrote, and through a delta', async () => {
+        expect(await idb.readCacheBase()).toEqual({ commit: undefined, schema: undefined });
+
+        await idb.replaceEntries(undefined, 'commit-1', listing, 5);
+        expect(await idb.readCacheBase()).toEqual({ commit: 'commit-1', schema: 5 });
+
+        await idb.applyEntryDelta('commit-1', 'commit-2', [entry('new.md')], []);
+        expect(await idb.readCacheBase()).toEqual({ commit: 'commit-2', schema: 5 });
+    });
+
+    // A listing from a moried too old to say its schema must not keep the schema of the one
+    // before it, or the next moried would patch it with deltas.
+    it('is forgotten by a listing that does not say one, and by a logout', async () => {
+        await idb.replaceEntries(undefined, 'commit-1', listing, 5);
+        await idb.replaceEntries('commit-1', 'commit-2', listing);
+        expect(await idb.readCacheBase()).toEqual({ commit: 'commit-2', schema: undefined });
+
+        await idb.replaceEntries('commit-2', 'commit-3', listing, 5);
+        await idb.clearEntries();
+        expect(await idb.readCacheBase()).toEqual({ commit: null, schema: undefined });
+    });
+});
+
 describe('a database an older version wrote', () => {
     // 2 held rows a delta landed on after another tab had moved them on, labelled as the commit it
     // came from: nothing tells them from good ones, and a later delta never names a row its base

@@ -9,6 +9,7 @@ import type { ListEntry2 } from '@/api';
 const idb = {
     // As idb.ts records it: `undefined` before any listing, `null` after a logout.
     commit: undefined as string | null | undefined,
+    schema: undefined as number | undefined,
     rows: new Map<string, ListEntry2>(),
     hold: null as Promise<void> | null,
     // Set once a write has reached the hold.
@@ -21,7 +22,7 @@ async function beforeRead(): Promise<void> {
     await act?.();
 }
 vi.mock('@/idb', () => ({
-    readCacheCommitId: async () => idb.commit,
+    readCacheBase: async () => ({ commit: idb.commit, schema: idb.schema }),
     // As idb.ts reads them: with the commit they describe, in one transaction.
     readEntriesAt: async (commit: string) => {
         await beforeRead();
@@ -29,7 +30,12 @@ vi.mock('@/idb', () => ({
     },
     readEntryAt: async (commit: string, path: string) => idb.commit === commit ? idb.rows.get(path) ?? null : null,
     // As idb.ts writes one: only over the commit recorded when it was asked for.
-    replaceEntries: async (base: string | null | undefined, commit: string, entries: ListEntry2[]) => {
+    replaceEntries: async (
+        base: string | null | undefined,
+        commit: string,
+        entries: ListEntry2[],
+        schema?: number,
+    ) => {
         idb.held = idb.hold !== null;
         await idb.hold;
         if (idb.commit !== base) {
@@ -37,6 +43,7 @@ vi.mock('@/idb', () => ({
         }
         idb.rows = new Map(entries.map((entry) => [entry.path, entry]));
         idb.commit = commit;
+        idb.schema = schema;
     },
     // As idb.ts writes one: only onto the rows of the commit it was computed from.
     applyEntryDelta: async (base: string, commit: string, changed: ListEntry2[], deleted: string[]) => {
@@ -56,12 +63,15 @@ vi.mock('@/idb', () => ({
     clearEntries: async () => {
         idb.rows.clear();
         idb.commit = null;
+        idb.schema = undefined;
     },
 }));
 
-// The backend: every commit's listing, answering `since` with what changed as moried does.
+// The backend: every commit's listing, answering `since` with what changed as moried does, but
+// only to a listing of its own schema. `undefined` is a moried too old to say one.
 const history = new Map<string, Map<string, ListEntry2>>();
 let head = '';
+let servedSchema: number | undefined = 5;
 
 function entry(path: string): ListEntry2 {
     return {
@@ -82,16 +92,18 @@ function commit(change: (files: Map<string, ListEntry2>) => void): void {
 }
 
 vi.mock('@/api', () => ({
-    getEntries: async (since?: string) => {
+    getEntries: async (since?: string, schema?: number) => {
         const now = history.get(head)!;
-        const before = since === undefined ? undefined : history.get(since);
+        const deltaServed = servedSchema !== undefined && schema === servedSchema;
+        const before = since === undefined || !deltaServed ? undefined : history.get(since);
         if (before === undefined) {
-            return { kind: 'full', commit: head, head, entries: Array.from(now.values()) };
+            return { kind: 'full', commit: head, head, schema: servedSchema, entries: Array.from(now.values()) };
         }
         return {
             kind: 'delta',
             commit: head,
             head,
+            schema: servedSchema,
             base: since,
             changed: Array.from(now.values()).filter((candidate) =>
                 JSON.stringify(before.get(candidate.path)) !== JSON.stringify(candidate)),
@@ -118,16 +130,41 @@ const paths = (entries: readonly ListEntry2[]) => entries.map((candidate) => can
 
 beforeEach(() => {
     idb.commit = undefined;
+    idb.schema = undefined;
     idb.rows = new Map();
     idb.hold = null;
     idb.held = false;
     idb.beforeRead = null;
     history.clear();
+    servedSchema = 5;
     head = 'C1';
     history.set(head, new Map([['a.md', entry('a.md')]]));
 });
 
 describe('the files store', () => {
+    // A page loaded while a deploy was replacing moried listed the old one's rows, under no
+    // schema. The new moried says what it lists of files whose content did not change, which no
+    // delta would carry, so the rows are replaced whole once, and deltas follow from there.
+    it('replaces a listing taken under another schema rather than patching it', async () => {
+        servedSchema = undefined;
+        const before = { ...entry('a.md'), time: '2020-01-01T00:00:00+00:00' };
+        history.set(head, new Map([['a.md', before]]));
+        await newTab().list();
+        expect(idb.schema).toBeUndefined();
+
+        servedSchema = 5;
+        history.set(head, new Map([['a.md', entry('a.md')]]));
+        const tab = newTab();
+        expect((await tab.list()).find((candidate) => candidate.path === 'a.md')?.time)
+            .toBe('2026-01-01T00:00:00+00:00');
+        expect(idb.rows.get('a.md')?.time).toBe('2026-01-01T00:00:00+00:00');
+        expect(idb.schema).toBe(5);
+
+        commit((files) => files.set('c.md', entry('c.md')));
+        const response = await (await import('@/api')).getEntries(idb.commit ?? undefined, idb.schema);
+        expect(response.kind).toBe('delta');
+    });
+
     // Every consumer derives from the one array, so a new array of the same entries makes all of
     // them work everything out again: over Home, that froze the page at each sync.
     it('keeps the listing it holds when a sync brings no change', async () => {
