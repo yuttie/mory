@@ -652,7 +652,15 @@ fn is_bulk_commit(commit: &git2::Commit) -> bool {
 /// `recorded` is the commit the cache describes, an ancestor of `head`, with the blob and time it
 /// holds for some of that commit's paths. A search the commits after it leave open, under a name
 /// recorded with the content sought, takes the recorded time instead of walking on: the cache
-/// dated that content as this walk would, by the same rule from the same commit.
+/// dated that content as this walk would, by the same rule from the same commit. A row only bulk
+/// commits dated yields to a newer one that wrote the file since, as the walk would have given it
+/// the newest of them.
+///
+/// That holds along one line of history. Across a merge the two can differ where both sides wrote
+/// the content sought under one name: this walk visits the side without the cache's commit first,
+/// and the row answers for the side with it, even for a search that came from the other side and
+/// never saw that write, while a walk of the whole history takes whichever write its order reaches
+/// first. Neither follows a search only through the history it came from.
 fn attribute_times(
     repo: &Repository,
     head: Oid,
