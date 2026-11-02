@@ -645,10 +645,16 @@ fn is_bulk_commit(commit: &git2::Commit) -> bool {
 ///
 /// The walk stops as soon as every wanted path is attributed, so an ordinary save costs a commit
 /// or two. Only a cold cache, where every path is wanted, pays for the whole history.
+///
+/// `recorded` is the commit the cache describes, an ancestor of `head`, with the blob and time it
+/// holds for some of that commit's paths. A search the commits after it leave open, under a name
+/// recorded with the content sought, takes the recorded time instead of walking on: the cache
+/// dated that content as this walk would, by the same rule from the same commit.
 fn attribute_times(
     repo: &Repository,
     head: Oid,
     wanted: &HashSet<PathBuf>,
+    recorded: Option<(Oid, &RecordedRows)>,
 ) -> Result<HashMap<PathBuf, git2::Time>> {
     let mut times: HashMap<PathBuf, git2::Time> = HashMap::with_capacity(wanted.len());
 
@@ -683,136 +689,181 @@ fn attribute_times(
     let mut commits_scanned = 0usize;
     let mut bulk_commits = 0usize;
 
-    let mut revwalk = repo.revwalk()?;
     // Topological order guarantees a descendant is never visited after its ancestor, which is the
     // property this "first hit wins" attribution relies on once merges exist. Measured against
     // Sort::TIME and the default: all within noise, so it is free.
-    revwalk.set_sorting(git2::Sort::TOPOLOGICAL)?;
-    revwalk.push(head)?;
-    'revwalk: for oid in revwalk {
-        let oid = oid?;
-        let commit = repo.find_commit(oid)?;
-        let tree = commit.tree()?;
-        commits_scanned += 1;
-
-        let parents: Vec<git2::Commit> = commit.parents().collect();
-        // Identical to some parent's tree, so nothing here differs from every parent.
-        if parents.iter().any(|parent| parent.tree_id() == tree.id()) {
-            continue;
+    fn walk_from(repo: &Repository, from: Oid, hidden: Option<Oid>) -> Result<git2::Revwalk<'_>> {
+        let mut revwalk = repo.revwalk()?;
+        revwalk.set_sorting(git2::Sort::TOPOLOGICAL)?;
+        revwalk.push(from)?;
+        if let Some(hidden) = hidden {
+            revwalk.hide(hidden)?;
         }
+        Ok(revwalk)
+    }
+    // With the cache's own rows, only the commits it has not seen are walked at first: what is
+    // still sought once they are takes the time the cache recorded, as the rest of the walk would
+    // have found it again. Unbounded, topological order has libgit2 walk the whole commit graph
+    // before it yields the first commit, and a move followed back to a note no one has edited
+    // since the last migration reads most of the trees in it too: 3.7 to 9.7 s a rename on the
+    // real history, with the repository locked throughout.
+    let mut revwalk = walk_from(repo, head, recorded.map(|(base, _)| base))?;
+    let mut resumed = false;
+    'revwalk: loop {
+        for oid in revwalk.by_ref() {
+            let oid = oid?;
+            let commit = repo.find_commit(oid)?;
+            let tree = commit.tree()?;
+            commits_scanned += 1;
 
-        // A root commit has no parent to diff against, so its whole tree is an addition. Without
-        // this it contributes no deltas at all, and any file introduced there and never touched
-        // again is never attributed.
-        let base_tree = match parents.first() {
-            Some(parent) => Some(parent.tree()?),
-            None => None,
-        };
-        let mut other_trees = Vec::with_capacity(parents.len().saturating_sub(1));
-        for parent in parents.iter().skip(1) {
-            other_trees.push(parent.tree()?);
-        }
+            let parents: Vec<git2::Commit> = commit.parents().collect();
+            // Identical to some parent's tree, so nothing here differs from every parent.
+            if parents.iter().any(|parent| parent.tree_id() == tree.id()) {
+                continue;
+            }
 
-        let bulk = is_bulk_commit(&commit);
-        let mut diff = repo.diff_tree_to_tree(base_tree.as_ref(), Some(&tree), None)?;
-        if bulk {
-            bulk_commits += 1;
-            // Only here: in any other commit a rename is the user's and owns the new name, which
-            // the plain diff already gives it as an addition. Detecting renames everywhere would
-            // also cost the cold walk a similarity pass per commit.
-            diff.find_similar(Some(git2::DiffFindOptions::new().renames(true)))?;
-        }
-        // Elsewhere only a move is followed: a file added with the very blob a deleted one had.
-        // Matching blob IDs is all the similarity pass an exact rename needs, and costs nothing
-        // in a commit that deletes nothing, which almost every save is. A rename that also
-        // changed the content wrote that content, and keeps the new name's time.
-        let moved_from: HashMap<Oid, PathBuf> = match bulk {
-            true => HashMap::new(),
-            false => diff
-                .deltas()
-                .filter(|delta| delta.status() == git2::Delta::Deleted)
-                .filter_map(|delta| {
-                    let old = delta.old_file();
-                    old.path().map(|path| (old.id(), path.to_owned()))
-                })
-                .collect(),
-        };
-        for delta in diff.deltas() {
-            use git2::Delta;
-            match delta.status() {
-                Delta::Added | Delta::Modified | Delta::Renamed | Delta::Copied => {
-                    let file = delta.new_file();
-                    let path = file.path().unwrap();
-                    let sought = remaining
-                        .get(path)
-                        .is_some_and(|by_content| by_content.contains_key(&file.id()));
-                    if !sought {
-                        continue;
-                    }
-                    // Present with the same content in another parent, so that parent already had
-                    // it and this commit did not author it.
-                    let treesame_elsewhere = other_trees.iter().any(|other| {
-                        other.get_path(path).map(|entry| entry.id()).ok() == Some(file.id())
-                    });
-                    if treesame_elsewhere {
-                        continue;
-                    }
-                    let by_content = remaining.get_mut(path).unwrap();
-                    let standing_for = by_content.remove(&file.id()).unwrap();
-                    if by_content.is_empty() {
-                        remaining.remove(path);
-                    }
-                    if bulk {
+            // A root commit has no parent to diff against, so its whole tree is an addition.
+            // Without this it contributes no deltas at all, and any file introduced there and never
+            // touched again is never attributed.
+            let base_tree = match parents.first() {
+                Some(parent) => Some(parent.tree()?),
+                None => None,
+            };
+            let mut other_trees = Vec::with_capacity(parents.len().saturating_sub(1));
+            for parent in parents.iter().skip(1) {
+                other_trees.push(parent.tree()?);
+            }
+
+            let bulk = is_bulk_commit(&commit);
+            let mut diff = repo.diff_tree_to_tree(base_tree.as_ref(), Some(&tree), None)?;
+            if bulk {
+                bulk_commits += 1;
+                // Only here: in any other commit a rename is the user's and owns the new name,
+                // which the plain diff already gives it as an addition. Detecting renames
+                // everywhere would also cost the cold walk a similarity pass per commit.
+                diff.find_similar(Some(git2::DiffFindOptions::new().renames(true)))?;
+            }
+            // Elsewhere only a move is followed: a file added with the very blob a deleted one had.
+            // Matching blob IDs is all the similarity pass an exact rename needs, and costs nothing
+            // in a commit that deletes nothing, which almost every save is. A rename that also
+            // changed the content wrote that content, and keeps the new name's time.
+            let moved_from: HashMap<Oid, PathBuf> = match bulk {
+                true => HashMap::new(),
+                false => diff
+                    .deltas()
+                    .filter(|delta| delta.status() == git2::Delta::Deleted)
+                    .filter_map(|delta| {
                         let old = delta.old_file();
-                        let older = match delta.status() {
-                            Delta::Modified => Some(path.to_owned()),
-                            Delta::Renamed | Delta::Copied => old.path().map(Path::to_owned),
-                            _ => None,
-                        };
-                        if let Some(older) = older {
+                        old.path().map(|path| (old.id(), path.to_owned()))
+                    })
+                    .collect(),
+            };
+            for delta in diff.deltas() {
+                use git2::Delta;
+                match delta.status() {
+                    Delta::Added | Delta::Modified | Delta::Renamed | Delta::Copied => {
+                        let file = delta.new_file();
+                        let path = file.path().unwrap();
+                        let sought = remaining
+                            .get(path)
+                            .is_some_and(|by_content| by_content.contains_key(&file.id()));
+                        if !sought {
+                            continue;
+                        }
+                        // Present with the same content in another parent, so that parent already
+                        // had it and this commit did not author it.
+                        let treesame_elsewhere = other_trees.iter().any(|other| {
+                            other.get_path(path).map(|entry| entry.id()).ok() == Some(file.id())
+                        });
+                        if treesame_elsewhere {
+                            continue;
+                        }
+                        let by_content = remaining.get_mut(path).unwrap();
+                        let standing_for = by_content.remove(&file.id()).unwrap();
+                        if by_content.is_empty() {
+                            remaining.remove(path);
+                        }
+                        if bulk {
+                            let old = delta.old_file();
+                            let older = match delta.status() {
+                                Delta::Modified => Some(path.to_owned()),
+                                Delta::Renamed | Delta::Copied => old.path().map(Path::to_owned),
+                                _ => None,
+                            };
+                            if let Some(older) = older {
+                                for wanted_path in &standing_for {
+                                    bulk_times.entry(wanted_path.clone()).or_insert(commit.time());
+                                }
+                                remaining
+                                    .entry(older)
+                                    .or_default()
+                                    .entry(old.id())
+                                    .or_default()
+                                    .extend(standing_for);
+                                continue;
+                            }
+                        }
+                        else if let Some(older) = moved_from.get(&file.id()) {
+                            // Moving a file is not editing it, whoever moved it: the walk looks for
+                            // what last wrote the content under its old name.
                             for wanted_path in &standing_for {
-                                bulk_times.entry(wanted_path.clone()).or_insert(commit.time());
+                                moved_times.entry(wanted_path.clone()).or_insert(commit.time());
                             }
                             remaining
-                                .entry(older)
+                                .entry(older.clone())
                                 .or_default()
-                                .entry(old.id())
+                                .entry(file.id())
                                 .or_default()
                                 .extend(standing_for);
                             continue;
                         }
-                    }
-                    else if let Some(older) = moved_from.get(&file.id()) {
-                        // Moving a file is not editing it, whoever moved it: the walk looks for
-                        // what last wrote the content under its old name.
-                        for wanted_path in &standing_for {
-                            moved_times.entry(wanted_path.clone()).or_insert(commit.time());
+                        // A plain commit wrote it, or a bulk commit created it with no older name
+                        // to follow. Either way nothing older wrote this content, so this commit
+                        // owns it, unless a newer bulk commit already claimed it.
+                        for wanted_path in standing_for {
+                            let when = match bulk {
+                                true => {
+                                    *bulk_times.entry(wanted_path.clone()).or_insert(commit.time())
+                                },
+                                false => commit.time(),
+                            };
+                            times.insert(wanted_path, when);
                         }
-                        remaining
-                            .entry(older.clone())
-                            .or_default()
-                            .entry(file.id())
-                            .or_default()
-                            .extend(standing_for);
-                        continue;
-                    }
-                    // A plain commit wrote it, or a bulk commit created it with no older name to
-                    // follow. Either way nothing older wrote this content, so this commit owns
-                    // it, unless a newer bulk commit already claimed it.
-                    for wanted_path in standing_for {
-                        let when = match bulk {
-                            true => *bulk_times.entry(wanted_path.clone()).or_insert(commit.time()),
-                            false => commit.time(),
-                        };
-                        times.insert(wanted_path, when);
-                    }
-                    if remaining.is_empty() {
-                        break 'revwalk;
-                    }
-                },
-                _ => (),
+                        if remaining.is_empty() {
+                            break 'revwalk;
+                        }
+                    },
+                    _ => (),
+                }
             }
         }
+
+        let Some((base, rows)) = recorded.filter(|_| !resumed) else {
+            break;
+        };
+        remaining.retain(|name, by_content| {
+            by_content.retain(|content, standing_for| {
+                let Some((recorded_content, when)) = rows.get(name) else {
+                    return true;
+                };
+                // A bulk commit in the range claimed it, and owns it if only bulk commits wrote it
+                // before, which a row does not say: walk on to find out.
+                let claimed = standing_for.iter().any(|path| bulk_times.contains_key(path));
+                if recorded_content != content || claimed {
+                    return true;
+                }
+                for wanted_path in standing_for.drain(..) {
+                    times.insert(wanted_path, *when);
+                }
+                false
+            });
+            !by_content.is_empty()
+        });
+        if remaining.is_empty() {
+            break;
+        }
+        revwalk = walk_from(repo, base, None)?;
+        resumed = true;
     }
 
     // Every name a bulk commit or a move hands back existed in its parent, so some older commit
@@ -897,6 +948,8 @@ async fn sync_cache_to(
         HashMap::new()
     };
 
+    // The paths a fast-forward touched, whose rows can end the attribution walk at `base`.
+    let mut recordable: Option<HashSet<PathBuf>> = None;
     let (delta, head_time) = {
         let repo = repo.lock().unwrap();
         let head_commit = repo.find_commit(head)?;
@@ -934,7 +987,13 @@ async fn sync_cache_to(
                 // the same principle as the TREESAME rule in `attribute_times`: a history
                 // operation that changed no content authored nothing.
                 if repo.graph_descendant_of(head, base).unwrap_or(false) {
-                    changed_paths.extend(paths_touched_since(&repo, base, head)?);
+                    let touched = paths_touched_since(&repo, base, head)?;
+                    changed_paths.extend(touched.iter().cloned());
+                    // The rows describe `base` only while the cache is still there: a stale
+                    // request can name a base the cache has since moved past.
+                    if current == Some(base) {
+                        recordable = Some(touched);
+                    }
                 }
 
                 // Resolve each against HEAD's tree; a touched path that HEAD does not contain is
@@ -983,10 +1042,16 @@ async fn sync_cache_to(
         return Ok(());
     }
 
+    // Every name the walk can still be looking for at `base` is one the range touched: a wanted
+    // path, or the old name of a file the range moved.
+    let recorded = match (base, recordable) {
+        (Some(base), Some(names)) => Some((base, recorded_rows(conn, names).await?)),
+        _ => None,
+    };
     let wanted: HashSet<PathBuf> = delta.changed.iter().map(|(path, _)| path.clone()).collect();
     let times = {
         let repo = repo.lock().unwrap();
-        attribute_times(&repo, head, &wanted)?
+        attribute_times(&repo, head, &wanted, recorded.as_ref().map(|(base, rows)| (*base, rows)))?
     };
 
     // Read blobs and extract metadata before opening the write transaction: this is the slow,
@@ -1063,6 +1128,34 @@ async fn sync_cache_to(
         started.elapsed(),
     );
     Ok(())
+}
+
+/// The blob and time the cache holds for a path, by path.
+type RecordedRows = HashMap<PathBuf, (Oid, git2::Time)>;
+
+/// The blob and time the cache holds for each of `paths` it has a row for.
+async fn recorded_rows(
+    conn: &mut SqliteConnection,
+    paths: HashSet<PathBuf>,
+) -> Result<RecordedRows> {
+    let mut rows = HashMap::with_capacity(paths.len());
+    for path in paths {
+        let Some(name) = path.to_str() else {
+            continue;
+        };
+        let row: Option<(String, i64, i64)> =
+            sqlx::query_as("SELECT blob_id, time, tz_offset FROM entry WHERE path = ?;")
+                .bind(name)
+                .fetch_optional(&mut *conn)
+                .await
+                .context("Failed to read a recorded entry")?;
+        if let Some((blob_id, seconds, offset)) = row {
+            if let Ok(blob_id) = Oid::from_str(&blob_id) {
+                rows.insert(path, (blob_id, git2::Time::new(seconds, (offset / 60) as i32)));
+            }
+        }
+    }
+    Ok(rows)
 }
 
 async fn record_cache_commit(conn: &mut SqliteConnection, head: Oid) -> Result<()> {

@@ -1805,6 +1805,105 @@ async fn a_move_on_one_side_of_a_merge_is_not_dated_by_an_edit_on_the_other() {
     }
 }
 
+#[tokio::test]
+async fn an_incremental_sync_dates_a_moved_file_by_what_the_cache_recorded() {
+    // A move is followed back to the old name, and the cache already dated the old name: walking
+    // on from the commit it describes would find that time again, after as much of the history
+    // as no one has edited the note in. The mark proves the walk stopped there.
+    let fixture = RepoFixture::new();
+    let first = fixture.commit_at(
+        "refs/heads/main",
+        &[],
+        &[("old.md", Some("body")), ("other.md", Some("x"))],
+        1_000,
+        0,
+        "add",
+    );
+    fixture.set_head("refs/heads/main");
+    let mut conn = test_cache_db().await;
+    sync_to(&mut conn, &fixture, first).await.unwrap();
+    sqlx::query("UPDATE entry SET time = 424242 WHERE path = 'old.md';")
+        .execute(&mut conn)
+        .await
+        .unwrap();
+
+    let moved = fixture.commit_at(
+        "refs/heads/main",
+        &[first],
+        &[("old.md", None), ("dir/new.md", Some("body"))],
+        2_000,
+        0,
+        "Rename old.md to dir/new.md",
+    );
+    sync_to(&mut conn, &fixture, moved).await.unwrap();
+
+    assert_eq!(time_of(&mut conn, "dir/new.md").await, 424_242);
+}
+
+#[tokio::test]
+async fn an_incremental_sync_over_a_second_bulk_rewrite_dates_as_a_cold_one() {
+    // The cache recorded the first bulk commit's time for a file only bulk commits wrote. The
+    // second one owns it now, which the row cannot say, so the walk must go on past the row.
+    let fixture = RepoFixture::new();
+    let root = fixture.commit_at("refs/heads/main", &[], &[("x.md", Some("x"))], 1_000, 0, "root");
+    let created = fixture.commit_at(
+        "refs/heads/main",
+        &[root],
+        &[("generated.md", Some("g0"))],
+        2_000,
+        0,
+        "Generate\n\nMory-Migration: generate\n",
+    );
+    fixture.set_head("refs/heads/main");
+    let mut conn = test_cache_db().await;
+    sync_to(&mut conn, &fixture, created).await.unwrap();
+    assert_eq!(time_of(&mut conn, "generated.md").await, 2_000);
+
+    let rewritten = fixture.commit_at(
+        "refs/heads/main",
+        &[created],
+        &[("generated.md", Some("g1"))],
+        3_000,
+        0,
+        "Rewrite\n\nMory-Maintenance: reformat\n",
+    );
+    sync_to(&mut conn, &fixture, rewritten).await.unwrap();
+
+    assert_eq!(time_of(&mut conn, "generated.md").await, 3_000);
+}
+
+#[tokio::test]
+async fn a_stale_base_does_not_lend_the_walk_rows_of_a_later_commit() {
+    // `old.md` moves to `new.md`, then a copy of it is made under the old name. A request still
+    // naming the commit before the move as its base reaches a cache already past the copy, whose
+    // row for `old.md` dates the copy: `new.md` must not take that time.
+    let fixture = RepoFixture::new();
+    let base = fixture.commit_at("refs/heads/main", &[], &[("old.md", Some("body"))], 1_000, 0, "add");
+    let moved = fixture.commit_at(
+        "refs/heads/main",
+        &[base],
+        &[("old.md", None), ("new.md", Some("body"))],
+        2_000,
+        0,
+        "Rename old.md to new.md",
+    );
+    let copied =
+        fixture.commit_at("refs/heads/main", &[moved], &[("old.md", Some("body"))], 3_000, 0, "copy");
+    fixture.set_head("refs/heads/main");
+    let mut conn = test_cache_db().await;
+    sync_to(&mut conn, &fixture, base).await.unwrap();
+    sync_to(&mut conn, &fixture, copied).await.unwrap();
+    assert_eq!(time_of(&mut conn, "old.md").await, 3_000);
+
+    let head =
+        fixture.commit_at("refs/heads/main", &[copied], &[("other.md", Some("o"))], 4_000, 0, "o");
+    crate::sync_cache_to(&mut conn, fixture.handle(), crate::CacheState::Behind { base, head })
+        .await
+        .unwrap();
+
+    assert_eq!(time_of(&mut conn, "new.md").await, 1_000);
+}
+
 // ---------------------------------------------------------------------------
 // T7 — iCalendar parsing and expansion
 //
