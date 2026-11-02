@@ -1756,6 +1756,55 @@ async fn a_moved_file_a_migration_wrote_keeps_the_migration_s_time() {
     assert_eq!(time_of(&mut conn, "plans/plan.md").await, 2_000);
 }
 
+/// One side of a merge moves `a.md` to `b.md` while the other edits `a.md`, and the merge keeps
+/// both, so HEAD's `a.md` and the name `b.md` is followed back to are one name with two contents.
+async fn a_move_beside_an_edit_of_its_old_name(move_first: bool) -> (i64, i64) {
+    let fixture = RepoFixture::new();
+    let base = fixture.commit_at("refs/heads/main", &[], &[("a.md", Some("a0"))], 1_000, 0, "add");
+    let moved = fixture.commit_at(
+        "refs/heads/moved",
+        &[base],
+        &[("a.md", None), ("b.md", Some("a0"))],
+        2_000,
+        0,
+        "Rename a.md to b.md",
+    );
+    let edited =
+        fixture.commit_at("refs/heads/edited", &[base], &[("a.md", Some("a1"))], 3_000, 0, "edit a");
+    let parents = match move_first {
+        true => [moved, edited],
+        false => [edited, moved],
+    };
+    let merged = fixture.commit_at(
+        "refs/heads/merged",
+        &parents,
+        &[("a.md", Some("a1")), ("b.md", Some("a0"))],
+        4_000,
+        0,
+        "merge",
+    );
+    fixture.set_head("refs/heads/merged");
+
+    let mut conn = test_cache_db().await;
+    cold_sync(&mut conn, &fixture, merged).await;
+    (time_of(&mut conn, "a.md").await, time_of(&mut conn, "b.md").await)
+}
+
+#[tokio::test]
+async fn a_move_on_one_side_of_a_merge_is_not_dated_by_an_edit_on_the_other() {
+    // Whichever side the walk visits first, the edit wrote `a.md` and only the base wrote what
+    // `b.md` holds. Keyed by name alone, the moved file waited for `a.md` beside HEAD's own, and
+    // took the edit's time whenever the move was visited before the edit.
+    for move_first in [true, false] {
+        assert_eq!(
+            a_move_beside_an_edit_of_its_old_name(move_first).await,
+            (3_000, 1_000),
+            "with the move as parent {}",
+            if move_first { 1 } else { 2 },
+        );
+    }
+}
+
 // ---------------------------------------------------------------------------
 // T7 — iCalendar parsing and expansion
 //

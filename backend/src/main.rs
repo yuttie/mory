@@ -651,15 +651,31 @@ fn attribute_times(
     wanted: &HashSet<PathBuf>,
 ) -> Result<HashMap<PathBuf, git2::Time>> {
     let mut times: HashMap<PathBuf, git2::Time> = HashMap::with_capacity(wanted.len());
-    if wanted.is_empty() {
-        return Ok(times);
-    }
 
     let started = time::Instant::now();
-    // Keyed by the name the walk is looking for, which a bulk rename makes differ from the wanted
-    // path it stands for. Two wanted paths can stand behind one name, if a bulk commit copied it.
-    let mut remaining: HashMap<PathBuf, Vec<PathBuf>> =
-        wanted.iter().map(|path| (path.clone(), vec![path.clone()])).collect();
+    // What the walk still looks for: under each name, the content it must find written there, and
+    // the wanted paths that content stands for. A move or a bulk rename makes the name differ from
+    // the wanted path, and two searches can then meet under one name: when one side of a merge
+    // moved a file away from a name the other side edited, the moved file looks for what the name
+    // held before the edit, and must not take the edit's time. Along one line of history the first
+    // commit found writing a name always wrote the content sought there, so the content only ever
+    // tells searches apart across a merge.
+    let head_tree = repo.find_commit(head)?.tree()?;
+    let mut remaining: HashMap<PathBuf, HashMap<Oid, Vec<PathBuf>>> = HashMap::new();
+    for path in wanted {
+        // A path HEAD does not hold has no content to look for, and is left to the caller.
+        if let Ok(entry) = head_tree.get_path(path) {
+            remaining
+                .entry(path.clone())
+                .or_default()
+                .entry(entry.id())
+                .or_default()
+                .push(path.clone());
+        }
+    }
+    if remaining.is_empty() {
+        return Ok(times);
+    }
     // The newest bulk commit that wrote each wanted path, which owns it if no older commit did.
     let mut bulk_times: HashMap<PathBuf, git2::Time> = HashMap::new();
     // The newest commit that moved each wanted path, for a name the walk never finds written.
@@ -727,7 +743,10 @@ fn attribute_times(
                 Delta::Added | Delta::Modified | Delta::Renamed | Delta::Copied => {
                     let file = delta.new_file();
                     let path = file.path().unwrap();
-                    if !remaining.contains_key(path) {
+                    let sought = remaining
+                        .get(path)
+                        .is_some_and(|by_content| by_content.contains_key(&file.id()));
+                    if !sought {
                         continue;
                     }
                     // Present with the same content in another parent, so that parent already had
@@ -738,35 +757,49 @@ fn attribute_times(
                     if treesame_elsewhere {
                         continue;
                     }
+                    let by_content = remaining.get_mut(path).unwrap();
+                    let standing_for = by_content.remove(&file.id()).unwrap();
+                    if by_content.is_empty() {
+                        remaining.remove(path);
+                    }
                     if bulk {
+                        let old = delta.old_file();
                         let older = match delta.status() {
                             Delta::Modified => Some(path.to_owned()),
-                            Delta::Renamed | Delta::Copied => delta.old_file().path().map(Path::to_owned),
+                            Delta::Renamed | Delta::Copied => old.path().map(Path::to_owned),
                             _ => None,
                         };
                         if let Some(older) = older {
-                            let standing_for = remaining.remove(path).unwrap();
                             for wanted_path in &standing_for {
                                 bulk_times.entry(wanted_path.clone()).or_insert(commit.time());
                             }
-                            remaining.entry(older).or_default().extend(standing_for);
+                            remaining
+                                .entry(older)
+                                .or_default()
+                                .entry(old.id())
+                                .or_default()
+                                .extend(standing_for);
                             continue;
                         }
                     }
                     else if let Some(older) = moved_from.get(&file.id()) {
                         // Moving a file is not editing it, whoever moved it: the walk looks for
                         // what last wrote the content under its old name.
-                        let standing_for = remaining.remove(path).unwrap();
                         for wanted_path in &standing_for {
                             moved_times.entry(wanted_path.clone()).or_insert(commit.time());
                         }
-                        remaining.entry(older.clone()).or_default().extend(standing_for);
+                        remaining
+                            .entry(older.clone())
+                            .or_default()
+                            .entry(file.id())
+                            .or_default()
+                            .extend(standing_for);
                         continue;
                     }
                     // A plain commit wrote it, or a bulk commit created it with no older name to
                     // follow. Either way nothing older wrote this content, so this commit owns
                     // it, unless a newer bulk commit already claimed it.
-                    for wanted_path in remaining.remove(path).unwrap() {
+                    for wanted_path in standing_for {
                         let when = match bulk {
                             true => *bulk_times.entry(wanted_path.clone()).or_insert(commit.time()),
                             false => commit.time(),
@@ -785,7 +818,7 @@ fn attribute_times(
     // Every name a bulk commit or a move hands back existed in its parent, so some older commit
     // added it and the walk should have found it. Should one slip through anyway, the newest such
     // commit is still a truer time than HEAD's, which is all the caller could fall back to.
-    for wanted_path in remaining.into_values().flatten() {
+    for wanted_path in remaining.into_values().flat_map(HashMap::into_values).flatten() {
         let when = bulk_times.get(&wanted_path).or_else(|| moved_times.get(&wanted_path));
         if let Some(when) = when {
             times.insert(wanted_path, *when);
