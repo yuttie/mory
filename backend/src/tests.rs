@@ -1484,6 +1484,160 @@ async fn syncing_to_a_commit_the_cache_already_describes_does_nothing() {
 }
 
 // ---------------------------------------------------------------------------
+// T4b — bulk commits author nothing
+// ---------------------------------------------------------------------------
+
+/// Two notes edited at 1,000 and 2,000, then rewritten together at 3,000 by `message`.
+fn history_with_a_bulk_rewrite(fixture: &RepoFixture, message: &str) -> Oid {
+    let first = fixture.commit_at("refs/heads/main", &[], &[("a.md", Some("a0"))], 1_000, 0, "a");
+    let second =
+        fixture.commit_at("refs/heads/main", &[first], &[("b.md", Some("b0"))], 2_000, 0, "b");
+    let bulk = fixture.commit_at(
+        "refs/heads/main",
+        &[second],
+        &[("a.md", Some("a1")), ("b.md", Some("b1"))],
+        3_000,
+        0,
+        message,
+    );
+    fixture.set_head("refs/heads/main");
+    bulk
+}
+
+#[tokio::test]
+async fn a_migration_leaves_each_file_its_last_own_edit() {
+    let fixture = RepoFixture::new();
+    let head = history_with_a_bulk_rewrite(
+        &fixture,
+        "chore: migrate notes\n\nMory-Migration: rename-a-key\n",
+    );
+
+    let mut conn = test_cache_db().await;
+    cold_sync(&mut conn, &fixture, head).await;
+
+    assert_eq!(time_of(&mut conn, "a.md").await, 1_000);
+    assert_eq!(time_of(&mut conn, "b.md").await, 2_000);
+}
+
+#[tokio::test]
+async fn maintenance_is_skipped_like_a_migration_whatever_the_key_case() {
+    let fixture = RepoFixture::new();
+    let head = history_with_a_bulk_rewrite(
+        &fixture,
+        "Optimize PNGs\n\nmory-maintenance: oxipng\n",
+    );
+
+    let mut conn = test_cache_db().await;
+    cold_sync(&mut conn, &fixture, head).await;
+
+    assert_eq!(time_of(&mut conn, "a.md").await, 1_000);
+    assert_eq!(time_of(&mut conn, "b.md").await, 2_000);
+}
+
+#[tokio::test]
+async fn a_trailer_key_mentioned_outside_the_trailers_marks_nothing() {
+    // The key in the body's middle paragraph is prose, not a trailer: the commit is the user's.
+    let fixture = RepoFixture::new();
+    let head = history_with_a_bulk_rewrite(
+        &fixture,
+        "Edit both\n\nMory-Migration: is what I will not call this.\n\nJust two edits.\n",
+    );
+
+    let mut conn = test_cache_db().await;
+    cold_sync(&mut conn, &fixture, head).await;
+
+    assert_eq!(time_of(&mut conn, "a.md").await, 3_000);
+    assert_eq!(time_of(&mut conn, "b.md").await, 3_000);
+}
+
+#[tokio::test]
+async fn an_incremental_sync_over_a_migration_keeps_the_earlier_times() {
+    let fixture = RepoFixture::new();
+    let first = fixture.commit_at(
+        "refs/heads/main",
+        &[],
+        &[("a.md", Some("a0")), ("b.md", Some("b0"))],
+        1_000,
+        0,
+        "both",
+    );
+    fixture.set_head("refs/heads/main");
+    let mut conn = test_cache_db().await;
+    sync_to(&mut conn, &fixture, first).await.unwrap();
+
+    let bulk = fixture.commit_at(
+        "refs/heads/main",
+        &[first],
+        &[("a.md", Some("a1")), ("b.md", Some("b1"))],
+        2_000,
+        0,
+        "Migrate\n\nMory-Migration: x\n",
+    );
+    let edit =
+        fixture.commit_at("refs/heads/main", &[bulk], &[("b.md", Some("b2"))], 3_000, 0, "edit b");
+    sync_to(&mut conn, &fixture, edit).await.unwrap();
+
+    assert_eq!(time_of(&mut conn, "a.md").await, 1_000, "only the migration touched a.md since");
+    assert_eq!(time_of(&mut conn, "b.md").await, 3_000, "an edit after a migration still counts");
+}
+
+#[tokio::test]
+async fn a_migration_rename_hands_the_file_its_old_name_s_time() {
+    let fixture = RepoFixture::new();
+    let content = "# A note long enough for similarity\n\nwith a body that stays the same.\n";
+    let first =
+        fixture.commit_at("refs/heads/main", &[], &[("note", Some(content))], 1_000, 0, "add");
+    let renamed = fixture.commit_at(
+        "refs/heads/main",
+        &[first],
+        &[("note", None), ("note.md", Some(content))],
+        2_000,
+        0,
+        "Append .md\n\nMory-Migration: md-suffix\n",
+    );
+    fixture.set_head("refs/heads/main");
+
+    let mut conn = test_cache_db().await;
+    cold_sync(&mut conn, &fixture, renamed).await;
+
+    assert_eq!(time_of(&mut conn, "note.md").await, 1_000);
+}
+
+#[tokio::test]
+async fn a_file_only_bulk_commits_wrote_takes_the_newest_of_them() {
+    // No user edit to fall back to: the newest bulk commit is the truest time there is, and
+    // certainly truer than HEAD's.
+    let fixture = RepoFixture::new();
+    let root = fixture.commit_at("refs/heads/main", &[], &[("x.md", Some("x"))], 1_000, 0, "root");
+    let created = fixture.commit_at(
+        "refs/heads/main",
+        &[root],
+        &[("generated.md", Some("g0")), ("x.md", Some("x1"))],
+        2_000,
+        0,
+        "Generate\n\nMory-Migration: generate\n",
+    );
+    let rewritten = fixture.commit_at(
+        "refs/heads/main",
+        &[created],
+        &[("generated.md", Some("g1")), ("x.md", Some("x2"))],
+        3_000,
+        0,
+        "Rewrite\n\nMory-Maintenance: reformat\n",
+    );
+    let head =
+        fixture.commit_at("refs/heads/main", &[rewritten], &[("y.md", Some("y"))], 4_000, 0, "y");
+    fixture.set_head("refs/heads/main");
+
+    let mut conn = test_cache_db().await;
+    cold_sync(&mut conn, &fixture, head).await;
+
+    assert_eq!(time_of(&mut conn, "generated.md").await, 3_000);
+    assert_eq!(time_of(&mut conn, "x.md").await, 1_000);
+    assert_eq!(time_of(&mut conn, "y.md").await, 4_000);
+}
+
+// ---------------------------------------------------------------------------
 // T7 — iCalendar parsing and expansion
 //
 // The fixtures are cut down from two feeds fetched live: Google's public "Rust releases" calendar,

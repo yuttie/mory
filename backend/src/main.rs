@@ -285,8 +285,10 @@ fn mcp_routes(oauth_state: oauth::OauthState) -> Router {
 /// Bumping this drops and refills the `entry` table on the next start. A row outlives the moried
 /// that wrote it for as long as its blob is unchanged, so this moves whenever what a row holds for
 /// a blob does, as well as when its columns do: 3 refilled the rows written before keys JSON cannot
-/// hold were left out of the listing one by one, and 4 added whether a file is text.
-const ENTRY_SCHEMA_VERSION: i64 = 4;
+/// hold were left out of the listing one by one, 4 added whether a file is text, and 5 dated the
+/// rows again once `attribute_times` passed over bulk commits, since a blob it had dated by one
+/// keeps that time otherwise.
+const ENTRY_SCHEMA_VERSION: i64 = 5;
 
 async fn init_cache_database(
     conn: &mut SqliteConnection,
@@ -596,6 +598,34 @@ fn paths_touched_since(repo: &Repository, base: Oid, head: Oid) -> Result<HashSe
     Ok(touched)
 }
 
+/// Trailer keys that mark a commit as authoring nothing: its edits are the app's or the
+/// repository's, not the user's, so they must not make every file it touched look recently
+/// changed. Both are read alike; the two names only tell a reader of `git log` why.
+///
+/// - `Mory-Migration:` rewrites notes into the shape a newer moried reads, which this app makes
+///   instead of keeping code to read the old one.
+/// - `Mory-Maintenance:` is other bulk upkeep that changes no note's meaning, such as recompressing
+///   images or re-encoding text.
+///
+/// Trailers rather than a subject prefix, because `message_trailers_strs` matches a key exactly
+/// where a prefix could match a note's own title, and because plain Git can filter on them:
+/// `git log --invert-grep --grep='^Mory-Migration:'`.
+const BULK_TRAILERS: [&str; 2] = ["Mory-Migration", "Mory-Maintenance"];
+
+/// Whether `commit` carries one of `BULK_TRAILERS`. Git compares trailer keys without regard to
+/// case, so this does too.
+fn is_bulk_commit(commit: &git2::Commit) -> bool {
+    let Ok(message) = commit.message() else {
+        return false;
+    };
+    let Ok(trailers) = git2::message_trailers_strs(message) else {
+        return false;
+    };
+    trailers
+        .iter()
+        .any(|(key, _)| BULK_TRAILERS.iter().any(|bulk| key.eq_ignore_ascii_case(bulk)))
+}
+
 /// The newest commit reachable from `head` that authored each of `wanted`.
 ///
 /// "Authored" is git's TREESAME rule: a commit authors a path only when its content there differs
@@ -603,6 +633,11 @@ fn paths_touched_since(repo: &Repository, base: Oid, head: Oid) -> Result<HashSe
 /// one parent at each path it carries, so attribution falls through to the commit that really
 /// wrote the content; a merge that resolved a conflict into something matching neither parent did
 /// author it, and is attributed.
+///
+/// A bulk commit (`is_bulk_commit`) authors no path that existed before it, so the walk carries on
+/// to the edit before it, following a path it renamed back to its old name. It does still own
+/// what it was the first to write, as a file it created, or one whose earlier history only other
+/// bulk commits wrote, since there is no older edit to give the time to.
 ///
 /// The walk stops as soon as every wanted path is attributed, so an ordinary save costs a commit
 /// or two. Only a cold cache, where every path is wanted, pays for the whole history.
@@ -617,8 +652,14 @@ fn attribute_times(
     }
 
     let started = time::Instant::now();
-    let mut remaining = wanted.clone();
+    // Keyed by the name the walk is looking for, which a bulk rename makes differ from the wanted
+    // path it stands for. Two wanted paths can stand behind one name, if a bulk commit copied it.
+    let mut remaining: HashMap<PathBuf, Vec<PathBuf>> =
+        wanted.iter().map(|path| (path.clone(), vec![path.clone()])).collect();
+    // The newest bulk commit that wrote each wanted path, which owns it if no older commit did.
+    let mut bulk_times: HashMap<PathBuf, git2::Time> = HashMap::new();
     let mut commits_scanned = 0usize;
+    let mut bulk_commits = 0usize;
 
     let mut revwalk = repo.revwalk()?;
     // Topological order guarantees a descendant is never visited after its ancestor, which is the
@@ -650,14 +691,22 @@ fn attribute_times(
             other_trees.push(parent.tree()?);
         }
 
-        let diff = repo.diff_tree_to_tree(base_tree.as_ref(), Some(&tree), None)?;
+        let bulk = is_bulk_commit(&commit);
+        let mut diff = repo.diff_tree_to_tree(base_tree.as_ref(), Some(&tree), None)?;
+        if bulk {
+            bulk_commits += 1;
+            // Only here: in any other commit a rename is the user's and owns the new name, which
+            // the plain diff already gives it as an addition. Detecting renames everywhere would
+            // also cost the cold walk a similarity pass per commit.
+            diff.find_similar(Some(git2::DiffFindOptions::new().renames(true)))?;
+        }
         for delta in diff.deltas() {
             use git2::Delta;
             match delta.status() {
                 Delta::Added | Delta::Modified | Delta::Renamed | Delta::Copied => {
                     let file = delta.new_file();
                     let path = file.path().unwrap();
-                    if !remaining.contains(path) {
+                    if !remaining.contains_key(path) {
                         continue;
                     }
                     // Present with the same content in another parent, so that parent already had
@@ -668,9 +717,31 @@ fn attribute_times(
                     if treesame_elsewhere {
                         continue;
                     }
-                    let path = path.to_owned();
-                    remaining.remove(&path);
-                    times.insert(path, commit.time());
+                    if bulk {
+                        let older = match delta.status() {
+                            Delta::Modified => Some(path.to_owned()),
+                            Delta::Renamed | Delta::Copied => delta.old_file().path().map(Path::to_owned),
+                            _ => None,
+                        };
+                        if let Some(older) = older {
+                            let standing_for = remaining.remove(path).unwrap();
+                            for wanted_path in &standing_for {
+                                bulk_times.entry(wanted_path.clone()).or_insert(commit.time());
+                            }
+                            remaining.entry(older).or_default().extend(standing_for);
+                            continue;
+                        }
+                    }
+                    // A plain commit wrote it, or a bulk commit created it with no older name to
+                    // follow. Either way nothing older wrote this content, so this commit owns
+                    // it, unless a newer bulk commit already claimed it.
+                    for wanted_path in remaining.remove(path).unwrap() {
+                        let when = match bulk {
+                            true => *bulk_times.entry(wanted_path.clone()).or_insert(commit.time()),
+                            false => commit.time(),
+                        };
+                        times.insert(wanted_path, when);
+                    }
                     if remaining.is_empty() {
                         break 'revwalk;
                     }
@@ -680,11 +751,21 @@ fn attribute_times(
         }
     }
 
+    // Every name a bulk commit hands back existed in its parent, so some older commit added it
+    // and the walk should have found it. Should one slip through anyway, the bulk commit is still
+    // a truer time than HEAD's, which is all the caller could fall back to.
+    for wanted_path in remaining.into_values().flatten() {
+        if let Some(when) = bulk_times.get(&wanted_path) {
+            times.insert(wanted_path, *when);
+        }
+    }
+
     tracing::info!(
-        "Attributed {}/{} paths over {} commits in {:.2?}",
+        "Attributed {}/{} paths over {} commits ({} bulk) in {:.2?}",
         times.len(),
         wanted.len(),
         commits_scanned,
+        bulk_commits,
         started.elapsed(),
     );
     Ok(times)
