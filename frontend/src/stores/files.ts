@@ -108,8 +108,8 @@ export const useFilesStore = defineStore('files', () => {
         const startEpoch = epoch;
 
         // Only the commit ID and its schema are needed to ask; the rows themselves are read only
-        // if a delta actually comes back. A cache that fails to open yields no base, and the backend then
-        // answers with a full listing.
+        // if a delta actually comes back. A cache that fails to open yields no base, and the
+        // backend then answers with a full listing.
         const { commit: base, schema } = await readCacheBase();
         const response = await api.getEntries(base ?? undefined, schema);
 
