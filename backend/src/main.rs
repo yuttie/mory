@@ -738,15 +738,17 @@ fn attribute_times(
             let mut diff = repo.diff_tree_to_tree(base_tree.as_ref(), Some(&tree), None)?;
             if bulk {
                 bulk_commits += 1;
-                // Only here: in any other commit a rename is the user's and owns the new name,
-                // which the plain diff already gives it as an addition. Detecting renames
-                // everywhere would also cost the cold walk a similarity pass per commit.
+                // Only here: in any other commit a rename that changed the content is the user's
+                // edit and owns the new name, which the plain diff already gives it as an
+                // addition. Detecting renames everywhere would also cost the cold walk a
+                // similarity pass per commit.
                 diff.find_similar(Some(git2::DiffFindOptions::new().renames(true)))?;
             }
-            // Elsewhere only a move is followed: a file added with the very blob a deleted one had.
-            // Matching blob IDs is all the similarity pass an exact rename needs, and costs nothing
-            // in a commit that deletes nothing, which almost every save is. A rename that also
-            // changed the content wrote that content, and keeps the new name's time.
+            // Elsewhere only a move is followed: a file written with the very blob a deleted one
+            // had, whether under a new name or over another file, as the web app once renamed
+            // onto a name already taken. Matching blob IDs is all the similarity pass an exact
+            // rename needs, and costs nothing in a commit that deletes nothing, which almost
+            // every save is.
             let moved_from: HashMap<Oid, PathBuf> = match bulk {
                 true => HashMap::new(),
                 false => diff
