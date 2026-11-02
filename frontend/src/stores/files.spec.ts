@@ -165,6 +165,27 @@ describe('the files store', () => {
         expect(response.kind).toBe('delta');
     });
 
+    // A tab open across a deploy holds the old moried's listing, and another tab took the new
+    // one's whole at the same commit. The deltas after it name only the files whose content
+    // changed, so applied to this tab's own listing they left it the old times of all the rest.
+    it('takes in a listing another tab took under a new schema', async () => {
+        servedSchema = undefined;
+        history.set(head, new Map([['a.md', { ...entry('a.md'), time: '2020-01-01T00:00:00+00:00' }]]));
+        const tab = newTab();
+        await tab.list();
+
+        servedSchema = 5;
+        history.set(head, new Map([['a.md', entry('a.md')]]));
+        await newTab().list();
+        expect(idb.schema).toBe(5);
+
+        await tab.write('c.md', '# C');
+        const listed = await tab.list();
+        expect(listed.find((candidate) => candidate.path === 'a.md')?.time)
+            .toBe('2026-01-01T00:00:00+00:00');
+        expect(paths(listed)).toEqual(['a.md', 'c.md']);
+    });
+
     // Every consumer derives from the one array, so a new array of the same entries makes all of
     // them work everything out again: over Home, that froze the page at each sync.
     it('keeps the listing it holds when a sync brings no change', async () => {

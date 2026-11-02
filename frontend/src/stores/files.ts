@@ -58,6 +58,10 @@ export const useFilesStore = defineStore('files', () => {
     // while this map stays where it was, and a delta from their commit would then skip whatever
     // happened in between.
     let mapCommit: string | null = null;
+    // The schema `entryMap` was listed under, which a delta's base must match as its commit must:
+    // another tab may have listed the same commit again under a newer schema, which says something
+    // new of files a delta never names.
+    let mapSchema: number | undefined;
 
     // When the last sync returned a commit older than HEAD, so `list()` does not spin while the
     // backend finishes a rebuild.
@@ -125,7 +129,7 @@ export const useFilesStore = defineStore('files', () => {
             // A delta is computed against the persisted rows, so it has to be applied to them --
             // never to a map an optimistic patch has already touched, which would compound the
             // patch rather than replace it, nor to one another tab's sync has left behind.
-            if (mapCommit === base) {
+            if (mapCommit === base && mapSchema === schema) {
                 // Nothing changed is the usual answer, and keeping the map then keeps the listing
                 // every consumer derives from.
                 const unchanged = response.changed.length === 0 && response.deleted.length === 0;
@@ -166,6 +170,7 @@ export const useFilesStore = defineStore('files', () => {
         }
         entryMap = next;
         mapCommit = response.commit;
+        mapSchema = response.kind === 'full' ? response.schema : schema;
 
         if (response.commit === response.head) {
             validatedCommitIdRef.value = response.commit;
