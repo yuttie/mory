@@ -147,6 +147,8 @@ jobs:
             # `COPY . .` copies every tracked file. Only `dist` leaves that
             # stage, so the image is the same.
             context: frontend
+            build-args: |
+                APK_REFRESH=${{ github.run_id }}-${{ github.run_attempt }}
             output: image
             # A run started by hand on another branch only checks that it builds.
             push: ${{ github.ref == 'refs/heads/main' }}

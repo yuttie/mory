@@ -13,6 +13,12 @@ RUN VITE_APP_APPLICATION_ROOT="VITE_APP_APPLICATION_ROOT_VALUE_TO_BE_REPLACED_LA
 
 # production stage (per-target-architecture)
 FROM nginx:stable-alpine AS production-stage
+# A new value upgrades the base image's packages again, whose security fixes a
+# cached layer would otherwise keep out until nginx:stable-alpine itself
+# changes. CI passes a new one each run, so how often the packages are
+# refreshed is how often it builds.
+ARG APK_REFRESH
+RUN apk upgrade --no-cache
 RUN rm /etc/nginx/conf.d/default.conf
 COPY docker/nginx-default.conf /etc/nginx/conf.d/default.conf
 COPY docker/entrypoint.sh /entrypoint.sh
