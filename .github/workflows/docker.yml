@@ -24,7 +24,6 @@ jobs:
         outputs:
             moried: ${{ steps.images.outputs.moried }}
             mory: ${{ steps.images.outputs.mory }}
-            week: ${{ steps.week.outputs.week }}
         steps:
             - uses: actions/checkout@v7
               with:
@@ -92,11 +91,6 @@ jobs:
                           echo "$image=false"
                       fi
                   done | tee -a "$GITHUB_OUTPUT"
-            # The reusable workflow's build-args cannot work out a date, so this
-            # job does, in Tokyo time: there the weekly run opens a week, where
-            # in UTC it would close one that a push may already have refreshed.
-            - id: week
-              run: echo "week=$(TZ=Asia/Tokyo date +%G-W%V)" >> "$GITHUB_OUTPUT"
     moried:
         needs: prepare
         if: needs.prepare.outputs.moried == 'true'
@@ -109,8 +103,10 @@ jobs:
             id-token: write # signs the cache entries, and the attestations when pushing
         with:
             context: backend
+            # A value of its own each run, so every run takes in the packages'
+            # security fixes, a re-run included.
             build-args: |
-                APT_REFRESH=${{ needs.prepare.outputs.week }}
+                APT_REFRESH=${{ github.run_id }}-${{ github.run_attempt }}
             output: image
             # A run started by hand on another branch only checks that it builds.
             push: ${{ github.ref == 'refs/heads/main' }}
@@ -151,6 +147,8 @@ jobs:
             # `COPY . .` copies every tracked file. Only `dist` leaves that
             # stage, so the image is the same.
             context: frontend
+            build-args: |
+                APK_REFRESH=${{ github.run_id }}-${{ github.run_attempt }}
             output: image
             # A run started by hand on another branch only checks that it builds.
             push: ${{ github.ref == 'refs/heads/main' }}
