@@ -15,11 +15,14 @@ RUN touch src/main.rs && cargo build --release
 # production stage
 FROM debian:trixie-slim AS production-stage
 
-# A new value reinstalls the packages below, whose security fixes a cached
-# layer would otherwise keep out until debian:trixie-slim itself changes. CI
-# passes the week, so the first build each week takes them in.
+# A new value runs this layer again, whose security fixes a cached layer would
+# otherwise keep out until debian:trixie-slim itself changes. CI passes a new
+# one each run, so how often the packages are refreshed is how often it builds.
+# The upgrade is for the packages the base image already holds, which an
+# install leaves at their version unless something it installs needs a newer
+# one.
 ARG APT_REFRESH
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     git \
     ca-certificates \
     tzdata \
