@@ -101,65 +101,77 @@ claude mcp add --transport http mory https://notes.example.com/api/v2/mcp
 
 #### Reverse proxy
 
-**The rule you already have is enough.** Whatever forwards `{MORIED_ROOT_PATH}`
-to moried also serves discovery: the `WWW-Authenticate` challenge points clients
-at `{MORIED_ROOT_PATH}.well-known/oauth-protected-resource/v2/mcp`, below the
-mount, and RFC 8414's last fallback for a path-bearing issuer is
-`{MORIED_ROOT_PATH}.well-known/openid-configuration`. Both are behind that one
-rule. A typical block needs nothing added:
+**Two rules.** One forwards `{MORIED_ROOT_PATH}` to moried, which a deployment
+already has; the other forwards the three discovery documents at the site root.
+Both pass `Host` through:
 
 ```nginx
 location /api/ {
     proxy_pass       http://backend;   # no trailing slash: keep the prefix
     proxy_set_header Host $host;       # rmcp validates this
 }
-```
 
-Verified against a real deployment behind nginx with exactly that one rule and no
-`/.well-known/` rules at all: claude.ai follows the `resource_metadata` pointer
-and then reads `{MORIED_ROOT_PATH}.well-known/openid-configuration`, both of
-which sit under the mount. Claude Code instead builds the site-root paths, so it
-wants the optional rules below — or the `{MORIED_ROOT_PATH}` fallback, which it
-also accepts. Both identify themselves by client ID metadata document rather
-than by registering.
-
-`Host` matters: rmcp checks it against the authority in `MORIED_PUBLIC_URL` to
-stop DNS rebinding. Pass it through as above, or name the internal hostname in
-`MORIED_MCP_ALLOWED_HOSTS`, or every MCP request is refused with 403.
-
-Optionally, these three put discovery on the path a client tries *first*, saving
-a round trip:
-
-```
-https://<host>/.well-known/oauth-authorization-server*  → moried
-https://<host>/.well-known/oauth-protected-resource*    → moried
-https://<host>/.well-known/openid-configuration*        → moried
-```
-
-Match them narrowly rather than proxying all of `/.well-known/`, or you will
-break `acme-challenge` and your certificate renewals:
-
-```nginx
 location ~ ^/\.well-known/(oauth-authorization-server|oauth-protected-resource|openid-configuration) {
     proxy_pass       http://backend;
     proxy_set_header Host $host;
 }
 ```
 
-Without them those paths reach whatever serves `/`. If that is a single-page
-app, it answers **200 with its index page** rather than 404 — which is why the
-challenge points below the mount instead: a client following it cannot be
-handed HTML by a route that was never meant to answer.
+Match the second narrowly rather than proxying all of `/.well-known/`, or you
+will break `acme-challenge` and your certificate renewals.
+
+`Host` matters: rmcp checks it against the authority in `MORIED_PUBLIC_URL` to
+stop DNS rebinding. Pass it through as above, or name the internal hostname in
+`MORIED_MCP_ALLOWED_HOSTS`, or every MCP request is refused with 403.
+
+**Why the second rule is required.** Every client built on the MCP TypeScript
+SDK needs it, Claude Code and OpenClaw among them. With `MORIED_ROOT_PATH=/api/`
+the issuer is `https://<host>/api`, and for an issuer with a path the SDK tries
+three metadata URLs in this order, moving on to the next when one answers 4xx:
+
+```
+https://<host>/.well-known/oauth-authorization-server/api
+https://<host>/.well-known/openid-configuration/api
+https://<host>/api/.well-known/openid-configuration
+```
+
+Without the second rule the first reaches whatever serves `/`. If that is a
+single-page app, it answers **200 with its index page** rather than 404, the
+SDK fails to parse it as JSON, and it never tries the other two. Where `/`
+answers 404 instead, the SDK does reach the third, but reads it as an OpenID
+Connect document, which must name `jwks_uri`, `subject_types_supported` and
+`id_token_signing_alg_values_supported`. moried is not an OpenID provider and
+names none of them, so that fails too. Either way the client gives up before
+it reaches the consent page, with an error that names neither cause:
+OpenClaw's says only "Sign-in did not finish".
+
+claude.ai is the one client known to manage with the `/api/` rule alone.
+Verified against a real deployment behind nginx with exactly that one rule and
+no `/.well-known/` rules at all: it follows the `resource_metadata` pointer and
+then reads `{MORIED_ROOT_PATH}.well-known/openid-configuration`, both of which
+sit under the mount, and it accepts that last document without the OpenID
+fields the SDK requires. claude.ai and Claude Code identify themselves by
+client ID metadata document rather than by registering.
+
+The `WWW-Authenticate` challenge still points below the mount, at
+`{MORIED_ROOT_PATH}.well-known/oauth-protected-resource/v2/mcp`, so a client
+following it reads the protected-resource document through the first rule
+however `/` behaves. It is the authorization server's document that the SDK
+looks for at the site root.
 
 Checking a deployment by hand:
 
 ```shell
+curl -s https://notes.example.com/.well-known/oauth-authorization-server/api | jq .issuer
 curl -s https://notes.example.com/.well-known/oauth-protected-resource/api/v2/mcp | jq
 curl -si -X POST https://notes.example.com/api/v2/mcp | head -3
 ```
 
-The first must report a `resource` byte-identical to the URL typed into the
-connector dialog; the second must be a 401 carrying `WWW-Authenticate: Bearer
+The first must print exactly `"https://notes.example.com/api"`: a parse error
+from jq means the request reached whatever serves `/`, and newer versions of
+the SDK refuse a document whose `issuer` is not the one they asked for. The
+second must report a `resource` byte-identical to the URL typed into the
+connector dialog; the third must be a 401 carrying `WWW-Authenticate: Bearer
 … resource_metadata="…"`.
 
 Run a container:

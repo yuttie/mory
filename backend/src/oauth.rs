@@ -81,8 +81,9 @@ const CIMD_CACHE_TTL: Duration = Duration::from_secs(300);
 /// slash, so it is the site root for the ordinary `MORIED_ROOT_PATH=/` deployment and
 /// path-bearing behind a reverse proxy. That second case is deliberate: for a path-bearing issuer
 /// RFC 8414 defines `https://host/api/.well-known/openid-configuration` as the last fallback, and
-/// that one URL is reachable through the `/api/` rule a deployment already has -- so discovery
-/// still works when the operator adds no new proxy rule at all.
+/// that one URL is reachable through the `/api/` rule a deployment already has -- so claude.ai
+/// finds this server with no new proxy rule at all. A client built on the MCP TypeScript SDK does
+/// not, for the reasons `site_root_routes` gives, and needs the site-root rule as well.
 #[derive(Clone, Debug)]
 pub struct McpConfig {
     /// The `MORIED_ROOT_PATH` this server is mounted under, leading and trailing slash included.
@@ -135,15 +136,17 @@ impl McpConfig {
             // RFC 9728 constructs a default location at the site root, but `WWW-Authenticate`
             // carries an explicit pointer and a client follows it -- so it can be any URL this
             // server actually serves. Pointing below the mount means the one reverse-proxy rule
-            // a deployment already has, forwarding `{root_path}` to the backend, is enough for
-            // discovery to work. Pointing at the site root needs a second rule, and without it
-            // that path usually reaches whatever serves `/` -- for a single-page app, the index
-            // page, returned as 200 text/html, which is a worse failure than a 404 because
-            // nothing about it looks like an error.
+            // a deployment already has, forwarding `{root_path}` to the backend, is enough for a
+            // client to read this document. Pointing at the site root needs a second rule, and
+            // without it that path usually reaches whatever serves `/` -- for a single-page app,
+            // the index page, returned as 200 text/html, which is a worse failure than a 404
+            // because nothing about it looks like an error.
             //
             // The site-root spellings are still served, for a client that constructs the
-            // default location instead of following the pointer; those are what the optional
-            // `/.well-known/*` proxy rule is for.
+            // default location instead of following the pointer, and for the authorization
+            // server's document, which the MCP TypeScript SDK looks for at the site root even
+            // after following the pointer here. Those are what the `/.well-known/*` proxy rule
+            // is for, and it is required for the SDK's clients: see `site_root_routes`.
             resource_metadata: format!(
                 "{}{}.well-known/oauth-protected-resource/v2/mcp",
                 public_url, root_path,
@@ -1556,11 +1559,17 @@ fn consent_throttle() -> impl tower::Layer<
 /// The same reasoning applies to the protected-resource document: the bare path describes the
 /// resource `https://host`, not `https://host/api/v2/mcp`.
 ///
-/// A client that follows the `resource_metadata` pointer never needs any of these, and neither
-/// does one that walks RFC 8414's fallbacks down to `{root_path}.well-known/openid-configuration`
-/// -- which the `/api/` rule a deployment already has will serve. They are here for the
-/// deployment that adds the recommended `/.well-known/*` proxy rule, which puts discovery on
-/// every client's first-choice path.
+/// claude.ai never needs any of these: it follows the `resource_metadata` pointer and then walks
+/// the fallbacks down to `{root_path}.well-known/openid-configuration`, which the `/api/` rule a
+/// deployment already has will serve. The MCP TypeScript SDK cannot use that fallback, and every
+/// client built on it depends on these instead, Claude Code and OpenClaw among them. The SDK moves
+/// to its next URL on a 4xx, and without the `/.well-known/*` proxy rule its first one reaches
+/// whatever serves `/` -- for a single-page app, the index page as 200 text/html, which it fails
+/// to parse and stops at. Where `/` answers 404 instead, the SDK does reach the last fallback, but
+/// reads it as an OpenID Connect document, which must name a `jwks_uri`, the
+/// `subject_types_supported` and the ID-token signing algorithms: an OpenID provider's fields,
+/// and this server is none, since it signs with a shared secret and issues no ID tokens. So the
+/// proxy rule that reaches these is required, not an optimisation.
 ///
 /// Only for a non-root `MORIED_ROOT_PATH`. At `/` the issuer *is* the site root, so the bare
 /// paths are correct and `routes` already serves them.
