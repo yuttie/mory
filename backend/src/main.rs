@@ -237,8 +237,9 @@ async fn main() -> Result<()> {
         }
         else {
             let app = Router::new().nest(&root_path, api);
-            // Only reachable with the recommended `/.well-known/*` proxy rule, and only
-            // meaningful when the app is not already at the site root.
+            // Only reachable with the `/.well-known/*` proxy rule, which clients built on the
+            // MCP TypeScript SDK require (see `oauth::site_root_routes`), and only meaningful
+            // when the app is not already at the site root.
             match &mcp {
                 Some(oauth_state) => app.merge(oauth::site_root_routes(oauth_state.clone())),
                 None => app,
