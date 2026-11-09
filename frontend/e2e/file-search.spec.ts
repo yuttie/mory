@@ -740,3 +740,54 @@ test('opens the file clicked', async ({ context, page }) => {
     await expect(page).toHaveURL('/note/journal/monday.md');
     await expect(palette(page)).toBeHidden();
 });
+
+// Each title two characters longer than the one before, beside the same five tags: the first
+// leaves room for every tag, and the last for none, and is cut short itself.
+const CROWDED_TITLE = 'A title that goes on and on about one thing and another, at length, and then about yet another thing, and more, and still more';
+const CROWDED = Object.fromEntries(Array.from({ length: 48 }, (_, i) => [
+    `crowded/${i}.md`,
+    `---\ntags: [alpha, beta, gamma, delta, epsilon]\n---\n\n# ${CROWDED_TITLE.slice(0, 30 + 2 * i)}\n`,
+]));
+
+// The title is what a file is chosen by, so the tags have only the room it leaves, and one without
+// room is left out whole. In steps that small, the room left falls short of a tag by a little on
+// some row, where a tag would be drawn squeezed or cut off at the edge.
+test('shows the tags only in the room the title leaves, each whole or not at all', async ({ context, page }) => {
+    await mockBackend(context, CROWDED);
+    await page.goto('/');
+    await open(page);
+    await expect(palette(page).getByRole('option')).toHaveCount(49);
+    await page.evaluate(() => document.fonts.ready);
+
+    const rows = await palette(page).locator('.file-search__tags').evaluateAll((boxes) => boxes.map((box) => {
+        const clip = box.getBoundingClientRect();
+        const title = box.closest('[role="option"]')!.querySelector('.v-list-item-title')!;
+        const shown: string[] = [];
+        const drawnInPart: string[] = [];
+        for (const chip of box.querySelectorAll('.v-chip')) {
+            const { left, right, top, bottom } = chip.getBoundingClientRect();
+            // Within half a pixel, as the browsers round an edge each their own way.
+            const isInside = left > clip.left - 0.5 && right < clip.right + 0.5
+                && top > clip.top - 0.5 && bottom < clip.bottom + 0.5;
+            const isSqueezed = chip.scrollWidth > chip.clientWidth;
+            if (isInside && !isSqueezed) {
+                shown.push(chip.textContent ?? '');
+            }
+            // A tag left out is on a line below the box's.
+            else if (top < clip.bottom - 0.5) {
+                drawnInPart.push(chip.textContent ?? '');
+            }
+        }
+        return {
+            title: title.textContent ?? '',
+            isTitleCut: title.scrollWidth > title.clientWidth,
+            shown,
+            drawnInPart,
+        };
+    }));
+    expect(rows.filter((row) => row.drawnInPart.length > 0)).toEqual([]);
+    expect(rows.filter((row) => row.isTitleCut && row.shown.length > 0)).toEqual([]);
+    // Both ends, or the sweep has not crossed the widths where a tag gives way.
+    expect(rows.some((row) => row.shown.length === 5)).toBe(true);
+    expect(rows.some((row) => row.isTitleCut)).toBe(true);
+});

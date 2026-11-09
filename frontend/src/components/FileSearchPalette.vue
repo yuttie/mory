@@ -64,6 +64,7 @@
                 v-bind:aria-selected="index === activeIndex"
                 tabindex="-1"
                 color="primary"
+                class="file-search__option"
                 v-on:click="emit('choose', option.to)"
                 v-on:mousemove="activeIndex = index"
             >
@@ -75,12 +76,14 @@
                     v-slot:append
                 >
                     <div class="file-search__aside">
-                        <v-chip
-                            v-for="tag of shownTags(option.row)"
-                            v-bind:key="tag"
-                            size="x-small"
-                            class="ml-1"
-                        >{{ tag }}</v-chip>
+                        <div class="file-search__tags">
+                            <v-chip
+                                v-for="tag of shownTags(option.row)"
+                                v-bind:key="tag"
+                                size="x-small"
+                                class="ml-1"
+                            >{{ tag }}</v-chip>
+                        </div>
                         <span class="text-caption text-medium-emphasis ml-2">{{ sortedOn(option.row) }}</span>
                     </div>
                 </template>
@@ -411,10 +414,54 @@ watch([options, queryText, tab], ([now, query, kind], [before, queryBefore, kind
     }
 }
 
+// The title is what a file is chosen by, so it has the room it needs before the tags have any:
+// Vuetify's `auto` for the append column gave every tag its width first and cut the title short.
+// The title's column grows to fit the title, and the line of details under it, which shares the
+// column: the status and the dates there matter more than the tags too. The column of the tags and
+// the date takes what is left, never less than the date needs.
+.file-search__option {
+    grid-template-columns: max-content minmax(auto, max-content) minmax(min-content, 1fr);
+}
+
+// Across the whole column, so the tags and the date keep to the right edge.
 .file-search__aside {
     display: flex;
+    flex: 1 1 auto;
     align-items: center;
     white-space: nowrap;
+}
+
+// The tags that do not fit wrap onto a line out of sight, so each one shown is shown whole rather
+// than cut off mid-word. A line keeps its first item however little room there is, and would draw
+// the first chip squeezed, so that item is an empty `::before`: a chip tall, as a first line with
+// no chip on it would close up and show the second. Each chip is as wide as its tag, never capped
+// at the box's width as Vuetify caps it, so whether it fits is told by its whole width. Contained,
+// the tags ask the grid for no width of their own, not even their widest chip's, so they take only
+// what the title leaves.
+//
+// Their height is an x-small chip's, 20px less the 8px the app's compact density takes off. It is
+// named here, outside `vuetify.css`, because the box must be exactly that tall to clip at the end
+// of the first line, and given to the chips as well, so that the two stay the same.
+.file-search__tags {
+    --file-search-tag-height: 12px;
+
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    contain: inline-size;
+    height: var(--file-search-tag-height);
+    overflow: hidden;
+
+    &::before {
+        content: '';
+        height: var(--file-search-tag-height);
+    }
+
+    :deep(.v-chip) {
+        max-width: none;
+        height: var(--file-search-tag-height);
+    }
 }
 
 .file-search__keys {
