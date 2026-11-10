@@ -279,8 +279,16 @@ function quadrant(task: TaskNode): number {
     return important ? (isUrgent(tasks.urgency(task.uuid)) ? 0 : 1) : (isUrgent(tasks.urgency(task.uuid)) ? 2 : 3);
 }
 // A task in the backlog is not taken on yet and a done or canceled one is over, so neither is
-// planned for a day. A task that names no status is read as Backlog, as the Status view reads it.
-const candidates = computed(() => props.candidates.filter((task) => tasks.ownUrgency(task.uuid).actionable && !['backlog', 'done', 'canceled'].includes(task.metadata?.task?.status?.kind ?? 'backlog')).sort((a, b) => quadrant(a) - quadrant(b) || (tasks.urgency(a.uuid).slack_ratio ?? Infinity) - (tasks.urgency(b.uuid).slack_ratio ?? Infinity) || a.uuid.localeCompare(b.uuid)));
+// planned for a day, and nor is one whose `available_from` has not come. A task that names no
+// status is read as Backlog, as the Status view reads it.
+const isPlannable = (task: TaskNode) => tasks.ownUrgency(task.uuid).actionable
+    && !['backlog', 'done', 'canceled'].includes(task.metadata?.task?.status?.kind ?? 'backlog');
+// A task with a plannable subtask, at any depth, is worked on through that subtask, which is what a
+// day plans. One that is not plannable leaves the task above it to be planned. Testing the subtasks
+// for what makes a candidate keeps any two candidates from being ancestor and descendant.
+const candidates = computed(() => props.candidates
+    .filter((task) => isPlannable(task) && !tasks.flattenDescendants(task.uuid).some(isPlannable))
+    .sort((a, b) => quadrant(a) - quadrant(b) || (tasks.urgency(a.uuid).slack_ratio ?? Infinity) - (tasks.urgency(b.uuid).slack_ratio ?? Infinity) || a.uuid.localeCompare(b.uuid)));
 const cloneTask = (task: TaskNode): PlanEntry => ({ task: task.uuid.toLowerCase(), origin: 'planned' });
 interface DraggedPlanEntry extends PlanEntry {
     sourceDate?: string;

@@ -35,6 +35,30 @@ for (const width of [390, 600, 1000, 1600]) {
     });
 }
 
+test('offers a task with subtasks only while none under it can be planned', async ({ context, page }) => {
+    await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
+    const withStatus = (title: string, kind: string) => task(title).replace('kind: todo', `kind: ${kind}`);
+    await mockBackend(context, {
+        [`.tasks/${A}.md`]: task('Open parent'),
+        [`.tasks/${A}/${B}.md`]: task('Open subtask'),
+        [`.tasks/${C}.md`]: task('Settled parent'),
+        [`.tasks/${C}/${uuid(4)}.md`]: withStatus('Done subtask', 'done'),
+        [`.tasks/${C}/${uuid(5)}.md`]: withStatus('Canceled subtask', 'canceled'),
+        [`.tasks/${C}/${uuid(6)}.md`]: withStatus('Backlog subtask', 'backlog'),
+        // Naming no status, which reads as Backlog.
+        [`.tasks/${C}/${uuid(7)}.md`]: '---\ntags: [work]\n---\n\n# Unsorted subtask\n',
+        [`.tasks/${uuid(8)}.md`]: task('Grandparent'),
+        [`.tasks/${uuid(8)}/${uuid(9)}.md`]: withStatus('Done middle', 'done'),
+        [`.tasks/${uuid(8)}/${uuid(9)}/${uuid(10)}.md`]: task('Open grandchild'),
+        [`.tasks/${uuid(11)}.md`]: task('Parent of a later subtask'),
+        [`.tasks/${uuid(11)}/${uuid(12)}.md`]: task('Later subtask', '    available_from: 2026-10-10\n'),
+    });
+    await page.goto('/tasks-next/_/descendants/schedule');
+    // By title alone, since a subtask's row names its parent too. Equal tasks sort by UUID.
+    await expect(page.locator('.planning-view .candidates .candidate .title-text'))
+        .toHaveText(['Open subtask', 'Settled parent', 'Open grandchild', 'Parent of a later subtask']);
+});
+
 test('plans by dragging, records effort and interruptions, collects history and completes the note', async ({ context, page }) => {
     await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
     const repository = await mockBackend(context, {
