@@ -8,6 +8,8 @@ const B = uuid(2);
 const C = uuid(3);
 const task = (title: string, fields = '') => `---\ncreated_at: 2026-10-01 10:00:00+09:00\ntask:\n    status: {kind: todo}\n    importance: medium\n${fields}tags: [work]\n---\n\n# ${title}\n`;
 const withStatus = (title: string, kind: string) => task(title).replace('kind: todo', `kind: ${kind}`);
+const rated = (title: string, importance: string, fields = '') => task(title, fields).replace('importance: medium', `importance: ${importance}`);
+const unrated = (title: string) => task(title).replace('    importance: medium\n', '');
 
 for (const width of [390, 600, 1000, 1600]) {
     test(`keeps week controls reachable and scrolls the days at ${width}px`, async ({ context, page }) => {
@@ -71,6 +73,87 @@ test('hides a task above a subtask in any status taken on', async ({ context, pa
     await page.goto('/tasks-next/_/descendants/schedule');
     await expect(page.locator('.planning-view .candidates .candidate .title-text'))
         .toHaveText(kinds.map((kind) => `Subtask ${kind}`));
+});
+
+// A subtask stands in for the tasks above it that the column hides, so it ranks as they would.
+test('ranks a subtask as the most urgent and important of the open tasks above it', async ({ context, page }) => {
+    await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
+    await mockBackend(context, {
+        [`.tasks/${uuid(1)}.md`]: rated('Calm chore', 'low'),
+        // Lends its urgency and its importance alike.
+        [`.tasks/${uuid(2)}.md`]: rated('Urgent project', 'high', '    deadline: 2026-10-05\n'),
+        [`.tasks/${uuid(2)}/${uuid(9)}.md`]: unrated('Project step'),
+        [`.tasks/${uuid(3)}.md`]: rated('Important someday', 'high'),
+        // Over, so it lends neither its importance nor its deadline.
+        [`.tasks/${uuid(4)}.md`]: rated('Finished project', 'high', '    deadline: 2026-10-05\n').replace('kind: todo', 'kind: done'),
+        [`.tasks/${uuid(4)}/${uuid(5)}.md`]: unrated('Leftover step'),
+        // More important than its step, so it lends over the step's own rating.
+        [`.tasks/${uuid(6)}.md`]: rated('Big project', 'high'),
+        [`.tasks/${uuid(6)}/${uuid(7)}.md`]: rated('Low step', 'low'),
+    });
+    await page.goto('/tasks-next/_/descendants/schedule');
+    const candidates = page.locator('.planning-view .candidates .candidate');
+    await expect(candidates.locator('.title-text'))
+        .toHaveText(['Project step', 'Important someday', 'Low step', 'Calm chore', 'Leftover step']);
+    const lent = candidates.filter({ hasText: 'Project step' }).locator('.lent-dates');
+    await expect(lent).toContainText('Ranked by Urgent project:');
+    await expect(lent).toContainText('Deadline');
+    await expect(page.locator('.planning-view .lent-dates')).toHaveCount(1);
+});
+
+test('ranks by the level of urgency lent, then by the step\'s own rank', async ({ context, page }) => {
+    await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
+    await mockBackend(context, {
+        // Lends its steps the same urgency, so their own ranks order them.
+        [`.tasks/${uuid(1)}.md`]: rated('Overdue project', 'high', '    deadline: 2026-10-01\n'),
+        [`.tasks/${uuid(1)}/${uuid(2)}.md`]: rated('Dateless step', 'low'),
+        [`.tasks/${uuid(1)}/${uuid(3)}.md`]: rated('Urgent step', 'high', '    deadline: 2026-10-05\n'),
+        // Its target is missed, which is more urgent than urgent, though its deadline, and so its
+        // slack, is a month off.
+        [`.tasks/${uuid(4)}.md`]: rated('Missed project', 'high', '    due_by: 2026-10-03\n    deadline: 2026-11-03\n'),
+        [`.tasks/${uuid(4)}/${uuid(5)}.md`]: rated('Step due tomorrow', 'high', '    deadline: 2026-10-05\n'),
+        [`.tasks/${uuid(6)}.md`]: rated('Other urgent', 'high', '    deadline: 2026-10-07\n'),
+    });
+    await page.goto('/tasks-next/_/descendants/schedule');
+    await expect(page.locator('.planning-view .candidates .candidate .title-text'))
+        .toHaveText(['Urgent step', 'Dateless step', 'Step due tomorrow', 'Other urgent']);
+});
+
+test('names the nearest task above that raises the urgency, by its due dates alone', async ({ context, page }) => {
+    await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
+    await mockBackend(context, {
+        // As urgent as each other, so the nearer is named.
+        [`.tasks/${uuid(1)}.md`]: rated('Outer project', 'high', '    deadline: 2026-10-05\n'),
+        [`.tasks/${uuid(1)}/${uuid(2)}.md`]: task('Inner project', '    available_from: 2026-10-01\n    deadline: 2026-10-05\n'),
+        [`.tasks/${uuid(1)}/${uuid(2)}/${uuid(3)}.md`]: unrated('Inner step'),
+        // Its deadline is later than its step's, but nearer in its own longer lead time: it ranks
+        // the step without raising its level, so it is not named.
+        [`.tasks/${uuid(4)}.md`]: task('Long project', '    lead_time: 30d\n    deadline: 2026-11-13\n'),
+        [`.tasks/${uuid(4)}/${uuid(5)}.md`]: task('Dated step', '    deadline: 2026-10-14\n'),
+    });
+    await page.goto('/tasks-next/_/descendants/schedule');
+    const candidates = page.locator('.planning-view .candidates .candidate');
+    await expect(candidates.locator('.title-text')).toHaveText(['Inner step', 'Dated step']);
+    const lent = candidates.filter({ hasText: 'Inner step' }).locator('.lent-dates');
+    await expect(lent).toContainText('Ranked by Inner project:');
+    await expect(lent).toContainText('Deadline');
+    await expect(lent).not.toContainText('Available');
+    await expect(page.locator('.planning-view .lent-dates')).toHaveCount(1);
+});
+
+// Every task in the list is under its root, so the root, and whatever is above it, would rank them
+// all alike.
+test('leaves the task the list is under, and those above it, out of the ranking', async ({ context, page }) => {
+    await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
+    await mockBackend(context, {
+        [`.tasks/${uuid(1)}.md`]: rated('Programme', 'high', '    deadline: 2026-10-05\n'),
+        [`.tasks/${uuid(1)}/${uuid(2)}.md`]: rated('Urgent project', 'high', '    deadline: 2026-10-05\n'),
+        [`.tasks/${uuid(1)}/${uuid(2)}/${uuid(3)}.md`]: unrated('Unrated step'),
+        [`.tasks/${uuid(1)}/${uuid(2)}/${uuid(4)}.md`]: rated('Minor step', 'low'),
+    });
+    await page.goto(`/tasks-next/${uuid(2)}/descendants/schedule`);
+    await expect(page.locator('.planning-view .candidates .candidate .title-text')).toHaveText(['Minor step', 'Unrated step']);
+    await expect(page.locator('.planning-view .lent-dates')).toHaveCount(0);
 });
 
 test('plans by dragging, records effort and interruptions, collects history and completes the note', async ({ context, page }) => {
