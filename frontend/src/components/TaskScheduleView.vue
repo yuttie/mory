@@ -60,7 +60,7 @@
             >
                 <draggable
                     class="task-list"
-                    v-bind:model-value="candidates"
+                    v-bind:model-value="candidateTasks"
                     item-key="uuid"
                     v-bind:group="CANDIDATE_GROUP"
                     v-bind:clone="cloneTask"
@@ -85,7 +85,18 @@
                                 v-bind:list-root="listRoot"
                                 v-on:pointerdown="onPointerDown"
                                 v-on:contextmenu="onContextMenu"
-                            />
+                            >
+                                <div
+                                    v-if="lenders.get(task.uuid)"
+                                    class="lent-dates"
+                                >
+                                    <span class="text-medium-emphasis">Ranked by {{ lenders.get(task.uuid)!.title || 'Untitled' }}:</span>
+                                    <TaskDateCues
+                                        v-bind:value="lenders.get(task.uuid)!"
+                                        v-bind:fields="LENT_FIELDS"
+                                    />
+                                </div>
+                            </TaskListItemNext>
                         </div>
                     </template>
                 </draggable>
@@ -245,7 +256,8 @@ import dayjs from 'dayjs';
 import draggable from 'vuedraggable';
 import type { TaskNode } from '@/task-forest';
 import { makeDefaultStatus } from '@/task';
-import { readImportance, isUrgent } from '@/urgency';
+import { readImportance, isUrgent, compareUrgency, IMPORTANCE_ORDER, URGENCY_ORDER, type Importance, type Urgency } from '@/urgency';
+import type { TaskDateField } from '@/task-date-cues';
 import type { PlanEntry } from '@/plans';
 import { useTasksStore } from '@/stores/tasks';
 import { usePlansStore } from '@/stores/plans';
@@ -270,17 +282,76 @@ const draggedFrom = ref<string | null>(null);
 const interruptionDate = ref<string | null>(null);
 const interruptionTask = ref<string | null>(null);
 const taskOf = (uuid: string) => tasks.allTasks.find((task) => task.uuid.toLowerCase() === uuid.toLowerCase());
-function quadrant(task: TaskNode): number {
-    const importance = readImportance(task.metadata?.task?.importance);
+interface Rank {
+    importance: Importance | undefined;
+    urgency: Urgency;
+}
+function quadrant({ importance, urgency }: Rank): number {
     if (!importance) {
         return 4;
     }
     const important = importance === 'medium' || importance === 'high';
-    return important ? (isUrgent(tasks.urgency(task.uuid)) ? 0 : 1) : (isUrgent(tasks.urgency(task.uuid)) ? 2 : 3);
+    return important ? (isUrgent(urgency) ? 0 : 1) : (isUrgent(urgency) ? 2 : 3);
+}
+// By quadrant, then by urgency within it, as the Eisenhower view orders a quadrant. Urgency is
+// compared whole, level first: its slack alone would put a step behind one less urgent once a
+// project whose target is missed but whose deadline is far off lends it its own.
+function compareRanks(a: Rank, b: Rank): number {
+    return quadrant(a) - quadrant(b) || compareUrgency(a.urgency, b.urgency);
+}
+// A subtask stands in for the tasks above it, which the column hides while it can be planned, so a
+// step of a project due tomorrow is ranked as urgent as the project and as important: `ranked` is the
+// most of each among them. Its `own` rank still orders two steps the same project ranks alike.
+// The tasks the list is under are left out, as the row's path leaves them out: every candidate
+// shares them, so they would only flatten the ranking. A done or canceled task lends nothing.
+interface Standing {
+    own: Rank;
+    ranked: Rank;
+    // The task above whose dates raise the level of urgency the candidate is ranked at, for the row
+    // to name. One that only shortens its slack is not named: slack is counted in each task's own
+    // lead time, so a project could be named for a deadline later than the step's own.
+    lender: TaskNode | undefined;
+}
+function standingOf(task: TaskNode): Standing {
+    // Nearest first, so that of two as urgent the closer is named.
+    const above = tasks.ancestorsOf(task.uuid, props.listRoot).reverse()
+        .filter((ancestor) => !['done', 'canceled'].includes(ancestor.metadata?.task?.status?.kind ?? ''));
+    const own: Rank = { importance: readImportance(task.metadata?.task?.importance), urgency: tasks.urgency(task.uuid) };
+    let { importance, urgency } = own;
+    let lender: TaskNode | undefined;
+    for (const ancestor of above) {
+        const lent = tasks.ownUrgency(ancestor.uuid);
+        if (compareUrgency(lent, urgency) < 0) {
+            urgency = lent;
+            lender = ancestor;
+        }
+        const value = readImportance(ancestor.metadata?.task?.importance);
+        if (value !== undefined && (importance === undefined || IMPORTANCE_ORDER[value] > IMPORTANCE_ORDER[importance])) {
+            importance = value;
+        }
+    }
+    const raised = URGENCY_ORDER[urgency.level] > URGENCY_ORDER[own.urgency.level];
+    return { own, ranked: { importance, urgency }, lender: raised ? lender : undefined };
 }
 // A task in the backlog is not taken on yet and a done or canceled one is over, so neither is
-// planned for a day. A task that names no status is read as Backlog, as the Status view reads it.
-const candidates = computed(() => props.candidates.filter((task) => tasks.ownUrgency(task.uuid).actionable && !['backlog', 'done', 'canceled'].includes(task.metadata?.task?.status?.kind ?? 'backlog')).sort((a, b) => quadrant(a) - quadrant(b) || (tasks.urgency(a.uuid).slack_ratio ?? Infinity) - (tasks.urgency(b.uuid).slack_ratio ?? Infinity) || a.uuid.localeCompare(b.uuid)));
+// planned for a day, and nor is one whose `available_from` has not come. A task that names no
+// status is read as Backlog, as the Status view reads it.
+const isPlannable = (task: TaskNode) => tasks.ownUrgency(task.uuid).actionable
+    && !['backlog', 'done', 'canceled'].includes(task.metadata?.task?.status?.kind ?? 'backlog');
+// A task with a plannable subtask, at any depth, is worked on through that subtask, which is what a
+// day plans. One that is not plannable leaves the task above it to be planned. Testing the subtasks
+// for what makes a candidate keeps any two candidates from being ancestor and descendant.
+// Each standing is worked out once, rather than at every comparison of the sort.
+const ranked = computed(() => props.candidates
+    .filter((task) => isPlannable(task) && !tasks.flattenDescendants(task.uuid).some(isPlannable))
+    .map((task) => ({ task, standing: standingOf(task) }))
+    .sort((a, b) => compareRanks(a.standing.ranked, b.standing.ranked)
+        || compareRanks(a.standing.own, b.standing.own)
+        || a.task.uuid.localeCompare(b.task.uuid)));
+const candidateTasks = computed(() => ranked.value.map(({ task }) => task));
+const lenders = computed(() => new Map(ranked.value.map(({ task, standing }) => [task.uuid, standing.lender])));
+// A lender's own start is not the candidate's, so only the dates that rank it are shown.
+const LENT_FIELDS: readonly TaskDateField[] = ['due_by', 'deadline'];
 const cloneTask = (task: TaskNode): PlanEntry => ({ task: task.uuid.toLowerCase(), origin: 'planned' });
 interface DraggedPlanEntry extends PlanEntry {
     sourceDate?: string;
@@ -389,6 +460,7 @@ onMounted(() => { void plans.loadAll().catch((failure) => { error.value = String
 .day-columns { display: flex; flex: 1; min-width: 0; min-height: 0; gap: 16px; padding: 8px; overflow: auto; }
 .day { flex-shrink: 0; width: 250px; }
 .candidates { width: 290px; }
+.lent-dates { font-size: 12px; }
 .today { border: 2px solid rgb(var(--v-theme-primary)); border-radius: 4px; }
 /* As tall as its day at least, so a task dropped below the last entry, or onto an empty day,
    still lands in the list. */
