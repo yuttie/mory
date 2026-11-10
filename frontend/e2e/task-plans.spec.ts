@@ -7,6 +7,7 @@ const A = uuid(1);
 const B = uuid(2);
 const C = uuid(3);
 const task = (title: string, fields = '') => `---\ncreated_at: 2026-10-01 10:00:00+09:00\ntask:\n    status: {kind: todo}\n    importance: medium\n${fields}tags: [work]\n---\n\n# ${title}\n`;
+const withStatus = (title: string, kind: string) => task(title).replace('kind: todo', `kind: ${kind}`);
 
 for (const width of [390, 600, 1000, 1600]) {
     test(`keeps week controls reachable and scrolls the days at ${width}px`, async ({ context, page }) => {
@@ -37,7 +38,6 @@ for (const width of [390, 600, 1000, 1600]) {
 
 test('offers a task with subtasks only while none under it can be planned', async ({ context, page }) => {
     await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
-    const withStatus = (title: string, kind: string) => task(title).replace('kind: todo', `kind: ${kind}`);
     await mockBackend(context, {
         [`.tasks/${A}.md`]: task('Open parent'),
         [`.tasks/${A}/${B}.md`]: task('Open subtask'),
@@ -57,6 +57,20 @@ test('offers a task with subtasks only while none under it can be planned', asyn
     // By title alone, since a subtask's row names its parent too. Equal tasks sort by UUID.
     await expect(page.locator('.planning-view .candidates .candidate .title-text'))
         .toHaveText(['Open subtask', 'Settled parent', 'Open grandchild', 'Parent of a later subtask']);
+});
+
+// A task is taken on in every status but Backlog, Done and Canceled, so a subtask in any of the
+// others is what a day plans. One parent each, since any one of them would hide a parent they shared.
+test('hides a task above a subtask in any status taken on', async ({ context, page }) => {
+    await page.clock.setFixedTime(new Date('2026-10-04T05:05:12Z'));
+    const kinds = ['todo', 'in_progress', 'waiting', 'blocked', 'on_hold'];
+    await mockBackend(context, Object.fromEntries(kinds.flatMap((kind, index) => [
+        [`.tasks/${uuid(2 * index + 1)}.md`, task(`Parent of ${kind}`)],
+        [`.tasks/${uuid(2 * index + 1)}/${uuid(2 * index + 2)}.md`, withStatus(`Subtask ${kind}`, kind)],
+    ])));
+    await page.goto('/tasks-next/_/descendants/schedule');
+    await expect(page.locator('.planning-view .candidates .candidate .title-text'))
+        .toHaveText(kinds.map((kind) => `Subtask ${kind}`));
 });
 
 test('plans by dragging, records effort and interruptions, collects history and completes the note', async ({ context, page }) => {
