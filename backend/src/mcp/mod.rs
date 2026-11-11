@@ -32,14 +32,36 @@ mod task_tools;
 mod plan_tools;
 pub(crate) mod tools;
 
-/// What every tool returns: text the model reads.
+/// What every tool returns: one JSON object, as `structuredContent` and again as the text.
 ///
 /// JSON rather than prose, because the paths in a result are what the next call is made with, and
 /// a model has to be able to lift one out without guessing where it ends.
+///
+/// Both fields carry the whole result because clients disagree about which one reaches the model:
+/// some forward only the text, some only `structuredContent`, and some both. Whichever a client
+/// picks, nothing is missing from it -- every remark a result makes is a field of the object, never
+/// a text block of its own. The text is compact rather than pretty-printed: a client that forwards
+/// it pays for every byte of indentation, and one that cuts long results short cuts them sooner.
+///
+/// The text is encoded from `value` itself rather than from the object, because this crate's
+/// `serde_json::Map` sorts its keys: a result's own order puts `path` before the `declaration`
+/// it belongs to, and the explanatory `note` last.
 fn json_result<T: Serialize>(value: &T) -> Result<CallToolResult, ErrorData> {
-    let text = serde_json::to_string_pretty(value)
-        .map_err(|e| ErrorData::internal_error(format!("could not encode the result: {e}"), None))?;
-    Ok(CallToolResult::success(vec![ContentBlock::text(text)]))
+    let encoding_failed =
+        |e: serde_json::Error| ErrorData::internal_error(format!("could not encode the result: {e}"), None);
+    let text = serde_json::to_string(value).map_err(encoding_failed)?;
+    let object = serde_json::to_value(value).map_err(encoding_failed)?;
+    // Every protocol version up to 2025-11-25 takes only an object as `structuredContent`. Every
+    // result here is a struct or a `json!` object, so anything else is a mistake in this module,
+    // not something a caller sent.
+    if !object.is_object() {
+        return Err(ErrorData::internal_error("a tool result must be a JSON object".to_owned(), None));
+    }
+    // Not `CallToolResult::structured`, which would encode the object once more for a text block
+    // in sorted order, only for it to be replaced.
+    let mut result = CallToolResult::success(vec![ContentBlock::text(text)]);
+    result.structured_content = Some(object);
+    Ok(result)
 }
 
 /// A failure the caller should see and can act on.
@@ -681,6 +703,35 @@ fn obsolete_task_arguments(name: &str, arguments: Option<&serde_json::Map<String
     ];
     let messages: Vec<_> = replacements.iter().filter(|(key, _)| arguments.contains_key(*key) || arguments.get("clear").and_then(serde_json::Value::as_array).is_some_and(|keys| keys.iter().any(|value| value.as_str() == Some(*key)))).map(|(_, message)| *message).collect();
     (!messages.is_empty()).then(|| messages.join(" "))
+}
+
+#[cfg(test)]
+mod result_tests {
+    use super::*;
+
+    #[test]
+    fn a_result_is_the_same_compact_object_twice() {
+        #[derive(Serialize)]
+        struct Output {
+            path: &'static str,
+            items: Vec<u8>,
+        }
+        let result = json_result(&Output { path: "a.md", items: vec![1, 2] }).unwrap();
+        let structured = result.structured_content.clone().expect("structuredContent is set");
+        assert_eq!(structured, serde_json::json!({"path": "a.md", "items": [1, 2]}));
+        let [block] = result.content.as_slice() else {
+            panic!("one text block, not {:?}", result.content);
+        };
+        let text = &block.as_text().expect("a text block").text;
+        assert_eq!(text, r#"{"path":"a.md","items":[1,2]}"#, "compact, in the result's own order");
+        assert_eq!(serde_json::from_str::<serde_json::Value>(text).unwrap(), structured);
+        assert_eq!(result.is_error, Some(false));
+    }
+
+    #[test]
+    fn a_result_that_is_not_an_object_is_refused() {
+        assert!(json_result(&vec![1, 2]).is_err());
+    }
 }
 
 #[cfg(test)]
