@@ -1,15 +1,16 @@
 //! The occurrences a note's `events:` block declares, where and when the calendar draws them.
 //!
-//! The Rust twin of `eventsFromEntries` in `frontend/src/events.ts`, for event alarms. moried
-//! sends each alarm as a Web Push at its occurrence's start, because a service worker cannot wake
-//! itself at a time of its own choosing -- so moried has to know the times itself.
+//! The Rust twin of `eventsFromEntries` in `frontend/src/events.ts`, for event alarms and for the
+//! occurrences the MCP tools list. moried sends each alarm as a Web Push at its occurrence's start,
+//! because a service worker cannot wake itself at a time of its own choosing -- so moried has to
+//! know the times itself.
 //!
-//! That makes this a third expander, which is exactly what `list_events` in `mcp/tools.rs`
-//! declines to be: the two before it passed their own tests for a long time while disagreeing.
-//! An alarm ringing at a time the calendar does not show is that disagreement made audible, so
-//! this follows the frontend rule by rule, including where its behaviour is an accident of
-//! JavaScript, and `fixtures/calendar/notes/` holds the two to each other. Change either one and
-//! run both halves of that comparison.
+//! That makes this a third expander, and the two before it passed their own tests for a long time
+//! while disagreeing. An alarm ringing at a time the calendar does not show, or a tool listing a
+//! meeting the calendar does not, is that disagreement made audible, so this follows the frontend
+//! rule by rule, including where its behaviour is an accident of JavaScript, and
+//! `fixtures/calendar/notes/` holds the two to each other. Change either one and run both halves of
+//! that comparison.
 //!
 //! Only what decides whether an occurrence is drawn, and the wall clocks it starts and ends at, is
 //! reproduced. Colours are read only as far as a bad one hides an occurrence. An occurrence's

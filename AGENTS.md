@@ -8,7 +8,7 @@ Layout of the tracked sources:
 
 - `backend/src/main.rs` — the server: routes, handlers, the `v2` module, and `models`.
 - `backend/src/ical.rs` — parsing subscribed iCal feeds and expanding their recurrences.
-- `backend/src/note_events.rs` — expanding the events a note declares, the Rust twin of `eventsFromEntries`, for event alarms and the agenda.
+- `backend/src/note_events.rs` — expanding the events a note declares, the Rust twin of `eventsFromEntries`, for event alarms and the occurrences `list_agenda` and `list_events` return.
 - `backend/src/agenda.rs` — what is on over some days: the occurrences the notes declare, the imported events no note claims, and the task dates, in one zone, for `list_agenda`.
 - `backend/src/alarms.rs` — when each alarm rings: the `alarms:` grammar, the defaults `.mory/calendars.yaml` sets, and a task's dates.
 - `backend/src/tasks.rs` — which notes are in the task tree, how they nest, and a task's status: the checks the MCP tools and the alarm scheduler share.
@@ -220,10 +220,11 @@ A path under `.tasks/` must keep the UUIDv4 naming the web app derives the task 
 and `.mory/tasks-v1.yaml` is read-only through MCP — 600 KB of legacy YAML using anchors and aliases
 that a rewrite would silently expand into independent copies.
 
-`list_events` does **not** expand recurrence rules: it returns the rule as declared and says so in
-the result. It was written when a Rust expander for notes would have had nothing comparing it to the
-frontend. `note_events` now has, for event alarms; handing a model computed occurrences instead would
-be a change to this tool to make on purpose.
+`list_events` returns each event as declared, for editing it, together with the occurrences of it
+that start in the window, which `note_events` expands as the calendar does. It did not expand
+rules while a Rust expander for notes would have had nothing comparing it to the frontend; once
+`fixtures/calendar/notes/` held `note_events` to `eventsFromEntries` for the alarms, it was made to
+expand them on purpose.
 
 The event categories are returned the same way: as `.mory/calendars.yaml` declares them, never
 applied to the events. Resolving them in Rust would be a second copy of `resolveCategory`.
@@ -299,4 +300,4 @@ Three details are easy to get wrong:
 
 Both sides expand with `rrule` — the crate in `backend/src/ical.rs`, rrule.js in `frontend/src/recurrence.ts` — but sharing a library is not the same as agreeing. Conversion is where the two swap places, and a disagreement is invisible afterwards, because the note claims the series and the imported original stops being drawn. `fixtures/calendar/` and `frontend/src/differential.spec.ts` exist to compare them; both expanders passed their own tests while disagreeing about nearly every feed there. Change either one and run it.
 
-A note is expanded twice as well: by `eventsFromEntries` for the calendar, and by `backend/src/note_events.rs` for event alarms, which follows the frontend rule by rule, JavaScript's accidents included — an alarm at a time the calendar does not show is the same disagreement. `fixtures/calendar/notes/`, `converted/` and `frontend/src/note-fixtures.spec.ts` compare the two. Change either one, run both halves, and regenerate as `fixtures/calendar/README.md` says. The same goes for the alarms an occurrence resolves to, which `notes.json` records beside what it draws.
+A note is expanded twice as well: by `eventsFromEntries` for the calendar, and by `backend/src/note_events.rs` for event alarms and the MCP tools, which follows the frontend rule by rule, JavaScript's accidents included — an alarm at a time the calendar does not show, or a tool listing an occurrence it does not draw, is the same disagreement. `fixtures/calendar/notes/`, `converted/` and `frontend/src/note-fixtures.spec.ts` compare the two. Change either one, run both halves, and regenerate as `fixtures/calendar/README.md` says. The same goes for the alarms an occurrence resolves to, which `notes.json` records beside what it draws.

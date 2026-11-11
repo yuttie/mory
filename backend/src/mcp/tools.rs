@@ -514,11 +514,26 @@ pub async fn list_tasks(
 // ---------------------------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct WindowArgs {
+pub struct EventsArgs {
     /// The first day of the window, `YYYY-MM-DD`.
     pub start: String,
     /// The last day of the window, `YYYY-MM-DD`.
     pub end: String,
+    /// The IANA zone the days are taken in and the occurrences are given in, such as
+    /// `Asia/Tokyo`. Defaults to moried's own. A time a note writes without an offset is read in
+    /// it too, as the calendar reads one in its reader's zone.
+    #[serde(default)]
+    pub tz: Option<String>,
+}
+
+/// The zone a calendar tool was asked for, or moried's own; `Err` names one that is not a zone.
+fn zone_of(tz: Option<&str>) -> Result<chrono_tz::Tz, String> {
+    match tz.map(str::trim).filter(|tz| !tz.is_empty()) {
+        None => Ok(crate::urgency::local_zone()),
+        Some(name) => name
+            .parse::<chrono_tz::Tz>()
+            .map_err(|_| format!("{name} is not an IANA time zone, such as Asia/Tokyo.")),
+    }
 }
 
 /// An `alarms:` list as the notes hold it, checked by `alarms::check_list` and written as given.
@@ -546,10 +561,10 @@ struct EventSummary {
     name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     note_title: Option<String>,
-    /// The declared occurrence starts that fall inside the window.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    /// Where each of its occurrences that starts inside the window starts, as the calendar draws
+    /// it: what its rule generates, adjusted by its exclusions and overrides, and what it lists.
     occurrences_in_window: Vec<String>,
-    /// True when this event carries a `repeat` rule, whose occurrences are *not* expanded here.
+    /// True when this event carries a `repeat` rule.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     recurs: bool,
     /// The `events:` entry exactly as the note declares it.
@@ -590,35 +605,10 @@ struct EventsOutput {
     /// unreadable file is not mistaken for one that configures none: `{}` is what both look like.
     #[serde(skip_serializing_if = "Option::is_none")]
     categories_error: Option<String>,
-    /// Said once per call rather than trusted to the tool description, because a recurring event
-    /// listed without occurrences is exactly the result a model would otherwise misread.
+    /// Said once per call rather than trusted to the tool description: how the categories and the
+    /// alarms apply is in no single field, and `declaration` is the note as written, with none of
+    /// it applied.
     note: &'static str,
-}
-
-/// Every occurrence start an event declares outright: its own `start`, and each entry of
-/// `instances` (or its older spelling `times`).
-///
-/// What a `repeat` rule generates is deliberately not computed, and the rule is returned as
-/// declared. The expanders passed their own tests for a long time while disagreeing about nearly
-/// every real feed, and this was written when a Rust one for notes would have had nothing
-/// comparing it to the frontend. `note_events` now has, for event alarms; using it here would be a
-/// change to what this tool tells a model, to make on purpose.
-fn declared_starts(event: &serde_yaml::Value) -> Vec<String> {
-    let mut starts = Vec::new();
-    if let Some(start) = event.get("start").and_then(|v| v.as_str()) {
-        starts.push(start.to_owned());
-    }
-    for key in ["instances", "times"] {
-        let Some(list) = event.get(key).and_then(|v| v.as_sequence()) else {
-            continue;
-        };
-        starts.extend(
-            list.iter()
-                .filter_map(|instance| instance.get("start")?.as_str())
-                .map(str::to_owned),
-        );
-    }
-    starts
 }
 
 /// Every task due date and deadline whose day falls inside the window.
@@ -691,9 +681,60 @@ fn config_blocks(
     }
 }
 
+/// Every event with an occurrence that starts in the days `[from, to]`, with those occurrences, in
+/// the order of the first.
+///
+/// Expanded as the calendar expands them, and through the same function the agenda and the alarms
+/// use, so this lists no occurrence the calendar does not draw, and misses none it does. The events
+/// are named as `note_events` names them, so a numeric key or a list of events is listed too.
+fn events_in_window(
+    entries: &[crate::models::ListEntry],
+    from: chrono::NaiveDate,
+    to: chrono::NaiveDate,
+    reader: &crate::note_events::Reader,
+) -> Vec<EventSummary> {
+    let (window_from, window_to) = crate::note_events::day_window(from, to, reader);
+    let mut starts: std::collections::HashMap<(String, String), Vec<crate::note_events::Start>> =
+        std::collections::HashMap::new();
+    for occurrence in crate::note_events::occurrences(entries, window_from, window_to, reader) {
+        if (window_from..=window_to).contains(&occurrence.start.begins(reader)) {
+            starts.entry((occurrence.path, occurrence.event)).or_default().push(occurrence.start);
+        }
+    }
+
+    let mut events = Vec::new();
+    for entry in entries {
+        let path = entry.path.to_string_lossy().into_owned();
+        for (name, event) in crate::note_events::declared_events(entry) {
+            let Some(mut in_window) = starts.remove(&(path.clone(), name.clone())) else {
+                continue;
+            };
+            in_window.sort_by_key(|start| start.begins(reader));
+            let first = in_window[0].begins(reader);
+            let Ok(declaration) = serde_json::to_value(event) else {
+                tracing::debug!("Skipping an unreadable event in {}", entry.path.display());
+                continue;
+            };
+            events.push((first, EventSummary {
+                path: path.clone(),
+                recurs: event.get("repeat").is_some_and(|value| !value.is_null()),
+                name,
+                note_title: entry.title.clone(),
+                occurrences_in_window: in_window.into_iter().map(|start| agenda_time(start, reader)).collect(),
+                declaration,
+            }));
+        }
+    }
+
+    events.sort_by(|(a_first, a), (b_first, b)| {
+        a_first.cmp(b_first).then_with(|| a.path.cmp(&b.path)).then_with(|| a.name.cmp(&b.name))
+    });
+    events.into_iter().map(|(_, event)| event).collect()
+}
+
 pub async fn list_events(
     state: &AppState,
-    args: WindowArgs,
+    args: EventsArgs,
 ) -> Result<CallToolResult, ErrorData> {
     let (Some(from), Some(to)) = (leading_date(&args.start), leading_date(&args.end)) else {
         return Ok(tool_error("start and end must both be dates, as YYYY-MM-DD."));
@@ -701,6 +742,10 @@ pub async fn list_events(
     if to < from {
         return Ok(tool_error("The window ends before it starts."));
     }
+    let zone = match zone_of(args.tz.as_deref()) {
+        Ok(zone) => zone,
+        Err(message) => return Ok(tool_error(message)),
+    };
 
     let (commit, entries) = match state.get_entries(None).await {
         Ok(listing) => listing,
@@ -713,57 +758,8 @@ pub async fn list_events(
         },
     };
 
-    let mut events = Vec::new();
-    for entry in &entries {
-        // `events:` is very often null in a real note; a missing or unusable block is simply a
-        // note with no events, never an error that would lose the rest of the calendar.
-        let Some(declared) = entry
-            .metadata
-            .as_ref()
-            .and_then(|value| value.get("events"))
-            .and_then(|value| value.as_mapping())
-        else {
-            continue;
-        };
-
-        for (name, event) in declared {
-            let Some(name) = name.as_str() else {
-                continue;
-            };
-            let recurs = event.get("repeat").is_some_and(|value| !value.is_null());
-            let occurrences_in_window = declared_starts(event)
-                .into_iter()
-                .filter(|start| {
-                    leading_date(start).is_some_and(|date| from <= date && date <= to)
-                })
-                .collect::<Vec<_>>();
-            // A recurring event is always listed: nothing here knows which of its occurrences
-            // fall in the window, so leaving it out would be a claim this cannot make.
-            if !recurs && occurrences_in_window.is_empty() {
-                continue;
-            }
-            let Ok(declaration) = serde_json::to_value(event) else {
-                tracing::debug!("Skipping an unreadable event in {}", entry.path.display());
-                continue;
-            };
-            events.push(EventSummary {
-                path: entry.path.to_string_lossy().into_owned(),
-                name: name.to_owned(),
-                note_title: entry.title.clone(),
-                occurrences_in_window,
-                recurs,
-                declaration,
-            });
-        }
-    }
-
-    events.sort_by(|a, b| {
-        a.occurrences_in_window
-            .first()
-            .cmp(&b.occurrences_in_window.first())
-            .then_with(|| a.path.cmp(&b.path))
-            .then_with(|| a.name.cmp(&b.name))
-    });
+    let reader = crate::note_events::Reader { zone, now: chrono::Utc::now() };
+    let events = events_in_window(&entries, from, to, &reader);
 
     let task_dates = task_dates_in_window(&entries, from, to);
 
@@ -778,21 +774,22 @@ pub async fn list_events(
         categories,
         alarms,
         categories_error,
-        note: "Events marked `recurs` carry a repeat rule whose occurrences are not expanded \
-               here; read `declaration.repeat` and work out the dates from it. Every other event \
-               is listed only when a declared occurrence falls inside the window. `task_dates` \
-               holds each task due_by and deadline inside the window, which the calendar draws \
-               as events too; one whose `status` is done or canceled is settled. An event's \
-               `category` names an entry of `categories`, which the calendar draws it with: that \
-               entry's `color` unless the event sets its own, and its `name` template, in which \
-               `{{name}}` stands for the event's name. A nested id such as `meeting/1on1` takes \
-               what it does not set from `meeting`. `declaration` is the note as written, with \
-               none of this applied. An occurrence rings at its own `alarms`, which an override or \
-               an instance may set, else its event's, else its category's, else the global \
-               `alarms.timed` or `alarms.all_day`, else at its start if it is timed and never if \
-               it is all-day; `[]` silences. A task's date rings at the task's own `task.alarms` \
-               for it, which `list_tasks` returns under `task`, else the global `alarms.due_by` \
-               or `alarms.deadline`, else never.",
+        note: "Each event is listed with every occurrence of it that starts inside the window, as \
+               the calendar draws it: what a `repeat` rule generates, less its exclusions and with \
+               its overrides applied, and what it lists. An event none of whose occurrences starts \
+               in the window is not listed. `task_dates` holds each task due_by and deadline \
+               inside the window, which the calendar draws as events too; one whose `status` is \
+               done or canceled is settled. An event's `category` names an entry of `categories`, \
+               which the calendar draws it with: that entry's `color` unless the event sets its \
+               own, and its `name` template, in which `{{name}}` stands for the event's name. A \
+               nested id such as `meeting/1on1` takes what it does not set from `meeting`. \
+               `declaration` is the note as written, with none of this applied. An occurrence \
+               rings at its own `alarms`, which an override or an instance may set, else its \
+               event's, else its category's, else the global `alarms.timed` or `alarms.all_day`, \
+               else at its start if it is timed and never if it is all-day; `[]` silences. A \
+               task's date rings at the task's own `task.alarms` for it, which `list_tasks` \
+               returns under `task`, else the global `alarms.due_by` or `alarms.deadline`, else \
+               never.",
     })
 }
 
@@ -965,12 +962,9 @@ pub async fn list_agenda(state: &AppState, args: AgendaArgs) -> Result<CallToolR
     if (to - from).num_days() >= MAX_AGENDA_DAYS {
         return Ok(tool_error(format!("A window covers at most {MAX_AGENDA_DAYS} days; ask for less.")));
     }
-    let zone = match args.tz.as_deref().map(str::trim).filter(|tz| !tz.is_empty()) {
-        None => crate::urgency::local_zone(),
-        Some(name) => match name.parse::<chrono_tz::Tz>() {
-            Ok(zone) => zone,
-            Err(_) => return Ok(tool_error(format!("{name} is not an IANA time zone, such as Asia/Tokyo."))),
-        },
+    let zone = match zone_of(args.tz.as_deref()) {
+        Ok(zone) => zone,
+        Err(message) => return Ok(tool_error(message)),
     };
     let reader = crate::note_events::Reader { zone, now: chrono::Utc::now() };
 
@@ -1525,31 +1519,6 @@ mod tests {
     }
 
     #[test]
-    fn declared_starts_collects_the_base_and_both_spellings_of_instances() {
-        assert_eq!(
-            declared_starts(&yaml("start: 2026-03-12 19:00")),
-            vec!["2026-03-12 19:00"],
-        );
-        assert_eq!(
-            declared_starts(&yaml(
-                "start: 2026-01-01\n\
-                 instances:\n  - start: 2026-02-01\n\
-                 times:\n  - start: 2026-03-01",
-            )),
-            vec!["2026-01-01", "2026-02-01", "2026-03-01"],
-        );
-        // An instance with no start of its own declares nothing this can filter on.
-        assert_eq!(
-            declared_starts(&yaml("instances:\n  - at: 2026-02-01\n    color: red")),
-            Vec::<String>::new(),
-        );
-        assert_eq!(
-            declared_starts(&yaml("repeat:\n  freq: weekly")),
-            Vec::<String>::new(),
-        );
-    }
-
-    #[test]
     fn derived_tasks_match_shared_hierarchy_fixtures() {
         let fixtures: serde_json::Value = serde_json::from_str(include_str!("../../../fixtures/urgency/hierarchy.json")).unwrap();
         for fixture in fixtures.as_array().unwrap() {
@@ -1584,6 +1553,52 @@ mod tests {
 
     fn fields_of(dates: &[TaskDateSummary]) -> Vec<(&str, &str, &str)> {
         dates.iter().map(|d| (d.path.as_str(), d.field, d.date.as_str())).collect()
+    }
+
+    /// `path  name  occurrence|occurrence` for each event `list_events` lists, in order.
+    fn listed_events(entries: &[crate::models::ListEntry], from: &str, to: &str) -> Vec<String> {
+        let reader = crate::note_events::Reader {
+            zone: chrono_tz::Asia::Tokyo,
+            now: "2026-11-11T00:00:00Z".parse().unwrap(),
+        };
+        events_in_window(entries, day(from), day(to), &reader)
+            .iter()
+            .map(|event| format!("{}  {}  {}", event.path, event.name, event.occurrences_in_window.join("|")))
+            .collect()
+    }
+
+    #[test]
+    fn events_are_listed_with_their_occurrences_in_the_window_as_the_calendar_draws_them() {
+        let entries = [
+            crate::models::ListEntry::note(
+                "meetings.md",
+                "events:
+    Monthly:
+        start: 2026-06-08 15:00
+        repeat: { freq: monthly, byday: 2mon }
+    Weekly:
+        start: 2026-10-06 10:00:00+09:00
+        repeat: { freq: weekly }
+        exclusions: [2026-11-03 10:00:00+09:00]
+        overrides: [{ at: 2026-11-10 10:00:00+09:00, start: 2026-11-10 13:00:00+09:00 }]
+    Over:
+        start: 2026-01-05
+        repeat: { freq: weekly, until: 2026-09-30 }
+    Unreadable end:
+        start: 2026-11-04 10:00:00+09:00
+        end: 90
+",
+            ),
+            // Named as the calendar names them: a numeric key by its text, a list by index.
+            crate::models::ListEntry::note("numbered.md", "events: { 2026: { start: 2026-11-02 } }"),
+            crate::models::ListEntry::note("listed.md", "events: [{ start: '2026-11-01 09:00:00Z' }]"),
+        ];
+        assert_eq!(listed_events(&entries, "2026-11-01", "2026-11-14"), [
+            "listed.md  0  2026-11-01 18:00:00+09:00",
+            "numbered.md  2026  2026-11-02",
+            "meetings.md  Monthly  2026-11-09 15:00:00+09:00",
+            "meetings.md  Weekly  2026-11-10 13:00:00+09:00",
+        ]);
     }
 
     #[test]

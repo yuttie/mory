@@ -217,25 +217,23 @@ impl Mory {
 
     #[tool(
         name = "list_events",
-        description = "List the calendar events the notes declare in their `events:` \
-                       frontmatter, over a window of whole days.\n\nAn event carrying a \
-                       `repeat` rule is returned with `recurs: true` and its rule, but its \
-                       occurrences are NOT expanded -- read the rule and work the dates out \
-                       from it. Every other event appears only when one of its declared \
-                       occurrences falls inside the window.\n\nEach task due_by and deadline \
-                       inside the window is listed too, under `task_dates`: the calendar draws \
-                       them as events, so a question about what is coming up needs them. The \
+        description = "List the calendar events the notes declare in their `events:` frontmatter, \
+                       over a window of whole days, each with its declaration as written and the \
+                       occurrences of it that start inside the window, as the calendar draws them: \
+                       a `repeat` rule's expanded, with its exclusions and overrides applied. An \
+                       event with none in the window is not listed.\n\nEach task due_by and \
+                       deadline inside the window is listed too, under `task_dates`: the calendar \
+                       draws them as events, so a question about what is coming up needs them. The \
                        event categories configured in `.mory/calendars.yaml` are listed under \
                        `categories`, as declared, and the config's `alarms`, saying when events \
                        and task dates ring where a note does not. Events subscribed from an \
-                       external calendar are \
-                       a separate tool, list_imported_events.\n\nThis is the declarations, for \
-                       editing them. To ask what is on, use list_agenda.",
+                       external calendar are a separate tool, list_imported_events.\n\nThis is the \
+                       declarations, for editing them. To ask what is on, use list_agenda.",
         annotations(title = "List events", read_only_hint = true, open_world_hint = false)
     )]
     pub async fn list_events(
         &self,
-        Parameters(args): Parameters<tools::WindowArgs>,
+        Parameters(args): Parameters<tools::EventsArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         tools::list_events(&self.state, args).await
     }
