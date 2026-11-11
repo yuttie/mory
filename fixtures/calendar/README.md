@@ -39,6 +39,11 @@ the alarms it rings at and spelling each as `Spec`'s `Display` does, so that `-1
 `-90 minutes` both read `-90m`. `note-fixtures.spec.ts` requires `eventsFromEntries` to resolve the
 same. `notes/alarms.md` is about little else.
 
+Each occurrence's end is recorded as well, under `ends`: one `start  name  end` line, the end as
+the calendar draws it or `none`, which `note-fixtures.spec.ts` requires `eventsFromEntries` to
+draw too. `notes/ends.md` is about little else. The backend also requires each converted note to end
+every occurrence where its feed does.
+
 An occurrence that sets no alarms of its own takes its category's, then the configuration's, then
 the built-in default, so the notes are read under `calendars.yaml`, a stand-in for
 `.mory/calendars.yaml`, whose parsed contents `notes.json` records as `calendars`. They are read

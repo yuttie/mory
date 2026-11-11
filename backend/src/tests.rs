@@ -3044,6 +3044,27 @@ fn draw_note_fixture(entry: &crate::models::ListEntry) -> Vec<String> {
     drawn_in_window(occurrences.iter().map(|occurrence| (occurrence.start, occurrence.name.as_str())))
 }
 
+/// `start  name  end` for everything that starts inside the window, in order, `end` as the
+/// calendar draws it or `none` -- what `note-fixtures.spec.ts` computes of `eventsFromEntries`.
+fn ends_in_window<'a>(drawn: impl IntoIterator<Item = (Start, &'a str, Option<Start>)>) -> Vec<String> {
+    let (from, to) = note_fixture_window();
+    let mut lines: Vec<String> = drawn
+        .into_iter()
+        .filter(|(start, _, _)| (from..=to).contains(&start.begins(&note_reader())))
+        .map(|(start, name, end)| {
+            format!("{start}  {name}  {}", end.map_or_else(|| "none".to_owned(), |end| end.to_string()))
+        })
+        .collect();
+    lines.sort();
+    lines
+}
+
+fn ends_of_note_fixture(entry: &crate::models::ListEntry) -> Vec<String> {
+    let (from, to) = note_fixture_window();
+    let occurrences = note_events::occurrences(std::slice::from_ref(entry), from, to, &note_reader());
+    ends_in_window(occurrences.iter().map(|occurrence| (occurrence.start, occurrence.name.as_str(), occurrence.end)))
+}
+
 /// The calendar configuration the fixtures are read under: what `.mory/calendars.yaml` holds, as
 /// the backend parses it.
 fn note_fixture_config() -> (serde_yaml::Value, crate::v2::CalendarConfig) {
@@ -3146,6 +3167,7 @@ fn note_fixtures_draw_as_recorded() {
             serde_json::json!({
                 "metadata": entry.metadata,
                 "drawn": draw_note_fixture(&entry),
+                "ends": ends_of_note_fixture(&entry),
                 "alarms": alarms_of_note_fixture(&entry, &categories_only),
                 "alarmsWithDefaults": alarms_of_note_fixture(&entry, &with_alarms),
             }),
@@ -3189,25 +3211,34 @@ fn note_fixtures_draw_as_recorded() {
     );
 }
 
-/// The note the app writes for a feed draws what the feed did, here as in the frontend.
+/// The note the app writes for a feed draws what the feed did, here as in the frontend, and ends
+/// each occurrence where the feed ends it.
 #[test]
 fn note_fixtures_converted_from_a_feed_draw_what_it_did() {
     let (from, to) = window(FIXTURE_WINDOW.0, FIXTURE_WINDOW.1);
     let reader = note_reader();
     for name in fixture_names() {
         let feed = crate::ical::expand(&fixture_calendar(&name), "fixture", from, to);
-        let imported = feed.events.iter().map(|event| {
+        let imported: Vec<_> = feed.events.iter().map(|event| {
             let start = note_events::to_wall_clock(&event.start, reader.zone)
                 .expect("the backend writes starts the frontend reads");
-            (start, event.name.as_str())
-        });
+            let end = event.end.as_deref().map(|end| {
+                note_events::to_wall_clock(end, reader.zone).expect("the backend writes ends the frontend reads")
+            });
+            (start, event.name.as_str(), end)
+        }).collect();
 
         let converted = format!("converted/{}", name.trim_end_matches(".ics"));
         let entry = note_fixture_entry(&format!("{converted}.md"));
         assert_eq!(
             draw_note_fixture(&entry),
-            drawn_in_window(imported),
+            drawn_in_window(imported.iter().map(|(start, name, _)| (*start, *name))),
             "{converted}.md should draw what {name} does",
+        );
+        assert_eq!(
+            ends_of_note_fixture(&entry),
+            ends_in_window(imported.iter().copied()),
+            "{converted}.md should end each occurrence where {name} does",
         );
     }
 }

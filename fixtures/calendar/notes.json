@@ -63,6 +63,12 @@
         "2024-05-20  Holiday",
         "2024-05-27  Holiday"
       ],
+      "ends": [
+        "2024-05-06  Holiday  2024-05-06",
+        "2024-05-13  Holiday  2024-05-13",
+        "2024-05-20  Holiday  2024-05-20",
+        "2024-05-27  Holiday  2024-05-27"
+      ],
       "metadata": {
         "events": {
           "Holiday": {
@@ -102,6 +108,11 @@
         "2023-04-17  Third Monday each April",
         "2024-04-15  Third Monday each April",
         "2025-04-21  Third Monday each April"
+      ],
+      "ends": [
+        "2023-04-17  Third Monday each April  2023-04-17",
+        "2024-04-15  Third Monday each April  2024-04-15",
+        "2025-04-21  Third Monday each April  2025-04-21"
       ],
       "metadata": {
         "events": {
@@ -146,6 +157,12 @@
         "2024-06-18 17:00  Third Wednesday from a first Wednesday",
         "2024-07-16 17:00  Third Wednesday from a first Wednesday",
         "2024-08-20 17:00  Third Wednesday from a first Wednesday"
+      ],
+      "ends": [
+        "2024-05-14 17:00  Third Wednesday from a first Wednesday  2024-05-14 18:00",
+        "2024-06-18 17:00  Third Wednesday from a first Wednesday  2024-06-18 18:00",
+        "2024-07-16 17:00  Third Wednesday from a first Wednesday  2024-07-16 18:00",
+        "2024-08-20 17:00  Third Wednesday from a first Wednesday  2024-08-20 18:00"
       ],
       "metadata": {
         "events": {
@@ -287,6 +304,44 @@
         "2026-11-19 01:00  Maintenance",
         "2026-12-17 01:00  Maintenance"
       ],
+      "ends": [
+        "2024-01-18 01:00  Maintenance  2024-01-18 05:00",
+        "2024-02-15 01:00  Maintenance  2024-02-15 05:00",
+        "2024-03-21 02:00  Maintenance  2024-03-21 06:00",
+        "2024-04-18 02:00  Maintenance  2024-04-18 06:00",
+        "2024-05-27 02:00  Maintenance, moved  2024-05-27 04:00",
+        "2024-06-20 02:00  Maintenance  2024-06-20 06:00",
+        "2024-07-18 02:00  Maintenance  2024-07-18 06:00",
+        "2024-08-15 02:00  Maintenance  2024-08-15 06:00",
+        "2024-09-19 02:00  Maintenance  2024-09-19 06:00",
+        "2024-10-17 02:00  Maintenance  2024-10-17 06:00",
+        "2024-11-21 01:00  Maintenance  2024-11-21 05:00",
+        "2024-12-19 01:00  Maintenance  2024-12-19 05:00",
+        "2025-01-16 01:00  Maintenance  2025-01-16 05:00",
+        "2025-02-20 01:00  Maintenance  2025-02-20 05:00",
+        "2025-03-20 02:00  Maintenance  2025-03-20 06:00",
+        "2025-04-17 02:00  Maintenance  2025-04-17 06:00",
+        "2025-05-15 02:00  Maintenance  2025-05-15 06:00",
+        "2025-06-19 02:00  Maintenance  2025-06-19 06:00",
+        "2025-07-17 02:00  Maintenance  2025-07-17 06:00",
+        "2025-08-21 02:00  Maintenance  2025-08-21 06:00",
+        "2025-09-18 02:00  Maintenance  2025-09-18 06:00",
+        "2025-10-16 02:00  Maintenance  2025-10-16 06:00",
+        "2025-11-20 01:00  Maintenance  2025-11-20 05:00",
+        "2025-12-18 01:00  Maintenance  2025-12-18 05:00",
+        "2026-01-15 01:00  Maintenance  2026-01-15 05:00",
+        "2026-02-19 01:00  Maintenance  2026-02-19 05:00",
+        "2026-03-19 02:00  Maintenance  2026-03-19 06:00",
+        "2026-04-16 02:00  Maintenance  2026-04-16 06:00",
+        "2026-05-21 02:00  Maintenance  2026-05-21 06:00",
+        "2026-06-18 02:00  Maintenance  2026-06-18 06:00",
+        "2026-07-16 02:00  Maintenance  2026-07-16 06:00",
+        "2026-08-20 02:00  Maintenance  2026-08-20 06:00",
+        "2026-09-17 02:00  Maintenance  2026-09-17 06:00",
+        "2026-10-15 02:00  Maintenance  2026-10-15 06:00",
+        "2026-11-19 01:00  Maintenance  2026-11-19 05:00",
+        "2026-12-17 01:00  Maintenance  2026-12-17 05:00"
+      ],
       "metadata": {
         "events": {
           "Maintenance": {
@@ -335,6 +390,11 @@
         "2024-05-13  Two-day break",
         "2024-05-20  Two-day break"
       ],
+      "ends": [
+        "2024-05-06  Two-day break  2024-05-07",
+        "2024-05-13  Two-day break  2024-05-14",
+        "2024-05-20  Two-day break  2024-05-21"
+      ],
       "metadata": {
         "events": {
           "Two-day break": {
@@ -381,6 +441,13 @@
         "2024-04-29 17:00  Month end",
         "2024-05-30 17:00  Month end"
       ],
+      "ends": [
+        "2024-01-30 16:00  Month end  2024-01-30 17:00",
+        "2024-02-28 16:00  Month end  2024-02-28 17:00",
+        "2024-03-30 17:00  Month end  2024-03-30 18:00",
+        "2024-04-29 17:00  Month end  2024-04-29 18:00",
+        "2024-05-30 17:00  Month end  2024-05-30 18:00"
+      ],
       "metadata": {
         "events": {
           "Month end": {
@@ -424,6 +491,12 @@
         "2024-06-18 17:00  Third Wednesday",
         "2024-07-16 17:00  Third Wednesday",
         "2024-08-20 17:00  Third Wednesday"
+      ],
+      "ends": [
+        "2024-05-14 17:00  Third Wednesday  2024-05-14 18:30",
+        "2024-06-18 17:00  Third Wednesday  2024-06-18 18:30",
+        "2024-07-16 17:00  Third Wednesday  2024-07-16 18:30",
+        "2024-08-20 17:00  Third Wednesday  2024-08-20 18:30"
       ],
       "metadata": {
         "events": {
@@ -754,6 +827,107 @@
         "2026-11-12 10:00  Rust release",
         "2026-12-24 10:00  Rust release"
       ],
+      "ends": [
+        "2015-06-25 10:00  Rust release  2015-06-25 11:00",
+        "2015-08-06 16:00  Moved to the afternoon  2015-08-06 17:30",
+        "2015-10-29 10:00  Rust release  2015-10-29 11:00",
+        "2016-01-21 10:00  Rust release  2016-01-21 11:00",
+        "2016-03-03 10:00  Rust release  2016-03-03 11:00",
+        "2016-04-14 10:00  Rust release  2016-04-14 11:00",
+        "2016-05-26 10:00  Rust release  2016-05-26 11:00",
+        "2016-07-07 10:00  Rust release  2016-07-07 11:00",
+        "2016-08-18 10:00  Rust release  2016-08-18 11:00",
+        "2016-09-29 10:00  Rust release  2016-09-29 11:00",
+        "2016-11-10 10:00  Rust release  2016-11-10 11:00",
+        "2016-12-22 10:00  Rust release  2016-12-22 11:00",
+        "2017-02-02 10:00  Rust release  2017-02-02 11:00",
+        "2017-03-16 10:00  Rust release  2017-03-16 11:00",
+        "2017-04-27 10:00  Rust release  2017-04-27 11:00",
+        "2017-06-08 10:00  Rust release  2017-06-08 11:00",
+        "2017-07-20 10:00  Rust release  2017-07-20 11:00",
+        "2017-08-31 10:00  Rust release  2017-08-31 11:00",
+        "2017-10-12 10:00  Rust release  2017-10-12 11:00",
+        "2017-11-23 10:00  Rust release  2017-11-23 11:00",
+        "2018-01-04 10:00  Rust release  2018-01-04 11:00",
+        "2018-02-15 10:00  Rust release  2018-02-15 11:00",
+        "2018-03-29 10:00  Rust release  2018-03-29 11:00",
+        "2018-05-10 10:00  Rust release  2018-05-10 11:00",
+        "2018-06-21 10:00  Rust release  2018-06-21 11:00",
+        "2018-08-02 10:00  Rust release  2018-08-02 11:00",
+        "2018-09-13 10:00  Rust release  2018-09-13 11:00",
+        "2018-10-25 10:00  Rust release  2018-10-25 11:00",
+        "2018-12-06 10:00  Rust release  2018-12-06 11:00",
+        "2019-01-17 10:00  Rust release  2019-01-17 11:00",
+        "2019-02-28 10:00  Rust release  2019-02-28 11:00",
+        "2019-04-11 10:00  Rust release  2019-04-11 11:00",
+        "2019-05-23 10:00  Rust release  2019-05-23 11:00",
+        "2019-07-04 10:00  Rust release  2019-07-04 11:00",
+        "2019-08-15 10:00  Rust release  2019-08-15 11:00",
+        "2019-09-26 10:00  Rust release  2019-09-26 11:00",
+        "2019-11-07 10:00  Rust release  2019-11-07 11:00",
+        "2019-12-19 10:00  Rust release  2019-12-19 11:00",
+        "2020-01-30 10:00  Rust release  2020-01-30 11:00",
+        "2020-03-12 10:00  Rust release  2020-03-12 11:00",
+        "2020-04-23 10:00  Rust release  2020-04-23 11:00",
+        "2020-06-04 10:00  Rust release  2020-06-04 11:00",
+        "2020-07-16 10:00  Rust release  2020-07-16 11:00",
+        "2020-08-27 10:00  Rust release  2020-08-27 11:00",
+        "2020-10-08 10:00  Rust release  2020-10-08 11:00",
+        "2020-11-19 10:00  Rust release  2020-11-19 11:00",
+        "2020-12-31 10:00  Rust release  2020-12-31 11:00",
+        "2021-02-11 10:00  Rust release  2021-02-11 11:00",
+        "2021-03-25 10:00  Rust release  2021-03-25 11:00",
+        "2021-05-06 10:00  Rust release  2021-05-06 11:00",
+        "2021-06-17 10:00  Rust release  2021-06-17 11:00",
+        "2021-07-29 10:00  Rust release  2021-07-29 11:00",
+        "2021-09-09 10:00  Rust release  2021-09-09 11:00",
+        "2021-10-21 10:00  Rust release  2021-10-21 11:00",
+        "2021-12-02 10:00  Rust release  2021-12-02 11:00",
+        "2022-01-13 10:00  Rust release  2022-01-13 11:00",
+        "2022-02-24 10:00  Rust release  2022-02-24 11:00",
+        "2022-04-07 10:00  Rust release  2022-04-07 11:00",
+        "2022-05-19 10:00  Rust release  2022-05-19 11:00",
+        "2022-06-30 10:00  Rust release  2022-06-30 11:00",
+        "2022-08-11 10:00  Rust release  2022-08-11 11:00",
+        "2022-09-22 10:00  Rust release  2022-09-22 11:00",
+        "2022-11-03 10:00  Rust release  2022-11-03 11:00",
+        "2022-12-15 10:00  Rust release  2022-12-15 11:00",
+        "2023-01-26 10:00  Rust release  2023-01-26 11:00",
+        "2023-03-09 10:00  Rust release  2023-03-09 11:00",
+        "2023-04-20 10:00  Rust release  2023-04-20 11:00",
+        "2023-06-01 10:00  Rust release  2023-06-01 11:00",
+        "2023-07-13 10:00  Rust release  2023-07-13 11:00",
+        "2023-08-24 10:00  Rust release  2023-08-24 11:00",
+        "2023-10-05 10:00  Rust release  2023-10-05 11:00",
+        "2023-11-16 10:00  Rust release  2023-11-16 11:00",
+        "2023-12-28 10:00  Rust release  2023-12-28 11:00",
+        "2024-02-08 10:00  Rust release  2024-02-08 11:00",
+        "2024-03-21 10:00  Rust release  2024-03-21 11:00",
+        "2024-05-02 10:00  Rust release  2024-05-02 11:00",
+        "2024-06-13 10:00  Rust release  2024-06-13 11:00",
+        "2024-07-25 10:00  Rust release  2024-07-25 11:00",
+        "2024-09-05 10:00  Rust release  2024-09-05 11:00",
+        "2024-10-17 10:00  Rust release  2024-10-17 11:00",
+        "2024-11-28 10:00  Rust release  2024-11-28 11:00",
+        "2025-01-09 10:00  Rust release  2025-01-09 11:00",
+        "2025-02-20 10:00  Rust release  2025-02-20 11:00",
+        "2025-04-03 10:00  Rust release  2025-04-03 11:00",
+        "2025-05-15 10:00  Rust release  2025-05-15 11:00",
+        "2025-06-26 10:00  Rust release  2025-06-26 11:00",
+        "2025-08-07 10:00  Rust release  2025-08-07 11:00",
+        "2025-09-18 10:00  Rust release  2025-09-18 11:00",
+        "2025-10-30 10:00  Rust release  2025-10-30 11:00",
+        "2025-12-11 10:00  Rust release  2025-12-11 11:00",
+        "2026-01-22 10:00  Rust release  2026-01-22 11:00",
+        "2026-03-05 10:00  Rust release  2026-03-05 11:00",
+        "2026-04-16 10:00  Rust release  2026-04-16 11:00",
+        "2026-05-28 10:00  Rust release  2026-05-28 11:00",
+        "2026-07-09 10:00  Rust release  2026-07-09 11:00",
+        "2026-08-20 10:00  Rust release  2026-08-20 11:00",
+        "2026-10-01 10:00  Rust release  2026-10-01 11:00",
+        "2026-11-12 10:00  Rust release  2026-11-12 11:00",
+        "2026-12-24 10:00  Rust release  2026-12-24 11:00"
+      ],
       "metadata": {
         "events": {
           "Rust release": {
@@ -809,6 +983,12 @@
         "2024-05-09 03:00  Weekly plus an extra",
         "2024-05-12 18:00  Weekly plus an extra",
         "2024-05-19 18:00  Weekly plus an extra"
+      ],
+      "ends": [
+        "2024-05-05 18:00  Weekly plus an extra  2024-05-05 19:00",
+        "2024-05-09 03:00  Weekly plus an extra  2024-05-09 04:00",
+        "2024-05-12 18:00  Weekly plus an extra  2024-05-12 19:00",
+        "2024-05-19 18:00  Weekly plus an extra  2024-05-19 19:00"
       ],
       "metadata": {
         "events": {
@@ -1295,6 +1475,157 @@
         "2026-12-25 10:00  Weekly across a DST change",
         "2027-01-01 10:00  Weekly across a DST change"
       ],
+      "ends": [
+        "2024-03-01 10:00  Weekly across a DST change  2024-03-01 11:00",
+        "2024-03-08 10:00  Weekly across a DST change  2024-03-08 11:00",
+        "2024-03-15 10:00  Weekly across a DST change  2024-03-15 11:00",
+        "2024-03-22 10:00  Weekly across a DST change  2024-03-22 11:00",
+        "2024-03-29 10:00  Weekly across a DST change  2024-03-29 11:00",
+        "2024-04-05 10:00  Weekly across a DST change  2024-04-05 11:00",
+        "2024-04-12 10:00  Weekly across a DST change  2024-04-12 11:00",
+        "2024-04-19 10:00  Weekly across a DST change  2024-04-19 11:00",
+        "2024-04-26 10:00  Weekly across a DST change  2024-04-26 11:00",
+        "2024-05-03 10:00  Weekly across a DST change  2024-05-03 11:00",
+        "2024-05-10 10:00  Weekly across a DST change  2024-05-10 11:00",
+        "2024-05-17 10:00  Weekly across a DST change  2024-05-17 11:00",
+        "2024-05-24 10:00  Weekly across a DST change  2024-05-24 11:00",
+        "2024-05-31 10:00  Weekly across a DST change  2024-05-31 11:00",
+        "2024-06-07 10:00  Weekly across a DST change  2024-06-07 11:00",
+        "2024-06-14 10:00  Weekly across a DST change  2024-06-14 11:00",
+        "2024-06-21 10:00  Weekly across a DST change  2024-06-21 11:00",
+        "2024-06-28 10:00  Weekly across a DST change  2024-06-28 11:00",
+        "2024-07-05 10:00  Weekly across a DST change  2024-07-05 11:00",
+        "2024-07-12 10:00  Weekly across a DST change  2024-07-12 11:00",
+        "2024-07-19 10:00  Weekly across a DST change  2024-07-19 11:00",
+        "2024-07-26 10:00  Weekly across a DST change  2024-07-26 11:00",
+        "2024-08-02 10:00  Weekly across a DST change  2024-08-02 11:00",
+        "2024-08-09 10:00  Weekly across a DST change  2024-08-09 11:00",
+        "2024-08-16 10:00  Weekly across a DST change  2024-08-16 11:00",
+        "2024-08-23 10:00  Weekly across a DST change  2024-08-23 11:00",
+        "2024-08-30 10:00  Weekly across a DST change  2024-08-30 11:00",
+        "2024-09-06 10:00  Weekly across a DST change  2024-09-06 11:00",
+        "2024-09-13 10:00  Weekly across a DST change  2024-09-13 11:00",
+        "2024-09-20 10:00  Weekly across a DST change  2024-09-20 11:00",
+        "2024-09-27 10:00  Weekly across a DST change  2024-09-27 11:00",
+        "2024-10-04 10:00  Weekly across a DST change  2024-10-04 11:00",
+        "2024-10-11 10:00  Weekly across a DST change  2024-10-11 11:00",
+        "2024-10-18 10:00  Weekly across a DST change  2024-10-18 11:00",
+        "2024-10-25 10:00  Weekly across a DST change  2024-10-25 11:00",
+        "2024-11-01 10:00  Weekly across a DST change  2024-11-01 11:00",
+        "2024-11-08 10:00  Weekly across a DST change  2024-11-08 11:00",
+        "2024-11-15 10:00  Weekly across a DST change  2024-11-15 11:00",
+        "2024-11-22 10:00  Weekly across a DST change  2024-11-22 11:00",
+        "2024-11-29 10:00  Weekly across a DST change  2024-11-29 11:00",
+        "2024-12-06 10:00  Weekly across a DST change  2024-12-06 11:00",
+        "2024-12-13 10:00  Weekly across a DST change  2024-12-13 11:00",
+        "2024-12-20 10:00  Weekly across a DST change  2024-12-20 11:00",
+        "2024-12-27 10:00  Weekly across a DST change  2024-12-27 11:00",
+        "2025-01-03 10:00  Weekly across a DST change  2025-01-03 11:00",
+        "2025-01-10 10:00  Weekly across a DST change  2025-01-10 11:00",
+        "2025-01-17 10:00  Weekly across a DST change  2025-01-17 11:00",
+        "2025-01-24 10:00  Weekly across a DST change  2025-01-24 11:00",
+        "2025-01-31 10:00  Weekly across a DST change  2025-01-31 11:00",
+        "2025-02-07 10:00  Weekly across a DST change  2025-02-07 11:00",
+        "2025-02-14 10:00  Weekly across a DST change  2025-02-14 11:00",
+        "2025-02-21 10:00  Weekly across a DST change  2025-02-21 11:00",
+        "2025-02-28 10:00  Weekly across a DST change  2025-02-28 11:00",
+        "2025-03-07 10:00  Weekly across a DST change  2025-03-07 11:00",
+        "2025-03-14 10:00  Weekly across a DST change  2025-03-14 11:00",
+        "2025-03-21 10:00  Weekly across a DST change  2025-03-21 11:00",
+        "2025-03-28 10:00  Weekly across a DST change  2025-03-28 11:00",
+        "2025-04-04 10:00  Weekly across a DST change  2025-04-04 11:00",
+        "2025-04-11 10:00  Weekly across a DST change  2025-04-11 11:00",
+        "2025-04-18 10:00  Weekly across a DST change  2025-04-18 11:00",
+        "2025-04-25 10:00  Weekly across a DST change  2025-04-25 11:00",
+        "2025-05-02 10:00  Weekly across a DST change  2025-05-02 11:00",
+        "2025-05-09 10:00  Weekly across a DST change  2025-05-09 11:00",
+        "2025-05-16 10:00  Weekly across a DST change  2025-05-16 11:00",
+        "2025-05-23 10:00  Weekly across a DST change  2025-05-23 11:00",
+        "2025-05-30 10:00  Weekly across a DST change  2025-05-30 11:00",
+        "2025-06-06 10:00  Weekly across a DST change  2025-06-06 11:00",
+        "2025-06-13 10:00  Weekly across a DST change  2025-06-13 11:00",
+        "2025-06-20 10:00  Weekly across a DST change  2025-06-20 11:00",
+        "2025-06-27 10:00  Weekly across a DST change  2025-06-27 11:00",
+        "2025-07-04 10:00  Weekly across a DST change  2025-07-04 11:00",
+        "2025-07-11 10:00  Weekly across a DST change  2025-07-11 11:00",
+        "2025-07-18 10:00  Weekly across a DST change  2025-07-18 11:00",
+        "2025-07-25 10:00  Weekly across a DST change  2025-07-25 11:00",
+        "2025-08-01 10:00  Weekly across a DST change  2025-08-01 11:00",
+        "2025-08-08 10:00  Weekly across a DST change  2025-08-08 11:00",
+        "2025-08-15 10:00  Weekly across a DST change  2025-08-15 11:00",
+        "2025-08-22 10:00  Weekly across a DST change  2025-08-22 11:00",
+        "2025-08-29 10:00  Weekly across a DST change  2025-08-29 11:00",
+        "2025-09-05 10:00  Weekly across a DST change  2025-09-05 11:00",
+        "2025-09-12 10:00  Weekly across a DST change  2025-09-12 11:00",
+        "2025-09-19 10:00  Weekly across a DST change  2025-09-19 11:00",
+        "2025-09-26 10:00  Weekly across a DST change  2025-09-26 11:00",
+        "2025-10-03 10:00  Weekly across a DST change  2025-10-03 11:00",
+        "2025-10-10 10:00  Weekly across a DST change  2025-10-10 11:00",
+        "2025-10-17 10:00  Weekly across a DST change  2025-10-17 11:00",
+        "2025-10-24 10:00  Weekly across a DST change  2025-10-24 11:00",
+        "2025-10-31 10:00  Weekly across a DST change  2025-10-31 11:00",
+        "2025-11-07 10:00  Weekly across a DST change  2025-11-07 11:00",
+        "2025-11-14 10:00  Weekly across a DST change  2025-11-14 11:00",
+        "2025-11-21 10:00  Weekly across a DST change  2025-11-21 11:00",
+        "2025-11-28 10:00  Weekly across a DST change  2025-11-28 11:00",
+        "2025-12-05 10:00  Weekly across a DST change  2025-12-05 11:00",
+        "2025-12-12 10:00  Weekly across a DST change  2025-12-12 11:00",
+        "2025-12-19 10:00  Weekly across a DST change  2025-12-19 11:00",
+        "2025-12-26 10:00  Weekly across a DST change  2025-12-26 11:00",
+        "2026-01-02 10:00  Weekly across a DST change  2026-01-02 11:00",
+        "2026-01-09 10:00  Weekly across a DST change  2026-01-09 11:00",
+        "2026-01-16 10:00  Weekly across a DST change  2026-01-16 11:00",
+        "2026-01-23 10:00  Weekly across a DST change  2026-01-23 11:00",
+        "2026-01-30 10:00  Weekly across a DST change  2026-01-30 11:00",
+        "2026-02-06 10:00  Weekly across a DST change  2026-02-06 11:00",
+        "2026-02-13 10:00  Weekly across a DST change  2026-02-13 11:00",
+        "2026-02-20 10:00  Weekly across a DST change  2026-02-20 11:00",
+        "2026-02-27 10:00  Weekly across a DST change  2026-02-27 11:00",
+        "2026-03-06 10:00  Weekly across a DST change  2026-03-06 11:00",
+        "2026-03-13 10:00  Weekly across a DST change  2026-03-13 11:00",
+        "2026-03-20 10:00  Weekly across a DST change  2026-03-20 11:00",
+        "2026-03-27 10:00  Weekly across a DST change  2026-03-27 11:00",
+        "2026-04-03 10:00  Weekly across a DST change  2026-04-03 11:00",
+        "2026-04-10 10:00  Weekly across a DST change  2026-04-10 11:00",
+        "2026-04-17 10:00  Weekly across a DST change  2026-04-17 11:00",
+        "2026-04-24 10:00  Weekly across a DST change  2026-04-24 11:00",
+        "2026-05-01 10:00  Weekly across a DST change  2026-05-01 11:00",
+        "2026-05-08 10:00  Weekly across a DST change  2026-05-08 11:00",
+        "2026-05-15 10:00  Weekly across a DST change  2026-05-15 11:00",
+        "2026-05-22 10:00  Weekly across a DST change  2026-05-22 11:00",
+        "2026-05-29 10:00  Weekly across a DST change  2026-05-29 11:00",
+        "2026-06-05 10:00  Weekly across a DST change  2026-06-05 11:00",
+        "2026-06-12 10:00  Weekly across a DST change  2026-06-12 11:00",
+        "2026-06-19 10:00  Weekly across a DST change  2026-06-19 11:00",
+        "2026-06-26 10:00  Weekly across a DST change  2026-06-26 11:00",
+        "2026-07-03 10:00  Weekly across a DST change  2026-07-03 11:00",
+        "2026-07-10 10:00  Weekly across a DST change  2026-07-10 11:00",
+        "2026-07-17 10:00  Weekly across a DST change  2026-07-17 11:00",
+        "2026-07-24 10:00  Weekly across a DST change  2026-07-24 11:00",
+        "2026-07-31 10:00  Weekly across a DST change  2026-07-31 11:00",
+        "2026-08-07 10:00  Weekly across a DST change  2026-08-07 11:00",
+        "2026-08-14 10:00  Weekly across a DST change  2026-08-14 11:00",
+        "2026-08-21 10:00  Weekly across a DST change  2026-08-21 11:00",
+        "2026-08-28 10:00  Weekly across a DST change  2026-08-28 11:00",
+        "2026-09-04 10:00  Weekly across a DST change  2026-09-04 11:00",
+        "2026-09-11 10:00  Weekly across a DST change  2026-09-11 11:00",
+        "2026-09-18 10:00  Weekly across a DST change  2026-09-18 11:00",
+        "2026-09-25 10:00  Weekly across a DST change  2026-09-25 11:00",
+        "2026-10-02 10:00  Weekly across a DST change  2026-10-02 11:00",
+        "2026-10-09 10:00  Weekly across a DST change  2026-10-09 11:00",
+        "2026-10-16 10:00  Weekly across a DST change  2026-10-16 11:00",
+        "2026-10-23 10:00  Weekly across a DST change  2026-10-23 11:00",
+        "2026-10-30 10:00  Weekly across a DST change  2026-10-30 11:00",
+        "2026-11-06 10:00  Weekly across a DST change  2026-11-06 11:00",
+        "2026-11-13 10:00  Weekly across a DST change  2026-11-13 11:00",
+        "2026-11-20 10:00  Weekly across a DST change  2026-11-20 11:00",
+        "2026-11-27 10:00  Weekly across a DST change  2026-11-27 11:00",
+        "2026-12-04 10:00  Weekly across a DST change  2026-12-04 11:00",
+        "2026-12-11 10:00  Weekly across a DST change  2026-12-11 11:00",
+        "2026-12-18 10:00  Weekly across a DST change  2026-12-18 11:00",
+        "2026-12-25 10:00  Weekly across a DST change  2026-12-25 11:00",
+        "2027-01-01 10:00  Weekly across a DST change  2027-01-01 11:00"
+      ],
       "metadata": {
         "events": {
           "Weekly across a DST change": {
@@ -1343,6 +1674,14 @@
         "2020-01-26 10:00  Bounded fortnightly",
         "2020-01-29 10:00  Bounded fortnightly",
         "2020-02-09 10:00  Bounded fortnightly"
+      ],
+      "ends": [
+        "2020-01-01 10:00  Bounded fortnightly  2020-01-01 11:00",
+        "2020-01-12 10:00  Bounded fortnightly  2020-01-12 11:00",
+        "2020-01-15 10:00  Bounded fortnightly  2020-01-15 11:00",
+        "2020-01-26 10:00  Bounded fortnightly  2020-01-26 11:00",
+        "2020-01-29 10:00  Bounded fortnightly  2020-01-29 11:00",
+        "2020-02-09 10:00  Bounded fortnightly  2020-02-09 11:00"
       ],
       "metadata": {
         "events": {
@@ -1506,6 +1845,51 @@
         "2024-07-20  All day in a category",
         "2024-07-21  All day with a category with nothing in it",
         "2024-07-22  All day with a category that silences"
+      ],
+      "ends": [
+        "2024-05-06 09:00  Not set  none",
+        "2024-05-06 10:00  On the event  none",
+        "2024-05-06 11:00  A single string  none",
+        "2024-05-06 12:00  Silenced  none",
+        "2024-05-06 13:00  An empty list is not set  none",
+        "2024-05-06 14:00  Malformed entries are dropped  none",
+        "2024-05-06 15:00  Every spelling  none",
+        "2024-05-06 16:00  The same alarm twice  none",
+        "2024-05-07  All day not set  none",
+        "2024-05-08  All day with times  none",
+        "2024-05-09  A single string for a time of day  none",
+        "2024-05-13 09:00  A series  none",
+        "2024-05-14 09:00  A series with none set  none",
+        "2024-05-20 09:00  A series  none",
+        "2024-05-21 09:00  A series with none set  none",
+        "2024-05-27 09:00  A series  none",
+        "2024-06-03 09:00  A series  none",
+        "2024-06-10 14:00  Listed  none",
+        "2024-06-11 14:00  Listed  none",
+        "2024-06-12 14:00  Listed  none",
+        "2024-06-13 14:00  Listed  none",
+        "2024-06-14 14:00  Listed with none set  none",
+        "2024-06-15  Listed with none set  none",
+        "2024-06-16 14:00  Listed with none set  none",
+        "2024-06-17 14:00  A start and a list  none",
+        "2024-06-18 14:00  A start and a list  none",
+        "2024-06-19 14:00  A start and a list  none",
+        "2024-06-20 14:00  Finished  none",
+        "2024-07-01 09:00  A category  none",
+        "2024-07-02 09:00  A nested category  none",
+        "2024-07-03 09:00  A nested category that sets none  none",
+        "2024-07-04 09:00  A category that silences  none",
+        "2024-07-05 09:00  A category that is not configured  none",
+        "2024-07-08 09:00  A category misspelt  none",
+        "2024-07-09 09:00  A category with nothing in it  none",
+        "2024-07-10 09:00  Through an ancestor that is not configured  none",
+        "2024-07-11 09:00  A category and a list on the event  none",
+        "2024-07-15 09:00  A category on a series  none",
+        "2024-07-16 09:00  A category on a series  none",
+        "2024-07-17 09:00  A category on a series  none",
+        "2024-07-20  All day in a category  none",
+        "2024-07-21  All day with a category with nothing in it  none",
+        "2024-07-22  All day with a category that silences  none"
       ],
       "metadata": {
         "events": {
@@ -1791,6 +2175,16 @@
         "2024-06-01  Monthly review",
         "2024-08-01  Monthly review"
       ],
+      "ends": [
+        "2024-05-01  Monthly review  none",
+        "2024-05-04  Weekly day off  2024-05-05",
+        "2024-05-10  Named zone on a date  none",
+        "2024-05-11  Named zone on a date  none",
+        "2024-05-11  Weekly day off  2024-05-12",
+        "2024-05-18  Weekly day off  2024-05-19",
+        "2024-06-01  Monthly review  none",
+        "2024-08-01  Monthly review  none"
+      ],
       "metadata": {
         "events": {
           "Monthly review": {
@@ -1818,6 +2212,271 @@
               "freq": "weekly"
             },
             "start": "2024-05-04"
+          }
+        }
+      }
+    },
+    "notes/ends.md": {
+      "alarms": [
+        "2024-01-15 09:00  A month and a half  +0m",
+        "2024-01-31 09:00  A month from the 31st  +0m",
+        "2024-02-29 09:00  A year from a leap day  +0m",
+        "2024-03-09 12:00  A day across the spring change  +0m",
+        "2024-03-09 12:00  Hours across the spring change  +0m",
+        "2024-03-10 01:00  Into the hour that is skipped  +0m",
+        "2024-04-01 09:00  A week and a half  +0m",
+        "2024-04-02 09:00  Half a day  +0m",
+        "2024-04-03 09:00  An hour and a half  +0m",
+        "2024-04-03 10:00  A fraction of a millisecond  +0m",
+        "2024-04-03 11:00  Seconds  +0m",
+        "2024-05-03 09:00  At its own start  +0m",
+        "2024-05-03 23:00  Past midnight  +0m",
+        "2024-05-10  Days on a date  none",
+        "2024-05-12  Hours on a date  none",
+        "2024-05-14 09:00  A date with an offset end  +0m",
+        "2024-05-20 22:00  Time of day on a rule  +0m",
+        "2024-05-21 22:00  Time of day on a rule  +0m",
+        "2024-05-22 09:00  Hours on a rule  +0m",
+        "2024-05-23 09:00  Hours on a rule  +0m",
+        "2024-06-01  Whole days on an all-day rule  none",
+        "2024-06-08  Whole days on an all-day rule  none",
+        "2024-06-20 09:00  Instances inherit the end as written  +0m",
+        "2024-06-24 09:00  Instances inherit the end as written  +0m",
+        "2024-06-25 09:00  Instances inherit the end as written  +0m",
+        "2024-07-01 09:00  An override's own end  +0m",
+        "2024-07-02 09:00  An override's own end  +0m",
+        "2024-11-02 09:00  Absolute end on a rule across the autumn change  +0m",
+        "2024-11-03 09:00  Absolute end on a rule across the autumn change  +0m",
+        "2024-11-04 09:00  Absolute end on a rule across the autumn change  +0m"
+      ],
+      "alarmsWithDefaults": [
+        "2024-01-15 09:00  A month and a half  -5m",
+        "2024-01-31 09:00  A month from the 31st  -5m",
+        "2024-02-29 09:00  A year from a leap day  -5m",
+        "2024-03-09 12:00  A day across the spring change  -5m",
+        "2024-03-09 12:00  Hours across the spring change  -5m",
+        "2024-03-10 01:00  Into the hour that is skipped  -5m",
+        "2024-04-01 09:00  A week and a half  -5m",
+        "2024-04-02 09:00  Half a day  -5m",
+        "2024-04-03 09:00  An hour and a half  -5m",
+        "2024-04-03 10:00  A fraction of a millisecond  -5m",
+        "2024-04-03 11:00  Seconds  -5m",
+        "2024-05-03 09:00  At its own start  -5m",
+        "2024-05-03 23:00  Past midnight  -5m",
+        "2024-05-10  Days on a date  -1d 18:00",
+        "2024-05-12  Hours on a date  -1d 18:00",
+        "2024-05-14 09:00  A date with an offset end  -5m",
+        "2024-05-20 22:00  Time of day on a rule  -5m",
+        "2024-05-21 22:00  Time of day on a rule  -5m",
+        "2024-05-22 09:00  Hours on a rule  -5m",
+        "2024-05-23 09:00  Hours on a rule  -5m",
+        "2024-06-01  Whole days on an all-day rule  -1d 18:00",
+        "2024-06-08  Whole days on an all-day rule  -1d 18:00",
+        "2024-06-20 09:00  Instances inherit the end as written  -5m",
+        "2024-06-24 09:00  Instances inherit the end as written  -5m",
+        "2024-06-25 09:00  Instances inherit the end as written  -5m",
+        "2024-07-01 09:00  An override's own end  -5m",
+        "2024-07-02 09:00  An override's own end  -5m",
+        "2024-11-02 09:00  Absolute end on a rule across the autumn change  -5m",
+        "2024-11-03 09:00  Absolute end on a rule across the autumn change  -5m",
+        "2024-11-04 09:00  Absolute end on a rule across the autumn change  -5m"
+      ],
+      "drawn": [
+        "2024-01-15 09:00  A month and a half",
+        "2024-01-31 09:00  A month from the 31st",
+        "2024-02-29 09:00  A year from a leap day",
+        "2024-03-09 12:00  A day across the spring change",
+        "2024-03-09 12:00  Hours across the spring change",
+        "2024-03-10 01:00  Into the hour that is skipped",
+        "2024-04-01 09:00  A week and a half",
+        "2024-04-02 09:00  Half a day",
+        "2024-04-03 09:00  An hour and a half",
+        "2024-04-03 10:00  A fraction of a millisecond",
+        "2024-04-03 11:00  Seconds",
+        "2024-05-03 09:00  At its own start",
+        "2024-05-03 23:00  Past midnight",
+        "2024-05-10  Days on a date",
+        "2024-05-12  Hours on a date",
+        "2024-05-14 09:00  A date with an offset end",
+        "2024-05-20 22:00  Time of day on a rule",
+        "2024-05-21 22:00  Time of day on a rule",
+        "2024-05-22 09:00  Hours on a rule",
+        "2024-05-23 09:00  Hours on a rule",
+        "2024-06-01  Whole days on an all-day rule",
+        "2024-06-08  Whole days on an all-day rule",
+        "2024-06-20 09:00  Instances inherit the end as written",
+        "2024-06-24 09:00  Instances inherit the end as written",
+        "2024-06-25 09:00  Instances inherit the end as written",
+        "2024-07-01 09:00  An override's own end",
+        "2024-07-02 09:00  An override's own end",
+        "2024-11-02 09:00  Absolute end on a rule across the autumn change",
+        "2024-11-03 09:00  Absolute end on a rule across the autumn change",
+        "2024-11-04 09:00  Absolute end on a rule across the autumn change"
+      ],
+      "ends": [
+        "2024-01-15 09:00  A month and a half  2024-02-15 09:00",
+        "2024-01-31 09:00  A month from the 31st  2024-02-29 09:00",
+        "2024-02-29 09:00  A year from a leap day  2025-02-28 09:00",
+        "2024-03-09 12:00  A day across the spring change  2024-03-10 12:00",
+        "2024-03-09 12:00  Hours across the spring change  2024-03-10 13:00",
+        "2024-03-10 01:00  Into the hour that is skipped  2024-03-10 03:30",
+        "2024-04-01 09:00  A week and a half  2024-04-12 09:00",
+        "2024-04-02 09:00  Half a day  2024-04-03 09:00",
+        "2024-04-03 09:00  An hour and a half  2024-04-03 10:30",
+        "2024-04-03 10:00  A fraction of a millisecond  2024-04-03 10:00",
+        "2024-04-03 11:00  Seconds  2024-04-03 11:01:30",
+        "2024-05-03 09:00  At its own start  2024-05-04 09:00",
+        "2024-05-03 23:00  Past midnight  2024-05-04 01:00",
+        "2024-05-10  Days on a date  2024-05-12",
+        "2024-05-12  Hours on a date  2024-05-13",
+        "2024-05-14 09:00  A date with an offset end  2024-05-14 13:00",
+        "2024-05-20 22:00  Time of day on a rule  2024-05-21 01:30",
+        "2024-05-21 22:00  Time of day on a rule  2024-05-22 01:30",
+        "2024-05-22 09:00  Hours on a rule  2024-05-22 09:45",
+        "2024-05-23 09:00  Hours on a rule  2024-05-23 09:45",
+        "2024-06-01  Whole days on an all-day rule  2024-06-03",
+        "2024-06-08  Whole days on an all-day rule  2024-06-10",
+        "2024-06-20 09:00  Instances inherit the end as written  2024-06-20 10:00",
+        "2024-06-24 09:00  Instances inherit the end as written  2024-06-20 10:00",
+        "2024-06-25 09:00  Instances inherit the end as written  2024-06-25 09:30",
+        "2024-07-01 09:00  An override's own end  2024-07-01 10:00",
+        "2024-07-02 09:00  An override's own end  2024-07-02 12:00",
+        "2024-11-02 09:00  Absolute end on a rule across the autumn change  2024-11-02 10:15",
+        "2024-11-03 09:00  Absolute end on a rule across the autumn change  2024-11-03 10:15",
+        "2024-11-04 09:00  Absolute end on a rule across the autumn change  2024-11-04 10:15"
+      ],
+      "metadata": {
+        "events": {
+          "A date with an offset end": {
+            "end": "2024-05-14 20:00:00+00:00",
+            "start": "2024-05-14 09:00"
+          },
+          "A day across the spring change": {
+            "end": "+1d",
+            "start": "2024-03-09 12:00"
+          },
+          "A fraction of a millisecond": {
+            "end": "+1.5ms",
+            "start": "2024-04-03 10:00"
+          },
+          "A month and a half": {
+            "end": "+1.5M",
+            "start": "2024-01-15 09:00"
+          },
+          "A month from the 31st": {
+            "end": "+1M",
+            "start": "2024-01-31 09:00"
+          },
+          "A week and a half": {
+            "end": "+1.5w",
+            "start": "2024-04-01 09:00"
+          },
+          "A year from a leap day": {
+            "end": "+1 year",
+            "start": "2024-02-29 09:00"
+          },
+          "Absolute end on a rule across the autumn change": {
+            "end": "2024-11-02 10:15",
+            "repeat": {
+              "count": 3,
+              "freq": "daily"
+            },
+            "start": "2024-11-02 09:00"
+          },
+          "An hour and a half": {
+            "end": "+1.5h",
+            "start": "2024-04-03 09:00"
+          },
+          "An override's own end": {
+            "end": "+1h",
+            "overrides": [
+              {
+                "at": "2024-07-02 09:00",
+                "end": "12:00"
+              }
+            ],
+            "repeat": {
+              "count": 2,
+              "freq": "daily"
+            },
+            "start": "2024-07-01 09:00"
+          },
+          "At its own start": {
+            "end": "09:00",
+            "start": "2024-05-03 09:00"
+          },
+          "Days on a date": {
+            "end": "+2d",
+            "start": "2024-05-10"
+          },
+          "Half a day": {
+            "end": "+.5d",
+            "start": "2024-04-02 09:00"
+          },
+          "Hours across the spring change": {
+            "end": "+24h",
+            "start": "2024-03-09 12:00"
+          },
+          "Hours on a date": {
+            "end": "+36h",
+            "start": "2024-05-12"
+          },
+          "Hours on a rule": {
+            "end": "+45m",
+            "repeat": {
+              "count": 2,
+              "freq": "daily"
+            },
+            "start": "2024-05-22 09:00"
+          },
+          "Instances inherit the end as written": {
+            "end": "2024-06-20 10:00",
+            "instances": [
+              {
+                "start": "2024-06-24 09:00"
+              },
+              {
+                "end": "+30m",
+                "start": "2024-06-25 09:00"
+              }
+            ],
+            "start": "2024-06-20 09:00"
+          },
+          "Into the hour that is skipped": {
+            "end": "02:30",
+            "start": "2024-03-10 01:00"
+          },
+          "More months than a date holds": {
+            "end": "+99999999999999999999M",
+            "start": "2024-02-29 10:00"
+          },
+          "More years than a date holds": {
+            "end": "+99999999999999999999y",
+            "start": "2024-02-29 11:00"
+          },
+          "Past midnight": {
+            "end": "01:00",
+            "start": "2024-05-03 23:00"
+          },
+          "Seconds": {
+            "end": "+90 Seconds",
+            "start": "2024-04-03 11:00"
+          },
+          "Time of day on a rule": {
+            "end": "01:30",
+            "repeat": {
+              "count": 2,
+              "freq": "daily"
+            },
+            "start": "2024-05-20 22:00"
+          },
+          "Whole days on an all-day rule": {
+            "end": "2024-06-03",
+            "repeat": {
+              "count": 2,
+              "freq": "weekly"
+            },
+            "start": "2024-06-01"
           }
         }
       }
@@ -1930,6 +2589,42 @@
         "2024-10-26 10:00  Exclusions only Date reads",
         "2024-10-28 10:00  Override only Date reads",
         "2024-10-29 10:00  Override only Date reads"
+      ],
+      "ends": [
+        "2024-02-29 17:00  Day past its month's end with an offset  none",
+        "2024-03-01 11:00  Day past its month's end  none",
+        "2024-04-28 04:00  Until that does not parse  none",
+        "2024-04-29 04:00  Until that does not parse  none",
+        "2024-04-30 04:00  Until that does not parse  none",
+        "2024-05-01  Date past its month's end  none",
+        "2024-05-01 04:00  Until that does not parse  none",
+        "2024-05-01 09:00  Empty end on a start  none",
+        "2024-05-04 10:00  Blank name  none",
+        "2024-05-05 09:00  Durations  2024-05-05 10:30",
+        "2024-05-05 09:00  Week start named as no weekday  none",
+        "2024-05-05 10:00  Long duration  2024-05-05 12:00",
+        "2024-05-05 11:00  Time of day  2024-05-05 12:00",
+        "2024-05-06 09:00  Absolute end on a rule  2024-05-06 10:00",
+        "2024-05-07 09:00  Absolute end on a rule  2024-05-07 10:00",
+        "2024-05-08 09:00  Instances in a null  none",
+        "2024-05-09 09:00  Finished  none",
+        "2024-05-10 09:00  Renamed overrides keep no series name  none",
+        "2024-05-11 09:00  Renamed overrides keep no series name  none",
+        "2024-05-13  Date with Z  none",
+        "2024-05-13 09:00  Week start named as no weekday  none",
+        "2024-05-14 08:00  End of the day with an offset  none",
+        "2024-05-19 09:00  Week start named as no weekday  none",
+        "2024-05-27 09:00  Week start named as no weekday  none",
+        "2024-08-04 00:00  Midnight written as the day's end  none",
+        "2024-09-24 10:00  Time of day with a fraction  2024-09-24 11:30",
+        "2024-09-25 10:00  Time of day Date reads as a year  2024-09-25 11:00",
+        "2024-10-21 10:00  Exclusions only Date reads  none",
+        "2024-10-22 10:00  Exclusions only Date reads  none",
+        "2024-10-24 10:00  Exclusions only Date reads  none",
+        "2024-10-25 10:00  Exclusions only Date reads  none",
+        "2024-10-26 10:00  Exclusions only Date reads  none",
+        "2024-10-28 10:00  Override only Date reads  none",
+        "2024-10-29 10:00  Override only Date reads  none"
       ],
       "metadata": {
         "events": {
@@ -2507,6 +3202,125 @@
         "2025-10-08 08:00  An empty month list",
         "2026-06-01 08:00  A blank count is no limit",
         "2026-06-01 17:00  The largest count"
+      ],
+      "ends": [
+        "2018-01-08 09:00  The 52nd Monday from a year's end  none",
+        "2018-12-31 09:00  The 53rd Monday of a year  none",
+        "2019-01-07 09:00  The 52nd Monday from a year's end  none",
+        "2020-03-05 09:00  A month written with a fraction  none",
+        "2020-03-15 10:00  Twice a year  none",
+        "2020-06-01 08:00  A blank count is no limit  none",
+        "2020-06-01 17:00  The largest count  none",
+        "2020-06-04 09:00  A count written with a fraction  none",
+        "2020-09-15 10:00  Twice a year  none",
+        "2021-03-05 09:00  A month written with a fraction  none",
+        "2021-03-15 10:00  Twice a year  none",
+        "2021-06-01 08:00  A blank count is no limit  none",
+        "2021-06-01 17:00  The largest count  none",
+        "2021-06-04 09:00  A count written with a fraction  none",
+        "2021-09-15 10:00  Twice a year  none",
+        "2022-03-15 10:00  Twice a year  none",
+        "2022-06-01 08:00  A blank count is no limit  none",
+        "2022-06-01 17:00  The largest count  none",
+        "2022-06-04 09:00  A count written with a fraction  none",
+        "2022-09-15 10:00  Twice a year  none",
+        "2023-03-15 10:00  Twice a year  none",
+        "2023-06-01 08:00  A blank count is no limit  none",
+        "2023-06-01 17:00  The largest count  none",
+        "2023-09-15 10:00  Twice a year  none",
+        "2024-01-02 18:00  Every other Tuesday and Thursday  none",
+        "2024-01-04 18:00  Every other Tuesday and Thursday  none",
+        "2024-01-16 18:00  Every other Tuesday and Thursday  none",
+        "2024-01-17 12:00  Third Wednesday  none",
+        "2024-01-18 18:00  Every other Tuesday and Thursday  none",
+        "2024-01-26 17:00  Last Friday  none",
+        "2024-01-30 18:00  Every other Tuesday and Thursday  none",
+        "2024-01-31 08:00  Last day of the month  none",
+        "2024-01-31 08:00  The 31st  none",
+        "2024-02-01 09:00  The first and the last day of a month  none",
+        "2024-02-01 18:00  Every other Tuesday and Thursday  none",
+        "2024-02-13 18:00  Every other Tuesday and Thursday  none",
+        "2024-02-15 09:00  Days of the month written with a fraction  none",
+        "2024-02-15 18:00  Every other Tuesday and Thursday  none",
+        "2024-02-21 12:00  Third Wednesday  none",
+        "2024-02-23 17:00  Last Friday  none",
+        "2024-02-27 18:00  Every other Tuesday and Thursday  none",
+        "2024-02-29 08:00  Last day of the month  none",
+        "2024-02-29 09:00  Days of the month written with a fraction  none",
+        "2024-02-29 09:00  The first and the last day of a month  none",
+        "2024-02-29 18:00  Every other Tuesday and Thursday  none",
+        "2024-03-01 09:00  The first and the last day of a month  none",
+        "2024-03-15 09:00  Days of the month written with a fraction  none",
+        "2024-03-15 10:00  Twice a year  none",
+        "2024-03-20 12:00  Third Wednesday  none",
+        "2024-03-29 09:00  The fifth Friday of a month  none",
+        "2024-03-29 17:00  Last Friday  none",
+        "2024-03-31 08:00  Last day of the month  none",
+        "2024-03-31 08:00  The 31st  none",
+        "2024-03-31 09:00  Days of the month written with a fraction  none",
+        "2024-03-31 09:00  The first and the last day of a month  none",
+        "2024-04-17 12:00  Third Wednesday  none",
+        "2024-04-26 17:00  Last Friday  none",
+        "2024-04-30 08:00  Last day of the month  none",
+        "2024-04-30 10:00  The 30th or 31st of February or April  none",
+        "2024-05-06 09:00  Daily with count  none",
+        "2024-05-09 11:30  Moved and renamed  none",
+        "2024-05-10 09:00  Daily with count  none",
+        "2024-05-15 12:00  Third Wednesday  none",
+        "2024-05-31 08:00  Last day of the month  none",
+        "2024-05-31 08:00  The 31st  none",
+        "2024-05-31 09:00  The fifth Friday of a month  none",
+        "2024-05-31 17:00  Last Friday  none",
+        "2024-06-01 08:00  A blank count is no limit  none",
+        "2024-06-01 17:00  The largest count  none",
+        "2024-06-03 10:00  Moved across a week  none",
+        "2024-06-15 16:00  Moved across a week  none",
+        "2024-06-17 10:00  Moved across a week  none",
+        "2024-06-19 12:00  Third Wednesday  none",
+        "2024-06-28 17:00  Last Friday  none",
+        "2024-07-01 07:00  Null parts  none",
+        "2024-07-04 08:00  A month, not a list  none",
+        "2024-07-15 08:00  A month day, not a list  none",
+        "2024-07-31 08:00  The 31st  none",
+        "2024-08-01 07:00  Null parts  none",
+        "2024-08-05 09:00  Start off the rule  none",
+        "2024-08-12 09:00  Start off the rule  none",
+        "2024-08-15 08:00  A month day, not a list  none",
+        "2024-08-30 09:00  The fifth Friday of a month  none",
+        "2024-09-01 07:00  Null parts  none",
+        "2024-09-15 08:00  A month day, not a list  none",
+        "2024-09-15 10:00  Twice a year  none",
+        "2024-10-06 08:00  An empty weekday list  none",
+        "2024-10-07 08:00  An empty month day list  none",
+        "2024-10-08 08:00  An empty month list  none",
+        "2024-10-14 10:00  A null weekday list  none",
+        "2024-10-15 08:00  A blank interval is none  none",
+        "2024-10-15 09:00  An interval of one  none",
+        "2024-10-15 15:00  The largest interval  none",
+        "2024-10-16 08:00  A weekday, not a list  none",
+        "2024-10-16 09:00  An interval written with a fraction  none",
+        "2024-10-16 09:00  An ordinal weekday, not a list  none",
+        "2024-10-21 10:00  A null weekday list  none",
+        "2024-10-22 08:00  A blank interval is none  none",
+        "2024-10-22 09:00  An interval of one  none",
+        "2024-10-23 08:00  A weekday, not a list  none",
+        "2024-10-30 09:00  An interval written with a fraction  none",
+        "2024-11-06 08:00  An empty weekday list  none",
+        "2024-11-07 08:00  An empty month day list  none",
+        "2024-11-13 09:00  An interval written with a fraction  none",
+        "2024-11-20 09:00  An ordinal weekday, not a list  none",
+        "2024-12-06 08:00  An empty weekday list  none",
+        "2024-12-07 08:00  An empty month day list  none",
+        "2024-12-30 09:00  The 53rd Monday of a year  none",
+        "2025-03-15 10:00  Twice a year  none",
+        "2025-04-30 10:00  The 30th or 31st of February or April  none",
+        "2025-06-01 08:00  A blank count is no limit  none",
+        "2025-06-01 17:00  The largest count  none",
+        "2025-07-04 08:00  A month, not a list  none",
+        "2025-09-15 10:00  Twice a year  none",
+        "2025-10-08 08:00  An empty month list  none",
+        "2026-06-01 08:00  A blank count is no limit  none",
+        "2026-06-01 17:00  The largest count  none"
       ],
       "metadata": {
         "events": {
@@ -3113,6 +3927,19 @@
         "2024-05-07 09:00  Both",
         "2024-05-08 09:00  Both"
       ],
+      "ends": [
+        "2024-04-30 18:00  With offset  none",
+        "2024-05-01 10:00  ISO with Z  none",
+        "2024-05-01 10:00  Wall clock  none",
+        "2024-05-01 10:00:30  With seconds  none",
+        "2024-05-02  All day  none",
+        "2024-05-03 09:00  Listed  none",
+        "2024-05-04 09:00  Renamed instance  none",
+        "2024-05-05  Listed  none",
+        "2024-05-06 09:00  Older spelling  none",
+        "2024-05-07 09:00  Both  none",
+        "2024-05-08 09:00  Both  none"
+      ],
       "metadata": {
         "events": {
           "All day": {
@@ -3286,6 +4113,45 @@
         "2024-11-02 01:30  Wall clock in the repeated hour",
         "2024-11-03 01:30  Wall clock in the repeated hour",
         "2024-11-04 01:30  Wall clock in the repeated hour"
+      ],
+      "ends": [
+        "2024-03-03 16:00  Tokyo morning  none",
+        "2024-03-07 10:00  Until the reader's clock skips  none",
+        "2024-03-08 02:30  Wall clock in the spring gap  none",
+        "2024-03-08 07:00  New York across spring forward  none",
+        "2024-03-08 10:00  Until the reader's clock skips  none",
+        "2024-03-09 02:30  Wall clock in the spring gap  none",
+        "2024-03-09 07:00  New York across spring forward  none",
+        "2024-03-10 02:30  Wall clock in the spring gap  none",
+        "2024-03-10 07:00  New York across spring forward  none",
+        "2024-03-10 17:00  Tokyo morning  none",
+        "2024-03-11 02:30  Wall clock in the spring gap  none",
+        "2024-03-11 07:00  New York across spring forward  none",
+        "2024-03-17 17:00  Tokyo morning  none",
+        "2024-03-24 17:00  Tokyo morning  none",
+        "2024-04-01 04:00  Until with an offset  none",
+        "2024-04-02 04:00  Until with an offset  none",
+        "2024-04-03 04:00  Until with an offset  none",
+        "2024-04-04 04:00  Until with an offset  none",
+        "2024-04-07 16:00  Excluded by instant  none",
+        "2024-04-09 16:00  Excluded by instant  none",
+        "2024-06-02 17:00  Zone in lower case  none",
+        "2024-06-03 17:00  Zone in lower case  none",
+        "2024-06-05 09:00  Empty zone  none",
+        "2024-06-06 09:00  Empty zone  none",
+        "2024-06-07  Unknown zone on dates  none",
+        "2024-06-08  Unknown zone on dates  none",
+        "2024-06-09 12:00  Zone the database abbreviates  none",
+        "2024-06-10 12:00  Zone the database abbreviates  none",
+        "2024-06-13  Zone that is zero on dates  none",
+        "2024-06-14  Zone that is zero on dates  none",
+        "2024-10-25 07:00  London across autumn  none",
+        "2024-10-26 07:00  London across autumn  none",
+        "2024-10-27 08:00  London across autumn  none",
+        "2024-10-28 08:00  London across autumn  none",
+        "2024-11-02 01:30  Wall clock in the repeated hour  none",
+        "2024-11-03 01:30  Wall clock in the repeated hour  none",
+        "2024-11-04 01:30  Wall clock in the repeated hour  none"
       ],
       "metadata": {
         "events": {

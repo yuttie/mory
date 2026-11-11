@@ -11,10 +11,10 @@
 //! JavaScript, and `fixtures/calendar/notes/` holds the two to each other. Change either one and
 //! run both halves of that comparison.
 //!
-//! Only what decides whether an occurrence is drawn, and at what wall clock, is reproduced.
-//! Colours and ends are read only as far as a bad one hides an occurrence. An occurrence's alarms
-//! and category are carried as written, for `alarms` to resolve: the category still changes only
-//! how an event is drawn, never when, and matters here for when it is *rung*.
+//! Only what decides whether an occurrence is drawn, and the wall clocks it starts and ends at, is
+//! reproduced. Colours are read only as far as a bad one hides an occurrence. An occurrence's
+//! alarms and category are carried as written, for `alarms` to resolve: the category still changes
+//! only how an event is drawn, never when, and matters here for when it is *rung*.
 //!
 //! Three JavaScript behaviours carry most of the weight, each easy to get subtly wrong:
 //!
@@ -29,11 +29,12 @@
 //!     empty string and a zero each in their own way. `end:` left empty hides every instance and
 //!     every generated occurrence of its event, and so it does here.
 
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::LazyLock;
 
 use chrono::{
-    DateTime, Duration, LocalResult, NaiveDate, NaiveDateTime, NaiveTime, Offset,
+    DateTime, Datelike, Duration, LocalResult, NaiveDate, NaiveDateTime, NaiveTime, Offset,
     TimeZone, Timelike, Utc,
 };
 use chrono_tz::Tz as Zone;
@@ -91,6 +92,10 @@ pub struct Occurrence {
     pub path: String,
     pub name: String,
     pub start: Start,
+    /// Where the calendar draws it ending, `normalizeEndTime`'s reading of the occurrence's `end`
+    /// or the one it inherits. `None` for no end, which the calendar draws as lasting to the end
+    /// of the day it starts on.
+    pub end: Option<Start>,
     pub finished: bool,
     pub location: Option<String>,
     /// The `alarms:` the occurrence's own fields or its event's hold, as written. `None` for
@@ -413,30 +418,167 @@ fn calendar_start(text: &str) -> Option<Start> {
     Some(Start::Time(date.and_hms_opt(field(6)?, field(8)?, 0)?))
 }
 
-/// Whether `normalizeEndTime` accepts `end`, and the calendar reads what it makes of it. The
-/// occurrence is dropped when either does not.
-fn end_is_usable(end: Option<&Value>, zone: Zone) -> bool {
-    let text = match end {
-        None => return true,
-        Some(Value::String(text)) => text,
-        // `null` is not `undefined`: the frontend refuses it, as anything else that is not text.
-        // That is what `end:` left empty does to an event's instances.
-        Some(_) => return false,
+/// The occurrence's start as `normalizeEndTime` reads it: the instant `dayjs(start)` names, and
+/// whether its text is a bare date, which keeps an end worked out from a duration a date too.
+#[derive(Clone, Copy)]
+struct EndAnchor {
+    begins: DateTime<Utc>,
+    date_only: bool,
+}
+
+/// An end the calendar cannot draw, which hides its occurrence.
+struct Unusable;
+
+/// `DATE_ONLY`, `^\d{4}-\d{2}-\d{2}$` once trimmed: the shape of a date, whether or not it is one.
+fn is_date_only(text: &str) -> bool {
+    let text = text.trim();
+    text.len() == 10
+        && text.bytes().enumerate().all(|(i, b)| if i == 4 || i == 7 { b == b'-' } else { b.is_ascii_digit() })
+}
+
+/// `formatDateTime`: seconds only when there are some, and no fraction of one.
+fn format_date_time(wall: NaiveDateTime) -> String {
+    if wall.second() == 0 {
+        wall.format("%Y-%m-%d %H:%M").to_string()
+    } else {
+        wall.format("%Y-%m-%d %H:%M:%S").to_string()
+    }
+}
+
+/// `parseFloat` of what the duration patterns capture, `[0-9.]+`: the number its start spells,
+/// `1.2.3` being 1.2 and `.5` a half, or `None` where it spells none, as `.` and `..5` do.
+fn parse_float(text: &str) -> Option<f64> {
+    let digits = |s: &str| s.bytes().take_while(u8::is_ascii_digit).count();
+    let whole = digits(text);
+    let rest = &text[whole..];
+    let fraction = rest.strip_prefix('.').map_or(0, digits);
+    if whole == 0 && fraction == 0 {
+        return None;
+    }
+    let end = if fraction > 0 { whole + 1 + fraction } else { whole };
+    format!("0{}", &text[..end]).parse().ok()
+}
+
+/// A wall clock moved by whole calendar days in `zone`, as `Date.setDate` moves it: the time of
+/// day is kept, and resolved again as the reader's clock reads it.
+fn add_days(at: DateTime<Utc>, days: i64, zone: Zone) -> Option<DateTime<Utc>> {
+    let wall = wall_clock_at(at, zone).checked_add_signed(Duration::try_days(days)?)?;
+    Some(resolve_local(wall, zone))
+}
+
+/// `dayjs(start).add(amount, unit)`, with `unit` as `dayjs` names it once it has normalised it.
+///
+/// Days and weeks move by calendar days, `Math.round` of the days the amount comes to. Months and
+/// years go through `setMonth` and `setFullYear`, which drop the fraction, and keep the day unless
+/// the month is shorter. Anything smaller is added to the instant, a fraction of a millisecond
+/// dropped as `Date` drops it.
+fn dayjs_add(at: DateTime<Utc>, amount: f64, unit: &str, zone: Zone) -> Option<DateTime<Utc>> {
+    let round = |days: f64| (days + 0.5).floor();
+    let months = |count: f64| -> Option<DateTime<Utc>> {
+        let wall = wall_clock_at(at, zone);
+        // A count past what a date holds is an invalid date to `Date`, which hides the occurrence,
+        // and saturates `as` here, where adding to it would overflow.
+        let target = (i64::from(wall.year()) * 12 + i64::from(wall.month0())).checked_add(count.trunc() as i64)?;
+        let (year, month0) = (target.div_euclid(12), target.rem_euclid(12));
+        let first = NaiveDate::from_ymd_opt(i32::try_from(year).ok()?, u32::try_from(month0).ok()? + 1, 1)?;
+        let last = first.checked_add_months(chrono::Months::new(1))?.pred_opt()?.day();
+        let date = first.with_day(wall.day().min(last))?;
+        Some(resolve_local(date.and_time(wall.time()), zone))
     };
-    if let Some(parts) = DURATION_SHORT.captures(text).or_else(|| DURATION_LONG.captures(text)) {
-        // `parseFloat` of `[0-9.]+` reads a number wherever one begins it: `1.2.3` is 1.2, and
-        // `.` none.
-        let amount = parts[1].trim_start_matches('.');
-        return amount.starts_with(|c: char| c.is_ascii_digit())
-            && parts[1].len() - amount.len() <= 1;
+    let step = match unit {
+        "year" => return months(amount.trunc() * 12.0),
+        "month" => return months(amount),
+        "week" => return add_days(at, round(amount * 7.0) as i64, zone),
+        "day" => return add_days(at, round(amount) as i64, zone),
+        "hour" => 3_600_000.0,
+        "minute" => 60_000.0,
+        "second" => 1_000.0,
+        _ => 1.0,
+    };
+    let millis = (at.timestamp_millis() as f64 + amount * step).trunc();
+    // `Date` holds no more than 8.64e15 ms either side of the epoch, and is invalid past it.
+    if !millis.is_finite() || millis.abs() > 8.64e15 {
+        return None;
     }
-    if dayjs_parse(text, zone).is_some() {
+    DateTime::from_timestamp_millis(millis as i64)
+}
+
+/// The unit a duration's suffix names, as `dayjs`'s `prettyUnit` spells it.
+fn duration_unit(suffix: &str) -> String {
+    match suffix {
+        "y" => "year".to_owned(),
+        "M" => "month".to_owned(),
+        "w" => "week".to_owned(),
+        "d" => "day".to_owned(),
+        "h" => "hour".to_owned(),
+        "m" => "minute".to_owned(),
+        "s" => "second".to_owned(),
+        "ms" => "millisecond".to_owned(),
+        long => long.to_lowercase().trim_end_matches('s').to_owned(),
+    }
+}
+
+/// `normalizeEndTime` and then `toWallClock`: where the calendar draws the end of an occurrence
+/// starting at `anchor`. `Ok(None)` for one with no end, and `Err` for an end that hides it: one
+/// that is not text -- `end:` left empty is `null`, which is not `undefined` -- or one that neither
+/// reads nor leaves the calendar something it can read.
+///
+/// An end the calendar reads but this cannot place, which only an unpadded month or day past its
+/// range comes to, is no end rather than a hidden occurrence: what is drawn must not change with
+/// what is reported of it.
+fn end_of(end: Option<&Value>, anchor: EndAnchor, zone: Zone) -> Result<Option<Start>, Unusable> {
+    let text = match end {
+        None => return Ok(None),
+        Some(Value::String(text)) => text,
+        Some(_) => return Err(Unusable),
+    };
+    let normalized = if let Some(parts) = DURATION_SHORT.captures(text).or_else(|| DURATION_LONG.captures(text)) {
+        let amount = parse_float(&parts[1]).ok_or(Unusable)?;
+        let end = dayjs_add(anchor.begins, amount, &duration_unit(&parts[2]), zone).ok_or(Unusable)?;
+        let wall = wall_clock_at(end, zone);
+        // A whole-day event stays whole days.
+        if anchor.date_only { wall.format("%Y-%m-%d").to_string() } else { format_date_time(wall) }
+    } else if dayjs_parse(text, zone).is_some() {
         // Kept as written, so the calendar reads it as `toWallClock` hands it on.
-        return parse_wall_clock(text).is_some() || CALENDAR_PARSE.is_match(text);
+        if parse_wall_clock(text).is_none() && !CALENDAR_PARSE.is_match(text) {
+            return Err(Unusable);
+        }
+        text.clone()
+    } else {
+        // A bare time of day belongs to the start's date -- or the next one, when taking it
+        // literally would put the end before the start.
+        let day = wall_clock_at(anchor.begins, zone).date();
+        let literal = dayjs_parse(&format!("{} {text}", day.format("%Y-%m-%d")), zone).ok_or(Unusable)?;
+        let end = if literal > anchor.begins { literal } else { add_days(literal, 1, zone).ok_or(Unusable)? };
+        format_date_time(wall_clock_at(end, zone))
+    };
+    Ok(to_wall_clock(&normalized, zone))
+}
+
+/// `durationOf`: the end a rule's occurrences inherit. A duration is reapplied to each; an absolute
+/// end becomes the gap it describes, in whole days for an all-day series, so that no occurrence
+/// inherits the first one's literal end. Anything else is handed on as written.
+fn duration_of(detail: &Mapping, zone: Zone) -> Option<Cow<'_, Value>> {
+    let end = detail.get("end")?;
+    let Some(start) = detail.get("start") else {
+        return Some(Cow::Borrowed(end));
+    };
+    let Some(text) = end.as_str().filter(|text| !text.starts_with('+')) else {
+        return Some(Cow::Borrowed(end));
+    };
+    let (Some(from), Some(to)) = (instant_of(Some(start), zone), dayjs_parse(text, zone)) else {
+        return Some(Cow::Borrowed(end));
+    };
+    let gap = to.timestamp_millis() - from;
+    if gap < 0 {
+        return Some(Cow::Borrowed(end));
     }
-    // A bare time of day belongs to the start's date, which is always a date `dayjs` reads, and
-    // is spelt out on it.
-    dayjs_parse(&format!("2000-01-01 {text}"), zone).is_some()
+    let duration = if start.as_str().is_some_and(is_date_only) {
+        format!("+{}d", (gap as f64 / 86_400_000.0 + 0.5).floor() as i64)
+    } else {
+        format!("+{gap}ms")
+    };
+    Some(Cow::Owned(Value::String(duration)))
 }
 
 // --- events -----------------------------------------------------------------------------------
@@ -452,16 +594,14 @@ enum StartInput<'a> {
 }
 
 /// What an occurrence falls back to when its own field is missing: nothing for an event's own
-/// start, and the event for its instances and for what its rule generates.
-///
-/// The frontend carries a series' end to each occurrence as a duration (`durationOf`), but only
-/// whether an end is usable matters here, and that conversion never changes it.
+/// start, and the event for its instances and for what its rule generates. A rule's occurrences
+/// inherit its end as a duration (`durationOf`), its instances the end as written.
 ///
 /// `category` is the exception: it belongs to the event as a whole, so an event's own start has it
 /// too, and an override or an instance cannot change it.
 #[derive(Default)]
 struct Parent<'a> {
-    end: Option<&'a Value>,
+    end: Option<Cow<'a, Value>>,
     color: Option<&'a Value>,
     location: Option<&'a Value>,
     alarms: Option<&'a Value>,
@@ -471,7 +611,7 @@ struct Parent<'a> {
 impl<'a> Parent<'a> {
     fn of(detail: &'a Mapping) -> Self {
         Parent {
-            end: detail.get("end"),
+            end: detail.get("end").map(Cow::Borrowed),
             color: detail.get("color"),
             location: detail.get("location"),
             alarms: detail.get("alarms"),
@@ -502,22 +642,27 @@ fn build_occurrence(
     out: &mut Vec<Occurrence>,
 ) {
     let get = |key: &str| own.and_then(|own| own.get(key));
-    let start = match start {
-        StartInput::Generated(start) => start,
-        StartInput::Written(Some(Value::String(text))) if dayjs_parse(text, reader.zone).is_some() => {
+    let (start, anchor) = match start {
+        StartInput::Generated(start) => {
+            (start, EndAnchor { begins: start.begins(reader), date_only: matches!(start, Start::Date(_)) })
+        },
+        StartInput::Written(Some(Value::String(text))) => {
+            let Some(begins) = dayjs_parse(text, reader.zone) else {
+                return;
+            };
             // Some whenever `dayjs` reads it.
             let Some(start) = to_wall_clock(text, reader.zone) else {
                 return;
             };
-            start
+            (start, EndAnchor { begins, date_only: is_date_only(text) })
         },
         StartInput::Written(_) => return,
     };
 
     // `time.end ?? parent.end`
-    if !end_is_usable(present(get("end")).or(parent.end), reader.zone) {
+    let Ok(end) = end_of(present(get("end")).or(parent.end.as_deref()), anchor, reader.zone) else {
         return;
-    }
+    };
 
     // `time.name || eventName`, then `validateEvent`, which refuses a name that is not a string.
     let name = match get("name").filter(|name| truthy(name)) {
@@ -542,6 +687,7 @@ fn build_occurrence(
         path: path.to_owned(),
         name,
         start,
+        end,
         // The views take any truthy value as finished: `finished: yes` is text in YAML 1.2.
         finished: get("finished").is_some_and(truthy),
         location,
@@ -643,7 +789,7 @@ fn expand_series(
         }
     }
 
-    let parent = Parent::of(detail);
+    let parent = Parent { end: duration_of(detail, zone), ..Parent::of(detail) };
     for (at, generated) in slots {
         if excluded.contains(&at) {
             continue;
