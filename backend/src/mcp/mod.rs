@@ -219,12 +219,14 @@ impl Mory {
                        into a note under `.events/` is still listed here. The note, which \
                        list_events returns, names the original in its `ical` (`uid`, and \
                        `recurrence_id` for one occurrence), and the calendar draws only the \
-                       note, so count such an event once.",
+                       note, so count such an event once.\n\nEach occurrence is listed on its \
+                       own. The whole definition of the series it belongs to is returned under \
+                       `series`, keyed by `uid`, only with `include_series`.",
         annotations(title = "List imported events", read_only_hint = true, open_world_hint = true)
     )]
     pub async fn list_imported_events(
         &self,
-        Parameters(args): Parameters<tools::WindowArgs>,
+        Parameters(args): Parameters<tools::ImportedEventsArgs>,
     ) -> Result<CallToolResult, ErrorData> {
         tools::list_imported_events(&self.state, args).await
     }
