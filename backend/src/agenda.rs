@@ -34,7 +34,7 @@ pub const LOOKBACK_DAYS: i64 = 31;
 /// One thing that is on.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Item {
-    /// Where it starts, as the reader's wall clock: a date for a whole day.
+    /// Where it starts, as moried's wall clock: a date for a whole day.
     pub start: Start,
     /// Where it ends, as the calendar draws it. `None` for no end.
     pub end: Option<Start>,
@@ -70,9 +70,42 @@ pub enum Source {
     },
 }
 
-/// The days `[from, to]`, for a reader in `reader.zone`, as the instants they begin and end at.
-pub fn bounds(from: NaiveDate, to: NaiveDate, reader: &Reader) -> (DateTime<Utc>, DateTime<Utc>) {
-    note_events::day_window(from, to, reader)
+/// Who an agenda is drawn for.
+///
+/// The notes are read as moried reads them, a time written without an offset in moried's own zone,
+/// where `update_event` matches it and `list_tasks` reads a task's dates: read in another, it would
+/// name a moment those tools do not. `zone` only picks the days of the window and the offset each
+/// time is given with. A whole day is the same date in any zone, so it is
+/// placed in `zone`, and is on the days its dates name there.
+#[derive(Debug, Clone, Copy)]
+pub struct View {
+    /// moried's reader: `zone` is moried's own.
+    pub reader: Reader,
+    pub zone: chrono_tz::Tz,
+}
+
+impl View {
+    /// The days `[from, to]` in the view's zone, as the instants they begin and end at.
+    pub fn days(&self, from: NaiveDate, to: NaiveDate) -> (DateTime<Utc>, DateTime<Utc>) {
+        note_events::day_window(from, to, &Reader { zone: self.zone, ..self.reader })
+    }
+
+    /// When an occurrence begins: a time where moried reads it, and a date at the first moment of
+    /// its day in the view's zone.
+    pub fn begins(&self, start: Start) -> DateTime<Utc> {
+        match start {
+            Start::Date(date) => self.days(date, date).0,
+            Start::Time(_) => start.begins(&self.reader),
+        }
+    }
+
+    /// What to expand the notes over to find the occurrences that start in the days `[from, to]`:
+    /// two days more on each side. `note_events` bounds a rule's whole days by where they begin in
+    /// moried's zone, and a zone can be 26 hours from another; what does not start in the days is
+    /// for the caller to drop.
+    pub fn reach(&self, from: NaiveDate, to: NaiveDate) -> (DateTime<Utc>, DateTime<Utc>) {
+        self.days(from - Duration::days(2), to + Duration::days(2))
+    }
 }
 
 /// The instants the subscribed calendars are asked for over the days `[from, to]`: from
@@ -80,23 +113,25 @@ pub fn bounds(from: NaiveDate, to: NaiveDate, reader: &Reader) -> (DateTime<Utc>
 ///
 /// A feed keeps some of what it holds by the date in its own zone rather than by instant -- an
 /// all-day event begins at midnight there, and an occurrence whose series it does not publish is
-/// kept by its own date -- and that zone may be most of a day from the reader's: an occurrence in
+/// kept by its own date -- and that zone may be most of a day from the view's: an occurrence in
 /// Sydney at 01:00 on the 12th is on the 11th in Tokyo. What is not on is dropped afterwards.
-pub fn feed_window(from: NaiveDate, to: NaiveDate, reader: &Reader) -> (DateTime<Utc>, DateTime<Utc>) {
-    bounds(from - Duration::days(LOOKBACK_DAYS), to + Duration::days(1), reader)
+pub fn feed_window(from: NaiveDate, to: NaiveDate, view: &View) -> (DateTime<Utc>, DateTime<Utc>) {
+    view.days(from - Duration::days(LOOKBACK_DAYS), to + Duration::days(1))
 }
 
 /// When an occurrence is over, as `eventEndsAt` has it: the end it is given, the whole of its last
-/// day if that is a date, and the end of the day it starts on if it has none. Never before its own
-/// start, which an instance that inherits its event's literal end can otherwise be.
-fn over_at(start: Start, end: Option<Start>, reader: &Reader) -> DateTime<Utc> {
-    let begins = start.begins(reader);
-    let over = match end.unwrap_or(match start {
-        Start::Date(date) => Start::Date(date),
-        Start::Time(wall) => Start::Date(wall.date()),
-    }) {
-        Start::Date(date) => note_events::day_window(date, date, reader).1,
-        time => time.begins(reader),
+/// day if that is a date, and the end of the day it starts on, in the view's zone, if it has none.
+/// Never before its own start, which an instance that inherits its event's literal end can
+/// otherwise be.
+fn over_at(start: Start, end: Option<Start>, view: &View) -> DateTime<Utc> {
+    let begins = view.begins(start);
+    let over = match end {
+        Some(Start::Date(date)) => view.days(date, date).1,
+        Some(time) => view.begins(time),
+        None => {
+            let day = begins.with_timezone(&view.zone).date_naive();
+            view.days(day, day).1
+        },
     };
     over.max(begins)
 }
@@ -104,9 +139,9 @@ fn over_at(start: Start, end: Option<Start>, reader: &Reader) -> DateTime<Utc> {
 /// Whether an occurrence is on at any moment of the window: it starts in it, or starts before it
 /// and is not over when it begins. One that ends at the window's first midnight is over by then,
 /// as the calendar has it, which does not draw an event on the day it ends at 00:00.
-fn is_on(start: Start, end: Option<Start>, window: (DateTime<Utc>, DateTime<Utc>), reader: &Reader) -> bool {
-    let begins = start.begins(reader);
-    begins <= window.1 && (window.0 <= begins || window.0 < over_at(start, end, reader))
+fn is_on(start: Start, end: Option<Start>, window: (DateTime<Utc>, DateTime<Utc>), view: &View) -> bool {
+    let begins = view.begins(start);
+    begins <= window.1 && (window.0 <= begins || window.0 < over_at(start, end, view))
 }
 
 /// JavaScript's template coercion of a value `mergeImported` keys on: text as itself, a number or
@@ -194,14 +229,14 @@ pub fn assemble(
     imported: &[ImportedEvent],
     from: NaiveDate,
     to: NaiveDate,
-    reader: &Reader,
+    view: &View,
 ) -> Vec<Item> {
-    let window = bounds(from, to, reader);
+    let window = view.days(from, to);
     let mut items = Vec::new();
 
-    let (look_from, look_to) = (bounds(from - Duration::days(LOOKBACK_DAYS), to, reader).0, window.1);
-    for occurrence in note_events::occurrences(entries, look_from, look_to, reader) {
-        if !is_on(occurrence.start, occurrence.end, window, reader) {
+    let (look_from, look_to) = view.reach(from - Duration::days(LOOKBACK_DAYS), to);
+    for occurrence in note_events::occurrences(entries, look_from, look_to, &view.reader) {
+        if !is_on(occurrence.start, occurrence.end, window, view) {
             continue;
         }
         items.push(Item {
@@ -218,17 +253,17 @@ pub fn assemble(
         });
     }
 
-    let claims = Claims::of(entries, reader);
+    let claims = Claims::of(entries, &view.reader);
     for event in imported {
-        if claims.claim(event, reader) {
+        if claims.claim(event, &view.reader) {
             continue;
         }
         // The backend writes every start and end the calendar reads.
-        let Some(start) = note_events::to_wall_clock(&event.start, reader.zone) else {
+        let Some(start) = note_events::to_wall_clock(&event.start, view.reader.zone) else {
             continue;
         };
-        let end = event.end.as_deref().and_then(|end| note_events::to_wall_clock(end, reader.zone));
-        if !is_on(start, end, window, reader) {
+        let end = event.end.as_deref().and_then(|end| note_events::to_wall_clock(end, view.reader.zone));
+        if !is_on(start, end, window, view) {
             continue;
         }
         items.push(Item {
@@ -251,10 +286,10 @@ pub fn assemble(
             continue;
         };
         for (field, text) in date_texts(task) {
-            let Some(start) = note_events::task_date_start(text, reader.zone) else {
+            let Some(start) = note_events::task_date_start(text, view.reader.zone) else {
                 continue;
             };
-            if !is_on(start, None, window, reader) {
+            if !is_on(start, None, window, view) {
                 continue;
             }
             items.push(Item {
@@ -275,9 +310,8 @@ pub fn assemble(
     // A whole day before anything timed on it, then by name, so that the same items always come
     // in the same order.
     items.sort_by(|a, b| {
-        a.start
-            .begins(reader)
-            .cmp(&b.start.begins(reader))
+        view.begins(a.start)
+            .cmp(&view.begins(b.start))
             .then_with(|| matches!(b.start, Start::Date(_)).cmp(&matches!(a.start, Start::Date(_))))
             .then_with(|| a.name.cmp(&b.name))
     });
@@ -301,11 +335,11 @@ pub async fn agenda(
     state: &crate::models::AppState,
     from: NaiveDate,
     to: NaiveDate,
-    reader: &Reader,
+    view: &View,
 ) -> anyhow::Result<Agenda> {
     let (commit, entries) = state.get_entries(None).await?;
 
-    let (look_from, look_to) = feed_window(from, to, reader);
+    let (look_from, look_to) = feed_window(from, to, view);
     let (calendars, imported, truncated, calendars_error) =
         match crate::v2::imported_events(state, look_from.fixed_offset(), look_to.fixed_offset()).await {
             Ok(response) => (response.calendars, response.events, response.truncated, None),
@@ -314,7 +348,7 @@ pub async fn agenda(
 
     Ok(Agenda {
         commit,
-        items: assemble(&entries, &imported, from, to, reader),
+        items: assemble(&entries, &imported, from, to, view),
         calendars,
         calendars_error,
         truncated,
@@ -329,8 +363,14 @@ mod tests {
 
     const TOKYO: Zone = chrono_tz::Asia::Tokyo;
 
-    fn reader() -> Reader {
-        Reader { zone: TOKYO, now: "2026-11-11T00:00:00Z".parse().unwrap() }
+    /// moried in Tokyo, and an agenda shown there.
+    fn tokyo() -> View {
+        shown_in(TOKYO)
+    }
+
+    /// moried in Tokyo, and an agenda shown in `zone`.
+    fn shown_in(zone: Zone) -> View {
+        View { reader: Reader { zone: TOKYO, now: "2026-11-11T00:00:00Z".parse().unwrap() }, zone }
     }
 
     fn day(text: &str) -> NaiveDate {
@@ -389,7 +429,7 @@ mod tests {
             imported("work", "standup", "2026-11-10 01:00:00+00:00", Some("2026-11-10 01:15:00+00:00")),
             imported("work", "holiday", "2026-11-11", Some("2026-11-11")),
         ];
-        let items = assemble(&entries, &feed, day("2026-11-10"), day("2026-11-11"), &reader());
+        let items = assemble(&entries, &feed, day("2026-11-10"), day("2026-11-11"), &tokyo());
         assert_eq!(lines(&items), [
             "2026-11-10  -  .tasks/report-6f1c1d0e-5b1a-4c3e-9a7b-1f2e3d4c5b6a.md",
             "2026-11-10 10:00  2026-11-10 10:15  standup",
@@ -414,7 +454,7 @@ mod tests {
         start: 2026-11-10 10:00:00+09:00
 ",
         )];
-        let items = assemble(&entries, &[], day("2026-11-10"), day("2026-11-10"), &reader());
+        let items = assemble(&entries, &[], day("2026-11-10"), day("2026-11-10"), &tokyo());
         assert_eq!(lines(&items), [
             "2026-11-10  -  Whole day",
             "2026-11-10 00:00  -  At midnight",
@@ -457,7 +497,7 @@ mod tests {
             // Over at the window's first midnight, where the calendar stops drawing it.
             imported("work", "late", "2026-11-09 14:00:00+00:00", Some("2026-11-09 15:00:00+00:00")),
         ];
-        let items = assemble(&entries, &feed, day("2026-11-10"), day("2026-11-11"), &reader());
+        let items = assemble(&entries, &feed, day("2026-11-10"), day("2026-11-11"), &tokyo());
         assert_eq!(lines(&items), [
             "2026-11-05  2026-11-12  Trip",
             "2026-11-09 23:00  2026-11-10 01:00  Running into it",
@@ -466,7 +506,39 @@ mod tests {
     }
 
     #[test]
-    fn a_feed_is_read_far_enough_for_a_zone_ahead_of_the_reader() {
+    fn a_zone_moves_the_days_and_never_a_time_written_without_an_offset() {
+        // moried is in Tokyo, which reads the breakfast at 08:00 there whatever zone is asked for.
+        let entries = [note(
+            "a.md",
+            "events:
+    Breakfast:
+        start: 2026-11-10 08:00
+    Holiday:
+        start: 2026-11-10
+    Rest:
+        start: 2026-11-11
+        repeat: { freq: daily, count: 1 }
+",
+        )];
+        let on = |from: &str, to: &str, view: &View| lines(&assemble(&entries, &[], day(from), day(to), view));
+        assert_eq!(on("2026-11-10", "2026-11-10", &tokyo()), [
+            "2026-11-10  -  Holiday",
+            "2026-11-10 08:00  -  Breakfast",
+        ]);
+        // In UTC it is 23:00 the day before, and over when that day is. A whole day is on its own
+        // date in any zone, a rule's as well.
+        let utc = shown_in(chrono_tz::UTC);
+        assert_eq!(on("2026-11-09", "2026-11-09", &utc), ["2026-11-10 08:00  -  Breakfast"]);
+        assert_eq!(on("2026-11-10", "2026-11-10", &utc), ["2026-11-10  -  Holiday"]);
+        assert_eq!(on("2026-11-11", "2026-11-11", &utc), ["2026-11-11  -  Rest"]);
+        // As far behind Tokyo as a zone gets, where the rule's day begins 23 hours after it does
+        // in Tokyo, and as far ahead.
+        assert_eq!(on("2026-11-11", "2026-11-11", &shown_in(chrono_tz::Etc::GMTPlus12)), ["2026-11-11  -  Rest"]);
+        assert_eq!(on("2026-11-11", "2026-11-11", &shown_in(chrono_tz::Pacific::Kiritimati)), ["2026-11-11  -  Rest"]);
+    }
+
+    #[test]
+    fn a_feed_is_read_far_enough_for_a_zone_ahead_of_the_view() {
         // An occurrence of a series the feed does not publish, which the feed keeps by its own
         // date: the 12th in Sydney, and the 11th, 23:00, in Tokyo.
         let calendar = crate::ical::parse_calendar(
@@ -478,9 +550,9 @@ mod tests {
         )
         .unwrap();
         let (from, to) = (day("2026-11-10"), day("2026-11-11"));
-        let (look_from, look_to) = feed_window(from, to, &reader());
+        let (look_from, look_to) = feed_window(from, to, &tokyo());
         let feed = crate::ical::expand(&calendar, "work", look_from.fixed_offset(), look_to.fixed_offset());
-        assert_eq!(lines(&assemble(&[], &feed.events, from, to, &reader())), [
+        assert_eq!(lines(&assemble(&[], &feed.events, from, to, &tokyo())), [
             "2026-11-11 23:00  2026-11-12 00:00  Late call",
         ]);
     }
@@ -507,7 +579,7 @@ mod tests {
             imported("work", "monthly", "2026-11-10 10:00:00+09:00", None),
             imported("work", "monthly", "2026-11-11 10:00:00+09:00", None),
         ];
-        let items = assemble(&entries, &feed, day("2026-11-10"), day("2026-11-11"), &reader());
+        let items = assemble(&entries, &feed, day("2026-11-10"), day("2026-11-11"), &tokyo());
         assert_eq!(lines(&items), [
             "2026-11-10 10:00  -  Weekly",
             "2026-11-10 10:00  -  weekly",
@@ -520,7 +592,7 @@ mod tests {
             ".events/listed.md",
             "events:\n    - start: 2026-11-10 10:00:00+09:00\n      ical: { calendar: work, uid: weekly }",
         )];
-        let items = assemble(&entries, &feed[..1], day("2026-11-10"), day("2026-11-11"), &reader());
+        let items = assemble(&entries, &feed[..1], day("2026-11-10"), day("2026-11-11"), &tokyo());
         assert_eq!(lines(&items), ["2026-11-10 10:00  -  0"]);
     }
 
@@ -530,7 +602,7 @@ mod tests {
             ".tasks/done-6f1c1d0e-5b1a-4c3e-9a7b-1f2e3d4c5b6a.md",
             "task:\n    deadline: 2026-11-10 18:00:00+09:00\n    status:\n        kind: done\n        completed_at: 2026-11-09 12:00:00+09:00",
         )];
-        let items = assemble(&entries, &[], day("2026-11-10"), day("2026-11-10"), &reader());
+        let items = assemble(&entries, &[], day("2026-11-10"), day("2026-11-10"), &tokyo());
         assert_eq!(lines(&items), ["2026-11-10 18:00  -  .tasks/done-6f1c1d0e-5b1a-4c3e-9a7b-1f2e3d4c5b6a.md"]);
         assert!(matches!(
             &items[0].source,

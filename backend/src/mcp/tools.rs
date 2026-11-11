@@ -520,20 +520,24 @@ pub struct EventsArgs {
     /// The last day of the window, `YYYY-MM-DD`.
     pub end: String,
     /// The IANA zone the days are taken in and the occurrences are given in, such as
-    /// `Asia/Tokyo`. Defaults to moried's own. A time a note writes without an offset is read in
-    /// it too, as the calendar reads one in its reader's zone.
+    /// `Asia/Tokyo`. Defaults to moried's own. It changes how a time is written, never which
+    /// moment it is: one a note writes without an offset is read in moried's zone whatever this
+    /// says, as update_event reads it. A whole day is its own date in any zone.
     #[serde(default)]
     pub tz: Option<String>,
 }
 
-/// The zone a calendar tool was asked for, or moried's own; `Err` names one that is not a zone.
-fn zone_of(tz: Option<&str>) -> Result<chrono_tz::Tz, String> {
-    match tz.map(str::trim).filter(|tz| !tz.is_empty()) {
-        None => Ok(crate::urgency::local_zone()),
+/// moried's reading of the notes, shown in the zone a calendar tool was asked for or in moried's
+/// own; `Err` names one that is not a zone.
+fn view_of(tz: Option<&str>) -> Result<crate::agenda::View, String> {
+    let reader = crate::note_events::Reader { zone: crate::urgency::local_zone(), now: chrono::Utc::now() };
+    let zone = match tz.map(str::trim).filter(|tz| !tz.is_empty()) {
+        None => reader.zone,
         Some(name) => name
             .parse::<chrono_tz::Tz>()
-            .map_err(|_| format!("{name} is not an IANA time zone, such as Asia/Tokyo.")),
-    }
+            .map_err(|_| format!("{name} is not an IANA time zone, such as Asia/Tokyo."))?,
+    };
+    Ok(crate::agenda::View { reader, zone })
 }
 
 /// An `alarms:` list as the notes hold it, checked by `alarms::check_list` and written as given.
@@ -691,13 +695,14 @@ fn events_in_window(
     entries: &[crate::models::ListEntry],
     from: chrono::NaiveDate,
     to: chrono::NaiveDate,
-    reader: &crate::note_events::Reader,
+    view: &crate::agenda::View,
 ) -> Vec<EventSummary> {
-    let (window_from, window_to) = crate::note_events::day_window(from, to, reader);
+    let (window_from, window_to) = view.days(from, to);
+    let (look_from, look_to) = view.reach(from, to);
     let mut starts: std::collections::HashMap<(String, String), Vec<crate::note_events::Start>> =
         std::collections::HashMap::new();
-    for occurrence in crate::note_events::occurrences(entries, window_from, window_to, reader) {
-        if (window_from..=window_to).contains(&occurrence.start.begins(reader)) {
+    for occurrence in crate::note_events::occurrences(entries, look_from, look_to, &view.reader) {
+        if (window_from..=window_to).contains(&view.begins(occurrence.start)) {
             starts.entry((occurrence.path, occurrence.event)).or_default().push(occurrence.start);
         }
     }
@@ -709,8 +714,8 @@ fn events_in_window(
             let Some(mut in_window) = starts.remove(&(path.clone(), name.clone())) else {
                 continue;
             };
-            in_window.sort_by_key(|start| start.begins(reader));
-            let first = in_window[0].begins(reader);
+            in_window.sort_by_key(|start| view.begins(*start));
+            let first = view.begins(in_window[0]);
             let Ok(declaration) = serde_json::to_value(event) else {
                 tracing::debug!("Skipping an unreadable event in {}", entry.path.display());
                 continue;
@@ -720,7 +725,7 @@ fn events_in_window(
                 recurs: event.get("repeat").is_some_and(|value| !value.is_null()),
                 name,
                 note_title: entry.title.clone(),
-                occurrences_in_window: in_window.into_iter().map(|start| agenda_time(start, reader)).collect(),
+                occurrences_in_window: in_window.into_iter().map(|start| agenda_time(start, view)).collect(),
                 declaration,
             }));
         }
@@ -742,8 +747,8 @@ pub async fn list_events(
     if to < from {
         return Ok(tool_error("The window ends before it starts."));
     }
-    let zone = match zone_of(args.tz.as_deref()) {
-        Ok(zone) => zone,
+    let view = match view_of(args.tz.as_deref()) {
+        Ok(view) => view,
         Err(message) => return Ok(tool_error(message)),
     };
 
@@ -758,8 +763,7 @@ pub async fn list_events(
         },
     };
 
-    let reader = crate::note_events::Reader { zone, now: chrono::Utc::now() };
-    let events = events_in_window(&entries, from, to, &reader);
+    let events = events_in_window(&entries, from, to, &view);
 
     let task_dates = task_dates_in_window(&entries, from, to);
 
@@ -857,8 +861,9 @@ pub struct AgendaArgs {
     /// The last day of the window, `YYYY-MM-DD`, included.
     pub end: String,
     /// The IANA zone the days are taken in and every time is given in, such as `Asia/Tokyo`.
-    /// Defaults to moried's own. A time a note writes without an offset is read in it too, as the
-    /// calendar reads one in its reader's zone.
+    /// Defaults to moried's own. It changes how a time is written, never which moment it is: one
+    /// a note writes without an offset is read in moried's zone whatever this says, as update_event
+    /// reads it. A whole day is its own date in any zone.
     #[serde(default)]
     pub tz: Option<String>,
     /// Also return each imported event's description, as `note`, its link, as `url`, and its
@@ -937,11 +942,11 @@ struct AgendaOutput {
 }
 
 /// A start or an end as the agenda gives it: a bare date for a whole day, and otherwise the
-/// instant with the zone's offset, as every datetime in the notes is written.
-fn agenda_time(start: crate::note_events::Start, reader: &crate::note_events::Reader) -> String {
+/// instant with the view's offset, as every datetime in the notes is written.
+fn agenda_time(start: crate::note_events::Start, view: &crate::agenda::View) -> String {
     match start {
         crate::note_events::Start::Date(date) => date.to_string(),
-        time => time.begins(reader).with_timezone(&reader.zone).format("%Y-%m-%d %H:%M:%S%:z").to_string(),
+        time => view.begins(time).with_timezone(&view.zone).format("%Y-%m-%d %H:%M:%S%:z").to_string(),
     }
 }
 
@@ -962,13 +967,12 @@ pub async fn list_agenda(state: &AppState, args: AgendaArgs) -> Result<CallToolR
     if (to - from).num_days() >= MAX_AGENDA_DAYS {
         return Ok(tool_error(format!("A window covers at most {MAX_AGENDA_DAYS} days; ask for less.")));
     }
-    let zone = match zone_of(args.tz.as_deref()) {
-        Ok(zone) => zone,
+    let view = match view_of(args.tz.as_deref()) {
+        Ok(view) => view,
         Err(message) => return Ok(tool_error(message)),
     };
-    let reader = crate::note_events::Reader { zone, now: chrono::Utc::now() };
 
-    let agenda = match crate::agenda::agenda(state, from, to, &reader).await {
+    let agenda = match crate::agenda::agenda(state, from, to, &view).await {
         Ok(agenda) => agenda,
         Err(e) => {
             tracing::error!("MCP list_agenda could not read the listing: {:?}", e);
@@ -982,8 +986,8 @@ pub async fn list_agenda(state: &AppState, args: AgendaArgs) -> Result<CallToolR
         .items
         .iter()
         .map(|item| AgendaItem {
-            start: agenda_time(item.start, &reader),
-            end: item.end.map(|end| agenda_time(end, &reader)),
+            start: agenda_time(item.start, &view),
+            end: item.end.map(|end| agenda_time(end, &view)),
             name: item.name.clone(),
             location: item.location.clone(),
             source: match &item.source {
@@ -1016,7 +1020,7 @@ pub async fn list_agenda(state: &AppState, args: AgendaArgs) -> Result<CallToolR
     json_result(&AgendaOutput {
         commit: agenda.commit.to_string(),
         window: (from.to_string(), to.to_string()),
-        tz: zone.name().to_owned(),
+        tz: view.zone.name().to_owned(),
         items,
         calendars: agenda
             .calendars
@@ -1555,13 +1559,19 @@ mod tests {
         dates.iter().map(|d| (d.path.as_str(), d.field, d.date.as_str())).collect()
     }
 
-    /// `path  name  occurrence|occurrence` for each event `list_events` lists, in order.
+    /// `path  name  occurrence|occurrence` for each event `list_events` lists, in order, from
+    /// moried in Tokyo.
     fn listed_events(entries: &[crate::models::ListEntry], from: &str, to: &str) -> Vec<String> {
+        listed_events_in(entries, from, to, chrono_tz::Asia::Tokyo)
+    }
+
+    /// The same, asked for in `zone`.
+    fn listed_events_in(entries: &[crate::models::ListEntry], from: &str, to: &str, zone: chrono_tz::Tz) -> Vec<String> {
         let reader = crate::note_events::Reader {
             zone: chrono_tz::Asia::Tokyo,
             now: "2026-11-11T00:00:00Z".parse().unwrap(),
         };
-        events_in_window(entries, day(from), day(to), &reader)
+        events_in_window(entries, day(from), day(to), &crate::agenda::View { reader, zone })
             .iter()
             .map(|event| format!("{}  {}  {}", event.path, event.name, event.occurrences_in_window.join("|")))
             .collect()
@@ -1598,6 +1608,30 @@ mod tests {
             "numbered.md  2026  2026-11-02",
             "meetings.md  Monthly  2026-11-09 15:00:00+09:00",
             "meetings.md  Weekly  2026-11-10 13:00:00+09:00",
+        ]);
+    }
+
+    #[test]
+    fn a_zone_changes_how_an_occurrence_is_written_and_never_when_it_is() {
+        // Written without offsets, which moried, in Tokyo, reads there whatever zone is asked for:
+        // a time copied from the listing names the occurrence update_event finds.
+        let entries = [crate::models::ListEntry::note(
+            "a.md",
+            "events:
+    Breakfast:
+        start: 2026-11-02 08:00
+        instances: [{ start: 2026-11-03 08:00 }]
+    Holiday:
+        start: 2026-11-02
+",
+        )];
+        assert_eq!(listed_events_in(&entries, "2026-11-01", "2026-11-02", chrono_tz::UTC), [
+            "a.md  Breakfast  2026-11-01 23:00:00+00:00|2026-11-02 23:00:00+00:00",
+            "a.md  Holiday  2026-11-02",
+        ]);
+        assert_eq!(listed_events(&entries, "2026-11-01", "2026-11-02"), [
+            "a.md  Holiday  2026-11-02",
+            "a.md  Breakfast  2026-11-02 08:00:00+09:00",
         ]);
     }
 

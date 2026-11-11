@@ -259,6 +259,14 @@ as the scheduler reads them, through `tasks::task_of`, `tasks::date_texts` and
 `note_events::task_date_start`, and kept when the day each falls on in the zone asked for is in
 the window, as `taskDateEvent` keeps them, finished tasks included.
 
+Both `list_agenda` and `list_events` read a time a note writes without an offset in moried's zone,
+whatever `tz` they are asked for, as `update_event` and `list_tasks` read one: `tz` picks only the
+days of the window and the offset each time is written with, and a whole day is its own date in
+any zone. Reading it in `tz`, as the calendar reads one in its reader's zone, would let a model
+that asks for UTC move a meeting by nine hours and then name an occurrence `update_event` cannot
+find. The web app and the alarms still read such a time in the browser's zone, so a reader
+elsewhere sees it at another moment than the tools give.
+
 `list_tasks` returns each task's urgency and progress as the web app derives them, because a
 model asked what to do next needs them and could not work them out from one task's block. That
 makes `backend/src/urgency.rs` a second copy of `frontend/src/urgency.ts`, and `derived_task` in
