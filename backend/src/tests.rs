@@ -4272,6 +4272,35 @@ categories:
     assert!(config.categories().is_none());
 }
 
+/// A description is for the MCP tools to hand on, so one that is not text describes nothing rather
+/// than costing every calendar's events, which are read from the same file. One described by
+/// nothing says nothing, rather than `"description": null`.
+#[test]
+fn a_calendar_is_described_in_text_or_not_at_all() {
+    let config = crate::v2::parse_calendar_config("\
+calendars:
+    - id: team
+      url: https://example.invalid/team.ics
+      description: |
+          Colleagues' leave, and the meetings I attend.
+    - id: odd
+      url: https://example.invalid/odd.ics
+      description: 5
+    - id: blank
+      url: https://example.invalid/blank.ics
+      description: '  '
+    - id: none
+      url: https://example.invalid/none.ics
+")
+    .expect("the subscriptions still parse");
+
+    let reports = config.reports();
+    let descriptions: Vec<_> = reports.iter().map(|report| report.description.as_deref()).collect();
+    assert_eq!(descriptions, [Some("Colleagues' leave, and the meetings I attend.\n"), None, None, None]);
+    let report = serde_json::to_value(&reports[3]).expect("a report is JSON");
+    assert!(report.get("description").is_none(), "{report}");
+}
+
 #[test]
 fn a_calendar_configuration_without_categories_has_none() {
     let config = crate::v2::parse_calendar_config("calendars: []\n").expect("valid");
