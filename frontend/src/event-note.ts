@@ -9,9 +9,8 @@
 // imported original. A note carrying only a uid claims the whole series; one that also carries
 // `recurrence_id` claims a single occurrence and leaves the rest of the series imported.
 
-import YAML from 'yaml';
-
 import type { EventOccurrence, ImportedOccurrence, ImportedSeries, MetadataEvent } from '@/api';
+import { stringifyQuotingIndented } from '@/frontmatter';
 
 export const EVENTS_DIR = '.events/';
 
@@ -106,7 +105,7 @@ function render(
     }
 
     // Same shape as `render()` in `task.ts`, so a note written here reads like one written there.
-    const frontmatter = '---\n' + YAML.stringify(metadata, { indent: 4 }) + '---\n';
+    const frontmatter = '---\n' + stringifyQuotingIndented(metadata, { indent: 4 }) + '---\n';
     // On one line: a line break would end the heading there, and leave the rest to the body.
     const heading = `\n# ${asText(name).replace(/\s*[\r\n]+\s*/g, ' ')}\n`;
     const rest = body.length === 0 ? '' : `\n${body.join('\n\n')}\n`;

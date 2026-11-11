@@ -87,6 +87,17 @@ describe('replaceStatus', () => {
         expect(after).toBe(render(task({ status: { kind: 'todo' } })));
     });
 
+    // Written as a block, the note would read back with two more spaces on every line.
+    it('keeps a note whose first line starts with a space as it was', () => {
+        const status: Status = {
+            kind: 'done',
+            completed_at: '2026-10-05 09:00:00+09:00',
+            completion_note: '  indented\nthen not',
+        };
+        const after = replaceStatus(render(task({ status: { kind: 'todo' } })), status);
+        expect(frontmatterOf(after)).toMatchObject({ task: { status } });
+    });
+
     it('takes the old status\'s companion keys with it', () => {
         const after = replaceStatus(render(task()), { kind: 'in_progress' });
         expect(after).not.toContain('waiting_for');
@@ -254,5 +265,10 @@ describe('render, frontmatter preservation', () => {
         expect(metadata.task).not.toHaveProperty('scheduled_dates');
         expect(metadata.task).not.toHaveProperty('start_at');
         expect(metadata.task).not.toHaveProperty('importance');
+    });
+
+    it('keeps text whose first line starts with a space, in a key it does not know', () => {
+        const source = '---\ncustom: |4-\n      indented\n    then not\ntask:\n    status: {kind: todo}\n---\n';
+        expect(frontmatterOf(render(task({ source })))).toMatchObject({ custom: '  indented\nthen not' });
     });
 });

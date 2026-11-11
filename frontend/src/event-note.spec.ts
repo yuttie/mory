@@ -163,6 +163,17 @@ describe('the emitted note', () => {
         expect(content).toContain('2020-01-30 10:00:00-08:00');
     });
 
+    // A feed's description is often a pasted invitation, indented as it came.
+    it('keeps a description whose first line starts with a space as the feed wrote it', () => {
+        const note = '  Join the call:\n    https://meet.example/abc\n';
+        for (const built of [
+            buildSeriesNote(occurrence, { ...series, note }),
+            buildOccurrenceNote({ ...occurrence, note }, series),
+        ]) {
+            expect(Object.values(frontmatterOf(built.content).events)[0].note).toBe(note);
+        }
+    });
+
     it('parses back as the metadata schema describes', () => {
         const metadata = frontmatterOf(buildSeriesNote(occurrence, series).content);
         expect(Object.keys(metadata)).toEqual(['tags', 'events']);
