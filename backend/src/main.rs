@@ -65,6 +65,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use models::*;
 
+mod agenda;
 mod alarms;
 mod ical;
 mod mcp;

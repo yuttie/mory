@@ -853,6 +853,191 @@ pub async fn list_imported_events(
     }
 }
 
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct AgendaArgs {
+    /// The first day of the window, `YYYY-MM-DD`.
+    pub start: String,
+    /// The last day of the window, `YYYY-MM-DD`, included.
+    pub end: String,
+    /// The IANA zone the days are taken in and every time is given in, such as `Asia/Tokyo`.
+    /// Defaults to moried's own. A time a note writes without an offset is read in it too, as the
+    /// calendar reads one in its reader's zone.
+    #[serde(default)]
+    pub tz: Option<String>,
+    /// Also return each imported event's description, as `note`, its link, as `url`, and its
+    /// `uid` and `recurrence_id`. Off unless asked for: the descriptions are mostly meeting
+    /// invitations, often in HTML.
+    #[serde(default)]
+    pub details: bool,
+}
+
+/// The longest window one call covers, which bounds what a call can make moried expand.
+const MAX_AGENDA_DAYS: i64 = 366;
+
+#[derive(Serialize)]
+struct AgendaItem {
+    start: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    end: Option<String>,
+    name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    location: Option<String>,
+    #[serde(flatten)]
+    source: AgendaSource,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "source", rename_all = "snake_case")]
+enum AgendaSource {
+    Note {
+        path: String,
+        event: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        category: Option<String>,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        finished: bool,
+    },
+    Imported {
+        calendar: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        calendar_name: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        uid: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        recurrence_id: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        note: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        url: Option<String>,
+    },
+    Task {
+        path: String,
+        field: &'static str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        status: Option<String>,
+    },
+}
+
+#[derive(Serialize)]
+struct AgendaCalendar {
+    id: String,
+    name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+#[derive(Serialize)]
+struct AgendaOutput {
+    commit: String,
+    window: (String, String),
+    tz: String,
+    items: Vec<AgendaItem>,
+    calendars: Vec<AgendaCalendar>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    calendars_error: Option<String>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    truncated: bool,
+}
+
+/// A start or an end as the agenda gives it: a bare date for a whole day, and otherwise the
+/// instant with the zone's offset, as every datetime in the notes is written.
+fn agenda_time(start: crate::note_events::Start, reader: &crate::note_events::Reader) -> String {
+    match start {
+        crate::note_events::Start::Date(date) => date.to_string(),
+        time => time.begins(reader).with_timezone(&reader.zone).format("%Y-%m-%d %H:%M:%S%:z").to_string(),
+    }
+}
+
+pub async fn list_agenda(state: &AppState, args: AgendaArgs) -> Result<CallToolResult, ErrorData> {
+    // Four digits of year, as the message says: `chrono` also reads `-262143-01-01`, so near the
+    // first day it holds that looking a month back from it overflows.
+    let day = |text: &str| {
+        Some(text.trim())
+            .filter(|text| text.len() == 10)
+            .and_then(|text| chrono::NaiveDate::parse_from_str(text, "%Y-%m-%d").ok())
+    };
+    let (Some(from), Some(to)) = (day(&args.start), day(&args.end)) else {
+        return Ok(tool_error("start and end must both be dates, as YYYY-MM-DD."));
+    };
+    if to < from {
+        return Ok(tool_error("The window ends before it starts."));
+    }
+    if (to - from).num_days() >= MAX_AGENDA_DAYS {
+        return Ok(tool_error(format!("A window covers at most {MAX_AGENDA_DAYS} days; ask for less.")));
+    }
+    let zone = match args.tz.as_deref().map(str::trim).filter(|tz| !tz.is_empty()) {
+        None => crate::urgency::local_zone(),
+        Some(name) => match name.parse::<chrono_tz::Tz>() {
+            Ok(zone) => zone,
+            Err(_) => return Ok(tool_error(format!("{name} is not an IANA time zone, such as Asia/Tokyo."))),
+        },
+    };
+    let reader = crate::note_events::Reader { zone, now: chrono::Utc::now() };
+
+    let agenda = match crate::agenda::agenda(state, from, to, &reader).await {
+        Ok(agenda) => agenda,
+        Err(e) => {
+            tracing::error!("MCP list_agenda could not read the listing: {:?}", e);
+            return Err(ErrorData::internal_error("the note listing could not be read".to_owned(), None));
+        },
+    };
+
+    let names: std::collections::HashMap<&str, &str> =
+        agenda.calendars.iter().map(|calendar| (calendar.id.as_str(), calendar.name.as_str())).collect();
+    let items = agenda
+        .items
+        .iter()
+        .map(|item| AgendaItem {
+            start: agenda_time(item.start, &reader),
+            end: item.end.map(|end| agenda_time(end, &reader)),
+            name: item.name.clone(),
+            location: item.location.clone(),
+            source: match &item.source {
+                crate::agenda::Source::Note { path, event, category, finished } => AgendaSource::Note {
+                    path: path.clone(),
+                    event: event.clone(),
+                    category: category.clone(),
+                    finished: *finished,
+                },
+                crate::agenda::Source::Imported { calendar, uid, recurrence_id, note, url } => {
+                    let detail = |value: &Option<String>| value.clone().filter(|_| args.details);
+                    AgendaSource::Imported {
+                        calendar: calendar.clone(),
+                        calendar_name: names.get(calendar.as_str()).map(|name| (*name).to_owned()),
+                        uid: args.details.then(|| uid.clone()),
+                        recurrence_id: args.details.then(|| recurrence_id.clone()),
+                        note: detail(note),
+                        url: detail(url),
+                    }
+                },
+                crate::agenda::Source::Task { path, field, status } => AgendaSource::Task {
+                    path: path.clone(),
+                    field: field.key(),
+                    status: status.clone(),
+                },
+            },
+        })
+        .collect();
+
+    json_result(&AgendaOutput {
+        commit: agenda.commit.to_string(),
+        window: (from.to_string(), to.to_string()),
+        tz: zone.name().to_owned(),
+        items,
+        calendars: agenda
+            .calendars
+            .iter()
+            .map(|calendar| AgendaCalendar {
+                id: calendar.id.clone(),
+                name: calendar.name.clone(),
+                error: calendar.error.clone(),
+            })
+            .collect(),
+        calendars_error: agenda.calendars_error,
+        truncated: agenda.truncated,
+    })
+}
+
 // ---------------------------------------------------------------------------------------------
 // Writing
 // ---------------------------------------------------------------------------------------------

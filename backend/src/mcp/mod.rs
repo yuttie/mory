@@ -185,6 +185,37 @@ impl Mory {
     }
 
     #[tool(
+        name = "list_agenda",
+        description = "List what is on over a window of whole days, as the calendar shows it: \
+                       every occurrence the notes' `events:` declare, recurring ones expanded; the \
+                       events of the subscribed calendars, less those a note converted from them \
+                       stands in for; and each task's due_by and deadline. One list, sorted by \
+                       start, every time in one zone. Use this to answer what is on, or when the \
+                       user is free; list_events and list_imported_events are for editing and \
+                       converting.\n\nAn item is listed if any part of it falls in the window, so \
+                       one that began before it and runs into it is listed too, if it began at \
+                       most 31 days before. A time carries the zone's offset, and a whole day is a \
+                       bare date: an `end` that is one is the last day included. An item without \
+                       `end` has none.\n\n`source` says where each comes from. A `note` item \
+                       carries its `path` and `event`, the key update_event edits it by, its \
+                       `category` id, and `finished`. An `imported` one carries the subscribed \
+                       `calendar` and its `calendar_name`, and is read-only; with `details`, it \
+                       also carries its description as `note`, its link as `url`, and its `uid` \
+                       and `recurrence_id`. A `task` one carries its `path`, which `field` it is, \
+                       and the task's `status`, which is settled when done or canceled. The same \
+                       meeting on two calendars is two items, and nothing is merged. Names are as \
+                       written, without a category's template. A note's own description is in the \
+                       note, which read_note returns.",
+        annotations(title = "List agenda", read_only_hint = true, open_world_hint = true)
+    )]
+    pub async fn list_agenda(
+        &self,
+        Parameters(args): Parameters<tools::AgendaArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        tools::list_agenda(&self.state, args).await
+    }
+
+    #[tool(
         name = "list_events",
         description = "List the calendar events the notes declare in their `events:` \
                        frontmatter, over a window of whole days.\n\nAn event carrying a \
@@ -198,7 +229,8 @@ impl Mory {
                        `categories`, as declared, and the config's `alarms`, saying when events \
                        and task dates ring where a note does not. Events subscribed from an \
                        external calendar are \
-                       a separate tool, list_imported_events.",
+                       a separate tool, list_imported_events.\n\nThis is the declarations, for \
+                       editing them. To ask what is on, use list_agenda.",
         annotations(title = "List events", read_only_hint = true, open_world_hint = false)
     )]
     pub async fn list_events(
@@ -221,7 +253,9 @@ impl Mory {
                        `recurrence_id` for one occurrence), and the calendar draws only the \
                        note, so count such an event once.\n\nEach occurrence is listed on its \
                        own. The whole definition of the series it belongs to is returned under \
-                       `series`, keyed by `uid`, only with `include_series`.",
+                       `series`, keyed by `uid`, only with `include_series`.\n\nTo ask what is \
+                       on, use list_agenda, which expands the notes too and leaves out what a \
+                       note claims.",
         annotations(title = "List imported events", read_only_hint = true, open_world_hint = true)
     )]
     pub async fn list_imported_events(
@@ -690,7 +724,9 @@ Two things are easy to get wrong and expensive to fix:
 - Weekdays in a recurrence rule are three letters (`wed`), not iCal's two, and may carry an \
 ordinal: `3wed` is the third Wednesday of the month.
 
-Start with search_notes to find a path, then read_note to read it.";
+Start with search_notes to find a path, then read_note to read it. To ask what is on, use \
+list_agenda: it lists the notes' events, the subscribed calendars' and the tasks' dates together, \
+as the calendar shows them.";
 
 fn obsolete_task_arguments(name: &str, arguments: Option<&serde_json::Map<String, serde_json::Value>>) -> Option<String> {
     if !matches!(name, "create_task" | "update_task" | "set_task_dates") {

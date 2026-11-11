@@ -90,6 +90,9 @@ impl std::fmt::Display for Start {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Occurrence {
     pub path: String,
+    /// The key the event has in the note's `events:` map, which `name` is unless the occurrence
+    /// renames itself.
+    pub event: String,
     pub name: String,
     pub start: Start,
     /// Where the calendar draws it ending, `normalizeEndTime`'s reading of the occurrence's `end`
@@ -118,30 +121,29 @@ pub fn occurrences(
     let window = from.timestamp_millis()..=to.timestamp_millis();
     let mut out = Vec::new();
     for entry in entries {
-        let Some(Value::Mapping(metadata)) = &entry.metadata else {
-            continue;
-        };
         let path = entry.path.to_string_lossy();
-        match metadata.get("events") {
-            Some(Value::Mapping(declared)) => {
-                for (key, detail) in declared {
-                    if let (Some(name), Value::Mapping(detail)) = (key_name(key), detail) {
-                        events_of_entry(&name, detail, &path, &window, reader, &mut out);
-                    }
-                }
-            },
-            // `Object.entries` of an array names each element by its index.
-            Some(Value::Sequence(declared)) => {
-                for (index, detail) in declared.iter().enumerate() {
-                    if let Value::Mapping(detail) = detail {
-                        events_of_entry(&index.to_string(), detail, &path, &window, reader, &mut out);
-                    }
-                }
-            },
-            _ => {},
+        for (name, detail) in declared_events(entry) {
+            if let Value::Mapping(detail) = detail {
+                events_of_entry(&name, detail, &path, &window, reader, &mut out);
+            }
         }
     }
     out
+}
+
+/// The events an entry's `events:` block declares, each with the name `eventsFromEntries` gives
+/// it: its key, a number or a boolean as its text, or its index where the block is a list, as
+/// `Object.entries` names an array's elements. A key that is none of these names no event.
+pub(crate) fn declared_events(entry: &ListEntry) -> Vec<(String, &Value)> {
+    match entry.metadata.as_ref().and_then(|metadata| metadata.get("events")) {
+        Some(Value::Mapping(declared)) => {
+            declared.iter().filter_map(|(key, detail)| Some((key_name(key)?, detail))).collect()
+        },
+        Some(Value::Sequence(declared)) => {
+            declared.iter().enumerate().map(|(index, detail)| (index.to_string(), detail)).collect()
+        },
+        _ => Vec::new(),
+    }
 }
 
 /// The first and last instants of the days `from` to `to`, in the reader's zone: what the
@@ -685,6 +687,7 @@ fn build_occurrence(
 
     out.push(Occurrence {
         path: path.to_owned(),
+        event: event_name.to_owned(),
         name,
         start,
         end,

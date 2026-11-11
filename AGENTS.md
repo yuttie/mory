@@ -8,7 +8,8 @@ Layout of the tracked sources:
 
 - `backend/src/main.rs` — the server: routes, handlers, the `v2` module, and `models`.
 - `backend/src/ical.rs` — parsing subscribed iCal feeds and expanding their recurrences.
-- `backend/src/note_events.rs` — expanding the events a note declares, the Rust twin of `eventsFromEntries`, for event alarms.
+- `backend/src/note_events.rs` — expanding the events a note declares, the Rust twin of `eventsFromEntries`, for event alarms and the agenda.
+- `backend/src/agenda.rs` — what is on over some days: the occurrences the notes declare, the imported events no note claims, and the task dates, in one zone, for `list_agenda`.
 - `backend/src/alarms.rs` — when each alarm rings: the `alarms:` grammar, the defaults `.mory/calendars.yaml` sets, and a task's dates.
 - `backend/src/tasks.rs` — which notes are in the task tree, how they nest, and a task's status: the checks the MCP tools and the alarm scheduler share.
 - `backend/src/urgency.rs` — a task's derived urgency, its lead time, and the defaults `.mory/tasks.yaml` sets: the Rust twin of `frontend/src/urgency.ts`, for `list_tasks`.
@@ -243,6 +244,19 @@ both read. The two Rust sides at least agree with each other about which notes a
 `tasks::task_of` and `tasks::date_texts` decide that, and what is left to each is the test of a
 value, the leading `YYYY-MM-DD` for the window and the stricter reading `dayjs` gives for the
 scheduler, which also skips a finished task.
+
+`list_agenda` is the tool for what is on. It lists the occurrences `note_events` expands, the
+imported events `v2::imported_events` returns and each task's dates, in one zone and in order, so
+nothing is expanded a second way, and each occurrence ends where `note_events` ends it, which `ends`
+in `fixtures/calendar/notes.json` holds to the calendar. What it adds is the calendar's rule that a
+note converted from an imported event is drawn in its place, a copy of `mergeImported`'s with one
+difference: the claim is read from the notes' `ical:` blocks rather than from the occurrences
+drawn in the window, so a note that moved its occurrence out of the window still hides the
+original, where the calendar's merge brings it back. It merges nothing else: the same meeting on
+two calendars is two items, and telling them apart is left to the model. A task's dates are read
+as the scheduler reads them, through `tasks::task_of`, `tasks::date_texts` and
+`note_events::task_date_start`, and kept when the day each falls on in the zone asked for is in
+the window, as `taskDateEvent` keeps them, finished tasks included.
 
 `list_tasks` returns each task's urgency and progress as the web app derives them, because a
 model asked what to do next needs them and could not work them out from one task's block. That
