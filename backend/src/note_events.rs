@@ -231,9 +231,11 @@ static HAS_OFFSET: LazyLock<Regex> =
 static DURATION_SHORT: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^\+([0-9.]+) *(y|M|w|d|h|m|s|ms)$").expect("a valid pattern"));
 
+// Case-insensitive in ASCII alone, as a JavaScript pattern without `u` is: Unicode's folding would
+// take `ſ` for an `s`, and read `+1 hourſ` as a duration the calendar refuses.
 static DURATION_LONG: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r"(?i)^\+([0-9.]+) *(years?|months?|weeks?|days?|hours?|minutes?|seconds?|milliseconds?)$",
+        r"(?i-u)^\+([0-9.]+) *(years?|months?|weeks?|days?|hours?|minutes?|seconds?|milliseconds?)$",
     )
     .expect("a valid pattern")
 });
@@ -521,6 +523,13 @@ fn duration_unit(suffix: &str) -> String {
     }
 }
 
+/// The wall clock an end `normalizeEndTime` works out is spelt at, by `format`: one past the year
+/// 9999 takes five digits, which neither `toWallClock` nor the calendar reads, and so hides the
+/// occurrence, as `+8000y` does.
+fn worked_out(end: DateTime<Utc>, zone: Zone) -> Result<NaiveDateTime, Unusable> {
+    Some(wall_clock_at(end, zone)).filter(|wall| wall.year() <= 9999).ok_or(Unusable)
+}
+
 /// `normalizeEndTime` and then `toWallClock`: where the calendar draws the end of an occurrence
 /// starting at `anchor`. `Ok(None)` for one with no end, and `Err` for an end that hides it: one
 /// that is not text -- `end:` left empty is `null`, which is not `undefined` -- or one that neither
@@ -538,7 +547,7 @@ fn end_of(end: Option<&Value>, anchor: EndAnchor, zone: Zone) -> Result<Option<S
     let normalized = if let Some(parts) = DURATION_SHORT.captures(text).or_else(|| DURATION_LONG.captures(text)) {
         let amount = parse_float(&parts[1]).ok_or(Unusable)?;
         let end = dayjs_add(anchor.begins, amount, &duration_unit(&parts[2]), zone).ok_or(Unusable)?;
-        let wall = wall_clock_at(end, zone);
+        let wall = worked_out(end, zone)?;
         // A whole-day event stays whole days.
         if anchor.date_only { wall.format("%Y-%m-%d").to_string() } else { format_date_time(wall) }
     } else if dayjs_parse(text, zone).is_some() {
@@ -553,7 +562,7 @@ fn end_of(end: Option<&Value>, anchor: EndAnchor, zone: Zone) -> Result<Option<S
         let day = wall_clock_at(anchor.begins, zone).date();
         let literal = dayjs_parse(&format!("{} {text}", day.format("%Y-%m-%d")), zone).ok_or(Unusable)?;
         let end = if literal > anchor.begins { literal } else { add_days(literal, 1, zone).ok_or(Unusable)? };
-        format_date_time(wall_clock_at(end, zone))
+        format_date_time(worked_out(end, zone)?)
     };
     Ok(to_wall_clock(&normalized, zone))
 }

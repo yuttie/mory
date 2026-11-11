@@ -21,6 +21,12 @@ events:
     More years than a date holds:
         start: 2024-02-29 11:00
         end: +99999999999999999999y
+    Past the year 9999:
+        start: 2024-02-29 12:00
+        end: +8000y
+    Hours past the year 9999:
+        start: 2024-02-29 13:00
+        end: +70000000h
     A week and a half:
         start: 2024-04-01 09:00
         end: +1.5w
@@ -36,6 +42,9 @@ events:
     Seconds:
         start: 2024-04-03 11:00
         end: +90 Seconds
+    A long s:
+        start: 2024-04-03 12:00
+        end: +1 hourſ
     A day across the spring change:
         start: 2024-03-09 12:00
         end: +1d
@@ -97,6 +106,9 @@ events:
 ---
 
 Ends as the calendar draws them: durations in every unit, with fractions, across daylight-saving
-changes in the reader's zone, on dates, and longer than a date can reach, which hides the
-occurrence; times of day, including one past midnight and one at the start itself; and the ends a
-rule's occurrences, its overrides and its instances inherit.
+changes in the reader's zone, and on dates; times of day, including one past midnight and one at
+the start itself; and the ends a rule's occurrences, its overrides and its instances inherit.
+
+And ends that hide their occurrence: a duration longer than a date can reach or than the calendar
+can spell the year of, and a unit spelt with a long s, which Unicode's case folding takes for an
+`s` and JavaScript's does not.
