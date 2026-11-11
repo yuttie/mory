@@ -182,6 +182,15 @@
                         label="Identifier"
                         persistent-hint
                     ></v-text-field>
+                    <v-textarea
+                        v-model="draft.description"
+                        auto-grow
+                        class="mt-4"
+                        hint="What this calendar holds, for an assistant reading it through MCP: whose events they are, and which of them are yours."
+                        label="Description"
+                        persistent-hint
+                        rows="2"
+                    ></v-textarea>
                     <ColorField
                         v-model="draft.color"
                         v-bind:fallback="DEFAULT_IMPORTED_COLOR"
@@ -306,6 +315,7 @@ const draft = reactive<CalendarSubscription>({
     url: '',
     color: '',
     enabled: true,
+    description: '',
 });
 
 
@@ -378,8 +388,8 @@ function openEditDialog(index: number | null) {
     draftError.value = '';
     const existing = index === null ? null : calendars.subscriptions[index];
     Object.assign(draft, existing === null
-        ? { id: '', name: '', url: '', color: '', enabled: true }
-        : { ...existing, color: existing.color ?? '' });
+        ? { id: '', name: '', url: '', color: '', enabled: true, description: '' }
+        : { ...existing, color: existing.color ?? '', description: existing.description ?? '' });
     dialogOpen.value = true;
 }
 
@@ -409,12 +419,19 @@ async function save() {
         return;
     }
 
+    // Trimmed only once edited here: written by hand as a block, a description ends in a newline,
+    // and changing a calendar's colour should not rewrite it.
+    const existing = editingIndex.value === null ? undefined : calendars.subscriptions[editingIndex.value];
+    const description = draft.description === (existing?.description ?? '')
+        ? draft.description
+        : draft.description?.trim();
     const entry: CalendarSubscription = {
         id,
         name: draft.name.trim() || id,
         url: draft.url.trim(),
         ...(draft.color?.trim() ? { color: draft.color.trim() } : {}),
         enabled: draft.enabled,
+        ...(description?.trim() ? { description } : {}),
     };
     const next = [...calendars.subscriptions];
     if (editingIndex.value === null) {

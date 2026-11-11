@@ -257,6 +257,53 @@ describe('subscriptions', () => {
         await expect(store.loadConfiguration()).rejects.toThrow('boom');
     });
 
+    // Every save writes the whole file from what the store holds, so a field it did not read would
+    // be gone after a colour was changed.
+    it('keeps a calendar\'s description through a save of anything else', async () => {
+        const store = await storeWith(`calendars:
+    - id: team
+      name: Team
+      url: https://example.invalid/team.ics
+      enabled: true
+      description: |
+        The team's shared calendar: colleagues' leave, and the meetings I attend.
+`);
+        await store.loadConfiguration();
+        expect(store.subscriptions[0].description)
+            .toBe('The team\'s shared calendar: colleagues\' leave, and the meetings I attend.\n');
+
+        await store.saveTaskDateColors({ deadline: '#b71c1c' });
+
+        const [, content] = apiMocks.addNote.mock.calls[0];
+        expect(YAML.parse(content).calendars[0].description)
+            .toBe('The team\'s shared calendar: colleagues\' leave, and the meetings I attend.\n');
+        // As it was written, although its line is longer than 80 columns.
+        expect(content).toContain(`      description: |
+          The team's shared calendar: colleagues' leave, and the meetings I attend.
+`);
+    });
+
+    // moried reads one as no description, and the next save drops it, so the author is told first.
+    it('reports a description that is not text, and no empty one', async () => {
+        const store = await storeWith(`calendars:
+    - id: team
+      url: https://example.invalid/team.ics
+      description: [colleagues' leave, the meetings I attend]
+    - id: unset
+      url: https://example.invalid/unset.ics
+      description:
+    - id: blank
+      url: https://example.invalid/blank.ics
+      description: '  '
+`);
+        await store.loadConfiguration();
+
+        expect(store.subscriptions.map((subscription) => subscription.description))
+            .toEqual([undefined, undefined, undefined]);
+        expect(store.errors).toEqual(['.mory/calendars.yaml: calendars: the description of team is '
+            + 'not text. It is ignored, and saving the settings removes it.']);
+    });
+
     it('writes the list back and drops what was loaded for the old one', async () => {
         apiMocks.getImportedEvents.mockResolvedValue(response());
         apiMocks.getNote.mockRejectedValue(missing());
