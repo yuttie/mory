@@ -71,4 +71,20 @@ categories:
         alarms: [-1h]
 `);
     });
+
+    // Written as a block, each of these would read back with four more spaces on every line.
+    it('reads back text whose first line starts with a space as it was', () => {
+        const value = {
+            list: [{ text: '  indented\nthen not' }],
+            map: { text: '\n  after a blank line\n' },
+            text: ' one space\n',
+            long: `  ${'word '.repeat(30)}\nand more`,
+        };
+        expect(YAML.parse(stringifyWithFlowAlarms(value, { indent: 4 }))).toEqual(value);
+    });
+
+    it('still writes other text over several lines as a block', () => {
+        expect(stringifyWithFlowAlarms({ text: 'one\n  two\n' }, { indent: 4 }))
+            .toBe('text: |\n    one\n      two\n');
+    });
 });
