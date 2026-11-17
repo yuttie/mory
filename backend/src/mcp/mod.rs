@@ -495,7 +495,9 @@ impl Mory {
                        a `repeat` rule, weekdays are three letters (`wed`), not iCal's two, and \
                        may carry an ordinal: `3wed` is the third Wednesday, which needs `freq: \
                        monthly` or `yearly`. `tz` is an IANA zone name such as `Asia/Tokyo`, \
-                       never an offset.\n\n`category` names an event category configured in \
+                       never an offset. A rule recurs from the event's `start`, so it needs one, \
+                       and `exclusions` take occurrences out of a rule, so they need a \
+                       `repeat`.\n\n`category` names an event category configured in \
                        `.mory/calendars.yaml`, which list_events lists; one that is not \
                        configured is refused rather than invented.\n\n`alarms` says when it \
                        rings, as offsets from the start (`-10m`, `+1h`) or times on its day \
