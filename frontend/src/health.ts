@@ -16,6 +16,7 @@ import metadataSchema from '@/metadata-schema.json';
 import { planMonthOf } from '@/plans';
 import { tagsOf } from '@/tags';
 import { isTaskPath, taskDirectoryOf, taskUuidOf } from '@/task-forest';
+import { readStatus } from '@/task';
 import { taskInstant } from '@/urgency';
 
 export type HealthSeverity = 'error' | 'warning';
@@ -355,6 +356,7 @@ export function taskChecks(entries: readonly ListEntry2[]): HealthCheck[] {
     const orphaned: HealthProblem[] = [];
     const legacy: HealthProblem[] = [];
     const unreadDates: HealthProblem[] = [];
+    const statusless: HealthProblem[] = [];
     const covered = new Set<string>();
     const pathsOf = new Map<string, string[]>();
     for (const entry of entries) {
@@ -417,6 +419,14 @@ export function taskChecks(entries: readonly ListEntry2[]): HealthCheck[] {
                 path: entry.path,
             });
         }
+        // Frontmatter moried could not read is reported as that, which is why it holds no status.
+        const reading = unreadableReason(entry.metadata) === null ? readStatus(entry.metadata) : undefined;
+        if (reading !== undefined && 'missing' in reading) {
+            statusless.push({ severity: 'warning', message: `${reading.missing} The task tree draws it as Backlog; list_tasks gives it no status.`, path: entry.path });
+        }
+        else if (reading !== undefined && 'unread' in reading) {
+            statusless.push({ severity: 'error', message: `${reading.unread} The task tree draws it as Backlog, list_tasks gives it no status, and the task editor will not open it.`, path: entry.path });
+        }
         const task = entry.metadata?.task;
         if (typeof task === 'object' && task !== null && !Array.isArray(task)) {
             const record = task as Record<string, unknown>;
@@ -460,6 +470,12 @@ export function taskChecks(entries: readonly ListEntry2[]): HealthCheck[] {
             title: 'Every subtask\'s parent task exists',
             description: 'A task in .tasks/<uuid>/ has a task file for <uuid> beside that directory. Without one the tree places it as though it had no parent.',
             problems: orphaned,
+        },
+        {
+            id: 'task-status',
+            title: 'Every task has a status',
+            description: 'Each note in the task tree has a task: block whose status has a kind of backlog, todo, in_progress, waiting, blocked, on_hold, done or canceled. A note there is a task by its path alone, so one without a status is still in the tree, drawn as Backlog, while list_tasks gives it none. The task editor writes one on its next save, but will not open a note whose status it would have to replace.',
+            problems: statusless,
         },
         {
             id: 'task-date-values',
