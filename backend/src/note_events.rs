@@ -1022,7 +1022,13 @@ fn build_rule(repeat: Option<&Value>, start: Option<&Value>, reader: &Reader) ->
                 let zone = zone?;
                 // `bounded ?? until`: one `dayjs` cannot read is taken as written.
                 if let Some(at) = dayjs_parse(text, reader.zone) {
-                    bound = wall_clock_at(at, zone).with_nanosecond(0)?;
+                    // `wallClockIn` spells the wall clock out and `parseWallClock` reads it back,
+                    // which puts a year below 100 in the 1900s, as it puts a start's, and finds no
+                    // wall clock in a year past 9999, which leaves `until` as written.
+                    let wall = wall_clock_at(at, zone).with_nanosecond(0)?;
+                    if let Some((read, _)) = parse_wall_clock(&wall.format("%Y-%m-%d %H:%M:%S").to_string()) {
+                        bound = read;
+                    }
                 }
             }
         }
@@ -1292,5 +1298,29 @@ events:
         let found: Vec<String> =
             occurrences(&entries, from, to, &reader).iter().map(|o| o.start.to_string()).collect();
         assert_eq!(found, ["2024-05-10 15:00"]);
+    }
+
+    // `0050-01-01 00:00:00+00:00` is 09:18:59 in Tokyo, which kept its own mean time then, and the
+    // calendar reads that wall clock in 1950, as it reads a start in the year 50. Read in the year 50,
+    // it was before a start in 1949, and the crate refused a rule the calendar draws.
+    #[test]
+    fn an_until_read_into_its_zone_is_read_in_the_1900s_below_the_year_100() {
+        let reader = reader();
+        let repeat = |until: &str| {
+            serde_yaml::from_str::<Value>(&format!("{{ freq: daily, tz: Asia/Tokyo, until: '{until}' }}")).unwrap()
+        };
+        let start = Value::from("1949-12-30 10:00");
+        let day = |y, m, d| NaiveDate::from_ymd_opt(y, m, d).unwrap();
+        let early = repeat("0050-01-01 00:00:00+00:00");
+        let drawn: Vec<String> = expand_rule(Some(&early), Some(&start), day(1949, 12, 1), day(1950, 1, 31), &reader)
+            .expect("a rule the calendar draws")
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(drawn, ["1949-12-29 17:00", "1949-12-30 17:00"]);
+        // In the year 10000 it is no wall clock the calendar reads, and `until` is compared as
+        // written, before this start, rather than as the next morning.
+        let late = Value::from("9999-12-31 22:00");
+        assert!(matches!(rule_fault(&repeat("9999-12-31 20:00:00+00:00"), &late, &reader), Err(Some(_))));
     }
 }
