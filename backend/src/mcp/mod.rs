@@ -373,8 +373,9 @@ impl Mory {
     #[tool(
         name = "create_task",
         description = "Create a task and commit it. Requires the notes:write scope.\n\nA task \
-                       is an ordinary note under `.tasks/` carrying a `task:` block. Only its \
-                       status is required, and it defaults to backlog. importance is low, \
+                       is an ordinary note under `.tasks/` carrying a `task:` block. It needs \
+                       a title that is not blank, and a status, which defaults to backlog. \
+                       importance is low, \
                        medium or high, or left out for an unrated task. lead_time is how long \
                        the work needs before its date, in whole days or weeks (`14d`, `2w`); \
                        left out, it is the longest `.mory/tasks.yaml` sets for one of its tags, \
@@ -404,7 +405,9 @@ impl Mory {
                        note is untouched, comments and hand-formatting included. Changing \
                        status replaces the whole status block, so the keys the new one requires \
                        must come with it: `waiting` needs waiting_for, `blocked` needs \
-                       blocked_by, `on_hold` needs hold_reason, `canceled` needs cancel_reason. \
+                       blocked_by, `on_hold` needs hold_reason, `canceled` needs cancel_reason, \
+                       and none of them may be blank, as the web app's task editor will not \
+                       save one. \
                        `done` and `canceled` default their timestamp to now. Setting the status \
                        a task already has changes only the keys given and keeps the rest.",
         annotations(title = "Update a task", read_only_hint = false, destructive_hint = true,
