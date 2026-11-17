@@ -23,6 +23,17 @@ pub(crate) fn in_task_tree(path: &str) -> bool {
     path.strip_prefix(TASKS_DIR).is_some_and(|rest| check_tree_naming(rest).is_ok())
 }
 
+/// The UUID a note in the task tree is known by: the one its file name ends with, after any
+/// readable prefix. `None` for a path outside the tree.
+pub(crate) fn uuid_of(path: &str) -> Option<&str> {
+    if !in_task_tree(path) {
+        return None;
+    }
+    let file = path.rsplit('/').next()?;
+    let stem = file.rsplit_once('.').map_or(file, |(stem, _)| stem);
+    stem.get(stem.len().checked_sub(36)?..)
+}
+
 /// The naming the task tree is derived from: every directory component a bare UUIDv4, and the
 /// file stem ending in one, optionally after a readable prefix.
 pub(crate) fn check_tree_naming(rest: &str) -> Result<(), String> {
@@ -220,6 +231,16 @@ mod tests {
         assert!(!in_task_tree(&format!(".tasks/{}/{uuid}.md", parent.replace('-', ""))));
         assert!(!in_task_tree(&format!(".tasks/{{{parent}}}/{uuid}.md")));
         assert!(!in_task_tree(&format!(".tasks/urn:uuid:{parent}/{uuid}.md")));
+    }
+
+    #[test]
+    fn a_task_is_known_by_the_uuid_its_file_name_ends_with() {
+        let uuid = "6f1d3c2e-8a4b-4c57-9d1e-2b7a5f0e9c31";
+        let parent = "0d9a7e54-1c3b-4f6a-8b2d-5e4c7a1f9b60";
+        assert_eq!(uuid_of(&format!(".tasks/{parent}/readable-name-{uuid}.md")), Some(uuid));
+        assert_eq!(uuid_of(&format!(".tasks/{uuid}")), Some(uuid));
+        assert_eq!(uuid_of(&format!("notes/{uuid}.md")), None);
+        assert_eq!(uuid_of(&format!(".tasks/{uuid}/not-a-task.md")), None);
     }
 
     #[test]
