@@ -61,6 +61,22 @@ test('opens and saves a task carrying all revised date fields', async ({ context
     expect(errors).toEqual([]);
 });
 
+// Urgency reads it in moried's zone, as the alarms do, so it is no reason to refuse the task.
+test('saves a task holding a date written without its offset, keeping that date', async ({ context, page }) => {
+    const id = uuid(10);
+    const repository = await mockBackend(context, {
+        [`.tasks/${id}.md`]: '---\ntask:\n    status: {kind: todo}\n    deadline: 2026-10-20 12:00\n---\n\n# Older task\n',
+    });
+    await page.goto(`/tasks-next/${id}/descendants/status?task=${id}`);
+    const title = page.getByRole('textbox', { name: 'Title', exact: true });
+    await expect(title).toHaveValue('Older task');
+    await expect(page.getByRole('textbox', { name: 'Deadline (hard cutoff)', exact: true })).toHaveValue('2026-10-20 12:00+09:00');
+    await title.fill('Older task, revised');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect.poll(() => repository.writes.length).toBe(1);
+    expect(repository.writes[0].content).toContain('    deadline: 2026-10-20 12:00\n');
+});
+
 test('clears task dates together with their explicit alarms', async ({ context, page }) => {
     const id = uuid(9);
     const repository = await mockBackend(context, {
