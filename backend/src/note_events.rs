@@ -39,7 +39,7 @@ use chrono::{
     TimeZone, Timelike, Utc,
 };
 use chrono_tz::Tz as Zone;
-use icalendar::{Frequency, NWeekday, Tz, Weekday, rrule::RRule};
+use icalendar::{Frequency, NWeekday, Tz, Weekday, rrule::{RRule, RRuleError, RRuleSet}};
 use regex::Regex;
 use serde_yaml::{Mapping, Value};
 
@@ -853,6 +853,14 @@ fn integer<T: TryFrom<i64>>(value: &Value) -> Option<T> {
     T::try_from(n).ok()
 }
 
+/// A rule as `expand_rule` reads one, built and ready to expand.
+struct BuiltRule {
+    set: RRuleSet,
+    has_time: bool,
+    /// The zone a timed rule's occurrences are converted from, when it names one.
+    convert_into: Option<Zone>,
+}
+
 /// `expandRule`: the wall clock of every occurrence a rule generates within the days `[from, to]`,
 /// in the reader's zone. `None` for any rule the frontend reports as unusable.
 fn expand_rule(
@@ -862,6 +870,36 @@ fn expand_rule(
     to: NaiveDate,
     reader: &Reader,
 ) -> Option<Vec<Start>> {
+    let BuiltRule { set, has_time, convert_into } = build_rule(repeat, start, reader)?.ok()?;
+    let floating = |wall: NaiveDateTime| Tz::UTC.from_utc_datetime(&wall);
+    let generated = set
+        .after(floating(from.and_time(NaiveTime::MIN)))
+        .before(floating(to.and_hms_opt(23, 59, 59)?))
+        .all(u16::MAX)
+        .dates;
+
+    Some(
+        generated
+            .into_iter()
+            .map(|at| {
+                let wall = at.naive_utc();
+                match (has_time, convert_into) {
+                    (false, _) => Start::Date(wall.date()),
+                    (true, None) => Start::Time(wall),
+                    // Into the reader's zone, to the minute: the frontend formats it `HH:mm`.
+                    (true, Some(zone)) => {
+                        let local = wall_clock_at(resolve_in_zone(wall, zone, reader.now), reader.zone);
+                        Start::Time(local.with_second(0).and_then(|t| t.with_nanosecond(0)).unwrap_or(local))
+                    },
+                }
+            })
+            .collect(),
+    )
+}
+
+/// The rule `expand_rule` expands: `None` for one it refuses before building it, and the crate's
+/// error for one the crate will not build.
+fn build_rule(repeat: Option<&Value>, start: Option<&Value>, reader: &Reader) -> Option<Result<BuiltRule, RRuleError>> {
     let Some(Value::Mapping(repeat)) = repeat else {
         return None;
     };
@@ -979,31 +1017,7 @@ fn expand_rule(
         _ => None,
     };
 
-    let floating = |wall: NaiveDateTime| Tz::UTC.from_utc_datetime(&wall);
-    let set = rule.build(floating(anchor)).ok()?;
-    let generated = set
-        .after(floating(from.and_time(NaiveTime::MIN)))
-        .before(floating(to.and_hms_opt(23, 59, 59)?))
-        .all(u16::MAX)
-        .dates;
-
-    Some(
-        generated
-            .into_iter()
-            .map(|at| {
-                let wall = at.naive_utc();
-                match (has_time, convert_into) {
-                    (false, _) => Start::Date(wall.date()),
-                    (true, None) => Start::Time(wall),
-                    // Into the reader's zone, to the minute: the frontend formats it `HH:mm`.
-                    (true, Some(zone)) => {
-                        let local = wall_clock_at(resolve_in_zone(wall, zone, reader.now), reader.zone);
-                        Start::Time(local.with_second(0).and_then(|t| t.with_nanosecond(0)).unwrap_or(local))
-                    },
-                }
-            })
-            .collect(),
-    )
+    Some(rule.build(Tz::UTC.from_utc_datetime(&anchor)).map(|set| BuiltRule { set, has_time, convert_into }))
 }
 
 #[cfg(test)]
