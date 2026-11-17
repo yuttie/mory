@@ -483,7 +483,9 @@ impl Mory {
     #[tool(
         name = "add_event",
         description = "Add a calendar event to a note's `events:` frontmatter and commit it. \
-                       Requires the notes:write scope.\n\nAn event is keyed by its name in that \
+                       Requires the notes:write scope.\n\nThe note must exist already; for an \
+                       event with a note of its own, make one under `.events/` with create_note \
+                       first. An event is keyed by its name in that \
                        map, so the name must not already be taken. It needs a `start`, or a \
                        list of occurrences in `add_instances`, each with its own `start`, for \
                        one that happens on dates no rule describes. A bare date makes an \
