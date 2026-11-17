@@ -327,6 +327,8 @@ pub struct Agenda {
     pub calendars: Vec<crate::v2::CalendarReport>,
     /// Why no calendar could be read at all, which leaves the notes and tasks to stand alone.
     pub calendars_error: Option<String>,
+    /// One line for each subscription left out because it could not be read.
+    pub configuration_errors: Vec<String>,
     /// Set when a series had more occurrences than one expansion returns, so some may be missing.
     pub truncated: bool,
 }
@@ -340,10 +342,12 @@ pub async fn agenda(
     let (commit, entries) = state.get_entries(None).await?;
 
     let (look_from, look_to) = feed_window(from, to, view);
-    let (calendars, imported, truncated, calendars_error) =
+    let (calendars, imported, truncated, calendars_error, configuration_errors) =
         match crate::v2::imported_events(state, look_from.fixed_offset(), look_to.fixed_offset()).await {
-            Ok(response) => (response.calendars, response.events, response.truncated, None),
-            Err(e) => (Vec::new(), Vec::new(), false, Some(format!("{e:#}"))),
+            Ok(response) => {
+                (response.calendars, response.events, response.truncated, None, response.configuration_errors)
+            },
+            Err(e) => (Vec::new(), Vec::new(), false, Some(format!("{e:#}")), Vec::new()),
         };
 
     Ok(Agenda {
@@ -351,6 +355,7 @@ pub async fn agenda(
         items: assemble(&entries, &imported, from, to, view),
         calendars,
         calendars_error,
+        configuration_errors,
         truncated,
     })
 }

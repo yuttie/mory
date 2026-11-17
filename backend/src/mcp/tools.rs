@@ -823,14 +823,23 @@ struct ImportedEventsOutput<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     series: Option<&'a std::collections::BTreeMap<String, crate::ical::SeriesDefinition>>,
     truncated: bool,
+    #[serde(skip_serializing_if = "<[_]>::is_empty")]
+    configuration_errors: &'a [String],
 }
 
 impl<'a> ImportedEventsOutput<'a> {
     fn of(response: &'a crate::v2::ImportedEventsResponse, include_series: bool) -> Self {
         // Taken apart whole, so that a field the endpoint gains fails to build here rather than
         // being left out of the tool without anyone deciding it should be.
-        let crate::v2::ImportedEventsResponse { calendars, events, series, truncated } = response;
-        Self { calendars, events, series: include_series.then_some(series), truncated: *truncated }
+        let crate::v2::ImportedEventsResponse { calendars, events, series, truncated, configuration_errors } =
+            response;
+        Self {
+            calendars,
+            events,
+            series: include_series.then_some(series),
+            truncated: *truncated,
+            configuration_errors,
+        }
     }
 }
 
@@ -939,6 +948,9 @@ struct AgendaOutput {
     calendars: Vec<AgendaCalendar>,
     #[serde(skip_serializing_if = "Option::is_none")]
     calendars_error: Option<String>,
+    /// The subscriptions left out because they could not be read, which `calendars` does not name.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    configuration_errors: Vec<String>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     truncated: bool,
 }
@@ -1036,6 +1048,7 @@ pub async fn list_agenda(state: &AppState, args: AgendaArgs) -> Result<CallToolR
             })
             .collect(),
         calendars_error: agenda.calendars_error,
+        configuration_errors: agenda.configuration_errors,
         truncated: agenda.truncated,
     })
 }
@@ -1471,6 +1484,7 @@ mod tests {
             events: vec![occurrence],
             series: std::collections::BTreeMap::from([("standup@example.com".to_owned(), series)]),
             truncated: true,
+            configuration_errors: vec!["calendars[1]: missing field `url`".to_owned()],
         };
         let endpoint = serde_json::to_value(&response).unwrap();
 

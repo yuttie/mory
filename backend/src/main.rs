@@ -2199,19 +2199,18 @@ Write note suggestions in GitHub Flavored Markdown, ready to add to the task's n
     }
 
     /// `.mory/calendars.yaml`, as far as the backend reads it.
-    #[derive(serde::Deserialize, Default)]
+    #[derive(Default)]
     pub(crate) struct CalendarConfig {
-        #[serde(default)]
-        calendars: Vec<CalendarSubscription>,
+        /// The subscriptions as declared, each read on its own by `subscriptions`: a hand-written
+        /// mistake in one must not cost the others, nor the categories and alarms set beside them.
+        calendars: serde_yaml::Value,
         /// The event categories, keyed by id. Only the web app draws with them, so they are
         /// taken as whatever the file holds: a malformed block must not stop the imported events
         /// from loading.
-        #[serde(default)]
         categories: serde_yaml::Value,
         /// When alarms ring where a note does not say: `timed`, `all_day`, and later the task
         /// dates. As lenient as `categories`, and for the same reason: an unusable value is no
         /// setting, and never a reason to lose the imported events.
-        #[serde(default)]
         alarms: serde_yaml::Value,
     }
 
@@ -2234,11 +2233,33 @@ Write note suggestions in GitHub Flavored Markdown, ready to add to the task's n
             self.alarms.as_mapping()
         }
 
+        /// The subscriptions moried can read, in the file's order, and one line for each it cannot,
+        /// which is left out on its own.
+        pub(crate) fn subscriptions(&self) -> (Vec<CalendarSubscription>, Vec<String>) {
+            let mut problems = Vec::new();
+            let entries = match &self.calendars {
+                serde_yaml::Value::Null => &[][..],
+                serde_yaml::Value::Sequence(entries) => &entries[..],
+                _ => {
+                    problems.push("calendars: is not a list of subscriptions".to_owned());
+                    &[][..]
+                },
+            };
+            let mut subscriptions = Vec::new();
+            for (index, entry) in entries.iter().enumerate() {
+                match read_subscription(entry) {
+                    Ok(subscription) => subscriptions.push(subscription),
+                    Err(reason) => problems.push(format!("calendars[{index}]: {reason}")),
+                }
+            }
+            (subscriptions, problems)
+        }
+
         /// Each subscription as `imported_events` reports it, in the file's order, as if every
         /// feed had been read.
         #[cfg(test)]
         pub(crate) fn reports(self) -> Vec<CalendarReport> {
-            self.calendars.into_iter().map(|subscription| subscription.report(None)).collect()
+            self.subscriptions().0.into_iter().map(|subscription| subscription.report(None)).collect()
         }
 
         /// The ids of the configured event categories, in the file's order, as the web app reads
@@ -2248,8 +2269,30 @@ Write note suggestions in GitHub Flavored Markdown, ready to add to the task's n
         }
     }
 
+    /// One entry of `calendars:`, or why it is not a subscription: not a mapping, an `id` or a
+    /// `url` that is not text, a `name` or a `color` that is neither text nor empty, or an
+    /// `enabled` that is not `true` or `false`. Nothing else is read as a flag, `off` and `yes`
+    /// included, since YAML reads those as text.
+    pub(crate) fn read_subscription(entry: &serde_yaml::Value) -> Result<CalendarSubscription, String> {
+        // Checked first: the derived reader would take a list positionally, as `[id, name, url]`,
+        // which the web app does not.
+        let Some(mapping) = entry.as_mapping() else {
+            return Err("is not a mapping with an id and a url".to_owned());
+        };
+        // Nor would it read past a key that is not text, such as `2024:`, which names no field: it
+        // fails the entry over one, where the web app reads the rest and reports the key as unread.
+        let fields: serde_yaml::Mapping =
+            mapping.iter().filter(|(key, _)| key.is_string()).map(|(key, value)| (key.clone(), value.clone())).collect();
+        serde_yaml::from_value(serde_yaml::Value::Mapping(fields)).map_err(|e| {
+            match entry.get("id").and_then(serde_yaml::Value::as_str) {
+                Some(id) => format!("{id}: {e}"),
+                None => e.to_string(),
+            }
+        })
+    }
+
     #[derive(serde::Deserialize)]
-    struct CalendarSubscription {
+    pub(crate) struct CalendarSubscription {
         id: String,
         #[serde(default)]
         name: Option<String>,
@@ -2305,6 +2348,10 @@ Write note suggestions in GitHub Flavored Markdown, ready to add to the task's n
         /// Set when some series hit the per-series occurrence cap, so the client can say the view
         /// is incomplete rather than quietly showing less than exists.
         pub truncated: bool,
+        /// One line for each subscription in `.mory/calendars.yaml` that could not be read, and so
+        /// was not asked for, as `CalendarConfig::subscriptions` words it. The web app reads the
+        /// file itself and says the same; this is for the MCP tools, which do not.
+        pub configuration_errors: Vec<String>,
     }
 
     /// Where the subscription list lives, alongside the app's other repository-held config.
@@ -2554,11 +2601,28 @@ Write note suggestions in GitHub Flavored Markdown, ready to add to the task's n
         parse_calendar_config(&text)
     }
 
+    /// The file read as far as it can be: only one that is not YAML, or not a mapping, fails whole,
+    /// since nothing in it can then be told from anything else.
     pub(crate) fn parse_calendar_config(text: &str) -> Result<CalendarConfig> {
         if text.trim().is_empty() {
             return Ok(CalendarConfig::default());
         }
-        serde_yaml::from_str(text).context("the calendar list is not valid YAML")
+        let document: serde_yaml::Value =
+            serde_yaml::from_str(text).context("the calendar list is not valid YAML")?;
+        match document {
+            serde_yaml::Value::Null => Ok(CalendarConfig::default()),
+            // Each block taken by its name rather than by a derived reader, which fails the whole
+            // file over a key that is not text, such as a stray `2024:` that names no block.
+            serde_yaml::Value::Mapping(mut document) => {
+                let mut block = |key: &str| document.remove(key).unwrap_or_default();
+                Ok(CalendarConfig {
+                    calendars: block("calendars"),
+                    categories: block("categories"),
+                    alarms: block("alarms"),
+                })
+            },
+            _ => bail!("the calendar list is not a mapping of calendars:, categories: and the rest"),
+        }
     }
 
     /// Events from every subscribed calendar that fall inside the requested window.
@@ -2582,13 +2646,17 @@ Write note suggestions in GitHub Flavored Markdown, ready to add to the task's n
         from: DateTime<chrono::FixedOffset>,
         to: DateTime<chrono::FixedOffset>,
     ) -> Result<ImportedEventsResponse> {
-        let subscriptions = read_calendar_config(state).await?.calendars;
+        let (subscriptions, configuration_errors) = read_calendar_config(state).await?.subscriptions();
+        for problem in &configuration_errors {
+            tracing::warn!("{CALENDARS_PATH}: {problem}; that calendar is left out");
+        }
 
         let mut response = ImportedEventsResponse {
             calendars: Vec::new(),
             events: Vec::new(),
             series: std::collections::BTreeMap::new(),
             truncated: false,
+            configuration_errors,
         };
 
         for subscription in subscriptions {
