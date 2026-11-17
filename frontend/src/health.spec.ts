@@ -32,14 +32,29 @@ describe('frontmatterChecks', () => {
         expect(problemsOf(frontmatterChecks([
             entry('plain.md', null),
             entry('tagged.md', { tags: ['a'] }),
-        ]))).toEqual({ 'frontmatter-yaml': [], 'frontmatter-schema': [] });
+        ]))).toEqual({ 'frontmatter-yaml': [], 'frontmatter-schema': [], 'frontmatter-notes': [] });
     });
 
     it('reports frontmatter moried could not read under its own check', () => {
         expect(problemsOf(frontmatterChecks([entry('broken.md', { error: 'did not find expected key' })]))).toEqual({
             'frontmatter-yaml': [{ path: 'broken.md', message: 'did not find expected key' }],
             'frontmatter-schema': [],
+            'frontmatter-notes': [],
         });
+    });
+
+    it('reports tags in a file search does not read', () => {
+        const files = [
+            { ...entry('meeting.md.template', { tags: ['meeting'] }), mime_type: 'application/octet-stream' },
+            { ...entry('.mory/notes.md', { tags: ['x'] }) },
+            { ...entry('README', { tags: ['x'] }), mime_type: 'text/markdown' },
+            { ...entry('plain.template', { tags: [] }), mime_type: 'application/octet-stream' },
+            { ...entry('Notes.MARKDOWN', { tags: ['x'] }), mime_type: 'text/plain' },
+        ];
+        expect(problemsOf(frontmatterChecks(files))['frontmatter-notes'].map((problem) => problem.path)).toEqual([
+            'meeting.md.template',
+            '.mory/notes.md',
+        ]);
     });
 
     // Each says what is wrong in one line, where Ajv reports how the value fails every shape it

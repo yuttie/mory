@@ -196,6 +196,7 @@ function unreadableReason(metadata: unknown): string | null {
 export function frontmatterChecks(entries: readonly ListEntry2[]): HealthCheck[] {
     const unreadable: HealthProblem[] = [];
     const invalid: HealthProblem[] = [];
+    const unsearched: HealthProblem[] = [];
     for (const entry of entries) {
         if (entry.metadata === null) {
             continue;
@@ -207,6 +208,16 @@ export function frontmatterChecks(entries: readonly ListEntry2[]): HealthCheck[]
         }
         for (const message of schemaProblems(entry.metadata)) {
             invalid.push({ severity: 'error', message, path: entry.path });
+        }
+        const tags: unknown = (entry.metadata as Record<string, unknown>).tags;
+        if (Array.isArray(tags) && tags.length > 0 && !isSearchedNote(entry)) {
+            unsearched.push({
+                severity: 'warning',
+                message: entry.path.startsWith('.mory/')
+                    ? 'Its tags are in the tag tree and moried\'s tools, but text and semantic search leave .mory/ out.'
+                    : 'Not a Markdown note, yet moried lists its frontmatter: its tags are in the tag tree, the Files view and moried\'s tools, but text and semantic search index only Markdown notes and leave it out. Any events it declares are drawn and ring.',
+                path: entry.path,
+            });
         }
     }
     return [
@@ -222,7 +233,22 @@ export function frontmatterChecks(entries: readonly ListEntry2[]): HealthCheck[]
             description: 'created_at, tags, events and task have the shapes the schema gives them, as the note view checks for one note. tags is a list of text: the readers part ways on anything else, the tag tree taking a string letter by letter and moried\'s tools taking no tags from it.',
             problems: invalid,
         },
+        {
+            id: 'frontmatter-notes',
+            title: 'Tags are only in the notes search reads',
+            description: 'moried lists the frontmatter of any text file, a template or a YAML file as well as a note, and the tag tree and moried\'s tools take the tags of each. Text and semantic search, in the Search view and moried\'s search_notes, read only Markdown notes outside .mory/, so a tag elsewhere finds the file in the tag tree and not in those searches.',
+            problems: unsearched,
+        },
     ];
+}
+
+// Whether text and semantic search index a file, and so its tags: a Markdown note outside `.mory/`,
+// as `build_inputs` and `is_markdown` in `backend/src/search/mod.rs` decide. Grep reads every file.
+function isSearchedNote(entry: ListEntry2): boolean {
+    if (entry.path.startsWith('.mory/')) {
+        return false;
+    }
+    return /^text\/markdown\s*(?:;|$)/i.test(entry.mime_type) || /\.(?:md|markdown)$/i.test(entry.path);
 }
 
 // Which check an error from the event derivations belongs to, by the property it names. A task's
