@@ -170,11 +170,17 @@ export function taskInstant(value: unknown, zone: string, endOfDay = false): num
     return Number.isFinite(instant) ? instant : undefined;
 }
 
-// Whether a value is a task date as one is written: a bare date, or a datetime carrying its offset.
-// What the task editor, the outline and moried's tools write; `taskInstant` reads more.
+// Whether a value is a task date as one is written: a bare date, or a datetime carrying its offset,
+// spelt as every reader of one takes it. What the task editor, the outline and moried's tools write
+// (`urgency::is_written`). `taskInstant` reads more, but not every reader does: the calendar
+// (`toWallClock`) and the alarms read no fraction of a second and no white space before a bare
+// date, and a bare date in the years 0 to 99 as one in the 1900s, and the editor's own date field
+// reads a datetime in those years so too, and white space after a bare date as midnight.
 export function isWrittenTaskDate(value: unknown): boolean {
     return typeof value === 'string'
-        && !/^[0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:\.[0-9]{1,3})?)?$/.test(value.trim())
+        && value.trim() === value
+        && !value.startsWith('00')
+        && /^[0-9]{4}-[0-9]{2}-[0-9]{2}(?:[ T][0-9]{2}:[0-9]{2}(?::[0-9]{2})?(?:Z|[+-][0-9]{2}:[0-9]{2}))?$/.test(value)
         && taskInstant(value, 'UTC') !== undefined;
 }
 
