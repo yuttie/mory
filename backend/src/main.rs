@@ -1628,7 +1628,7 @@ fn frontmatter_tree(text: &str) -> Option<markdown::mdast::Node> {
 
 /// Whether `line` is a frontmatter fence of `marker` as markdown-rs reads one: the marker, then
 /// only spaces or tabs to the end of the line.
-fn is_fence(line: &str, marker: &str) -> bool {
+pub(crate) fn is_fence(line: &str, marker: &str) -> bool {
     line.trim_end_matches(['\n', '\r'])
         .strip_prefix(marker)
         .is_some_and(|rest| rest.trim_end_matches([' ', '\t']).is_empty())
@@ -1643,8 +1643,8 @@ fn extract_metadata(blob: &[u8], mime_type: &str) -> (Option<serde_yaml::Value>,
 
 /// How the fences around a note's frontmatter are read differently by the listing, which reads
 /// them as markdown-rs does, and by the other readers of the note's own text: moried's tools
-/// (`mcp::frontmatter::Note::parse`) open only on a line that is `---` alone and close on one that
-/// is `---` or `...` alone, and the web app's editors (`editFrontmatter`) open on `---` alone and
+/// (`mcp::frontmatter::Note::parse`) open and close only on a line that is `---` alone, and refuse
+/// to edit a note the listing reads otherwise (`mcp::frontmatter::check_fences`), and the web app's editors (`editFrontmatter`) open on `---` alone and
 /// close on `---` with trailing blanks allowed. Each reader is left as it is; a note they part ways
 /// on is reported, for its author to write the fence every one of them reads.
 ///

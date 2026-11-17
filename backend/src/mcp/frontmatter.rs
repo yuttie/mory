@@ -173,10 +173,9 @@ fn refuse(message: impl Into<String>) -> EditError {
     EditError(message.into())
 }
 
-/// A fence as the listing reads one (markdown-rs, through `extract_metadata`): three `-`, then
-/// only spaces or tabs, its line ending already taken off.
+/// A fence as the listing reads one, its line ending already taken off.
 fn is_listed_fence(line: &str) -> bool {
-    line.strip_prefix("---").is_some_and(|rest| rest.trim_end_matches([' ', '\t']).is_empty())
+    crate::is_fence(line, "---")
 }
 
 /// Refuses a note whose frontmatter the listing reads but this module would not find: one after a
