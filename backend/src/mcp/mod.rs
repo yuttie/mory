@@ -457,7 +457,8 @@ impl Mory {
                        plan's, set with plan_task. They are bare dates (`2026-03-15`) \
                        or datetimes carrying their offset (`2026-03-15 09:00:00+09:00`). due_by \
                        and deadline are drawn on the calendar in their own colours, so they are \
-                       events as well as fields, and list_events returns them. \
+                       events as well as fields: list_agenda lists them with the rest of what is \
+                       on, and list_events under `task_dates`. \
                        `due_by_alarms` and `deadline_alarms` say when each rings, as offsets \
                        (`-1h`) or times on its day (`09:00`, `-1d 18:00`).",
         annotations(title = "Set a task's dates", read_only_hint = false,
