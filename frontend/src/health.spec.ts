@@ -205,6 +205,15 @@ describe('taskChecks', () => {
         expect(taskChecks([{ ...entry('.tasks/photo.png', null), mime_type: 'image/png' }]).flatMap((check) => check.problems)).toEqual([]);
     });
 
+    it('reports a file the tree takes for a task that is not a note', () => {
+        const problems = problemsOf(taskChecks([
+            { ...entry(`.tasks/${A}.png`, null), mime_type: 'image/png' },
+            { ...entry(`.tasks/report-${B}.template`, { task: { status: { kind: 'todo' }, due_by: '2026-10-01' } }), mime_type: 'application/octet-stream' },
+        ]))['task-files'];
+        expect(problems.map((problem) => problem.path)).toEqual([`.tasks/${A}.png`, `.tasks/report-${B}.template`]);
+        expect(problems[1].message).toContain('list_tasks take it for a task');
+    });
+
     it('reports every file of a UUID that names more than one', () => {
         const paths = [`.tasks/${A}.md`, `.tasks/old-${A}.md`, `.tasks/${B}/${A}.md`];
         const problems = problemsOf(taskChecks([...paths, `.tasks/${B}.md`].map((path) => entry(path, null))))['task-ids'];

@@ -383,8 +383,25 @@ export function taskChecks(entries: readonly ListEntry2[]): HealthCheck[] {
             shared.push({ severity: 'error', message: `Shares its UUID with ${others.join(', ')}; ${consequence}.`, path });
         }
     }
+    // The tree and moried's `task_of` take any file whose name ends with a UUID, whatever its
+    // extension, while the plan tools, creating a task and the checks below take only a `.md` one.
+    const notNotes: HealthProblem[] = [];
     for (const entry of entries) {
-        // Only notes: an attachment beside a task is not meant to be one.
+        if (!isTaskPath(entry.path) || entry.path.endsWith('.md') || taskUuidOf(entry.path) === null) {
+            continue;
+        }
+        const task = entry.metadata?.task;
+        notNotes.push({
+            severity: 'warning',
+            message: typeof task === 'object' && task !== null && !Array.isArray(task)
+                ? 'Not a Markdown note, yet the task tree and moried\'s list_tasks take it for a task, and the calendar draws its dates and rings them; day plans in moried\'s tools and the checks here take only a .md file. Rename it to end with .md.'
+                : 'Not a Markdown note, yet the task tree shows it as a task, its name ending with a UUID; day plans in moried\'s tools take only a .md file. Rename it to end with .md, or so that its name does not end with a UUID.',
+            path: entry.path,
+        });
+    }
+    for (const entry of entries) {
+        // Only notes: an attachment beside a task is not meant to be one, and is reported above
+        // where its name makes it one anyway.
         if (!isTaskPath(entry.path) || !entry.path.endsWith('.md')) {
             continue;
         }
@@ -425,6 +442,12 @@ export function taskChecks(entries: readonly ListEntry2[]): HealthCheck[] {
             title: 'Task files are named for the task tree',
             description: 'Each note under .tasks/ has a file name ending with a UUIDv4, in directories each named by a bare UUIDv4. The tree leaves out any other.',
             problems: misnamed,
+        },
+        {
+            id: 'task-files',
+            title: 'Every file the task tree takes is a Markdown note',
+            description: 'Each file under .tasks/ whose name ends with a UUIDv4 ends with .md. The task tree and moried\'s list_tasks take one that does not for a task, and the calendar its dates, while day plans in moried\'s tools and creating a task take only a note.',
+            problems: notNotes,
         },
         {
             id: 'task-ids',
