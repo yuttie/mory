@@ -459,6 +459,12 @@ export function readAlarmDefaults(value: unknown, problems?: string[]): AlarmDef
         problems?.push('alarms: is not a mapping of kinds to the alarms they ring at');
         return {};
     }
+    const kinds: readonly string[] = Object.values(ALARM_DEFAULT_KEYS);
+    for (const key of Object.keys(mapping)) {
+        if (!kinds.includes(key)) {
+            problems?.push(`alarms.${key}: is not a kind of alarm moried or the web app knows`);
+        }
+    }
     return readAlarmFields(
         mapping,
         ALARM_DEFAULT_ENTRIES,

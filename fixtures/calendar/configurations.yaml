@@ -1,0 +1,213 @@
+# `.mory/calendars.yaml` as it may be written by hand, and where each value is that moried or the
+# web app does not read. `frontend/src/calendar-configuration.spec.ts` requires exactly these to be
+# reported: a reader leaving one out unannounced is a setting that looks made and does nothing.
+#
+# Each case is `name`, the file's `text`, and `unread`, the places at fault in any order.
+
+- name: everything read
+  text: |
+    calendars:
+        - id: work
+          name: Work
+          url: https://example.invalid/work.ics
+          color: '#3f51b5'
+          enabled: false
+          description: |
+              The team's meetings.
+        - id: bare
+          url: https://example.invalid/bare.ics
+        - id: emptied
+          url: https://example.invalid/emptied.ics
+          name:
+          color:
+          description:
+    task_dates:
+        due_by: '#ff9800'
+        deadline:
+    alarms:
+        timed: [-10m]
+        all_day: -1d 18:00
+        due_by: []
+        deadline:
+    categories:
+        meeting:
+            color: red
+            name: '[MTG] {{name}}'
+            alarms: [-5m, 09:00]
+        meeting/1on1:
+        trip: {}
+  unread: []
+
+- name: nothing but comments
+  text: |
+    # No calendars yet.
+  unread: []
+
+# Only `true` and `false` are flags: YAML reads `off` and `yes` as text, and an empty `enabled:` as
+# nothing at all, which is not a flag either.
+- name: a subscription that is not read
+  text: |
+    calendars:
+        - id: off
+          url: https://example.invalid/off.ics
+          enabled: off
+        - id: yes
+          url: https://example.invalid/yes.ics
+          enabled: yes
+        - id: one
+          url: https://example.invalid/one.ics
+          enabled: 1
+        - id: empty
+          url: https://example.invalid/empty.ics
+          enabled:
+        - url: https://example.invalid/no-id.ics
+        - id: no-url
+        - id: 5
+          url: https://example.invalid/numbered.ics
+        - id: named
+          url: https://example.invalid/named.ics
+          name: [Named]
+        - id: coloured
+          url: https://example.invalid/coloured.ics
+          color: 5
+        - https://example.invalid/bare.ics
+        - [listed, Listed, https://example.invalid/listed.ics]
+        - id: fine
+          url: https://example.invalid/fine.ics
+  unread:
+    - calendars[0]
+    - calendars[1]
+    - calendars[2]
+    - calendars[3]
+    - calendars[4]
+    - calendars[5]
+    - calendars[6]
+    - calendars[7]
+    - calendars[8]
+    - calendars[9]
+    - calendars[10]
+
+# A plain scalar is text or not as moried's YAML reader takes it, in both: a binary integer, and a
+# hexadecimal or octal one with a sign, are numbers, and digits after a leading zero, or a number
+# too large to be finite, are text.
+- name: numbers as moried reads them
+  text: |
+    calendars:
+        - id: 0b101
+          url: https://example.invalid/binary.ics
+        - id: work
+          url: https://example.invalid/work.ics
+          name: -0x1F
+        - id: 017
+          url: https://example.invalid/zero.ics
+          name: 1e400
+          color: 007
+    categories:
+        017:
+            color: +0o7
+  unread:
+    - calendars[0]
+    - calendars[1]
+    - categories.017.color
+
+# A key that is not text names nothing, and costs nothing but itself.
+- name: keys that are not text
+  text: |
+    calendars:
+        - id: work
+          url: https://example.invalid/work.ics
+          2024: a year
+    alarms:
+        timed: [-10m]
+    true: a flag
+  unread:
+    - calendars[0].2024
+    - 'true'
+
+- name: subscriptions that are not a list
+  text: |
+    calendars:
+        work:
+            url: https://example.invalid/work.ics
+    alarms:
+        timed: [-10m]
+  unread: [calendars]
+
+- name: what a read subscription holds besides
+  text: |
+    calendars:
+        - id: work
+          url: https://example.invalid/work.ics
+          description: [the team, its meetings]
+          colour: red
+  unread:
+    - calendars[0].description
+    - calendars[0].colour
+
+- name: task date colours
+  text: |
+    task_dates:
+        due_by: 5
+        deadline: [red]
+        completed: green
+  unread:
+    - task_dates.due_by
+    - task_dates.deadline
+    - task_dates.completed
+
+- name: task date colours that are not a mapping
+  text: |
+    task_dates: red
+  unread: [task_dates]
+
+- name: alarm defaults
+  text: |
+    alarms:
+        timed: [-10m, 10m, soon]
+        all_day: 5
+        due_by: [-1d 18:00]
+        deadline: { at: -1d }
+        overdue: [-1h]
+  unread:
+    - alarms.timed
+    - alarms.all_day
+    - alarms.deadline
+    - alarms.overdue
+
+- name: alarm defaults that are not a mapping
+  text: |
+    alarms: [-10m]
+  unread: [alarms]
+
+- name: categories
+  text: |
+    categories:
+        meeting:
+            color: 5
+            name: [MTG]
+            alarms: [-10m, later]
+            icon: people
+        text: 5
+        list: [meeting]
+        fine:
+            color: green
+  unread:
+    - categories.meeting.color
+    - categories.meeting.name
+    - categories.meeting.alarms
+    - categories.meeting.icon
+    - categories.text
+    - categories.list
+
+- name: categories that are not a mapping
+  text: |
+    categories: [meeting, trip]
+  unread: [categories]
+
+- name: a key neither reads
+  text: |
+    calendars: []
+    calendar:
+        - id: work
+          url: https://example.invalid/work.ics
+  unread: [calendar]

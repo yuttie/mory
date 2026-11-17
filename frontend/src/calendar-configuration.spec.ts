@@ -10,7 +10,23 @@ import {
     writeCalendarConfiguration,
 } from '@/calendar-configuration';
 
+import fixture from '../../fixtures/calendar/configurations.yaml?raw';
+
+interface Case {
+    name: string;
+    text: string;
+    unread: string[];
+}
+
+// Each case names every value the file holds that moried or the web app leaves out.
+const cases: Case[] = YAML.parse(fixture);
+
 describe('readCalendarConfiguration', () => {
+    it.each(cases)('says where each value it leaves out is: $name', ({ text, unread }) => {
+        const read = readCalendarConfiguration(parseCalendarConfiguration(text));
+        expect(new Set(read.unread.map((value) => value.at))).toEqual(new Set(unread));
+    });
+
     it('refuses a file that is not a mapping, and reads an empty one as nothing', () => {
         expect(() => readCalendarConfiguration(['calendars'])).toThrow('not a mapping');
         expect(() => readCalendarConfiguration('calendars')).toThrow('not a mapping');
@@ -24,11 +40,14 @@ describe('readCalendarConfiguration', () => {
       enabled: off
     - id: work
       url: https://example.invalid/work.ics
-      description: 5
+      colour: red
+task_dates:
+    deadline: 5
 `));
         expect(read.unread.map(({ at, kept }) => [at, kept])).toEqual([
             ['calendars[0]', true],
-            ['calendars[1].description', false],
+            ['calendars[1].colour', false],
+            ['task_dates.deadline', false],
         ]);
     });
 });

@@ -3,7 +3,8 @@
 // The file is written by hand as well as by the settings, and moried reads it too, so what one
 // reader leaves out the other must leave out alike, and neither may leave a value out unannounced:
 // it would look set and do nothing. Every such value is said, by where it is, and the health page
-// and the Calendar list them. `backend/src/main.rs` leaves out the same subscriptions.
+// and the Calendar list them. `backend/src/main.rs` leaves out the same subscriptions moried cannot
+// read, and `fixtures/calendar/configurations.yaml` lists what each case leaves out.
 //
 // What happens to a value left out on the next save depends on what it is. A subscription is kept
 // as written, wherever it stood: it holds a feed's address and the id converted notes name it by,
@@ -17,7 +18,7 @@ import type { AlarmDefaults } from '@/alarms';
 import { readAlarmDefaults, writeAlarmDefaults } from '@/alarms';
 import { MORIED_SCALARS, stringifyWithFlowAlarms } from '@/frontmatter';
 import type { ConfiguredCategory, TaskDateColors } from '@/events';
-import { readCategories } from '@/events';
+import { readCategories, UNKNOWN_KEY } from '@/events';
 
 export interface CalendarSubscription {
     id: string;
@@ -58,6 +59,8 @@ export interface CalendarConfiguration {
     unread: UnreadValue[];
 }
 
+const TOP_LEVEL_KEYS = ['calendars', 'task_dates', 'alarms', 'categories'];
+const SUBSCRIPTION_KEYS = ['id', 'name', 'url', 'color', 'enabled', 'description'];
 const TASK_DATE_KEYS = ['due_by', 'deadline'] as const;
 
 function isMapping(value: unknown): value is Record<string, unknown> {
@@ -152,6 +155,12 @@ export function readCalendarConfiguration(parsed: unknown): CalendarConfiguratio
     const dropped = (at: string, message: string) => unread.push({ at, message, kept: false });
     const kept = (at: string, message: string) => unread.push({ at, message, kept: true });
 
+    for (const key of Object.keys(parsed)) {
+        if (!TOP_LEVEL_KEYS.includes(key)) {
+            dropped(key, UNKNOWN_KEY);
+        }
+    }
+
     const subscriptions: CalendarSubscription[] = [];
     const held: HeldSubscription[] = [];
     let heldCalendars: unknown;
@@ -170,6 +179,11 @@ export function readCalendarConfiguration(parsed: unknown): CalendarConfiguratio
             if (!isUnsetOrText(record.description)) {
                 dropped(`${at}.description`, 'is not text');
             }
+            for (const key of Object.keys(record)) {
+                if (!SUBSCRIPTION_KEYS.includes(key)) {
+                    dropped(`${at}.${key}`, UNKNOWN_KEY);
+                }
+            }
         });
     }
     else if (calendars !== undefined && calendars !== null) {
@@ -178,7 +192,7 @@ export function readCalendarConfiguration(parsed: unknown): CalendarConfiguratio
     }
 
     const problems: string[] = [];
-    const taskDateColors = readTaskDateColors(parsed.task_dates);
+    const taskDateColors = readTaskDateColors(parsed.task_dates, problems);
     const alarmDefaults = readAlarmDefaults(parsed.alarms, problems);
     const categories = readCategories(parsed.categories, problems);
     for (const problem of problems) {
@@ -218,9 +232,13 @@ export function writeCalendarConfiguration(
 }
 
 // Hand-edited YAML, so every value is checked rather than trusted: a colour that is not a string is
-// dropped in favour of the default, which is what an absent one means anyway.
-function readTaskDateColors(value: unknown): TaskDateColors {
+// dropped in favour of the default, which is what an absent one means anyway, and said in
+// `problems`.
+function readTaskDateColors(value: unknown, problems: string[]): TaskDateColors {
     if (!isMapping(value)) {
+        if (value !== undefined && value !== null) {
+            problems.push('task_dates: is not a mapping of due_by and deadline to colours');
+        }
         return {};
     }
     const colors: TaskDateColors = {};
@@ -228,6 +246,14 @@ function readTaskDateColors(value: unknown): TaskDateColors {
         const color = value[field];
         if (typeof color === 'string' && color.trim() !== '') {
             colors[field] = color.trim();
+        }
+        else if (!isUnsetOrText(color)) {
+            problems.push(`task_dates.${field}: is not a colour`);
+        }
+    }
+    for (const key of Object.keys(value)) {
+        if (!(TASK_DATE_KEYS as readonly string[]).includes(key)) {
+            problems.push(`task_dates.${key}: ${UNKNOWN_KEY}`);
         }
     }
     return colors;
