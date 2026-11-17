@@ -7,6 +7,7 @@ import { useLocalStorage } from '@/composables/localStorage';
 import { endEventAlarms, watchEventAlarms } from '@/event-alarms';
 import { connectServiceWorker } from '@/service-worker';
 import { useFilesStore } from '@/stores/files';
+import { useZoneStore } from '@/stores/zone';
 
 import * as api from '@/api';
 
@@ -18,6 +19,7 @@ export const useAppStore = defineStore('app', () => {
     const loginError: Ref<null | string> = ref(null);
     const serviceWorkerConfigured = connectServiceWorker(token);
     watchEventAlarms(token);
+    const zones = useZoneStore();
     const draggingViewerContent = ref(false);
     // How many mounted views are showing their own controls in the app bar, through <AppBarContent>.
     // While any is, the app bar leaves out its generic title.
@@ -70,6 +72,13 @@ export const useAppStore = defineStore('app', () => {
     }
 
     // Watchers
+    // moried's zone, asked whenever there is a session, since moried refuses the question without
+    // one. After the flush, so that `useLocalStorage` has stored the token `getAxios()` reads.
+    watch(token, (value) => {
+        if (value !== null) {
+            void zones.load();
+        }
+    }, { immediate: true, flush: 'post' });
     // Retries what failed for want of a token once the page has one again, from a login here or
     // in another tab. After the flush, so that `useLocalStorage` has stored the token that
     // `getAxios()` reads.

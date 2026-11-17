@@ -185,6 +185,7 @@ async fn main() -> Result<()> {
         );
     let protected_api_v2 = Router::new()
         .route("/commits/head", get(v2::get_commits_head))
+        .route("/zone", get(v2::get_zone))
         .route("/files/*path", get(v2::get_files_path).head(v2::head_files_path))
         .route("/entries", get(v2::get_entries))
         .route("/tasks", get(v2::get_tasks))
@@ -2636,6 +2637,13 @@ Write note suggestions in GitHub Flavored Markdown, ready to add to the task's n
         let commit = head.peel_to_commit()?;
         let commit_id = commit.id();
         Ok(Json(commit_id.to_string()))
+    }
+
+    /// `GET /v2/zone`: the zone moried reads a time written without an offset in, as an IANA
+    /// name. The web app reads such a time in it too, so that a note means the same moments in
+    /// every browser, wherever it is.
+    pub async fn get_zone() -> Json<&'static str> {
+        Json(crate::urgency::local_zone().name())
     }
 
     /// Whether the client holds the version `etag` names already: one of the tags `If-None-Match`
