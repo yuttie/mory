@@ -796,9 +796,46 @@ pub async fn list_events(
     })
 }
 
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ImportedEventsArgs {
+    /// The first day of the window, `YYYY-MM-DD`.
+    pub start: String,
+    /// The last day of the window, `YYYY-MM-DD`.
+    pub end: String,
+    /// Also return `series`: the whole definition of each series an occurrence belongs to -- its
+    /// rule, exclusions and overrides -- which writing a note that claims the series needs. Off
+    /// unless asked for.
+    #[serde(default)]
+    pub include_series: bool,
+}
+
+/// What `list_imported_events` returns: the endpoint's response, with `series` only on request.
+///
+/// The web app needs `series` to convert an event into a note, and the endpoint returns it with
+/// every window. A model asking what is on rarely does, and it can be most of the response: it
+/// repeats every overridden occurrence's description, for the whole life of the series, whatever
+/// the window.
+#[derive(Serialize)]
+struct ImportedEventsOutput<'a> {
+    calendars: &'a [crate::v2::CalendarReport],
+    events: &'a [crate::ical::ImportedEvent],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    series: Option<&'a std::collections::BTreeMap<String, crate::ical::SeriesDefinition>>,
+    truncated: bool,
+}
+
+impl<'a> ImportedEventsOutput<'a> {
+    fn of(response: &'a crate::v2::ImportedEventsResponse, include_series: bool) -> Self {
+        // Taken apart whole, so that a field the endpoint gains fails to build here rather than
+        // being left out of the tool without anyone deciding it should be.
+        let crate::v2::ImportedEventsResponse { calendars, events, series, truncated } = response;
+        Self { calendars, events, series: include_series.then_some(series), truncated: *truncated }
+    }
+}
+
 pub async fn list_imported_events(
     state: &AppState,
-    args: WindowArgs,
+    args: ImportedEventsArgs,
 ) -> Result<CallToolResult, ErrorData> {
     let (from, to) = match crate::ical::parse_window(&args.start, &args.end) {
         Ok(window) => window,
@@ -806,7 +843,7 @@ pub async fn list_imported_events(
     };
 
     match crate::v2::imported_events(state, from, to).await {
-        Ok(response) => json_result(&response),
+        Ok(response) => json_result(&ImportedEventsOutput::of(&response, args.include_series)),
         Err(e) => {
             tracing::error!("MCP list_imported_events failed: {:?}", e);
             Ok(tool_error(format!(
@@ -1199,6 +1236,63 @@ mod tests {
         assert_eq!(unreadable.0, json("{}"));
         assert_eq!(unreadable.1, json("{}"));
         assert!(unreadable.2.as_deref().is_some_and(|reason| reason.contains("not valid YAML")), "{unreadable:?}");
+    }
+
+    /// `list_imported_events` is the endpoint's response, `series` only on request, and everything
+    /// else whether asked for or not.
+    #[test]
+    fn imported_series_are_returned_only_on_request() {
+        let occurrence = crate::ical::ImportedEvent {
+            calendar: "work".to_owned(),
+            uid: "standup@example.com".to_owned(),
+            recurrence_id: "2026-10-05 09:00:00+09:00".to_owned(),
+            name: "Standup".to_owned(),
+            start: "2026-10-05 09:00:00+09:00".to_owned(),
+            end: None,
+            note: None,
+            location: None,
+            url: None,
+        };
+        let series = crate::ical::SeriesDefinition {
+            name: "Standup".to_owned(),
+            start: "2026-04-06 09:00:00+09:00".to_owned(),
+            end: None,
+            repeat: Some(crate::ical::Repeat { freq: "weekly".to_owned(), ..Default::default() }),
+            exclusions: Vec::new(),
+            overrides: vec![crate::ical::Override {
+                at: "2027-01-04 09:00:00+09:00".to_owned(),
+                name: Some("Standup, the first of the year".to_owned()),
+                start: None,
+                end: None,
+                note: Some("A long invitation, repeated whatever the window.".to_owned()),
+                location: None,
+            }],
+            instances: Vec::new(),
+            note: None,
+            location: None,
+            url: None,
+            unmapped: std::collections::BTreeMap::new(),
+        };
+        let response = crate::v2::ImportedEventsResponse {
+            calendars: vec![crate::v2::CalendarReport {
+                id: "work".to_owned(),
+                name: "Work".to_owned(),
+                color: None,
+                error: Some("one VEVENT could not be read".to_owned()),
+            }],
+            events: vec![occurrence],
+            series: std::collections::BTreeMap::from([("standup@example.com".to_owned(), series)]),
+            truncated: true,
+        };
+        let endpoint = serde_json::to_value(&response).unwrap();
+
+        let asked = serde_json::to_value(ImportedEventsOutput::of(&response, true)).unwrap();
+        assert_eq!(asked, endpoint);
+
+        let mut without_series = endpoint.clone();
+        without_series.as_object_mut().unwrap().remove("series");
+        let not_asked = serde_json::to_value(ImportedEventsOutput::of(&response, false)).unwrap();
+        assert_eq!(not_asked, without_series);
     }
 
     #[test]
