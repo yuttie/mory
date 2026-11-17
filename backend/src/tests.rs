@@ -1105,6 +1105,15 @@ fn a_fence_the_readers_find_in_different_places_is_unread() {
     assert!(unread("---\ntags: [a]\n...\nmore\n---\n")[0].contains("`...`"));
 }
 
+#[test]
+fn a_key_the_listing_leaves_out_is_unread() {
+    // The event every reader of the listing misses, and the note's own text still holds.
+    let (metadata, _, unread) = crate::extract_listing(b"---\nevents:\n    ~:\n        start: 2026-01-01\n---\n", "text/markdown");
+    assert_eq!(serde_json::to_string(&metadata).unwrap(), r#"{"events":{}}"#);
+    assert_eq!(unread.len(), 1);
+    assert!(unread[0].contains("a null key in `events`"), "{unread:?}");
+}
+
 #[tokio::test]
 async fn the_listing_carries_what_is_unread_only_where_there_is_some() {
     let fixture = RepoFixture::new();

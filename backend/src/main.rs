@@ -1725,7 +1725,7 @@ fn extract_listing(blob: &[u8], mime_type: &str) -> (Option<serde_yaml::Value>, 
         return (None, None, Vec::new());
     }
     if let Ok(text) = std::str::from_utf8(blob) {
-        let unread = fence_problems(text);
+        let mut unread = fence_problems(text);
         if let Some(node) = markdown_tree(text).or_else(|| frontmatter_tree(text)) {
             let error_metadata = |message: String| {
                 let mut mapping = serde_yaml::Mapping::new();
@@ -1738,9 +1738,12 @@ fn extract_listing(blob: &[u8], mime_type: &str) -> (Option<serde_yaml::Value>, 
                         tracing::debug!("parsed YAML metadata: {:?}", &doc);
                         let mut left_out = Vec::new();
                         let doc = listable(doc, None, &mut left_out);
-                        for warning in left_out {
+                        for warning in &left_out {
                             tracing::warn!("{}", warning);
                         }
+                        // What the listing leaves out, every reader of it misses without a word
+                        // anywhere but this log.
+                        unread.extend(left_out);
                         // Read back as the listing reads it, so whatever the sync stores the
                         // listing can read: YAML nested 127 deep is within serde_yaml's limit
                         // but past serde_json's, and every read of a row it could not read
@@ -3095,8 +3098,8 @@ mod models {
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         pub binary: bool,
         /// What some reader does not take of the file's frontmatter, one sentence each, for the
-        /// health page: fences the readers find in different places. Left out when there is
-        /// nothing, as it is for nearly every file.
+        /// health page: fences the readers find in different places, and keys the listing leaves
+        /// out. Left out when there is nothing, as it is for nearly every file.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         pub unread: Vec<String>,
     }
